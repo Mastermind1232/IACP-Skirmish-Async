@@ -76,6 +76,8 @@ export async function renderMap(mapId, options = {}) {
 
   const canvas = createCanvas(w, h);
   const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, w, h);
 
   const s = scale;
@@ -108,7 +110,7 @@ export async function renderMap(mapId, options = {}) {
 
   // Figure markers: circular clip to hide white background; size-scaled for 2x2/2x3 units
   const sizeMultipliers = { '1x1': 1, '1x2': 1.2, '2x2': 1.5, '2x3': 1.8 };
-  const baseTokenSize = Math.min(Math.max(36, 44 * scale), sdx * 0.9, sdy * 0.9);
+  const baseTokenSize = Math.min(Math.max(52, 64 * scale), sdx * 0.95, sdy * 0.95);
   for (const fig of figures) {
     const coord = fig.coord?.toLowerCase?.() || fig.coord;
     if (!coord) continue;
@@ -132,7 +134,7 @@ export async function renderMap(mapId, options = {}) {
           const figImg = await loadImage(figPath);
           const tw = figImg.width;
           const th = figImg.height;
-          const tScale = Math.min(tokenSize / tw, tokenSize / th, 1);
+          const tScale = Math.min(tokenSize / tw, tokenSize / th);
           const dw = Math.round(tw * tScale);
           const dh = Math.round(th * tScale);
           ctx.save();

@@ -141,7 +141,7 @@ const SAMPLE_DECK_P2 = {
 
 const DEFAULT_DECK_REBELS = {
   name: 'Default Rebels',
-  dcList: ['Luke Skywalker', 'Rebel Trooper (Elite)', 'Rebel Trooper (Regular)', 'Rebel Trooper (Regular)'],
+  dcList: ['Luke Skywalker', 'Han Solo', 'Chewbacca', 'Rebel Trooper (Elite)'],
   ccList: ['Burst Fire', 'Concentrated Fire', 'Covering Fire', 'Deadeye', 'Deflection', 'Dirty Trick', 'Disorient', 'Element of Surprise', 'Focus', 'Force Push', 'Take Aim', 'Take Cover', 'Take Initiative', 'Take Down', 'Under Duress'],
   dcCount: 4,
   ccCount: 15,
@@ -157,9 +157,9 @@ const DEFAULT_DECK_SCUM = {
 
 const DEFAULT_DECK_IMPERIAL = {
   name: 'Default Imperial',
-  dcList: ['Darth Vader', 'Stormtrooper (Elite)', 'Stormtrooper (Regular)', 'Stormtrooper (Regular)'],
+  dcList: ['Darth Vader', 'Emperor Palpatine', 'Stormtrooper (Elite)'],
   ccList: ['Burst Fire', 'Concentrated Fire', 'Covering Fire', 'Deadeye', 'Deflection', 'Dirty Trick', 'Disorient', 'Element of Surprise', 'Focus', 'Force Lightning', 'Take Aim', 'Take Cover', 'Take Initiative', 'Take Down', 'Under Duress'],
-  dcCount: 4,
+  dcCount: 3,
   ccCount: 15,
 };
 
@@ -250,6 +250,33 @@ async function updateThreadName(thread, lobby) {
   }
 }
 
+/** Create p1 and p2 Hand channels (called when map is selected). */
+async function createHandChannels(guild, gameCategory, prefix, player1Id, player2Id) {
+  const p1Only = [
+    { id: guild.roles.everyone.id, deny: PermissionFlagsBits.ViewChannel },
+    { id: player1Id, allow: PermissionFlagsBits.ViewChannel },
+    { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel },
+  ];
+  const p2Only = [
+    { id: guild.roles.everyone.id, deny: PermissionFlagsBits.ViewChannel },
+    { id: player2Id, allow: PermissionFlagsBits.ViewChannel },
+    { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel },
+  ];
+  const p1 = await guild.channels.create({
+    name: `${prefix} p1-hand`,
+    type: ChannelType.GuildText,
+    parent: gameCategory.id,
+    permissionOverwrites: p1Only,
+  });
+  const p2 = await guild.channels.create({
+    name: `${prefix} p2-hand`,
+    type: ChannelType.GuildText,
+    parent: gameCategory.id,
+    permissionOverwrites: p2Only,
+  });
+  return { p1HandChannel: p1, p2HandChannel: p2 };
+}
+
 /** Create p1 and p2 Play Area channels (called when both squads are ready). */
 async function createPlayAreaChannels(guild, gameCategory, prefix, player1Id, player2Id) {
   const playAreaPerms = [
@@ -274,7 +301,7 @@ async function createPlayAreaChannels(guild, gameCategory, prefix, player1Id, pl
 }
 
 async function createGameChannels(guild, player1Id, player2Id, options = {}) {
-  const { createPlayAreas = false } = options;
+  const { createPlayAreas = false, createHandChannels = false } = options;
   // Scan for existing IA Game #XXXXX categories (active, archived, completed) so we never reuse an ID
   await guild.channels.fetch();
   const gameCategories = guild.channels.cache.filter(
@@ -347,18 +374,22 @@ async function createGameChannels(guild, player1Id, player2Id, options = {}) {
     parent: gameCategory.id,
     permissionOverwrites: playerPerms,
   });
-  const p1HandChannel = await guild.channels.create({
-    name: `${prefix} p1-hand`,
-    type: ChannelType.GuildText,
-    parent: gameCategory.id,
-    permissionOverwrites: p1Only,
-  });
-  const p2HandChannel = await guild.channels.create({
-    name: `${prefix} p2-hand`,
-    type: ChannelType.GuildText,
-    parent: gameCategory.id,
-    permissionOverwrites: p2Only,
-  });
+  let p1HandChannel = null;
+  let p2HandChannel = null;
+  if (createHandChannels) {
+    p1HandChannel = await guild.channels.create({
+      name: `${prefix} p1-hand`,
+      type: ChannelType.GuildText,
+      parent: gameCategory.id,
+      permissionOverwrites: p1Only,
+    });
+    p2HandChannel = await guild.channels.create({
+      name: `${prefix} p2-hand`,
+      type: ChannelType.GuildText,
+      parent: gameCategory.id,
+      permissionOverwrites: p2Only,
+    });
+  }
   let p1PlayAreaChannel = null;
   let p2PlayAreaChannel = null;
   if (createPlayAreas) {
@@ -447,7 +478,7 @@ function getSelectSquadButton(gameId, playerNum) {
   );
 }
 
-/** Select Squad + Default Rebels (red), Default Scum (green), Default Imperial (grey) for testing. */
+/** Select Squad (grey) + Default Rebels (red), Default Scum (green), Default Imperial (blurple) for testing. */
 function getHandSquadButtons(gameId, playerNum) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -465,7 +496,7 @@ function getHandSquadButtons(gameId, playerNum) {
     new ButtonBuilder()
       .setCustomId(`default_deck_${gameId}_${playerNum}_imperial`)
       .setLabel('Default Imperial')
-      .setStyle(ButtonStyle.Secondary)
+      .setStyle(ButtonStyle.Primary)
   );
 }
 
@@ -714,7 +745,7 @@ async function buildBoardMapPayload(gameId, map, game) {
   const imagePath = map.imagePath ? join(rootDir, map.imagePath) : null;
   const pdfPath = join(rootDir, 'data', 'map-pdfs', `${map.id}.pdf`);
 
-  const allowedMentions = game ? { users: [game.player1Id, game.player2Id] } : undefined;
+  const allowedMentions = game ? { users: [...new Set([game.player1Id, game.player2Id])] } : undefined;
   if (hasFigures && imagePath && existsSync(imagePath)) {
     try {
       const buffer = await renderMap(map.id, { figures, showGrid: false, maxWidth: 1200 });
@@ -1082,7 +1113,7 @@ async function applySquadSubmission(game, isP1, squad, client) {
     }
     await generalChannel.send({
       content: `<@${game.player1Id}> <@${game.player2Id}> — Both squads are ready! Determine initiative below.`,
-      allowedMentions: { users: [game.player1Id, game.player2Id] },
+      allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
       embeds: [
         new EmbedBuilder()
           .setTitle('Both Squads Ready')
@@ -1205,7 +1236,7 @@ client.on('messageCreate', async (message) => {
     try {
       const guild = message.guild;
       const { gameId, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel } =
-        await createGameChannels(guild, userId, userId, { createPlayAreas: false });
+        await createGameChannels(guild, userId, userId, { createPlayAreas: false, createHandChannels: false });
       const game = {
         gameId,
         gameCategoryId: generalChannel.parentId,
@@ -1214,8 +1245,8 @@ client.on('messageCreate', async (message) => {
         generalId: generalChannel.id,
         chatId: chatChannel.id,
         boardId: boardChannel.id,
-        p1HandId: p1HandChannel.id,
-        p2HandId: p2HandChannel.id,
+        p1HandId: p1HandChannel?.id ?? null,
+        p2HandId: p2HandChannel?.id ?? null,
         p1PlayAreaId: p1PlayAreaChannel?.id ?? null,
         p2PlayAreaId: p2PlayAreaChannel?.id ?? null,
         player1Squad: null,
@@ -1226,26 +1257,20 @@ client.on('messageCreate', async (message) => {
       games.set(gameId, game);
 
       const setupMsg = await generalChannel.send({
-        content: `<@${userId}> — **Test game** created. You are both players. Map Selection below, then go to your **Hand** channels to pick decks. Use **General chat** for notes.`,
+        content: `<@${userId}> — **Test game** created. You are both players. Map Selection below — Hand channels will appear after map selection. Use **General chat** for notes.`,
         allowedMentions: { users: [userId] },
         embeds: [
           new EmbedBuilder()
             .setTitle('Game Setup (Test)')
             .setDescription(
-              '**Test game** — Use your **Hand** channels: click **Select Squad** or **Default Rebels** / **Default Scum** / **Default Imperial** to load decks for each "side".'
+              '**Test game** — Select the map below. Hand channels will then appear; use them to pick decks (Select Squad or Default Rebels / Scum / Imperial) for each "side".'
             )
             .setColor(0x2f3136),
         ],
         components: [getGeneralSetupButtons(game)],
       });
       game.generalSetupMessageId = setupMsg.id;
-      await p1HandChannel.send({
-        content: `Once the map is selected in **Game Log**, you'll be able to pick your squad here.`,
-      });
-      await p2HandChannel.send({
-        content: `Once the map is selected in **Game Log**, you'll be able to pick your squad here.`,
-      });
-      await creatingMsg.edit(`Test game **IA Game #${gameId}** is ready! Check your Hand channels.`);
+      await creatingMsg.edit(`Test game **IA Game #${gameId}** is ready! Select the map in Game Log — Hand channels will appear after map selection.`);
       saveGames();
     } catch (err) {
       console.error('Test game creation error:', err);
@@ -1595,16 +1620,6 @@ client.on('interactionCreate', async (interaction) => {
     game.selectedMap = { id: map.id, name: map.name, imagePath: map.imagePath };
     game.mapSelected = true;
     await interaction.deferUpdate();
-    await logGameAction(game, client, `Map selected: **${map.name}**`, { phase: 'SETUP', icon: 'map' });
-    if (game.generalSetupMessageId) {
-      try {
-        const generalChannel = await client.channels.fetch(game.generalId);
-        const setupMsg = await generalChannel.messages.fetch(game.generalSetupMessageId);
-        await setupMsg.edit({ components: [getGeneralSetupButtons(game)] });
-      } catch (err) {
-        console.error('Failed to remove Map Selection button:', err);
-      }
-    }
     if (game.boardId) {
       try {
         const boardChannel = await client.channels.fetch(game.boardId);
@@ -1614,16 +1629,31 @@ client.on('interactionCreate', async (interaction) => {
         console.error('Failed to post map to Board channel:', err);
       }
     }
+    await logGameAction(game, client, `Map selected: **${map.name}** — View in Board channel.`, { phase: 'SETUP', icon: 'map' });
+    if (game.generalSetupMessageId) {
+      try {
+        const generalChannel = await client.channels.fetch(game.generalId);
+        const setupMsg = await generalChannel.messages.fetch(game.generalSetupMessageId);
+        await setupMsg.edit({ components: [getGeneralSetupButtons(game)] });
+      } catch (err) {
+        console.error('Failed to remove Map Selection button:', err);
+      }
+    }
     try {
+      if (!game.p1HandId || !game.p2HandId) {
+        const generalCh = await client.channels.fetch(game.generalId);
+        const guild = generalCh.guild;
+        const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalCh.parentId);
+        const prefix = `IA${game.gameId}`;
+        const { p1HandChannel, p2HandChannel } = await createHandChannels(
+          guild, gameCategory, prefix, game.player1Id, game.player2Id
+        );
+        game.p1HandId = p1HandChannel.id;
+        game.p2HandId = p2HandChannel.id;
+      }
       const p1Hand = await client.channels.fetch(game.p1HandId);
       const p2Hand = await client.channels.fetch(game.p2HandId);
       const isTest = game.player1Id === game.player2Id;
-      const placeholderContent = `Once the map is selected in **Game Log**, you'll be able to pick your squad here.`;
-      for (const ch of [p1Hand, p2Hand]) {
-        const msgs = await ch.messages.fetch({ limit: 5 });
-        const placeholder = msgs.find((m) => m.author.bot && m.content === placeholderContent);
-        if (placeholder) await placeholder.delete().catch(() => {});
-      }
       await p1Hand.send({
         content: `<@${game.player1Id}> — pick your squad below!${isTest ? ' *(Test — use Select Squad or Default deck buttons for each side.)*' : ''}`,
         allowedMentions: { users: [game.player1Id] },
@@ -1637,7 +1667,7 @@ client.on('interactionCreate', async (interaction) => {
         components: [getHandSquadButtons(game.gameId, 2)],
       });
     } catch (err) {
-      console.error('Failed to populate Hand channels with squad UI:', err);
+      console.error('Failed to create/populate Hand channels:', err);
     }
     saveGames();
     return;
@@ -1694,7 +1724,7 @@ client.on('interactionCreate', async (interaction) => {
       if (generalChannel) {
         await generalChannel.send({
           content: `⚠️ **Initiative blocked** — Squad selection required first.\n\nStill needed: ${missing.join(', ')}`,
-          allowedMentions: { users: [game.player1Id, game.player2Id] },
+          allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
         }).catch(() => {});
       }
       return;
@@ -1704,10 +1734,10 @@ client.on('interactionCreate', async (interaction) => {
     game.initiativePlayerId = winner;
     game.initiativeDetermined = true;
     await interaction.deferUpdate();
-    await logGameAction(game, client, `<@${winner}> won initiative! Chooses deployment zone and activates first each round.`, { allowedMentions: { users: [winner] }, phase: 'INITIATIVE', icon: 'initiative' });
+    await logGameAction(game, client, `<@${winner}> (**Player ${playerNum}**) won initiative! Chooses deployment zone and activates first each round.`, { allowedMentions: { users: [winner] }, phase: 'INITIATIVE', icon: 'initiative' });
     const generalChannel = await client.channels.fetch(game.generalId);
     const zoneMsg = await generalChannel.send({
-      content: `<@${winner}> — Pick your deployment zone:`,
+      content: `<@${winner}> (**Player ${playerNum}**) — Pick your deployment zone:`,
       allowedMentions: { users: [winner] },
       components: [getDeploymentZoneButtons(gameId)],
     });
@@ -1743,7 +1773,8 @@ client.on('interactionCreate', async (interaction) => {
     const zone = isRed ? 'red' : 'blue';
     game.deploymentZoneChosen = zone;
     await interaction.deferUpdate();
-    await logGameAction(game, client, `<@${game.initiativePlayerId}> chose the **${zone}** deployment zone`, { allowedMentions: { users: [game.initiativePlayerId] }, phase: 'INITIATIVE', icon: 'zone' });
+    const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    await logGameAction(game, client, `<@${game.initiativePlayerId}> (**Player ${initiativePlayerNum}**) chose the **${zone}** deployment zone`, { allowedMentions: { users: [game.initiativePlayerId] }, phase: 'INITIATIVE', icon: 'zone' });
     if (game.deploymentZoneMessageId) {
       try {
         const generalChannel = await client.channels.fetch(game.generalId);
@@ -1754,7 +1785,6 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
     const initiativeHandId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
-    const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
     const initiativeSquad = initiativePlayerNum === 1 ? game.player1Squad : game.player2Squad;
     const initiativeDcList = initiativeSquad?.dcList || [];
     const { labels: initiativeLabels, metadata: initiativeMetadata } = getDeployFigureLabels(initiativeDcList);
@@ -1838,6 +1868,7 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
     }
+    const validSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
     if (validSpaces.length > 0) {
       const { rows, available } = getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, occupied, playerZone);
       if (available.length === 0) {
@@ -1846,15 +1877,24 @@ client.on('interactionCreate', async (interaction) => {
       }
       const BTM_PER_MSG = 5;
       const firstRows = rows.slice(0, BTM_PER_MSG);
-      await interaction.reply({
+      game.deploySpaceGridMessageIds = game.deploySpaceGridMessageIds || {};
+      const gridKey = `${playerNum}_${flatIndex}`;
+      const replyMsg = await interaction.reply({
         content: `Pick a space for **${label.replace(/^Deploy /, '')}**:`,
         components: firstRows,
         ephemeral: false,
-      }).catch(() => {});
+        fetchReply: true,
+      }).catch(() => null);
+      const gridIds = [];
+      if (replyMsg?.id) gridIds.push(replyMsg.id);
       for (let i = BTM_PER_MSG; i < rows.length; i += BTM_PER_MSG) {
         const more = rows.slice(i, i + BTM_PER_MSG);
-        if (more.length > 0) await interaction.followUp({ content: null, components: more }).catch(() => {});
+        if (more.length > 0) {
+          const followMsg = await interaction.followUp({ content: null, components: more, fetchReply: true }).catch(() => null);
+          if (followMsg?.id) gridIds.push(followMsg.id);
+        }
       }
+      game.deploySpaceGridMessageIds[gridKey] = gridIds;
     } else {
       const modal = new ModalBuilder()
         .setCustomId(`deploy_modal_${gameId}_${playerNum}_${flatIndex}`)
@@ -1901,18 +1941,40 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Figure not found.', ephemeral: true }).catch(() => {});
       return;
     }
+    await interaction.deferUpdate();
     const figureKey = `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}`;
     if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
     if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
     game.figurePositions[playerNum][figureKey] = space.toLowerCase();
     saveGames();
     const spaceUpper = space.toUpperCase();
+    const gridKey = `${playerNum}_${flatIndex}`;
+    const gridMsgIds = game.deploySpaceGridMessageIds?.[gridKey] || [];
+    const clickedMsgId = interaction.message?.id;
+    if (gridMsgIds.length > 0) {
+      try {
+        const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+        const handChannel = await client.channels.fetch(handId);
+        for (const msgId of gridMsgIds) {
+          if (msgId === clickedMsgId) continue;
+          try {
+            const msg = await handChannel.messages.fetch(msgId);
+            await msg.delete();
+          } catch {}
+        }
+      } catch (err) {
+        console.error('Failed to delete space grid messages:', err);
+      }
+      if (game.deploySpaceGridMessageIds) {
+        delete game.deploySpaceGridMessageIds[gridKey];
+      }
+    }
     await logGameAction(game, client, `<@${interaction.user.id}> deployed **${figLabel.replace(/^Deploy /, '')}** at **${spaceUpper}**`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deploy' });
     await updateDeployPromptMessages(game, playerNum, client);
-    await interaction.update({
+    await interaction.editReply({
       content: `✓ Deployed **${figLabel.replace(/^Deploy /, '')}** at **${spaceUpper}**.`,
       components: [],
-    }).catch(() => interaction.reply({ content: `Deployed **${figLabel}** at **${spaceUpper}**.`, ephemeral: true }).catch(() => {}));
+    }).catch(() => {});
     return;
   }
 
@@ -2227,7 +2289,7 @@ client.on('interactionCreate', async (interaction) => {
     try {
       const guild = interaction.guild;
       const { gameId, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel } =
-        await createGameChannels(guild, lobby.creatorId, lobby.joinedId, { createPlayAreas: false });
+        await createGameChannels(guild, lobby.creatorId, lobby.joinedId, { createPlayAreas: false, createHandChannels: false });
       const game = {
         gameId,
         gameCategoryId: generalChannel.parentId,
@@ -2236,8 +2298,8 @@ client.on('interactionCreate', async (interaction) => {
         generalId: generalChannel.id,
         chatId: chatChannel.id,
         boardId: boardChannel.id,
-        p1HandId: p1HandChannel.id,
-        p2HandId: p2HandChannel.id,
+        p1HandId: p1HandChannel?.id ?? null,
+        p2HandId: p2HandChannel?.id ?? null,
         p1PlayAreaId: p1PlayAreaChannel?.id ?? null,
         p2PlayAreaId: p2PlayAreaChannel?.id ?? null,
         player1Squad: null,
@@ -2248,30 +2310,23 @@ client.on('interactionCreate', async (interaction) => {
       games.set(gameId, game);
 
       const setupMsg = await generalChannel.send({
-        content: `<@${game.player1Id}> <@${game.player2Id}> — Game created. Map Selection below, then go to your **Hand** channel to pick your deck. Use **General chat** to talk with your opponent.`,
+        content: `<@${game.player1Id}> <@${game.player2Id}> — Game created. Map Selection below — Hand channels will appear after map selection. Use **General chat** to talk with your opponent.`,
         allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
         embeds: [
           new EmbedBuilder()
             .setTitle(isTestGame ? 'Game Setup (Test)' : 'Game Setup')
             .setDescription(
               isTestGame
-                ? '**Test game** — use your **Hand** channel: click **Select Squad** (form) or **Default Rebels** (red) / **Default Scum** (green) / **Default Imperial** (grey) to load a deck.'
-                : '**Map Selection** first (button below), then both players: go to your **Hand** channel (private) and click **Select Squad** or a default deck button to submit your deck.'
+                ? '**Test game** — Select the map below. Hand channels will then appear for picking decks.'
+                : '**Map Selection** first (button below). Hand channels will then appear — both players pick their deck there (Select Squad or default deck buttons).'
             )
             .setColor(0x2f3136),
         ],
         components: [getGeneralSetupButtons(game)],
       });
       game.generalSetupMessageId = setupMsg.id;
-      await p1HandChannel.send({
-        content: `Once the map is selected in **Game Log**, you'll be able to pick your squad here.`,
-      });
-      await p2HandChannel.send({
-        content: `Once the map is selected in **Game Log**, you'll be able to pick your squad here.`,
-      });
-
       await interaction.followUp({
-        content: `Game **IA Game #${gameId}** is ready!${isTestGame ? ' (Test)' : ''} Check your **Hand** channel: Select Squad or Default Rebels / Scum / Imperial.`,
+        content: `Game **IA Game #${gameId}** is ready!${isTestGame ? ' (Test)' : ''} Select the map in Game Log — Hand channels will appear after map selection.`,
         ephemeral: true,
       });
       await updateThreadName(interaction.channel, lobby);
