@@ -410,12 +410,13 @@ async function createGameChannels(guild, player1Id, player2Id, options = {}) {
   return { gameCategory, gameId, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel };
 }
 
-/** Game phases for visual organization */
+/** Game phases for visual organization - all use orange sidebar */
+const PHASE_COLOR = 0xf39c12;
 const GAME_PHASES = {
-  SETUP: { name: 'PRE-GAME SETUP', emoji: '⚙️', color: 0x95a5a6 },
-  INITIATIVE: { name: 'INITIATIVE', emoji: '🎲', color: 0xf39c12 },
-  DEPLOYMENT: { name: 'DEPLOYMENT', emoji: '📍', color: 0x3498db },
-  ROUND: { name: 'ROUND', emoji: '⚔️', color: 0xe74c3c },
+  SETUP: { name: 'PRE-GAME SETUP', emoji: '⚙️', color: PHASE_COLOR },
+  INITIATIVE: { name: 'INITIATIVE', emoji: '🎲', color: PHASE_COLOR },
+  DEPLOYMENT: { name: 'DEPLOYMENT', emoji: '📍', color: PHASE_COLOR },
+  ROUND: { name: 'ROUND', emoji: '⚔️', color: PHASE_COLOR },
 };
 
 /** Action icons for game log */
@@ -536,7 +537,7 @@ function getDeploymentDoneButton(gameId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`deployment_done_${gameId}`)
-      .setLabel("I've Deployed")
+      .setLabel("Deployment Completed")
       .setStyle(ButtonStyle.Success)
   );
 }
@@ -584,7 +585,7 @@ function getDeployFigureLabels(dcList) {
   return { labels, metadata };
 }
 
-/** One button per row. Undeployed: colored Deploy X. Deployed: grey Deploy X (Location: B1). All clear when I've Deployed. */
+/** One button per row. Undeployed: colored Deploy X. Deployed: grey Deploy X (Location: B1). All clear when Deployment Completed. */
 function getDeployButtonRows(gameId, playerNum, dcList, zone, figurePositions) {
   const { labels, metadata } = getDeployFigureLabels(dcList);
   const zoneStyle = zone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
@@ -631,11 +632,11 @@ async function updateDeployPromptMessages(game, playerNum, client) {
     const DEPLOY_ROWS_PER_MSG = 4;
     const zoneLabel = zone === 'red' ? 'red' : 'blue';
     const firstContent = isInitiative
-      ? `You chose the **${zoneLabel}** zone. Deploy each figure below (one per row), then click **I've Deployed** when finished.`
-      : `Your opponent has deployed. Deploy each figure in the **${zoneLabel}** zone below (one per row), then click **I've Deployed** when finished.`;
+      ? `You chose the **${zoneLabel}** zone. Deploy each figure below (one per row), then click **Deployment Completed** when finished.`
+      : `Your opponent has deployed. Deploy each figure in the **${zoneLabel}** zone below (one per row), then click **Deployment Completed** when finished.`;
     if (deployRows.length === 0) {
       const msg = await handChannel.send({
-        content: isInitiative ? `You chose the **${zoneLabel}** zone. When finished, click **I've Deployed** below.` : `Your opponent has deployed. Deploy in the **${zoneLabel}** zone. When finished, click **I've Deployed** below.`,
+        content: isInitiative ? `You chose the **${zoneLabel}** zone. When finished, click **Deployment Completed** below.` : `Your opponent has deployed. Deploy in the **${zoneLabel}** zone. When finished, click **Deployment Completed** below.`,
         components: [doneRow],
       });
       game[idsKey].push(msg.id);
@@ -657,34 +658,40 @@ async function updateDeployPromptMessages(game, playerNum, client) {
   }
 }
 
-/** Returns action rows of space buttons (5 per row, max 5 rows). Sorts by row then col for grid feel. Excludes occupied spaces. */
+/** Returns action rows of space buttons grouped by map row (never mix row 17 and 18 in same line). Max 5 buttons per Discord row. */
 function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, occupiedSpaces, zone) {
   const occupied = new Set((occupiedSpaces || []).map((s) => String(s).toLowerCase()));
   const available = (validSpaces || [])
     .map((s) => String(s).toLowerCase())
-    .filter((s) => !occupied.has(s))
-    .sort((a, b) => {
-      const mA = a.match(/^([a-z]+)(\d+)$/i);
-      const mB = b.match(/^([a-z]+)(\d+)$/i);
-      const numA = mA ? parseInt(mA[2], 10) : 0;
-      const numB = mB ? parseInt(mB[2], 10) : 0;
-      if (numA !== numB) return numA - numB;
-      return (a || '').localeCompare(b || '');
-    });
+    .filter((s) => !occupied.has(s));
+  const byRow = {};
+  for (const s of available) {
+    const m = s.match(/^([a-z]+)(\d+)$/i);
+    const row = m ? parseInt(m[2], 10) : 0;
+    if (!byRow[row]) byRow[row] = [];
+    byRow[row].push(s);
+  }
+  const sortedRows = Object.keys(byRow).map(Number).sort((a, b) => a - b);
+  for (const r of sortedRows) {
+    byRow[r].sort((a, b) => (a || '').localeCompare(b || ''));
+  }
   const zoneStyle = zone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
   const rows = [];
-  for (let i = 0; i < available.length && rows.length < 5; i += 5) {
-    const chunk = available.slice(i, i + 5);
-    rows.push(
-      new ActionRowBuilder().addComponents(
-        chunk.map((space) =>
-          new ButtonBuilder()
-            .setCustomId(`deploy_pick_${gameId}_${playerNum}_${flatIndex}_${space}`)
-            .setLabel(space.toUpperCase())
-            .setStyle(zoneStyle)
+  for (const rowNum of sortedRows) {
+    const tiles = byRow[rowNum];
+    for (let i = 0; i < tiles.length; i += 5) {
+      const chunk = tiles.slice(i, i + 5);
+      rows.push(
+        new ActionRowBuilder().addComponents(
+          chunk.map((space) =>
+            new ButtonBuilder()
+              .setCustomId(`deploy_pick_${gameId}_${playerNum}_${flatIndex}_${space}`)
+              .setLabel(space.toUpperCase())
+              .setStyle(zoneStyle)
+          )
         )
-      )
-    );
+      );
+    }
   }
   return { rows, available };
 }
@@ -694,19 +701,40 @@ function getFiguresForRender(game) {
   const pos = game.figurePositions;
   if (!pos || (!pos[1] && !pos[2])) return [];
   const figures = [];
-  const colors = { 1: '#e74c3c', 2: '#3498db' };
+  const zoneColors = { red: '#e74c3c', blue: '#3498db' };
+  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const chosen = game.deploymentZoneChosen;
+  if (!chosen) return figures;
+  const otherZone = chosen === 'red' ? 'blue' : 'red';
   for (const p of [1, 2]) {
+    const zone = p === initiativePlayerNum ? chosen : otherZone;
+    const color = zoneColors[zone] || '#888';
     const poses = pos[p] || {};
+    const dcList = (p === 1 ? game.player1Squad : game.player2Squad)?.dcList || [];
+    const totals = {};
+    for (const d of dcList) totals[d] = (totals[d] || 0) + 1;
     for (const [figureKey, space] of Object.entries(poses)) {
       const dcName = figureKey.replace(/-\d+-\d+$/, '');
+      const m = figureKey.match(/-(\d+)-(\d+)$/);
+      const dgIndex = m ? parseInt(m[1], 10) : 1;
+      const figureIndex = m ? parseInt(m[2], 10) : 0;
+      const figureCount = getDcStats(dcName).figures ?? 1;
+      const dcCopies = totals[dcName] ?? 1;
+      let label = null;
+      if (dcCopies > 1) {
+        label = figureCount > 1 ? `${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : String(dgIndex);
+      } else if (figureCount > 1) {
+        label = `${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}`;
+      }
       const imagePath = getFigureImagePath(dcName);
       const figureSize = getFigureSize(dcName);
       figures.push({
         coord: space,
-        color: colors[p] || '#888',
+        color,
         imagePath: imagePath || undefined,
         dcName,
         figureSize,
+        label,
       });
     }
   }
@@ -798,7 +826,7 @@ function getGeneralSetupButtons(game) {
       new ButtonBuilder()
         .setCustomId(`map_selection_${game.gameId}`)
         .setLabel('Map Selection')
-        .setStyle(ButtonStyle.Secondary)
+        .setStyle(ButtonStyle.Success)
     );
   }
   components.push(killBtn);
@@ -1801,7 +1829,7 @@ client.on('interactionCreate', async (interaction) => {
       const initiativePing = `<@${game.initiativePlayerId}>`;
       if (deployRows.length === 0) {
         const msg = await initiativeHandChannel.send({
-          content: `${initiativePing} — You chose the **${zone}** zone. When finished, click **I've Deployed** below.`,
+          content: `${initiativePing} — You chose the **${zone}** zone. When finished, click **Deployment Completed** below.`,
           components: [doneRow],
           allowedMentions: { users: [game.initiativePlayerId] },
         });
@@ -1812,7 +1840,7 @@ client.on('interactionCreate', async (interaction) => {
           const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
           const components = isLastChunk ? [...chunk, doneRow] : chunk;
           const msg = await initiativeHandChannel.send({
-            content: i === 0 ? `${initiativePing} — You chose the **${zone}** zone. Deploy each figure below (one per row), then click **I've Deployed** when finished.` : null,
+            content: i === 0 ? `${initiativePing} — You chose the **${zone}** zone. Deploy each figure below (one per row), then click **Deployment Completed** when finished.` : null,
             components,
             allowedMentions: { users: [game.initiativePlayerId] },
           });
@@ -1969,8 +1997,24 @@ client.on('interactionCreate', async (interaction) => {
         delete game.deploySpaceGridMessageIds[gridKey];
       }
     }
+    const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    const isInitiative = playerNum === initiativePlayerNum;
+    const confirmIdsKey = isInitiative ? 'initiativeDeployedConfirmIds' : 'nonInitiativeDeployedConfirmIds';
+    if (clickedMsgId) {
+      game[confirmIdsKey] = game[confirmIdsKey] || [];
+      game[confirmIdsKey].push(clickedMsgId);
+    }
     await logGameAction(game, client, `<@${interaction.user.id}> deployed **${figLabel.replace(/^Deploy /, '')}** at **${spaceUpper}**`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deploy' });
     await updateDeployPromptMessages(game, playerNum, client);
+    if (game.boardId && game.selectedMap) {
+      try {
+        const boardChannel = await client.channels.fetch(game.boardId);
+        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+        await boardChannel.send(payload);
+      } catch (err) {
+        console.error('Failed to update map after deployment:', err);
+      }
+    }
     await interaction.editReply({
       content: `✓ Deployed **${figLabel.replace(/^Deploy /, '')}** at **${spaceUpper}**.`,
       components: [],
@@ -1989,10 +2033,18 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Only players in this game can use this.', ephemeral: true }).catch(() => {});
       return;
     }
-    const isInitiativePlayer = interaction.user.id === game.initiativePlayerId;
+    const channelId = interaction.channel?.id;
+    const isP1Hand = channelId === game.p1HandId;
+    const isP2Hand = channelId === game.p2HandId;
+    if (!isP1Hand && !isP2Hand) {
+      await interaction.reply({ content: 'Use the Deployment Completed button in your Hand channel.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    const isInitiativeSide = (isP1Hand && initiativePlayerNum === 1) || (isP2Hand && initiativePlayerNum === 2);
     const otherZone = game.deploymentZoneChosen === 'red' ? 'blue' : 'red';
 
-    if (isInitiativePlayer) {
+    if (isInitiativeSide) {
       if (game.initiativePlayerDeployed) {
         await interaction.reply({ content: "You've already marked deployed.", ephemeral: true }).catch(() => {});
         return;
@@ -2000,17 +2052,26 @@ client.on('interactionCreate', async (interaction) => {
       game.initiativePlayerDeployed = true;
       await logGameAction(game, client, `<@${interaction.user.id}> finished deploying`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deployed' });
       await interaction.deferUpdate();
-      if (game.initiativeDeployMessageIds?.length) {
+      const initiativeHandId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
+      try {
+        const handChannel = await client.channels.fetch(initiativeHandId);
+        const toDelete = [...(game.initiativeDeployMessageIds || []), ...(game.initiativeDeployedConfirmIds || [])];
+        for (const msgId of toDelete) {
+          try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
+        }
+        game.initiativeDeployMessageIds = [];
+        game.initiativeDeployedConfirmIds = [];
+        await handChannel.send({ content: '✓ **Deployed.**' });
+      } catch (err) {
+        console.error('Failed to update initiative deploy message:', err);
+      }
+      if (game.boardId && game.selectedMap) {
         try {
-          const handId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
-          const handChannel = await client.channels.fetch(handId);
-          for (const msgId of game.initiativeDeployMessageIds) {
-            try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
-          }
-          game.initiativeDeployMessageIds = [];
-          await handChannel.send({ content: '✓ **Deployed.**' });
+          const boardChannel = await client.channels.fetch(game.boardId);
+          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
         } catch (err) {
-          console.error('Failed to update initiative deploy message:', err);
+          console.error('Failed to update map after initiative deployment:', err);
         }
       }
       const nonInitiativeHandId = game.initiativePlayerId === game.player1Id ? game.p2HandId : game.p1HandId;
@@ -2029,10 +2090,11 @@ client.on('interactionCreate', async (interaction) => {
         const { deployRows, doneRow } = getDeployButtonRows(gameId, nonInitiativePlayerNum, nonInitiativeDcList, otherZone, game.figurePositions);
         const DEPLOY_ROWS_PER_MSG = 4;
         game.nonInitiativeDeployMessageIds = game.nonInitiativeDeployMessageIds || [];
+        game.nonInitiativeDeployedConfirmIds = game.nonInitiativeDeployedConfirmIds || [];
         const nonInitiativePing = `<@${nonInitiativePlayerId}>`;
         if (deployRows.length === 0) {
           const msg = await nonInitiativeHandChannel.send({
-            content: `${nonInitiativePing} — Your opponent has deployed. Deploy in the **${otherZone}** zone. When finished, click **I've Deployed** below.`,
+            content: `${nonInitiativePing} — Your opponent has deployed. Deploy in the **${otherZone}** zone. When finished, click **Deployment Completed** below.`,
             components: [doneRow],
             allowedMentions: { users: [nonInitiativePlayerId] },
           });
@@ -2043,7 +2105,7 @@ client.on('interactionCreate', async (interaction) => {
             const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
             const components = isLastChunk ? [...chunk, doneRow] : chunk;
             const msg = await nonInitiativeHandChannel.send({
-              content: i === 0 ? `${nonInitiativePing} — Your opponent has deployed. Deploy each figure in the **${otherZone}** zone below (one per row), then click **I've Deployed** when finished.` : null,
+              content: i === 0 ? `${nonInitiativePing} — Your opponent has deployed. Deploy each figure in the **${otherZone}** zone below (one per row), then click **Deployment Completed** when finished.` : null,
               components,
               allowedMentions: { users: [nonInitiativePlayerId] },
             });
@@ -2068,22 +2130,27 @@ client.on('interactionCreate', async (interaction) => {
     }
     game.nonInitiativePlayerDeployed = true;
     await interaction.deferUpdate();
-    if (game.nonInitiativeDeployMessageIds?.length) {
-      try {
-        const handId = game.initiativePlayerId === game.player1Id ? game.p2HandId : game.p1HandId;
-        const handChannel = await client.channels.fetch(handId);
-        for (const msgId of game.nonInitiativeDeployMessageIds) {
-          try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
-        }
-        game.nonInitiativeDeployMessageIds = [];
-        await handChannel.send({ content: '✓ **Deployed.**' });
-      } catch (err) {
-        console.error('Failed to update non-initiative deploy message:', err);
+    const nonInitiativeHandId = game.initiativePlayerId === game.player1Id ? game.p2HandId : game.p1HandId;
+    try {
+      const handChannel = await client.channels.fetch(nonInitiativeHandId);
+      const toDelete = [...(game.nonInitiativeDeployMessageIds || []), ...(game.nonInitiativeDeployedConfirmIds || [])];
+      for (const msgId of toDelete) {
+        try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
       }
+      game.nonInitiativeDeployMessageIds = [];
+      game.nonInitiativeDeployedConfirmIds = [];
+      await handChannel.send({ content: '✓ **Deployed.**' });
+    } catch (err) {
+      console.error('Failed to update non-initiative deploy message:', err);
     }
+    game.currentRound = 1;
     const generalChannel = await client.channels.fetch(game.generalId);
+    const roundEmbed = new EmbedBuilder()
+      .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND 1`)
+      .setColor(PHASE_COLOR);
     await generalChannel.send({
       content: '**Both players have deployed.** Game on!',
+      embeds: [roundEmbed],
     });
     saveGames();
     return;

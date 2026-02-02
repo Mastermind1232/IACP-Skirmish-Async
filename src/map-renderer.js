@@ -144,7 +144,7 @@ export async function renderMap(mapId, options = {}) {
           ctx.clip();
           ctx.drawImage(figImg, cx - dw / 2, cy - dh / 2, dw, dh);
           ctx.restore();
-          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.strokeStyle = fig.color || '#fff';
           ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.arc(cx, cy, clipRadius, 0, Math.PI * 2);
@@ -155,13 +155,25 @@ export async function renderMap(mapId, options = {}) {
         }
       }
     }
+    if (fig.label) {
+      const fontSize = Math.max(10, Math.round(12 * scale));
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const labelY = cy - clipRadius * 0.6;
+      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(fig.label, cx, labelY);
+      ctx.fillStyle = fig.color || '#fff';
+      ctx.fillText(fig.label, cx, labelY);
+    }
     if (!drewImage) {
       console.error(`Map figure image missing for DC "${fig.dcName || '?'}" at ${fig.coord} - run: node scripts/extract-figure-images.js`);
       ctx.fillStyle = fig.color || '#f00';
       ctx.beginPath();
       ctx.arc(cx, cy, Math.max(4, 8 * scale), 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#fff';
+      ctx.strokeStyle = fig.color || '#fff';
       ctx.lineWidth = 2;
       ctx.stroke();
     }

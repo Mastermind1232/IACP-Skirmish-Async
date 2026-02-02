@@ -1,7 +1,7 @@
 {
   "source": "IACP / IA Skirmish rules - expand as needed. NOTE: specials = abilities with the arrow (special action) icon. figures = group size: match the grey notches/pips in the top-left of the deployment card. speed = movement points per activation.",
   "dcStats": {
-    "Darth Vader": { "health": 12, "figures": 1, "speed": 5, "specials": ["Force Choke", "Brutality"] },
+    "Darth Vader": { "health": 16, "figures": 1, "speed": 4, "specials": ["Force Choke", "Brutality"] },
     "Stormtrooper (Elite)": { "health": 5, "figures": 3, "speed": 4, "specials": [] },
     "Stormtrooper (Regular)": { "health": 4, "figures": 3, "speed": 4, "specials": [] },
     "Luke Skywalker": { "health": 10, "figures": 1, "speed": 5, "specials": ["Saber Strike"] },
@@ -15,6 +15,10 @@
     "Weequay Pirate (Regular)": { "health": 4, "figures": 2, "speed": 4, "specials": [] },
     "Nexu": { "health": 6, "figures": 1, "speed": 5, "specials": ["Pounce"] },
     "Nexu (Elite)": { "health": 8, "figures": 1, "speed": 5, "specials": ["Pounce"] },
-    "Nexu (Regular)": { "health": 6, "figures": 1, "speed": 5, "specials": [] }
+    "Nexu (Regular)": { "health": 6, "figures": 1, "speed": 5, "specials": [] },
+    "Emperor Palpatine": { "health": 13, "figures": 1, "speed": 4, "specials": ["Force Lightning"] },
+    "Han Solo": { "health": 10, "figures": 1, "speed": 5, "specials": [] },
+    "Chewbacca": { "health": 12, "figures": 1, "speed": 4, "specials": [] },
+    "Royal Guard Champion": { "health": 8, "figures": 1, "speed": 4, "specials": [] }
   }
 }
