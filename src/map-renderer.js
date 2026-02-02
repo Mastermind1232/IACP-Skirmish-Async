@@ -106,7 +106,9 @@ export async function renderMap(mapId, options = {}) {
     }
   }
 
-  // Figure markers
+  // Figure markers: circular clip to hide white background; size-scaled for 2x2/2x3 units
+  const sizeMultipliers = { '1x1': 1, '1x2': 1.2, '2x2': 1.5, '2x3': 1.8 };
+  const baseTokenSize = Math.min(Math.max(36, 44 * scale), sdx * 0.9, sdy * 0.9);
   for (const fig of figures) {
     const coord = fig.coord?.toLowerCase?.() || fig.coord;
     if (!coord) continue;
@@ -119,13 +121,48 @@ export async function renderMap(mapId, options = {}) {
     if (row < 0 || col < 0) continue;
     const cx = sx0 + col * sdx + sdx / 2;
     const cy = sy0 + row * sdy + sdy / 2;
-    ctx.fillStyle = fig.color || '#f00';
-    ctx.beginPath();
-    ctx.arc(cx, cy, Math.max(4, 8 * scale), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    const mult = sizeMultipliers[fig.figureSize] || 1;
+    const tokenSize = baseTokenSize * mult;
+    const clipRadius = tokenSize / 2;
+    let drewImage = false;
+    if (fig.imagePath) {
+      const figPath = join(rootDir, fig.imagePath);
+      if (existsSync(figPath)) {
+        try {
+          const figImg = await loadImage(figPath);
+          const tw = figImg.width;
+          const th = figImg.height;
+          const tScale = Math.min(tokenSize / tw, tokenSize / th, 1);
+          const dw = Math.round(tw * tScale);
+          const dh = Math.round(th * tScale);
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cx, cy, clipRadius, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(figImg, cx - dw / 2, cy - dh / 2, dw, dh);
+          ctx.restore();
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, clipRadius, 0, Math.PI * 2);
+          ctx.stroke();
+          drewImage = true;
+        } catch (err) {
+          console.error('Map figure image load failed:', fig.imagePath, err);
+        }
+      }
+    }
+    if (!drewImage) {
+      console.error(`Map figure image missing for DC "${fig.dcName || '?'}" at ${fig.coord} - run: node scripts/extract-figure-images.js`);
+      ctx.fillStyle = fig.color || '#f00';
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(4, 8 * scale), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
   }
 
   return canvas.toBuffer('image/png');

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Deployment Zone Extractor</title>
+  <style>
+    body { font-family: sans-serif; padding: 16px; background: #222; color: #eee; }
+    .toolbar { margin: 12px 0; }
+    button { padding: 8px 16px; margin-right: 8px; cursor: pointer; }
+    .container { position: relative; display: inline-block; }
+    #mapImg { display: block; max-width: 1200px; }
+    #overlay { position: absolute; left: 0; top: 0; cursor: crosshair; }
+    #status { margin: 8px 0; color: #9f9; }
+  </style>
+</head>
+<body>
+  <h1>Mos Eisley Outskirts — Deployment Zones</h1>
+  <p id="status">Click or drag: Red → Blue → clear. Hold and drag to paint many cells.</p>
+  <div class="toolbar">
+    <button id="exportBtn" style="background:#0a0;color:#fff">Export JSON</button>
+  </div>
+  <div class="container">
+    <img id="mapImg" src="Map_Mos Eisley Outskirts.gif" alt="Map">
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <script>
+    const img = document.getElementById('mapImg');
+    const overlay = document.getElementById('overlay');
+    const ctx = overlay.getContext('2d');
+    const dx = 50, dy = 50, x0 = 25, y0 = 25;
+    let scale = 1, numCols = 0, numRows = 0;
+    let state = { red: [], blue: [] };
+
+    function colToLetter(c) { return c < 26 ? String.fromCharCode(65 + c) : colToLetter(Math.floor(c/26)-1) + colToLetter(c%26); }
+    function coordKey(col, row) { return colToLetter(col).toLowerCase() + (row + 1); }
+
+    function init() {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      if (!w || !h) { document.getElementById('status').textContent = 'Map failed to load. Open this HTML from the same folder as the map GIF.'; return; }
+      scale = Math.min(1, 1200 / w);
+      const sw = Math.round(w * scale), sh = Math.round(h * scale);
+      overlay.width = sw; overlay.height = sh;
+      overlay.style.width = sw + 'px'; overlay.style.height = sh + 'px';
+      numCols = Math.floor((sw - x0 * scale) / (dx * scale));
+      numRows = Math.floor((sh - y0 * scale) / (dy * scale));
+      document.getElementById('status').textContent = 'Map loaded! Click cells to tag zones.';
+      draw();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      const sdx = dx * scale, sdy = dy * scale, sx0 = x0 * scale, sy0 = y0 * scale;
+      for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) {
+        const k = coordKey(c, r), x = sx0 + c * sdx, y = sy0 + r * sdy;
+        if (state.red.includes(k)) { ctx.fillStyle = 'rgba(220,53,69,0.5)'; ctx.fillRect(x, y, sdx, sdy); }
+        else if (state.blue.includes(k)) { ctx.fillStyle = 'rgba(13,110,253,0.5)'; ctx.fillRect(x, y, sdx, sdy); }
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.strokeRect(x, y, sdx, sdy);
+      }
+    }
+
+    function getCell(e) {
+      const r = overlay.getBoundingClientRect();
+      const px = (e.clientX - r.left) * (overlay.width / r.width);
+      const py = (e.clientY - r.top) * (overlay.height / r.height);
+      const sdx = dx * scale, sdy = dy * scale, sx0 = x0 * scale, sy0 = y0 * scale;
+      const col = Math.floor((px - sx0) / sdx), row = Math.floor((py - sy0) / sdy);
+      return (col >= 0 && row >= 0 && col < numCols && row < numRows) ? [col, row] : null;
+    }
+
+    function applyToCell(col, row, mode) {
+      const k = coordKey(col, row);
+      if (mode === 'red') { state.blue = state.blue.filter(x => x !== k); if (!state.red.includes(k)) state.red.push(k); }
+      else if (mode === 'blue') { state.red = state.red.filter(x => x !== k); if (!state.blue.includes(k)) state.blue.push(k); }
+      else { state.red = state.red.filter(x => x !== k); state.blue = state.blue.filter(x => x !== k); }
+    }
+
+    let dragging = false, dragMode = null, lastCell = null;
+
+    function startDrag(col, row) {
+      const k = coordKey(col, row);
+      if (state.red.includes(k)) dragMode = 'blue';
+      else if (state.blue.includes(k)) dragMode = 'clear';
+      else dragMode = 'red';
+      applyToCell(col, row, dragMode);
+      lastCell = col + ',' + row;
+    }
+
+    function dragTo(col, row) {
+      if (!dragging || !dragMode) return;
+      const key = col + ',' + row;
+      if (key === lastCell) return;
+      lastCell = key;
+      applyToCell(col, row, dragMode);
+    }
+
+    overlay.onmousedown = (e) => {
+      if (e.button !== 0) return;
+      const cell = getCell(e);
+      if (!cell) return;
+      e.preventDefault();
+      dragging = true;
+      startDrag(cell[0], cell[1]);
+      state.red.sort(); state.blue.sort();
+      draw();
+    };
+
+    overlay.onmousemove = (e) => {
+      const cell = getCell(e);
+      if (cell) dragTo(cell[0], cell[1]);
+      if (dragging && cell) { state.red.sort(); state.blue.sort(); draw(); }
+    };
+
+    overlay.onmouseup = overlay.onmouseleave = () => { dragging = false; };
+    document.addEventListener('mouseup', () => { dragging = false; });
+
+    document.getElementById('exportBtn').onclick = () => {
+      const data = { source: 'extract-zones.html', maps: { 'mos-eisley-outskirts': { red: state.red, blue: state.blue } } };
+      const a = document.createElement('a');
+      a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(data, null, 2));
+      a.download = 'deployment-zones.json';
+      a.click();
+    };
+
+    img.onload = init;
+    img.onerror = () => { document.getElementById('status').textContent = 'Could not load map. Put this HTML file in the same folder as Map_Mos Eisley Outskirts.gif and open it.'; };
+    if (img.complete) init();
+  </script>
+</body>
+</html>

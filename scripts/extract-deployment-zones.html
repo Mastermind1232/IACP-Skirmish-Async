@@ -21,8 +21,8 @@
     .swatch.blue { background: rgba(13,110,253,0.6); }
     .swatch.none { background: transparent; border: 2px solid #666; }
     .hint { font-size: 12px; color: #999; margin-bottom: 12px; }
-    .container { position: relative; display: inline-block; max-width: 100%; overflow: auto; }
-    #mapImg { display: block; max-width: 100%; height: auto; }
+    .container { position: relative; display: inline-block; max-width: 100%; overflow: auto; min-height: 200px; }
+    #mapImg { display: block; max-width: 100%; height: auto; min-height: 100px; background: #333; }
     #overlay { position: absolute; left: 0; top: 0; cursor: crosshair; }
     #overlay.hidden { pointer-events: none; opacity: 0.5; }
     .output { margin-top: 16px; }
@@ -39,10 +39,12 @@
   </div>
   <div class="toolbar">
     <label>Map: <select id="mapSelect"></select></label>
+    <label>Or load image: <input type="file" id="imageInput" accept="image/*"></label>
     <button id="exportBtn" class="export">Export JSON</button>
     <button id="loadBtn">Load from JSON</button>
     <input type="file" id="fileInput" accept=".json" style="display:none">
   </div>
+  <p id="statusMsg" class="hint" style="margin-bottom:8px">Load a map image to begin.</p>
   <div class="container">
     <img id="mapImg" alt="Map">
     <canvas id="overlay"></canvas>
@@ -89,7 +91,9 @@
       x0 = map.grid.x0;
       y0 = map.grid.y0;
 
-      imgEl.src = map.image;
+      if (map.image) {
+        imgEl.src = map.image;
+      }
       imgEl.onload = () => {
         const w = imgEl.naturalWidth;
         const h = imgEl.naturalHeight;
@@ -195,7 +199,48 @@
       if (m) loadMap(m);
     };
 
-    loadMap(MAPS[0]);
+    document.getElementById('imageInput').onchange = (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      document.getElementById('statusMsg').textContent = 'Loading...';
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        imgEl = document.getElementById('mapImg');
+        overlay = document.getElementById('overlay');
+        ctx = overlay.getContext('2d');
+        dx = 50; dy = 50; x0 = 0; y0 = 0;
+        const img = new Image();
+        img.onload = () => {
+          const w = img.naturalWidth || img.width;
+          const h = img.naturalHeight || img.height;
+          const maxW = Math.min(w, 1400);
+          scale = maxW / w;
+          const sw = Math.round(w * scale);
+          const sh = Math.round(h * scale);
+          imgEl.src = ev.target.result;
+          imgEl.style.width = sw + 'px';
+          imgEl.style.height = sh + 'px';
+          imgEl.style.display = 'block';
+          overlay.width = sw;
+          overlay.height = sh;
+          overlay.style.width = sw + 'px';
+          overlay.style.height = sh + 'px';
+          numCols = Math.floor((sw - x0 * scale) / (dx * scale));
+          numRows = Math.floor((sh - y0 * scale) / (dy * scale));
+          state = { red: [], blue: [] };
+          draw();
+          document.getElementById('statusMsg').textContent = 'Map loaded! Click cells to tag Red or Blue zones.';
+        };
+        img.onerror = () => { document.getElementById('statusMsg').textContent = 'Load failed.'; alert('Could not load image.'); };
+        img.src = ev.target.result;
+      };
+      reader.onerror = () => { document.getElementById('statusMsg').textContent = 'Read failed.'; alert('Could not read file.'); };
+      reader.readAsDataURL(f);
+    };
+
+    imgEl = document.getElementById('mapImg');
+    overlay = document.getElementById('overlay');
+    ctx = overlay.getContext('2d');
   </script>
 </body>
 </html>
