@@ -1,0 +1,8 @@
+node_modules/
+.env
+test-map-output.png
+data/games-state.json
+
+# Large files (GitHub 100MB limit)
+Imperial_Assault_-_Skirmish_12.11.3.0.vmod
+IA Continuity Project Official Changes - 10.2.2.docx

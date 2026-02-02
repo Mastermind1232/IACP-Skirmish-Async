@@ -1,0 +1,654 @@
+{
+  "source": "Vassal buildFile.xml",
+  "extractedAt": "2026-02-01T23:27:23.527Z",
+  "maps": [
+    {
+      "id": "30th-floor-plaza",
+      "name": "30th Floor Plaza",
+      "vassalImage": "Map_30th Floor Plaza.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_30th Floor Plaza.gif"
+    },
+    {
+      "id": "anchorhead-cantina-bar",
+      "name": "Anchorhead Cantina/Bar",
+      "vassalImage": "Map_Anchorhead Cantina-Bar.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Anchorhead Cantina-Bar.gif"
+    },
+    {
+      "id": "bespin-tibanna-facility",
+      "name": "Bespin Tibanna Facility",
+      "vassalImage": "Map_Bespin Tibanna Facility.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Bespin Tibanna Facility.gif"
+    },
+    {
+      "id": "chopper-base-atollon",
+      "name": "Chopper Base, Atollon",
+      "vassalImage": "Map_Chopper Base Atollon.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Chopper Base Atollon.gif"
+    },
+    {
+      "id": "climate-research-camp",
+      "name": "Climate Research Camp",
+      "vassalImage": "Map_Climate Research Camp.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Climate Research Camp.gif"
+    },
+    {
+      "id": "corellian-underground",
+      "name": "Corellian Underground",
+      "vassalImage": "Map_Corellian Underground.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Corellian Underground.gif"
+    },
+    {
+      "id": "coruscant-back-alleys",
+      "name": "Coruscant Back Alleys",
+      "vassalImage": "Map_Coruscant Back Alleys.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Coruscant Back Alleys.gif"
+    },
+    {
+      "id": "coruscant-landfill",
+      "name": "Coruscant Landfill",
+      "vassalImage": "Map_Coruscant Landfill.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Coruscant Landfill.gif"
+    },
+    {
+      "id": "coruscant-senate-office",
+      "name": "Coruscant Senate Office",
+      "vassalImage": "Map_Coruscant Senate Office.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Coruscant Senate Office.gif"
+    },
+    {
+      "id": "devaron-garrison",
+      "name": "Devaron Garrison",
+      "vassalImage": "Devaron Garrison.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Devaron Garrison.gif"
+    },
+    {
+      "id": "development-facility",
+      "name": "Development Facility",
+      "vassalImage": "Map_Development Facility.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Development Facility.gif"
+    },
+    {
+      "id": "the-dune-sea",
+      "name": "The Dune Sea",
+      "vassalImage": "Map_The Dune Sea.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_The Dune Sea.gif"
+    },
+    {
+      "id": "echo-base",
+      "name": "Echo Base",
+      "vassalImage": "Map_Echo Base.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Echo Base.gif"
+    },
+    {
+      "id": "endor-defense-station",
+      "name": "Endor Defense Station",
+      "vassalImage": "Map_Endor Defense Station.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Endor Defense Station.gif"
+    },
+    {
+      "id": "endor-wilderness",
+      "name": "Endor Wilderness",
+      "vassalImage": "Map_Endor Wilderness.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Endor Wilderness.gif"
+    },
+    {
+      "id": "geonosis-foundry",
+      "name": "Geonosis Foundry",
+      "vassalImage": "Map_Geonosis Foundry.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Geonosis Foundry.gif"
+    },
+    {
+      "id": "hangar-bay",
+      "name": "Hangar Bay",
+      "vassalImage": "Map_Hangar Bay.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Hangar Bay.gif"
+    },
+    {
+      "id": "hoth-battle-station",
+      "name": "Hoth Battle Station",
+      "vassalImage": "Map_Hoth Battle Station.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Hoth Battle Station.gif"
+    },
+    {
+      "id": "hoth-weather-shelter",
+      "name": "Hoth Weather Shelter",
+      "vassalImage": "Map_Hoth Weather Shelter.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Hoth Weather Shelter.gif"
+    },
+    {
+      "id": "imperial-command-hub",
+      "name": "Imperial Command Hub",
+      "vassalImage": "Map_Imperial Command Hub.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Imperial Command Hub.gif"
+    },
+    {
+      "id": "imperial-labor-camp",
+      "name": "Imperial Labor Camp",
+      "vassalImage": "Map_Imperial Labor Camp.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Imperial Labor Camp.gif"
+    },
+    {
+      "id": "imperial-research-lab",
+      "name": "Imperial Research Lab",
+      "vassalImage": "Map_Imperial Research Lab.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Imperial Research Lab.gif"
+    },
+    {
+      "id": "imperial-space-station",
+      "name": "Imperial Space Station",
+      "vassalImage": "Map_Imperial Space Station.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Imperial Space Station.gif"
+    },
+    {
+      "id": "imperial-tower",
+      "name": "Imperial Tower",
+      "vassalImage": "Imperial Tower.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Imperial Tower.gif"
+    },
+    {
+      "id": "isb-headquarters",
+      "name": "ISB Headquarters",
+      "vassalImage": "Map_ISB Headquarters.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_ISB Headquarters.gif"
+    },
+    {
+      "id": "isb-training-grounds",
+      "name": "ISB Training Grounds",
+      "vassalImage": "Map_ISB Training Grounds.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_ISB Training Grounds.gif"
+    },
+    {
+      "id": "jabba-s-palace",
+      "name": "Jabba's Palace",
+      "vassalImage": "Map_Jabba's Palace.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Jabba's Palace.gif"
+    },
+    {
+      "id": "kashyyyk-station",
+      "name": "Kashyyyk Station",
+      "vassalImage": "Map_Kashyyyk Station.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Kashyyyk Station.gif"
+    },
+    {
+      "id": "kuat-space-station",
+      "name": "Kuat Space Station",
+      "vassalImage": "Map_Kuat Space Station.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Kuat Space Station.gif"
+    },
+    {
+      "id": "lothal-battlefront",
+      "name": "Lothal Battlefront",
+      "vassalImage": "Lothal Battlefront.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Lothal Battlefront.gif"
+    },
+    {
+      "id": "lothal-safehouse",
+      "name": "Lothal Safehouse",
+      "vassalImage": "Map_Lothal Safehouse.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Lothal Safehouse.gif"
+    },
+    {
+      "id": "lothal-spaceport",
+      "name": "Lothal Spaceport",
+      "vassalImage": "Map_Lothal Spaceport.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Lothal Spaceport.gif"
+    },
+    {
+      "id": "lothal-wastes",
+      "name": "Lothal Wastes",
+      "vassalImage": "Map_Lothal Wastes.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Lothal Wastes.gif"
+    },
+    {
+      "id": "massassi-ruins",
+      "name": "Massassi Ruins",
+      "vassalImage": "Map_Massassi Ruins.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Massassi Ruins.gif"
+    },
+    {
+      "id": "moisture-farm",
+      "name": "Moisture Farm",
+      "vassalImage": "Map_Moisture Farm.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Moisture Farm.gif"
+    },
+    {
+      "id": "mos-eisley-back-alleys",
+      "name": "Mos Eisley Back Alleys",
+      "vassalImage": "Map_Mos Eisley Back Alleys.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Mos Eisley Back Alleys.gif"
+    },
+    {
+      "id": "mos-eisley-cantina",
+      "name": "Mos Eisley Cantina",
+      "vassalImage": "Map_Mos Eisley Cantina.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Mos Eisley Cantina.gif"
+    },
+    {
+      "id": "mos-eisley-outskirts",
+      "name": "Mos Eisley Outskirts",
+      "vassalImage": "Map_Mos Eisley Outskirts.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Mos Eisley Outskirts.gif"
+    },
+    {
+      "id": "nal-hutta-swamps",
+      "name": "Nal Hutta Swamps",
+      "vassalImage": "Map_Nal Hutta Swamps.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Nal Hutta Swamps.gif"
+    },
+    {
+      "id": "nelvaanian-war-zone",
+      "name": "Nelvaanian War Zone",
+      "vassalImage": "Map_Nelvaanian War Zone.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Nelvaanian War Zone.gif"
+    },
+    {
+      "id": "ord-mantell-junkyard",
+      "name": "Ord Mantell Junkyard",
+      "vassalImage": "Map_Ord Mantell Junkyard.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Ord Mantell Junkyard.gif"
+    },
+    {
+      "id": "the-pit-of-carkoon",
+      "name": "The Pit of Carkoon",
+      "vassalImage": "Map_The Pit of Carkoon.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_The Pit of Carkoon.gif"
+    },
+    {
+      "id": "sewers-of-nar-shaddaa",
+      "name": "Sewers of Nar Shaddaa",
+      "vassalImage": "Map_Sewers of Nar Shaddaa.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Sewers of Nar Shaddaa.gif"
+    },
+    {
+      "id": "tarkin-initiative-labs",
+      "name": "Tarkin Initiative Labs",
+      "vassalImage": "Map_Tarkin Initiative Labs.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Tarkin Initiative Labs.gif"
+    },
+    {
+      "id": "training-ground",
+      "name": "Training Ground",
+      "vassalImage": "Map_Training Ground.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Training Ground.gif"
+    },
+    {
+      "id": "tython-meditation-field",
+      "name": "Tython Meditation Field",
+      "vassalImage": "Map_Tython Meditation Field.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Tython Meditation Field.gif"
+    },
+    {
+      "id": "uscru-entertainment-district",
+      "name": "Uscru Entertainment District",
+      "vassalImage": "Map_Uscru Entertainment District.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Uscru Entertainment District.gif"
+    },
+    {
+      "id": "wasskah-hunting-ground",
+      "name": "Wasskah Hunting Ground",
+      "vassalImage": "Map_Wasskah Hunting Ground.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Wasskah Hunting Ground.gif"
+    },
+    {
+      "id": "wasteland-outpost",
+      "name": "Wasteland Outpost",
+      "vassalImage": "Map_Wasteland Outpost.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Wasteland Outpost.gif"
+    },
+    {
+      "id": "b-omarr-subterranean-passageways-3-player",
+      "name": "* B'Omarr Subterranean Passageways (3-player)",
+      "vassalImage": "Map_Subterranean Passages (3-Player).gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Subterranean Passages (3-Player).gif"
+    },
+    {
+      "id": "scarif-imperial-hotel-3-player",
+      "name": "* Scarif Imperial Hotel (3-player)",
+      "vassalImage": "Map_Imperial Hotel (3-Player).gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Imperial Hotel (3-Player).gif"
+    },
+    {
+      "id": "hoth-battlefield-4-player",
+      "name": "* Hoth Battlefield (4-player)",
+      "vassalImage": "Map_Hoth Battlefield (4-Player).gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Hoth Battlefield (4-Player).gif"
+    },
+    {
+      "id": "nal-hutta-borderlands-4-player",
+      "name": "* Nal Hutta Borderlands (4-player)",
+      "vassalImage": "Map_Nal Hutta Borderlands (4-Player).gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Nal Hutta Borderlands (4-Player).gif"
+    },
+    {
+      "id": "temple-gardens-4-player",
+      "name": "* Temple Gardens (4-player)",
+      "vassalImage": "Map_Temple Gardens.gif",
+      "grid": {
+        "dx": 50,
+        "dy": 50,
+        "x0": 0,
+        "y0": 0
+      },
+      "imagePath": "vassal_extracted/images/Map_Temple Gardens.gif"
+    }
+  ]
+}

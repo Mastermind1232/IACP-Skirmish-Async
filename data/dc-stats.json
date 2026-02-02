@@ -1,0 +1,20 @@
+{
+  "source": "IACP / IA Skirmish rules - expand as needed. NOTE: specials = abilities with the arrow (special action) icon. figures = group size: match the grey notches/pips in the top-left of the deployment card (1 notch = 1 figure, 2 = 2, 3 = 3).",
+  "dcStats": {
+    "Darth Vader": { "health": 12, "figures": 1, "specials": ["Force Choke", "Brutality"] },
+    "Stormtrooper (Elite)": { "health": 5, "figures": 3, "specials": [] },
+    "Stormtrooper (Regular)": { "health": 4, "figures": 3, "specials": [] },
+    "Luke Skywalker": { "health": 10, "figures": 1, "specials": ["Saber Strike"] },
+    "Rebel Trooper (Elite)": { "health": 5, "figures": 3, "specials": [] },
+    "Rebel Trooper (Regular)": { "health": 4, "figures": 3, "specials": [] },
+    "Trandoshan Hunter": { "health": 7, "figures": 1, "specials": ["Frenzy"] },
+    "Trandoshan Hunter (Elite)": { "health": 7, "figures": 1, "specials": ["Frenzy"] },
+    "Trandoshan Hunter (Regular)": { "health": 6, "figures": 1, "specials": [] },
+    "Weequay Pirate": { "health": 4, "figures": 2, "specials": [] },
+    "Weequay Pirate (Elite)": { "health": 5, "figures": 2, "specials": [] },
+    "Weequay Pirate (Regular)": { "health": 4, "figures": 2, "specials": [] },
+    "Nexu": { "health": 6, "figures": 1, "specials": ["Pounce"] },
+    "Nexu (Elite)": { "health": 8, "figures": 1, "specials": ["Pounce"] },
+    "Nexu (Regular)": { "health": 6, "figures": 1, "specials": [] }
+  }
+}

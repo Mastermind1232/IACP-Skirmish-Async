@@ -1,0 +1,36 @@
+# IA Skirmish Rules Reference
+
+**Source:** FFG Skirmish Guide + IACP Official Changes (v10.2.2). IACP takes priority when rules conflict.
+
+## Core Loop
+1. **Setup** → Initiative, map, deployment, draw 3 command cards
+2. **Activation Phase** → Alternate activating deployment groups (initiative player first)
+3. **Status Phase** → Ready cards, draw command cards (1 + 1 per terminal), pass initiative
+4. Repeat until 40 VP or one player eliminated
+
+## Army Building
+- **Deployment:** ≤40 points, same affiliation, limits: 1 unique, 2 elite, 4 regular per name
+- **Command deck:** Exactly 15 cards, ≤15 total cost, obey card limit icons
+- **Skirmish upgrades:** Optional, no figure, can enable multi-affiliation
+
+## Victory
+- **40 VP** to win immediately
+- **Elimination:** All figures defeated = instant loss
+- **VP sources:** Defeating figures (cost = VP), mission objectives, card effects
+
+## Key Rules (Skirmish vs Campaign)
+- Strain (C) → Health (H) instead; can discard command card to prevent
+- No resting
+- One attack per activation (including special-action attacks)
+- Heroes use Deployment cards, not hero sheets; function like normal figures
+- No supply cards/crates
+
+## Initiative
+- Lower total deployment cost chooses who starts with initiative
+- Tie = random
+- Initiative player: picks deployment zone (red or blue), activates first each round
+- Passes to opponent each Status Phase
+
+## Terminals
+- Player controls terminal if only they have a figure on/adjacent
+- +1 command card draw per controlled terminal (Status Phase)

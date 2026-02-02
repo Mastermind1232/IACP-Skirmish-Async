@@ -1,0 +1,74 @@
+======================================
+** Imperial Assault - Skirmish Game **
+======================================
+
+Welcome to Imperial Assault, the Skirmish Game!  
+
+Before we begin, please note a few things:
+1.  I LOVE THIS GAME!!!  I made this module primarily because I want to be able to play it with my friends online whenever I'm free.  I offer it to the awesome players of the Imperial Assault community as a gift; I hope we can enjoy many exciting IA matches together!
+2.  If you play and enjoy this Vassal module, please buy a physical copy of the game.  This module is in no way intended to serve as a replacement for the actual game.
+3.  If you want to play the Campaign mode, this is not the module you're looking for.  Perhaps someone else will be able to make a Vassal module for the Campaign mode. 
+4.  If you have suggestions or requests to improve this module, or if you just want to chat, feel free to send me a private message.  My screenname is "thereisnotry" on both BoardGameGeek.com and FantasyFlightGames.com.
+
+--------------------
+Starting a Game
+--------------------
+1.  To choose a random mission, click the Skirmish Mission icon (the one with a picture of Vader and Luke in a lightsaber duel).  This will randomly select one of the missions for you to play.  If you'd rather choose the mission yourself, feel free to skip this step.
+2.  As of Wave 5, we now have 25 maps to choose from, which means 50 different missions.  This increasing volume of missions requires a change in how missions are saved on Vassal, because we will soon get to the point where it is unwieldy to find the mission that you're looking for.  Therefore, starting with version 5.0 and onward, only the missions for the current season's legal maps will be pre-loaded in the module.  [These maps are listed in the "Imperial Assault Tournament Rules" document, which you can find at "https://www.fantasyflightgames.com/en/products/star-wars-imperial-assault/?section=support#/support-section".]  To access these pre-loaded missions, click "File" in the upper-left corner of the screen and then mouse-over the "Load a Mission" section.  This will make a list of the current season's legal maps and missions appear.  Click the mission you wish to play, and the game will load.  All of the necessary elements and tokens will be pre-loaded onto the map if you do this.  
+3.  For the rest of the maps (ie, the ones not in the current rotation of legal maps/missions), you can select the "...Choose your own Skirmish Mission Map...." option at the top of the list, which will allow you to select which Player you want to be, and which map you'd like to play on.  You will then need to take a few moments to find and place the mission's components onto the map.
+4.  FYI, click the "Retire" button and choose to "Join another side" if you'd like to change your Player number.
+5.  The maps will show up in a separate window.  To toggle this window, click the "Map" button or press F8 on your keyboard.  
+6.  To put some cards and figures into play, click on the "Cards / Figures / Tokens" button, which will bring up a tabbed section in which you can navigate between Cards, Figures and Tokens to find the -droids- (oops) pieces you're looking for.  When you've found the pieces you want, just click-and-drag them onto the map or onto your Player Hand (see below).
+7.  To interact with any Card or Figure or Token, simply Right-click on it, and a menu will pop up, allowing you to change features of the item.  You can follow the prompts on the R-click windows, and you can also learn the commands listed there.  As an example, you can highlight a Deployment Card and press "CTRL F" on your keyboard to create the corresponding Figure on top of that Card (this saves time when putting your pieces onto the map at the start of the game).
+
+
+-------------------
+Player Hands
+-------------------
+It is worthwhile to take note of which Player number you chose when creating or joining a game.   Once a game is loaded, you can click on the black and yellow buttons at the top of the screen.  These are Player Hands.  Only the owner of a given Player Hand can move or manipulate the pieces in that window; so if you're Player 1, then you're the only person who can interact with the items in the "Player 1 Hand" window.
+
+Any player or observer can see the items listed in any Player Hand if they open that window, but if the cards in it are flipped face-down, they will only see the backs of the cards.  Meanwhile, if you are its owner you will be able to see a smaller picture of the card face; if you want a larger view of the card, then simply hover your mouse over it, and you will get a larger image, which should be large enough for you to read easily.  When you want to play a Card or move a Figure from your Player Hand, simply drag it onto the game map.
+
+Each Player Hand has three Decks, which are the gray boxes with the words, "Command Cards," "Deployment Cards," and "Figures" written on an angle.  The main differences between the different decks are the size, but the "Command Card" deck is different, because any cards placed in this deck will always be automatically shuffled.  The purpose of this design is to ensure that your Command Card draws during the game are always random.  The Deployment Card and Figure decks will store the items in the order in which you place them.  Any Card will be turned face-down when placed in any of the decks, though the Figures are always face-up.
+
+If you R-click on a Deck you will see a Save/Load option (as well as an option to Draw Multiple cards).  Place any cards there that you'd like (whether Deployment Cards or Command Cards), and choose the Save option, and then give your deck a name (ie, "Vader's Fist") and save it to a place on your computer where you'll be able to find it again.  (I've placed a folder named "IA Squads" on my desktop for this purpose.)  If you get into the habit of saving your squads after making them, you'll soon have a growing pool of squads readily available to you for use (using the "Load" option when R-clicking the grayed box).  This can save you a lot of setup time as you go along.
+
+In order to make set-up easier, I would suggest saving your squad components in 3 separate files.  For example, "Vader's Fist DC," "Vader's Fist CC," and "Vader's Fist figs" for the Deployment Cards, Command Cards, and Figures, respectively.  If you load each deck into its own designated area on your Player Hand, you'll find that it's easy to get set up quickly every time you play.
+
+
+--------------------
+Misc Features
+--------------------
+--Score Cards-- I've made Score Cards to help players to keep track of their accumulated VPs during a game. Each player should have his own Score Card, with its color corresponding to his player color (Green, Purple, etc). 
+
+--The "Moved" indicator-- After a Figure has moved from one position on the map to another, a small black and red targeting icon will appear at the bottom of the figure's token. To remove it, you can highlight the Figure and press "CTRL M." Or, to remove all of them at once (ie, when a round is over), you can click on the small black button (with the white "MOV" letters on it) at the top of the screen; this will remove all of the "Moved" markers on all of the figures on the board.
+
+--Sound Effects-- Press "CTRL M" on a highlighted Skirmish Mission card to play some intro music when you start a new mission (imagine the classic opening Star Wars scrawl). Similarly, highlight some of the Figures and/or Command Cards and press "CTRL S" to play a short (and classic!) sound effect. 
+
+--Green and Red Arrow buttons-- At the end of your turn, click the Green arrow button (or press F9 on your keyboard); R2-D2 will whistle and a message will be displayed in the information window, alerting your opponent that it is now his turn. Likewise, if you click the Red arrow button (or press F12 on your keyboard), the sound of a lightsaber being extinguished will play, and a similar message will be displayed, telling your opponent that you've finished activating all of your deployment cards for the round.
+
+--Dice-- Versions 4.0 and onward use a Dice pop-up window to roll the dice.  [Massive thanks and kudos to the makers of the excellent X-Wing mod, because I copied this coding directly from their mod and made minor changes to make it work for IA.]  To open the Dice window, first load a map or a mission (the window will be empty until you do) and then either click on the icon with the picture of multiple dice or press F5 on your keyboard.  To roll a die, first highlight the die you want to roll (ie, the Red one) by clicking on it; a pink box will appear around it.  Then you have a choice: if you want to roll 2 dice (such as for a Wampa's attack), then you could press "CTRL 2" to roll 2 Red dice at once.  Alternatively, you could highlight the Red die and then press any two of the numbers between 1 and 4.  This feature allows you the option of rolling up to 4 dice of a given color, and it also gives you the option to roll any of those dice at any point: you could roll the 2nd and 4th dice on the Red row, along with the 3rd die on the Yellow row for Darth Vader's attack, for example.  Please note that if you press "CTRL #" (where # represents a number between 1-4) for a given die color, the roller will first delete the other dice of that color that are currently rolled.  If you want to reroll or cancel a certain die that has already been rolled, then you just need to select that die and press either "CTRL V" to reroll it or "CTRL D" to delete it.  The Attack dice and Defense dice have different sound effects because...that's how this module rolls.  :)  When you're done rolling dice, press the "Clear Dice" button to delete all the dice that have been rolled.  As is normal for a Vassal mod, the dice results will be written in the main chat window so you can always go back and look at them if perhaps you accidentally clear the dice before you're finished with them.
+
+
+--------------------
+
+MODULE CONTRIBUTORS
+--------------------
+
+
+
+Vassal coding by thereisnotry
+Graphical enhancement by Radarman5 
+
+Superb scans for many of the cards & maps: Rob (from the IA Mission Support FaceBook group)
+
+
+--------------------
+ACKNOWLEDGMENTS
+--------------------
+
+Star Wars: Imperial Assault is a registered trademark of Fantasy Flight Games, Inc. No challenge to the legal status of this content is intended. If my experience with previous games on Vassal is any indication, I expect that this Vassal Module will only help to promote the growth and sale of the game. Please, if you play it on Vassal, buy it for your game closet! Every game is better when played face-to-face, but Vassal is a useful tool when you can't get together with your gaming buddies.
+
+If you need help, have questions, want to report a bug, or ask for improvements, please send me an email: revtrev@hotmail.com
+
+Have fun, and may the Force be with you!
