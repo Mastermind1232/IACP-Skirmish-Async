@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Map Tokens — Terminals, Mission A, Mission B</title>
+  <style>
+    body { font-family: sans-serif; padding: 16px; background: #222; color: #eee; }
+    .toolbar { margin: 12px 0; }
+    button { padding: 8px 16px; margin-right: 8px; cursor: pointer; }
+    .container { position: relative; display: inline-block; }
+    #mapImg { display: block; max-width: 1200px; }
+    #overlay { position: absolute; left: 0; top: 0; cursor: crosshair; user-select: none; }
+    #status { margin: 8px 0; color: #9f9; }
+    .mode { margin-right: 12px; }
+    label { cursor: pointer; }
+    .legend { margin: 8px 0; font-size: 14px; }
+    .legend span { margin-right: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Map Tokens — Mos Eisley Outskirts</h1>
+  <p id="status">Load map-spaces.json first (defines valid cells). Then place Terminals (global), Mission A tokens (launch panels), Mission B tokens (contraband).</p>
+  <div class="legend">
+    <span style="color:#4fc3f7">■ Terminals</span>
+    <span style="color:#81c784">■ Mission A — Launch panels</span>
+    <span style="color:#ffb74d">■ Mission B — Contraband</span>
+  </div>
+  <div class="toolbar">
+    <span class="mode"><label><input type="radio" name="mode" value="terminal" checked> Terminals (global)</label></span>
+    <span class="mode"><label><input type="radio" name="mode" value="missionA"> Mission A (launch panels)</label></span>
+    <span class="mode"><label><input type="radio" name="mode" value="missionB"> Mission B (contraband)</label></span>
+    <button id="loadSpacesBtn">Load map-spaces.json</button>
+    <button id="loadTokensBtn">Load map-tokens.json</button>
+    <input type="file" id="fileInput" accept=".json" style="display:none">
+    <button id="exportBtn" style="background:#0a0;color:#fff">Export map-tokens.json</button>
+  </div>
+  <div class="container">
+    <img id="mapImg" src="Map_Mos Eisley Outskirts.gif" alt="Map">
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <script>
+    const img = document.getElementById('mapImg');
+    const overlay = document.getElementById('overlay');
+    const ctx = overlay.getContext('2d');
+    const dx = 50, dy = 50, x0 = 25, y0 = 25;
+    let scale = 1, numCols = 0, numRows = 0;
+    let validSpaces = new Set();
+    let state = {
+      terminals: [],
+      missionA: { launchPanels: [] },
+      missionB: { contraband: [] }
+    };
+
+    function colToLetter(c) { return c < 26 ? String.fromCharCode(65 + c) : colToLetter(Math.floor(c/26)-1) + colToLetter(c%26); }
+    function coordKey(col, row) { return colToLetter(col).toLowerCase() + (row + 1); }
+
+    function init() {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      if (!w || !h) { document.getElementById('status').textContent = 'Map failed to load.'; return; }
+      scale = Math.min(1, 1200 / w);
+      const sw = Math.round(w * scale), sh = Math.round(h * scale);
+      overlay.width = sw; overlay.height = sh;
+      overlay.style.width = sw + 'px'; overlay.style.height = sh + 'px';
+      numCols = Math.floor((sw - x0 * scale) / (dx * scale));
+      numRows = Math.floor((sh - y0 * scale) / (dy * scale));
+      draw();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      const sdx = dx * scale, sdy = dy * scale, sx0 = x0 * scale, sy0 = y0 * scale;
+      const termSet = new Set(state.terminals.map(s => String(s).toLowerCase()));
+      const aSet = new Set(state.missionA.launchPanels.map(s => String(s).toLowerCase()));
+      const bSet = new Set(state.missionB.contraband.map(s => String(s).toLowerCase()));
+
+      for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) {
+        const k = coordKey(c, r), x = sx0 + c * sdx, y = sy0 + r * sdy;
+        if (!validSpaces.has(k)) {
+          ctx.fillStyle = 'rgba(60,60,60,0.5)';
+          ctx.fillRect(x, y, sdx, sdy);
+        }
+        ctx.strokeStyle = validSpaces.has(k) ? 'rgba(255,255,255,0.15)' : 'rgba(100,100,100,0.3)';
+        ctx.strokeRect(x, y, sdx, sdy);
+
+        if (termSet.has(k)) {
+          ctx.fillStyle = 'rgba(79,195,247,0.6)';
+          ctx.fillRect(x + 4, y + 4, sdx - 8, sdy - 8);
+        }
+        if (aSet.has(k)) {
+          ctx.fillStyle = 'rgba(129,199,132,0.6)';
+          ctx.beginPath();
+          ctx.arc(x + sdx/2, y + sdy/2, Math.min(sdx,sdy)/2 - 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (bSet.has(k)) {
+          ctx.fillStyle = 'rgba(255,183,77,0.7)';
+          ctx.fillRect(x + 6, y + 6, sdx - 12, sdy - 12);
+        }
+      }
+    }
+
+    function getCellInfo(e) {
+      const r = overlay.getBoundingClientRect();
+      const px = (e.clientX - r.left) * (overlay.width / r.width);
+      const py = (e.clientY - r.top) * (overlay.height / r.height);
+      const sdx = dx * scale, sdy = dy * scale, sx0 = x0 * scale, sy0 = y0 * scale;
+      const col = Math.floor((px - sx0) / sdx), row = Math.floor((py - sy0) / sdy);
+      if (col < 0 || row < 0 || col >= numCols || row >= numRows) return null;
+      return { col, row, coord: coordKey(col, row) };
+    }
+
+    function toggleCoord(coord, mode) {
+      const k = String(coord).toLowerCase();
+      if (!validSpaces.has(k)) return;
+      if (mode === 'terminal') {
+        const idx = state.terminals.findIndex(s => String(s).toLowerCase() === k);
+        if (idx >= 0) state.terminals.splice(idx, 1);
+        else state.terminals.push(k);
+      } else if (mode === 'missionA') {
+        const arr = state.missionA.launchPanels;
+        const idx = arr.findIndex(s => String(s).toLowerCase() === k);
+        if (idx >= 0) arr.splice(idx, 1);
+        else arr.push(k);
+      } else if (mode === 'missionB') {
+        const arr = state.missionB.contraband;
+        const idx = arr.findIndex(s => String(s).toLowerCase() === k);
+        if (idx >= 0) arr.splice(idx, 1);
+        else arr.push(k);
+      }
+    }
+
+    let dragState = null;
+    overlay.onmousedown = (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const info = getCellInfo(e);
+      if (!info) return;
+      const mode = document.querySelector('input[name="mode"]:checked').value;
+      const hasToken = (mode === 'terminal' && state.terminals.some(s => String(s).toLowerCase() === info.coord)) ||
+        (mode === 'missionA' && state.missionA.launchPanels.some(s => String(s).toLowerCase() === info.coord)) ||
+        (mode === 'missionB' && state.missionB.contraband.some(s => String(s).toLowerCase() === info.coord));
+      const paintAdd = !hasToken;
+      toggleCoord(info.coord, mode);
+      dragState = { mode, paintAdd, lastCoord: info.coord };
+      draw();
+    };
+
+    overlay.onmousemove = (e) => {
+      if (!dragState) return;
+      const info = getCellInfo(e);
+      if (!info || info.coord === dragState.lastCoord) return;
+      dragState.lastCoord = info.coord;
+      const hasToken = (dragState.mode === 'terminal' && state.terminals.some(s => String(s).toLowerCase() === info.coord)) ||
+        (dragState.mode === 'missionA' && state.missionA.launchPanels.some(s => String(s).toLowerCase() === info.coord)) ||
+        (dragState.mode === 'missionB' && state.missionB.contraband.some(s => String(s).toLowerCase() === info.coord));
+      const shouldToggle = (dragState.paintAdd && !hasToken) || (!dragState.paintAdd && hasToken);
+      if (shouldToggle) {
+        toggleCoord(info.coord, dragState.mode);
+        draw();
+      }
+    };
+
+    overlay.onmouseup = overlay.onmouseleave = () => { if (dragState) dragState = null; };
+    document.addEventListener('mouseup', () => { if (dragState) dragState = null; });
+
+    function loadFile(cb) {
+      const input = document.getElementById('fileInput');
+      input.onchange = (e) => {
+        const f = e.target.files[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = () => { cb(r.result); input.value = ''; };
+        r.readAsText(f);
+      };
+      input.click();
+    }
+
+    document.getElementById('loadSpacesBtn').onclick = () => loadFile((text) => {
+      try {
+        const data = JSON.parse(text);
+        const mapData = data.maps?.['mos-eisley-outskirts'] || data;
+        const spaces = mapData.spaces || [];
+        validSpaces = new Set(spaces.map(s => String(s).toLowerCase()));
+        document.getElementById('status').textContent = 'Loaded ' + validSpaces.size + ' valid spaces. Click or drag to place tokens.';
+        draw();
+      } catch (err) { document.getElementById('status').textContent = 'Load error: ' + err.message; }
+    });
+
+    document.getElementById('loadTokensBtn').onclick = () => loadFile((text) => {
+      try {
+        const data = JSON.parse(text);
+        const mapData = data.maps?.['mos-eisley-outskirts'] || data;
+        if (mapData) {
+          state.terminals = mapData.terminals || [];
+          state.missionA = { launchPanels: mapData.missionA?.launchPanels || [] };
+          state.missionB = { contraband: mapData.missionB?.contraband || mapData.missionB?.crates || [] };
+        }
+        document.getElementById('status').textContent = 'Loaded tokens. Terminals: ' + state.terminals.length + ', A: ' + state.missionA.launchPanels.length + ', B: ' + state.missionB.contraband.length;
+        draw();
+      } catch (err) { document.getElementById('status').textContent = 'Load error: ' + err.message; }
+    });
+
+    document.getElementById('exportBtn').onclick = () => {
+      const output = {
+        source: 'extract-map-tokens.html',
+        maps: {
+          'mos-eisley-outskirts': {
+            terminals: [...state.terminals].sort(),
+            missionA: { launchPanels: [...state.missionA.launchPanels].sort() },
+            missionB: { contraband: [...state.missionB.contraband].sort() }
+          }
+        }
+      };
+      const a = document.createElement('a');
+      a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(output, null, 2));
+      a.download = 'map-tokens.json';
+      a.click();
+      document.getElementById('status').textContent = 'Exported. Terminals: ' + state.terminals.length + ', A: ' + state.missionA.launchPanels.length + ', B: ' + state.missionB.contraband.length;
+    };
+
+    img.onload = init;
+    img.onerror = () => { document.getElementById('status').textContent = 'Could not load map.'; };
+    if (img.complete) init();
+  </script>
+</body>
+</html>

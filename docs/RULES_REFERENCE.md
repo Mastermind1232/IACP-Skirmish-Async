@@ -4,8 +4,8 @@
 
 ## Core Loop
 1. **Setup** → Initiative, map, deployment, draw 3 command cards
-2. **Activation Phase** → Alternate activating deployment groups (initiative player first)
-3. **Status Phase** → Ready cards, draw command cards (1 + 1 per terminal), pass initiative
+2. **Activation Phase** → Alternate activating deployment groups (initiative player first). Both players end activation when done.
+3. **Status Phase** — in order: (1) Ready all Deployment cards; (2) Draw 1 CC + 1 per controlled terminal; (3) End of round effects (scoring); (4) Pass initiative
 4. Repeat until 40 VP or one player eliminated
 
 ## Army Building
@@ -32,5 +32,5 @@
 - Passes to opponent each Status Phase
 
 ## Terminals
-- Player controls terminal if only they have a figure on/adjacent
-- +1 command card draw per controlled terminal (Status Phase)
+- Player controls terminal if only they have a figure on or adjacent
+- +1 command card draw per controlled terminal (Status Phase step 2)

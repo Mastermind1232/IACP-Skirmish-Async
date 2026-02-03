@@ -75,9 +75,101 @@ try {
   const dData = JSON.parse(readFileSync(join(rootDir, 'data', 'dice.json'), 'utf8'));
   diceData = dData;
 } catch {}
+let missionCardsData = {};
+try {
+  const mcData = JSON.parse(readFileSync(join(rootDir, 'data', 'mission-cards.json'), 'utf8'));
+  missionCardsData = mcData.maps || {};
+} catch {}
+let mapTokensData = {};
+try {
+  const mtData = JSON.parse(readFileSync(join(rootDir, 'data', 'map-tokens.json'), 'utf8'));
+  mapTokensData = mtData.maps || {};
+} catch {}
 
 function getMapSpaces(mapId) {
   return mapSpacesData[mapId] || null;
+}
+
+/** Return true if coord is within optional gridBounds (maxCol/maxRow are 0-based inclusive). */
+function isWithinGridBounds(coord, gridBounds) {
+  if (!gridBounds || (gridBounds.maxCol == null && gridBounds.maxRow == null)) return true;
+  const { col, row } = parseCoord(coord);
+  if (col < 0 || row < 0) return false;
+  if (gridBounds.maxCol != null && col > gridBounds.maxCol) return false;
+  if (gridBounds.maxRow != null && row > gridBounds.maxRow) return false;
+  return true;
+}
+
+/** Filter map data (spaces, adjacency, etc.) to only include coords within gridBounds. */
+function filterMapSpacesByBounds(rawMapSpaces, gridBounds) {
+  if (!gridBounds || (gridBounds.maxCol == null && gridBounds.maxRow == null)) return rawMapSpaces;
+  const inBounds = (c) => isWithinGridBounds(c, gridBounds);
+  const spaces = (rawMapSpaces.spaces || []).filter(inBounds);
+  const spaceSet = new Set(spaces.map((s) => normalizeCoord(s)));
+  const adjacency = {};
+  for (const [coord, neighbors] of Object.entries(rawMapSpaces.adjacency || {})) {
+    if (!inBounds(coord)) continue;
+    adjacency[normalizeCoord(coord)] = (neighbors || []).filter((n) => spaceSet.has(normalizeCoord(n))).map((n) => normalizeCoord(n));
+  }
+  const terrain = {};
+  for (const [coord, type] of Object.entries(rawMapSpaces.terrain || {})) {
+    if (inBounds(coord)) terrain[normalizeCoord(coord)] = String(type || 'normal').toLowerCase();
+  }
+  const blocking = (rawMapSpaces.blocking || []).filter(inBounds);
+  const movementBlockingEdges = (rawMapSpaces.movementBlockingEdges || []).filter(
+    ([a, b]) => spaceSet.has(normalizeCoord(a)) && spaceSet.has(normalizeCoord(b))
+  );
+  const impassableEdges = (rawMapSpaces.impassableEdges || []).filter(
+    ([a, b]) => spaceSet.has(normalizeCoord(a)) && spaceSet.has(normalizeCoord(b))
+  );
+  return {
+    ...rawMapSpaces,
+    spaces,
+    adjacency,
+    terrain,
+    blocking,
+    movementBlockingEdges,
+    impassableEdges,
+  };
+}
+
+/** Get set of normalized coords occupied by a player's figures. */
+function getPlayerOccupiedCells(game, playerNum) {
+  const cells = new Set();
+  const poses = game.figurePositions?.[playerNum] || {};
+  for (const [k, coord] of Object.entries(poses)) {
+    const dcName = k.replace(/-\d+-\d+$/, '');
+    const size = game.figureOrientations?.[k] || getFigureSize(dcName);
+    for (const c of getFootprintCells(coord, size)) {
+      cells.add(normalizeCoord(c));
+    }
+  }
+  return cells;
+}
+
+/** Count terminals exclusively controlled by player (on or adjacent; only they have presence). */
+function countTerminalsControlledByPlayer(game, playerNum, mapId) {
+  const mapData = mapTokensData[mapId];
+  if (!mapData?.terminals?.length) return 0;
+  const rawMapSpaces = getMapSpaces(mapId);
+  if (!rawMapSpaces?.adjacency) return 0;
+  const mapDef = mapRegistry.find((m) => m.id === mapId);
+  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+  const adjacency = mapSpaces.adjacency || {};
+
+  const p1Cells = getPlayerOccupiedCells(game, 1);
+  const p2Cells = getPlayerOccupiedCells(game, 2);
+
+  let count = 0;
+  for (const term of mapData.terminals) {
+    const t = normalizeCoord(term);
+    const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
+    const p1Has = [...controlSet].some((c) => p1Cells.has(c));
+    const p2Has = [...controlSet].some((c) => p2Cells.has(c));
+    if (playerNum === 1 && p1Has && !p2Has) count++;
+    if (playerNum === 2 && p2Has && !p1Has) count++;
+  }
+  return count;
 }
 
 /** Get all occupied spaces (any figure's footprint) for movement validation. */
@@ -145,8 +237,10 @@ function getMovementKeywords(dcName) {
 
 function getBoardStateForMovement(game, excludeFigureKey = null) {
   if (!game?.selectedMap?.id) return null;
-  const mapSpaces = getMapSpaces(game.selectedMap.id);
-  if (!mapSpaces) return null;
+  const rawMapSpaces = getMapSpaces(game.selectedMap.id);
+  if (!rawMapSpaces) return null;
+  const mapDef = mapRegistry.find((m) => m.id === game.selectedMap.id);
+  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
   const occupiedSet = new Set(
     getOccupiedSpacesForMovement(game, excludeFigureKey).map((s) => normalizeCoord(s))
   );
@@ -584,8 +678,16 @@ async function updateMovementBankMessage(game, msgId, client) {
   const bank = game.movementBank?.[msgId];
   if (!bank) return;
   const { threadId, messageId, remaining, total, displayName } = bank;
-  if (!threadId || !messageId) return;
+  if (!threadId) return;
   try {
+    if (remaining <= 0 && messageId) {
+      const thread = await client.channels.fetch(threadId);
+      const msg = await thread.messages.fetch(messageId).catch(() => null);
+      if (msg) await msg.delete().catch(() => {});
+      bank.messageId = null;
+      return;
+    }
+    if (!messageId) return;
     const thread = await client.channels.fetch(threadId);
     const msg = await thread.messages.fetch(messageId);
     await msg.edit({ content: getMovementBankText(displayName, remaining, total) });
@@ -1056,11 +1158,15 @@ async function createGameChannels(guild, player1Id, player2Id, options = {}) {
     parent: gameCategory.id,
     permissionOverwrites: playerPerms,
   });
+  const gameLogPerms = [
+    ...playerPerms.filter((p) => p.id !== botId),
+    { id: botId, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ManageMessages },
+  ];
   const generalChannel = await guild.channels.create({
     name: `${prefix} Game Log`,
     type: ChannelType.GuildText,
     parent: gameCategory.id,
-    permissionOverwrites: playerPerms,
+    permissionOverwrites: gameLogPerms,
   });
   const boardChannel = await guild.channels.create({
     name: `${prefix} Board`,
@@ -1163,6 +1269,36 @@ async function logGameAction(game, client, content, options = {}) {
     await ch.send({ content: msg, allowedMentions: options.allowedMentions });
   } catch (err) {
     console.error('Game log error:', err);
+  }
+}
+
+/** After map selection: randomly pick A or B mission card, post to Game Log, pin it. */
+async function postMissionCardAfterMapSelection(game, client, map) {
+  const missions = missionCardsData[map.id];
+  if (!missions?.a || !missions?.b) return;
+  const variant = Math.random() < 0.5 ? 'a' : 'b';
+  const mission = missions[variant];
+  const mapName = map.name || map.id;
+  const fullName = `${mapName} — ${mission.name}`;
+  game.selectedMission = { variant, name: mission.name, fullName };
+  try {
+    const ch = await client.channels.fetch(game.generalId);
+    const imagePath = join(rootDir, mission.imagePath);
+    let sentMsg;
+    if (existsSync(imagePath)) {
+      const attachment = new AttachmentBuilder(imagePath, { name: 'mission-card.jpg' });
+      sentMsg = await ch.send({
+        content: `🎯 **Mission:** ${fullName}`,
+        files: [attachment],
+      });
+    } else {
+      sentMsg = await ch.send({ content: `🎯 **Mission:** ${fullName}` });
+    }
+    await sentMsg.pin().catch(() => {});
+    await logGameAction(game, client, `Mission selected: **${fullName}** (pinned above).`, { phase: 'SETUP', icon: 'map' });
+  } catch (err) {
+    console.error('Mission card post error:', err);
+    await logGameAction(game, client, `Mission selected: **${fullName}**`, { phase: 'SETUP', icon: 'map' });
   }
 }
 
@@ -1400,6 +1536,25 @@ function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, occup
   return { rows, available };
 }
 
+/** Returns action rows for MP distance selection: buttons with move_mp_${msgId}_${figureIndex}_${mp}. */
+function getMoveMpButtonRows(msgId, figureIndex, mpRemaining) {
+  if (!mpRemaining || mpRemaining < 1) return [];
+  const btns = [];
+  for (let mp = 1; mp <= mpRemaining; mp++) {
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`move_mp_${msgId}_${figureIndex}_${mp}`)
+        .setLabel(`${mp} MP`)
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
+  const rows = [];
+  for (let r = 0; r < btns.length; r += 5) {
+    rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  }
+  return rows;
+}
+
 /** Returns action rows for movement: buttons with move_pick_${msgId}_${figureIndex}_${space}. */
 function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces) {
   const available = (validSpaces || []).map((s) => normalizeCoord(s));
@@ -1488,6 +1643,20 @@ function getFiguresForRender(game) {
   return figures;
 }
 
+/** Get map tokens (terminals + mission-specific) for renderMap. */
+function getMapTokensForRender(mapId, missionVariant) {
+  const mapData = mapTokensData[mapId];
+  if (!mapData) return { terminals: [], missionA: [], missionB: [] };
+  const terminals = mapData.terminals || [];
+  const missionA = mapData.missionA?.launchPanels || [];
+  const missionB = mapData.missionB?.contraband || mapData.missionB?.crates || [];
+  return {
+    terminals,
+    missionA: missionVariant === 'a' ? missionA : [],
+    missionB: missionVariant === 'b' ? missionB : [],
+  };
+}
+
 /** Build Scorecard embed with VP breakdown per player. */
 function buildScorecardEmbed(game) {
   const vp1 = game.player1VP || { total: 0, kills: 0, objectives: 0 };
@@ -1516,14 +1685,16 @@ async function buildBoardMapPayload(gameId, map, game) {
   const components = [getBoardButtons(gameId)];
   const embeds = game ? [buildScorecardEmbed(game)] : [];
   const figures = game ? getFiguresForRender(game) : [];
+  const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant);
   const hasFigures = figures.length > 0;
+  const hasTokens = tokens.terminals?.length > 0 || tokens.missionA?.length > 0 || tokens.missionB?.length > 0;
   const imagePath = map.imagePath ? join(rootDir, map.imagePath) : null;
   const pdfPath = join(rootDir, 'data', 'map-pdfs', `${map.id}.pdf`);
 
   const allowedMentions = game ? { users: [...new Set([game.player1Id, game.player2Id])] } : undefined;
-  if (hasFigures && imagePath && existsSync(imagePath)) {
+  if ((hasFigures || hasTokens) && imagePath && existsSync(imagePath)) {
     try {
-      const buffer = await renderMap(map.id, { figures, showGrid: false, maxWidth: 1200 });
+      const buffer = await renderMap(map.id, { figures, tokens, showGrid: false, maxWidth: 1200 });
       return {
         content: `**Game map: ${map.name}** — Refresh to update figure positions.`,
         files: [new AttachmentBuilder(buffer, { name: 'map-with-figures.png' })],
@@ -1617,6 +1788,7 @@ async function runDraftRandom(game, client) {
     const map = playReadyMaps[Math.floor(Math.random() * playReadyMaps.length)];
     game.selectedMap = { id: map.id, name: map.name, imagePath: map.imagePath };
     game.mapSelected = true;
+    await postMissionCardAfterMapSelection(game, client, map);
     if (game.boardId) {
       const boardChannel = await client.channels.fetch(game.boardId);
       const payload = await buildBoardMapPayload(game.gameId, map, game);
@@ -1753,17 +1925,25 @@ async function runDraftRandom(game, client) {
   const roundEmbed = new EmbedBuilder()
     .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND 1`)
     .setColor(PHASE_COLOR);
-  const endRoundRow = new ActionRowBuilder().addComponents(
+  const showBtn = shouldShowEndActivationPhaseButton(game, game.gameId);
+  const components = showBtn ? [new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`status_phase_${game.gameId}`)
-      .setLabel('End Round (Status Phase)')
+      .setLabel('End R1 Activation Phase')
       .setStyle(ButtonStyle.Secondary)
-  );
-  await generalChannel.send({
-    content: '**Draft Random complete.** Game on! When both players have used all activations, click **End Round**.',
+  )] : [];
+  const content = showBtn
+    ? `<@${game.initiativePlayerId}> **Draft Random complete.** Your turn! Both players: click **End R1 Activation Phase** when you've used all activations and any end-of-activation effects.`
+    : `<@${game.initiativePlayerId}> **Draft Random complete.** Your turn! Use all activations and actions. The **End R1 Activation Phase** button will appear when both players have done so.`;
+  const sent = await generalChannel.send({
+    content,
     embeds: [roundEmbed],
-    components: [endRoundRow],
+    components,
+    allowedMentions: { users: [game.initiativePlayerId] },
   });
+  game.roundActivationMessageId = sent.id;
+  game.roundActivationButtonShown = showBtn;
+  saveGames();
 }
 
 function pushUndo(game, entry) {
@@ -1876,20 +2056,120 @@ function getDcStats(dcName) {
   return { health: null, figures: 1, specials: [] };
 }
 
+const DC_ACTIONS_PER_ACTIVATION = 2;
+
+/** Returns "X/2 Actions Remaining" with green/red square visual (🟩=remaining, 🟥=used). */
+function getActionsCounterContent(remaining, total = DC_ACTIONS_PER_ACTIVATION) {
+  const r = Math.max(0, Math.min(remaining, total));
+  const used = total - r;
+  const green = '🟩'.repeat(r);
+  const red = '🟥'.repeat(used);
+  return `**Actions** • ${r}/${total} ${green}${red}`;
+}
+
+/** True if any DC in this game has actions remaining to spend. */
+function hasActionsRemainingInGame(game, gameId) {
+  for (const [mid, meta] of dcMessageMeta) {
+    if (meta.gameId !== gameId) continue;
+    const data = game.dcActionsData?.[mid];
+    if (data?.remaining > 0) return true;
+  }
+  return false;
+}
+
+/** True when both players have no readied DCs and no actions left to spend in any activated DC. */
+function shouldShowEndActivationPhaseButton(game, gameId) {
+  const r1 = game.p1ActivationsRemaining ?? 0;
+  const r2 = game.p2ActivationsRemaining ?? 0;
+  if (r1 > 0 || r2 > 0) return false;
+  if (hasActionsRemainingInGame(game, gameId)) return false;
+  return true;
+}
+
+/** Edit the round message to add the End Activation Phase button when conditions are met. */
+async function maybeShowEndActivationPhaseButton(game, client) {
+  const gameId = game.gameId;
+  if (!shouldShowEndActivationPhaseButton(game, gameId)) return;
+  if (game.roundActivationButtonShown) return;
+  const roundMsgId = game.roundActivationMessageId;
+  if (!roundMsgId || !game.generalId) return;
+  try {
+    const ch = await client.channels.fetch(game.generalId);
+    const msg = await ch.messages.fetch(roundMsgId);
+    const round = game.currentRound || 1;
+    const roundEmbed = new EmbedBuilder()
+      .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round}`)
+      .setColor(PHASE_COLOR);
+    const endBtn = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`status_phase_${gameId}`)
+        .setLabel(`End R${round} Activation Phase`)
+        .setStyle(ButtonStyle.Secondary)
+    );
+    await msg.edit({
+      content: `<@${game.initiativePlayerId}> **Round ${round}** — Both players have used all activations and actions. Both players: click **End R${round} Activation Phase** when done with any end-of-activation effects.`,
+      embeds: [roundEmbed],
+      components: [endBtn],
+      allowedMentions: { users: [game.initiativePlayerId] },
+    }).catch(() => {});
+    game.roundActivationButtonShown = true;
+    saveGames();
+  } catch (err) {
+    console.error('Failed to show End Activation Phase button:', err);
+  }
+}
+
+/** Update the DC thread's Actions message with current counter. If all actions exhausted, @ the other player to activate. */
+async function updateDcActionsMessage(game, msgId, client) {
+  const data = game.dcActionsData?.[msgId];
+  if (!data?.threadId) return;
+  const meta = dcMessageMeta.get(msgId);
+  const displayName = meta?.displayName || meta?.dcName || '';
+
+  if (data?.messageId) {
+    try {
+      const thread = await client.channels.fetch(data.threadId);
+      const msg = await thread.messages.fetch(data.messageId);
+      const components = meta ? getDcActionButtons(msgId, meta.dcName, displayName, data.remaining) : [];
+      await msg.edit({
+        content: getActionsCounterContent(data.remaining, data.total),
+        components,
+      }).catch(() => {});
+    } catch (err) {
+      console.error('Failed to update DC actions message:', err);
+    }
+  }
+
+  if (data?.remaining === 0 && meta) {
+    game.dcFinishedPinged = game.dcFinishedPinged || {};
+    if (!game.dcFinishedPinged[msgId]) {
+      game.dcFinishedPinged[msgId] = true;
+      const otherPlayerId = meta.playerNum === 1 ? game.player2Id : game.player1Id;
+      await logGameAction(game, client, `<@${otherPlayerId}> **${displayName}** finished all actions — your turn to activate a figure!`, {
+        allowedMentions: { users: [otherPlayerId] },
+        phase: 'ROUND',
+        icon: 'activate',
+      });
+    }
+    await maybeShowEndActivationPhaseButton(game, client);
+  }
+}
+
 /** Returns action rows: one [Move][Attack][Interact] row per figure, plus specials if any. Max 5 rows (Discord limit). */
-function getDcActionButtons(msgId, dcName, displayName) {
+function getDcActionButtons(msgId, dcName, displayName, actionsRemaining = 2) {
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   const specials = stats.specials || [];
   const dgIndex = displayName?.match(/\[Group (\d+)\]/)?.[1] ?? 1;
   const baseName = (displayName || dcName).replace(/\s*\[Group \d+\]$/, '') || dcName;
+  const noActions = (actionsRemaining ?? 2) <= 0;
   const rows = [];
   for (let f = 0; f < figures && rows.length < 5; f++) {
     const suffix = figures <= 1 ? '' : ` ${dgIndex}${FIGURE_LETTERS[f]}`;
     rows.push(new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${f}`).setLabel(`Move${suffix}`).setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${f}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${f}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${f}`).setLabel(`Move${suffix}`).setStyle(ButtonStyle.Success).setDisabled(noActions),
+      new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${f}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noActions),
+      new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${f}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noActions)
     ));
   }
   if (specials.length > 0 && rows.length < 5) {
@@ -1898,6 +2178,7 @@ function getDcActionButtons(msgId, dcName, displayName) {
         .setCustomId(`dc_special_${idx}_${msgId}`)
         .setLabel(name.slice(0, 80))
         .setStyle(ButtonStyle.Primary)
+        .setDisabled(noActions)
     );
     rows.push(new ActionRowBuilder().addComponents(...specialBtns));
   }
@@ -2667,8 +2948,14 @@ client.on('interactionCreate', async (interaction) => {
     const thread = await msg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
     const speed = getDcStats(dcName).speed ?? 4;
     game.movementBank = game.movementBank || {};
-    game.movementBank[msgId] = { total: speed, remaining: speed, threadId: thread.id, messageId: null, displayName };
-    await thread.send({ content: '**Actions**', components: getDcActionButtons(msgId, dcName, displayName) });
+    game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
+    game.dcActionsData = game.dcActionsData || {};
+    game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id };
+    const actionsMsg = await thread.send({
+      content: getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION),
+      components: getDcActionButtons(msgId, dcName, displayName, DC_ACTIONS_PER_ACTIVATION),
+    });
+    game.dcActionsData[msgId].messageId = actionsMsg.id;
     if (playerNum === 1) { game.p1ActivationsRemaining--; game.p1ActivatedDcIndices.push(dcIndex); }
     else { game.p2ActivationsRemaining--; game.p2ActivatedDcIndices.push(dcIndex); }
     await updateActivationsMessage(game, playerNum, client);
@@ -2727,8 +3014,14 @@ client.on('interactionCreate', async (interaction) => {
         const thread = await interaction.message.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
         const speed = getDcStats(meta.dcName).speed ?? 4;
         game.movementBank = game.movementBank || {};
-        game.movementBank[msgId] = { total: speed, remaining: speed, threadId: thread.id, messageId: null, displayName };
-        await thread.send({ content: '**Actions**', components: getDcActionButtons(msgId, meta.dcName, displayName) });
+        game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
+        game.dcActionsData = game.dcActionsData || {};
+        game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id };
+        const actionsMsg = await thread.send({
+          content: getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION),
+          components: getDcActionButtons(msgId, meta.dcName, displayName, DC_ACTIONS_PER_ACTIVATION),
+        });
+        game.dcActionsData[msgId].messageId = actionsMsg.id;
       }
     }
     // When going exhausted → ready, give an activation back (cap at total)
@@ -2748,6 +3041,7 @@ client.on('interactionCreate', async (interaction) => {
         await updateActivationsMessage(game, meta.playerNum, client);
       }
       if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
+      if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
     }
     saveGames();
     const actionIcon = nowExhausted ? 'activate' : 'ready';
@@ -2802,7 +3096,14 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Only the owner of this Play Area can use these actions.', ephemeral: true }).catch(() => {});
       return;
     }
+    const actionsData = game.dcActionsData?.[msgId];
+    const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
+    if (actionsRemaining <= 0) {
+      await interaction.reply({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch(() => {});
+      return;
+    }
     if (action === 'Move') {
+      try {
       const dgIndex = (meta.displayName || '').match(/\[Group (\d+)\]/)?.[1] ?? 1;
       const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
       const playerNum = meta.playerNum;
@@ -2814,23 +3115,23 @@ client.on('interactionCreate', async (interaction) => {
       const stats = getDcStats(meta.dcName);
       const speed = stats.speed ?? 4;
       const bank = game.movementBank?.[msgId];
-      const mpRemaining = bank?.remaining ?? speed;
-      if (mpRemaining <= 0) {
-        await interaction.reply({ content: 'No movement points remaining for this activation.', ephemeral: true }).catch(() => {});
-        return;
-      }
+      const currentMp = bank?.remaining ?? 0;
+      const mpRemaining = currentMp + speed;
+      const displayName = meta.displayName || meta.dcName;
+      const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
       game.movementBank = game.movementBank || {};
       if (!game.movementBank[msgId]) {
         game.movementBank[msgId] = {
           total: speed,
           remaining: mpRemaining,
-          threadId: null,
-          messageId: null,
+          threadId: bank?.threadId ?? null,
+          messageId: bank?.messageId ?? null,
           displayName: figLabel,
         };
       } else {
         game.movementBank[msgId].displayName = game.movementBank[msgId].displayName || figLabel;
-        game.movementBank[msgId].total = game.movementBank[msgId].total ?? speed;
+        game.movementBank[msgId].remaining = mpRemaining;
+        game.movementBank[msgId].total = (game.movementBank[msgId].total ?? 0) + speed;
       }
       await ensureMovementBankMessage(game, msgId, interaction.client);
       const boardState = getBoardStateForMovement(game, figureKey);
@@ -2844,8 +3145,11 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ content: 'No valid movement spaces.', ephemeral: true }).catch(() => {});
         return;
       }
-      const displayName = meta.displayName || meta.dcName;
-      const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
+      const actionsData = game.dcActionsData?.[msgId];
+      if (actionsData) {
+        actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+        await updateDcActionsMessage(game, msgId, interaction.client);
+      }
       game.moveInProgress = game.moveInProgress || {};
       const moveKey = `${msgId}_${figureIndex}`;
       const mpRows = getMoveMpButtonRows(msgId, figureIndex, mpRemaining);
@@ -2872,6 +3176,11 @@ client.on('interactionCreate', async (interaction) => {
       game.moveGridMessageIds = game.moveGridMessageIds || {};
       game.moveGridMessageIds[moveKey] = [];
       return;
+      } catch (err) {
+        console.error('Move button error:', err);
+        await interaction.reply({ content: `Move failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch(() => {});
+        return;
+      }
     }
     if (action === 'Attack') {
       const dgIndex = (meta.displayName || '').match(/\[Group (\d+)\]/)?.[1] ?? 1;
@@ -2940,7 +3249,12 @@ client.on('interactionCreate', async (interaction) => {
       }).catch(() => {});
       return;
     }
+    if (actionsData) {
+      actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+      await updateDcActionsMessage(game, msgId, interaction.client);
+    }
     await interaction.reply({ content: `**${action}** — Coming soon.`, ephemeral: true }).catch(() => {});
+    saveGames();
     return;
   }
 
@@ -3184,6 +3498,11 @@ client.on('interactionCreate', async (interaction) => {
     }
     await interaction.deferUpdate();
     delete game.attackTargets[`${msgId}_${figureIndex}`];
+    const actionsData = game.dcActionsData?.[msgId];
+    if (actionsData) {
+      actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+      await updateDcActionsMessage(game, msgId, interaction.client);
+    }
 
     const attackerStats = getDcStats(meta.dcName);
     const attackInfo = attackerStats.attack || { dice: ['red'], range: [1, 3] };
@@ -3272,22 +3591,62 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
     if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-      await interaction.reply({ content: 'Only players in this game can end the round.', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: 'Only players in this game can end the activation phase.', ephemeral: true }).catch(() => {});
       return;
     }
     const r1 = game.p1ActivationsRemaining ?? 0;
     const r2 = game.p2ActivationsRemaining ?? 0;
-    if (r1 > 0 || r2 > 0) {
+    const hasActions = hasActionsRemainingInGame(game, gameId);
+    if (r1 > 0 || r2 > 0 || hasActions) {
+      const parts = [];
+      if (r1 > 0 || r2 > 0) parts.push(`P1: ${r1} activations left, P2: ${r2} activations left`);
+      if (hasActions) parts.push('some DCs still have actions to spend');
       await interaction.reply({
-        content: `Both players must use all activations first. (P1: ${r1} left, P2: ${r2} left)`,
+        content: `Both players must use all activations and actions first. (${parts.join('; ')})`,
         ephemeral: true,
       }).catch(() => {});
       return;
     }
+    const round = game.currentRound || 1;
+    const clickerIsP1 = interaction.user.id === game.player1Id;
+    game.p1ActivationPhaseEnded = game.p1ActivationPhaseEnded || false;
+    game.p2ActivationPhaseEnded = game.p2ActivationPhaseEnded || false;
+    if (clickerIsP1) game.p1ActivationPhaseEnded = true;
+    else game.p2ActivationPhaseEnded = true;
+    const bothEnded = game.p1ActivationPhaseEnded && game.p2ActivationPhaseEnded;
+    if (!bothEnded) {
+      const waiting = !game.p1ActivationPhaseEnded ? 'P1' : 'P2';
+      await interaction.reply({
+        content: `${clickerIsP1 ? 'P1' : 'P2'} has ended activation. Waiting for **${waiting}** to click **End R${round} Activation Phase**.`,
+        ephemeral: true,
+      }).catch(() => {});
+      const generalChannel = await client.channels.fetch(game.generalId);
+      const roundEmbed = new EmbedBuilder()
+        .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round}`)
+        .setColor(PHASE_COLOR);
+      const endBtn = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`status_phase_${gameId}`)
+          .setLabel(`End R${round} Activation Phase`)
+          .setStyle(ButtonStyle.Secondary)
+      );
+      await interaction.message.edit({
+        content: `**Round ${round}** — ${game.p1ActivationPhaseEnded ? '✓ P1' : 'P1'} ended activation. ${game.p2ActivationPhaseEnded ? '✓ P2' : 'P2'} ended activation. Both players must click the button when done with activations and any end-of-activation effects.`,
+        embeds: [roundEmbed],
+        components: [endBtn],
+      }).catch(() => {});
+      saveGames();
+      return;
+    }
+    game.p1ActivationPhaseEnded = false;
+    game.p2ActivationPhaseEnded = false;
     await interaction.deferUpdate();
+    game.dcFinishedPinged = {};
     for (const [msgId, meta] of dcMessageMeta) {
       if (meta.gameId === gameId) {
         dcExhaustedState.set(msgId, false);
+        if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
+        if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
         try {
           const chId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
           const ch = await client.channels.fetch(chId);
@@ -3302,20 +3661,27 @@ client.on('interactionCreate', async (interaction) => {
     }
     game.p1ActivationsRemaining = game.p1ActivationsTotal ?? 0;
     game.p2ActivationsRemaining = game.p2ActivationsTotal ?? 0;
+    const mapId = game.selectedMap?.id;
+    const p1Terminals = mapId ? countTerminalsControlledByPlayer(game, 1, mapId) : 0;
+    const p2Terminals = mapId ? countTerminalsControlledByPlayer(game, 2, mapId) : 0;
+    const p1DrawCount = 1 + p1Terminals;
+    const p2DrawCount = 1 + p2Terminals;
     const p1Deck = game.player1CcDeck || [];
     const p2Deck = game.player2CcDeck || [];
-    if (p1Deck.length > 0) {
-      game.player1CcHand = game.player1CcHand || [];
+    const p1Drawn = [];
+    const p2Drawn = [];
+    for (let i = 0; i < p1DrawCount && p1Deck.length > 0; i++) {
       const drawn = p1Deck.shift();
-      game.player1CcHand.push(drawn);
-      game.player1CcDeck = p1Deck;
+      p1Drawn.push(drawn);
     }
-    if (p2Deck.length > 0) {
-      game.player2CcHand = game.player2CcHand || [];
+    game.player1CcHand = [...(game.player1CcHand || []), ...p1Drawn];
+    game.player1CcDeck = p1Deck;
+    for (let i = 0; i < p2DrawCount && p2Deck.length > 0; i++) {
       const drawn = p2Deck.shift();
-      game.player2CcHand.push(drawn);
-      game.player2CcDeck = p2Deck;
+      p2Drawn.push(drawn);
     }
+    game.player2CcHand = [...(game.player2CcHand || []), ...p2Drawn];
+    game.player2CcDeck = p2Deck;
     const prevInitiative = game.initiativePlayerId;
     game.initiativePlayerId = prevInitiative === game.player1Id ? game.player2Id : game.player1Id;
     game.currentRound = (game.currentRound || 1) + 1;
@@ -3339,21 +3705,34 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
     const generalChannel = await client.channels.fetch(game.generalId);
-    await logGameAction(game, client, `**Status Phase** — Initiative passes to <@${game.initiativePlayerId}>. Round **${game.currentRound}** begins.`, { phase: 'ROUND', icon: 'round' });
+    const drawDesc = p1Terminals > 0 || p2Terminals > 0
+      ? `Draw 1 CC each (P1 +${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''}, P2 +${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''}).`
+      : 'Draw 1 command card each.';
+    await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) — resolve manually. 4. Initiative passes to <@${game.initiativePlayerId}>. Round **${game.currentRound}** begins.`, { phase: 'ROUND', icon: 'round' });
     const roundEmbed = new EmbedBuilder()
       .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound}`)
       .setColor(PHASE_COLOR);
-    const endRoundRow = new ActionRowBuilder().addComponents(
+    const showBtn = shouldShowEndActivationPhaseButton(game, gameId);
+    const components = showBtn ? [new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`status_phase_${gameId}`)
-        .setLabel('End Round (Status Phase)')
+        .setLabel(`End R${game.currentRound} Activation Phase`)
         .setStyle(ButtonStyle.Secondary)
-    );
-    await generalChannel.send({
-      content: `**Round ${game.currentRound}** — All deployment groups readied. Draw 1 command card. When all activations are used, click **End Round**.`,
+    )] : [];
+    const drawRule = (p1Terminals > 0 || p2Terminals > 0)
+      ? 'Draw 1 CC (+1 per controlled terminal). '
+      : 'Draw 1 CC. ';
+    const content = showBtn
+      ? `<@${game.initiativePlayerId}> **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Both players: click **End R${game.currentRound} Activation Phase** when you've used all activations and any end-of-activation effects.`
+      : `<@${game.initiativePlayerId}> **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Use all activations and actions. The **End R${game.currentRound} Activation Phase** button will appear when both players have done so.`;
+    const sent = await generalChannel.send({
+      content,
       embeds: [roundEmbed],
-      components: [endRoundRow],
+      components,
+      allowedMentions: { users: [game.initiativePlayerId] },
     });
+    game.roundActivationMessageId = sent.id;
+    game.roundActivationButtonShown = showBtn;
     await interaction.message.edit({ components: [] }).catch(() => {});
     saveGames();
     return;
@@ -3386,6 +3765,7 @@ client.on('interactionCreate', async (interaction) => {
     game.selectedMap = { id: map.id, name: map.name, imagePath: map.imagePath };
     game.mapSelected = true;
     await interaction.deferUpdate();
+    await postMissionCardAfterMapSelection(game, client, map);
     if (game.boardId) {
       try {
         const boardChannel = await client.channels.fetch(game.boardId);
@@ -3582,6 +3962,7 @@ client.on('interactionCreate', async (interaction) => {
     game.initiativePlayerId = winner;
     game.initiativeDetermined = true;
     await interaction.deferUpdate();
+    await interaction.message.edit({ components: [getDetermineInitiativeButtons(game)] }).catch(() => {});
     await logGameAction(game, client, `<@${winner}> (**Player ${playerNum}**) won initiative! Chooses deployment zone and activates first each round.`, { allowedMentions: { users: [winner] }, phase: 'INITIATIVE', icon: 'initiative' });
     const generalChannel = await client.channels.fetch(game.generalId);
     const zoneMsg = await generalChannel.send({
@@ -4089,17 +4470,24 @@ client.on('interactionCreate', async (interaction) => {
     const roundEmbed = new EmbedBuilder()
       .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND 1`)
       .setColor(PHASE_COLOR);
-    const endRoundRow = new ActionRowBuilder().addComponents(
+    const showBtn = shouldShowEndActivationPhaseButton(game, gameId);
+    const components = showBtn ? [new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`status_phase_${gameId}`)
-        .setLabel('End Round (Status Phase)')
+        .setLabel('End R1 Activation Phase')
         .setStyle(ButtonStyle.Secondary)
-    );
-    await generalChannel.send({
-      content: '**Both players have deployed.** Game on! When both players have used all activations, click **End Round**.',
+    )] : [];
+    const content = showBtn
+      ? `<@${game.initiativePlayerId}> **Both players have deployed.** Your turn! Both players: click **End R1 Activation Phase** when you've used all activations and any end-of-activation effects.`
+      : `<@${game.initiativePlayerId}> **Both players have deployed.** Your turn! Use all activations and actions. The **End R1 Activation Phase** button will appear when both players have done so.`;
+    const sent = await generalChannel.send({
+      content,
       embeds: [roundEmbed],
-      components: [endRoundRow],
+      components,
+      allowedMentions: { users: [game.initiativePlayerId] },
     });
+    game.roundActivationMessageId = sent.id;
+    game.roundActivationButtonShown = showBtn;
     try {
       const p1HandChannel = await client.channels.fetch(game.p1HandId);
       const p2HandChannel = await client.channels.fetch(game.p2HandId);

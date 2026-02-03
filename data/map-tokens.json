@@ -1,0 +1,26 @@
+{
+  "source": "extract-map-tokens.html",
+  "maps": {
+    "mos-eisley-outskirts": {
+      "terminals": [
+        "h21",
+        "t9"
+      ],
+      "missionA": {
+        "launchPanels": [
+          "m14",
+          "m15",
+          "n14",
+          "n15"
+        ]
+      },
+      "missionB": {
+        "contraband": [
+          "f21",
+          "n13",
+          "t11"
+        ]
+      }
+    }
+  }
+}

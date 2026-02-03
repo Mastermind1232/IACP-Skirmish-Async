@@ -1,0 +1,6 @@
+{
+  "source": "Vassal buildFile.xml / vassal_extracted/images",
+  "terminals": "Counter--Terminal Blue.gif",
+  "missionA": "Mission Token--Neutral Blue.gif",
+  "missionB": "Counter--Crate Blue.gif"
+}

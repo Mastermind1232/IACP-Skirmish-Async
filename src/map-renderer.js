@@ -12,6 +12,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 
 let registryCache = null;
+let tokenImagesConfig = null;
+
+function getTokenImagesConfig() {
+  if (!tokenImagesConfig) {
+    try {
+      tokenImagesConfig = JSON.parse(readFileSync(join(rootDir, 'data', 'token-images.json'), 'utf8'));
+    } catch {
+      tokenImagesConfig = {};
+    }
+  }
+  return tokenImagesConfig;
+}
 
 function getRegistry() {
   if (!registryCache) {
@@ -41,8 +53,20 @@ function colToLetter(col) {
  * @param {number} [options.maxWidth] - Scale down if wider (for Discord 8MB limit)
  * @returns {Promise<Buffer>} PNG buffer
  */
+/** Parse coord "g10" -> { col, row } (0-based) */
+function parseCoord(coord) {
+  const s = String(coord || '').toLowerCase();
+  const letter = s.match(/[a-z]+/)?.[0] || '';
+  const num = parseInt(s.match(/\d+/)?.[0] || '0', 10);
+  const col = letter
+    ? [...letter].reduce((acc, c) => acc * 26 + (c.charCodeAt(0) - 96), 0) - 1
+    : -1;
+  const row = num - 1;
+  return { col, row };
+}
+
 export async function renderMap(mapId, options = {}) {
-  const { figures = [], showGrid = true, maxWidth = 1200 } = options;
+  const { figures = [], tokens = {}, showGrid = true, maxWidth = 1200 } = options;
   const mapDef = getMap(mapId);
   if (!mapDef) throw new Error(`Map not found: ${mapId}`);
 
@@ -183,6 +207,55 @@ export async function renderMap(mapId, options = {}) {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
+  }
+
+  // Draw map tokens using game box images from vassal_extracted/images
+  const tokenSize = Math.min(sdx, sdy) * 0.9;
+  const tc = getTokenImagesConfig();
+  const imagesDir = join(rootDir, 'vassal_extracted', 'images');
+
+  const drawTokenAt = async (coord, imageFilename, fallbackStyle, fallbackShape = 'square') => {
+    const { col, row } = parseCoord(coord);
+    if (col < 0 || row < 0 || col >= numCols || row >= numRows) return;
+    const cx = sx0 + col * sdx + sdx / 2;
+    const cy = sy0 + row * sdy + sdy / 2;
+    const imgPath = imageFilename ? join(imagesDir, imageFilename) : null;
+    if (imgPath && existsSync(imgPath)) {
+      try {
+        const tokenImg = await loadImage(imgPath);
+        const tw = tokenImg.width;
+        const th = tokenImg.height;
+        const tScale = Math.min(tokenSize / tw, tokenSize / th);
+        const dw = Math.round(tw * tScale);
+        const dh = Math.round(th * tScale);
+        ctx.drawImage(tokenImg, cx - dw / 2, cy - dh / 2, dw, dh);
+        return;
+      } catch (err) {
+        console.error('Token image load failed:', imageFilename, err);
+      }
+    }
+    ctx.fillStyle = fallbackStyle;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 1;
+    if (fallbackShape === 'circle') {
+      ctx.beginPath();
+      ctx.arc(cx, cy, tokenSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
+      ctx.strokeRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
+    }
+  };
+
+  for (const coord of tokens.terminals || []) {
+    await drawTokenAt(coord, tc.terminals, 'rgba(79,195,247,0.8)', 'square');
+  }
+  for (const coord of tokens.missionA || []) {
+    await drawTokenAt(coord, tc.missionA, 'rgba(129,199,132,0.8)', 'circle');
+  }
+  for (const coord of tokens.missionB || []) {
+    await drawTokenAt(coord, tc.missionB, 'rgba(255,183,77,0.8)', 'square');
   }
 
   return canvas.toBuffer('image/png');

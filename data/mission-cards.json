@@ -1,0 +1,15 @@
+{
+  "source": "buildFile.xml",
+  "maps": {
+    "mos-eisley-outskirts": {
+      "a": {
+        "name": "A. Get to the Ship",
+        "imagePath": "vassal_extracted/images/SkMission Card--Mos Eisley Outskirts-A-Get to the Ship.png"
+      },
+      "b": {
+        "name": "B. Smuggled Goods",
+        "imagePath": "vassal_extracted/images/SkMission Card--Mos Eisley Outskirts-B-Smuggled Goods.png"
+      }
+    }
+  }
+}
