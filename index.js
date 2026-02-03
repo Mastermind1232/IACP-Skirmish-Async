@@ -592,6 +592,21 @@ async function updateMovementBankMessage(game, msgId, client) {
   } catch {}
 }
 
+async function ensureMovementBankMessage(game, msgId, client) {
+  const bank = game.movementBank?.[msgId];
+  if (!bank) return null;
+  if (bank.messageId) return bank;
+  if (!bank.threadId) return bank;
+  try {
+    const thread = await client.channels.fetch(bank.threadId);
+    const msg = await thread.send({ content: getMovementBankText(bank.displayName, bank.remaining, bank.total) });
+    bank.messageId = msg.id;
+  } catch (err) {
+    console.error('Failed to create movement bank message:', err);
+  }
+  return bank;
+}
+
 /** Fisher-Yates shuffle. Mutates array in place. */
 function shuffleArray(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -2651,9 +2666,8 @@ client.on('interactionCreate', async (interaction) => {
     const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
     const thread = await msg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
     const speed = getDcStats(dcName).speed ?? 4;
-    const bankMsg = await thread.send({ content: getMovementBankText(displayName, speed, speed) });
     game.movementBank = game.movementBank || {};
-    game.movementBank[msgId] = { total: speed, remaining: speed, threadId: thread.id, messageId: bankMsg.id, displayName };
+    game.movementBank[msgId] = { total: speed, remaining: speed, threadId: thread.id, messageId: null, displayName };
     await thread.send({ content: '**Actions**', components: getDcActionButtons(msgId, dcName, displayName) });
     if (playerNum === 1) { game.p1ActivationsRemaining--; game.p1ActivatedDcIndices.push(dcIndex); }
     else { game.p2ActivationsRemaining--; game.p2ActivatedDcIndices.push(dcIndex); }
@@ -2712,9 +2726,8 @@ client.on('interactionCreate', async (interaction) => {
         const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
         const thread = await interaction.message.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
         const speed = getDcStats(meta.dcName).speed ?? 4;
-        const bankMsg = await thread.send({ content: getMovementBankText(displayName, speed, speed) });
         game.movementBank = game.movementBank || {};
-        game.movementBank[msgId] = { total: speed, remaining: speed, threadId: thread.id, messageId: bankMsg.id, displayName };
+        game.movementBank[msgId] = { total: speed, remaining: speed, threadId: thread.id, messageId: null, displayName };
         await thread.send({ content: '**Actions**', components: getDcActionButtons(msgId, meta.dcName, displayName) });
       }
     }
@@ -2806,6 +2819,20 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ content: 'No movement points remaining for this activation.', ephemeral: true }).catch(() => {});
         return;
       }
+      game.movementBank = game.movementBank || {};
+      if (!game.movementBank[msgId]) {
+        game.movementBank[msgId] = {
+          total: speed,
+          remaining: mpRemaining,
+          threadId: null,
+          messageId: null,
+          displayName: figLabel,
+        };
+      } else {
+        game.movementBank[msgId].displayName = game.movementBank[msgId].displayName || figLabel;
+        game.movementBank[msgId].total = game.movementBank[msgId].total ?? speed;
+      }
+      await ensureMovementBankMessage(game, msgId, interaction.client);
       const boardState = getBoardStateForMovement(game, figureKey);
       if (!boardState) {
         await interaction.reply({ content: 'Map spaces data not found for this map. Run: npm run generate-map-spaces', ephemeral: true }).catch(() => {});
