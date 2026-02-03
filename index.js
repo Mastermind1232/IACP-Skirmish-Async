@@ -59,6 +59,14 @@ try {
   deploymentZones = dzData.maps || {};
 } catch {}
 
+/** Fisher-Yates shuffle. Mutates array in place. */
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
 /** Maps with deployment zones configured are play-ready. */
 function getPlayReadyMaps() {
   return mapRegistry.filter(
@@ -202,6 +210,15 @@ function getLobbyStartButton(threadId) {
       .setCustomId(`lobby_start_${threadId}`)
       .setLabel('Start Game')
       .setStyle(ButtonStyle.Primary),
+  );
+}
+
+function getCcShuffleDrawButton(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`cc_shuffle_draw_${gameId}`)
+      .setLabel('Shuffle deck and draw starting 3 Command Cards')
+      .setStyle(ButtonStyle.Success),
   );
 }
 
@@ -2152,6 +2169,63 @@ client.on('interactionCreate', async (interaction) => {
       content: '**Both players have deployed.** Game on!',
       embeds: [roundEmbed],
     });
+    try {
+      const p1HandChannel = await client.channels.fetch(game.p1HandId);
+      const p2HandChannel = await client.channels.fetch(game.p2HandId);
+      const p1CcList = game.player1Squad?.ccList || [];
+      const p2CcList = game.player2Squad?.ccList || [];
+      const ccDeckText = (list) => list.length ? list.join(', ') : '(no command cards)';
+      await p1HandChannel.send({
+        content: `**Your Command Card deck** (${p1CcList.length} cards):\n${ccDeckText(p1CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
+        components: [getCcShuffleDrawButton(gameId)],
+      });
+      await p2HandChannel.send({
+        content: `**Your Command Card deck** (${p2CcList.length} cards):\n${ccDeckText(p2CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
+        components: [getCcShuffleDrawButton(gameId)],
+      });
+    } catch (err) {
+      console.error('Failed to send CC deck prompt:', err);
+    }
+    saveGames();
+    return;
+  }
+
+  if (interaction.customId.startsWith('cc_shuffle_draw_')) {
+    const gameId = interaction.customId.replace('cc_shuffle_draw_', '');
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const channelId = interaction.channel?.id;
+    const isP1Hand = channelId === game.p1HandId;
+    const isP2Hand = channelId === game.p2HandId;
+    if (!isP1Hand && !isP2Hand) {
+      await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const playerNum = isP1Hand ? 1 : 2;
+    const squad = playerNum === 1 ? game.player1Squad : game.player2Squad;
+    const ccList = squad?.ccList || [];
+    const drawnKey = playerNum === 1 ? 'player1CcDrawn' : 'player2CcDrawn';
+    if (game[drawnKey]) {
+      await interaction.reply({ content: "You've already drawn your starting hand.", ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate();
+    const deck = [...ccList];
+    shuffleArray(deck);
+    const hand = deck.splice(0, 3);
+    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    game[deckKey] = deck;
+    game[handKey] = hand;
+    game[drawnKey] = true;
+    const handText = hand.length ? hand.join(', ') : '(none)';
+    await interaction.message.edit({
+      content: `**Command Cards** — Starting hand drawn.\n\n**Hand (3):** ${handText}\n**Deck:** ${deck.length} cards remaining.`,
+      components: [],
+    }).catch(() => {});
     saveGames();
     return;
   }
