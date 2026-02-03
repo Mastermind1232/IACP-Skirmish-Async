@@ -1748,6 +1748,8 @@ async function runDraftRandom(game, client) {
   await drawStartingHand(1);
   await drawStartingHand(2);
 
+  await logGameAction(game, client, '**Draft Random** — Auto-deployed all figures and drew starting CCs.', { phase: 'DEPLOYMENT', icon: 'deployed' });
+
   const roundEmbed = new EmbedBuilder()
     .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND 1`)
     .setColor(PHASE_COLOR);
@@ -1762,8 +1764,6 @@ async function runDraftRandom(game, client) {
     embeds: [roundEmbed],
     components: [endRoundRow],
   });
-
-  await logGameAction(game, client, '**Draft Random** — Auto-deployed all figures and drew starting CCs.', { phase: 'DEPLOYMENT', icon: 'deployed' });
 }
 
 function pushUndo(game, entry) {
