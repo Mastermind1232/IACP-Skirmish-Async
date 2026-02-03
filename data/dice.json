@@ -1,0 +1,55 @@
+{
+  "source": "FFG Imperial Assault / IACP - attack {acc, dmg, surge}, defense {block, evade}",
+  "attack": {
+    "red": [
+      { "acc": 0, "dmg": 1, "surge": 0 },
+      { "acc": 0, "dmg": 2, "surge": 0 },
+      { "acc": 0, "dmg": 2, "surge": 0 },
+      { "acc": 0, "dmg": 2, "surge": 1 },
+      { "acc": 0, "dmg": 3, "surge": 0 },
+      { "acc": 0, "dmg": 3, "surge": 0 }
+    ],
+    "yellow": [
+      { "acc": 0, "dmg": 0, "surge": 1 },
+      { "acc": 2, "dmg": 0, "surge": 1 },
+      { "acc": 2, "dmg": 1, "surge": 0 },
+      { "acc": 1, "dmg": 1, "surge": 1 },
+      { "acc": 1, "dmg": 2, "surge": 0 },
+      { "acc": 1, "dmg": 1, "surge": 2 }
+    ],
+    "green": [
+      { "acc": 1, "dmg": 0, "surge": 1 },
+      { "acc": 1, "dmg": 1, "surge": 1 },
+      { "acc": 2, "dmg": 1, "surge": 1 },
+      { "acc": 3, "dmg": 2, "surge": 0 },
+      { "acc": 1, "dmg": 2, "surge": 0 },
+      { "acc": 2, "dmg": 2, "surge": 0 }
+    ],
+    "blue": [
+      { "acc": 2, "dmg": 0, "surge": 1 },
+      { "acc": 2, "dmg": 1, "surge": 0 },
+      { "acc": 5, "dmg": 1, "surge": 0 },
+      { "acc": 3, "dmg": 1, "surge": 1 },
+      { "acc": 3, "dmg": 2, "surge": 0 },
+      { "acc": 4, "dmg": 2, "surge": 0 }
+    ]
+  },
+  "defense": {
+    "white": [
+      { "block": 0, "evade": 0 },
+      { "block": 1, "evade": 0 },
+      { "block": 1, "evade": 0 },
+      { "block": 0, "evade": 1 },
+      { "block": 1, "evade": 1 },
+      { "block": 2, "evade": 0 }
+    ],
+    "black": [
+      { "block": 0, "evade": 0 },
+      { "block": 1, "evade": 0 },
+      { "block": 2, "evade": 0 },
+      { "block": 2, "evade": 0 },
+      { "block": 3, "evade": 0 },
+      { "block": 0, "evade": 1 }
+    ]
+  }
+}

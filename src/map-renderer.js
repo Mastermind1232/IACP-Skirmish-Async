@@ -108,8 +108,10 @@ export async function renderMap(mapId, options = {}) {
     }
   }
 
-  // Figure markers: circular clip to hide white background; size-scaled for 2x2/2x3 units
-  const sizeMultipliers = { '1x1': 1, '1x2': 1.2, '2x2': 1.5, '2x3': 1.8 };
+  // Figure markers: circular clip to hide white background; size-scaled to fill footprint
+  // Coord is top-left for large units; center the figure on its footprint
+  // 2x2 footprint = 2 cells → diameter should span ~2 cells; 2x3 = 2–3 cells
+  const sizeMultipliers = { '1x1': 1, '1x2': 1.4, '2x2': 2.05, '2x3': 2.4 };
   const baseTokenSize = Math.min(Math.max(52, 64 * scale), sdx * 0.95, sdy * 0.95);
   for (const fig of figures) {
     const coord = fig.coord?.toLowerCase?.() || fig.coord;
@@ -121,8 +123,12 @@ export async function renderMap(mapId, options = {}) {
       : -1;
     const row = num - 1;
     if (row < 0 || col < 0) continue;
-    const cx = sx0 + col * sdx + sdx / 2;
-    const cy = sy0 + row * sdy + sdy / 2;
+    const size = (fig.figureSize || '1x1').toLowerCase();
+    const [cols = 1, rows = 1] = size.split('x').map(Number);
+    const centerCol = col + cols / 2;
+    const centerRow = row + rows / 2;
+    const cx = sx0 + centerCol * sdx;
+    const cy = sy0 + centerRow * sdy;
     const mult = sizeMultipliers[fig.figureSize] || 1;
     const tokenSize = baseTokenSize * mult;
     const clipRadius = tokenSize / 2;

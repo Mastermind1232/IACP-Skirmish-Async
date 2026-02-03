@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Map Spaces / Terrain Extractor</title>
+  <style>
+    body { font-family: sans-serif; padding: 16px; background: #222; color: #eee; }
+    .toolbar { margin: 12px 0; }
+    button { padding: 8px 16px; margin-right: 8px; cursor: pointer; }
+    .container { position: relative; display: inline-block; }
+    #mapImg { display: block; max-width: 1200px; }
+    #overlay { position: absolute; left: 0; top: 0; cursor: crosshair; }
+    #status { margin: 8px 0; color: #9f9; }
+    .mode { margin-right: 12px; }
+    label { cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Map Spaces — Terrain & Walls</h1>
+  <p id="status">Load map-spaces.json. Terrain: click cells. Edges: click to cycle solid wall (blocks move + LOS) → dotted (blocks move, see-through) → clear.</p>
+  <div class="toolbar">
+    <span class="mode"><label><input type="radio" name="mode" value="terrain" checked> Terrain (click cell)</label></span>
+    <span class="mode"><label><input type="radio" name="mode" value="edge"> Edge (click: solid wall → dotted → clear)</label></span>
+    <button id="loadBtn">Load map-spaces.json</button>
+    <input type="file" id="fileInput" accept=".json" style="display:none">
+    <button id="exportBtn" style="background:#0a0;color:#fff">Export JSON</button>
+  </div>
+  <div class="container">
+    <img id="mapImg" src="Map_Mos Eisley Outskirts.gif" alt="Map">
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <script>
+    const img = document.getElementById('mapImg');
+    const overlay = document.getElementById('overlay');
+    const ctx = overlay.getContext('2d');
+    const dx = 50, dy = 50, x0 = 25, y0 = 25;
+    let scale = 1, numCols = 0, numRows = 0;
+    let state = { spaces: [], adjacency: {}, terrain: {}, blocking: [], impassableEdges: [], movementBlockingEdges: [] };
+
+    function colToLetter(c) { return c < 26 ? String.fromCharCode(65 + c) : colToLetter(Math.floor(c/26)-1) + colToLetter(c%26); }
+    function coordKey(col, row) { return colToLetter(col).toLowerCase() + (row + 1); }
+    function edgeKey(a, b) { return [a, b].sort().join('|'); }
+
+    function init() {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      if (!w || !h) { document.getElementById('status').textContent = 'Map failed to load.'; return; }
+      scale = Math.min(1, 1200 / w);
+      const sw = Math.round(w * scale), sh = Math.round(h * scale);
+      overlay.width = sw; overlay.height = sh;
+      overlay.style.width = sw + 'px'; overlay.style.height = sh + 'px';
+      numCols = Math.floor((sw - x0 * scale) / (dx * scale));
+      numRows = Math.floor((sh - y0 * scale) / (dy * scale));
+      if (state.spaces.length === 0) {
+        for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) {
+          const k = coordKey(c, r);
+          state.spaces.push(k);
+          if (!state.terrain[k]) state.terrain[k] = 'normal';
+          if (!state.adjacency[k]) {
+            const n = [];
+            if (c > 0) n.push(coordKey(c-1, r));
+            if (c < numCols-1) n.push(coordKey(c+1, r));
+            if (r > 0) n.push(coordKey(c, r-1));
+            if (r < numRows-1) n.push(coordKey(c, r+1));
+            state.adjacency[k] = n;
+          }
+        }
+      }
+      document.getElementById('status').textContent = 'Map loaded. Click cells (terrain) or edges (walls).';
+      draw();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      const sdx = dx * scale, sdy = dy * scale, sx0 = x0 * scale, sy0 = y0 * scale;
+      const impSet = new Set(state.impassableEdges.map(e => edgeKey(e[0], e[1])));
+      const dotSet = new Set((state.movementBlockingEdges || []).map(e => edgeKey(e[0], e[1])));
+      for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) {
+        const k = coordKey(c, r), x = sx0 + c * sdx, y = sy0 + r * sdy;
+        const ter = state.terrain[k] || 'normal';
+        if (ter === 'difficult') { ctx.fillStyle = 'rgba(100,149,237,0.4)'; ctx.fillRect(x, y, sdx, sdy); }
+        else if (ter === 'blocking') { ctx.fillStyle = 'rgba(255,0,0,0.5)'; ctx.fillRect(x, y, sdx, sdy); }
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.strokeRect(x, y, sdx, sdy);
+        for (const [dc, dr, dir] of [[0,-1,'n'],[1,0,'e'],[0,1,'s'],[-1,0,'w']]) {
+          const nk = coordKey(c+dc, r+dr);
+          const ek = edgeKey(k, nk);
+          if (impSet.has(ek)) {
+            ctx.fillStyle = 'rgba(255,255,0,0.8)';
+            if (dir === 'n') ctx.fillRect(x, y, sdx, 5);
+            else if (dir === 's') ctx.fillRect(x, y+sdy-5, sdx, 5);
+            else if (dir === 'e') ctx.fillRect(x+sdx-5, y, 5, sdy);
+            else ctx.fillRect(x, y, 5, sdy);
+          } else if (dotSet.has(ek)) {
+            ctx.fillStyle = 'rgba(255,100,100,0.7)';
+            if (dir === 'n') ctx.fillRect(x, y, sdx, 4);
+            else if (dir === 's') ctx.fillRect(x, y+sdy-4, sdx, 4);
+            else if (dir === 'e') ctx.fillRect(x+sdx-4, y, 4, sdy);
+            else ctx.fillRect(x, y, 4, sdy);
+          }
+        }
+      }
+    }
+
+    function getCellInfo(e) {
+      const r = overlay.getBoundingClientRect();
+      const px = (e.clientX - r.left) * (overlay.width / r.width);
+      const py = (e.clientY - r.top) * (overlay.height / r.height);
+      const sdx = dx * scale, sdy = dy * scale, sx0 = x0 * scale, sy0 = y0 * scale;
+      const col = Math.floor((px - sx0) / sdx), row = Math.floor((py - sy0) / sdy);
+      if (col < 0 || row < 0 || col >= numCols || row >= numRows) return null;
+      const lx = (px - sx0) % sdx, ly = (py - sy0) % sdy;
+      const edge = (lx < 6 ? 'w' : lx > sdx - 6 ? 'e' : ly < 6 ? 'n' : ly > sdy - 6 ? 's' : null);
+      return { col, row, edge, coord: coordKey(col, row) };
+    }
+
+    overlay.onclick = (e) => {
+      if (e.button !== 0) return;
+      const info = getCellInfo(e);
+      if (!info) return;
+      const mode = document.querySelector('input[name="mode"]:checked').value;
+      if (mode === 'terrain') {
+        const next = { normal: 'difficult', difficult: 'blocking', blocking: 'normal' };
+        state.terrain[info.coord] = next[state.terrain[info.coord] || 'normal'];
+        state.blocking = state.spaces.filter(s => state.terrain[s] === 'blocking');
+      } else if (mode === 'edge' && info.edge) {
+        const nc = info.edge === 'e' ? info.col + 1 : info.edge === 'w' ? info.col - 1 : info.col;
+        const nr = info.edge === 's' ? info.row + 1 : info.edge === 'n' ? info.row - 1 : info.row;
+        if (nc >= 0 && nc < numCols && nr >= 0 && nr < numRows) {
+          const nk = coordKey(nc, nr);
+          const ek = edgeKey(info.coord, nk);
+          const impIdx = state.impassableEdges.findIndex(([a,b]) => edgeKey(a,b) === ek);
+          const dotIdx = (state.movementBlockingEdges || []).findIndex(([a,b]) => edgeKey(a,b) === ek);
+          const removeFromAdj = () => {
+            state.adjacency[info.coord] = (state.adjacency[info.coord] || []).filter(x => x !== nk);
+            state.adjacency[nk] = (state.adjacency[nk] || []).filter(x => x !== info.coord);
+          };
+          const addToAdj = () => {
+            if (!(state.adjacency[info.coord] || []).includes(nk)) state.adjacency[info.coord].push(nk);
+            if (!(state.adjacency[nk] || []).includes(info.coord)) state.adjacency[nk].push(info.coord);
+          };
+          if (impIdx >= 0) {
+            state.impassableEdges.splice(impIdx, 1);
+            state.movementBlockingEdges = state.movementBlockingEdges || [];
+            state.movementBlockingEdges.push([info.coord, nk]);
+            removeFromAdj();
+          } else if (dotIdx >= 0) {
+            state.movementBlockingEdges.splice(dotIdx, 1);
+            addToAdj();
+          } else {
+            state.impassableEdges.push([info.coord, nk]);
+            removeFromAdj();
+          }
+        }
+      }
+      draw();
+    };
+
+    document.getElementById('loadBtn').onclick = () => document.getElementById('fileInput').click();
+    document.getElementById('fileInput').onchange = (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const data = JSON.parse(r.result);
+          const mapData = data.maps?.['mos-eisley-outskirts'] || data;
+          state = { spaces: mapData.spaces || [], adjacency: mapData.adjacency || {}, terrain: mapData.terrain || {}, blocking: mapData.blocking || [], impassableEdges: mapData.impassableEdges || [], movementBlockingEdges: mapData.movementBlockingEdges || [] };
+          document.getElementById('status').textContent = 'Loaded. Click to edit.';
+          draw();
+        } catch (err) { document.getElementById('status').textContent = 'Load error: ' + err.message; }
+      };
+      r.readAsText(f);
+    };
+
+    document.getElementById('exportBtn').onclick = () => {
+      const data = { source: 'extract-map-spaces.html', maps: { 'mos-eisley-outskirts': state } };
+      const a = document.createElement('a');
+      a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(data, null, 2));
+      a.download = 'map-spaces.json';
+      a.click();
+    };
+
+    img.onload = init;
+    img.onerror = () => { document.getElementById('status').textContent = 'Could not load map.'; };
+    if (img.complete) init();
+  </script>
+</body>
+</html>
