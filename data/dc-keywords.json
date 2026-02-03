@@ -1,0 +1,18 @@
+{
+  "source": "Manual entry (fill out as cards are reviewed). Keywords drive movement/LOS rules (e.g., Massive, Mobile).",
+  "keywords": {
+    "AT-DP": ["Massive"],
+    "AT-ST": ["Massive"],
+    "Bantha Rider": ["Massive"],
+    "Dewback Rider": ["Mobile"],
+    "Jet Trooper (Elite)": ["Mobile"],
+    "Jet Trooper (Regular)": ["Mobile"],
+    "Nexu": ["Mobile"],
+    "Nexu (Elite)": ["Mobile"],
+    "Nexu (Regular)": ["Mobile"],
+    "Rancor": ["Massive"],
+    "SC2-M Repulsor Tank": ["Massive"],
+    "Tauntaun Rider (Elite)": ["Mobile"],
+    "Tauntaun Rider (Regular)": ["Mobile"]
+  }
+}

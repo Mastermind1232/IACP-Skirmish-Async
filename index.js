@@ -65,6 +65,11 @@ try {
   const msData = JSON.parse(readFileSync(join(rootDir, 'data', 'map-spaces.json'), 'utf8'));
   mapSpacesData = msData.maps || {};
 } catch {}
+let dcKeywords = {};
+try {
+  const kwData = JSON.parse(readFileSync(join(rootDir, 'data', 'dc-keywords.json'), 'utf8'));
+  dcKeywords = kwData.keywords || {};
+} catch {}
 let diceData = { attack: {}, defense: {} };
 try {
   const dData = JSON.parse(readFileSync(join(rootDir, 'data', 'dice.json'), 'utf8'));
@@ -102,6 +107,89 @@ function edgeKey(a, b) {
   return [String(a).toLowerCase(), String(b).toLowerCase()].sort().join('|');
 }
 
+function normalizeCoord(coord) {
+  return String(coord || '').toLowerCase();
+}
+
+function toLowerSet(arr = []) {
+  return new Set(arr.map((s) => normalizeCoord(s)));
+}
+
+function parseSizeString(size) {
+  const [colsRaw, rowsRaw] = String(size || '1x1')
+    .toLowerCase()
+    .split('x')
+    .map((n) => parseInt(n, 10) || 1);
+  return { cols: colsRaw || 1, rows: rowsRaw || 1 };
+}
+
+function sizeToString(cols, rows) {
+  return `${Math.max(1, cols)}x${Math.max(1, rows)}`;
+}
+
+function rotateSizeString(size) {
+  const { cols, rows } = parseSizeString(size);
+  if (cols === rows) return sizeToString(cols, rows);
+  return sizeToString(rows, cols);
+}
+
+function shiftCoord(coord, dx, dy) {
+  const { col, row } = parseCoord(coord);
+  return normalizeCoord(colRowToCoord(col + dx, row + dy));
+}
+
+function getMovementKeywords(dcName) {
+  const raw = dcKeywords?.[dcName] || [];
+  return new Set(raw.map((k) => String(k).toLowerCase()));
+}
+
+function getBoardStateForMovement(game, excludeFigureKey = null) {
+  if (!game?.selectedMap?.id) return null;
+  const mapSpaces = getMapSpaces(game.selectedMap.id);
+  if (!mapSpaces) return null;
+  const occupiedSet = new Set(
+    getOccupiedSpacesForMovement(game, excludeFigureKey).map((s) => normalizeCoord(s))
+  );
+  const blockingSet = toLowerSet(mapSpaces.blocking || []);
+  const spacesSet = toLowerSet(mapSpaces.spaces || []);
+  const terrain = {};
+  for (const [coord, type] of Object.entries(mapSpaces.terrain || {})) {
+    terrain[normalizeCoord(coord)] = String(type || 'normal').toLowerCase();
+  }
+  const adjacency = {};
+  for (const [coord, neighbors] of Object.entries(mapSpaces.adjacency || {})) {
+    adjacency[normalizeCoord(coord)] = (neighbors || []).map((n) => normalizeCoord(n));
+  }
+  const movementBlockingSet = new Set(
+    (mapSpaces.movementBlockingEdges || []).map((edge) => edgeKey(edge[0], edge[1]))
+  );
+  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, movementBlockingSet, spacesSet };
+}
+
+function getMovementProfile(dcName, figureKey, game) {
+  const baseSize = getFigureSize(dcName) || '1x1';
+  const storedSize = game.figureOrientations?.[figureKey] || baseSize;
+  const { cols, rows } = parseSizeString(storedSize);
+  const keywords = getMovementKeywords(dcName);
+  const isMassive = keywords.has('massive');
+  const isMobile = keywords.has('mobile');
+  return {
+    size: storedSize,
+    cols,
+    rows,
+    isLarge: cols !== 1 || rows !== 1,
+    allowDiagonal: cols === 1 && rows === 1,
+    canRotate: cols !== rows,
+    isMassive,
+    isMobile,
+    ignoreDifficult: isMassive || isMobile,
+    ignoreBlocking: isMassive || isMobile,
+    ignoreFigureCost: isMassive || isMobile,
+    canEndOnOccupied: isMassive,
+    keywords,
+  };
+}
+
 /** Line-of-sight: true if no blocking terrain or solid walls on line. Dotted red (movementBlockingEdges) do NOT block LOS. */
 function hasLineOfSight(coord1, coord2, mapSpaces) {
   const blocking = new Set((mapSpaces?.blocking || []).map((s) => String(s).toLowerCase()));
@@ -134,62 +222,353 @@ function hasLineOfSight(coord1, coord2, mapSpaces) {
 }
 
 /** BFS: reachable spaces from startCoord within mp movement points. 1 MP per adjacent step. Cannot end on occupied. */
-function getReachableSpaces(startCoord, mp, mapSpaces, occupiedSet) {
-  if (!mapSpaces || mp <= 0) return [];
-  const adj = mapSpaces.adjacency || {};
-  const occ = new Set((occupiedSet || []).map((s) => String(s).toLowerCase()));
-  const moveBlockSet = new Set((mapSpaces?.movementBlockingEdges || []).map((e) => edgeKey(e[0], e[1])));
-  const start = String(startCoord).toLowerCase();
-  const reachable = new Map();
-  reachable.set(start, 0);
-  const queue = [[start, 0]];
-  while (queue.length > 0) {
-    const [cur, cost] = queue.shift();
-    if (cost >= mp) continue;
-    const neighbors = adj[cur] || [];
-    for (const n of neighbors) {
-      const nLower = String(n).toLowerCase();
-      if (moveBlockSet.has(edgeKey(cur, nLower))) continue;
-      const newCost = cost + 1;
-      if (newCost > mp) continue;
-      if (occ.has(nLower)) continue;
-      if (!reachable.has(nLower) || reachable.get(nLower) > newCost) {
-        reachable.set(nLower, newCost);
-        queue.push([nLower, newCost]);
-      }
-    }
+function buildTempBoardState(mapSpaces, occupiedSet) {
+  if (!mapSpaces) return null;
+  const blockingSet = toLowerSet(mapSpaces.blocking || []);
+  const spacesSet = toLowerSet(mapSpaces.spaces || []);
+  const terrain = {};
+  for (const [coord, type] of Object.entries(mapSpaces.terrain || {})) {
+    terrain[normalizeCoord(coord)] = String(type || 'normal').toLowerCase();
   }
-  return [...reachable.keys()].filter((c) => c !== start);
+  const adjacency = {};
+  for (const [coord, neighbors] of Object.entries(mapSpaces.adjacency || {})) {
+    adjacency[normalizeCoord(coord)] = (neighbors || []).map((n) => normalizeCoord(n));
+  }
+  const movementBlockingSet = new Set(
+    (mapSpaces.movementBlockingEdges || []).map((edge) => edgeKey(edge[0], edge[1]))
+  );
+  return {
+    mapSpaces,
+    adjacency,
+    terrain,
+    blockingSet,
+    occupiedSet: new Set((occupiedSet || []).map((s) => normalizeCoord(s))),
+    movementBlockingSet,
+    spacesSet,
+  };
 }
 
-/** BFS: cost in MP to reach destCoord from startCoord. Returns Infinity if unreachable. Uses same rules as getReachableSpaces. */
-function getPathCost(startCoord, destCoord, mapSpaces, occupiedSet) {
-  if (!mapSpaces) return Infinity;
-  const adj = mapSpaces.adjacency || {};
-  const occ = new Set((occupiedSet || []).map((s) => String(s).toLowerCase()));
-  const moveBlockSet = new Set((mapSpaces?.movementBlockingEdges || []).map((e) => edgeKey(e[0], e[1])));
-  const start = String(startCoord).toLowerCase();
-  const dest = String(destCoord).toLowerCase();
-  if (start === dest) return 0;
-  const visited = new Map();
-  visited.set(start, 0);
-  const queue = [[start, 0]];
-  while (queue.length > 0) {
-    const [cur, cost] = queue.shift();
-    const neighbors = adj[cur] || [];
-    for (const n of neighbors) {
-      const nLower = String(n).toLowerCase();
-      if (moveBlockSet.has(edgeKey(cur, nLower))) continue;
-      const newCost = cost + 1;
-      if (nLower === dest) return newCost;
-      if (occ.has(nLower)) continue;
-      if (!visited.has(nLower) || visited.get(nLower) > newCost) {
-        visited.set(nLower, newCost);
-        queue.push([nLower, newCost]);
-      }
+function movementStateKey(coord, size) {
+  return `${normalizeCoord(coord)}|${size}`;
+}
+
+function getNormalizedFootprint(topLeft, size) {
+  return getFootprintCells(topLeft, size).map((c) => normalizeCoord(c));
+}
+
+function canMoveDiagonally(start, dx, dy, board) {
+  if (!dx || !dy) return true;
+  const startLower = normalizeCoord(start);
+  const { col, row } = parseCoord(startLower);
+  const intermediateA = colRowToCoord(col + dx, row);
+  const intermediateB = colRowToCoord(col, row + dy);
+  if (!board.spacesSet.has(normalizeCoord(intermediateA)) || !board.spacesSet.has(normalizeCoord(intermediateB))) {
+    return false;
+  }
+  const adj = board.adjacency[startLower] || [];
+  return adj.includes(normalizeCoord(intermediateA)) && adj.includes(normalizeCoord(intermediateB));
+}
+
+function getNeighborStates(state, board, profile) {
+  const neighbors = [];
+  const moveVectors = [
+    { dx: 1, dy: 0 },
+    { dx: -1, dy: 0 },
+    { dx: 0, dy: 1 },
+    { dx: 0, dy: -1 },
+  ];
+  if (profile.allowDiagonal) {
+    moveVectors.push(
+      { dx: 1, dy: 1 },
+      { dx: 1, dy: -1 },
+      { dx: -1, dy: 1 },
+      { dx: -1, dy: -1 }
+    );
+  }
+  for (const vec of moveVectors) {
+    if ((vec.dx && vec.dy) && profile.isLarge) continue;
+    if ((vec.dx && vec.dy) && !canMoveDiagonally(state.topLeft, vec.dx, vec.dy, board)) continue;
+    const nextTopLeft = shiftCoord(state.topLeft, vec.dx, vec.dy);
+    if (!nextTopLeft || !board.spacesSet.has(nextTopLeft)) continue;
+    neighbors.push({ type: 'move', topLeft: nextTopLeft, size: state.size, dx: vec.dx, dy: vec.dy });
+  }
+  if (profile.canRotate) {
+    const rotatedSize = rotateSizeString(state.size);
+    neighbors.push({ type: 'rotate', topLeft: state.topLeft, size: rotatedSize, dx: 0, dy: 0 });
+  }
+  return neighbors;
+}
+
+function evaluateMovementStep(current, neighbor, board, profile) {
+  const nextFootprint = getNormalizedFootprint(neighbor.topLeft, neighbor.size);
+  if (!nextFootprint.length) return null;
+  for (const cell of nextFootprint) {
+    if (!board.spacesSet.has(cell)) return null;
+  }
+  if (!profile.ignoreBlocking) {
+    for (const cell of nextFootprint) {
+      if (board.blockingSet.has(cell)) return null;
     }
   }
-  return Infinity;
+  const prevFootprint = current.footprint;
+  const prevSet = new Set(prevFootprint);
+  if (neighbor.type === 'rotate') {
+    const overlapping = nextFootprint.some((c) => board.occupiedSet.has(c));
+    if (overlapping && !profile.canEndOnOccupied) return null;
+    return {
+      cost: 1,
+      occupied: overlapping,
+      canEnd: !overlapping || profile.canEndOnOccupied,
+      footprint: nextFootprint,
+    };
+  }
+  const entering = nextFootprint.filter((cell) => !prevSet.has(cell));
+  if (!entering.length) return null;
+  const dx = neighbor.dx;
+  const dy = neighbor.dy;
+  if (board.movementBlockingSet.size > 0) {
+    const backDx = dx ? -Math.sign(dx) : 0;
+    const backDy = dy ? -Math.sign(dy) : 0;
+    for (const cell of entering) {
+      const { col, row } = parseCoord(cell);
+      const prevCoord = colRowToCoord(col + backDx, row + backDy);
+      if (!prevSet.has(normalizeCoord(prevCoord))) continue;
+      if (board.movementBlockingSet.has(edgeKey(cell, prevCoord))) return null;
+    }
+  }
+  const enteringBlocking = !profile.ignoreBlocking && entering.some((cell) => board.blockingSet.has(cell));
+  if (enteringBlocking) return null;
+  const enteringDifficult =
+    !profile.ignoreDifficult &&
+    entering.some((cell) => (board.terrain[cell] || 'normal') === 'difficult');
+  const enteringOccupied = entering.some((cell) => board.occupiedSet.has(cell));
+  const baseCost = 1;
+  let extraCost = 0;
+  if (enteringDifficult) extraCost += 1;
+  if (enteringOccupied && !profile.ignoreFigureCost) extraCost += 1;
+  return {
+    cost: baseCost + extraCost,
+    occupied: enteringOccupied,
+    canEnd: !enteringOccupied || profile.canEndOnOccupied,
+    footprint: nextFootprint,
+  };
+}
+
+function computeMovementCache(startCoord, mpLimit, board, profile) {
+  const startTopLeft = normalizeCoord(startCoord);
+  if (!board?.spacesSet?.has(startTopLeft)) return { nodes: new Map(), cells: new Map(), maxMp: mpLimit };
+  const startKey = movementStateKey(startTopLeft, profile.size);
+  const queue = [
+    {
+      key: startKey,
+      topLeft: startTopLeft,
+      size: profile.size,
+      cost: 0,
+      footprint: getNormalizedFootprint(startTopLeft, profile.size),
+    },
+  ];
+  const bestCost = new Map([[startKey, 0]]);
+  const nodes = new Map();
+  const cells = new Map();
+  while (queue.length > 0) {
+    queue.sort((a, b) => a.cost - b.cost);
+    const current = queue.shift();
+    if (current.cost > mpLimit) continue;
+    const isOccupied = current.footprint.some((cell) => board.occupiedSet.has(cell));
+    const canEnd = !isOccupied || profile.canEndOnOccupied;
+    nodes.set(current.key, { ...current, isOccupied, canEnd });
+    if (canEnd) {
+      for (const cell of current.footprint) {
+        if (!board.spacesSet.has(cell)) continue;
+        if (current.cost === 0 && cell === startTopLeft) continue;
+        const prev = cells.get(cell);
+        if (!prev || current.cost < prev.cost) {
+          cells.set(cell, {
+            cost: current.cost,
+            topLeft: current.topLeft,
+            size: current.size,
+          });
+        }
+      }
+    }
+    const neighbors = getNeighborStates(current, board, profile);
+    for (const neighbor of neighbors) {
+      const step = evaluateMovementStep(current, neighbor, board, profile);
+      if (!step) continue;
+      const newCost = current.cost + step.cost;
+      if (newCost > mpLimit) continue;
+      const neighborKey = movementStateKey(neighbor.topLeft, neighbor.size);
+      if (bestCost.has(neighborKey) && bestCost.get(neighborKey) <= newCost) continue;
+      bestCost.set(neighborKey, newCost);
+      queue.push({
+        key: neighborKey,
+        topLeft: neighbor.topLeft,
+        size: neighbor.size,
+        cost: newCost,
+        footprint: step.footprint,
+      });
+    }
+  }
+  return { nodes, cells, maxMp: mpLimit };
+}
+
+function getSpacesAtCost(cache, mpCost) {
+  const matches = [];
+  for (const [cell, info] of cache.cells.entries()) {
+    if (info.cost === mpCost) matches.push(cell);
+  }
+  return matches;
+}
+
+function getMovementTarget(cache, coord) {
+  return cache.cells.get(normalizeCoord(coord)) || null;
+}
+
+function ensureMovementCache(moveState, startCoord, mpLimit, board, profile) {
+  if (!moveState.movementCache || (moveState.cacheMaxMp || 0) < mpLimit) {
+    moveState.movementCache = computeMovementCache(startCoord, mpLimit, board, profile);
+    moveState.cacheMaxMp = mpLimit;
+  }
+  return moveState.movementCache;
+}
+
+async function clearMoveGridMessages(game, moveKey, channel) {
+  if (!channel) return;
+  const ids = game.moveGridMessageIds?.[moveKey] || [];
+  for (const id of ids) {
+    try {
+      const msg = await channel.messages.fetch(id);
+      await msg.delete();
+    } catch {
+      // ignore missing messages
+    }
+  }
+  if (game.moveGridMessageIds) delete game.moveGridMessageIds[moveKey];
+}
+
+async function editDistanceMessage(moveState, channel, content, components) {
+  if (!moveState?.distanceMessageId || !channel) return;
+  try {
+    const msg = await channel.messages.fetch(moveState.distanceMessageId);
+    await msg.edit({ content, components });
+  } catch {
+    // ignore
+  }
+}
+
+function collectOverlappingFigures(game, movingPlayerNum, movingFigureKey, footprint) {
+  const overlapsFriendly = [];
+  const overlapsEnemy = [];
+  for (const p of [1, 2]) {
+    const poses = game.figurePositions?.[p] || {};
+    for (const [key, coord] of Object.entries(poses)) {
+      if (key === movingFigureKey) continue;
+      const dcName = key.replace(/-\d+-\d+$/, '');
+      const size = game.figureOrientations?.[key] || getFigureSize(dcName);
+      const cells = getNormalizedFootprint(coord, size);
+      const intersects = cells.some((cell) => footprint.has(cell));
+      if (!intersects) continue;
+      const entry = { playerNum: p, figureKey: key, dcName };
+      if (p === movingPlayerNum) overlapsFriendly.push(entry);
+      else overlapsEnemy.push(entry);
+    }
+  }
+  return [...overlapsFriendly, ...overlapsEnemy];
+}
+
+function pushFigureToNearestValid(game, playerNum, figureKey, forbiddenSet) {
+  const coord = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!coord) return false;
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const board = getBoardStateForMovement(game, figureKey);
+  if (!board) return false;
+  const profile = getMovementProfile(dcName, figureKey, game);
+  const startTopLeft = normalizeCoord(coord);
+  const queue = [startTopLeft];
+  const visited = new Set([movementStateKey(startTopLeft, profile.size)]);
+  while (queue.length > 0) {
+    const topLeft = queue.shift();
+    const footprint = new Set(getNormalizedFootprint(topLeft, profile.size));
+    const overlapForbidden = [...footprint].some((cell) => forbiddenSet.has(cell));
+    const overlapOther = [...footprint].some((cell) => board.occupiedSet.has(cell));
+    const blocked = !profile.ignoreBlocking && [...footprint].some((cell) => board.blockingSet.has(cell));
+    if (!overlapForbidden && !overlapOther && !blocked) {
+      game.figurePositions[playerNum][figureKey] = topLeft;
+      return true;
+    }
+    const moveVectors = [
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 },
+      { dx: 0, dy: 1 },
+      { dx: 0, dy: -1 },
+    ];
+    for (const vec of moveVectors) {
+      const nextTopLeft = shiftCoord(topLeft, vec.dx, vec.dy);
+      if (!board.spacesSet.has(nextTopLeft)) continue;
+      const stateKey = movementStateKey(nextTopLeft, profile.size);
+      if (visited.has(stateKey)) continue;
+      visited.add(stateKey);
+      queue.push(nextTopLeft);
+    }
+  }
+  return false;
+}
+
+async function resolveMassivePush(game, profile, figureKey, playerNum, newFootprint, client) {
+  if (!profile.canEndOnOccupied) return;
+  const footprintSet = new Set(newFootprint);
+  const overlaps = collectOverlappingFigures(game, playerNum, figureKey, footprintSet);
+  for (const entry of overlaps) {
+    const success = pushFigureToNearestValid(game, entry.playerNum, entry.figureKey, footprintSet);
+    if (!success) {
+      console.warn(`Failed to push ${entry.figureKey} away from massive figure ${figureKey}`);
+    }
+  }
+  if (overlaps.length > 0) {
+    await logGameAction(game, client, `Massive figure pushed ${overlaps.length} figure(s) aside.`, { icon: 'move', phase: 'ROUND' });
+  }
+}
+function getReachableSpaces(startCoord, mp, mapSpaces, occupiedSet) {
+  const board = buildTempBoardState(mapSpaces, occupiedSet);
+  if (!board || mp <= 0) return [];
+  const profile = {
+    size: '1x1',
+    cols: 1,
+    rows: 1,
+    isLarge: false,
+    allowDiagonal: true,
+    canRotate: false,
+    isMassive: false,
+    isMobile: false,
+    ignoreDifficult: false,
+    ignoreBlocking: false,
+    ignoreFigureCost: false,
+    canEndOnOccupied: false,
+  };
+  const cache = computeMovementCache(startCoord, mp, board, profile);
+  return [...cache.cells.keys()];
+}
+
+function getPathCost(startCoord, destCoord, mapSpaces, occupiedSet) {
+  const board = buildTempBoardState(mapSpaces, occupiedSet);
+  if (!board) return Infinity;
+  const profile = {
+    size: '1x1',
+    cols: 1,
+    rows: 1,
+    isLarge: false,
+    allowDiagonal: true,
+    canRotate: false,
+    isMassive: false,
+    isMobile: false,
+    ignoreDifficult: false,
+    ignoreBlocking: false,
+    ignoreFigureCost: false,
+    canEndOnOccupied: false,
+  };
+  const cache = computeMovementCache(startCoord, 50, board, profile);
+  const target = cache.cells.get(normalizeCoord(destCoord));
+  return target ? target.cost : Infinity;
 }
 
 /** Movement bank display text (green progress bar). */
@@ -1007,22 +1386,30 @@ function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, occup
 }
 
 /** Returns action rows for movement: buttons with move_pick_${msgId}_${figureIndex}_${space}. */
-function getMoveSpaceGridRows(msgId, figureIndex, validSpaces) {
-  const available = (validSpaces || []).map((s) => String(s).toLowerCase());
+function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces) {
+  const available = (validSpaces || []).map((s) => normalizeCoord(s));
+  const orderMap = new Map(
+    (mapSpaces?.spaces || []).map((coord, idx) => [normalizeCoord(coord), idx])
+  );
+  available.sort((a, b) => {
+    const diff = (orderMap.get(a) ?? Infinity) - (orderMap.get(b) ?? Infinity);
+    if (diff !== 0) return diff;
+    return a.localeCompare(b);
+  });
   const byRow = {};
+  const rowOrder = [];
   for (const s of available) {
     const m = s.match(/^([a-z]+)(\d+)$/i);
     const row = m ? parseInt(m[2], 10) : 0;
-    if (!byRow[row]) byRow[row] = [];
+    if (!byRow[row]) {
+      byRow[row] = [];
+      rowOrder.push(row);
+    }
     byRow[row].push(s);
   }
-  const sortedRows = Object.keys(byRow).map(Number).sort((a, b) => a - b);
-  for (const r of sortedRows) {
-    byRow[r].sort((a, b) => (a || '').localeCompare(b || ''));
-  }
   const rows = [];
-  for (const rowNum of sortedRows) {
-    const tiles = byRow[rowNum];
+  for (const rowNum of rowOrder) {
+    const tiles = byRow[rowNum] || [];
     for (let i = 0; i < tiles.length; i += 5) {
       const chunk = tiles.slice(i, i + 5);
       rows.push(
@@ -2415,51 +2802,48 @@ client.on('interactionCreate', async (interaction) => {
       const speed = stats.speed ?? 4;
       const bank = game.movementBank?.[msgId];
       const mpRemaining = bank?.remaining ?? speed;
-      const figureSize = getFigureSize(meta.dcName);
-      if (figureSize !== '1x1') {
-        await interaction.reply({ content: 'Movement for large (2x2/2x3) units — Coming soon.', ephemeral: true }).catch(() => {});
-        return;
-      }
       if (mpRemaining <= 0) {
         await interaction.reply({ content: 'No movement points remaining for this activation.', ephemeral: true }).catch(() => {});
         return;
       }
-      const mapId = game.selectedMap?.id;
-      const ms = getMapSpaces(mapId);
-      if (!ms) {
+      const boardState = getBoardStateForMovement(game, figureKey);
+      if (!boardState) {
         await interaction.reply({ content: 'Map spaces data not found for this map. Run: npm run generate-map-spaces', ephemeral: true }).catch(() => {});
         return;
       }
-      const occupied = getOccupiedSpacesForMovement(game, figureKey);
-      const reachable = getReachableSpaces(pos, mpRemaining, ms, occupied);
-      if (reachable.length === 0) {
+      const profile = getMovementProfile(meta.dcName, figureKey, game);
+      const cache = computeMovementCache(pos, mpRemaining, boardState, profile);
+      if (cache.cells.size === 0) {
         await interaction.reply({ content: 'No valid movement spaces.', ephemeral: true }).catch(() => {});
         return;
       }
-      const { rows, available } = getMoveSpaceGridRows(msgId, figureIndex, reachable);
-      const BTM_PER_MSG = 5;
-      const firstRows = rows.slice(0, BTM_PER_MSG);
       const displayName = meta.displayName || meta.dcName;
       const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
       game.moveInProgress = game.moveInProgress || {};
-      game.moveInProgress[`${msgId}_${figureIndex}`] = { figureKey, playerNum, mpRemaining, displayName: figLabel, msgId };
+      const moveKey = `${msgId}_${figureIndex}`;
+      const mpRows = getMoveMpButtonRows(msgId, figureIndex, mpRemaining);
       const replyMsg = await interaction.reply({
-        content: `**Move** — Pick a destination (**${mpRemaining}** MP remaining):`,
-        components: firstRows,
+        content: `**Move** — Pick distance (**${mpRemaining}** MP remaining):`,
+        components: mpRows,
         ephemeral: false,
         fetchReply: true,
       }).catch(() => null);
-      const gridIds = [];
-      if (replyMsg?.id) gridIds.push(replyMsg.id);
-      for (let i = BTM_PER_MSG; i < rows.length; i += BTM_PER_MSG) {
-        const more = rows.slice(i, i + BTM_PER_MSG);
-        if (more.length > 0) {
-          const followMsg = await interaction.followUp({ content: null, components: more, fetchReply: true }).catch(() => null);
-          if (followMsg?.id) gridIds.push(followMsg.id);
-        }
-      }
+      game.moveInProgress[moveKey] = {
+        figureKey,
+        playerNum,
+        mpRemaining,
+        displayName: figLabel,
+        msgId,
+        movementProfile: profile,
+        boardState,
+        movementCache: cache,
+        cacheMaxMp: mpRemaining,
+        startCoord: pos,
+        pendingMp: null,
+        distanceMessageId: replyMsg?.id || null,
+      };
       game.moveGridMessageIds = game.moveGridMessageIds || {};
-      game.moveGridMessageIds[`${msgId}_${figureIndex}`] = gridIds;
+      game.moveGridMessageIds[moveKey] = [];
       return;
     }
     if (action === 'Attack') {
@@ -2533,6 +2917,95 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  if (interaction.customId.startsWith('move_mp_')) {
+    const m = interaction.customId.match(/^move_mp_(.+)_(\d+)_(\d+)$/);
+    if (!m) {
+      await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const [, msgId, figureIndexStr, mpStr] = m;
+    const figureIndex = parseInt(figureIndexStr, 10);
+    const mp = parseInt(mpStr, 10);
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) {
+      await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const game = games.get(meta.gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const moveKey = `${msgId}_${figureIndex}`;
+    const moveState = game.moveInProgress?.[moveKey];
+    if (!moveState) {
+      await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const { figureKey, playerNum, mpRemaining, displayName } = moveState;
+    const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({ content: 'Only the owner can move.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (mp < 1 || mp > mpRemaining) {
+      await interaction.reply({ content: `Choose 1–${mpRemaining} MP.`, ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate();
+    const boardState = moveState.boardState || getBoardStateForMovement(game, figureKey);
+    if (!boardState) {
+      delete game.moveInProgress[moveKey];
+      await interaction.followUp({ content: 'Map data missing. Movement cancelled.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const profile = moveState.movementProfile || getMovementProfile(meta.dcName, figureKey, game);
+    moveState.boardState = boardState;
+    moveState.movementProfile = profile;
+    const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
+    if (!startCoord) {
+      delete game.moveInProgress[moveKey];
+      await interaction.followUp({ content: 'Figure position missing. Movement cancelled.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const cache = ensureMovementCache(moveState, startCoord, mpRemaining, boardState, profile);
+    const spaces = getSpacesAtCost(cache, mp);
+    if (spaces.length === 0) {
+      await interaction.followUp({ content: `No spaces exactly **${mp}** MP away.`, ephemeral: true }).catch(() => {});
+      return;
+    }
+    moveState.pendingMp = mp;
+    await clearMoveGridMessages(game, moveKey, interaction.channel);
+    game.moveGridMessageIds = game.moveGridMessageIds || {};
+    delete game.moveGridMessageIds[moveKey];
+    if (moveState.distanceMessageId && interaction.message?.id === moveState.distanceMessageId) {
+      await interaction.message.edit({
+        content: `**Move** — Pick a destination (**${mp}** MP) — see buttons below.`,
+        components: [],
+      }).catch(() => {});
+    }
+    const { rows } = getMoveSpaceGridRows(msgId, figureIndex, spaces, boardState.mapSpaces);
+    const gridIds = [];
+    const BTM_PER_MSG = 5;
+    const firstRows = rows.slice(0, BTM_PER_MSG);
+    const gridMsg = await interaction.followUp({
+      content: `**Move** — Pick destination (**${mp}** MP):`,
+      components: firstRows,
+      fetchReply: true,
+    }).catch(() => null);
+    if (gridMsg?.id) gridIds.push(gridMsg.id);
+    for (let i = BTM_PER_MSG; i < rows.length; i += BTM_PER_MSG) {
+      const more = rows.slice(i, i + BTM_PER_MSG);
+      if (more.length > 0) {
+        const follow = await interaction.channel.send({ content: null, components: more }).catch(() => null);
+        if (follow?.id) gridIds.push(follow.id);
+      }
+    }
+    game.moveGridMessageIds = game.moveGridMessageIds || {};
+    game.moveGridMessageIds[moveKey] = gridIds;
+    return;
+  }
+
   if (interaction.customId.startsWith('move_pick_')) {
     const m = interaction.customId.match(/^move_pick_(.+)_(\d+)_(.+)$/);
     if (!m) {
@@ -2564,65 +3037,79 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
     await interaction.deferUpdate();
-    const spaceLower = String(space).toLowerCase();
-    const oldPos = game.figurePositions?.[playerNum]?.[figureKey];
-    const ms = getMapSpaces(game.selectedMap?.id);
-    const occupied = getOccupiedSpacesForMovement(game, figureKey);
-    const pathCost = oldPos && ms ? getPathCost(oldPos, spaceLower, ms, occupied) : 1;
-    const cost = Math.min(pathCost, mpRemaining);
+    await clearMoveGridMessages(game, moveKey, interaction.channel);
+    const boardState = getBoardStateForMovement(game, figureKey);
+    if (!boardState) {
+      delete game.moveInProgress[moveKey];
+      await interaction.followUp({ content: 'Map data missing. Movement cancelled.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const profile = getMovementProfile(meta.dcName, figureKey, game);
+    const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
+    if (!startCoord) {
+      delete game.moveInProgress[moveKey];
+      await interaction.followUp({ content: 'Figure position missing. Movement cancelled.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const cache = ensureMovementCache(moveState, startCoord, mpRemaining, boardState, profile);
+    const targetLower = normalizeCoord(space);
+    const targetInfo = getMovementTarget(cache, targetLower);
+    if (!targetInfo) {
+      await interaction.followUp({ content: 'Destination not valid for the selected MP.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (moveState.pendingMp && targetInfo.cost !== moveState.pendingMp) {
+      await interaction.followUp({ content: 'Select a destination from the most recent distance choice.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const cost = targetInfo.cost;
+    if (cost > mpRemaining) {
+      await interaction.followUp({ content: 'Not enough movement points.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    moveState.pendingMp = null;
     if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
     if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
-    game.figurePositions[playerNum][figureKey] = spaceLower;
+    const newTopLeft = targetInfo.topLeft;
+    game.figurePositions[playerNum][figureKey] = newTopLeft;
+    const newSize = targetInfo.size;
+    const storedSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
+    if (newSize !== storedSize) {
+      game.figureOrientations = game.figureOrientations || {};
+      game.figureOrientations[figureKey] = newSize;
+    }
+    const footprintSet = new Set(getNormalizedFootprint(newTopLeft, newSize));
+    const updatedProfile = getMovementProfile(meta.dcName, figureKey, game);
+    await resolveMassivePush(game, updatedProfile, figureKey, playerNum, footprintSet, client);
     const newMp = mpRemaining - cost;
+    moveState.mpRemaining = newMp;
+    moveState.startCoord = targetInfo.topLeft;
+    moveState.boardState = null;
+    moveState.movementCache = null;
+    moveState.cacheMaxMp = 0;
     if (game.movementBank?.[msgId]) {
       game.movementBank[msgId].remaining = Math.max(0, newMp);
       await updateMovementBankMessage(game, msgId, client);
     }
-    const gridIds = game.moveGridMessageIds?.[moveKey] || [];
-    try {
-      const channel = interaction.channel;
-      for (const id of gridIds) {
-        if (id !== interaction.message?.id) {
-          try { await (await channel.messages.fetch(id)).delete(); } catch {}
-        }
-      }
-    } catch (err) {
-      console.error('Failed to delete move grid messages:', err);
-    }
-    game.moveGridMessageIds = game.moveGridMessageIds || {};
-    delete game.moveGridMessageIds[moveKey];
-
+    const destDisplay = space.toUpperCase();
+    await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** to **${destDisplay}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
     if (newMp <= 0) {
+      await editDistanceMessage(moveState, interaction.channel, `✓ Moved **${displayName}** to **${destDisplay}**.`, []);
       delete game.moveInProgress[moveKey];
-      await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** to **${spaceLower.toUpperCase()}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
-      await interaction.message.edit({ content: `✓ Moved **${displayName}** to **${spaceLower.toUpperCase()}**.`, components: [] }).catch(() => {});
     } else {
-      game.moveInProgress[moveKey].mpRemaining = newMp;
-      const ms = getMapSpaces(game.selectedMap?.id);
-      const occupied = getOccupiedSpacesForMovement(game, figureKey);
-      const reachable = getReachableSpaces(spaceLower, newMp, ms, occupied);
-      if (reachable.length === 0) {
-        delete game.moveInProgress[moveKey];
-        await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** to **${spaceLower.toUpperCase()}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
-        await interaction.message.edit({ content: `✓ Moved **${displayName}** to **${spaceLower.toUpperCase()}**.`, components: [] }).catch(() => {});
-      } else {
-        const { rows } = getMoveSpaceGridRows(msgId, figureIndex, reachable);
-        const BTM_PER_MSG = 5;
-        const firstRows = rows.slice(0, BTM_PER_MSG);
-        await interaction.message.edit({
-          content: `**Move** — Pick next destination (**${newMp}** MP remaining):`,
-          components: firstRows,
-        }).catch(() => {});
-        const newGridIds = [interaction.message.id];
-        for (let i = BTM_PER_MSG; i < rows.length; i += BTM_PER_MSG) {
-          const more = rows.slice(i, i + BTM_PER_MSG);
-          if (more.length > 0) {
-            const sent = await interaction.channel.send({ content: null, components: more });
-            newGridIds.push(sent.id);
-          }
-        }
-        game.moveGridMessageIds[moveKey] = newGridIds;
+      const nextBoard = getBoardStateForMovement(game, figureKey);
+      if (nextBoard) {
+        const nextProfile = getMovementProfile(meta.dcName, figureKey, game);
+        const nextCache = computeMovementCache(newTopLeft, newMp, nextBoard, nextProfile);
+        moveState.boardState = nextBoard;
+        moveState.movementProfile = nextProfile;
+        moveState.movementCache = nextCache;
+        moveState.cacheMaxMp = newMp;
       }
+      const mpRows = getMoveMpButtonRows(msgId, figureIndex, newMp);
+      await editDistanceMessage(moveState, interaction.channel, `**Move** — Pick distance (**${newMp}** MP remaining):`, mpRows);
+      game.moveGridMessageIds = game.moveGridMessageIds || {};
+      game.moveGridMessageIds[moveKey] = [];
     }
     if (game.boardId && game.selectedMap) {
       try {
