@@ -138,6 +138,7 @@ function getReachableSpaces(startCoord, mp, mapSpaces, occupiedSet) {
   if (!mapSpaces || mp <= 0) return [];
   const adj = mapSpaces.adjacency || {};
   const occ = new Set((occupiedSet || []).map((s) => String(s).toLowerCase()));
+  const moveBlockSet = new Set((mapSpaces?.movementBlockingEdges || []).map((e) => edgeKey(e[0], e[1])));
   const start = String(startCoord).toLowerCase();
   const reachable = new Map();
   reachable.set(start, 0);
@@ -148,6 +149,7 @@ function getReachableSpaces(startCoord, mp, mapSpaces, occupiedSet) {
     const neighbors = adj[cur] || [];
     for (const n of neighbors) {
       const nLower = String(n).toLowerCase();
+      if (moveBlockSet.has(edgeKey(cur, nLower))) continue;
       const newCost = cost + 1;
       if (newCost > mp) continue;
       if (occ.has(nLower)) continue;
@@ -158,6 +160,57 @@ function getReachableSpaces(startCoord, mp, mapSpaces, occupiedSet) {
     }
   }
   return [...reachable.keys()].filter((c) => c !== start);
+}
+
+/** BFS: cost in MP to reach destCoord from startCoord. Returns Infinity if unreachable. Uses same rules as getReachableSpaces. */
+function getPathCost(startCoord, destCoord, mapSpaces, occupiedSet) {
+  if (!mapSpaces) return Infinity;
+  const adj = mapSpaces.adjacency || {};
+  const occ = new Set((occupiedSet || []).map((s) => String(s).toLowerCase()));
+  const moveBlockSet = new Set((mapSpaces?.movementBlockingEdges || []).map((e) => edgeKey(e[0], e[1])));
+  const start = String(startCoord).toLowerCase();
+  const dest = String(destCoord).toLowerCase();
+  if (start === dest) return 0;
+  const visited = new Map();
+  visited.set(start, 0);
+  const queue = [[start, 0]];
+  while (queue.length > 0) {
+    const [cur, cost] = queue.shift();
+    const neighbors = adj[cur] || [];
+    for (const n of neighbors) {
+      const nLower = String(n).toLowerCase();
+      if (moveBlockSet.has(edgeKey(cur, nLower))) continue;
+      const newCost = cost + 1;
+      if (nLower === dest) return newCost;
+      if (occ.has(nLower)) continue;
+      if (!visited.has(nLower) || visited.get(nLower) > newCost) {
+        visited.set(nLower, newCost);
+        queue.push([nLower, newCost]);
+      }
+    }
+  }
+  return Infinity;
+}
+
+/** Movement bank display text (green progress bar). */
+function getMovementBankText(displayName, remaining, total) {
+  const safeTotal = Math.max(0, total ?? 0);
+  const safeRemaining = Math.max(0, Math.min(remaining ?? 0, safeTotal));
+  const bar = '🟢'.repeat(safeRemaining) + '⚪'.repeat(Math.max(0, safeTotal - safeRemaining));
+  const name = displayName ? ` — ${displayName}` : '';
+  return `**Movement Bank${name}:** ${safeRemaining}/${safeTotal} MP remaining ${bar ? `\n${bar}` : ''}`;
+}
+
+async function updateMovementBankMessage(game, msgId, client) {
+  const bank = game.movementBank?.[msgId];
+  if (!bank) return;
+  const { threadId, messageId, remaining, total, displayName } = bank;
+  if (!threadId || !messageId) return;
+  try {
+    const thread = await client.channels.fetch(threadId);
+    const msg = await thread.messages.fetch(messageId);
+    await msg.edit({ content: getMovementBankText(displayName, remaining, total) });
+  } catch {}
 }
 
 /** Fisher-Yates shuffle. Mutates array in place. */
@@ -2210,6 +2263,10 @@ client.on('interactionCreate', async (interaction) => {
     await msg.edit({ embeds: [embed], files, components: [getDcToggleButton(msgId, true)] });
     const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
     const thread = await msg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
+    const speed = getDcStats(dcName).speed ?? 4;
+    const bankMsg = await thread.send({ content: getMovementBankText(displayName, speed, speed) });
+    game.movementBank = game.movementBank || {};
+    game.movementBank[msgId] = { total: speed, remaining: speed, threadId: thread.id, messageId: bankMsg.id, displayName };
     await thread.send({ content: '**Actions**', components: getDcActionButtons(msgId, dcName, displayName) });
     if (playerNum === 1) { game.p1ActivationsRemaining--; game.p1ActivatedDcIndices.push(dcIndex); }
     else { game.p2ActivationsRemaining--; game.p2ActivatedDcIndices.push(dcIndex); }
@@ -2267,6 +2324,10 @@ client.on('interactionCreate', async (interaction) => {
         await updateActivationsMessage(game, meta.playerNum, client);
         const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
         const thread = await interaction.message.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
+        const speed = getDcStats(meta.dcName).speed ?? 4;
+        const bankMsg = await thread.send({ content: getMovementBankText(displayName, speed, speed) });
+        game.movementBank = game.movementBank || {};
+        game.movementBank[msgId] = { total: speed, remaining: speed, threadId: thread.id, messageId: bankMsg.id, displayName };
         await thread.send({ content: '**Actions**', components: getDcActionButtons(msgId, meta.dcName, displayName) });
       }
     }
@@ -2286,6 +2347,7 @@ client.on('interactionCreate', async (interaction) => {
         }
         await updateActivationsMessage(game, meta.playerNum, client);
       }
+      if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
     }
     saveGames();
     const actionIcon = nowExhausted ? 'activate' : 'ready';
@@ -2351,9 +2413,15 @@ client.on('interactionCreate', async (interaction) => {
       }
       const stats = getDcStats(meta.dcName);
       const speed = stats.speed ?? 4;
+      const bank = game.movementBank?.[msgId];
+      const mpRemaining = bank?.remaining ?? speed;
       const figureSize = getFigureSize(meta.dcName);
       if (figureSize !== '1x1') {
         await interaction.reply({ content: 'Movement for large (2x2/2x3) units — Coming soon.', ephemeral: true }).catch(() => {});
+        return;
+      }
+      if (mpRemaining <= 0) {
+        await interaction.reply({ content: 'No movement points remaining for this activation.', ephemeral: true }).catch(() => {});
         return;
       }
       const mapId = game.selectedMap?.id;
@@ -2363,7 +2431,7 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
       const occupied = getOccupiedSpacesForMovement(game, figureKey);
-      const reachable = getReachableSpaces(pos, speed, ms, occupied);
+      const reachable = getReachableSpaces(pos, mpRemaining, ms, occupied);
       if (reachable.length === 0) {
         await interaction.reply({ content: 'No valid movement spaces.', ephemeral: true }).catch(() => {});
         return;
@@ -2374,9 +2442,9 @@ client.on('interactionCreate', async (interaction) => {
       const displayName = meta.displayName || meta.dcName;
       const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
       game.moveInProgress = game.moveInProgress || {};
-      game.moveInProgress[`${msgId}_${figureIndex}`] = { figureKey, playerNum, mpRemaining: speed, displayName: figLabel };
+      game.moveInProgress[`${msgId}_${figureIndex}`] = { figureKey, playerNum, mpRemaining, displayName: figLabel, msgId };
       const replyMsg = await interaction.reply({
-        content: `**Move** — Pick a destination (**${speed}** MP remaining):`,
+        content: `**Move** — Pick a destination (**${mpRemaining}** MP remaining):`,
         components: firstRows,
         ephemeral: false,
         fetchReply: true,
@@ -2497,10 +2565,19 @@ client.on('interactionCreate', async (interaction) => {
     }
     await interaction.deferUpdate();
     const spaceLower = String(space).toLowerCase();
+    const oldPos = game.figurePositions?.[playerNum]?.[figureKey];
+    const ms = getMapSpaces(game.selectedMap?.id);
+    const occupied = getOccupiedSpacesForMovement(game, figureKey);
+    const pathCost = oldPos && ms ? getPathCost(oldPos, spaceLower, ms, occupied) : 1;
+    const cost = Math.min(pathCost, mpRemaining);
     if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
     if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
     game.figurePositions[playerNum][figureKey] = spaceLower;
-    const newMp = mpRemaining - 1;
+    const newMp = mpRemaining - cost;
+    if (game.movementBank?.[msgId]) {
+      game.movementBank[msgId].remaining = Math.max(0, newMp);
+      await updateMovementBankMessage(game, msgId, client);
+    }
     const gridIds = game.moveGridMessageIds?.[moveKey] || [];
     try {
       const channel = interaction.channel;
