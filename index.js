@@ -2114,21 +2114,23 @@ async function updateDeployPromptMessages(game, playerNum, client) {
     const firstContent = isInitiative
       ? `You chose the **${zoneLabel}** zone. Deploy each figure below (one per row), then click **Deployment Completed** when finished.`
       : `Your opponent has deployed. Deploy each figure in the **${zoneLabel}** zone below (one per row), then click **Deployment Completed** when finished.`;
+    const mapAttachment = await getDeploymentMapAttachment(game, zone);
     if (deployRows.length === 0) {
-      const msg = await handChannel.send({
+      const payload = {
         content: isInitiative ? `You chose the **${zoneLabel}** zone. When finished, click **Deployment Completed** below.` : `Your opponent has deployed. Deploy in the **${zoneLabel}** zone. When finished, click **Deployment Completed** below.`,
         components: [doneRow],
-      });
+      };
+      if (mapAttachment) payload.files = [mapAttachment];
+      const msg = await handChannel.send(payload);
       game[idsKey].push(msg.id);
     } else {
       for (let i = 0; i < deployRows.length; i += DEPLOY_ROWS_PER_MSG) {
         const chunk = deployRows.slice(i, i + DEPLOY_ROWS_PER_MSG);
         const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
         const components = isLastChunk ? [...chunk, doneRow] : chunk;
-        const msg = await handChannel.send({
-          content: i === 0 ? firstContent : null,
-          components,
-        });
+        const payload = { content: i === 0 ? firstContent : null, components };
+        if (i === 0 && mapAttachment) payload.files = [mapAttachment];
+        const msg = await handChannel.send(payload);
         game[idsKey].push(msg.id);
       }
     }
@@ -2305,6 +2307,29 @@ function getMapTokensForRender(mapId, missionVariant) {
     missionA: missionVariant === 'a' ? missionA : [],
     missionB: missionVariant === 'b' ? missionB : [],
   };
+}
+
+/** Returns AttachmentBuilder for deployment zone map (zoomed, black coords). zone = 'red' | 'blue'. */
+async function getDeploymentMapAttachment(game, zone) {
+  const map = game?.selectedMap;
+  if (!map?.id) return null;
+  try {
+    const figures = getFiguresForRender(game);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant);
+    const zoneSpaces = zone && deploymentZones[map.id]?.[zone] ? deploymentZones[map.id][zone] : null;
+    const buffer = await renderMap(map.id, {
+      figures,
+      tokens,
+      showGrid: true,
+      maxWidth: 900,
+      cropToZone: zoneSpaces && zoneSpaces.length > 0 ? zoneSpaces : null,
+      gridStyle: 'black',
+    });
+    return new AttachmentBuilder(buffer, { name: 'deployment-zone.png' });
+  } catch (err) {
+    console.error('Deployment map render error:', err);
+    return null;
+  }
 }
 
 /** Check win conditions. Returns { ended, winnerId?, reason? }. Posts game-over and sets game.ended if ended. */
@@ -6205,23 +6230,28 @@ client.on('interactionCreate', async (interaction) => {
       const DEPLOY_ROWS_PER_MSG = 4;
       game.initiativeDeployMessageIds = game.initiativeDeployMessageIds || [];
       const initiativePing = `<@${game.initiativePlayerId}>`;
+      const initMapAttachment = await getDeploymentMapAttachment(game, zone);
       if (deployRows.length === 0) {
-        const msg = await initiativeHandChannel.send({
+        const payload = {
           content: `${initiativePing} — You chose the **${zone}** zone. When finished, click **Deployment Completed** below.`,
           components: [doneRow],
           allowedMentions: { users: [game.initiativePlayerId] },
-        });
+        };
+        if (initMapAttachment) payload.files = [initMapAttachment];
+        const msg = await initiativeHandChannel.send(payload);
         game.initiativeDeployMessageIds = [msg.id];
       } else {
         for (let i = 0; i < deployRows.length; i += DEPLOY_ROWS_PER_MSG) {
           const chunk = deployRows.slice(i, i + DEPLOY_ROWS_PER_MSG);
           const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
           const components = isLastChunk ? [...chunk, doneRow] : chunk;
-          const msg = await initiativeHandChannel.send({
+          const payload = {
             content: i === 0 ? `${initiativePing} — You chose the **${zone}** zone. Deploy each figure below (one per row), then click **Deployment Completed** when finished.` : null,
             components,
             allowedMentions: { users: [game.initiativePlayerId] },
-          });
+          };
+          if (i === 0 && initMapAttachment) payload.files = [initMapAttachment];
+          const msg = await initiativeHandChannel.send(payload);
           game.initiativeDeployMessageIds.push(msg.id);
         }
       }
@@ -6313,12 +6343,10 @@ client.on('interactionCreate', async (interaction) => {
       const promptText = isLarge
         ? `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${figureSize} unit):`
         : `Pick a space for **${label.replace(/^Deploy /, '')}**:`;
-      const replyMsg = await interaction.reply({
-        content: promptText,
-        components: firstRows,
-        ephemeral: false,
-        fetchReply: true,
-      }).catch(() => null);
+      const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
+      const replyPayload = { content: promptText, components: firstRows, ephemeral: false, fetchReply: true };
+      if (mapAttachment) replyPayload.files = [mapAttachment];
+      const replyMsg = await interaction.reply(replyPayload).catch(() => null);
       const gridIds = [];
       if (replyMsg?.id) gridIds.push(replyMsg.id);
       for (let i = BTM_PER_MSG; i < rows.length; i += BTM_PER_MSG) {
@@ -6409,10 +6437,13 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.deferUpdate();
     const gridIds = [];
     try {
-      await interaction.message.edit({
+      const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
+      const editPayload = {
         content: `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${orientation} unit):`,
         components: firstRows,
-      });
+      };
+      if (mapAttachment) editPayload.files = [mapAttachment];
+      await interaction.message.edit(editPayload);
       if (interaction.message?.id) gridIds.push(interaction.message.id);
       for (let i = BTM_PER_MSG; i < rows.length; i += BTM_PER_MSG) {
         const more = rows.slice(i, i + BTM_PER_MSG);
@@ -6591,23 +6622,28 @@ client.on('interactionCreate', async (interaction) => {
         game.nonInitiativeDeployMessageIds = game.nonInitiativeDeployMessageIds || [];
         game.nonInitiativeDeployedConfirmIds = game.nonInitiativeDeployedConfirmIds || [];
         const nonInitiativePing = `<@${nonInitiativePlayerId}>`;
+        const nonInitMapAttachment = await getDeploymentMapAttachment(game, otherZone);
         if (deployRows.length === 0) {
-          const msg = await nonInitiativeHandChannel.send({
+          const payload = {
             content: `${nonInitiativePing} — Your opponent has deployed. Deploy in the **${otherZone}** zone. When finished, click **Deployment Completed** below.`,
             components: [doneRow],
             allowedMentions: { users: [nonInitiativePlayerId] },
-          });
+          };
+          if (nonInitMapAttachment) payload.files = [nonInitMapAttachment];
+          const msg = await nonInitiativeHandChannel.send(payload);
           game.nonInitiativeDeployMessageIds = [msg.id];
         } else {
           for (let i = 0; i < deployRows.length; i += DEPLOY_ROWS_PER_MSG) {
             const chunk = deployRows.slice(i, i + DEPLOY_ROWS_PER_MSG);
             const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
             const components = isLastChunk ? [...chunk, doneRow] : chunk;
-            const msg = await nonInitiativeHandChannel.send({
+            const payload = {
               content: i === 0 ? `${nonInitiativePing} — Your opponent has deployed. Deploy each figure in the **${otherZone}** zone below (one per row), then click **Deployment Completed** when finished.` : null,
               components,
               allowedMentions: { users: [nonInitiativePlayerId] },
-            });
+            };
+            if (i === 0 && nonInitMapAttachment) payload.files = [nonInitMapAttachment];
+            const msg = await nonInitiativeHandChannel.send(payload);
             game.nonInitiativeDeployMessageIds.push(msg.id);
           }
         }

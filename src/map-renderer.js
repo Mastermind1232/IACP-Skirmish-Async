@@ -97,7 +97,7 @@ function parseCoord(coord) {
 }
 
 export async function renderMap(mapId, options = {}) {
-  const { figures = [], tokens = {}, showGrid = true, maxWidth = 1200 } = options;
+  const { figures = [], tokens = {}, showGrid = true, maxWidth = 1200, cropToZone = null, gridStyle = 'default' } = options;
   const mapDef = getMap(mapId);
   if (!mapDef) throw new Error(`Map not found: ${mapId}`);
 
@@ -146,10 +146,11 @@ export async function renderMap(mapId, options = {}) {
   const numRows = Math.floor((h - sy0) / sdy);
 
   if (showGrid) {
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.lineWidth = 2;
-    ctx.font = `${Math.max(10, Math.round(12 * scale))}px "${FONT_FAMILY}"`;
+    const useBlackGrid = gridStyle === 'black';
+    ctx.fillStyle = useBlackGrid ? '#000000' : 'rgba(0,0,0,0.7)';
+    ctx.strokeStyle = useBlackGrid ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = useBlackGrid ? 2.5 : 2;
+    ctx.font = `bold ${Math.max(11, Math.round(13 * scale))}px "${FONT_FAMILY}"`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -319,6 +320,33 @@ export async function renderMap(mapId, options = {}) {
   }
   for (const coord of tokens.missionB || []) {
     await drawTokenAt(coord, tc.missionB, 'rgba(255,183,77,0.8)', 'square', 'Contraband');
+  }
+
+  // Optionally crop to deployment zone for zoomed-in view
+  if (cropToZone && Array.isArray(cropToZone) && cropToZone.length > 0) {
+    const parsed = cropToZone.map((c) => parseCoord(c)).filter((p) => p.col >= 0 && p.row >= 0);
+    if (parsed.length > 0) {
+      const cols = parsed.map((p) => p.col);
+      const rows = parsed.map((p) => p.row);
+      const minCol = Math.max(0, Math.min(...cols) - 1);
+      const maxCol = Math.min(numCols - 1, Math.max(...cols) + 1);
+      const minRow = Math.max(0, Math.min(...rows) - 1);
+      const maxRow = Math.min(numRows - 1, Math.max(...rows) + 1);
+      const srcX = sx0 + minCol * sdx;
+      const srcY = sy0 + minRow * sdy;
+      const srcW = (maxCol - minCol + 1) * sdx;
+      const srcH = (maxRow - minRow + 1) * sdy;
+      const ZOOM_MAX_WIDTH = 800;
+      const zoomScale = srcW > 0 ? Math.min(2, ZOOM_MAX_WIDTH / srcW) : 1;
+      const outW = Math.round(srcW * zoomScale);
+      const outH = Math.round(srcH * zoomScale);
+      const cropCanvas = createCanvas(outW, outH);
+      const cropCtx = cropCanvas.getContext('2d');
+      cropCtx.imageSmoothingEnabled = true;
+      cropCtx.imageSmoothingQuality = 'high';
+      cropCtx.drawImage(canvas, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
+      return cropCanvas.toBuffer('image/png');
+    }
   }
 
   return canvas.toBuffer('image/png');
