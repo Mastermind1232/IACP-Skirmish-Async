@@ -2362,6 +2362,50 @@ async function getActivationMinimapAttachment(game, msgId) {
   }
 }
 
+/** Returns AttachmentBuilder for movement minimap (zoomed on figure, coords only on spacesAtCost). */
+async function getMovementMinimapAttachment(game, msgId, figureKey, spacesAtCost) {
+  const meta = dcMessageMeta.get(msgId);
+  const map = game?.selectedMap;
+  if (!meta || !map?.id || !spacesAtCost?.length) return null;
+  const playerNum = meta.playerNum;
+  const pos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!pos) return null;
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const speed = getEffectiveSpeed(dcName, figureKey, game);
+  const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName);
+  const { col: tlCol, row: tlRow } = parseCoord(pos);
+  const [cols = 1, rows = 1] = String(size || '1x1').split('x').map(Number);
+  const centerCol = Math.floor(tlCol + (cols - 1) / 2);
+  const centerRow = Math.floor(tlRow + (rows - 1) / 2);
+  const halfExtent = Math.max(1, Math.ceil((speed * 2.5) / 2));
+  const cropCoords = [];
+  for (let dr = -halfExtent; dr <= halfExtent; dr++) {
+    for (let dc = -halfExtent; dc <= halfExtent; dc++) {
+      const c = colRowToCoord(centerCol + dc, centerRow + dr);
+      if (c) cropCoords.push(c);
+    }
+  }
+  if (cropCoords.length === 0) return null;
+  const labelCoords = spacesAtCost.map((s) => String(s).toLowerCase());
+  try {
+    const figures = getFiguresForRender(game);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant);
+    const buffer = await renderMap(map.id, {
+      figures,
+      tokens,
+      showGrid: true,
+      maxWidth: 800,
+      cropToZone: cropCoords,
+      gridStyle: 'black',
+      showGridOnlyOnCoords: labelCoords,
+    });
+    return new AttachmentBuilder(buffer, { name: 'move-destinations.png' });
+  } catch (err) {
+    console.error('Movement minimap render error:', err);
+    return null;
+  }
+}
+
 /** Returns AttachmentBuilder for deployment zone map (zoomed, black coords). zone = 'red' | 'blue'. */
 async function getDeploymentMapAttachment(game, zone) {
   const map = game?.selectedMap;
@@ -3093,10 +3137,13 @@ async function updateDcActionsMessage(game, msgId, client) {
       const thread = await client.channels.fetch(data.threadId);
       const msg = await thread.messages.fetch(data.messageId);
       const components = meta && game ? getDcActionButtons(msgId, meta.dcName, displayName, data.remaining, game) : [];
-      await msg.edit({
+      const editPayload = {
         content: getActionsCounterContent(data.remaining, data.total),
         components,
-      }).catch(() => {});
+      };
+      const actMinimap = await getActivationMinimapAttachment(game, msgId);
+      if (actMinimap) editPayload.files = [actMinimap];
+      await msg.edit(editPayload).catch(() => {});
     } catch (err) {
       console.error('Failed to update DC actions message:', err);
     }
@@ -4881,21 +4928,32 @@ client.on('interactionCreate', async (interaction) => {
     delete game.moveGridMessageIds[moveKey];
     if (moveState.distanceMessageId && interaction.message?.id === moveState.distanceMessageId) {
       await interaction.message.edit({
-        content: `**Move** — Pick a destination (**${mp}** MP) — see buttons below.`,
+        content: `**Move** — Pick a destination (**${mp}** MP) — see map and buttons below.`,
         components: [],
       }).catch(() => {});
     }
     const { rows } = getMoveSpaceGridRows(msgId, figureIndex, spaces, boardState.mapSpaces);
     const gridIds = [];
     const BTM_PER_MSG = 5;
-    const firstRows = rows.slice(0, BTM_PER_MSG);
-    const gridMsg = await interaction.followUp({
+    const SPACE_ROWS_ON_FIRST = 4;
+    const firstSpaceRows = rows.slice(0, SPACE_ROWS_ON_FIRST);
+    const adjustRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
+        .setLabel('Adjust movement points spent')
+        .setStyle(ButtonStyle.Secondary)
+    );
+    const firstRows = [...firstSpaceRows, adjustRow];
+    const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, spaces);
+    const gridPayload = {
       content: `**Move** — Pick destination (**${mp}** MP):`,
       components: firstRows,
       fetchReply: true,
-    }).catch(() => null);
+    };
+    if (moveMinimap) gridPayload.files = [moveMinimap];
+    const gridMsg = await interaction.followUp(gridPayload).catch(() => null);
     if (gridMsg?.id) gridIds.push(gridMsg.id);
-    for (let i = BTM_PER_MSG; i < rows.length; i += BTM_PER_MSG) {
+    for (let i = SPACE_ROWS_ON_FIRST; i < rows.length; i += BTM_PER_MSG) {
       const more = rows.slice(i, i + BTM_PER_MSG);
       if (more.length > 0) {
         const follow = await interaction.channel.send({ content: null, components: more }).catch(() => null);
@@ -4904,6 +4962,46 @@ client.on('interactionCreate', async (interaction) => {
     }
     game.moveGridMessageIds = game.moveGridMessageIds || {};
     game.moveGridMessageIds[moveKey] = gridIds;
+    return;
+  }
+
+  if (interaction.customId.startsWith('move_adjust_mp_')) {
+    const m = interaction.customId.match(/^move_adjust_mp_(.+)_(\d+)$/);
+    if (!m) {
+      await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const [, msgId, figureIndexStr] = m;
+    const figureIndex = parseInt(figureIndexStr, 10);
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) {
+      await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const game = games.get(meta.gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const moveKey = `${msgId}_${figureIndex}`;
+    const moveState = game.moveInProgress?.[moveKey];
+    if (!moveState) {
+      await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const { playerNum, mpRemaining } = moveState;
+    const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({ content: 'Only the owner can adjust.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate();
+    moveState.pendingMp = null;
+    await clearMoveGridMessages(game, moveKey, interaction.channel);
+    game.moveGridMessageIds = game.moveGridMessageIds || {};
+    delete game.moveGridMessageIds[moveKey];
+    const mpRows = getMoveMpButtonRows(msgId, figureIndex, mpRemaining);
+    await editDistanceMessage(moveState, interaction.channel, `**Move** — Pick distance (**${mpRemaining}** MP remaining):`, mpRows);
     return;
   }
 
