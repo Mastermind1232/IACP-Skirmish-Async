@@ -2575,7 +2575,8 @@ async function refreshAllGameComponents(game, client) {
       const channel = await client.channels.fetch(channelId);
       const msg = await channel.messages.fetch(msgId);
       const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState);
-      const components = exhausted ? [getDcToggleButton(msgId, true)] : [getDcToggleButton(msgId, false)];
+      const toggleRow = getDcToggleButton(msgId, exhausted, game);
+      const components = toggleRow ? [toggleRow] : [];
       await msg.edit({ embeds: [embed], files: files?.length ? files : [], components });
     } catch (err) {
       console.error('Refresh All: DC message failed', msgId, err);
@@ -2849,6 +2850,8 @@ async function runDraftRandom(game, client) {
     game[deckKey] = deck;
     game[handKey] = hand;
     game[drawnKey] = true;
+    const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+    await logGameAction(game, client, `<@${playerId}> shuffled and drew 3 Command Cards.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
     const handChannelId = playerNum === 1 ? game.p1HandId : game.p2HandId;
     const handChannel = await client.channels.fetch(handChannelId);
     const existingMsgs = await handChannel.messages.fetch({ limit: 5 });
@@ -2874,6 +2877,7 @@ async function runDraftRandom(game, client) {
 
   await logGameAction(game, client, '**Draft Random** — Auto-deployed all figures and drew starting CCs.', { phase: 'DEPLOYMENT', icon: 'deployed' });
 
+  await updatePlayAreaDcButtons(game, client);
   await sendRoundActivationPhaseMessage(game, client);
   await clearPreGameSetup(game, client);
   saveGames();
@@ -3065,8 +3069,9 @@ function shouldShowEndActivationPhaseButton(game, gameId) {
 async function sendRoundActivationPhaseMessage(game, client) {
   const gameId = game.gameId;
   const generalChannel = await client.channels.fetch(game.generalId);
+  const round = game.currentRound || 1;
   const roundEmbed = new EmbedBuilder()
-    .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound || 1}`)
+    .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round} - Start of Round`)
     .setColor(PHASE_COLOR);
   const showBtn = shouldShowEndActivationPhaseButton(game, gameId);
   const components = [];
@@ -3094,7 +3099,6 @@ async function sendRoundActivationPhaseMessage(game, client) {
     ? 'Draw 1 CC (+1 per controlled terminal). '
     : 'Draw 1 CC. ';
   const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-  const round = game.currentRound || 1;
   const initZone = getInitiativePlayerZoneLabel(game);
   const passHint = otherRem > initRem && initRem > 0 ? ' You may pass back (opponent has more activations).' : '';
   const content = showBtn
@@ -3117,14 +3121,14 @@ async function maybeShowEndActivationPhaseButton(game, client) {
   const gameId = game.gameId;
   if (!shouldShowEndActivationPhaseButton(game, gameId)) return;
   if (game.roundActivationButtonShown) return;
-  const roundMsgId = game.roundActivationMessageId;
+    const roundMsgId = game.roundActivationMessageId;
   if (!roundMsgId || !game.generalId) return;
   try {
     const ch = await client.channels.fetch(game.generalId);
     const msg = await ch.messages.fetch(roundMsgId);
     const round = game.currentRound || 1;
     const roundEmbed = new EmbedBuilder()
-      .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round}`)
+      .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round} - Activation Phase`)
       .setColor(PHASE_COLOR);
     const endBtn = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -3245,7 +3249,7 @@ function formatHealthSection(dgIndex, healthState) {
   return `Health\n${lines.join('\n')}`;
 }
 
-function getDcToggleButton(msgId, exhausted) {
+function getDcToggleButton(msgId, exhausted, game = null) {
   if (exhausted) {
     return new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -3258,6 +3262,8 @@ function getDcToggleButton(msgId, exhausted) {
         .setStyle(ButtonStyle.Success)
     );
   }
+  const bothDrawn = game && game.player1CcDrawn && game.player2CcDrawn;
+  if (!bothDrawn) return null;
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`dc_toggle_${msgId}`)
@@ -3545,6 +3551,29 @@ async function updateDiscardPileMessage(game, playerNum, client) {
   }
 }
 
+/** Update all DC messages in both Play Areas to show Activate buttons (when both players have drawn). */
+async function updatePlayAreaDcButtons(game, client) {
+  if (!game.player1CcDrawn || !game.player2CcDrawn) return;
+  for (const playerNum of [1, 2]) {
+    const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+    if (!channelId || msgIds.length === 0) continue;
+    try {
+      const channel = await client.channels.fetch(channelId);
+      for (const msgId of msgIds) {
+        const meta = dcMessageMeta.get(msgId);
+        if (!meta || meta.gameId !== game.gameId) continue;
+        const exhausted = dcExhaustedState.get(msgId) ?? false;
+        const toggleRow = getDcToggleButton(msgId, exhausted, game);
+        const msg = await channel.messages.fetch(msgId);
+        await msg.edit({ components: toggleRow ? [toggleRow] : [] }).catch(() => {});
+      }
+    } catch (err) {
+      console.error('Failed to update Play Area DC buttons:', err);
+    }
+  }
+}
+
 /** Call after changing game.p1ActivationsRemaining or game.p2ActivationsRemaining to refresh the Play Area header. */
 async function updateActivationsMessage(game, playerNum, client) {
   const msgId = playerNum === 1 ? game.p1ActivationsMessageId : game.p2ActivationsMessageId;
@@ -3640,7 +3669,8 @@ async function populatePlayAreas(game, client) {
     dcMessageMeta.set(msg.id, { gameId, playerNum: 1, dcName, displayName });
     dcExhaustedState.set(msg.id, false);
     dcHealthState.set(msg.id, healthState);
-    await msg.edit({ components: [getDcToggleButton(msg.id, false)] });
+    const p1Toggle = getDcToggleButton(msg.id, false, game);
+    await msg.edit({ components: p1Toggle ? [p1Toggle] : [] });
     game.p1DcMessageIds.push(msg.id);
   }
   for (const { dcName, displayName, healthState } of p2Dcs) {
@@ -3649,7 +3679,8 @@ async function populatePlayAreas(game, client) {
     dcMessageMeta.set(msg.id, { gameId, playerNum: 2, dcName, displayName });
     dcExhaustedState.set(msg.id, false);
     dcHealthState.set(msg.id, healthState);
-    await msg.edit({ components: [getDcToggleButton(msg.id, false)] });
+    const p2Toggle = getDcToggleButton(msg.id, false, game);
+    await msg.edit({ components: p2Toggle ? [p2Toggle] : [] });
     game.p2DcMessageIds.push(msg.id);
   }
 
@@ -4366,7 +4397,7 @@ client.on('interactionCreate', async (interaction) => {
     const msg = await channel.messages.fetch(msgId);
     dcExhaustedState.set(msgId, true);
     const { embed, files } = await buildDcEmbedAndFiles(dcName, true, displayName, healthState);
-    await msg.edit({ embeds: [embed], files, components: [getDcToggleButton(msgId, true)] });
+    await msg.edit({ embeds: [embed], files, components: [getDcToggleButton(msgId, true, game)] });
     const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
     const thread = await msg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
     const speed = getDcStats(dcName).speed ?? 4;
@@ -4471,7 +4502,7 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.message.edit({
       embeds: [embed],
       files,
-      components: [getDcToggleButton(msgId, false)],
+      components: (() => { const r = getDcToggleButton(msgId, false, game); return r ? [r] : []; })(),
     });
     saveGames();
     return;
@@ -4610,10 +4641,11 @@ client.on('interactionCreate', async (interaction) => {
     const actionText = nowExhausted ? `**${pLabel}:** <@${playerId}> activated **${displayName}**!` : `**${pLabel}:** <@${playerId}> readied **${displayName}**`;
     await logGameAction(game, client, actionText, { allowedMentions: { users: [playerId] }, icon: actionIcon });
     const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, nowExhausted, displayName, healthState);
+    const toggleRow = getDcToggleButton(msgId, nowExhausted, game);
     await interaction.update({
       embeds: [embed],
       files,
-      components: [getDcToggleButton(msgId, nowExhausted)],
+      components: toggleRow ? [toggleRow] : [],
     });
     return;
   }
@@ -5497,7 +5529,7 @@ client.on('interactionCreate', async (interaction) => {
       }).catch(() => {});
       const generalChannel = await client.channels.fetch(game.generalId);
       const roundEmbed = new EmbedBuilder()
-        .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round}`)
+        .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round} - Activation Phase`)
         .setColor(PHASE_COLOR);
       const endBtn = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -5523,7 +5555,7 @@ client.on('interactionCreate', async (interaction) => {
     await logGameAction(game, client, `**End of Round** — 1. Mission Rules/Effects (resolve as needed). 2. <@${game.initiativePlayerId}> (${initZone}Initiative). 3. <@${otherPlayerId}>. 4. Next phase. Initiative player: play any end-of-round effects or CCs, then click **End 'End of Round' window** in your Hand.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId, otherPlayerId] } });
     const generalChannel = await client.channels.fetch(game.generalId);
     const roundEmbed = new EmbedBuilder()
-      .setTitle(`${GAME_PHASES.ROUND.emoji}  End of Round — waiting for both players`)
+      .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round} - Status Phase`)
       .setDescription(`1. Mission Rules/Effects 2. <@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}Initiative) 3. <@${otherPlayerId}> 4. Go. Both must click **End 'End of Round' window** in their Hand.`)
       .setColor(PHASE_COLOR);
     await generalChannel.send({
@@ -5580,7 +5612,8 @@ client.on('interactionCreate', async (interaction) => {
           const msg = await ch.messages.fetch(msgId);
           const healthState = dcHealthState.get(msgId) || [];
           const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState);
-          await msg.edit({ embeds: [embed], files, components: [getDcToggleButton(msgId, false)] }).catch(() => {});
+          const toggleRow = getDcToggleButton(msgId, false, game);
+          await msg.edit({ embeds: [embed], files, components: toggleRow ? [toggleRow] : [] }).catch(() => {});
         } catch (err) {
           console.error('Failed to ready DC embed:', err);
         }
@@ -5746,7 +5779,7 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.deferUpdate();
     const generalChannel = await client.channels.fetch(game.generalId);
     const roundEmbed = new EmbedBuilder()
-      .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound}`)
+      .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound} - Start of Round`)
       .setColor(PHASE_COLOR);
     const showBtn = shouldShowEndActivationPhaseButton(game, gameId);
     const components = [];
@@ -6017,22 +6050,18 @@ client.on('interactionCreate', async (interaction) => {
       if (game.dcActionsData?.[dcMsgId]) delete game.dcActionsData[dcMsgId];
       if (game.movementBank?.[dcMsgId]) delete game.movementBank[dcMsgId];
     }
-    // Update the DC card to show only Ready (remove Un-activate)
+    // Update the DC card to show Un-activate / Ready
     try {
       const playAreaId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
       const playChannel = await client.channels.fetch(playAreaId);
       const dcMsg = await playChannel.messages.fetch(dcMsgId);
       const healthState = dcHealthState.get(dcMsgId) ?? [[null, null]];
       const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, meta.displayName, healthState);
+      const toggleRow = getDcToggleButton(dcMsgId, true, game);
       await dcMsg.edit({
         embeds: [embed],
         files,
-        components: [new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`dc_toggle_${dcMsgId}`)
-            .setLabel('Ready')
-            .setStyle(ButtonStyle.Success)
-        )],
+        components: toggleRow ? [toggleRow] : [],
       }).catch(() => {});
     } catch (err) {
       console.error('Failed to update DC card after End Turn:', err);
@@ -6107,7 +6136,7 @@ client.on('interactionCreate', async (interaction) => {
     const playChannel = await client.channels.fetch(playAreaId);
     const dcMsg = await playChannel.messages.fetch(msgId);
     const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, dcHealthState.get(msgId) ?? [[null, null]]);
-    await dcMsg.edit({ embeds: [embed], files, components: [getDcToggleButton(msgId, true)] });
+    await dcMsg.edit({ embeds: [embed], files, components: [getDcToggleButton(msgId, true, game)] });
     const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
     const thread = await dcMsg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
     game.movementBank = game.movementBank || {};
@@ -6913,28 +6942,12 @@ client.on('interactionCreate', async (interaction) => {
     }
     game.currentRound = 1;
     const generalChannel = await client.channels.fetch(game.generalId);
-    const roundEmbed = new EmbedBuilder()
-      .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND 1`)
-      .setColor(PHASE_COLOR);
-    const showBtn = shouldShowEndActivationPhaseButton(game, gameId);
-    const components = showBtn ? [new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`status_phase_${gameId}`)
-        .setLabel('End R1 Activation Phase')
-        .setStyle(ButtonStyle.Secondary)
-    )] : [];
     const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-    const content = showBtn
-      ? `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands below. After both have drawn, Round 1 begins. Then click **End R1 Activation Phase** when you've used all activations.`
-      : `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands below. After both have drawn, Round 1 begins.`;
-    const sent = await generalChannel.send({
-      content,
-      embeds: [roundEmbed],
-      components,
+    const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in your Hand channel. Round 1 will begin when both have drawn.`;
+    await generalChannel.send({
+      content: deployContent,
       allowedMentions: { users: [game.initiativePlayerId] },
     });
-    game.roundActivationMessageId = sent.id;
-    game.roundActivationButtonShown = showBtn;
     game.currentActivationTurnPlayerId = game.initiativePlayerId;
     await clearPreGameSetup(game, client);
     try {
@@ -6989,6 +7002,8 @@ client.on('interactionCreate', async (interaction) => {
     game[deckKey] = deck;
     game[handKey] = hand;
     game[drawnKey] = true;
+    const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+    await logGameAction(game, client, `<@${playerId}> shuffled and drew 3 Command Cards.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
     const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
     await interaction.message.edit({
       content: handPayload.content,
@@ -6998,6 +7013,7 @@ client.on('interactionCreate', async (interaction) => {
     }).catch(() => {});
     await updateHandVisualMessage(game, playerNum, client);
     if (game.player1CcDrawn && game.player2CcDrawn) {
+      await updatePlayAreaDcButtons(game, client);
       await sendRoundActivationPhaseMessage(game, client);
     }
     saveGames();
