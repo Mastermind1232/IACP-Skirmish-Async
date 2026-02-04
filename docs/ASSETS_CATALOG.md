@@ -30,6 +30,7 @@ Images are organized into subfolders. Run `npm run organize-images` to sort exis
 | `conditions/` | Condition cards and markers (Condition card--*, Condition Marker--*) |
 | `companions/` | Companion cards and tokens (Companion Card--*, Companion Token--*) |
 | `cardbacks/` | All cardbacks (Command, Deployment, Companion, Mission, Shape, etc.) |
+| `dice/` | Dice box, Dice Clear button, Dice Icon colors, Dice faces (Black/Blue/Green/Red/White/Yellow) |
 
 The bot checks subfolders first, then root, for backward compatibility.
 
