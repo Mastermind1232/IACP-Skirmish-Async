@@ -41,7 +41,11 @@ const server = createServer(async (req, res) => {
     const ccDir = join(imagesDir, 'cc');
     // Also check root for backward compatibility
     const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
-    const candidates = [
+    const candidates = [];
+    if (cardName.trim().toLowerCase() === 'smoke grenade') {
+      candidates.push('Smoke Grenade Final.png', '003 Smoke Grenade Final.png');
+    }
+    candidates.push(
       `C card--${cardName}.jpg`,
       `C card--${cardName}.png`,
       `C card--${titleCase(cardName.toLowerCase())}.jpg`,
@@ -53,8 +57,8 @@ const server = createServer(async (req, res) => {
       `IACP10_C card--${cardName}.png`,
       `IACP10_C card--${cardName}.jpg`,
       `IACP11_C card--${cardName}.png`,
-      `IACP11_C card--${cardName}.jpg`,
-    ];
+      `IACP11_C card--${cardName}.jpg`
+    );
     let found = null;
     for (const c of candidates) {
       const inCc = join(ccDir, c);

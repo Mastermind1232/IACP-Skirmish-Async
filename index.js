@@ -1396,7 +1396,11 @@ const CARDBACKS_DIR = join(IMAGES_DIR, 'cardbacks');
 /** Resolve command card image path. Looks in cc/ subfolder first, then root. Tries C card--Name, IACP variants. Returns cardback path if not found. */
 function getCommandCardImagePath(cardName) {
   if (!cardName || typeof cardName !== 'string') return null;
-  const candidates = [
+  const candidates = [];
+  if (cardName.trim().toLowerCase() === 'smoke grenade') {
+    candidates.push('Smoke Grenade Final.png', '003 Smoke Grenade Final.png');
+  }
+  candidates.push(
     `C card--${cardName}.jpg`,
     `C card--${cardName}.png`,
     `IACP_C card--${cardName}.png`,
@@ -1406,8 +1410,8 @@ function getCommandCardImagePath(cardName) {
     `IACP10_C card--${cardName}.png`,
     `IACP10_C card--${cardName}.jpg`,
     `IACP11_C card--${cardName}.png`,
-    `IACP11_C card--${cardName}.jpg`,
-  ];
+    `IACP11_C card--${cardName}.jpg`
+  );
   for (const c of candidates) {
     const inCc = join(CC_DIR, c);
     if (existsSync(inCc)) return inCc;

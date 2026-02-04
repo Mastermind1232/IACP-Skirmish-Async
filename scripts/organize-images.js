@@ -25,16 +25,16 @@ const root = join(__dirname, '..');
 const imagesDir = join(root, 'vassal_extracted', 'images');
 
 const SUBFOLDERS = {
-  cc: ['C card--', 'IACP_C card--', 'IACP9_C card--', 'IACP10_C card--', 'IACP11_C card--'],
+  cc: ['C card--', 'IACP_C card--', 'IACP9_C card--', 'IACP10_C card--', 'IACP11_C card--', 'Smoke Grenade Final'],
   'dc-figures': [], // populated by dc-images (non-bracket keys)
   'dc-figureless': [], // populated by dc-images (bracket keys)
   figures: ['Figure-'],
-  tokens: ['Counter--', 'Mission Token--', 'Door'],
+  tokens: ['Counter--', 'Mission Token--', 'Door', 'Initiative Token', 'Power Token--', 'Layer_PowerToken_', 'P1 PT Button', 'P2 PT Button', 'P3 PT Button', 'P4 PT Button'],
   maps: ['Map_'],
-  'mission-cards': ['SkMission Card--', 'SkMission card--'],
+  'mission-cards': ['SkMission Card--', 'SkMission card--', 'Skirmish Card ', 'Skirmish Mission Card--', 'Skirmish Mission card--', 'Skirmish Mission randomizer'],
   conditions: ['Condition card--', 'Condition Marker--'],
   conditionIcons: ['Bleeding', 'Stunned', 'Weakened', 'Focused', 'Hidden'],
-  companions: ['Companion Card--', 'Companion Token--', 'Dio Token', 'IACP_Comp card--', 'IACP_Comp Card--'],
+  companions: ['Companion Card--', 'Companion Token--', 'Dio Token', 'The Child Token', 'IACP_Comp card--', 'IACP_Comp Card--'],
   cardbacks: ['cardback'],
   dice: ['Dice'],
   'dc-supplemental': ['IACP_Shape Card--', 'IACP_Loadout Card--', 'Shape Card--'],
@@ -61,12 +61,13 @@ function getDestSubfolder(filename, figurelessFilenames) {
   if (filename.toLowerCase().includes('cardback')) return 'cardbacks';
   if (SUBFOLDERS.cc.some((p) => filename.startsWith(p))) return 'cc';
   if (SUBFOLDERS.maps.some((p) => filename.startsWith(p))) return 'maps';
-  if (filename.startsWith('Devaron Garrison')) return 'maps';
+  if (['Devaron Garrison', 'Lothal Battlefront', 'Imperial Tower'].some((p) => filename.startsWith(p))) return 'maps';
   if (SUBFOLDERS['mission-cards'].some((p) => filename.startsWith(p))) return 'mission-cards';
   if (SUBFOLDERS.figures.some((p) => filename.startsWith(p))) return 'figures';
   if (SUBFOLDERS.tokens.some((p) => filename.startsWith(p))) return 'tokens';
   if (SUBFOLDERS.conditions.some((p) => filename.startsWith(p))) return 'conditions';
   if (filename.startsWith('Icon-') && SUBFOLDERS.conditionIcons.some((c) => filename.includes(c))) return 'conditions';
+  if ((filename.startsWith('Icon-') && ['Block', 'Damage', 'Evade', 'Surge', 'Crate'].some((c) => filename.includes(c))) || filename.startsWith('Icon--') || filename.startsWith('Icon_')) return 'tokens';
   if (SUBFOLDERS.companions.some((p) => filename.startsWith(p))) return 'companions';
   if (SUBFOLDERS.dice.some((p) => filename.startsWith(p))) return 'dice';
   if (SUBFOLDERS['dc-supplemental'].some((p) => filename.startsWith(p))) return 'dc-supplemental';
