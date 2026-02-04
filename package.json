@@ -19,6 +19,7 @@
   "type": "module",
   "dependencies": {
     "canvas": "^3.2.1",
+    "dejavu-fonts-ttf": "^2.37.3",
     "discord.js": "^14.25.1",
     "dotenv": "^17.2.3",
     "pg": "^8.18.0",

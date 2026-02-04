@@ -3,13 +3,29 @@
  * Uses Vassal grid params from map-registry.json
  */
 
-import { createCanvas, loadImage } from 'canvas';
+import { createCanvas, loadImage, registerFont } from 'canvas';
 import { readFileSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
+
+// Register DejaVu Sans for reliable text rendering (sans-serif often fails on headless/servers)
+const FONT_FAMILY = 'DejaVu Sans';
+try {
+  const ttfDir = resolve(rootDir, 'node_modules', 'dejavu-fonts-ttf', 'ttf');
+  const sansPath = resolve(ttfDir, 'DejaVuSans.ttf');
+  const boldPath = resolve(ttfDir, 'DejaVuSans-Bold.ttf');
+  if (existsSync(sansPath)) {
+    registerFont(sansPath, { family: FONT_FAMILY, weight: 'normal' });
+  }
+  if (existsSync(boldPath)) {
+    registerFont(boldPath, { family: FONT_FAMILY, weight: 'bold' });
+  }
+} catch (err) {
+  console.warn('Map renderer: could not register DejaVu fonts, falling back to sans-serif:', err.message);
+}
 
 /** Try subfolder first (e.g. tokens/ maps/), then root. pathOrFilename can be "vassal_extracted/images/X" or "X.gif". */
 function resolveImagePath(pathOrFilename, subfolder) {
@@ -101,7 +117,7 @@ export async function renderMap(mapId, options = {}) {
     ctx.fillStyle = '#444';
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = '#fff';
-    ctx.font = '24px sans-serif';
+    ctx.font = `24px "${FONT_FAMILY}"`;
     ctx.textAlign = 'center';
     ctx.fillText(`${mapDef.name}`, w / 2, h / 2 - 20);
     ctx.fillText('(Map image not found – add to vassal_extracted/images/)', w / 2, h / 2 + 20);
@@ -133,7 +149,7 @@ export async function renderMap(mapId, options = {}) {
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx.lineWidth = 2;
-    ctx.font = `${Math.max(10, Math.round(12 * scale))}px sans-serif`;
+    ctx.font = `${Math.max(10, Math.round(12 * scale))}px "${FONT_FAMILY}"`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -203,7 +219,7 @@ export async function renderMap(mapId, options = {}) {
     }
     if (fig.label) {
       const fontSize = Math.max(10, Math.round(12 * scale));
-      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.font = `bold ${fontSize}px "${FONT_FAMILY}"`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const labelY = cy - clipRadius * 0.6;
@@ -277,7 +293,7 @@ export async function renderMap(mapId, options = {}) {
     }
     if (label) {
       const fontSize = Math.max(9, Math.round(11 * scale));
-      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.font = `bold ${fontSize}px "${FONT_FAMILY}"`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const paddingH = Math.max(4, Math.round(6 * scale));
