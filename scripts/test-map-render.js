@@ -15,8 +15,8 @@ async function main() {
   const buffer = await renderMap(mapId, {
     showGrid: true,
     figures: [
-      { id: 's1', coord: 'B3', label: 'Stormtrooper', color: '#888' },
-      { id: 'v1', coord: 'D5', label: 'Vader', color: '#333' },
+      { id: 's1', coord: 'B3', label: '1a', color: '#888' },
+      { id: 'v1', coord: 'D5', label: '1b', color: '#333' },
     ],
   });
   const out = join(__dirname, '..', 'test-map-output.png');
