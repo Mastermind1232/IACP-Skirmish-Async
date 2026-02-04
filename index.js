@@ -243,10 +243,16 @@ function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
     options.push({ id: 'use_terminal', label: 'Use Terminal', missionSpecific: false });
   }
 
-  const doorsRaw = mapData.doors || [];
-  const doorCoords = doorsRaw.flat().filter(Boolean);
-  if (doorCoords.length && isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, toLowerSet(doorCoords))) {
-    options.push({ id: 'open_door', label: 'Open Door', missionSpecific: false });
+  const openedSet = new Set((game.openedDoors || []).map((k) => String(k).toLowerCase()));
+  for (const edge of mapData.doors || []) {
+    if (edge?.length < 2) continue;
+    const ek = edgeKey(edge[0], edge[1]);
+    if (openedSet.has(ek)) continue;
+    const coordSet = toLowerSet(edge);
+    if (isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, coordSet)) {
+      const label = `Open Door (${String(edge[0]).toUpperCase()}–${String(edge[1]).toUpperCase()})`;
+      options.push({ id: `open_door_${ek}`, label, missionSpecific: false });
+    }
   }
 
   return options;
@@ -386,6 +392,14 @@ function getBoardStateForMovement(game, excludeFigureKey = null) {
   const movementBlockingSet = new Set(
     (mapSpaces.movementBlockingEdges || []).map((edge) => edgeKey(edge[0], edge[1]))
   );
+  const mapData = mapTokensData[game.selectedMap.id];
+  const openedSet = new Set((game.openedDoors || []).map((k) => String(k).toLowerCase()));
+  for (const edge of mapData?.doors || []) {
+    if (edge?.length >= 2) {
+      const ek = edgeKey(edge[0], edge[1]);
+      if (!openedSet.has(ek)) movementBlockingSet.add(ek);
+    }
+  }
   return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, spacesSet };
 }
 
@@ -4872,15 +4886,19 @@ client.on('interactionCreate', async (interaction) => {
     if (optionId === 'retrieve_contraband') {
       game.figureContraband = game.figureContraband || {};
       game.figureContraband[figureKey] = true;
-      await logGameAction(game, client, `**${pLabel}: ${figLabel}** retrieved contraband!`, { phase: 'ROUND', icon: 'deploy' });
+      await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** retrieved contraband!`, { phase: 'ROUND', icon: 'deploy' });
     } else if (optionId === 'launch_panel') {
-      await logGameAction(game, client, `**${pLabel}: ${figLabel}** used Launch Panel.`, { phase: 'ROUND', icon: 'deploy' });
+      await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** used Launch Panel.`, { phase: 'ROUND', icon: 'deploy' });
     } else if (optionId === 'use_terminal') {
-      await logGameAction(game, client, `**${pLabel}: ${figLabel}** used terminal.`, { phase: 'ROUND', icon: 'deploy' });
-    } else if (optionId === 'open_door') {
-      await logGameAction(game, client, `**${pLabel}: ${figLabel}** opened a door.`, { phase: 'ROUND', icon: 'deploy' });
+      await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** used terminal.`, { phase: 'ROUND', icon: 'deploy' });
+    } else if (optionId.startsWith('open_door_')) {
+      const edgeKey = optionId.replace('open_door_', '');
+      game.openedDoors = game.openedDoors || [];
+      if (!game.openedDoors.includes(edgeKey)) game.openedDoors.push(edgeKey);
+      const doorLabel = edgeKey.split('|').map((s) => s.toUpperCase()).join('–');
+      await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** opened door (${doorLabel}).`, { phase: 'ROUND', icon: 'deploy' });
     } else {
-      await logGameAction(game, client, `**${pLabel}: ${figLabel}** — ${opt.label}.`, { phase: 'ROUND', icon: 'deploy' });
+      await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** — ${opt.label}.`, { phase: 'ROUND', icon: 'deploy' });
     }
     saveGames();
     return;

@@ -212,7 +212,7 @@ export async function renderMap(mapId, options = {}) {
   const tc = getTokenImagesConfig();
   const imagesDir = join(rootDir, 'vassal_extracted', 'images');
 
-  const drawTokenAt = async (coord, imageFilename, fallbackStyle, fallbackShape = 'square') => {
+  const drawTokenAt = async (coord, imageFilename, fallbackStyle, fallbackShape = 'square', label = null) => {
     const { col, row } = parseCoord(coord);
     if (col < 0 || row < 0 || col >= numCols || row >= numRows) return;
     const cx = sx0 + col * sdx + sdx / 2;
@@ -227,22 +227,52 @@ export async function renderMap(mapId, options = {}) {
         const dw = Math.round(tw * tScale);
         const dh = Math.round(th * tScale);
         ctx.drawImage(tokenImg, cx - dw / 2, cy - dh / 2, dw, dh);
-        return;
       } catch (err) {
         console.error('Token image load failed:', imageFilename, err);
+        ctx.fillStyle = fallbackStyle;
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 1;
+        if (fallbackShape === 'circle') {
+          ctx.beginPath();
+          ctx.arc(cx, cy, tokenSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          ctx.fillRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
+          ctx.strokeRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
+        }
+      }
+    } else {
+      ctx.fillStyle = fallbackStyle;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.lineWidth = 1;
+      if (fallbackShape === 'circle') {
+        ctx.beginPath();
+        ctx.arc(cx, cy, tokenSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
+        ctx.strokeRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
       }
     }
-    ctx.fillStyle = fallbackStyle;
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-    ctx.lineWidth = 1;
-    if (fallbackShape === 'circle') {
-      ctx.beginPath();
-      ctx.arc(cx, cy, tokenSize / 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    } else {
-      ctx.fillRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
-      ctx.strokeRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
+    if (label) {
+      const fontSize = Math.max(9, Math.round(11 * scale));
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const paddingH = Math.max(4, Math.round(6 * scale));
+      const paddingV = Math.max(2, Math.round(3 * scale));
+      const metrics = ctx.measureText(label);
+      const boxW = metrics.width + paddingH * 2;
+      const boxH = fontSize + paddingV * 2;
+      const labelY = cy + tokenSize / 2 + boxH / 2 + 2;
+      const boxX = cx - boxW / 2;
+      const boxY = labelY - boxH / 2;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+      ctx.fillStyle = '#FFEB3B';
+      ctx.fillText(label, cx, labelY);
     }
   };
 
@@ -250,10 +280,10 @@ export async function renderMap(mapId, options = {}) {
     await drawTokenAt(coord, tc.terminals, 'rgba(79,195,247,0.8)', 'square');
   }
   for (const coord of tokens.missionA || []) {
-    await drawTokenAt(coord, tc.missionA, 'rgba(120,120,120,0.9)', 'circle');
+    await drawTokenAt(coord, tc.missionA, 'rgba(120,120,120,0.9)', 'circle', 'Panel');
   }
   for (const coord of tokens.missionB || []) {
-    await drawTokenAt(coord, tc.missionB, 'rgba(255,183,77,0.8)', 'square');
+    await drawTokenAt(coord, tc.missionB, 'rgba(255,183,77,0.8)', 'square', 'Contraband');
   }
 
   return canvas.toBuffer('image/png');
