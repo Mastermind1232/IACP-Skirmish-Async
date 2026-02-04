@@ -47,3 +47,56 @@ export function parseVsav(content) {
     ccCount: ccList.length,
   };
 }
+
+/**
+ * Parse IACP list paste format (from Share button in IACP List Builder).
+ * Format:
+ *   -- Army Name ---
+ *   Deployment Cards:
+ *   - Card1
+ *   - Card2
+ *   Command Cards:
+ *   - CC1
+ *   Stats: ...
+ * @param {string} content - Pasted message content
+ * @returns {{ dcList: string[], ccList: string[], name?: string } | null}
+ */
+export function parseIacpListPaste(content) {
+  if (!content || typeof content !== 'string') return null;
+  const text = content.trim();
+  if (!text.includes('Deployment Cards:') || !text.includes('Command Cards:')) return null;
+
+  let name = '';
+  const nameMatch = text.match(/^[-]*\s*(.+?)\s*-{2,}/m);
+  if (nameMatch) name = nameMatch[1].trim();
+
+  const dcSection = text.split(/Command Cards:/i)[0];
+  const ccSection = text.split(/Command Cards:/i)[1]?.split(/Stats:/i)[0] || '';
+
+  const parseBullets = (section) => {
+    const lines = section.split('\n');
+    const items = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const match = trimmed.match(/^-\s+(.+)$/);
+      if (match) {
+        const item = match[1].trim();
+        if (item && /[A-Za-z0-9]/.test(item)) items.push(item);
+      }
+    }
+    return items;
+  };
+
+  const dcList = parseBullets(dcSection);
+  const ccList = parseBullets(ccSection);
+
+  if (dcList.length === 0 && ccList.length === 0) return null;
+
+  return {
+    dcList,
+    ccList,
+    dcCount: dcList.length,
+    ccCount: ccList.length,
+    name: name || undefined,
+  };
+}

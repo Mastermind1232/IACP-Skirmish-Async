@@ -19,7 +19,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
-import { parseVsav } from './src/vsav-parser.js';
+import { parseVsav, parseIacpListPaste } from './src/vsav-parser.js';
 import { rotateImage90 } from './src/dc-image-utils.js';
 import { renderMap } from './src/map-renderer.js';
 
@@ -90,6 +90,30 @@ try {
   const ccData = JSON.parse(readFileSync(join(rootDir, 'data', 'cc-effects.json'), 'utf8'));
   if (ccData?.cards) ccEffectsData = ccData;
 } catch {}
+
+/** Reload game data from JSON files (dc-stats, dc-images, etc.). Call before Refresh All to pick up new entries. */
+function reloadGameData() {
+  try {
+    const dcData = JSON.parse(readFileSync(join(rootDir, 'data', 'dc-images.json'), 'utf8'));
+    dcImages = dcData.dcImages || {};
+  } catch {}
+  try {
+    const figData = JSON.parse(readFileSync(join(rootDir, 'data', 'figure-images.json'), 'utf8'));
+    figureImages = figData.figureImages || {};
+  } catch {}
+  try {
+    const szData = JSON.parse(readFileSync(join(rootDir, 'data', 'figure-sizes.json'), 'utf8'));
+    figureSizes = szData.figureSizes || {};
+  } catch {}
+  try {
+    const statsData = JSON.parse(readFileSync(join(rootDir, 'data', 'dc-stats.json'), 'utf8'));
+    dcStats = statsData.dcStats || {};
+  } catch {}
+  try {
+    const ccData = JSON.parse(readFileSync(join(rootDir, 'data', 'cc-effects.json'), 'utf8'));
+    if (ccData?.cards) ccEffectsData = ccData;
+  } catch {}
+}
 
 function getCcEffect(cardName) {
   return ccEffectsData.cards?.[cardName] || null;
@@ -1279,6 +1303,7 @@ const CHANNELS = {
   activeGames: { name: 'active-games', parent: 'lfg', type: ChannelType.GuildText },
   botLogs: { name: 'bot-logs', parent: 'admin', type: ChannelType.GuildText },
   suggestions: { name: 'suggestions', parent: 'admin', type: ChannelType.GuildText },
+  requestsAndSuggestions: { name: 'requests-and-suggestions', parent: 'admin', type: ChannelType.GuildForum },
 };
 
 function getMainMenu() {
@@ -1346,15 +1371,24 @@ function getCcActionButtons(gameId, hand = [], deck = []) {
 
 const COMMAND_CARDBACK_PATH = join(rootDir, 'vassal_extracted', 'images', 'Command cardback.jpg');
 
-/** Resolve command card image path (C card--Name.jpg or .png). Returns cardback path if not found so P2 hand always shows an image. */
+/** Resolve command card image path. Tries C card--Name, IACP_C card--, IACP9_, IACP11_ variants. Returns cardback path if not found. */
 function getCommandCardImagePath(cardName) {
   if (!cardName || typeof cardName !== 'string') return null;
   const base = join(rootDir, 'vassal_extracted', 'images');
-  const jpg = join(base, `C card--${cardName}.jpg`);
-  const png = join(base, `C card--${cardName}.png`);
-  if (existsSync(jpg)) return jpg;
-  if (existsSync(png)) return png;
-  // Fallback so missing assets still show a thumbnail
+  const candidates = [
+    `C card--${cardName}.jpg`,
+    `C card--${cardName}.png`,
+    `IACP_C card--${cardName}.png`,
+    `IACP_C card--${cardName}.jpg`,
+    `IACP9_C card--${cardName}.png`,
+    `IACP9_C card--${cardName}.jpg`,
+    `IACP11_C card--${cardName}.png`,
+    `IACP11_C card--${cardName}.jpg`,
+  ];
+  for (const c of candidates) {
+    const p = join(base, c);
+    if (existsSync(p)) return p;
+  }
   if (existsSync(COMMAND_CARDBACK_PATH)) return COMMAND_CARDBACK_PATH;
   return null;
 }
@@ -1707,6 +1741,103 @@ async function logGameAction(game, client, content, options = {}) {
   }
 }
 
+const gameErrorThreads = new Map();
+
+function extractGameIdFromInteraction(interaction) {
+  const id = interaction.customId || interaction.values?.[0] || '';
+  const prefixes = [
+    'status_phase_', 'end_end_of_round_', 'end_start_of_round_', 'map_selection_', 'draft_random_',
+    'pass_activation_turn_', 'combat_ready_', 'combat_roll_', 'cc_play_select_', 'cc_discard_select_',
+    'kill_game_', 'refresh_map_', 'refresh_all_', 'undo_', 'deployment_zone_red_', 'deployment_zone_blue_',
+  ];
+  for (const p of prefixes) {
+    if (id.startsWith(p)) {
+      const rest = id.slice(p.length);
+      const gameId = rest.split('_')[0];
+      if (gameId && games.has(gameId)) return gameId;
+      return gameId || null;
+    }
+  }
+  const m = id.match(/^(?:squad_modal_|deploy_modal_|special_done_|interact_choice_|interact_cancel_)([^_]+)/);
+  if (m && games.has(m[1])) return m[1];
+  const dcMatch = id.match(/^dc_(?:activate|move|attack|interact|special)_([^_]+)/);
+  if (dcMatch) {
+    const part = dcMatch[1];
+    if (games.has(part)) return part;
+    for (const [gid, g] of games) {
+      if (g.p1DcMessageIds?.includes(part) || g.p2DcMessageIds?.includes(part)) return gid;
+      for (const [msgId, meta] of dcMessageMeta) {
+        if (meta.gameId === gid && (String(msgId) === part || part.startsWith(msgId))) return gid;
+      }
+    }
+  }
+  const moveMatch = id.match(/^move_(?:mp|pick)_([^_]+)/);
+  if (moveMatch && games.has(moveMatch[1])) return moveMatch[1];
+  const attackMatch = id.match(/^attack_target_(.+)_\d+_\d+$/);
+  if (attackMatch) {
+    const msgId = attackMatch[1];
+    for (const [gid, g] of games) {
+      if ([...(g.p1DcMessageIds || []), ...(g.p2DcMessageIds || [])].includes(msgId)) return gid;
+    }
+  }
+  return null;
+}
+
+function extractGameIdFromMessage(message) {
+  const chId = message.channel?.id;
+  if (!chId) return null;
+  for (const [gameId, g] of games) {
+    if (g.generalId === chId || g.chatId === chId || g.boardId === chId ||
+        g.p1HandId === chId || g.p2HandId === chId || g.p1PlayAreaId === chId || g.p2PlayAreaId === chId) {
+      return gameId;
+    }
+  }
+  if (message.channel?.isThread?.()) {
+    const parent = message.channel.parent;
+    if (parent?.name === 'new-games') return null;
+    for (const [gameId, g] of games) {
+      const cat = message.guild?.channels?.cache?.get(g.gameCategoryId);
+      if (cat && message.channel.parentId === cat.id) return gameId;
+    }
+  }
+  return null;
+}
+
+async function logGameErrorToBotLogs(client, guild, gameId, error, context = '') {
+  try {
+    await guild?.channels?.fetch().catch(() => {});
+    const ch = guild?.channels?.cache?.find((c) => c.name === 'bot-logs' && c.type === ChannelType.GuildText);
+    if (!ch) return;
+    const errMsg = error?.message || String(error);
+    const stack = error?.stack ? `\n\`\`\`\n${error.stack.slice(0, 800)}\n\`\`\`` : '';
+    const ctx = context ? ` (${context})` : '';
+    const content = `⚠️ **Game Error**${gameId ? ` — IA Game #${gameId}` : ''}${ctx}\n${errMsg}${stack}`;
+
+    if (gameId) {
+      const key = `${guild.id}_${gameId}`;
+      let threadId = gameErrorThreads.get(key);
+      if (!threadId) {
+        try {
+          const thread = await ch.threads.create({
+            name: `IA${gameId} errors`,
+            autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+          });
+          threadId = thread.id;
+          gameErrorThreads.set(key, threadId);
+        } catch {
+          threadId = null;
+        }
+      }
+      const target = threadId ? await client.channels.fetch(threadId).catch(() => null) : ch;
+      if (target) await target.send({ content });
+    } else {
+      await ch.send({ content });
+    }
+  } catch (e) {
+    console.error('Failed to log game error to bot-logs:', e);
+  }
+}
+
 /** After map selection: randomly pick A or B mission card, post to Game Log, pin it. */
 async function postMissionCardAfterMapSelection(game, client, map) {
   const missions = missionCardsData[map.id];
@@ -1792,6 +1923,10 @@ function getBoardButtons(gameId) {
       .setStyle(ButtonStyle.Primary),
     getUndoButton(gameId),
     new ButtonBuilder()
+      .setCustomId(`refresh_all_${gameId}`)
+      .setLabel('Refresh All')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
       .setCustomId(`kill_game_${gameId}`)
       .setLabel('Kill Game (testing)')
       .setStyle(ButtonStyle.Danger)
@@ -1836,16 +1971,21 @@ function getDeployDisplayNames(dcList) {
 
 const FIGURE_LETTERS = 'abcdefghij';
 
-/** Per-figure deploy labels: one entry per figure (e.g. multi-figure DCs get "1a", "1b", "2a", "2b"). Returns { labels, metadata }. */
+function resolveDcName(entry) {
+  return typeof entry === 'object' ? (entry.dcName || entry.displayName) : entry;
+}
+
+/** Per-figure deploy labels: one entry per figure (e.g. multi-figure DCs get "1a", "1b", "2a", "2b"). Figure-less DCs excluded. */
 function getDeployFigureLabels(dcList) {
   if (!dcList?.length) return { labels: [], metadata: [] };
+  const figureDcs = dcList.map(resolveDcName).filter((n) => n && !isFigurelessDc(n));
   const totals = {};
   const counts = {};
-  for (const d of dcList) totals[d] = (totals[d] || 0) + 1;
+  for (const d of figureDcs) totals[d] = (totals[d] || 0) + 1;
   const labels = [];
   const metadata = [];
-  for (let i = 0; i < dcList.length; i++) {
-    const dcName = dcList[i];
+  for (let i = 0; i < figureDcs.length; i++) {
+    const dcName = figureDcs[i];
     counts[dcName] = (counts[dcName] || 0) + 1;
     const dgIndex = counts[dcName];
     const displayName = totals[dcName] > 1 ? `${dcName} [Group ${dgIndex}]` : dcName;
@@ -2052,7 +2192,10 @@ function getFiguresForRender(game) {
     const poses = pos[p] || {};
     const dcList = (p === 1 ? game.player1Squad : game.player2Squad)?.dcList || [];
     const totals = {};
-    for (const d of dcList) totals[d] = (totals[d] || 0) + 1;
+    for (const d of dcList) {
+      const n = resolveDcName(d);
+      if (n && !isFigurelessDc(n)) totals[n] = (totals[n] || 0) + 1;
+    }
     for (const [figureKey, space] of Object.entries(poses)) {
       const dcName = figureKey.replace(/-\d+-\d+$/, '');
       const m = figureKey.match(/-(\d+)-(\d+)$/);
@@ -2171,6 +2314,59 @@ function buildScorecardEmbed(game) {
       { name: 'Objectives', value: `${vp2.objectives}`, inline: true },
       { name: '\u200b', value: '\u200b', inline: true }
     );
+}
+
+/** Refresh all game components with latest data (DC stats, CC images, etc.). Reloads JSON data first. */
+async function refreshAllGameComponents(game, client) {
+  reloadGameData();
+  const gameId = game.gameId;
+
+  if (game.boardId && game.selectedMap) {
+    try {
+      const boardChannel = await client.channels.fetch(game.boardId);
+      const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
+      await boardChannel.send(payload);
+    } catch (err) {
+      console.error('Refresh All: board failed', err);
+    }
+  }
+
+  const allDcMsgIds = [...(game.p1DcMessageIds || []), ...(game.p2DcMessageIds || [])];
+  for (const msgId of allDcMsgIds) {
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta || meta.gameId !== gameId) continue;
+    const exhausted = dcExhaustedState.get(msgId) ?? false;
+    const displayName = meta.displayName || meta.dcName;
+    let healthState = dcHealthState.get(msgId) ?? [];
+    const stats = getDcStats(meta.dcName);
+    const figureless = isFigurelessDc(meta.dcName);
+    if (!figureless && stats.health != null) {
+      const figures = stats.figures ?? 1;
+      healthState = Array.from({ length: figures }, (_, i) => {
+        const existing = healthState[i];
+        const cur = existing?.[0] != null ? existing[0] : stats.health;
+        const max = existing?.[1] != null ? existing[1] : stats.health;
+        return [cur, max];
+      });
+      dcHealthState.set(msgId, healthState);
+    }
+    try {
+      const channelId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+      const channel = await client.channels.fetch(channelId);
+      const msg = await channel.messages.fetch(msgId);
+      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState);
+      const components = exhausted ? [getDcToggleButton(msgId, true)] : [getDcToggleButton(msgId, false)];
+      await msg.edit({ embeds: [embed], files: files?.length ? files : [], components });
+    } catch (err) {
+      console.error('Refresh All: DC message failed', msgId, err);
+    }
+  }
+
+  await updateHandChannelMessages(game, client);
+  for (const pn of [1, 2]) {
+    await updateHandVisualMessage(game, pn, client);
+    await updateDiscardPileMessage(game, pn, client);
+  }
 }
 
 /** Returns { content, files?, embeds?, components } for posting the game map. Includes Scorecard embed. */
@@ -2483,7 +2679,10 @@ function getSquadSelectEmbed(playerNum, squad) {
     .setDescription(
       squad
         ? `**Squad:** ${squad.name}\n**Deployment Cards:** ${squad.dcCount ?? '—'} cards\n**Command Cards:** ${squad.ccCount ?? '—'} cards\n\n✓ Squad submitted.`
-        : 'Click **Select Squad** or **upload a .vsav file** (from [IACP List Builder](https://iacp-list-builder.onrender.com/)) to submit your squad.'
+        : 'Submit your squad using any of these methods:\n' +
+          '1. **Select Squad** — fill out the form\n' +
+          '2. **Upload a .vsav file** — export from [IACP List Builder](https://iacp-list-builder.onrender.com/)\n' +
+          '3. **Copy-paste your list** — from the IACP builder, press the **Share** button and paste the full list below'
     )
     .setColor(0x2f3136);
   return embed;
@@ -2494,6 +2693,8 @@ function getDcImagePath(dcName) {
   if (!dcName || typeof dcName !== 'string') return null;
   const exact = dcImages[dcName];
   if (exact) return exact;
+  const trimmed = dcName.trim();
+  if (!/^\[.+\]$/.test(trimmed) && dcImages[`[${trimmed}]`]) return dcImages[`[${trimmed}]`];
   const lower = dcName.toLowerCase();
   let key = Object.keys(dcImages).find((k) => k.toLowerCase() === lower);
   if (key) return dcImages[key];
@@ -2572,13 +2773,26 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
   return null;
 }
 
+/** DCs in brackets (e.g. [Zillo Technique], [Extra Armor]) are upgrades with no figure; no health, no deployment. */
+function isFigurelessDc(dcName) {
+  if (!dcName || typeof dcName !== 'string') return false;
+  const n = dcName.trim();
+  if (!n) return false;
+  if (/^\[.+\]$/.test(n)) return true;
+  if (dcImages[`[${n}]`]) return true;
+  return Object.keys(dcImages).some((k) => /^\[.+\]$/.test(k) && (k.slice(1, -1) === n || k === n));
+}
+
 function getDcStats(dcName) {
   const exact = dcStats[dcName];
-  if (exact) return exact;
+  if (exact) return { ...exact, figures: isFigurelessDc(dcName) ? 0 : (exact.figures ?? 1) };
   const lower = dcName?.toLowerCase?.() || '';
   const key = Object.keys(dcStats).find((k) => k.toLowerCase() === lower);
-  if (key) return dcStats[key];
-  return { health: null, figures: 1, specials: [] };
+  if (key) {
+    const base = dcStats[key];
+    return { ...base, figures: isFigurelessDc(dcName) ? 0 : (base.figures ?? 1) };
+  }
+  return { health: null, figures: isFigurelessDc(dcName) ? 0 : 1, specials: [] };
 }
 
 const DC_ACTIONS_PER_ACTIVATION = 2;
@@ -2788,9 +3002,12 @@ function getActivateDcButtons(game, playerNum) {
   const gameId = game.gameId;
   const btns = [];
   for (let i = 0; i < dcList.length; i++) {
+    const dc = dcList[i];
+    const dcName = resolveDcName(dc);
+    if (isFigurelessDc(dcName)) continue;
     if (activatedSet.has(i)) continue;
     if (isGroupDefeated(game, playerNum, i)) continue;
-    const { displayName } = dcList[i];
+    const displayName = dc?.displayName || dcName;
     const fullLabel = `Activate ${displayName}`;
     const label = fullLabel.length > 80 ? fullLabel.slice(0, 77) + '…' : fullLabel;
     btns.push(new ButtonBuilder()
@@ -2820,20 +3037,23 @@ function getActivateDcButtons(game, playerNum) {
 async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState) {
   const status = exhausted ? 'EXHAUSTED' : 'READIED';
   const color = exhausted ? 0xed4245 : 0x57f287; // red : green
+  const figureless = isFigurelessDc(dcName);
   const dgIndex = displayName.match(/\[Group (\d+)\]/)?.[1] ?? 1;
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   const variant = dcName?.includes('(Elite)') ? 'Elite' : dcName?.includes('(Regular)') ? 'Regular' : null;
-  const healthSection = formatHealthSection(Number(dgIndex), healthState);
-  const lines = [
-    `**Figures:** ${figures}`,
-    variant ? `**Variant:** ${variant}` : null,
-    '',
-    healthSection,
-  ].filter(Boolean);
+  const healthSection = figureless ? null : formatHealthSection(Number(dgIndex), healthState);
+  const lines = figureless
+    ? [variant ? `**Variant:** ${variant}` : null].filter(Boolean)
+    : [
+        `**Figures:** ${figures}`,
+        variant ? `**Variant:** ${variant}` : null,
+        '',
+        healthSection,
+      ].filter(Boolean);
   const embed = new EmbedBuilder()
     .setTitle(`${status} — ${displayName}`)
-    .setDescription(lines.join('\n'))
+    .setDescription(lines.length ? lines.join('\n') : '*Upgrade — no figure*')
     .setColor(color);
 
   let files = [];
@@ -2888,7 +3108,7 @@ function getHandTooltipEmbed(game, playerNum) {
     .setTitle('Your Hand')
     .setDescription(
       'Your private channel for **Command Cards** and squad selection. Only you can see this channel.\n\n' +
-      '• Select your squad below (or upload a .vsav file)\n' +
+      '• Select your squad below (form), **upload a .vsav file**, or **copy-paste** your list from the IACP builder Share button\n' +
       '• During the game, your hand is shown here — played cards will show up in the **Game Log**'
     )
     .setColor(0x5865f2);
@@ -3055,8 +3275,10 @@ async function populatePlayAreas(game, client) {
   const p2PlayArea = await client.channels.fetch(game.p2PlayAreaId);
   const gameId = game.gameId;
 
-  const p1Total = (game.player1Squad?.dcList?.length ?? game.player1Squad?.dcCount) || 0;
-  const p2Total = (game.player2Squad?.dcList?.length ?? game.player2Squad?.dcCount) || 0;
+  const p1FigureDcs = (game.player1Squad?.dcList || []).filter((d) => !isFigurelessDc(resolveDcName(d)));
+  const p2FigureDcs = (game.player2Squad?.dcList || []).filter((d) => !isFigurelessDc(resolveDcName(d)));
+  const p1Total = p1FigureDcs.length || game.player1Squad?.dcCount || 0;
+  const p2Total = p2FigureDcs.length || game.player2Squad?.dcCount || 0;
   game.p1ActivationsTotal = p1Total;
   game.p2ActivationsTotal = p2Total;
   game.p1ActivationsRemaining = p1Total;
@@ -3065,15 +3287,20 @@ async function populatePlayAreas(game, client) {
   const processDcList = (dcList) => {
     const counts = {};
     const totals = {};
-    for (const d of dcList) totals[d] = (totals[d] || 0) + 1;
-    return dcList.map((dcName) => {
+    for (const d of dcList) {
+      const n = resolveDcName(d);
+      if (n) totals[n] = (totals[n] || 0) + 1;
+    }
+    return dcList.map((entry) => {
+      const dcName = resolveDcName(entry);
       counts[dcName] = (counts[dcName] || 0) + 1;
       const dgIndex = counts[dcName];
       const displayName = totals[dcName] > 1 ? `${dcName} [Group ${dgIndex}]` : dcName;
       const stats = getDcStats(dcName);
-      const health = stats.health ?? '?';
-      const figures = stats.figures ?? 1;
-      const healthState = Array.from({ length: figures }, () => [health, health]);
+      const figureless = isFigurelessDc(dcName);
+      const health = figureless ? null : (stats.health ?? '?');
+      const figures = figureless ? 0 : (stats.figures ?? 1);
+      const healthState = figureless ? [] : Array.from({ length: figures }, () => [health, health]);
       return { dcName, displayName, healthState };
     });
   };
@@ -3217,10 +3444,10 @@ async function setupServer(guild) {
         name: config.name,
         type: config.type,
         parent: parent.id,
-        ...(config.type === ChannelType.GuildForum && { availableTags: GAME_TAGS }),
+        ...(config.type === ChannelType.GuildForum && config.name === 'new-games' && { availableTags: GAME_TAGS }),
       });
-      if (config.type === ChannelType.GuildForum) forumChannel = created;
-    } else if (config.type === ChannelType.GuildForum) {
+      if (config.type === ChannelType.GuildForum && config.name === 'new-games') forumChannel = created;
+    } else if (config.type === ChannelType.GuildForum && config.name === 'new-games') {
       forumChannel = existing;
     }
   }
@@ -3254,12 +3481,41 @@ client.once('ready', async () => {
         if (forum) {
           await forum.setAvailableTags(GAME_TAGS);
         }
+        const adminCat = guild.channels.cache.find(
+          (c) => c.type === ChannelType.GuildCategory && c.name === CATEGORIES.admin
+        );
+        const hasRequestsForum = guild.channels.cache.some(
+          (c) => c.type === ChannelType.GuildForum && c.name === 'requests-and-suggestions'
+        );
+        if (adminCat && !hasRequestsForum) {
+          await guild.channels.create({
+            name: 'requests-and-suggestions',
+            type: ChannelType.GuildForum,
+            parent: adminCat.id,
+          });
+        }
       }
     } catch (err) {
       console.error(`Setup failed for ${guild.name}:`, err);
     }
   }
 });
+
+/** Resolve/Reject buttons for requests-and-suggestions forum posts. Admin-only (checked on click). */
+function getRequestActionButtons(threadId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`request_resolve_${threadId}`)
+      .setLabel('Resolve')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`request_reject_${threadId}`)
+      .setLabel('Reject')
+      .setStyle(ButtonStyle.Danger),
+  );
+}
+
+const requestsWithButtons = new Set();
 
 // Forum posts: thread isn't messageable until the author sends their first message.
 // So we set up the lobby on the first message in a new-games thread.
@@ -3280,7 +3536,22 @@ async function maybeSetupLobbyFromFirstMessage(message) {
   return true;
 }
 
+async function maybeAddRequestButtons(message) {
+  const thread = message.channel;
+  if (!thread?.isThread?.()) return false;
+  const parent = thread.parent;
+  if (parent?.name !== 'requests-and-suggestions') return false;
+  if (requestsWithButtons.has(thread.id)) return false;
+  requestsWithButtons.add(thread.id);
+  await thread.send({
+    content: 'Admins: mark this request as resolved or rejected.',
+    components: [getRequestActionButtons(thread.id)],
+  });
+  return true;
+}
+
 client.on('messageCreate', async (message) => {
+  try {
   if (message.author.bot) return;
 
   // Forum post first message: set up lobby buttons (thread isn't messageable until author posts)
@@ -3288,6 +3559,13 @@ client.on('messageCreate', async (message) => {
     if (await maybeSetupLobbyFromFirstMessage(message)) return;
   } catch (err) {
     console.error('Lobby setup error:', err);
+  }
+
+  // Requests-and-suggestions: add Resolve/Reject buttons (admin-only on click)
+  try {
+    if (await maybeAddRequestButtons(message)) return;
+  } catch (err) {
+    console.error('Request buttons error:', err);
   }
 
   const content = message.content.toLowerCase().trim();
@@ -3334,11 +3612,6 @@ client.on('messageCreate', async (message) => {
         components: [getGeneralSetupButtons(game)],
       });
       game.generalSetupMessageId = setupMsg.id;
-      const undoMsg = await generalChannel.send({
-        content: '**Game Controls**',
-        components: [new ActionRowBuilder().addComponents(getUndoButton(gameId), new ButtonBuilder().setCustomId(`kill_game_${gameId}`).setLabel('Kill Game (testing)').setStyle(ButtonStyle.Danger))],
-      });
-      game.undoMessageId = undoMsg.id;
       await creatingMsg.edit(`Test game **IA Game #${gameId}** is ready! Select the map in Game Log — Hand channels will appear after map selection.`);
       saveGames();
     } catch (err) {
@@ -3460,9 +3733,89 @@ client.on('messageCreate', async (message) => {
       return;
     }
   }
+
+  // Pasted IACP list (from Share button) in Player Hand channel
+  const channelId = message.channel.id;
+  for (const [gameId, game] of games) {
+    const isP1 = game.p1HandId === channelId;
+    const isP2 = game.p2HandId === channelId;
+    if (!isP1 && !isP2) continue;
+    const userId = isP1 ? game.player1Id : game.player2Id;
+    if (message.author.id !== userId) continue;
+    if (!game.mapSelected) continue;
+    const parsed = parseIacpListPaste(message.content || '');
+    if (parsed && (parsed.dcList.length > 0 || parsed.ccList.length > 0)) {
+      const squad = {
+        name: parsed.name || 'From pasted list',
+        dcList: parsed.dcList,
+        ccList: parsed.ccList,
+        dcCount: parsed.dcList.length,
+        ccCount: parsed.ccList.length,
+      };
+      await applySquadSubmission(game, isP1, squad, message.client);
+      await message.reply(`✓ Squad **${squad.name}** submitted from pasted list (${squad.dcCount} DCs, ${squad.ccCount} CCs)`);
+      return;
+    }
+  }
+  } catch (err) {
+    console.error('Message handler error:', err);
+    const guild = message?.guild;
+    const gameId = extractGameIdFromMessage(message);
+    await logGameErrorToBotLogs(message.client, guild, gameId, err, 'messageCreate');
+  }
 });
 
 client.on('interactionCreate', async (interaction) => {
+  try {
+  if (interaction.isButton()) {
+    if (interaction.customId.startsWith('request_resolve_')) {
+      const threadId = interaction.customId.replace('request_resolve_', '');
+      if (!interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)) {
+        await interaction.reply({ content: 'Only admins can resolve requests.', ephemeral: true }).catch(() => {});
+        return;
+      }
+      try {
+        const thread = await interaction.client.channels.fetch(threadId);
+        if (!thread?.isThread?.()) {
+          await interaction.reply({ content: 'Thread not found.', ephemeral: true }).catch(() => {});
+          return;
+        }
+        const name = thread.name;
+        const prefix = '[IMPLEMENTED] ';
+        const newName = name.startsWith(prefix) ? name : prefix + name.replace(/^\[REJECTED\] /, '');
+        await thread.setName(newName);
+        await interaction.deferUpdate();
+        await interaction.message.edit({ content: '✓ Marked as resolved.', components: [] }).catch(() => {});
+      } catch (err) {
+        await interaction.reply({ content: `Failed: ${err.message}`, ephemeral: true }).catch(() => {});
+      }
+      return;
+    }
+    if (interaction.customId.startsWith('request_reject_')) {
+      const threadId = interaction.customId.replace('request_reject_', '');
+      if (!interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)) {
+        await interaction.reply({ content: 'Only admins can reject requests.', ephemeral: true }).catch(() => {});
+        return;
+      }
+      try {
+        const thread = await interaction.client.channels.fetch(threadId);
+        if (!thread?.isThread?.()) {
+          await interaction.reply({ content: 'Thread not found.', ephemeral: true }).catch(() => {});
+          return;
+        }
+        const name = thread.name;
+        const prefix = '[REJECTED] ';
+        const newName = name.startsWith(prefix) ? name : prefix + name.replace(/^\[IMPLEMENTED\] /, '');
+        await thread.setName(newName);
+        await interaction.deferUpdate();
+        await interaction.message.edit({ content: '✓ Marked as rejected.', components: [] }).catch(() => {});
+      } catch (err) {
+        await interaction.reply({ content: `Failed: ${err.message}`, ephemeral: true }).catch(() => {});
+      }
+      return;
+    }
+  }
+
   if (interaction.isModalSubmit()) {
     if (interaction.customId.startsWith('squad_modal_')) {
       const [, , gameId, playerNum] = interaction.customId.split('_');
@@ -5553,6 +5906,28 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  if (interaction.customId.startsWith('refresh_all_')) {
+    const gameId = interaction.customId.replace('refresh_all_', '');
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
+      await interaction.reply({ content: 'Only players in this game can refresh.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate();
+    try {
+      await refreshAllGameComponents(game, client);
+      await interaction.followUp({ content: '✓ Refreshed all components (map, DCs, hand).', ephemeral: true }).catch(() => {});
+    } catch (err) {
+      console.error('Failed to refresh all:', err);
+      await interaction.followUp({ content: 'Failed to refresh: ' + (err?.message || String(err)), ephemeral: true }).catch(() => {});
+    }
+    return;
+  }
+
   if (interaction.customId.startsWith('undo_')) {
     const gameId = interaction.customId.replace('undo_', '');
     const game = games.get(gameId);
@@ -6693,11 +7068,6 @@ client.on('interactionCreate', async (interaction) => {
         components: [getGeneralSetupButtons(game)],
       });
       game.generalSetupMessageId = setupMsg.id;
-      const undoMsg = await generalChannel.send({
-        content: '**Game Controls**',
-        components: [new ActionRowBuilder().addComponents(getUndoButton(gameId), new ButtonBuilder().setCustomId(`kill_game_${gameId}`).setLabel('Kill Game (testing)').setStyle(ButtonStyle.Danger))],
-      });
-      game.undoMessageId = undoMsg.id;
       await interaction.followUp({
         content: `Game **IA Game #${gameId}** is ready!${isTestGame ? ' (Test)' : ''} Select the map in Game Log — Hand channels will appear after map selection.`,
         ephemeral: true,
@@ -6726,6 +7096,19 @@ client.on('interactionCreate', async (interaction) => {
       content: 'Browse **#new-games** and click **Join Game** on a lobby post that needs an opponent.',
       components: [getMainMenu()],
     });
+  }
+  } catch (err) {
+    console.error('Interaction error:', err);
+    const guild = interaction?.guild;
+    const gameId = extractGameIdFromInteraction(interaction);
+    await logGameErrorToBotLogs(interaction.client, guild, gameId, err, 'interactionCreate');
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp({ content: 'An error occurred. It has been logged to bot-logs.', ephemeral: true }).catch(() => {});
+      } else {
+        await interaction.reply({ content: 'An error occurred. It has been logged to bot-logs.', ephemeral: true }).catch(() => {});
+      }
+    } catch {}
   }
 });
 

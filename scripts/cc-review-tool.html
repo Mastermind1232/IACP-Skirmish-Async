@@ -88,8 +88,7 @@
 
     function imageUrl(name, imagePath) {
       if (imagePath) return IMAGES_BASE + encodeURIComponent(imagePath);
-      const tries = [`C card--${name}.jpg`, `C card--${name}.png`, `IACP_C card--${name}.png`];
-      return IMAGES_BASE + encodeURIComponent(tries[0]);
+      return '/api/cc-image/' + encodeURIComponent(name);
     }
 
     async function fetchJson(path) {
@@ -215,7 +214,10 @@
       detailEl.innerHTML = `
         <div class="detail">
           <div>
-            <img src="${url}" alt="${name}" onerror="this.style.display='none'">
+            <div class="card-img-wrap" style="min-width:120px;min-height:168px;background:#222;border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;">
+          <img src="${url}" alt="${name}" style="max-width:180px;border-radius:8px;" onerror="var p=this.parentNode;p.querySelector('.img-fallback').style.display='block';this.style.display='none';">
+          <span class="img-fallback" style="display:none;color:#666;font-size:12px;padding:8px;">No image</span>
+        </div>
           </div>
           <div class="form">
             <label>Cost</label>
@@ -284,7 +286,10 @@
         if (r.ok && j.ok) {
           statusEl.textContent = `Saved ${Object.keys(out.cards).length} cards to data/cc-effects.json`;
         } else {
-          statusEl.textContent = 'Save failed: ' + (j.error || r.statusText);
+          const msg = r.status === 404
+            ? 'Save API not found. Run "npm run cc-review" (not plain serve) and refresh.'
+            : (j.error || r.statusText);
+          statusEl.textContent = 'Save failed: ' + msg;
         }
       } catch (e) {
         statusEl.textContent = 'Save failed: ' + e.message + ' (run npm run cc-review for Save to work)';

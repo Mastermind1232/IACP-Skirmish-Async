@@ -5,7 +5,7 @@
  * Save button writes directly to data/cc-effects.json.
  */
 import { createServer } from 'http';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -27,9 +27,51 @@ const MIME = {
 };
 
 const server = createServer(async (req, res) => {
-  const url = new URL(req.url || '/', `http://localhost`);
-  const pathname = url.pathname === '/' ? '/scripts/cc-review-tool.html' : url.pathname;
+  const requestPath = (req.url || '/').split('?')[0];
+  const pathname = requestPath === '/' ? '/scripts/cc-review-tool.html' : requestPath;
 
+  if (req.method === 'GET' && pathname === '/api/cc-review-server') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, server: 'cc-review-server' }));
+    return;
+  }
+  if (req.method === 'GET' && pathname.startsWith('/api/cc-image/')) {
+    const cardName = decodeURIComponent(pathname.replace('/api/cc-image/', ''));
+    const imagesDir = join(root, 'vassal_extracted', 'images');
+    const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+    const candidates = [
+      `C card--${cardName}.jpg`,
+      `C card--${cardName}.png`,
+      `C card--${titleCase(cardName.toLowerCase())}.jpg`,
+      `C card--${titleCase(cardName.toLowerCase())}.png`,
+      `IACP_C card--${cardName}.png`,
+      `IACP_C card--${cardName}.jpg`,
+    ];
+    let found = null;
+    for (const c of candidates) {
+      const p = join(imagesDir, c);
+      if (existsSync(p)) {
+        found = p;
+        break;
+      }
+    }
+    if (found) {
+      try {
+        const buf = readFileSync(found);
+        const ext = extname(found).toLowerCase();
+        const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
+        res.writeHead(200, { 'Content-Type': mime });
+        res.end(buf);
+      } catch {
+        res.writeHead(500);
+        res.end('Error reading image');
+      }
+    } else {
+      res.writeHead(404);
+      res.end('Not found');
+    }
+    return;
+  }
   if (req.method === 'POST' && pathname === '/api/save-cc-effects') {
     let body = '';
     for await (const chunk of req) body += chunk;
@@ -50,7 +92,13 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  const filePath = join(root, pathname.replace(/^\//, ''));
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(pathname.replace(/^\//, ''));
+  } catch {
+    decodedPath = pathname.replace(/^\//, '');
+  }
+  const filePath = join(root, decodedPath);
   const ext = extname(filePath);
   const mime = MIME[ext] || 'application/octet-stream';
 
@@ -66,4 +114,5 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`CC Review server: http://localhost:${PORT}/scripts/cc-review-tool.html`);
+  console.log('Save button writes to data/cc-effects.json');
 });
