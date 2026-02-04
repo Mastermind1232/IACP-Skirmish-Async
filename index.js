@@ -1358,7 +1358,7 @@ const CHANNELS = {
   activeGames: { name: 'active-games', parent: 'lfg', type: ChannelType.GuildText },
   botLogs: { name: 'bot-logs', parent: 'admin', type: ChannelType.GuildText },
   suggestions: { name: 'suggestions', parent: 'admin', type: ChannelType.GuildText },
-  requestsAndSuggestions: { name: 'bot-requests-and-suggestions', parent: 'admin', type: ChannelType.GuildForum },
+  requestsAndSuggestions: { name: 'bot-requests-and-suggestions', parent: 'general', type: ChannelType.GuildForum },
 };
 
 function getMainMenu() {
@@ -3750,17 +3750,17 @@ client.once('ready', async () => {
         if (forum) {
           await forum.setAvailableTags(GAME_TAGS);
         }
-        const adminCat = guild.channels.cache.find(
-          (c) => c.type === ChannelType.GuildCategory && c.name === CATEGORIES.admin
+        const generalCat = guild.channels.cache.find(
+          (c) => c.type === ChannelType.GuildCategory && c.name === CATEGORIES.general
         );
         const hasRequestsForum = guild.channels.cache.some(
           (c) => c.type === ChannelType.GuildForum && c.name === 'bot-requests-and-suggestions'
         );
-        if (adminCat && !hasRequestsForum) {
+        if (generalCat && !hasRequestsForum) {
           await guild.channels.create({
             name: 'bot-requests-and-suggestions',
             type: ChannelType.GuildForum,
-            parent: adminCat.id,
+            parent: generalCat.id,
           });
         }
       }
@@ -6509,6 +6509,19 @@ client.on('interactionCreate', async (interaction) => {
       const promptText = isLarge
         ? `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${figureSize} unit):`
         : `Pick a space for **${label.replace(/^Deploy /, '')}**:`;
+      const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+      const isInitiative = playerNum === initiativePlayerNum;
+      const idsKey = isInitiative ? 'initiativeDeployMessageIds' : 'nonInitiativeDeployMessageIds';
+      const deployMsgIds = game[idsKey] || [];
+      const firstDeployMsgId = deployMsgIds[0];
+      if (firstDeployMsgId) {
+        try {
+          const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+          const handChannel = await client.channels.fetch(handId);
+          const deployMsg = await handChannel.messages.fetch(firstDeployMsgId);
+          await deployMsg.edit({ attachments: [] });
+        } catch {}
+      }
       const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
       const replyPayload = { content: promptText, components: firstRows, ephemeral: false, fetchReply: true };
       if (mapAttachment) replyPayload.files = [mapAttachment];
@@ -6603,6 +6616,19 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.deferUpdate();
     const gridIds = [];
     try {
+      const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+      const isInitiative = playerNum === initiativePlayerNum;
+      const idsKey = isInitiative ? 'initiativeDeployMessageIds' : 'nonInitiativeDeployMessageIds';
+      const deployMsgIds = game[idsKey] || [];
+      const firstDeployMsgId = deployMsgIds[0];
+      if (firstDeployMsgId) {
+        try {
+          const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+          const handChannel = await client.channels.fetch(handId);
+          const deployMsg = await handChannel.messages.fetch(firstDeployMsgId);
+          await deployMsg.edit({ attachments: [] });
+        } catch {}
+      }
       const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
       const editPayload = {
         content: `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${orientation} unit):`,
