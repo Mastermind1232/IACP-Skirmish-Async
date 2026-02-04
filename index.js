@@ -1403,6 +1403,8 @@ function getCommandCardImagePath(cardName) {
     `IACP_C card--${cardName}.jpg`,
     `IACP9_C card--${cardName}.png`,
     `IACP9_C card--${cardName}.jpg`,
+    `IACP10_C card--${cardName}.png`,
+    `IACP10_C card--${cardName}.jpg`,
     `IACP11_C card--${cardName}.png`,
     `IACP11_C card--${cardName}.jpg`,
   ];

@@ -12,6 +12,7 @@
  *   companions/   - Companion cards and tokens (Companion Card--*, Companion Token--*)
  *   cardbacks/    - All cardbacks (Command, Deployment, Companion, Mission, Shape, etc.)
  *   dice/         - Dice box, Dice Clear button, Dice Icon colors, Dice faces (Black/Blue/Green/Red/White/Yellow)
+ *   dc-supplemental/- Attachments, IACP Shape Cards, IACP Loadout Cards
  * Run: node scripts/organize-images.js
  * Safe to run multiple times (skips already-moved files).
  */
@@ -24,7 +25,7 @@ const root = join(__dirname, '..');
 const imagesDir = join(root, 'vassal_extracted', 'images');
 
 const SUBFOLDERS = {
-  cc: ['C card--', 'IACP_C card--', 'IACP9_C card--', 'IACP11_C card--'],
+  cc: ['C card--', 'IACP_C card--', 'IACP9_C card--', 'IACP10_C card--', 'IACP11_C card--'],
   'dc-figures': [], // populated by dc-images (non-bracket keys)
   'dc-figureless': [], // populated by dc-images (bracket keys)
   figures: ['Figure-'],
@@ -32,9 +33,11 @@ const SUBFOLDERS = {
   maps: ['Map_'],
   'mission-cards': ['SkMission Card--', 'SkMission card--'],
   conditions: ['Condition card--', 'Condition Marker--'],
-  companions: ['Companion Card--', 'Companion Token--'],
+  conditionIcons: ['Bleeding', 'Stunned', 'Weakened', 'Focused', 'Hidden'],
+  companions: ['Companion Card--', 'Companion Token--', 'Dio Token', 'IACP_Comp card--', 'IACP_Comp Card--'],
   cardbacks: ['cardback'],
   dice: ['Dice'],
+  'dc-supplemental': ['IACP_Shape Card--', 'IACP_Loadout Card--', 'Shape Card--'],
 };
 
 function loadFigurelessDcFilenames() {
@@ -63,8 +66,10 @@ function getDestSubfolder(filename, figurelessFilenames) {
   if (SUBFOLDERS.figures.some((p) => filename.startsWith(p))) return 'figures';
   if (SUBFOLDERS.tokens.some((p) => filename.startsWith(p))) return 'tokens';
   if (SUBFOLDERS.conditions.some((p) => filename.startsWith(p))) return 'conditions';
+  if (filename.startsWith('Icon-') && SUBFOLDERS.conditionIcons.some((c) => filename.includes(c))) return 'conditions';
   if (SUBFOLDERS.companions.some((p) => filename.startsWith(p))) return 'companions';
   if (SUBFOLDERS.dice.some((p) => filename.startsWith(p))) return 'dice';
+  if (SUBFOLDERS['dc-supplemental'].some((p) => filename.startsWith(p))) return 'dc-supplemental';
   if (filename.startsWith('Default Dengar') || filename.startsWith('Dengar 10.1')) return 'dc-figures';
 
   const dcPrefixes = ['D card-', 'IACP_D card-', 'IACP9_D card-', 'IACP11_D card-', 'IACP10_D card-'];
@@ -94,7 +99,7 @@ function main() {
   }
 
   const figurelessFilenames = loadFigurelessDcFilenames();
-  const dirs = ['cc', 'dc-figures', 'dc-figureless', 'figures', 'tokens', 'maps', 'mission-cards', 'conditions', 'companions', 'cardbacks', 'dice'];
+  const dirs = ['cc', 'dc-figures', 'dc-figureless', 'dc-supplemental', 'figures', 'tokens', 'maps', 'mission-cards', 'conditions', 'companions', 'cardbacks', 'dice'];
   for (const d of dirs) {
     const p = join(imagesDir, d);
     if (!existsSync(p)) mkdirSync(p, { recursive: true });
@@ -105,7 +110,7 @@ function main() {
 
   const seen = new Set();
 
-  for (const subdir of ['', 'cc', 'dc', 'conditions', 'companions', 'cardbacks', 'dice']) {
+  for (const subdir of ['', 'cc', 'dc', 'dc-supplemental', 'conditions', 'companions', 'cardbacks', 'dice']) {
     const scanDir = subdir ? join(imagesDir, subdir) : imagesDir;
     if (!existsSync(scanDir)) continue;
 
