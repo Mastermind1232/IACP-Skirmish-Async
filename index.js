@@ -2309,7 +2309,7 @@ function getMapTokensForRender(mapId, missionVariant) {
   };
 }
 
-/** Returns AttachmentBuilder for activation minimap (zoomed on figure, size = speed * 2.5 cells). msgId = DC message ID. */
+/** Returns AttachmentBuilder for activation minimap (zoomed on figure, size = speed * 1.75 cells). msgId = DC message ID. */
 async function getActivationMinimapAttachment(game, msgId) {
   const meta = dcMessageMeta.get(msgId);
   const map = game?.selectedMap;
@@ -2335,7 +2335,7 @@ async function getActivationMinimapAttachment(game, msgId) {
   const [cols = 1, rows = 1] = String(size || '1x1').split('x').map(Number);
   const centerCol = Math.floor(tlCol + (cols - 1) / 2);
   const centerRow = Math.floor(tlRow + (rows - 1) / 2);
-  const halfExtent = Math.max(1, Math.ceil((speed * 2.5) / 2));
+  const halfExtent = Math.max(1, Math.ceil((speed * 1.75) / 2));
   const cropCoords = [];
   for (let dr = -halfExtent; dr <= halfExtent; dr++) {
     for (let dc = -halfExtent; dc <= halfExtent; dc++) {
@@ -2489,6 +2489,21 @@ async function replyIfGameEnded(game, interaction) {
   return false;
 }
 
+/** Returns the current initiative player's zone label, e.g. "[RED] " or "[BLUE] ", or "" if unknown. */
+function getInitiativePlayerZoneLabel(game) {
+  return getPlayerZoneLabel(game, game.initiativePlayerId);
+}
+
+/** Returns a player's zone label, e.g. "[RED] " or "[BLUE] ", or "" if unknown. */
+function getPlayerZoneLabel(game, playerId) {
+  if (!playerId) return '';
+  let zone = playerId === game.player1Id ? game.player1DeploymentZone : game.player2DeploymentZone;
+  if (!zone && game.deploymentZoneChosen) {
+    zone = (playerId === game.initiativePlayerId) ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+  }
+  return zone ? `[${zone.toUpperCase()}] ` : '';
+}
+
 /** Build Scorecard embed with VP breakdown per player. Initiative shown via bullet row (no token image). */
 function buildScorecardEmbed(game) {
   const vp1 = game.player1VP || { total: 0, kills: 0, objectives: 0 };
@@ -2511,9 +2526,10 @@ function buildScorecardEmbed(game) {
     { name: '\u200b', value: '\u200b', inline: true },
   ];
   if (game.initiativeDetermined) {
+    const zoneLabel = getInitiativePlayerZoneLabel(game);
     const initiativeValue = p1HasInitiative
-      ? `● P1 <@${game.player1Id}> has the initiative!`
-      : `● P2: <@${game.player2Id}> has the initiative!`;
+      ? `● ${zoneLabel}P1 <@${game.player1Id}> has the initiative!`
+      : `● ${zoneLabel}P2 <@${game.player2Id}> has the initiative!`;
     fields.push({ name: 'Initiative', value: initiativeValue, inline: false });
   }
 
@@ -2753,12 +2769,16 @@ async function runDraftRandom(game, client) {
   }
   if (!game.deploymentZoneChosen) {
     const zone = Math.random() < 0.5 ? 'red' : 'blue';
+    const otherZone = zone === 'red' ? 'blue' : 'red';
     game.deploymentZoneChosen = zone;
     const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    game.player1DeploymentZone = initiativePlayerNum === 1 ? zone : otherZone;
+    game.player2DeploymentZone = initiativePlayerNum === 2 ? zone : otherZone;
+    const zoneLabel = `[${zone.toUpperCase()}] `;
     await logGameAction(
       game,
       client,
-      `<@${game.initiativePlayerId}> (**Player ${initiativePlayerNum}**) chose the **${zone}** deployment zone`,
+      `<@${game.initiativePlayerId}> (${zoneLabel}**Player ${initiativePlayerNum}**) chose the **${zone}** deployment zone`,
       { allowedMentions: { users: [game.initiativePlayerId] }, phase: 'INITIATIVE', icon: 'zone' }
     );
   }
@@ -3075,10 +3095,11 @@ async function sendRoundActivationPhaseMessage(game, client) {
     : 'Draw 1 CC. ';
   const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
   const round = game.currentRound || 1;
+  const initZone = getInitiativePlayerZoneLabel(game);
   const passHint = otherRem > initRem && initRem > 0 ? ' You may pass back (opponent has more activations).' : '';
   const content = showBtn
-    ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${round}** — Your turn! All deployment groups readied. ${drawRule}Both players: click **End R${round} Activation Phase** when you've used all activations and any end-of-activation effects.${passHint}`
-    : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${round}** — Your turn! All deployment groups readied. ${drawRule}Use all activations and actions. The **End R${round} Activation Phase** button will appear when both players have done so.${passHint}`;
+    ? `<@${game.initiativePlayerId}> (${initZone}**Player ${initPlayerNum}**) **Round ${round}** — Your turn! All deployment groups readied. ${drawRule}Both players: click **End R${round} Activation Phase** when you've used all activations and any end-of-activation effects.${passHint}`
+    : `<@${game.initiativePlayerId}> (${initZone}**Player ${initPlayerNum}**) **Round ${round}** — Your turn! All deployment groups readied. ${drawRule}Use all activations and actions. The **End R${round} Activation Phase** button will appear when both players have done so.${passHint}`;
   const sent = await generalChannel.send({
     content,
     embeds: [roundEmbed],
@@ -3112,8 +3133,9 @@ async function maybeShowEndActivationPhaseButton(game, client) {
         .setStyle(ButtonStyle.Secondary)
     );
     const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    const initZone = getInitiativePlayerZoneLabel(game);
     await msg.edit({
-      content: `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${round}** — Both players have used all activations and actions. Both players: click **End R${round} Activation Phase** when done with any end-of-activation effects.`,
+      content: `<@${game.initiativePlayerId}> (${initZone}**Player ${initPlayerNum}**) **Round ${round}** — Both players have used all activations and actions. Both players: click **End R${round} Activation Phase** when done with any end-of-activation effects.`,
       embeds: [roundEmbed],
       components: [endBtn],
       allowedMentions: { users: [game.initiativePlayerId] },
@@ -4336,6 +4358,10 @@ client.on('interactionCreate', async (interaction) => {
       });
       return;
     }
+    await interaction.deferUpdate().catch((e) => {
+      console.error('dc_activate_ deferUpdate failed:', e?.message || e);
+    });
+    try {
     const channel = await client.channels.fetch(playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
     const msg = await channel.messages.fetch(msgId);
     dcExhaustedState.set(msgId, true);
@@ -4373,6 +4399,10 @@ client.on('interactionCreate', async (interaction) => {
     game.dcActivationLogMessageIds[msgId] = logMsg.id;
     const activateRows = getActivateDcButtons(game, playerNum);
     await interaction.update({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch(() => interaction.deferUpdate().catch(() => {}));
+    } catch (err) {
+      console.error('dc_activate_ error:', err);
+      await interaction.followUp({ content: `Activation failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch(() => {});
+    }
     return;
   }
 
@@ -5489,14 +5519,15 @@ client.on('interactionCreate', async (interaction) => {
     game.endOfRoundWhoseTurn = game.initiativePlayerId;
     const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
     const otherPlayerId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
-    await logGameAction(game, client, `**End of Round** — 1. Mission Rules/Effects (resolve as needed). 2. <@${game.initiativePlayerId}> (Initiative). 3. <@${otherPlayerId}>. 4. Next phase. Initiative player: play any end-of-round effects or CCs, then click **End 'End of Round' window** in your Hand.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId, otherPlayerId] } });
+    const initZone = getInitiativePlayerZoneLabel(game);
+    await logGameAction(game, client, `**End of Round** — 1. Mission Rules/Effects (resolve as needed). 2. <@${game.initiativePlayerId}> (${initZone}Initiative). 3. <@${otherPlayerId}>. 4. Next phase. Initiative player: play any end-of-round effects or CCs, then click **End 'End of Round' window** in your Hand.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId, otherPlayerId] } });
     const generalChannel = await client.channels.fetch(game.generalId);
     const roundEmbed = new EmbedBuilder()
       .setTitle(`${GAME_PHASES.ROUND.emoji}  End of Round — waiting for both players`)
-      .setDescription(`1. Mission Rules/Effects 2. <@${game.initiativePlayerId}> (Initiative) 3. <@${otherPlayerId}> 4. Go. Both must click **End 'End of Round' window** in their Hand.`)
+      .setDescription(`1. Mission Rules/Effects 2. <@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}Initiative) 3. <@${otherPlayerId}> 4. Go. Both must click **End 'End of Round' window** in their Hand.`)
       .setColor(PHASE_COLOR);
     await generalChannel.send({
-      content: `**End of Round window** — <@${game.initiativePlayerId}> (Player ${initPlayerNum}), play any end-of-round effects/CCs, then click the button in your Hand.`,
+      content: `**End of Round window** — <@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}Player ${initPlayerNum}), play any end-of-round effects/CCs, then click the button in your Hand.`,
       embeds: [roundEmbed],
       allowedMentions: { users: [game.initiativePlayerId] },
     });
@@ -5528,7 +5559,8 @@ client.on('interactionCreate', async (interaction) => {
       game.endOfRoundWhoseTurn = otherId;
       const initNum = initiativeId === game.player1Id ? 1 : 2;
       const otherNum = 3 - initNum;
-      await logGameAction(game, client, `**End of Round** — 2. Initiative done ✓. 3. <@${otherId}> (Player ${otherNum}) — your turn for end-of-round effects. Click **End 'End of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
+      const otherZone = getPlayerZoneLabel(game, otherId);
+      await logGameAction(game, client, `**End of Round** — 2. Initiative done ✓. 3. <@${otherId}> (${otherZone}Player ${otherNum}) — your turn for end-of-round effects. Click **End 'End of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
       await updateHandChannelMessages(game, client);
       saveGames();
       return;
@@ -5673,7 +5705,9 @@ client.on('interactionCreate', async (interaction) => {
     const drawDesc = p1Terminals > 0 || p2Terminals > 0
       ? `Draw 1 CC each (P1 +${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''}, P2 +${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''}).`
       : 'Draw 1 command card each.';
-    await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
+    const initZone = getInitiativePlayerZoneLabel(game);
+    const initNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
     await sendRoundActivationPhaseMessage(game, client);
     await interaction.message.edit({ components: [] }).catch(() => {});
     saveGames();
@@ -5702,7 +5736,8 @@ client.on('interactionCreate', async (interaction) => {
       game.startOfRoundWhoseTurn = otherId;
       const initNum = initiativeId === game.player1Id ? 1 : 2;
       const otherNum = 3 - initNum;
-      await logGameAction(game, client, `**Start of Round** — 2. Initiative done ✓. 3. <@${otherId}> (Player ${otherNum}) — your turn for start-of-round effects. Click **End 'Start of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
+      const otherZone = getPlayerZoneLabel(game, otherId);
+      await logGameAction(game, client, `**Start of Round** — 2. Initiative done ✓. 3. <@${otherId}> (${otherZone}Player ${otherNum}) — your turn for start-of-round effects. Click **End 'Start of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
       await updateHandChannelMessages(game, client);
       saveGames();
       return;
@@ -5918,8 +5953,9 @@ client.on('interactionCreate', async (interaction) => {
               .setStyle(ButtonStyle.Secondary)
           ));
         }
+        const otherZone = getPlayerZoneLabel(game, otherPlayerId);
         await msg.edit({
-          content: `<@${otherPlayerId}> (**Player ${initNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back if the other player has more activations.' : ''}`,
+          content: `<@${otherPlayerId}> (${otherZone}**Player ${initNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back if the other player has more activations.' : ''}`,
           components: passRows,
           allowedMentions: { users: [otherPlayerId] },
         }).catch(() => {});
@@ -6368,10 +6404,14 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
     const zone = isRed ? 'red' : 'blue';
+    const otherZone = zone === 'red' ? 'blue' : 'red';
     game.deploymentZoneChosen = zone;
-    await interaction.deferUpdate();
     const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-    await logGameAction(game, client, `<@${game.initiativePlayerId}> (**Player ${initiativePlayerNum}**) chose the **${zone}** deployment zone`, { allowedMentions: { users: [game.initiativePlayerId] }, phase: 'INITIATIVE', icon: 'zone' });
+    game.player1DeploymentZone = initiativePlayerNum === 1 ? zone : otherZone;
+    game.player2DeploymentZone = initiativePlayerNum === 2 ? zone : otherZone;
+    await interaction.deferUpdate();
+    const zoneLabel = `[${zone.toUpperCase()}] `;
+    await logGameAction(game, client, `<@${game.initiativePlayerId}> (${zoneLabel}**Player ${initiativePlayerNum}**) chose the **${zone}** deployment zone`, { allowedMentions: { users: [game.initiativePlayerId] }, phase: 'INITIATIVE', icon: 'zone' });
     if (game.deploymentZoneMessageId) {
       try {
         const generalChannel = await client.channels.fetch(game.generalId);
@@ -6885,8 +6925,8 @@ client.on('interactionCreate', async (interaction) => {
     )] : [];
     const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
     const content = showBtn
-      ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands below. After both have drawn, Round 1 begins. Then click **End R1 Activation Phase** when you've used all activations.`
-      : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands below. After both have drawn, Round 1 begins.`;
+      ? `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands below. After both have drawn, Round 1 begins. Then click **End R1 Activation Phase** when you've used all activations.`
+      : `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands below. After both have drawn, Round 1 begins.`;
     const sent = await generalChannel.send({
       content,
       embeds: [roundEmbed],

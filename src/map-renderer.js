@@ -40,6 +40,20 @@ function resolveImagePath(pathOrFilename, subfolder) {
 
 let registryCache = null;
 let tokenImagesConfig = null;
+let mapSpacesCache = null;
+
+function getMapSpaces(mapId) {
+  if (!mapSpacesCache) {
+    try {
+      mapSpacesCache = JSON.parse(readFileSync(join(rootDir, 'data', 'map-spaces.json'), 'utf8'));
+    } catch {
+      mapSpacesCache = { maps: {} };
+    }
+  }
+  const raw = mapSpacesCache?.maps?.[mapId];
+  const spaces = raw?.spaces || [];
+  return new Set(spaces.map((s) => String(s).toLowerCase()));
+}
 
 function getTokenImagesConfig() {
   try {
@@ -62,6 +76,7 @@ function getRegistry() {
 export function clearMapRendererCache() {
   registryCache = null;
   tokenImagesConfig = null;
+  mapSpacesCache = null;
 }
 
 function getMap(mapId) {
@@ -147,6 +162,7 @@ export async function renderMap(mapId, options = {}) {
 
   if (showGrid) {
     const useBlackGrid = gridStyle === 'black';
+    const onMapCoords = getMapSpaces(mapId);
     const coordFilter = showGridOnlyOnCoords
       ? new Set((Array.isArray(showGridOnlyOnCoords) ? showGridOnlyOnCoords : []).map((c) => String(c).toLowerCase()))
       : null;
@@ -161,6 +177,7 @@ export async function renderMap(mapId, options = {}) {
       for (let col = 0; col < numCols; col++) {
         const label = colToLetter(col) + (row + 1);
         const coordKey = label.toLowerCase();
+        if (onMapCoords.size > 0 && !onMapCoords.has(coordKey)) continue;
         if (coordFilter && !coordFilter.has(coordKey)) continue;
         const cx = sx0 + col * sdx + sdx / 2;
         const cy = sy0 + row * sdy + sdy / 2;
