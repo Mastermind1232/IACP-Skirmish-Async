@@ -39,7 +39,7 @@
 </head>
 <body>
   <h1>IA Skirmish — Command Card Review Tool</h1>
-  <p class="hint">1) Run <code>npm run scrape-cc-data</code> to OCR all cards (takes ~5–10 min). 2) Run <code>npm run cc-review</code> and open <code>http://localhost:3456/scripts/cc-review-tool.html</code>. 3) Load All, browse with arrows/Prev/Next, fix data, Export.</p>
+  <p class="hint">1) Run <code>npm run scrape-cc-data</code> to OCR all cards (takes ~5–10 min). 2) Run <code>npm run cc-review</code> and open <code>http://localhost:3456/scripts/cc-review-tool.html</code>. 3) Load All, browse with arrows/Prev/Next, edit cards, click <strong>Save</strong> (or Ctrl+S) to write to data/cc-effects.json.</p>
 
   <div class="toolbar">
     <button id="loadAll">Load All (scraped + effects + names)</button>
@@ -48,7 +48,8 @@
     <button id="loadFile" class="secondary">Load from file...</button>
     <input type="file" id="fileInput" accept=".json" style="display:none">
     <input type="search" id="search" placeholder="Filter cards...">
-    <button id="exportBtn" class="export">Export cc-effects.json</button>
+    <button id="saveBtn" class="export" title="Saves directly to data/cc-effects.json (requires cc-review server)">Save</button>
+    <button id="exportBtn" class="secondary">Export JSON (download)</button>
     <span class="status" id="status">Load data to begin.</span>
   </div>
 
@@ -226,6 +227,7 @@
               ${TIMING_OPTIONS.map(([val, label]) => `<option value="${val}" ${d.timing === val ? 'selected' : ''}>${label}</option>`).join('')}
             </select>
             <label>Effect (mechanics for implementation)</label>
+            <p class="hint" style="margin: 4px 0 6px 0;">Use full card text. Put traits in ALL CAPS (e.g. WOOKIES, Hunter, Droid, Rebel) so they stand out.</p>
             <textarea id="fEffect" placeholder="Card text or implementation notes">${(d.effect || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
             <div class="nav-row">
               <button id="prevBtn">← Prev</button>
@@ -254,20 +256,43 @@
       cardsData[name].effectType = 'manual';
     }
 
-    document.getElementById('exportBtn').onclick = () => {
+    function buildExportPayload() {
       saveCurrent();
-      const out = { source: 'cc-review-tool', cards: {} };
+      const out = { source: 'CC Review Tool', cards: {} };
       for (const name of allCards) {
-        const d = cardsData[name];
-        if (!d) continue;
+        const d = cardsData[name] || {};
         out.cards[name] = {
-          cost: d.cost,
+          cost: d.cost != null ? Number(d.cost) : null,
           playableBy: d.playableBy || 'Any Figure',
           timing: d.timing || 'other',
           effect: d.effect || '',
           effectType: d.effectType || 'manual',
         };
       }
+      return out;
+    }
+
+    document.getElementById('saveBtn').onclick = async () => {
+      const out = buildExportPayload();
+      try {
+        const r = await fetch('/api/save-cc-effects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(out),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (r.ok && j.ok) {
+          statusEl.textContent = `Saved ${Object.keys(out.cards).length} cards to data/cc-effects.json`;
+        } else {
+          statusEl.textContent = 'Save failed: ' + (j.error || r.statusText);
+        }
+      } catch (e) {
+        statusEl.textContent = 'Save failed: ' + e.message + ' (run npm run cc-review for Save to work)';
+      }
+    };
+
+    document.getElementById('exportBtn').onclick = () => {
+      const out = buildExportPayload();
       const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -280,6 +305,11 @@
     searchEl.oninput = () => updateCardsList();
 
     document.body.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        document.getElementById('saveBtn').click();
+        return;
+      }
       if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
       if (e.key === 'ArrowDown' || e.key === 'j') {
         currentIndex = Math.min(allCards.length - 1, currentIndex + 1);

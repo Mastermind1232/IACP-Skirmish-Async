@@ -2240,7 +2240,7 @@ function getGeneralSetupButtons(game) {
     components.push(
       new ButtonBuilder()
         .setCustomId(`map_selection_${game.gameId}`)
-        .setLabel('Map Selection')
+        .setLabel('MAP SELECTION')
         .setStyle(ButtonStyle.Success)
     );
   }
@@ -6685,8 +6685,8 @@ client.on('interactionCreate', async (interaction) => {
             .setTitle(isTestGame ? 'Game Setup (Test)' : 'Game Setup')
             .setDescription(
               isTestGame
-                ? '**Test game** — Select the map below. Hand channels will then appear for picking decks.'
-                : '**Map Selection** first (button below). Hand channels will then appear — both players pick their deck there (Select Squad or default deck buttons).'
+                ? '**Test game** — Complete **MAP SELECTION** first (button below). This will randomly select a Map and its A or B mission variant. Hand channels will then appear for picking decks.'
+                : 'Complete **MAP SELECTION** first (button below). This will randomly select a Map and its A or B mission variant. Hand channels will then appear — both players pick their deck there (Select Squad or default deck buttons).'
             )
             .setColor(0x2f3136),
         ],
