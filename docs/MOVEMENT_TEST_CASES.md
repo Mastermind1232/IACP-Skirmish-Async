@@ -86,13 +86,35 @@
 
 - **Setup:** Luke at A1, Enemy1 at B1, Enemy2 at C1. Luke wants D1.
 - **Expected:** A1→B1 (2) →C1 (2) →D1 (1) = 5 MP. Cannot end on B1 or C1.
-- **Code behavior:** Each occupied cell adds +1. ✅
+- **Code behavior:** Each hostile cell adds +1. ✅
 
 ### Case 8: Friendly Figure
 
 - **Setup:** Luke at A1, friendly Leia at B1. Can Luke move to C1?
-- **Rules (unverified):** Can you move through friendly figures? Same cost?
-- **Code behavior:** occupiedSet includes all figures. Same as enemy. ⚠️ **Gap if rules differ.**
+- **Rules:** No extra cost to move through friendly figures. Cannot end on them.
+- **Code behavior:** hostileOccupiedSet excludes friendlies; only hostile adds +1. ✅
+
+### Case 9: Difficult + Hostile in Same Space
+
+- **Setup:** B1 has difficult terrain and a hostile figure.
+- **Expected:** Movement costs stack: 1 base + 1 difficult + 1 hostile = 3 MP for that space.
+- **Code behavior:** enteringDifficult and enteringHostile both add to extraCost. ✅
+
+### Case 10: Large Figures (2×2) and Hostile
+
+- **Rules:** Each cell of the large figure is checked; large figures pay only once per moved space (Consolidated: E-Web through 2 hostile cells = +1, not +2).
+- **Code behavior:** Entering any hostile cell adds +1 for the step (capped at once per step). ✅
+
+### Case 11: Massive / Mobile
+
+- **Rules:** Ignore difficult terrain, blocking, and figure cost.
+- **Code behavior:** ignoreDifficult, ignoreBlocking, ignoreFigureCost in profile. ✅
+
+### Case 12: Diagonal When Corner Missing (Edge Case)
+
+- **Setup:** B1 is off-map or blocking. Luke at A1 wants to reach B2 diagonally.
+- **Expected:** Diagonal A1→B2 requires both orthogonal "corner" spaces (A2 and B1) to exist. If B1 is invalid, diagonal not allowed.
+- **Code behavior:** canMoveDiagonally checks both intermediates exist and are adjacent. ✅
 
 ---
 

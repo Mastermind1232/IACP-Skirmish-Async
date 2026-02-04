@@ -855,6 +855,24 @@ async function runMovementTests() {
     assert('A1→B1→C1 through friendly: 2 MP (no extra)', costToC1 === 2, `got ${costToC1}`);
   }
 
+  // Case 3c: Through two hostiles = 5 MP (2+2+1)
+  {
+    const grid = buildTestGrid5x5({ blocked: ['a2', 'b2', 'c2', 'd2'] });
+    const board = buildTempBoardState(grid, ['b1', 'c1'], ['b1', 'c1']);
+    const cache = computeMovementCache('a1', 6, board, profile);
+    const costToD1 = cache.cells.get('d1')?.cost;
+    assert('A1→B1→C1→D1 through two hostiles: 2+2+1=5 MP', costToD1 === 5, `got ${costToD1}`);
+  }
+
+  // Case 3d: Difficult + hostile in same space = 3 MP (costs stack)
+  {
+    const grid = buildTestGrid5x5({ blocked: ['a2', 'b2'], difficult: ['b1'] });
+    const board = buildTempBoardState(grid, ['b1'], ['b1']);
+    const cache = computeMovementCache('a1', 5, board, profile);
+    const costToC1 = cache.cells.get('c1')?.cost;
+    assert('B1 difficult+hostile costs 3 MP (1+1+1)', costToC1 === 4, `got ${costToC1}`);
+  }
+
   // Case 4: Difficult terrain
   {
     const grid = buildTestGrid5x5({ difficult: ['b1'] });
@@ -862,6 +880,16 @@ async function runMovementTests() {
     const cache = computeMovementCache('a1', 4, board, profile);
     const costB1 = cache.cells.get('b1')?.cost;
     assert('Difficult b1 costs 2 MP', costB1 === 2);
+  }
+
+  // Case 4b: Massive/Mobile ignore difficult terrain
+  {
+    const grid = buildTestGrid5x5({ difficult: ['b1'] });
+    const board = buildTempBoardState(grid, []);
+    const massiveProfile = { ...profile, ignoreDifficult: true };
+    const cache = computeMovementCache('a1', 4, board, massiveProfile);
+    const costB1 = cache.cells.get('b1')?.cost;
+    assert('Massive/Mobile: difficult b1 costs 1 MP', costB1 === 1, `got ${costB1}`);
   }
 
   // Case 5: Blocking
