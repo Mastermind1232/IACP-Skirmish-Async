@@ -6551,9 +6551,10 @@ client.on('interactionCreate', async (interaction) => {
         console.error('Failed to update map after deployment:', err);
       }
     }
-    await interaction.editReply({
+    await interaction.update({
       content: `✓ Deployed **${figLabel.replace(/^Deploy /, '')}** at **${spaceUpper}**.`,
       components: [],
+      attachments: [],
     }).catch(() => {});
     return;
   }
