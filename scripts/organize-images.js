@@ -8,6 +8,8 @@
  *   tokens/       - Counters, mission tokens (Counter--*, Mission Token--*)
  *   maps/         - Map images (Map_*)
  *   mission-cards/- Mission cards (SkMission Card--*)
+ *   conditions/   - Condition cards and markers (Condition card--*, Condition Marker--*)
+ *   companions/   - Companion cards and tokens (Companion Card--*, Companion Token--*, Companion cardback*)
  * Run: node scripts/organize-images.js
  * Safe to run multiple times (skips already-moved files).
  */
@@ -27,6 +29,8 @@ const SUBFOLDERS = {
   tokens: ['Counter--', 'Mission Token--', 'Door'],
   maps: ['Map_'],
   'mission-cards': ['SkMission Card--', 'SkMission card--'],
+  conditions: ['Condition card--', 'Condition Marker--'],
+  companions: ['Companion Card--', 'Companion Token--', 'Companion cardback'],
 };
 
 function loadFigurelessDcFilenames() {
@@ -52,6 +56,8 @@ function getDestSubfolder(filename, figurelessFilenames) {
   if (SUBFOLDERS['mission-cards'].some((p) => filename.startsWith(p))) return 'mission-cards';
   if (SUBFOLDERS.figures.some((p) => filename.startsWith(p))) return 'figures';
   if (SUBFOLDERS.tokens.some((p) => filename.startsWith(p))) return 'tokens';
+  if (SUBFOLDERS.conditions.some((p) => filename.startsWith(p))) return 'conditions';
+  if (SUBFOLDERS.companions.some((p) => filename.startsWith(p))) return 'companions';
 
   const dcPrefixes = ['D card-', 'IACP_D card-', 'IACP9_D card-', 'IACP11_D card-'];
   if (dcPrefixes.some((p) => filename.startsWith(p))) {
@@ -80,7 +86,7 @@ function main() {
   }
 
   const figurelessFilenames = loadFigurelessDcFilenames();
-  const dirs = ['cc', 'dc-figures', 'dc-figureless', 'figures', 'tokens', 'maps', 'mission-cards'];
+  const dirs = ['cc', 'dc-figures', 'dc-figureless', 'figures', 'tokens', 'maps', 'mission-cards', 'conditions', 'companions'];
   for (const d of dirs) {
     const p = join(imagesDir, d);
     if (!existsSync(p)) mkdirSync(p, { recursive: true });
@@ -91,7 +97,7 @@ function main() {
 
   const seen = new Set();
 
-  for (const subdir of ['', 'cc', 'dc']) {
+  for (const subdir of ['', 'cc', 'dc', 'conditions', 'companions']) {
     const scanDir = subdir ? join(imagesDir, subdir) : imagesDir;
     if (!existsSync(scanDir)) continue;
 

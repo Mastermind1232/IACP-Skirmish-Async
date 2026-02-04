@@ -27,6 +27,8 @@ Images are organized into subfolders. Run `npm run organize-images` to sort exis
 | `tokens/` | Counters, mission tokens (Counter--Terminal, Mission Token--, etc.) |
 | `maps/` | Map backgrounds (Map_*.gif) |
 | `mission-cards/` | Mission cards (SkMission Card--*.jpg) |
+| `conditions/` | Condition cards and markers (Condition card--*, Condition Marker--*) |
+| `companions/` | Companion cards and tokens (Companion Card--*, Companion Token--*) |
 
 The bot checks subfolders first, then root, for backward compatibility.
 
