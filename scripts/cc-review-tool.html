@@ -87,8 +87,9 @@
     const statusEl = document.getElementById('status');
 
     function imageUrl(name, imagePath) {
+      if (name) return '/api/cc-image/' + encodeURIComponent(name);
       if (imagePath) return IMAGES_BASE + encodeURIComponent(imagePath);
-      return '/api/cc-image/' + encodeURIComponent(name);
+      return null;
     }
 
     async function fetchJson(path) {

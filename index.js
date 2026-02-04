@@ -20,6 +20,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
 import { parseVsav, parseIacpListPaste } from './src/vsav-parser.js';
+import { isDbConfigured, initDb, loadGamesFromDb, saveGamesToDb } from './src/db.js';
 import { rotateImage90 } from './src/dc-image-utils.js';
 import { renderMap } from './src/map-renderer.js';
 
@@ -1186,7 +1187,21 @@ let gameIdCounter = 1;
 
 const GAMES_STATE_PATH = join(rootDir, 'data', 'games-state.json');
 
-function loadGames() {
+async function loadGames() {
+  if (isDbConfigured()) {
+    try {
+      await initDb();
+      const data = await loadGamesFromDb();
+      for (const [id, g] of Object.entries(data)) {
+        if (g && typeof g === 'object') delete g.pendingAttack;
+        games.set(id, g);
+      }
+      console.log(`[Games] Loaded ${games.size} game(s) from PostgreSQL.`);
+    } catch (err) {
+      console.error('Failed to load games from DB:', err);
+    }
+    return;
+  }
   try {
     if (!existsSync(GAMES_STATE_PATH)) return;
     const raw = readFileSync(GAMES_STATE_PATH, 'utf8');
@@ -1227,6 +1242,10 @@ function repopulateDcMapsFromGames() {
 }
 
 function saveGames() {
+  if (isDbConfigured()) {
+    void saveGamesToDb(games);
+    return;
+  }
   try {
     const data = Object.fromEntries(games);
     writeFileSync(GAMES_STATE_PATH, JSON.stringify(data, null, 2), 'utf8');
@@ -1235,7 +1254,8 @@ function saveGames() {
   }
 }
 
-loadGames();
+// Load games at startup (async)
+await loadGames();
 repopulateDcMapsFromGames();
 
 const CATEGORIES = {
@@ -1369,12 +1389,13 @@ function getCcActionButtons(gameId, hand = [], deck = []) {
   );
 }
 
-const COMMAND_CARDBACK_PATH = join(rootDir, 'vassal_extracted', 'images', 'Command cardback.jpg');
+const IMAGES_DIR = join(rootDir, 'vassal_extracted', 'images');
+const CC_DIR = join(IMAGES_DIR, 'cc');
+const COMMAND_CARDBACK_PATH = join(IMAGES_DIR, 'Command cardback.jpg');
 
-/** Resolve command card image path. Tries C card--Name, IACP_C card--, IACP9_, IACP11_ variants. Returns cardback path if not found. */
+/** Resolve command card image path. Looks in cc/ subfolder first, then root. Tries C card--Name, IACP variants. Returns cardback path if not found. */
 function getCommandCardImagePath(cardName) {
   if (!cardName || typeof cardName !== 'string') return null;
-  const base = join(rootDir, 'vassal_extracted', 'images');
   const candidates = [
     `C card--${cardName}.jpg`,
     `C card--${cardName}.png`,
@@ -1386,9 +1407,13 @@ function getCommandCardImagePath(cardName) {
     `IACP11_C card--${cardName}.jpg`,
   ];
   for (const c of candidates) {
-    const p = join(base, c);
-    if (existsSync(p)) return p;
+    const inCc = join(CC_DIR, c);
+    if (existsSync(inCc)) return inCc;
+    const inRoot = join(IMAGES_DIR, c);
+    if (existsSync(inRoot)) return inRoot;
   }
+  const cardbackInCc = join(CC_DIR, 'Command cardback.jpg');
+  if (existsSync(cardbackInCc)) return cardbackInCc;
   if (existsSync(COMMAND_CARDBACK_PATH)) return COMMAND_CARDBACK_PATH;
   return null;
 }
@@ -1849,7 +1874,8 @@ async function postMissionCardAfterMapSelection(game, client, map) {
   game.selectedMission = { variant, name: mission.name, fullName };
   try {
     const ch = await client.channels.fetch(game.generalId);
-    const imagePath = join(rootDir, mission.imagePath);
+    const resolvedPath = resolveAssetPath(mission.imagePath, 'mission-cards');
+    const imagePath = join(rootDir, resolvedPath);
     let sentMsg;
     if (existsSync(imagePath)) {
       const attachment = new AttachmentBuilder(imagePath, { name: 'mission-card.jpg' });
@@ -2377,7 +2403,8 @@ async function buildBoardMapPayload(gameId, map, game) {
   const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant);
   const hasFigures = figures.length > 0;
   const hasTokens = tokens.terminals?.length > 0 || tokens.missionA?.length > 0 || tokens.missionB?.length > 0;
-  const imagePath = map.imagePath ? join(rootDir, map.imagePath) : null;
+  const resolvedMapPath = map.imagePath ? resolveAssetPath(map.imagePath, 'maps') : null;
+  const imagePath = resolvedMapPath ? join(rootDir, resolvedMapPath) : null;
   const pdfPath = join(rootDir, 'data', 'map-pdfs', `${map.id}.pdf`);
 
   const allowedMentions = game ? { users: [...new Set([game.player1Id, game.player2Id])] } : undefined;
@@ -2688,25 +2715,39 @@ function getSquadSelectEmbed(playerNum, squad) {
   return embed;
 }
 
-/** Resolve DC name to DC card image path (for deployment card embeds). */
+/** Resolve DC name to DC card image path (for deployment card embeds). Looks in dc-figures/ or dc-figureless/ first, then root. */
 function getDcImagePath(dcName) {
   if (!dcName || typeof dcName !== 'string') return null;
   const exact = dcImages[dcName];
-  if (exact) return exact;
+  if (exact) return resolveDcImagePath(exact, dcName);
   const trimmed = dcName.trim();
-  if (!/^\[.+\]$/.test(trimmed) && dcImages[`[${trimmed}]`]) return dcImages[`[${trimmed}]`];
+  if (!/^\[.+\]$/.test(trimmed) && dcImages[`[${trimmed}]`]) return resolveDcImagePath(dcImages[`[${trimmed}]`], `[${trimmed}]`);
   const lower = dcName.toLowerCase();
   let key = Object.keys(dcImages).find((k) => k.toLowerCase() === lower);
-  if (key) return dcImages[key];
+  if (key) return resolveDcImagePath(dcImages[key], key);
   const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
   if (base !== dcName) {
     key = Object.keys(dcImages).find((k) => k.toLowerCase() === base.toLowerCase());
-    if (key) return dcImages[key];
+    if (key) return resolveDcImagePath(dcImages[key], key);
     key = Object.keys(dcImages).find((k) => k.toLowerCase().startsWith(base.toLowerCase()));
-    if (key) return dcImages[key];
+    if (key) return resolveDcImagePath(dcImages[key], key);
   }
   key = Object.keys(dcImages).find((k) => k.toLowerCase().startsWith(lower) || lower.startsWith(k.toLowerCase()));
-  return key ? dcImages[key] : null;
+  return key ? resolveDcImagePath(dcImages[key], key) : null;
+}
+
+/** Prefer dc-figures/ or dc-figureless/ subfolder over root for a given dc-images path. */
+function resolveDcImagePath(relPath, dcName) {
+  if (!relPath || typeof relPath !== 'string') return null;
+  const filename = relPath.split(/[/\\]/).pop() || relPath;
+  const subfolder = dcName && isFigurelessDc(dcName) ? 'dc-figureless' : 'dc-figures';
+  const inSub = `vassal_extracted/images/${subfolder}/${filename}`;
+  if (existsSync(join(rootDir, inSub))) return inSub;
+  const otherSub = subfolder === 'dc-figures' ? 'dc-figureless' : 'dc-figures';
+  const inOther = `vassal_extracted/images/${otherSub}/${filename}`;
+  if (existsSync(join(rootDir, inOther))) return inOther;
+  if (existsSync(join(rootDir, relPath))) return relPath;
+  return relPath;
 }
 
 /** Get figure base size (1x1, 1x2, 2x2, 2x3) for map rendering. Default 1x1. */
@@ -2721,23 +2762,33 @@ function getFigureSize(dcName) {
   return key2 ? figureSizes[key2] : '1x1';
 }
 
-/** Resolve DC name to circular figure image (for map tokens). Tries exact, case-insensitive, then without (Elite)/(Regular), then prefix match. */
+/** Resolve DC name to circular figure image (for map tokens). Tries figures/ subfolder first, then root. */
 function getFigureImagePath(dcName) {
   if (!dcName || typeof dcName !== 'string') return null;
   const exact = figureImages[dcName];
-  if (exact) return exact;
+  if (exact) return resolveAssetPath(exact, 'figures');
   const lower = dcName.toLowerCase();
   let key = Object.keys(figureImages).find((k) => k.toLowerCase() === lower);
-  if (key) return figureImages[key];
+  if (key) return resolveAssetPath(figureImages[key], 'figures');
   const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
   if (base !== dcName) {
     key = Object.keys(figureImages).find((k) => k.toLowerCase() === base.toLowerCase());
-    if (key) return figureImages[key];
+    if (key) return resolveAssetPath(figureImages[key], 'figures');
     key = Object.keys(figureImages).find((k) => k.toLowerCase().startsWith(base.toLowerCase()));
-    if (key) return figureImages[key];
+    if (key) return resolveAssetPath(figureImages[key], 'figures');
   }
   key = Object.keys(figureImages).find((k) => k.toLowerCase().startsWith(lower) || lower.startsWith(k.toLowerCase()));
-  return key ? figureImages[key] : null;
+  return key ? resolveAssetPath(figureImages[key], 'figures') : null;
+}
+
+/** Try subfolder first, then root. relPath is e.g. "vassal_extracted/images/X.gif". */
+function resolveAssetPath(relPath, subfolder) {
+  if (!relPath || typeof relPath !== 'string') return null;
+  const filename = relPath.split(/[/\\]/).pop() || relPath;
+  const inSub = `vassal_extracted/images/${subfolder}/${filename}`;
+  if (existsSync(join(rootDir, inSub))) return inSub;
+  if (existsSync(join(rootDir, relPath))) return relPath;
+  return relPath;
 }
 
 function rollAttackDice(diceColors) {

@@ -11,6 +11,17 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 
+/** Try subfolder first (e.g. tokens/ maps/), then root. pathOrFilename can be "vassal_extracted/images/X" or "X.gif". */
+function resolveImagePath(pathOrFilename, subfolder) {
+  const filename = pathOrFilename.split(/[/\\]/).pop() || pathOrFilename;
+  const base = join(rootDir, 'vassal_extracted', 'images');
+  const inSub = join(base, subfolder, filename);
+  if (existsSync(inSub)) return join('vassal_extracted', 'images', subfolder, filename).replace(/\\/g, '/');
+  const inRoot = join(base, filename);
+  if (existsSync(inRoot)) return join('vassal_extracted', 'images', filename).replace(/\\/g, '/');
+  return pathOrFilename;
+}
+
 let registryCache = null;
 let tokenImagesConfig = null;
 
@@ -68,7 +79,8 @@ export async function renderMap(mapId, options = {}) {
   const mapDef = getMap(mapId);
   if (!mapDef) throw new Error(`Map not found: ${mapId}`);
 
-  const imagePath = join(rootDir, mapDef.imagePath);
+  const mapPath = resolveImagePath(mapDef.imagePath, 'maps');
+  const imagePath = join(rootDir, mapPath);
   const { dx, dy, x0, y0 } = mapDef.grid;
 
   let img;
@@ -207,7 +219,7 @@ export async function renderMap(mapId, options = {}) {
     }
   }
 
-  // Draw map tokens using game box images from vassal_extracted/images
+  // Draw map tokens using game box images from vassal_extracted/images/tokens
   const tokenSize = Math.min(sdx, sdy) * 0.9;
   const tc = getTokenImagesConfig();
   const imagesDir = join(rootDir, 'vassal_extracted', 'images');
@@ -217,7 +229,8 @@ export async function renderMap(mapId, options = {}) {
     if (col < 0 || row < 0 || col >= numCols || row >= numRows) return;
     const cx = sx0 + col * sdx + sdx / 2;
     const cy = sy0 + row * sdy + sdy / 2;
-    const imgPath = imageFilename ? join(imagesDir, imageFilename) : null;
+    const resolved = imageFilename ? resolveImagePath(join('vassal_extracted', 'images', imageFilename), 'tokens') : null;
+    const imgPath = resolved ? join(rootDir, resolved) : null;
     if (imgPath && existsSync(imgPath)) {
       try {
         const tokenImg = await loadImage(imgPath);

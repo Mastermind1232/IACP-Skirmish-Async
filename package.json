@@ -12,6 +12,8 @@
     "test-map": "node scripts/test-map-render.js",
     "extract-zones": "npx --yes serve . -p 3456",
     "generate-map-spaces": "node scripts/generate-map-spaces.js",
+    "organize-images": "node scripts/organize-images.js",
+    "test-db": "node scripts/test-db-connection.js",
     "test-movement": "node index.js --test-movement"
   },
   "type": "module",
@@ -19,6 +21,7 @@
     "canvas": "^3.2.1",
     "discord.js": "^14.25.1",
     "dotenv": "^17.2.3",
+    "pg": "^8.18.0",
     "sharp": "^0.34.5",
     "tesseract.js": "^7.0.0"
   }

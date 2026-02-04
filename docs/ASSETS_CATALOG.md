@@ -15,12 +15,20 @@ Extracted from `Imperial_Assault_-_Skirmish_12.11.3.0.vmod` (IACP Season 11.3, W
 Tournament-legal maps rotate per IACP season (see FFG support docs).
 
 ## Images (`vassal_extracted/images/`)
-- **229 Command cards** — `C card--[Name].jpg` (e.g. `C card--Force Lightning.jpg`)
-- **Deployment cards** — different naming in buildFile (DeploymentCardImperial, Rebel, Mercenary, Neutral)
-- **Figures** — Figure1x1, Figure1x2, Figure2x2, Figure2x3
-- **Map images** — mission/map backgrounds
-- **Power tokens** — Damage, Surge, Block, Evade
-- **Conditions** — Bleeding, Stunned, Weakened
+
+Images are organized into subfolders. Run `npm run organize-images` to sort existing files.
+
+| Subfolder | Contents |
+|-----------|----------|
+| `cc/` | Command cards (C card--, IACP_C card--, etc.) |
+| `dc-figures/` | Deployment cards with figures |
+| `dc-figureless/` | Deployment cards without figures (upgrades like [Zillo Technique]) |
+| `figures/` | Circular figure tokens for map (Figure-Imperial--, etc.) |
+| `tokens/` | Counters, mission tokens (Counter--Terminal, Mission Token--, etc.) |
+| `maps/` | Map backgrounds (Map_*.gif) |
+| `mission-cards/` | Mission cards (SkMission Card--*.jpg) |
+
+The bot checks subfolders first, then root, for backward compatibility.
 
 ## Game Structure (from buildFile.xml)
 - **Player Hands** — 4 players (green, red, blue, yellow)

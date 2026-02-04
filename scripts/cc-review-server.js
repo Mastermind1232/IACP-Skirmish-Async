@@ -38,6 +38,8 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET' && pathname.startsWith('/api/cc-image/')) {
     const cardName = decodeURIComponent(pathname.replace('/api/cc-image/', ''));
     const imagesDir = join(root, 'vassal_extracted', 'images');
+    const ccDir = join(imagesDir, 'cc');
+    // Also check root for backward compatibility
     const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
     const candidates = [
       `C card--${cardName}.jpg`,
@@ -46,12 +48,21 @@ const server = createServer(async (req, res) => {
       `C card--${titleCase(cardName.toLowerCase())}.png`,
       `IACP_C card--${cardName}.png`,
       `IACP_C card--${cardName}.jpg`,
+      `IACP9_C card--${cardName}.png`,
+      `IACP9_C card--${cardName}.jpg`,
+      `IACP11_C card--${cardName}.png`,
+      `IACP11_C card--${cardName}.jpg`,
     ];
     let found = null;
     for (const c of candidates) {
-      const p = join(imagesDir, c);
-      if (existsSync(p)) {
-        found = p;
+      const inCc = join(ccDir, c);
+      if (existsSync(inCc)) {
+        found = inCc;
+        break;
+      }
+      const inRoot = join(imagesDir, c);
+      if (existsSync(inRoot)) {
+        found = inRoot;
         break;
       }
     }
