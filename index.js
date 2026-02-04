@@ -2309,6 +2309,59 @@ function getMapTokensForRender(mapId, missionVariant) {
   };
 }
 
+/** Returns AttachmentBuilder for activation minimap (zoomed on figure, size = speed * 2.5 cells). msgId = DC message ID. */
+async function getActivationMinimapAttachment(game, msgId) {
+  const meta = dcMessageMeta.get(msgId);
+  const map = game?.selectedMap;
+  if (!meta || !map?.id) return null;
+  const playerNum = meta.playerNum;
+  const dcName = meta.dcName;
+  const dgIndex = (meta.displayName || '').match(/\[Group (\d+)\]/)?.[1] ?? 1;
+  const poses = game.figurePositions?.[playerNum] || {};
+  let figureKey = null;
+  let pos = null;
+  for (let fi = 0; fi < 10; fi++) {
+    const fk = `${dcName}-${dgIndex}-${fi}`;
+    if (fk in poses) {
+      figureKey = fk;
+      pos = poses[fk];
+      break;
+    }
+  }
+  if (!figureKey || !pos) return null;
+  const speed = getEffectiveSpeed(dcName, figureKey, game);
+  const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName);
+  const { col: tlCol, row: tlRow } = parseCoord(pos);
+  const [cols = 1, rows = 1] = String(size || '1x1').split('x').map(Number);
+  const centerCol = Math.floor(tlCol + (cols - 1) / 2);
+  const centerRow = Math.floor(tlRow + (rows - 1) / 2);
+  const halfExtent = Math.max(1, Math.ceil((speed * 2.5) / 2));
+  const cropCoords = [];
+  for (let dr = -halfExtent; dr <= halfExtent; dr++) {
+    for (let dc = -halfExtent; dc <= halfExtent; dc++) {
+      const c = colRowToCoord(centerCol + dc, centerRow + dr);
+      if (c) cropCoords.push(c);
+    }
+  }
+  if (cropCoords.length === 0) return null;
+  try {
+    const figures = getFiguresForRender(game);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant);
+    const buffer = await renderMap(map.id, {
+      figures,
+      tokens,
+      showGrid: true,
+      maxWidth: 800,
+      cropToZone: cropCoords,
+      gridStyle: 'black',
+    });
+    return new AttachmentBuilder(buffer, { name: 'activation-minimap.png' });
+  } catch (err) {
+    console.error('Activation minimap render error:', err);
+    return null;
+  }
+}
+
 /** Returns AttachmentBuilder for deployment zone map (zoomed, black coords). zone = 'red' | 'blue'. */
 async function getDeploymentMapAttachment(game, zone) {
   const map = game?.selectedMap;
@@ -4249,11 +4302,14 @@ client.on('interactionCreate', async (interaction) => {
     game.dcActionsData = game.dcActionsData || {};
     game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id };
     const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
-    const actionsMsg = await thread.send({
+    const actMinimap = await getActivationMinimapAttachment(game, msgId);
+    const actionsPayload = {
       content: pingContent,
       components: getDcActionButtons(msgId, dcName, displayName, DC_ACTIONS_PER_ACTIVATION, game),
       allowedMentions: { users: [ownerId] },
-    });
+    };
+    if (actMinimap) actionsPayload.files = [actMinimap];
+    const actionsMsg = await thread.send(actionsPayload);
     game.dcActionsData[msgId].messageId = actionsMsg.id;
     if (playerNum === 1) { game.p1ActivationsRemaining--; game.p1ActivatedDcIndices.push(dcIndex); }
     else { game.p2ActivationsRemaining--; game.p2ActivatedDcIndices.push(dcIndex); }
@@ -4412,11 +4468,14 @@ client.on('interactionCreate', async (interaction) => {
         game.dcActionsData = game.dcActionsData || {};
         game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id };
         const pingContent = `<@${meta.playerNum === 1 ? game.player1Id : game.player2Id}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
-        const actionsMsg = await thread.send({
+        const actMinimap = await getActivationMinimapAttachment(game, msgId);
+        const actionsPayload = {
           content: pingContent,
           components: getDcActionButtons(msgId, meta.dcName, displayName, DC_ACTIONS_PER_ACTIVATION, game),
           allowedMentions: { users: [meta.playerNum === 1 ? game.player1Id : game.player2Id] },
-        });
+        };
+        if (actMinimap) actionsPayload.files = [actMinimap];
+        const actionsMsg = await thread.send(actionsPayload);
         game.dcActionsData[msgId].messageId = actionsMsg.id;
         const logCh = await client.channels.fetch(game.generalId);
         const icon = ACTION_ICONS.activate || '⚡';
@@ -5922,11 +5981,14 @@ client.on('interactionCreate', async (interaction) => {
     game.dcActionsData = game.dcActionsData || {};
     game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id };
     const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
-    const actionsMsg = await thread.send({
+    const actMinimap = await getActivationMinimapAttachment(game, msgId);
+    const actionsPayload = {
       content: pingContent,
       components: getDcActionButtons(msgId, meta.dcName, displayName, DC_ACTIONS_PER_ACTIVATION, game),
       allowedMentions: { users: [ownerId] },
-    });
+    };
+    if (actMinimap) actionsPayload.files = [actMinimap];
+    const actionsMsg = await thread.send(actionsPayload);
     game.dcActionsData[msgId].messageId = actionsMsg.id;
     const logCh = await client.channels.fetch(game.generalId);
     const icon = ACTION_ICONS.activate || '⚡';
