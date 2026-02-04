@@ -22,7 +22,7 @@ import 'dotenv/config';
 import { parseVsav, parseIacpListPaste } from './src/vsav-parser.js';
 import { isDbConfigured, initDb, loadGamesFromDb, saveGamesToDb } from './src/db.js';
 import { rotateImage90 } from './src/dc-image-utils.js';
-import { renderMap } from './src/map-renderer.js';
+import { renderMap, clearMapRendererCache } from './src/map-renderer.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname);
@@ -92,8 +92,9 @@ try {
   if (ccData?.cards) ccEffectsData = ccData;
 } catch {}
 
-/** Reload game data from JSON files (dc-stats, dc-images, etc.). Call before Refresh All to pick up new entries. */
+/** Reload all game data from JSON files. Call before Refresh All so git-pulled changes apply. */
 function reloadGameData() {
+  clearMapRendererCache();
   try {
     const dcData = JSON.parse(readFileSync(join(rootDir, 'data', 'dc-images.json'), 'utf8'));
     dcImages = dcData.dcImages || {};
@@ -113,6 +114,34 @@ function reloadGameData() {
   try {
     const ccData = JSON.parse(readFileSync(join(rootDir, 'data', 'cc-effects.json'), 'utf8'));
     if (ccData?.cards) ccEffectsData = ccData;
+  } catch {}
+  try {
+    const mapData = JSON.parse(readFileSync(join(rootDir, 'data', 'map-registry.json'), 'utf8'));
+    mapRegistry = mapData.maps || [];
+  } catch {}
+  try {
+    const dzData = JSON.parse(readFileSync(join(rootDir, 'data', 'deployment-zones.json'), 'utf8'));
+    deploymentZones = dzData.maps || {};
+  } catch {}
+  try {
+    const msData = JSON.parse(readFileSync(join(rootDir, 'data', 'map-spaces.json'), 'utf8'));
+    mapSpacesData = msData.maps || {};
+  } catch {}
+  try {
+    const kwData = JSON.parse(readFileSync(join(rootDir, 'data', 'dc-keywords.json'), 'utf8'));
+    dcKeywords = kwData.keywords || {};
+  } catch {}
+  try {
+    const dData = JSON.parse(readFileSync(join(rootDir, 'data', 'dice.json'), 'utf8'));
+    diceData = dData || { attack: {}, defense: {} };
+  } catch {}
+  try {
+    const mcData = JSON.parse(readFileSync(join(rootDir, 'data', 'mission-cards.json'), 'utf8'));
+    missionCardsData = mcData.maps || {};
+  } catch {}
+  try {
+    const mtData = JSON.parse(readFileSync(join(rootDir, 'data', 'map-tokens.json'), 'utf8'));
+    mapTokensData = mtData.maps || {};
   } catch {}
 }
 
@@ -1435,29 +1464,18 @@ function getCommandCardImagePath(cardName) {
   return null;
 }
 
-/** Get window button row for Hand channel when in Start/End of Round window and it's this player's turn. */
+/** Get window button row for Hand channel when in End of Round window and it's this player's turn. */
 function getHandWindowButtonRow(game, playerNum, gameId) {
   if (!game) return null;
-  const whoseTurn = game.endOfRoundWhoseTurn ?? game.startOfRoundWhoseTurn;
+  const whoseTurn = game.endOfRoundWhoseTurn;
   const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
-  if (whoseTurn !== playerId) return null;
-  if (game.endOfRoundWhoseTurn) {
-    return new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`end_end_of_round_${gameId}`)
-        .setLabel(`End 'End of Round' window`)
-        .setStyle(ButtonStyle.Primary)
-    );
-  }
-  if (game.startOfRoundWhoseTurn) {
-    return new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`end_start_of_round_${gameId}`)
-        .setLabel(`End 'Start of Round' window`)
-        .setStyle(ButtonStyle.Primary)
-    );
-  }
-  return null;
+  if (!whoseTurn || whoseTurn !== playerId) return null;
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`end_end_of_round_${gameId}`)
+      .setLabel(`End 'End of Round' window`)
+      .setStyle(ButtonStyle.Primary)
+  );
 }
 
 /** Build hand channel message payload: vertical list of embeds, one per CC, same thumbnail size as DC embeds in Play Area. */
@@ -2336,8 +2354,8 @@ async function replyIfGameEnded(game, interaction) {
   return false;
 }
 
-/** Build Scorecard embed with VP breakdown per player. Optionally shows initiative and uses initiative token as thumbnail. */
-function buildScorecardEmbed(game, initiativeTokenAttached = false) {
+/** Build Scorecard embed with VP breakdown per player. Initiative shown via bullet row (no token image). */
+function buildScorecardEmbed(game) {
   const vp1 = game.player1VP || { total: 0, kills: 0, objectives: 0 };
   const vp2 = game.player2VP || { total: 0, kills: 0, objectives: 0 };
   const p1HasInitiative = game.initiativeDetermined && game.initiativePlayerId === game.player1Id;
@@ -2358,18 +2376,13 @@ function buildScorecardEmbed(game, initiativeTokenAttached = false) {
     { name: '\u200b', value: '\u200b', inline: true },
   ];
   if (game.initiativeDetermined) {
-    fields.push(
-      { name: 'Initiative', value: p1HasInitiative ? '●' : '—', inline: true },
-      { name: '\u200b', value: p2HasInitiative ? '●' : '—', inline: true },
-      { name: '\u200b', value: '\u200b', inline: true }
-    );
+    const initiativeValue = p1HasInitiative
+      ? '●  P1 has the initiative!             ●'
+      : '●                                                ● P2 has the initiative!';
+    fields.push({ name: 'Initiative', value: initiativeValue, inline: false });
   }
 
-  const embed = new EmbedBuilder().setTitle('Scorecard').setColor(0x2f3136).addFields(fields);
-  if (game.initiativeDetermined && initiativeTokenAttached) {
-    embed.setThumbnail('attachment://initiative-token.gif');
-  }
-  return embed;
+  return new EmbedBuilder().setTitle('Scorecard').setColor(0x2f3136).addFields(fields);
 }
 
 /** Refresh all game components with latest data (DC stats, CC images, etc.). Reloads JSON data first. */
@@ -2428,17 +2441,7 @@ async function refreshAllGameComponents(game, client) {
 /** Returns { content, files?, embeds?, components } for posting the game map. Includes Scorecard embed. */
 async function buildBoardMapPayload(gameId, map, game) {
   const components = [getBoardButtons(gameId)];
-  const initiativeTokenPath = game?.initiativeDetermined
-    ? (() => {
-        const p = resolveAssetPath('Initiative Token.gif', 'tokens');
-        return p ? join(rootDir, p) : null;
-      })()
-    : null;
-  const initiativeAttachment =
-    initiativeTokenPath && existsSync(initiativeTokenPath)
-      ? [new AttachmentBuilder(initiativeTokenPath, { name: 'initiative-token.gif' })]
-      : [];
-  const embeds = game ? [buildScorecardEmbed(game, initiativeAttachment.length > 0)] : [];
+  const embeds = game ? [buildScorecardEmbed(game)] : [];
   const figures = game ? getFiguresForRender(game) : [];
   const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant);
   const hasFigures = figures.length > 0;
@@ -2453,7 +2456,7 @@ async function buildBoardMapPayload(gameId, map, game) {
       const buffer = await renderMap(map.id, { figures, tokens, showGrid: false, maxWidth: 1200 });
       return {
         content: `**Game map: ${map.name}** — Refresh to update figure positions.`,
-        files: [new AttachmentBuilder(buffer, { name: 'map-with-figures.png' }), ...initiativeAttachment],
+        files: [new AttachmentBuilder(buffer, { name: 'map-with-figures.png' })],
         embeds,
         components,
         allowedMentions,
@@ -2465,7 +2468,7 @@ async function buildBoardMapPayload(gameId, map, game) {
   if (existsSync(pdfPath)) {
     return {
       content: `**Game map: ${map.name}** (high-res PDF)`,
-      files: [new AttachmentBuilder(pdfPath, { name: `${map.id}.pdf` }), ...initiativeAttachment],
+      files: [new AttachmentBuilder(pdfPath, { name: `${map.id}.pdf` })],
       embeds,
       components,
       allowedMentions,
@@ -2476,7 +2479,6 @@ async function buildBoardMapPayload(gameId, map, game) {
       content: `**Game map: ${map.name}** *(Add \`data/map-pdfs/${map.id}.pdf\` for high-res PDF)*`,
       files: [
         new AttachmentBuilder(imagePath, { name: `map.${(map.imagePath || '').split('.').pop() || 'gif'}` }),
-        ...initiativeAttachment,
       ],
       embeds,
       components,
@@ -2485,7 +2487,7 @@ async function buildBoardMapPayload(gameId, map, game) {
   }
   return {
     content: `**Game map: ${map.name}** — Add high-res PDF at \`data/map-pdfs/${map.id}.pdf\` to display it here.`,
-    files: initiativeAttachment.length > 0 ? initiativeAttachment : undefined,
+    files: undefined,
     embeds,
     components,
     allowedMentions,
@@ -2717,24 +2719,8 @@ async function runDraftRandom(game, client) {
 
   await logGameAction(game, client, '**Draft Random** — Auto-deployed all figures and drew starting CCs.', { phase: 'DEPLOYMENT', icon: 'deployed' });
 
-  game.startOfRoundWhoseTurn = game.initiativePlayerId;
-  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-  const otherId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
-  await logGameAction(game, client, `**Start of Round** — 1. Mission Rules/Effects (resolve as needed). 2. <@${game.initiativePlayerId}> (Initiative). 3. <@${otherId}>. 4. Go. Initiative player: play any start-of-round effects/CCs, then click **End 'Start of Round' window** in your Hand.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId] } });
-  const roundEmbed = new EmbedBuilder()
-    .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND 1 — Start of Round window`)
-    .setDescription(`1. Mission Rules/Effects 2. <@${game.initiativePlayerId}> (Initiative) 3. <@${otherId}> 4. Go. Both must click **End 'Start of Round' window** in their Hand.`)
-    .setColor(PHASE_COLOR);
-  await generalChannel.send({
-    content: `**Start of Round** — <@${game.initiativePlayerId}> (Player ${initPlayerNum}), play any start-of-round effects/CCs, then click **End 'Start of Round' window** in your Hand.`,
-    embeds: [roundEmbed],
-    allowedMentions: { users: [game.initiativePlayerId] },
-  });
-  game.roundActivationMessageId = null;
-  game.roundActivationButtonShown = false;
-  game.currentActivationTurnPlayerId = game.initiativePlayerId;
+  await sendRoundActivationPhaseMessage(game, client);
   await clearPreGameSetup(game, client);
-  await updateHandChannelMessages(game, client);
   saveGames();
 }
 
@@ -2918,6 +2904,56 @@ function shouldShowEndActivationPhaseButton(game, gameId) {
   if (r1 > 0 || r2 > 0) return false;
   if (hasActionsRemainingInGame(game, gameId)) return false;
   return true;
+}
+
+/** Send the round activation phase message (Round X — Your turn!) to Game Log. Skips Start of Round window. */
+async function sendRoundActivationPhaseMessage(game, client) {
+  const gameId = game.gameId;
+  const generalChannel = await client.channels.fetch(game.generalId);
+  const roundEmbed = new EmbedBuilder()
+    .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound || 1}`)
+    .setColor(PHASE_COLOR);
+  const showBtn = shouldShowEndActivationPhaseButton(game, gameId);
+  const components = [];
+  if (showBtn) {
+    components.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`status_phase_${gameId}`)
+        .setLabel(`End R${game.currentRound || 1} Activation Phase`)
+        .setStyle(ButtonStyle.Secondary)
+    ));
+  }
+  const initRem = game.initiativePlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+  const otherRem = game.initiativePlayerId === game.player1Id ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
+  if (otherRem > initRem && initRem > 0) {
+    components.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`pass_activation_turn_${gameId}`)
+        .setLabel('Pass turn to opponent')
+        .setStyle(ButtonStyle.Secondary)
+    ));
+  }
+  const p1Terminals = game.selectedMap?.id ? countTerminalsControlledByPlayer(game, 1, game.selectedMap.id) : 0;
+  const p2Terminals = game.selectedMap?.id ? countTerminalsControlledByPlayer(game, 2, game.selectedMap.id) : 0;
+  const drawRule = (p1Terminals > 0 || p2Terminals > 0)
+    ? 'Draw 1 CC (+1 per controlled terminal). '
+    : 'Draw 1 CC. ';
+  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const round = game.currentRound || 1;
+  const passHint = otherRem > initRem && initRem > 0 ? ' You may pass back (opponent has more activations).' : '';
+  const content = showBtn
+    ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${round}** — Your turn! All deployment groups readied. ${drawRule}Both players: click **End R${round} Activation Phase** when you've used all activations and any end-of-activation effects.${passHint}`
+    : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${round}** — Your turn! All deployment groups readied. ${drawRule}Use all activations and actions. The **End R${round} Activation Phase** button will appear when both players have done so.${passHint}`;
+  const sent = await generalChannel.send({
+    content,
+    embeds: [roundEmbed],
+    components,
+    allowedMentions: { users: [game.initiativePlayerId] },
+  });
+  game.roundActivationMessageId = sent.id;
+  game.roundActivationButtonShown = showBtn;
+  game.currentActivationTurnPlayerId = game.initiativePlayerId;
+  await updateHandChannelMessages(game, client);
 }
 
 /** Edit the round message to add the End Activation Phase button when conditions are met. */
@@ -5442,20 +5478,8 @@ client.on('interactionCreate', async (interaction) => {
     const drawDesc = p1Terminals > 0 || p2Terminals > 0
       ? `Draw 1 CC each (P1 +${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''}, P2 +${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''}).`
       : 'Draw 1 command card each.';
-    await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to <@${game.initiativePlayerId}> (after end of round effects). Round **${game.currentRound}** — **Start of Round** window: 1. Mission Rules/Effects 2. Initiative 3. Non-initiative 4. Go.`, { phase: 'ROUND', icon: 'round' });
-    game.startOfRoundWhoseTurn = game.initiativePlayerId;
-    const startInitPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-    const startOtherId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
-    const startRoundEmbed = new EmbedBuilder()
-      .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound} — Start of Round window`)
-      .setDescription(`1. Mission Rules/Effects 2. <@${game.initiativePlayerId}> (Initiative) 3. <@${startOtherId}> 4. Go. Both must click **End 'Start of Round' window** in their Hand.`)
-      .setColor(PHASE_COLOR);
-    await generalChannel.send({
-      content: `**Start of Round** — <@${game.initiativePlayerId}> (Player ${startInitPlayerNum}), play any start-of-round effects/CCs, then click **End 'Start of Round' window** in your Hand.`,
-      embeds: [startRoundEmbed],
-      allowedMentions: { users: [game.initiativePlayerId] },
-    });
-    await updateHandChannelMessages(game, client);
+    await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
+    await sendRoundActivationPhaseMessage(game, client);
     await interaction.message.edit({ components: [] }).catch(() => {});
     saveGames();
     return;
@@ -6028,7 +6052,7 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.deferUpdate();
     try {
       await refreshAllGameComponents(game, client);
-      await interaction.followUp({ content: '✓ Refreshed all components (map, DCs, hand).', ephemeral: true }).catch(() => {});
+      await interaction.followUp({ content: '✓ Full refresh complete. Reloaded all JSON data, map renderer cache, map, DCs, hands, discard piles.', ephemeral: true }).catch(() => {});
     } catch (err) {
       console.error('Failed to refresh all:', err);
       await interaction.followUp({ content: 'Failed to refresh: ' + (err?.message || String(err)), ephemeral: true }).catch(() => {});
@@ -6625,8 +6649,8 @@ client.on('interactionCreate', async (interaction) => {
     )] : [];
     const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
     const content = showBtn
-      ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands below. After both have drawn, the **Start of Round** window begins. Then click **End R1 Activation Phase** when you've used all activations.`
-      : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands below. After both have drawn, the **Start of Round** window begins.`;
+      ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands below. After both have drawn, Round 1 begins. Then click **End R1 Activation Phase** when you've used all activations.`
+      : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands below. After both have drawn, Round 1 begins.`;
     const sent = await generalChannel.send({
       content,
       embeds: [roundEmbed],
@@ -6698,21 +6722,7 @@ client.on('interactionCreate', async (interaction) => {
     }).catch(() => {});
     await updateHandVisualMessage(game, playerNum, client);
     if (game.player1CcDrawn && game.player2CcDrawn) {
-      game.startOfRoundWhoseTurn = game.initiativePlayerId;
-      const generalChannel = await client.channels.fetch(game.generalId);
-      const initNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-      const otherId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
-      await logGameAction(game, client, `**Start of Round** — 1. Mission Rules/Effects (resolve as needed). 2. <@${game.initiativePlayerId}> (Initiative). 3. <@${game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id}>. 4. Go. Initiative player: play any start-of-round effects/CCs, then click **End 'Start of Round' window** in your Hand.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId] } });
-      const startRoundEmbed = new EmbedBuilder()
-        .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND 1 — Start of Round window`)
-        .setDescription(`1. Mission Rules/Effects 2. <@${game.initiativePlayerId}> (Initiative) 3. <@${otherId}>. Both must click **End 'Start of Round' window** in their Hand.`)
-        .setColor(PHASE_COLOR);
-      await generalChannel.send({
-        content: `**Start of Round** — <@${game.initiativePlayerId}> (Player ${initNum}), play any start-of-round effects/CCs, then click **End 'Start of Round' window** in your Hand.`,
-        embeds: [startRoundEmbed],
-        allowedMentions: { users: [game.initiativePlayerId] },
-      });
-      await updateHandChannelMessages(game, client);
+      await sendRoundActivationPhaseMessage(game, client);
     }
     saveGames();
     return;

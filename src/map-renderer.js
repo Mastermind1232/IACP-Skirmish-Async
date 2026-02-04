@@ -42,6 +42,12 @@ function getRegistry() {
   return registryCache;
 }
 
+/** Clear in-memory caches so next render uses fresh data (e.g. after git pull). Call from Refresh All. */
+export function clearMapRendererCache() {
+  registryCache = null;
+  tokenImagesConfig = null;
+}
+
 function getMap(mapId) {
   const { maps } = getRegistry();
   return maps.find((m) => m.id === mapId) || maps.find((m) => m.name.toLowerCase().includes(mapId.toLowerCase()));

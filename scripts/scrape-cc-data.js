@@ -14,7 +14,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 const buildFile = join(rootDir, 'vassal_extracted', 'buildFile.xml');
 const imagesDir = join(rootDir, 'vassal_extracted', 'images');
+const ccDir = join(imagesDir, 'cc'); // CCs nested under cc/
 const outputFile = join(rootDir, 'data', 'cc-scraped.json');
+
+function findImagePath(filename) {
+  const inCc = join(ccDir, filename);
+  if (existsSync(inCc)) return filename;
+  const inRoot = join(imagesDir, filename);
+  if (existsSync(inRoot)) return filename;
+  return null;
+}
 
 // Known playable-by phrases (from card center)
 const PLAYABLE_BY_PHRASES = [
@@ -48,16 +57,11 @@ function extractCcCardsFromBuildFile() {
     for (const im of imgMatches) {
       const fn = im[1].trim();
       if (!/card|Card/i.test(fn)) continue;
-      const full = join(imagesDir, fn);
-      if (existsSync(full)) {
-        imagePath = fn;
-        break;
-      }
+      imagePath = findImagePath(fn);
+      if (imagePath) break;
       const alt = fn.replace(/^IACP\d*_?\s*/, '').replace(/\.png$/i, '.jpg').replace(/\.jpg$/i, '.png');
-      if (existsSync(join(imagesDir, alt))) {
-        imagePath = alt;
-        break;
-      }
+      imagePath = findImagePath(alt);
+      if (imagePath) break;
     }
     if (!imagePath) {
       const candidates = [
@@ -67,10 +71,8 @@ function extractCcCardsFromBuildFile() {
         `IACP_C card--${name}.jpg`,
       ];
       for (const c of candidates) {
-        if (existsSync(join(imagesDir, c))) {
-          imagePath = c;
-          break;
-        }
+        imagePath = findImagePath(c);
+        if (imagePath) break;
       }
     }
     seen.add(name);
@@ -81,7 +83,12 @@ function extractCcCardsFromBuildFile() {
 }
 
 function resolveImagePath(name, imagePath) {
-  if (imagePath && existsSync(join(imagesDir, imagePath))) return join(imagesDir, imagePath);
+  if (imagePath) {
+    const inCc = join(ccDir, imagePath);
+    if (existsSync(inCc)) return inCc;
+    const inRoot = join(imagesDir, imagePath);
+    if (existsSync(inRoot)) return inRoot;
+  }
   const tries = [
     `C card--${name}.jpg`,
     `C card--${name}.png`,
@@ -89,8 +96,10 @@ function resolveImagePath(name, imagePath) {
     `IACP11_C card--${name}.png`,
   ];
   for (const t of tries) {
-    const p = join(imagesDir, t);
+    const p = join(ccDir, t);
     if (existsSync(p)) return p;
+    const pRoot = join(imagesDir, t);
+    if (existsSync(pRoot)) return pRoot;
   }
   return null;
 }

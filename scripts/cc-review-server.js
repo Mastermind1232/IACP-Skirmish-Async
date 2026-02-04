@@ -115,9 +115,16 @@ const server = createServer(async (req, res) => {
   } catch {
     decodedPath = pathname.replace(/^\//, '');
   }
-  const filePath = join(root, decodedPath);
+  let filePath = join(root, decodedPath);
   const ext = extname(filePath);
   const mime = MIME[ext] || 'application/octet-stream';
+
+  // If path is vassal_extracted/images/<name> and file missing, try cc/ subfolder (all CCs nested under cc/)
+  if (!existsSync(filePath) && decodedPath.startsWith('vassal_extracted/images/') && !decodedPath.includes('/cc/')) {
+    const baseName = decodedPath.replace('vassal_extracted/images/', '');
+    const ccPath = join(root, 'vassal_extracted', 'images', 'cc', baseName);
+    if (existsSync(ccPath)) filePath = ccPath;
+  }
 
   try {
     const content = readFileSync(filePath);
