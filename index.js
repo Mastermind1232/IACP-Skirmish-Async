@@ -235,6 +235,27 @@ function getOccupiedSpacesForMovement(game, excludeFigureKey = null) {
   return occupied;
 }
 
+/** Get spaces occupied by hostile figures only (opponent's figures). Per rules: +1 MP to enter hostile; no extra cost for friendly. */
+function getHostileOccupiedSpacesForMovement(game, excludeFigureKey = null) {
+  const poses = game.figurePositions || { 1: {}, 2: {} };
+  let moverPlayer = null;
+  for (const p of [1, 2]) {
+    if (excludeFigureKey in (poses[p] || {})) {
+      moverPlayer = p;
+      break;
+    }
+  }
+  if (moverPlayer == null) return [];
+  const hostilePlayer = moverPlayer === 1 ? 2 : 1;
+  const occupied = [];
+  for (const [k, coord] of Object.entries(poses[hostilePlayer] || {})) {
+    const dcName = k.replace(/-\d+-\d+$/, '');
+    const size = game.figureOrientations?.[k] || getFigureSize(dcName);
+    occupied.push(...getFootprintCells(coord, size));
+  }
+  return occupied;
+}
+
 /** Manhattan distance in spaces between two coords. */
 function getRange(coord1, coord2) {
   const a = parseCoord(coord1);
@@ -292,6 +313,9 @@ function getBoardStateForMovement(game, excludeFigureKey = null) {
   const occupiedSet = new Set(
     getOccupiedSpacesForMovement(game, excludeFigureKey).map((s) => normalizeCoord(s))
   );
+  const hostileOccupiedSet = new Set(
+    getHostileOccupiedSpacesForMovement(game, excludeFigureKey).map((s) => normalizeCoord(s))
+  );
   const blockingSet = toLowerSet(mapSpaces.blocking || []);
   const spacesSet = toLowerSet(mapSpaces.spaces || []);
   const terrain = {};
@@ -305,7 +329,7 @@ function getBoardStateForMovement(game, excludeFigureKey = null) {
   const movementBlockingSet = new Set(
     (mapSpaces.movementBlockingEdges || []).map((edge) => edgeKey(edge[0], edge[1]))
   );
-  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, movementBlockingSet, spacesSet };
+  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, spacesSet };
 }
 
 function getMovementProfile(dcName, figureKey, game) {
@@ -364,7 +388,7 @@ function hasLineOfSight(coord1, coord2, mapSpaces) {
 }
 
 /** BFS: reachable spaces from startCoord within mp movement points. 1 MP per adjacent step. Cannot end on occupied. */
-function buildTempBoardState(mapSpaces, occupiedSet) {
+function buildTempBoardState(mapSpaces, occupiedSet, hostileOccupiedSet = null) {
   if (!mapSpaces) return null;
   const blockingSet = toLowerSet(mapSpaces.blocking || []);
   const spacesSet = toLowerSet(mapSpaces.spaces || []);
@@ -379,7 +403,7 @@ function buildTempBoardState(mapSpaces, occupiedSet) {
   const movementBlockingSet = new Set(
     (mapSpaces.movementBlockingEdges || []).map((edge) => edgeKey(edge[0], edge[1]))
   );
-  return {
+  const board = {
     mapSpaces,
     adjacency,
     terrain,
@@ -388,6 +412,10 @@ function buildTempBoardState(mapSpaces, occupiedSet) {
     movementBlockingSet,
     spacesSet,
   };
+  if (hostileOccupiedSet != null) {
+    board.hostileOccupiedSet = new Set((hostileOccupiedSet || []).map((s) => normalizeCoord(s)));
+  }
+  return board;
 }
 
 function movementStateKey(coord, size) {
@@ -484,10 +512,13 @@ function evaluateMovementStep(current, neighbor, board, profile) {
     !profile.ignoreDifficult &&
     entering.some((cell) => (board.terrain[cell] || 'normal') === 'difficult');
   const enteringOccupied = entering.some((cell) => board.occupiedSet.has(cell));
+  const enteringHostile = board.hostileOccupiedSet
+    ? entering.some((cell) => board.hostileOccupiedSet.has(cell))
+    : enteringOccupied;
   const baseCost = 1;
   let extraCost = 0;
   if (enteringDifficult) extraCost += 1;
-  if (enteringOccupied && !profile.ignoreFigureCost) extraCost += 1;
+  if (enteringHostile && !profile.ignoreFigureCost) extraCost += 1;
   return {
     cost: baseCost + extraCost,
     occupied: enteringOccupied,
@@ -732,6 +763,137 @@ function getPathCost(startCoord, destCoord, mapSpaces, occupiedSet) {
   return target ? target.cost : Infinity;
 }
 
+/** Build 5x5 grid for movement tests. */
+function buildTestGrid5x5(overrides = {}) {
+  const { blocked = [], difficult = [], movementBlockingEdges = [] } = overrides;
+  const spaces = [];
+  const adjacency = {};
+  const terrain = {};
+  const blocking = [...blocked];
+  const coord = (col, row) => String.fromCharCode(97 + col) + (row + 1);
+
+  for (let row = 0; row < 5; row++) {
+    for (let col = 0; col < 5; col++) {
+      const k = coord(col, row);
+      if (blocking.includes(k)) continue;
+      spaces.push(k);
+      terrain[k] = difficult.includes(k) ? 'difficult' : 'normal';
+      const neighbors = [];
+      for (const [dc, dr] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+        const nc = col + dc, nr = row + dr;
+        if (nc >= 0 && nc < 5 && nr >= 0 && nr < 5) {
+          const nk = coord(nc, nr);
+          if (!blocking.includes(nk)) {
+            const ek = [k, nk].sort().join('|');
+            const isBlocked = (movementBlockingEdges || []).some(([a, b]) =>
+              [String(a).toLowerCase(), String(b).toLowerCase()].sort().join('|') === ek
+            );
+            if (!isBlocked) neighbors.push(nk);
+          }
+        }
+      }
+      adjacency[k] = neighbors;
+    }
+  }
+  return { spaces, adjacency, terrain, blocking, movementBlockingEdges: movementBlockingEdges || [] };
+}
+
+/** Run movement tests. Returns 0 if pass, 1 if fail. */
+async function runMovementTests() {
+  const profile = {
+    size: '1x1', cols: 1, rows: 1, isLarge: false, allowDiagonal: true, canRotate: false,
+    isMassive: false, isMobile: false, ignoreDifficult: false, ignoreBlocking: false,
+    ignoreFigureCost: false, canEndOnOccupied: false,
+  };
+  let passed = 0, failed = 0;
+
+  const assert = (name, ok, detail = '') => {
+    if (ok) { console.log(`  ✓ ${name}`); passed++; }
+    else { console.log(`  ✗ ${name}${detail ? ': ' + detail : ''}`); failed++; }
+  };
+
+  console.log('\n=== Movement Tests ===\n');
+
+  // Case 1: Empty board, basic reachability
+  {
+    const grid = buildTestGrid5x5();
+    const board = buildTempBoardState(grid, []);
+    const reachable = [...(computeMovementCache('a1', 4, board, profile).cells.keys())];
+    assert('Empty 4 MP from a1 reaches multiple spaces', reachable.length >= 10);
+  }
+
+  // Case 2: Diagonal past enemy (corner cut) - 1 MP
+  {
+    const grid = buildTestGrid5x5();
+    const board = buildTempBoardState(grid, ['b2']);
+    const cache = computeMovementCache('a1', 4, board, profile);
+    const costToC3 = cache.cells.get('c3')?.cost;
+    const path = getMovementPath(cache, 'a1', 'c3', '1x1', profile);
+    assert('Reach c3 within 4 MP (enemy at b2)', costToC3 !== undefined && costToC3 <= 4);
+    assert('Path a1→c3 exists', path.length >= 2 && path[0] === 'a1' && path[path.length - 1] === 'c3');
+  }
+
+  // Case 3: Through enemy costs +1 MP; cannot end on occupied
+  {
+    const grid = buildTestGrid5x5({ blocked: ['a2', 'b2'] });
+    const board = buildTempBoardState(grid, ['b1'], ['b1']);
+    const cache = computeMovementCache('a1', 5, board, profile);
+    const targetB1 = getMovementTarget(cache, 'b1');
+    assert('Cannot end on b1 (occupied)', targetB1 == null);
+    const costToC1 = cache.cells.get('c1')?.cost;
+    assert('A1→B1→C1 through hostile: 2+1=3 MP (only path)', costToC1 === 3, `got ${costToC1}`);
+  }
+
+  // Case 3b: Through friendly costs no extra; cannot end on occupied
+  {
+    const grid = buildTestGrid5x5({ blocked: ['a2', 'b2'] });
+    const board = buildTempBoardState(grid, ['b1'], []);
+    const cache = computeMovementCache('a1', 5, board, profile);
+    const targetB1 = getMovementTarget(cache, 'b1');
+    assert('Cannot end on b1 (occupied by friendly)', targetB1 == null);
+    const costToC1 = cache.cells.get('c1')?.cost;
+    assert('A1→B1→C1 through friendly: 2 MP (no extra)', costToC1 === 2, `got ${costToC1}`);
+  }
+
+  // Case 4: Difficult terrain
+  {
+    const grid = buildTestGrid5x5({ difficult: ['b1'] });
+    const board = buildTempBoardState(grid, []);
+    const cache = computeMovementCache('a1', 4, board, profile);
+    const costB1 = cache.cells.get('b1')?.cost;
+    assert('Difficult b1 costs 2 MP', costB1 === 2);
+  }
+
+  // Case 5: Blocking
+  {
+    const grid = buildTestGrid5x5({ blocked: ['b1'] });
+    const board = buildTempBoardState(grid, []);
+    const cache = computeMovementCache('a1', 4, board, profile);
+    assert('Blocked b1 unreachable', cache.cells.get('b1') == null);
+  }
+
+  // Case 6: Movement-blocking edge
+  {
+    const grid = buildTestGrid5x5({ movementBlockingEdges: [['a1', 'b1']] });
+    const board = buildTempBoardState(grid, []);
+    const cache = computeMovementCache('a1', 4, board, profile);
+    const directB1 = cache.cells.get('b1')?.cost === 1;
+    assert('Movement-blocking a1-b1: cannot move directly', !directB1);
+  }
+
+  // Case 7: Path includes waypoints
+  {
+    const grid = buildTestGrid5x5();
+    const board = buildTempBoardState(grid, []);
+    const cache = computeMovementCache('a1', 4, board, profile);
+    const path = getMovementPath(cache, 'a1', 'c3', '1x1', profile);
+    assert('Path a1→c3 exists and starts with a1', path.length >= 2 && path[0] === 'a1');
+  }
+
+  console.log(`\n${passed} passed, ${failed} failed\n`);
+  return failed > 0 ? 1 : 0;
+}
+
 /** Movement bank display text (green progress bar). */
 function getMovementBankText(displayName, remaining, total) {
   const safeTotal = Math.max(0, total ?? 0);
@@ -873,6 +1035,30 @@ function loadGames() {
   }
 }
 
+/** Repopulate dcMessageMeta, dcExhaustedState, dcHealthState from loaded games. Call after loadGames() so in-memory Maps survive redeploys. */
+function repopulateDcMapsFromGames() {
+  for (const [gameId, game] of games) {
+    for (const playerNum of [1, 2]) {
+      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const activatedIndices = new Set(playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []));
+      for (let i = 0; i < dcMessageIds.length && i < dcList.length; i++) {
+        const msgId = dcMessageIds[i];
+        const dc = dcList[i];
+        if (!msgId || !dc) continue;
+        dcMessageMeta.set(msgId, {
+          gameId,
+          playerNum,
+          dcName: dc.dcName,
+          displayName: dc.displayName || dc.dcName,
+        });
+        dcExhaustedState.set(msgId, activatedIndices.has(i));
+        dcHealthState.set(msgId, dc.healthState || [[null, null]]);
+      }
+    }
+  }
+}
+
 function saveGames() {
   try {
     const data = Object.fromEntries(games);
@@ -883,6 +1069,7 @@ function saveGames() {
 }
 
 loadGames();
+repopulateDcMapsFromGames();
 
 const CATEGORIES = {
   general: '📢 General',
@@ -3990,6 +4177,11 @@ client.on('interactionCreate', async (interaction) => {
         const newCur = Math.max(0, (cur ?? max) - damage);
         healthState[targetFigIndex] = [newCur, max ?? newCur];
         dcHealthState.set(targetMsgId, healthState);
+        const enemyPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
+        const dcMessageIds = enemyPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcList = enemyPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+        const idx = (dcMessageIds || []).indexOf(targetMsgId);
+        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
         if (newCur <= 0) {
           const enemyPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
           if (game.figurePositions?.[enemyPlayerNum]) {
@@ -5753,4 +5945,10 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+if (process.argv.includes('--test-movement')) {
+  runMovementTests()
+    .then((code) => process.exit(code || 0))
+    .catch((err) => { console.error(err); process.exit(1); });
+} else {
+  client.login(process.env.DISCORD_TOKEN);
+}

@@ -8,7 +8,8 @@
     "extract-dc-images": "node scripts/extract-dc-images.js",
     "test-map": "node scripts/test-map-render.js",
     "extract-zones": "npx --yes serve . -p 3456",
-    "generate-map-spaces": "node scripts/generate-map-spaces.js"
+    "generate-map-spaces": "node scripts/generate-map-spaces.js",
+    "test-movement": "node index.js --test-movement"
   },
   "type": "module",
   "dependencies": {
