@@ -15,12 +15,10 @@ let registryCache = null;
 let tokenImagesConfig = null;
 
 function getTokenImagesConfig() {
-  if (!tokenImagesConfig) {
-    try {
-      tokenImagesConfig = JSON.parse(readFileSync(join(rootDir, 'data', 'token-images.json'), 'utf8'));
-    } catch {
-      tokenImagesConfig = {};
-    }
+  try {
+    tokenImagesConfig = JSON.parse(readFileSync(join(rootDir, 'data', 'token-images.json'), 'utf8'));
+  } catch {
+    tokenImagesConfig = tokenImagesConfig || {};
   }
   return tokenImagesConfig;
 }
@@ -252,7 +250,7 @@ export async function renderMap(mapId, options = {}) {
     await drawTokenAt(coord, tc.terminals, 'rgba(79,195,247,0.8)', 'square');
   }
   for (const coord of tokens.missionA || []) {
-    await drawTokenAt(coord, tc.missionA, 'rgba(129,199,132,0.8)', 'circle');
+    await drawTokenAt(coord, tc.missionA, 'rgba(120,120,120,0.9)', 'circle');
   }
   for (const coord of tokens.missionB || []) {
     await drawTokenAt(coord, tc.missionB, 'rgba(255,183,77,0.8)', 'square');

@@ -147,6 +147,54 @@ function getPlayerOccupiedCells(game, playerNum) {
   return cells;
 }
 
+/** Mission B: True if figure is adjacent to or on a contraband space. */
+function isFigureAdjacentOrOnContraband(game, playerNum, figureKey, mapId) {
+  if (game?.selectedMission?.variant !== 'b') return false;
+  const mapData = mapTokensData[mapId];
+  const contraband = mapData?.missionB?.contraband || mapData?.missionB?.crates || [];
+  if (!contraband.length) return false;
+  const rawMapSpaces = getMapSpaces(mapId);
+  if (!rawMapSpaces?.adjacency) return false;
+  const mapDef = mapRegistry.find((m) => m.id === mapId);
+  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+  const adjacency = mapSpaces.adjacency || {};
+  const contrabandSet = toLowerSet(contraband);
+  const pos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!pos) return false;
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const footprint = getFootprintCells(pos, game.figureOrientations?.[figureKey] || getFigureSize(dcName));
+  for (const c of footprint) {
+    const n = normalizeCoord(c);
+    if (contrabandSet.has(n)) return true;
+    for (const adj of adjacency[n] || []) {
+      if (contrabandSet.has(normalizeCoord(adj))) return true;
+    }
+  }
+  return false;
+}
+
+/** Mission B: Effective speed (base - 2 when carrying contraband). */
+function getEffectiveSpeed(dcName, figureKey, game) {
+  const base = getDcStats(dcName).speed ?? 4;
+  if (game?.selectedMission?.variant !== 'b') return base;
+  if (game.figureContraband?.[figureKey]) return Math.max(0, base - 2);
+  return base;
+}
+
+/** Mission B: True if figure is in player's deployment zone. */
+function isFigureInDeploymentZone(game, playerNum, figureKey, mapId) {
+  const zoneData = deploymentZones[mapId];
+  if (!zoneData) return false;
+  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const zone = playerNum === initPlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+  const zoneSpaces = toLowerSet(zoneData[zone] || []);
+  const pos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!pos) return false;
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const footprint = getFootprintCells(pos, game.figureOrientations?.[figureKey] || getFigureSize(dcName));
+  return footprint.some((c) => zoneSpaces.has(normalizeCoord(c)));
+}
+
 /** Count terminals exclusively controlled by player (on or adjacent; only they have presence). */
 function countTerminalsControlledByPlayer(game, playerNum, mapId) {
   const mapData = mapTokensData[mapId];
@@ -851,7 +899,7 @@ const SAMPLE_DECK_P2 = {
 
 const DEFAULT_DECK_REBELS = {
   name: 'Default Rebels',
-  dcList: ['Luke Skywalker', 'Rebel Trooper (Elite)'],
+  dcList: ['Luke Skywalker', 'Wookiee Warrior (Elite)'],
   ccList: ['Burst Fire', 'Concentrated Fire', 'Covering Fire', 'Deadeye', 'Deflection', 'Dirty Trick', 'Disorient', 'Element of Surprise', 'Focus', 'Force Push', 'Lock On', 'Take Cover', 'Take Initiative', 'Marksman', 'Ready Weapons'],
   dcCount: 2,
   ccCount: 15,
@@ -859,9 +907,9 @@ const DEFAULT_DECK_REBELS = {
 
 const DEFAULT_DECK_SCUM = {
   name: 'Default Scum',
-  dcList: ['Boba Fett', 'IG-88', 'Nexu (Elite)'],
-  ccList: ['Burst Fire', 'Concentrated Fire', 'Dirty Trick', 'Disorient', 'Element of Surprise', 'Focus', 'Hunt Them Down', 'Lure', 'Lock On', 'Take Cover', 'Take Initiative', 'Marksman', 'Ready Weapons', 'Urgency', 'Wookiee Rage'],
-  dcCount: 3,
+  dcList: ['Boba Fett', 'Nexu (Elite)'],
+  ccList: ['Burst Fire', 'Concentrated Fire', 'Dirty Trick', 'Disorient', 'Element of Surprise', 'Focus', 'Hunt Them Down', 'Lure of the Dark Side', 'Lock On', 'Take Cover', 'Take Initiative', 'Marksman', 'Ready Weapons', 'Urgency', 'Wookiee Rage'],
+  dcCount: 2,
   ccCount: 15,
 };
 
@@ -957,7 +1005,7 @@ function getCommandCardImagePath(cardName) {
   const png = join(base, `C card--${cardName}.png`);
   if (existsSync(jpg)) return jpg;
   if (existsSync(png)) return png;
-  // Fallback so missing assets (e.g. Lure, Take Aim, Under Duress for Scum) still show a thumbnail
+  // Fallback so missing assets still show a thumbnail
   if (existsSync(COMMAND_CARDBACK_PATH)) return COMMAND_CARDBACK_PATH;
   return null;
 }
@@ -1249,7 +1297,12 @@ async function logPhaseHeader(game, client, phase, roundNum = null) {
     const embed = new EmbedBuilder()
       .setTitle(`${phase.emoji}  ${phaseName}`)
       .setColor(phase.color);
-    await ch.send({ embeds: [embed] });
+    const msg = await ch.send({ embeds: [embed] });
+    const setupPhases = ['SETUP', 'INITIATIVE', 'DEPLOYMENT'];
+    if (setupPhases.includes(phase.name)) {
+      game.setupLogMessageIds = game.setupLogMessageIds || [];
+      game.setupLogMessageIds.push(msg.id);
+    }
   } catch (err) {
     console.error('Phase header error:', err);
   }
@@ -1265,8 +1318,13 @@ async function logGameAction(game, client, content, options = {}) {
       await logPhaseHeader(game, client, GAME_PHASES[phase], options.roundNum);
     }
     const timestamp = `<t:${Math.floor(Date.now() / 1000)}:t>`;
-    const msg = `${icon}${timestamp} — ${content}`;
-    await ch.send({ content: msg, allowedMentions: options.allowedMentions });
+    const msgContent = `${icon}${timestamp} — ${content}`;
+    const sentMsg = await ch.send({ content: msgContent, allowedMentions: options.allowedMentions });
+    const setupPhases = ['SETUP', 'INITIATIVE', 'DEPLOYMENT'];
+    if (phase && setupPhases.includes(phase)) {
+      game.setupLogMessageIds = game.setupLogMessageIds || [];
+      game.setupLogMessageIds.push(sentMsg.id);
+    }
   } catch (err) {
     console.error('Game log error:', err);
   }
@@ -1355,7 +1413,11 @@ function getBoardButtons(gameId) {
       .setCustomId(`refresh_map_${gameId}`)
       .setLabel('Refresh Map')
       .setStyle(ButtonStyle.Primary),
-    getUndoButton(gameId)
+    getUndoButton(gameId),
+    new ButtonBuilder()
+      .setCustomId(`kill_game_${gameId}`)
+      .setLabel('Kill Game (testing)')
+      .setStyle(ButtonStyle.Danger)
   );
 }
 
@@ -1758,6 +1820,32 @@ function getGeneralSetupButtons(game) {
   return new ActionRowBuilder().addComponents(...components);
 }
 
+/** Delete setup messages from Game Log when Round 1 begins. */
+async function clearPreGameSetup(game, client) {
+  const ids = [
+    ...(game.generalSetupMessageId ? [game.generalSetupMessageId] : []),
+    ...(game.bothReadyMessageId ? [game.bothReadyMessageId] : []),
+    ...(game.deploymentZoneMessageId ? [game.deploymentZoneMessageId] : []),
+    ...(game.setupLogMessageIds || []),
+  ];
+  if (ids.length === 0) return;
+  try {
+    const ch = await client.channels.fetch(game.generalId);
+    for (const id of ids) {
+      try {
+        const msg = await ch.messages.fetch(id);
+        await msg.delete();
+      } catch {}
+    }
+    game.generalSetupMessageId = null;
+    game.bothReadyMessageId = null;
+    game.deploymentZoneMessageId = null;
+    game.setupLogMessageIds = [];
+  } catch (err) {
+    console.error('Failed to clear pre-game setup:', err);
+  }
+}
+
 /** Returns Determine Initiative + Kill Game for the Both Squads Ready message. */
 function getDetermineInitiativeButtons(game) {
   const components = [];
@@ -1908,6 +1996,15 @@ async function runDraftRandom(game, client) {
     game[drawnKey] = true;
     const handChannelId = playerNum === 1 ? game.p1HandId : game.p2HandId;
     const handChannel = await client.channels.fetch(handChannelId);
+    const existingMsgs = await handChannel.messages.fetch({ limit: 5 });
+    if (existingMsgs.size === 0) {
+      const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+      await handChannel.send({
+        content: `<@${playerId}>, this is your hand.`,
+        embeds: [getHandTooltipEmbed(game, playerNum)],
+        allowedMentions: { users: [playerId] },
+      });
+    }
     const handPayload = buildHandDisplayPayload(hand, deck, game.gameId);
     await handChannel.send({
       content: handPayload.content,
@@ -1932,9 +2029,10 @@ async function runDraftRandom(game, client) {
       .setLabel('End R1 Activation Phase')
       .setStyle(ButtonStyle.Secondary)
   )] : [];
+  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
   const content = showBtn
-    ? `<@${game.initiativePlayerId}> **Draft Random complete.** Your turn! Both players: click **End R1 Activation Phase** when you've used all activations and any end-of-activation effects.`
-    : `<@${game.initiativePlayerId}> **Draft Random complete.** Your turn! Use all activations and actions. The **End R1 Activation Phase** button will appear when both players have done so.`;
+    ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Draft Random complete.** Your turn! Both players: click **End R1 Activation Phase** when you've used all activations and any end-of-activation effects.`
+    : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Draft Random complete.** Your turn! Use all activations and actions. The **End R1 Activation Phase** button will appear when both players have done so.`;
   const sent = await generalChannel.send({
     content,
     embeds: [roundEmbed],
@@ -1943,6 +2041,7 @@ async function runDraftRandom(game, client) {
   });
   game.roundActivationMessageId = sent.id;
   game.roundActivationButtonShown = showBtn;
+  await clearPreGameSetup(game, client);
   saveGames();
 }
 
@@ -2106,8 +2205,9 @@ async function maybeShowEndActivationPhaseButton(game, client) {
         .setLabel(`End R${round} Activation Phase`)
         .setStyle(ButtonStyle.Secondary)
     );
+    const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
     await msg.edit({
-      content: `<@${game.initiativePlayerId}> **Round ${round}** — Both players have used all activations and actions. Both players: click **End R${round} Activation Phase** when done with any end-of-activation effects.`,
+      content: `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${round}** — Both players have used all activations and actions. Both players: click **End R${round} Activation Phase** when done with any end-of-activation effects.`,
       embeds: [roundEmbed],
       components: [endBtn],
       allowedMentions: { users: [game.initiativePlayerId] },
@@ -2130,7 +2230,7 @@ async function updateDcActionsMessage(game, msgId, client) {
     try {
       const thread = await client.channels.fetch(data.threadId);
       const msg = await thread.messages.fetch(data.messageId);
-      const components = meta ? getDcActionButtons(msgId, meta.dcName, displayName, data.remaining) : [];
+      const components = meta && game ? getDcActionButtons(msgId, meta.dcName, displayName, data.remaining, game) : [];
       await msg.edit({
         content: getActionsCounterContent(data.remaining, data.total),
         components,
@@ -2142,35 +2242,52 @@ async function updateDcActionsMessage(game, msgId, client) {
 
   if (data?.remaining === 0 && meta) {
     game.dcFinishedPinged = game.dcFinishedPinged || {};
-    if (!game.dcFinishedPinged[msgId]) {
-      game.dcFinishedPinged[msgId] = true;
-      const otherPlayerId = meta.playerNum === 1 ? game.player2Id : game.player1Id;
-      await logGameAction(game, client, `<@${otherPlayerId}> **${displayName}** finished all actions — your turn to activate a figure!`, {
-        allowedMentions: { users: [otherPlayerId] },
-        phase: 'ROUND',
-        icon: 'activate',
-      });
+    game.pendingEndTurn = game.pendingEndTurn || {};
+    if (!game.dcFinishedPinged[msgId] && !game.pendingEndTurn[msgId]) {
+      const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+      const initPlayerNum = meta.playerNum;
+      try {
+        const ch = await client.channels.fetch(game.generalId);
+        const icon = ACTION_ICONS.activate || '⚡';
+        const timestamp = `<t:${Math.floor(Date.now() / 1000)}:t>`;
+        const endTurnBtn = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`end_turn_${game.gameId}_${msgId}`)
+            .setLabel('End Turn')
+            .setStyle(ButtonStyle.Primary)
+        );
+        const endTurnMsg = await ch.send({
+          content: `${icon} ${timestamp} — <@${ownerId}> (**Player ${initPlayerNum}**) **${displayName}** finished all actions. Press **End Turn** when ready to pass the turn.`,
+          components: [endTurnBtn],
+          allowedMentions: { users: [ownerId] },
+        });
+        game.pendingEndTurn[msgId] = { playerNum: meta.playerNum, displayName, messageId: endTurnMsg.id };
+      } catch (err) {
+        console.error('Failed to send End Turn prompt:', err);
+      }
     }
     await maybeShowEndActivationPhaseButton(game, client);
   }
 }
 
-/** Returns action rows: one [Move][Attack][Interact] row per figure, plus specials if any. Max 5 rows (Discord limit). */
-function getDcActionButtons(msgId, dcName, displayName, actionsRemaining = 2) {
+/** Returns action rows: one [Move][Attack][Interact] row per figure, plus specials. Max 5 rows. Retrieve Contraband is shown as a prompt after movement (Mission B). */
+function getDcActionButtons(msgId, dcName, displayName, actionsRemaining = 2, game = null) {
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   const specials = stats.specials || [];
   const dgIndex = displayName?.match(/\[Group (\d+)\]/)?.[1] ?? 1;
-  const baseName = (displayName || dcName).replace(/\s*\[Group \d+\]$/, '') || dcName;
   const noActions = (actionsRemaining ?? 2) <= 0;
+  const playerNum = game ? (dcMessageMeta.get(msgId)?.playerNum ?? 1) : 1;
   const rows = [];
   for (let f = 0; f < figures && rows.length < 5; f++) {
     const suffix = figures <= 1 ? '' : ` ${dgIndex}${FIGURE_LETTERS[f]}`;
-    rows.push(new ActionRowBuilder().addComponents(
+    const figureKey = `${dcName}-${dgIndex}-${f}`;
+    const comps = [
       new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${f}`).setLabel(`Move${suffix}`).setStyle(ButtonStyle.Success).setDisabled(noActions),
       new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${f}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noActions),
-      new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${f}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noActions)
-    ));
+      new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${f}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noActions),
+    ];
+    rows.push(new ActionRowBuilder().addComponents(...comps));
   }
   if (specials.length > 0 && rows.length < 5) {
     const specialBtns = specials.slice(0, 5).map((name, idx) =>
@@ -2198,11 +2315,23 @@ function formatHealthSection(dgIndex, healthState) {
 }
 
 function getDcToggleButton(msgId, exhausted) {
+  if (exhausted) {
+    return new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`dc_unactivate_${msgId}`)
+        .setLabel('Un-activate')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`dc_toggle_${msgId}`)
+        .setLabel('Ready')
+        .setStyle(ButtonStyle.Success)
+    );
+  }
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`dc_toggle_${msgId}`)
-      .setLabel(exhausted ? 'Ready' : 'Activate')
-      .setStyle(exhausted ? ButtonStyle.Success : ButtonStyle.Success)
+      .setLabel('Activate')
+      .setStyle(ButtonStyle.Success)
   );
 }
 
@@ -2279,6 +2408,35 @@ async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState)
 /** Card-back character (vertical rectangle) for hand visual. */
 const CARD_BACK_CHAR = '▮';
 
+/** Tooltip embed at top of Play Area: player, CC count, DC list. */
+function getPlayAreaTooltipEmbed(game, playerNum) {
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const handCount = (playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || [])).length;
+  const dcList = playerNum === 1 ? (game.p1DcList || game.player1Squad?.dcList || []) : (game.p2DcList || game.player2Squad?.dcList || []);
+  const dcNames = Array.isArray(dcList) ? dcList.map((d) => (typeof d === 'object' ? d.dcName || d.displayName : d)).filter(Boolean) : [];
+  const dcText = dcNames.length > 0 ? dcNames.join(', ') : '—';
+  return new EmbedBuilder()
+    .setTitle(`This is Player ${playerNum}'s Play Area`)
+    .setDescription(
+      `**Player:** <@${playerId}>\n` +
+      `**Command Cards in hand:** ${handCount}\n` +
+      `**Deployment Cards:** ${dcText}`
+    )
+    .setColor(0x5865f2);
+}
+
+/** Tooltip embed for Hand channel: explains the private hand. */
+function getHandTooltipEmbed(game, playerNum) {
+  return new EmbedBuilder()
+    .setTitle('Your Hand')
+    .setDescription(
+      'Your private channel for **Command Cards** and squad selection. Only you can see this channel.\n\n' +
+      '• Select your squad below (or upload a .vsav file)\n' +
+      '• During the game, your hand is shown here — played cards will show up in the **Game Log**'
+    )
+    .setColor(0x5865f2);
+}
+
 /** Returns embed showing command cards in hand as card backs (e.g. ▮▮▮ for 3 cards). */
 function getHandVisualEmbed(handCount) {
   const count = Math.max(0, handCount ?? 0);
@@ -2287,6 +2445,71 @@ function getHandVisualEmbed(handCount) {
     .setTitle('Command Cards in Hand')
     .setDescription(`**${count}** cards\n${cards}`)
     .setColor(0x2f3136);
+}
+
+/** Returns embed showing discard pile count (card backs). */
+function getDiscardPileEmbed(discardCount) {
+  const count = Math.max(0, discardCount ?? 0);
+  const cards = CARD_BACK_CHAR.repeat(count) || '—';
+  return new EmbedBuilder()
+    .setTitle('Command Cards in Discard Pile')
+    .setDescription(`**${count}** cards\n${cards}`)
+    .setColor(0x2f3136);
+}
+
+/** Search (blue) and Close (red) buttons for discard pile. */
+function getDiscardPileButtons(gameId, playerNum, hasOpenThread) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`cc_search_discard_${gameId}_${playerNum}`)
+      .setLabel('Search Discard Pile')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`cc_close_discard_${gameId}_${playerNum}`)
+      .setLabel('Close Discard Pile')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!hasOpenThread)
+  );
+}
+
+const EMBEDS_PER_MESSAGE = 10;
+
+/** Build discard pile display for thread (embeds with card images, like hand view). Returns array of { embeds, files } for chunked sends. */
+function buildDiscardPileDisplayPayload(discard) {
+  const cardData = [];
+  for (let i = 0; i < discard.length; i++) {
+    const card = discard[i];
+    const path = getCommandCardImagePath(card);
+    const ext = path ? (path.toLowerCase().endsWith('.png') ? 'png' : 'jpg') : 'jpg';
+    const fileName = `cc-discard-${i}-${(card || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
+    const embed = new EmbedBuilder()
+      .setTitle(card || `Card ${i + 1}`)
+      .setColor(0x2f3136);
+    let file = null;
+    if (path && existsSync(path)) {
+      file = new AttachmentBuilder(path, { name: fileName });
+      embed.setThumbnail(`attachment://${fileName}`);
+    }
+    cardData.push({ embed, file });
+  }
+  const header = new EmbedBuilder()
+    .setTitle('Command Cards in Discard Pile')
+    .setDescription(`**${discard.length}** cards discarded`)
+    .setColor(0x2f3136);
+  const chunks = [];
+  let embeds = [header];
+  let files = [];
+  for (let i = 0; i < cardData.length; i++) {
+    if (embeds.length >= EMBEDS_PER_MESSAGE) {
+      chunks.push({ embeds, files: files.length > 0 ? files : undefined });
+      embeds = [];
+      files = [];
+    }
+    embeds.push(cardData[i].embed);
+    if (cardData[i].file) files.push(cardData[i].file);
+  }
+  if (embeds.length > 0) chunks.push({ embeds, files: files.length > 0 ? files : undefined });
+  return chunks;
 }
 
 /** Call after changing player1CcHand/player2CcHand to refresh the Play Area hand visual. */
@@ -2311,6 +2534,26 @@ function getActivationsLine(remaining, total) {
   const used = Math.max(0, total - remaining);
   const circles = green.repeat(remaining) + red.repeat(used);
   return `**Activations:** ${circles} (${remaining}/${total} remaining)`;
+}
+
+/** Call after changing discard pile to refresh the Play Area discard embed and buttons. */
+async function updateDiscardPileMessage(game, playerNum, client) {
+  const msgId = playerNum === 1 ? game.p1DiscardPileMessageId : game.p2DiscardPileMessageId;
+  if (msgId == null) return;
+  const discard = playerNum === 1 ? (game.player1CcDiscard || []) : (game.player2CcDiscard || []);
+  const threadId = playerNum === 1 ? game.p1DiscardThreadId : game.p2DiscardThreadId;
+  const hasOpenThread = !!threadId;
+  try {
+    const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+    const channel = await client.channels.fetch(channelId);
+    const msg = await channel.messages.fetch(msgId);
+    await msg.edit({
+      embeds: [getDiscardPileEmbed(discard.length)],
+      components: [getDiscardPileButtons(game.gameId, playerNum, hasOpenThread)],
+    });
+  } catch (err) {
+    console.error('Failed to update discard pile message:', err);
+  }
 }
 
 /** Call after changing game.p1ActivationsRemaining or game.p2ActivationsRemaining to refresh the Play Area header. */
@@ -2341,18 +2584,6 @@ async function populatePlayAreas(game, client) {
   game.p1ActivationsRemaining = p1Total;
   game.p2ActivationsRemaining = p2Total;
 
-  const p1HandCount = (game.player1CcHand || []).length;
-  const p2HandCount = (game.player2CcHand || []).length;
-  const p1HandVisualMsg = await p1PlayArea.send({ embeds: [getHandVisualEmbed(p1HandCount)] });
-  const p2HandVisualMsg = await p2PlayArea.send({ embeds: [getHandVisualEmbed(p2HandCount)] });
-  game.p1HandVisualMessageId = p1HandVisualMsg.id;
-  game.p2HandVisualMessageId = p2HandVisualMsg.id;
-
-  const p1ActivationsMsg = await p1PlayArea.send(getActivationsLine(p1Total, p1Total));
-  const p2ActivationsMsg = await p2PlayArea.send(getActivationsLine(p2Total, p2Total));
-  game.p1ActivationsMessageId = p1ActivationsMsg.id;
-  game.p2ActivationsMessageId = p2ActivationsMsg.id;
-
   const processDcList = (dcList) => {
     const counts = {};
     const totals = {};
@@ -2377,6 +2608,35 @@ async function populatePlayAreas(game, client) {
   game.p2ActivatedDcIndices = game.p2ActivatedDcIndices || [];
   game.p1DcMessageIds = [];
   game.p2DcMessageIds = [];
+
+  // Tooltip embeds at top of each Play Area
+  await p1PlayArea.send({ embeds: [getPlayAreaTooltipEmbed(game, 1)] });
+  await p2PlayArea.send({ embeds: [getPlayAreaTooltipEmbed(game, 2)] });
+
+  const p1HandCount = (game.player1CcHand || []).length;
+  const p2HandCount = (game.player2CcHand || []).length;
+  const p1HandVisualMsg = await p1PlayArea.send({ embeds: [getHandVisualEmbed(p1HandCount)] });
+  const p2HandVisualMsg = await p2PlayArea.send({ embeds: [getHandVisualEmbed(p2HandCount)] });
+  game.p1HandVisualMessageId = p1HandVisualMsg.id;
+  game.p2HandVisualMessageId = p2HandVisualMsg.id;
+
+  const p1DiscardCount = (game.player1CcDiscard || []).length;
+  const p2DiscardCount = (game.player2CcDiscard || []).length;
+  const p1DiscardMsg = await p1PlayArea.send({
+    embeds: [getDiscardPileEmbed(p1DiscardCount)],
+    components: [getDiscardPileButtons(gameId, 1, false)],
+  });
+  const p2DiscardMsg = await p2PlayArea.send({
+    embeds: [getDiscardPileEmbed(p2DiscardCount)],
+    components: [getDiscardPileButtons(gameId, 2, false)],
+  });
+  game.p1DiscardPileMessageId = p1DiscardMsg.id;
+  game.p2DiscardPileMessageId = p2DiscardMsg.id;
+
+  const p1ActivationsMsg = await p1PlayArea.send(getActivationsLine(p1Total, p1Total));
+  const p2ActivationsMsg = await p2PlayArea.send(getActivationsLine(p2Total, p2Total));
+  game.p1ActivationsMessageId = p1ActivationsMsg.id;
+  game.p2ActivationsMessageId = p2ActivationsMsg.id;
 
   for (const { dcName, displayName, healthState } of p1Dcs) {
     const { embed, files } = await buildDcEmbedAndFiles(dcName, false, displayName, healthState);
@@ -2411,7 +2671,7 @@ async function applySquadSubmission(game, isP1, squad, client) {
   const botMsg = handMessages.find((m) => m.author.bot && m.components.length > 0);
   if (botMsg) {
     await botMsg.edit({
-      embeds: [getSquadSelectEmbed(isP1 ? 1 : 2, squad)],
+      embeds: [getHandTooltipEmbed(game, isP1 ? 1 : 2), getSquadSelectEmbed(isP1 ? 1 : 2, squad)],
       components: [],
     });
   }
@@ -2434,7 +2694,7 @@ async function applySquadSubmission(game, isP1, squad, client) {
     } catch (err) {
       console.error('Failed to create/populate Play Areas:', err);
     }
-    await generalChannel.send({
+    const bothReadyMsg = await generalChannel.send({
       content: `<@${game.player1Id}> <@${game.player2Id}> — Both squads are ready! Determine initiative below.`,
       allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
       embeds: [
@@ -2449,6 +2709,7 @@ async function applySquadSubmission(game, isP1, squad, client) {
       ],
       components: [getDetermineInitiativeButtons(game)],
     });
+    game.bothReadyMessageId = bothReadyMsg.id;
   }
   saveGames();
 }
@@ -2595,7 +2856,7 @@ client.on('messageCreate', async (message) => {
       game.generalSetupMessageId = setupMsg.id;
       const undoMsg = await generalChannel.send({
         content: '**Game Controls**',
-        components: [new ActionRowBuilder().addComponents(getUndoButton(gameId))],
+        components: [new ActionRowBuilder().addComponents(getUndoButton(gameId), new ButtonBuilder().setCustomId(`kill_game_${gameId}`).setLabel('Kill Game (testing)').setStyle(ButtonStyle.Danger))],
       });
       game.undoMessageId = undoMsg.id;
       await creatingMsg.edit(`Test game **IA Game #${gameId}** is ready! Select the map in Game Log — Hand channels will appear after map selection.`);
@@ -2850,6 +3111,7 @@ client.on('interactionCreate', async (interaction) => {
       }
       await interaction.message.delete().catch(() => {});
       await updateHandVisualMessage(game, playerNum, interaction.client);
+      await updateDiscardPileMessage(game, playerNum, interaction.client);
       await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       saveGames();
     }
@@ -2898,6 +3160,7 @@ client.on('interactionCreate', async (interaction) => {
       }
       await interaction.message.delete().catch(() => {});
       await updateHandVisualMessage(game, playerNum, interaction.client);
+      await updateDiscardPileMessage(game, playerNum, interaction.client);
       await logGameAction(game, interaction.client, `<@${interaction.user.id}> discarded **${card}**`, { allowedMentions: { users: [interaction.user.id] }, icon: 'card' });
       saveGames();
     }
@@ -2939,6 +3202,21 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'DC message not found.', ephemeral: true }).catch(() => {});
       return;
     }
+    const isInitiative = ownerId === game.initiativePlayerId;
+    if (!isInitiative) {
+      await interaction.deferUpdate().catch(() => {});
+      const playAreaCh = await client.channels.fetch(playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
+      const promptRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`confirm_activate_${gameId}_${msgId}_${interaction.message.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`cancel_activate_${gameId}_${ownerId}`).setLabel('No').setStyle(ButtonStyle.Danger)
+      );
+      await playAreaCh.send({
+        content: `<@${ownerId}> You are not first to act. Activate anyway?`,
+        components: [promptRow],
+        allowedMentions: { users: [ownerId] },
+      });
+      return;
+    }
     const channel = await client.channels.fetch(playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
     const msg = await channel.messages.fetch(msgId);
     dcExhaustedState.set(msgId, true);
@@ -2951,18 +3229,99 @@ client.on('interactionCreate', async (interaction) => {
     game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
     game.dcActionsData = game.dcActionsData || {};
     game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id };
+    const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
     const actionsMsg = await thread.send({
-      content: getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION),
-      components: getDcActionButtons(msgId, dcName, displayName, DC_ACTIONS_PER_ACTIVATION),
+      content: pingContent,
+      components: getDcActionButtons(msgId, dcName, displayName, DC_ACTIONS_PER_ACTIVATION, game),
+      allowedMentions: { users: [ownerId] },
     });
     game.dcActionsData[msgId].messageId = actionsMsg.id;
     if (playerNum === 1) { game.p1ActivationsRemaining--; game.p1ActivatedDcIndices.push(dcIndex); }
     else { game.p2ActivationsRemaining--; game.p2ActivatedDcIndices.push(dcIndex); }
     await updateActivationsMessage(game, playerNum, client);
     saveGames();
-    await logGameAction(game, client, `<@${ownerId}> activated **${displayName}**!`, { allowedMentions: { users: [ownerId] }, icon: 'activate' });
+    const logCh = await client.channels.fetch(game.generalId);
+    const icon = ACTION_ICONS.activate || '⚡';
+    const pLabel = `P${playerNum}`;
+    const logMsg = await logCh.send({
+      content: `${icon} <t:${Math.floor(Date.now() / 1000)}:t> — **${pLabel}:** <@${ownerId}> activated **${displayName}**!`,
+      allowedMentions: { users: [ownerId] },
+    });
+    game.dcActivationLogMessageIds = game.dcActivationLogMessageIds || {};
+    game.dcActivationLogMessageIds[msgId] = logMsg.id;
     const activateRows = getActivateDcButtons(game, playerNum);
     await interaction.update({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch(() => interaction.deferUpdate().catch(() => {}));
+    return;
+  }
+
+  if (interaction.customId.startsWith('dc_unactivate_')) {
+    const msgId = interaction.customId.replace('dc_unactivate_', '');
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) {
+      await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const game = games.get(meta.gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({ content: 'Only the owner can un-activate.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const wasExhausted = dcExhaustedState.get(msgId) ?? false;
+    if (!wasExhausted) {
+      await interaction.reply({ content: 'DC is not activated.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate();
+    const displayName = meta.displayName || meta.dcName;
+    dcExhaustedState.set(msgId, false);
+    const total = meta.playerNum === 1 ? game.p1ActivationsTotal : game.p2ActivationsTotal;
+    const remaining = meta.playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
+    if (remaining < total) {
+      if (meta.playerNum === 1) {
+        game.p1ActivationsRemaining++;
+        const dcIndex = (game.p1DcMessageIds || []).indexOf(msgId);
+        if (dcIndex !== -1 && game.p1ActivatedDcIndices) game.p1ActivatedDcIndices = game.p1ActivatedDcIndices.filter((i) => i !== dcIndex);
+      } else {
+        game.p2ActivationsRemaining++;
+        const dcIndex = (game.p2DcMessageIds || []).indexOf(msgId);
+        if (dcIndex !== -1 && game.p2ActivatedDcIndices) game.p2ActivatedDcIndices = game.p2ActivatedDcIndices.filter((i) => i !== dcIndex);
+      }
+      await updateActivationsMessage(game, meta.playerNum, client);
+    }
+    const threadId = game.dcActionsData?.[msgId]?.threadId;
+    if (threadId) {
+      try {
+        const thread = await client.channels.fetch(threadId);
+        await thread.delete();
+      } catch (err) {
+        console.error('Failed to delete activation thread on un-activate:', err);
+      }
+    }
+    if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
+    if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
+    if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
+    if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
+    if (game.dcActivationLogMessageIds?.[msgId]) {
+      try {
+        const logCh = await client.channels.fetch(game.generalId);
+        const logMsg = await logCh.messages.fetch(game.dcActivationLogMessageIds[msgId]);
+        await logMsg.delete().catch(() => {});
+      } catch {}
+      delete game.dcActivationLogMessageIds[msgId];
+    }
+    const healthState = dcHealthState.get(msgId) ?? [[null, null]];
+    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, displayName, healthState);
+    await interaction.message.edit({
+      embeds: [embed],
+      files,
+      components: [getDcToggleButton(msgId, false)],
+    });
+    saveGames();
     return;
   }
 
@@ -2985,13 +3344,28 @@ client.on('interactionCreate', async (interaction) => {
     }
     const wasExhausted = dcExhaustedState.get(msgId) ?? false;
     const nowExhausted = !wasExhausted;
-    dcExhaustedState.set(msgId, nowExhausted);
     const healthState = dcHealthState.get(msgId) ?? [[null, null]];
     const displayName = meta.displayName || meta.dcName;
     const playerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
 
     // When going ready → exhausted, that uses an activation and starts the action thread
     if (!wasExhausted && nowExhausted) {
+      const isInitiative = playerId === game.initiativePlayerId;
+      if (!isInitiative) {
+        await interaction.deferUpdate().catch(() => {});
+        const playAreaCh = await client.channels.fetch(meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
+        const promptRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`confirm_activate_${game.gameId}_${msgId}_0`).setLabel('Yes').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId(`cancel_activate_${game.gameId}_${playerId}`).setLabel('No').setStyle(ButtonStyle.Danger)
+        );
+        await playAreaCh.send({
+          content: `<@${playerId}> You are not first to act. Activate anyway?`,
+          components: [promptRow],
+          allowedMentions: { users: [playerId] },
+        });
+        return;
+      }
+      dcExhaustedState.set(msgId, true);
       const remaining = meta.playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
       if (remaining > 0) {
         if (meta.playerNum === 1) {
@@ -3017,15 +3391,27 @@ client.on('interactionCreate', async (interaction) => {
         game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
         game.dcActionsData = game.dcActionsData || {};
         game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id };
+        const pingContent = `<@${meta.playerNum === 1 ? game.player1Id : game.player2Id}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
         const actionsMsg = await thread.send({
-          content: getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION),
-          components: getDcActionButtons(msgId, meta.dcName, displayName, DC_ACTIONS_PER_ACTIVATION),
+          content: pingContent,
+          components: getDcActionButtons(msgId, meta.dcName, displayName, DC_ACTIONS_PER_ACTIVATION, game),
+          allowedMentions: { users: [meta.playerNum === 1 ? game.player1Id : game.player2Id] },
         });
         game.dcActionsData[msgId].messageId = actionsMsg.id;
+        const logCh = await client.channels.fetch(game.generalId);
+        const icon = ACTION_ICONS.activate || '⚡';
+        const pLabel = `P${meta.playerNum}`;
+        const logMsg = await logCh.send({
+          content: `${icon} <t:${Math.floor(Date.now() / 1000)}:t> — **${pLabel}:** <@${playerId}> activated **${displayName}**!`,
+          allowedMentions: { users: [playerId] },
+        });
+        game.dcActivationLogMessageIds = game.dcActivationLogMessageIds || {};
+        game.dcActivationLogMessageIds[msgId] = logMsg.id;
       }
     }
     // When going exhausted → ready, give an activation back (cap at total)
     if (wasExhausted && !nowExhausted) {
+      dcExhaustedState.set(msgId, false);
       const total = meta.playerNum === 1 ? game.p1ActivationsTotal : game.p2ActivationsTotal;
       const remaining = meta.playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
       if (remaining < total) {
@@ -3040,13 +3426,33 @@ client.on('interactionCreate', async (interaction) => {
         }
         await updateActivationsMessage(game, meta.playerNum, client);
       }
+      const threadId = game.dcActionsData?.[msgId]?.threadId;
+      if (threadId) {
+        try {
+          const thread = await client.channels.fetch(threadId);
+          await thread.delete();
+        } catch (err) {
+          console.error('Failed to delete activation thread on ready:', err);
+        }
+      }
       if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
       if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
+      if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
+      if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
+      if (game.dcActivationLogMessageIds?.[msgId]) {
+        try {
+          const logCh = await client.channels.fetch(game.generalId);
+          const logMsg = await logCh.messages.fetch(game.dcActivationLogMessageIds[msgId]);
+          await logMsg.delete().catch(() => {});
+        } catch {}
+        delete game.dcActivationLogMessageIds[msgId];
+      }
     }
     saveGames();
     const actionIcon = nowExhausted ? 'activate' : 'ready';
-    const actionText = nowExhausted ? `activated **${displayName}**!` : `readied **${displayName}**`;
-    await logGameAction(game, client, `<@${playerId}> ${actionText}`, { allowedMentions: { users: [playerId] }, icon: actionIcon });
+    const pLabel = `P${meta.playerNum}`;
+    const actionText = nowExhausted ? `**${pLabel}:** <@${playerId}> activated **${displayName}**!` : `**${pLabel}:** <@${playerId}> readied **${displayName}**`;
+    await logGameAction(game, client, actionText, { allowedMentions: { users: [playerId] }, icon: actionIcon });
     const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, nowExhausted, displayName, healthState);
     await interaction.update({
       embeds: [embed],
@@ -3113,7 +3519,7 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
       const stats = getDcStats(meta.dcName);
-      const speed = stats.speed ?? 4;
+      const speed = getEffectiveSpeed(meta.dcName, figureKey, game);
       const bank = game.movementBank?.[msgId];
       const currentMp = bank?.remaining ?? 0;
       const mpRemaining = currentMp + speed;
@@ -3409,6 +3815,8 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
     moveState.pendingMp = null;
+    const mapId = game.selectedMap?.id;
+    const terminalsBefore = mapId ? countTerminalsControlledByPlayer(game, playerNum, mapId) : 0;
     if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
     if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
     const newTopLeft = targetInfo.topLeft;
@@ -3433,7 +3841,32 @@ client.on('interactionCreate', async (interaction) => {
       await updateMovementBankMessage(game, msgId, client);
     }
     const destDisplay = space.toUpperCase();
+    const shortName = (displayName || meta.displayName || '').replace(/\s*\[Group \d+\]$/, '') || displayName;
+    const pLabel = `P${playerNum}`;
     await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** to **${destDisplay}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
+    const terminalsAfter = mapId ? countTerminalsControlledByPlayer(game, playerNum, mapId) : 0;
+    if (terminalsAfter > terminalsBefore) {
+      await logGameAction(game, client, `**${pLabel}: ${shortName}** has taken control of a terminal!`, { phase: 'ROUND', icon: 'deploy' });
+    }
+    const showContrabandPrompt = game.selectedMission?.variant === 'b' && mapId &&
+      !game.figureContraband?.[figureKey] &&
+      isFigureAdjacentOrOnContraband(game, playerNum, figureKey, mapId);
+    if (showContrabandPrompt) {
+      const retrieveRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`retrieve_contraband_${game.gameId}_${msgId}_f${figureIndex}`)
+          .setLabel('Retrieve Contraband')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`do_not_retrieve_${game.gameId}_${msgId}_f${figureIndex}`)
+          .setLabel('Do not Retrieve Contraband')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      await interaction.channel.send({
+        content: `**${shortName}** is adjacent to contraband. Retrieve?`,
+        components: [retrieveRow],
+      }).catch(() => {});
+    }
     if (newMp <= 0) {
       await editDistanceMessage(moveState, interaction.channel, `✓ Moved **${displayName}** to **${destDisplay}**.`, []);
       delete game.moveInProgress[moveKey];
@@ -3642,6 +4075,7 @@ client.on('interactionCreate', async (interaction) => {
     game.p2ActivationPhaseEnded = false;
     await interaction.deferUpdate();
     game.dcFinishedPinged = {};
+    game.pendingEndTurn = {};
     for (const [msgId, meta] of dcMessageMeta) {
       if (meta.gameId === gameId) {
         dcExhaustedState.set(msgId, false);
@@ -3682,6 +4116,27 @@ client.on('interactionCreate', async (interaction) => {
     }
     game.player2CcHand = [...(game.player2CcHand || []), ...p2Drawn];
     game.player2CcDeck = p2Deck;
+    if (game.selectedMission?.variant === 'b' && mapId && game.figureContraband) {
+      for (const pn of [1, 2]) {
+        let scored = 0;
+        for (const [figureKey, carrying] of Object.entries(game.figureContraband)) {
+          if (!carrying) continue;
+          const poses = game.figurePositions?.[pn] || {};
+          if (!(figureKey in poses)) continue;
+          if (!isFigureInDeploymentZone(game, pn, figureKey, mapId)) continue;
+          const vp = game[`player${pn}VP`] || { total: 0, kills: 0, objectives: 0 };
+          vp.total = (vp.total || 0) + 15;
+          vp.objectives = (vp.objectives || 0) + 15;
+          game[`player${pn}VP`] = vp;
+          delete game.figureContraband[figureKey];
+          scored++;
+        }
+        if (scored > 0) {
+          const pid = pn === 1 ? game.player1Id : game.player2Id;
+          await logGameAction(game, client, `<@${pid}> gained **${15 * scored} VP** for ${scored} figure(s) delivering contraband to deployment zone.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+        }
+      }
+    }
     const prevInitiative = game.initiativePlayerId;
     game.initiativePlayerId = prevInitiative === game.player1Id ? game.player2Id : game.player1Id;
     game.currentRound = (game.currentRound || 1) + 1;
@@ -3722,9 +4177,10 @@ client.on('interactionCreate', async (interaction) => {
     const drawRule = (p1Terminals > 0 || p2Terminals > 0)
       ? 'Draw 1 CC (+1 per controlled terminal). '
       : 'Draw 1 CC. ';
+    const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
     const content = showBtn
-      ? `<@${game.initiativePlayerId}> **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Both players: click **End R${game.currentRound} Activation Phase** when you've used all activations and any end-of-activation effects.`
-      : `<@${game.initiativePlayerId}> **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Use all activations and actions. The **End R${game.currentRound} Activation Phase** button will appear when both players have done so.`;
+      ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Both players: click **End R${game.currentRound} Activation Phase** when you've used all activations and any end-of-activation effects.`
+      : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Use all activations and actions. The **End R${game.currentRound} Activation Phase** button will appear when both players have done so.`;
     const sent = await generalChannel.send({
       content,
       embeds: [roundEmbed],
@@ -3800,16 +4256,18 @@ client.on('interactionCreate', async (interaction) => {
       const p1Hand = await client.channels.fetch(game.p1HandId);
       const p2Hand = await client.channels.fetch(game.p2HandId);
       const isTest = game.player1Id === game.player2Id;
+      const p1Id = game.player1Id;
+      const p2Id = game.player2Id;
       await p1Hand.send({
-        content: `<@${game.player1Id}> — pick your squad below!${isTest ? ' *(Test — use Select Squad or Default deck buttons for each side.)*' : ''}`,
-        allowedMentions: { users: [game.player1Id] },
-        embeds: [getSquadSelectEmbed(1, null)],
+        content: `<@${p1Id}>, this is your hand — pick your squad below!${isTest ? ' *(Test — use Select Squad or Default deck buttons for each side.)*' : ''}`,
+        allowedMentions: { users: [p1Id] },
+        embeds: [getHandTooltipEmbed(game, 1), getSquadSelectEmbed(1, null)],
         components: [getHandSquadButtons(game.gameId, 1)],
       });
       await p2Hand.send({
-        content: `<@${game.player2Id}> — pick your squad below!${isTest ? ' *(Test — use Select Squad or Default deck buttons for each side.)*' : ''}`,
-        allowedMentions: { users: [game.player2Id] },
-        embeds: [getSquadSelectEmbed(2, null)],
+        content: `<@${p2Id}>, this is your hand — pick your squad below!${isTest ? ' *(Test — use Select Squad or Default deck buttons for each side.)*' : ''}`,
+        allowedMentions: { users: [p2Id] },
+        embeds: [getHandTooltipEmbed(game, 2), getSquadSelectEmbed(2, null)],
         components: [getHandSquadButtons(game.gameId, 2)],
       });
     } catch (err) {
@@ -3852,6 +4310,234 @@ client.on('interactionCreate', async (interaction) => {
       console.error('Draft Random error:', err);
       await interaction.followUp({ content: `Draft Random failed: ${err.message}`, ephemeral: true }).catch(() => {});
     }
+    return;
+  }
+
+  if (interaction.customId.startsWith('end_turn_')) {
+    const match = interaction.customId.match(/^end_turn_([^_]+)_(.+)$/);
+    if (!match) return;
+    const gameId = match[1];
+    const dcMsgId = match[2];
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const meta = dcMessageMeta.get(dcMsgId);
+    if (!meta || meta.gameId !== gameId) {
+      await interaction.reply({ content: 'Invalid End Turn.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({ content: 'Only the player who finished that activation can end the turn.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const pending = game.pendingEndTurn?.[dcMsgId];
+    if (!pending) {
+      await interaction.reply({ content: 'This turn was already ended.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate();
+    const otherPlayerId = meta.playerNum === 1 ? game.player2Id : game.player1Id;
+    const otherPlayerNum = meta.playerNum === 1 ? 2 : 1;
+    game.dcFinishedPinged = game.dcFinishedPinged || {};
+    game.dcFinishedPinged[dcMsgId] = true;
+    delete game.pendingEndTurn[dcMsgId];
+    if (pending.messageId) {
+      try {
+        const ch = await client.channels.fetch(game.generalId);
+        const endTurnMsg = await ch.messages.fetch(pending.messageId);
+        await endTurnMsg.edit({ components: [] }).catch(() => {});
+      } catch {}
+    }
+    // Delete the DC activation thread
+    const actionsData = game.dcActionsData?.[dcMsgId];
+    if (actionsData?.threadId) {
+      try {
+        const thread = await client.channels.fetch(actionsData.threadId);
+        await thread.delete();
+      } catch (err) {
+        console.error('Failed to delete DC activation thread:', err);
+      }
+      if (game.dcActionsData?.[dcMsgId]) delete game.dcActionsData[dcMsgId];
+      if (game.movementBank?.[dcMsgId]) delete game.movementBank[dcMsgId];
+    }
+    // Update the DC card to show only Ready (remove Un-activate)
+    try {
+      const playAreaId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+      const playChannel = await client.channels.fetch(playAreaId);
+      const dcMsg = await playChannel.messages.fetch(dcMsgId);
+      const healthState = dcHealthState.get(dcMsgId) ?? [[null, null]];
+      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, meta.displayName, healthState);
+      await dcMsg.edit({
+        embeds: [embed],
+        files,
+        components: [new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`dc_toggle_${dcMsgId}`)
+            .setLabel('Ready')
+            .setStyle(ButtonStyle.Success)
+        )],
+      }).catch(() => {});
+    } catch (err) {
+      console.error('Failed to update DC card after End Turn:', err);
+    }
+    await logGameAction(game, client, `<@${otherPlayerId}> (**Player ${otherPlayerNum}'s turn**) **${pending.displayName}** finished all actions — your turn to activate a figure!`, {
+      allowedMentions: { users: [otherPlayerId] },
+      phase: 'ROUND',
+      icon: 'activate',
+    });
+    await maybeShowEndActivationPhaseButton(game, client);
+    saveGames();
+    return;
+  }
+
+  if (interaction.customId.startsWith('confirm_activate_')) {
+    const match = interaction.customId.match(/^confirm_activate_([^_]+)_(.+)_(\d+)$/);
+    if (!match) return;
+    const [, gameId, msgId, activateCardMsgIdStr] = match;
+    const activateCardMsgId = activateCardMsgIdStr === '0' ? null : activateCardMsgIdStr;
+    const game = games.get(gameId);
+    if (!game) return;
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta || meta.gameId !== gameId) return;
+    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) return;
+    const remaining = meta.playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
+    if (remaining <= 0) {
+      await interaction.reply({ content: 'No activations remaining.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate();
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    dcExhaustedState.set(msgId, true);
+    if (meta.playerNum === 1) {
+      game.p1ActivationsRemaining--;
+      const dcIndex = (game.p1DcMessageIds || []).indexOf(msgId);
+      if (dcIndex !== -1) { game.p1ActivatedDcIndices = game.p1ActivatedDcIndices || []; game.p1ActivatedDcIndices.push(dcIndex); }
+    } else {
+      game.p2ActivationsRemaining--;
+      const dcIndex = (game.p2DcMessageIds || []).indexOf(msgId);
+      if (dcIndex !== -1) { game.p2ActivatedDcIndices = game.p2ActivatedDcIndices || []; game.p2ActivatedDcIndices.push(dcIndex); }
+    }
+    await updateActivationsMessage(game, meta.playerNum, client);
+    const displayName = meta.displayName || meta.dcName;
+    const playAreaId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+    const playChannel = await client.channels.fetch(playAreaId);
+    const dcMsg = await playChannel.messages.fetch(msgId);
+    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, dcHealthState.get(msgId) ?? [[null, null]]);
+    await dcMsg.edit({ embeds: [embed], files, components: [getDcToggleButton(msgId, true)] });
+    const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
+    const thread = await dcMsg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
+    game.movementBank = game.movementBank || {};
+    game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
+    game.dcActionsData = game.dcActionsData || {};
+    game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id };
+    const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
+    const actionsMsg = await thread.send({
+      content: pingContent,
+      components: getDcActionButtons(msgId, meta.dcName, displayName, DC_ACTIONS_PER_ACTIVATION, game),
+      allowedMentions: { users: [ownerId] },
+    });
+    game.dcActionsData[msgId].messageId = actionsMsg.id;
+    const logCh = await client.channels.fetch(game.generalId);
+    const icon = ACTION_ICONS.activate || '⚡';
+    const pLabel = `P${meta.playerNum}`;
+    const logMsg = await logCh.send({
+      content: `${icon} <t:${Math.floor(Date.now() / 1000)}:t> — **${pLabel}:** <@${ownerId}> activated **${displayName}**!`,
+      allowedMentions: { users: [ownerId] },
+    });
+    game.dcActivationLogMessageIds = game.dcActivationLogMessageIds || {};
+    game.dcActivationLogMessageIds[msgId] = logMsg.id;
+    if (activateCardMsgId) {
+      try {
+        const activateCardMsg = await logCh.messages.fetch(activateCardMsgId);
+        const activateRows = getActivateDcButtons(game, meta.playerNum);
+        await activateCardMsg.edit({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch(() => {});
+      } catch {}
+    }
+    saveGames();
+    return;
+  }
+
+  if (interaction.customId.startsWith('cancel_activate_')) {
+    const match = interaction.customId.match(/^cancel_activate_([^_]+)_(.+)$/);
+    if (!match) return;
+    const [, gameId, ownerId] = match;
+    if (interaction.user.id !== ownerId) return;
+    await interaction.deferUpdate();
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    return;
+  }
+
+  if (interaction.customId.startsWith('do_not_retrieve_')) {
+    const match = interaction.customId.match(/^do_not_retrieve_([^_]+)_(.+)_f(\d+)$/);
+    if (!match) return;
+    const [, gameId, dcMsgId, figureIdxStr] = match;
+    const game = games.get(gameId);
+    if (!game) return;
+    const meta = dcMessageMeta.get(dcMsgId);
+    if (!meta || meta.gameId !== gameId) return;
+    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) return;
+    await interaction.deferUpdate();
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    return;
+  }
+
+  if (interaction.customId.startsWith('retrieve_contraband_')) {
+    const match = interaction.customId.match(/^retrieve_contraband_([^_]+)_(.+)_f(\d+)$/);
+    if (!match) return;
+    const [, gameId, dcMsgId, figureIdxStr] = match;
+    const figureIndex = parseInt(figureIdxStr, 10);
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const meta = dcMessageMeta.get(dcMsgId);
+    if (!meta || meta.gameId !== gameId) {
+      await interaction.reply({ content: 'Invalid.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (game.selectedMission?.variant !== 'b') {
+      await interaction.reply({ content: 'Mission B only.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({ content: 'Only the owner can retrieve contraband.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const dgIndex = (meta.displayName || '').match(/\[Group (\d+)\]/)?.[1] ?? 1;
+    const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+    if (game.figureContraband?.[figureKey]) {
+      await interaction.reply({ content: 'This figure is already carrying contraband.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const mapId = game.selectedMap?.id;
+    if (!mapId || !isFigureAdjacentOrOnContraband(game, meta.playerNum, figureKey, mapId)) {
+      await interaction.reply({ content: 'Figure must be on or adjacent to contraband.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate();
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    game.figureContraband = game.figureContraband || {};
+    game.figureContraband[figureKey] = true;
+    const actionsData = game.dcActionsData?.[dcMsgId];
+    if (actionsData?.messageId && actionsData?.threadId) {
+      try {
+        const thread = await client.channels.fetch(actionsData.threadId);
+        const msg = await thread.messages.fetch(actionsData.messageId);
+        const components = getDcActionButtons(dcMsgId, meta.dcName, meta.displayName, actionsData.remaining, game);
+        await msg.edit({ components }).catch(() => {});
+      } catch {}
+    }
+    const shortName = (meta.displayName || meta.dcName || '').replace(/\s*\[Group \d+\]$/, '') || meta.displayName;
+    const pLabel = `P${meta.playerNum}`;
+    await logGameAction(game, client, `**${pLabel}: ${shortName}** retrieved contraband!`, { phase: 'ROUND', icon: 'deploy' });
+    saveGames();
     return;
   }
 
@@ -3962,7 +4648,7 @@ client.on('interactionCreate', async (interaction) => {
     game.initiativePlayerId = winner;
     game.initiativeDetermined = true;
     await interaction.deferUpdate();
-    await interaction.message.edit({ components: [getDetermineInitiativeButtons(game)] }).catch(() => {});
+    await clearPreGameSetup(game, client);
     await logGameAction(game, client, `<@${winner}> (**Player ${playerNum}**) won initiative! Chooses deployment zone and activates first each round.`, { allowedMentions: { users: [winner] }, phase: 'INITIATIVE', icon: 'initiative' });
     const generalChannel = await client.channels.fetch(game.generalId);
     const zoneMsg = await generalChannel.send({
@@ -3971,14 +4657,6 @@ client.on('interactionCreate', async (interaction) => {
       components: [getDeploymentZoneButtons(gameId)],
     });
     game.deploymentZoneMessageId = zoneMsg.id;
-    if (game.generalSetupMessageId) {
-      try {
-        const setupMsg = await generalChannel.messages.fetch(game.generalSetupMessageId);
-        await setupMsg.edit({ components: [getGeneralSetupButtons(game)] });
-      } catch (err) {
-        console.error('Failed to remove Determine Initiative button:', err);
-      }
-    }
     saveGames();
     return;
   }
@@ -4477,9 +5155,10 @@ client.on('interactionCreate', async (interaction) => {
         .setLabel('End R1 Activation Phase')
         .setStyle(ButtonStyle.Secondary)
     )] : [];
+    const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
     const content = showBtn
-      ? `<@${game.initiativePlayerId}> **Both players have deployed.** Your turn! Both players: click **End R1 Activation Phase** when you've used all activations and any end-of-activation effects.`
-      : `<@${game.initiativePlayerId}> **Both players have deployed.** Your turn! Use all activations and actions. The **End R1 Activation Phase** button will appear when both players have done so.`;
+      ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Both players have deployed.** Your turn! Both players: click **End R1 Activation Phase** when you've used all activations and any end-of-activation effects.`
+      : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Both players have deployed.** Your turn! Use all activations and actions. The **End R1 Activation Phase** button will appear when both players have done so.`;
     const sent = await generalChannel.send({
       content,
       embeds: [roundEmbed],
@@ -4488,6 +5167,7 @@ client.on('interactionCreate', async (interaction) => {
     });
     game.roundActivationMessageId = sent.id;
     game.roundActivationButtonShown = showBtn;
+    await clearPreGameSetup(game, client);
     try {
       const p1HandChannel = await client.channels.fetch(game.p1HandId);
       const p2HandChannel = await client.channels.fetch(game.p2HandId);
@@ -4626,6 +5306,111 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  if (interaction.customId.startsWith('cc_search_discard_')) {
+    const match = interaction.customId.match(/^cc_search_discard_([^_]+)_(\d+)$/);
+    if (!match) return;
+    const [, gameId, playerNumStr] = match;
+    const playerNum = parseInt(playerNumStr, 10);
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const channelId = interaction.channel?.id;
+    const isP1Area = channelId === game.p1PlayAreaId;
+    const isP2Area = channelId === game.p2PlayAreaId;
+    if ((!isP1Area && !isP2Area) || (isP1Area && playerNum !== 1) || (isP2Area && playerNum !== 2)) {
+      await interaction.reply({ content: 'Use this in your Play Area.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== playerId) {
+      await interaction.reply({ content: 'Only the owner of this Play Area can search their discard pile.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const existingThreadId = playerNum === 1 ? game.p1DiscardThreadId : game.p2DiscardThreadId;
+    if (existingThreadId) {
+      try {
+        const existing = await client.channels.fetch(existingThreadId);
+        if (existing) {
+          await interaction.reply({ content: 'Discard pile thread is already open. Close it first.', ephemeral: true }).catch(() => {});
+          return;
+        }
+      } catch { /* thread was deleted */ }
+      if (playerNum === 1) delete game.p1DiscardThreadId;
+      else delete game.p2DiscardThreadId;
+    }
+    await interaction.deferUpdate();
+    const discard = playerNum === 1 ? (game.player1CcDiscard || []) : (game.player2CcDiscard || []);
+    const threadName = `Discard Pile (${discard.length} cards)`;
+    const thread = await interaction.message.startThread({
+      name: threadName.slice(0, 100),
+      autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+    });
+    if (playerNum === 1) game.p1DiscardThreadId = thread.id;
+    else game.p2DiscardThreadId = thread.id;
+    const chunks = buildDiscardPileDisplayPayload(discard);
+    const closeRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`cc_close_discard_${gameId}_${playerNum}`)
+        .setLabel('Close Discard Pile')
+        .setStyle(ButtonStyle.Danger)
+    );
+    if (chunks.length === 0) {
+      await thread.send({
+        content: 'Discard pile is empty.',
+        embeds: [new EmbedBuilder().setTitle('Command Cards in Discard Pile').setDescription('*Empty*').setColor(0x2f3136)],
+        components: [closeRow],
+      });
+    } else {
+      for (let i = 0; i < chunks.length; i++) {
+        const isLast = i === chunks.length - 1;
+        await thread.send({
+          embeds: chunks[i].embeds,
+          files: chunks[i].files,
+          components: isLast ? [closeRow] : [],
+        });
+      }
+    }
+    await updateDiscardPileMessage(game, playerNum, client);
+    saveGames();
+    return;
+  }
+
+  if (interaction.customId.startsWith('cc_close_discard_')) {
+    const match = interaction.customId.match(/^cc_close_discard_([^_]+)_(\d+)$/);
+    if (!match) return;
+    const [, gameId, playerNumStr] = match;
+    const playerNum = parseInt(playerNumStr, 10);
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const threadId = playerNum === 1 ? game.p1DiscardThreadId : game.p2DiscardThreadId;
+    if (!threadId) {
+      await interaction.reply({ content: 'No discard pile thread is open.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== playerId) {
+      await interaction.reply({ content: 'Only the owner can close the discard pile thread.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate();
+    try {
+      const thread = await client.channels.fetch(threadId);
+      await thread.delete();
+    } catch (err) {
+      console.error('Failed to delete discard pile thread:', err);
+    }
+    if (playerNum === 1) delete game.p1DiscardThreadId;
+    else delete game.p2DiscardThreadId;
+    await updateDiscardPileMessage(game, playerNum, client);
+    saveGames();
+    return;
+  }
+
   if (interaction.customId.startsWith('cc_discard_')) {
     const gameId = interaction.customId.replace('cc_discard_', '');
     const game = games.get(gameId);
@@ -4671,11 +5456,20 @@ client.on('interactionCreate', async (interaction) => {
     }
     await interaction.deferReply({ ephemeral: true });
     try {
-      const categoryId = interaction.channel.parentId;
-      const category = await interaction.guild.channels.fetch(categoryId);
-      const children = interaction.guild.channels.cache.filter((c) => c.parentId === categoryId);
+      let categoryId = game.gameCategoryId;
+      if (!categoryId) {
+        const generalCh = await client.channels.fetch(game.generalId).catch(() => null);
+        categoryId = generalCh?.parentId;
+      }
+      if (!categoryId) {
+        await interaction.editReply({ content: 'Could not find game category.' });
+        return;
+      }
+      const guild = interaction.guild;
+      const category = await guild.channels.fetch(categoryId);
+      const children = guild.channels.cache.filter((c) => c.parentId === categoryId);
       for (const ch of children.values()) {
-        await ch.delete();
+        await ch.delete().catch(() => {});
       }
       await category.delete();
       games.delete(gameId);
@@ -4896,7 +5690,7 @@ client.on('interactionCreate', async (interaction) => {
       game.generalSetupMessageId = setupMsg.id;
       const undoMsg = await generalChannel.send({
         content: '**Game Controls**',
-        components: [new ActionRowBuilder().addComponents(getUndoButton(gameId))],
+        components: [new ActionRowBuilder().addComponents(getUndoButton(gameId), new ButtonBuilder().setCustomId(`kill_game_${gameId}`).setLabel('Kill Game (testing)').setStyle(ButtonStyle.Danger))],
       });
       game.undoMessageId = undoMsg.id;
       await interaction.followUp({

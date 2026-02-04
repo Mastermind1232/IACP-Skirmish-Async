@@ -17,7 +17,7 @@ Place **terminals**, **Mission A tokens** (launch panels for Get to the Ship), a
 
 The map renderer uses actual game box token images from `vassal_extracted/images/`:
 - **Terminals** — `Counter--Terminal Blue.gif`
-- **Mission A (launch panels)** — `Mission Token--Neutral Blue.gif`
+- **Mission A (launch panels)** — `Mission Token--Neutral GRAY.gif` (gray side up at setup; flipped to blue when claimed)
 - **Mission B (contraband)** — `Counter--Crate Blue.gif`
 
 Token images are configured in `data/token-images.json`.
