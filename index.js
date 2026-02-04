@@ -1182,6 +1182,12 @@ const client = new Client({
 });
 
 const lobbies = new Map();
+/** Thread IDs we've already sent the lobby embed for (prevents duplicate embeds from race conditions). */
+const lobbyEmbedSent = new Set();
+/** User IDs currently creating a test game (prevents duplicate creation from double-send or double-click). */
+const testGameCreationInProgress = new Set();
+/** Message IDs we've already handled for testgame (prevents duplicate from Discord firing messageCreate twice). */
+const processedTestGameMessageIds = new Set();
 const games = new Map(); // gameId -> { ..., p1ActivationsMessageId, p2ActivationsMessageId, p1ActivationsRemaining, p2ActivationsRemaining, p1ActivationsTotal, p2ActivationsTotal }
 let gameIdCounter = 1;
 
@@ -2330,27 +2336,40 @@ async function replyIfGameEnded(game, interaction) {
   return false;
 }
 
-/** Build Scorecard embed with VP breakdown per player. */
-function buildScorecardEmbed(game) {
+/** Build Scorecard embed with VP breakdown per player. Optionally shows initiative and uses initiative token as thumbnail. */
+function buildScorecardEmbed(game, initiativeTokenAttached = false) {
   const vp1 = game.player1VP || { total: 0, kills: 0, objectives: 0 };
   const vp2 = game.player2VP || { total: 0, kills: 0, objectives: 0 };
-  return new EmbedBuilder()
-    .setTitle('Scorecard')
-    .setColor(0x2f3136)
-    .addFields(
-      { name: 'Player 1', value: `<@${game.player1Id}>`, inline: true },
-      { name: 'Player 2', value: `<@${game.player2Id}>`, inline: true },
-      { name: '\u200b', value: '\u200b', inline: true },
-      { name: 'Total VP', value: `${vp1.total}`, inline: true },
-      { name: 'Total VP', value: `${vp2.total}`, inline: true },
-      { name: '\u200b', value: '\u200b', inline: true },
-      { name: 'Kills', value: `${vp1.kills}`, inline: true },
-      { name: 'Kills', value: `${vp2.kills}`, inline: true },
-      { name: '\u200b', value: '\u200b', inline: true },
-      { name: 'Objectives', value: `${vp1.objectives}`, inline: true },
-      { name: 'Objectives', value: `${vp2.objectives}`, inline: true },
+  const p1HasInitiative = game.initiativeDetermined && game.initiativePlayerId === game.player1Id;
+  const p2HasInitiative = game.initiativeDetermined && game.initiativePlayerId === game.player2Id;
+
+  const fields = [
+    { name: 'Player 1', value: `<@${game.player1Id}>`, inline: true },
+    { name: 'Player 2', value: `<@${game.player2Id}>`, inline: true },
+    { name: '\u200b', value: '\u200b', inline: true },
+    { name: 'Total VP', value: `${vp1.total}`, inline: true },
+    { name: 'Total VP', value: `${vp2.total}`, inline: true },
+    { name: '\u200b', value: '\u200b', inline: true },
+    { name: 'Kills', value: `${vp1.kills}`, inline: true },
+    { name: 'Kills', value: `${vp2.kills}`, inline: true },
+    { name: '\u200b', value: '\u200b', inline: true },
+    { name: 'Objectives', value: `${vp1.objectives}`, inline: true },
+    { name: 'Objectives', value: `${vp2.objectives}`, inline: true },
+    { name: '\u200b', value: '\u200b', inline: true },
+  ];
+  if (game.initiativeDetermined) {
+    fields.push(
+      { name: 'Initiative', value: p1HasInitiative ? '●' : '—', inline: true },
+      { name: '\u200b', value: p2HasInitiative ? '●' : '—', inline: true },
       { name: '\u200b', value: '\u200b', inline: true }
     );
+  }
+
+  const embed = new EmbedBuilder().setTitle('Scorecard').setColor(0x2f3136).addFields(fields);
+  if (game.initiativeDetermined && initiativeTokenAttached) {
+    embed.setThumbnail('attachment://initiative-token.gif');
+  }
+  return embed;
 }
 
 /** Refresh all game components with latest data (DC stats, CC images, etc.). Reloads JSON data first. */
@@ -2409,7 +2428,17 @@ async function refreshAllGameComponents(game, client) {
 /** Returns { content, files?, embeds?, components } for posting the game map. Includes Scorecard embed. */
 async function buildBoardMapPayload(gameId, map, game) {
   const components = [getBoardButtons(gameId)];
-  const embeds = game ? [buildScorecardEmbed(game)] : [];
+  const initiativeTokenPath = game?.initiativeDetermined
+    ? (() => {
+        const p = resolveAssetPath('Initiative Token.gif', 'tokens');
+        return p ? join(rootDir, p) : null;
+      })()
+    : null;
+  const initiativeAttachment =
+    initiativeTokenPath && existsSync(initiativeTokenPath)
+      ? [new AttachmentBuilder(initiativeTokenPath, { name: 'initiative-token.gif' })]
+      : [];
+  const embeds = game ? [buildScorecardEmbed(game, initiativeAttachment.length > 0)] : [];
   const figures = game ? getFiguresForRender(game) : [];
   const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant);
   const hasFigures = figures.length > 0;
@@ -2424,7 +2453,7 @@ async function buildBoardMapPayload(gameId, map, game) {
       const buffer = await renderMap(map.id, { figures, tokens, showGrid: false, maxWidth: 1200 });
       return {
         content: `**Game map: ${map.name}** — Refresh to update figure positions.`,
-        files: [new AttachmentBuilder(buffer, { name: 'map-with-figures.png' })],
+        files: [new AttachmentBuilder(buffer, { name: 'map-with-figures.png' }), ...initiativeAttachment],
         embeds,
         components,
         allowedMentions,
@@ -2436,7 +2465,7 @@ async function buildBoardMapPayload(gameId, map, game) {
   if (existsSync(pdfPath)) {
     return {
       content: `**Game map: ${map.name}** (high-res PDF)`,
-      files: [new AttachmentBuilder(pdfPath, { name: `${map.id}.pdf` })],
+      files: [new AttachmentBuilder(pdfPath, { name: `${map.id}.pdf` }), ...initiativeAttachment],
       embeds,
       components,
       allowedMentions,
@@ -2445,7 +2474,10 @@ async function buildBoardMapPayload(gameId, map, game) {
   if (imagePath && existsSync(imagePath)) {
     return {
       content: `**Game map: ${map.name}** *(Add \`data/map-pdfs/${map.id}.pdf\` for high-res PDF)*`,
-      files: [new AttachmentBuilder(imagePath, { name: `map.${(map.imagePath || '').split('.').pop() || 'gif'}` })],
+      files: [
+        new AttachmentBuilder(imagePath, { name: `map.${(map.imagePath || '').split('.').pop() || 'gif'}` }),
+        ...initiativeAttachment,
+      ],
       embeds,
       components,
       allowedMentions,
@@ -2453,6 +2485,7 @@ async function buildBoardMapPayload(gameId, map, game) {
   }
   return {
     content: `**Game map: ${map.name}** — Add high-res PDF at \`data/map-pdfs/${map.id}.pdf\` to display it here.`,
+    files: initiativeAttachment.length > 0 ? initiativeAttachment : undefined,
     embeds,
     components,
     allowedMentions,
@@ -3586,7 +3619,9 @@ async function maybeSetupLobbyFromFirstMessage(message) {
   if (!thread?.isThread?.()) return false;
   const parent = thread.parent;
   if (parent?.name !== 'new-games') return false;
-  if (lobbies.has(thread.id)) return false;
+  // Guard against duplicates: claim synchronously before any await (prevents race when two messages fire)
+  if (lobbies.has(thread.id) || lobbyEmbedSent.has(thread.id)) return false;
+  lobbyEmbedSent.add(thread.id);
   const creator = message.author.id;
   const lobby = { creatorId: creator, joinedId: null, status: 'LFG' };
   lobbies.set(thread.id, lobby);
@@ -3633,7 +3668,16 @@ client.on('messageCreate', async (message) => {
   const content = message.content.toLowerCase().trim();
 
   if (content === 'testgame' && message.channel?.name === 'lfg') {
+    const msgId = message.id;
+    if (processedTestGameMessageIds.has(msgId)) return; // dedupe: Discord sometimes fires messageCreate twice
+    processedTestGameMessageIds.add(msgId);
+    if (processedTestGameMessageIds.size > 500) processedTestGameMessageIds.clear();
     const userId = message.author.id;
+    if (testGameCreationInProgress.has(userId)) {
+      await message.reply('A test game is already being created. Please wait.');
+      return;
+    }
+    testGameCreationInProgress.add(userId);
     const creatingMsg = await message.reply('Creating test game (you as both players)...');
     try {
       const guild = message.guild;
@@ -3679,6 +3723,8 @@ client.on('messageCreate', async (message) => {
     } catch (err) {
       console.error('Test game creation error:', err);
       await creatingMsg.edit(`Failed to create test game: ${err.message}`).catch(() => {});
+    } finally {
+      testGameCreationInProgress.delete(userId);
     }
     return;
   }
