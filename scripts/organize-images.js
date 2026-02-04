@@ -9,7 +9,8 @@
  *   maps/         - Map images (Map_*)
  *   mission-cards/- Mission cards (SkMission Card--*)
  *   conditions/   - Condition cards and markers (Condition card--*, Condition Marker--*)
- *   companions/   - Companion cards and tokens (Companion Card--*, Companion Token--*, Companion cardback*)
+ *   companions/   - Companion cards and tokens (Companion Card--*, Companion Token--*)
+ *   cardbacks/    - All cardbacks (Command, Deployment, Companion, Mission, Shape, etc.)
  * Run: node scripts/organize-images.js
  * Safe to run multiple times (skips already-moved files).
  */
@@ -22,7 +23,7 @@ const root = join(__dirname, '..');
 const imagesDir = join(root, 'vassal_extracted', 'images');
 
 const SUBFOLDERS = {
-  cc: ['C card--', 'IACP_C card--', 'IACP9_C card--', 'IACP11_C card--', 'Command cardback'],
+  cc: ['C card--', 'IACP_C card--', 'IACP9_C card--', 'IACP11_C card--'],
   'dc-figures': [], // populated by dc-images (non-bracket keys)
   'dc-figureless': [], // populated by dc-images (bracket keys)
   figures: ['Figure-'],
@@ -30,7 +31,8 @@ const SUBFOLDERS = {
   maps: ['Map_'],
   'mission-cards': ['SkMission Card--', 'SkMission card--'],
   conditions: ['Condition card--', 'Condition Marker--'],
-  companions: ['Companion Card--', 'Companion Token--', 'Companion cardback'],
+  companions: ['Companion Card--', 'Companion Token--'],
+  cardbacks: ['cardback'],
 };
 
 function loadFigurelessDcFilenames() {
@@ -51,6 +53,7 @@ function loadFigurelessDcFilenames() {
 }
 
 function getDestSubfolder(filename, figurelessFilenames) {
+  if (filename.toLowerCase().includes('cardback')) return 'cardbacks';
   if (SUBFOLDERS.cc.some((p) => filename.startsWith(p))) return 'cc';
   if (SUBFOLDERS.maps.some((p) => filename.startsWith(p))) return 'maps';
   if (SUBFOLDERS['mission-cards'].some((p) => filename.startsWith(p))) return 'mission-cards';
@@ -86,7 +89,7 @@ function main() {
   }
 
   const figurelessFilenames = loadFigurelessDcFilenames();
-  const dirs = ['cc', 'dc-figures', 'dc-figureless', 'figures', 'tokens', 'maps', 'mission-cards', 'conditions', 'companions'];
+  const dirs = ['cc', 'dc-figures', 'dc-figureless', 'figures', 'tokens', 'maps', 'mission-cards', 'conditions', 'companions', 'cardbacks'];
   for (const d of dirs) {
     const p = join(imagesDir, d);
     if (!existsSync(p)) mkdirSync(p, { recursive: true });
@@ -97,7 +100,7 @@ function main() {
 
   const seen = new Set();
 
-  for (const subdir of ['', 'cc', 'dc', 'conditions', 'companions']) {
+  for (const subdir of ['', 'cc', 'dc', 'conditions', 'companions', 'cardbacks']) {
     const scanDir = subdir ? join(imagesDir, subdir) : imagesDir;
     if (!existsSync(scanDir)) continue;
 

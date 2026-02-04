@@ -1391,7 +1391,7 @@ function getCcActionButtons(gameId, hand = [], deck = []) {
 
 const IMAGES_DIR = join(rootDir, 'vassal_extracted', 'images');
 const CC_DIR = join(IMAGES_DIR, 'cc');
-const COMMAND_CARDBACK_PATH = join(IMAGES_DIR, 'Command cardback.jpg');
+const CARDBACKS_DIR = join(IMAGES_DIR, 'cardbacks');
 
 /** Resolve command card image path. Looks in cc/ subfolder first, then root. Tries C card--Name, IACP variants. Returns cardback path if not found. */
 function getCommandCardImagePath(cardName) {
@@ -1412,9 +1412,14 @@ function getCommandCardImagePath(cardName) {
     const inRoot = join(IMAGES_DIR, c);
     if (existsSync(inRoot)) return inRoot;
   }
-  const cardbackInCc = join(CC_DIR, 'Command cardback.jpg');
-  if (existsSync(cardbackInCc)) return cardbackInCc;
-  if (existsSync(COMMAND_CARDBACK_PATH)) return COMMAND_CARDBACK_PATH;
+  const cardbackCandidates = [
+    join(CARDBACKS_DIR, 'Command cardback.jpg'),
+    join(CC_DIR, 'Command cardback.jpg'),
+    join(IMAGES_DIR, 'Command cardback.jpg'),
+  ];
+  for (const p of cardbackCandidates) {
+    if (existsSync(p)) return p;
+  }
   return null;
 }
 
