@@ -97,7 +97,7 @@ function parseCoord(coord) {
 }
 
 export async function renderMap(mapId, options = {}) {
-  const { figures = [], tokens = {}, showGrid = true, maxWidth = 1200, cropToZone = null, gridStyle = 'default' } = options;
+  const { figures = [], tokens = {}, showGrid = true, maxWidth = 1200, cropToZone = null, gridStyle = 'default', showGridOnlyOnCoords = null } = options;
   const mapDef = getMap(mapId);
   if (!mapDef) throw new Error(`Map not found: ${mapId}`);
 
@@ -147,6 +147,9 @@ export async function renderMap(mapId, options = {}) {
 
   if (showGrid) {
     const useBlackGrid = gridStyle === 'black';
+    const coordFilter = showGridOnlyOnCoords
+      ? new Set((Array.isArray(showGridOnlyOnCoords) ? showGridOnlyOnCoords : []).map((c) => String(c).toLowerCase()))
+      : null;
     ctx.fillStyle = useBlackGrid ? '#000000' : 'rgba(0,0,0,0.7)';
     ctx.strokeStyle = useBlackGrid ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.9)';
     ctx.lineWidth = useBlackGrid ? 2.5 : 2;
@@ -157,6 +160,8 @@ export async function renderMap(mapId, options = {}) {
     for (let row = 0; row < numRows; row++) {
       for (let col = 0; col < numCols; col++) {
         const label = colToLetter(col) + (row + 1);
+        const coordKey = label.toLowerCase();
+        if (coordFilter && !coordFilter.has(coordKey)) continue;
         const cx = sx0 + col * sdx + sdx / 2;
         const cy = sy0 + row * sdy + sdy / 2;
         ctx.strokeText(label, cx, cy);

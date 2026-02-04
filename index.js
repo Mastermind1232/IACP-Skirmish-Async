@@ -2317,6 +2317,11 @@ async function getDeploymentMapAttachment(game, zone) {
     const figures = getFiguresForRender(game);
     const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant);
     const zoneSpaces = zone && deploymentZones[map.id]?.[zone] ? deploymentZones[map.id][zone] : null;
+    const occupiedSet = toLowerSet(getOccupiedSpacesForMovement(game) || []);
+    const validLabelCoords =
+      zoneSpaces && zoneSpaces.length > 0
+        ? zoneSpaces.filter((c) => !occupiedSet.has(String(c).toLowerCase()))
+        : null;
     const buffer = await renderMap(map.id, {
       figures,
       tokens,
@@ -2324,6 +2329,7 @@ async function getDeploymentMapAttachment(game, zone) {
       maxWidth: 900,
       cropToZone: zoneSpaces && zoneSpaces.length > 0 ? zoneSpaces : null,
       gridStyle: 'black',
+      showGridOnlyOnCoords: validLabelCoords && validLabelCoords.length > 0 ? validLabelCoords : null,
     });
     return new AttachmentBuilder(buffer, { name: 'deployment-zone.png' });
   } catch (err) {
