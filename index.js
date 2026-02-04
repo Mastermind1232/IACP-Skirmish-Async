@@ -2262,13 +2262,20 @@ function getFiguresForRender(game) {
       const m = figureKey.match(/-(\d+)-(\d+)$/);
       const dgIndex = m ? parseInt(m[1], 10) : 1;
       const figureIndex = m ? parseInt(m[2], 10) : 0;
-      const figureCount = getDcStats(dcName).figures ?? 1;
+      let figureCount = getDcStats(dcName).figures ?? 1;
+      if (figureCount <= 1 && dcName) {
+        const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+        const key = Object.keys(dcStats || {}).find(
+          (k) => k.toLowerCase().startsWith(base.toLowerCase() + ' ') || k.toLowerCase() === base.toLowerCase()
+        );
+        if (key) figureCount = dcStats[key]?.figures ?? figureCount;
+      }
       const dcCopies = totals[dcName] ?? 1;
       let label = null;
-      if (dcCopies > 1) {
-        label = figureCount > 1 ? `${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : String(dgIndex);
-      } else if (figureCount > 1) {
+      if (figureCount > 1 || figureIndex > 0) {
         label = `${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}`;
+      } else if (dcCopies > 1) {
+        label = String(dgIndex);
       }
       const imagePath = getFigureImagePath(dcName);
       const baseSize = getFigureSize(dcName);
@@ -2377,8 +2384,8 @@ function buildScorecardEmbed(game) {
   ];
   if (game.initiativeDetermined) {
     const initiativeValue = p1HasInitiative
-      ? '●  P1 has the initiative!             ●'
-      : '●                                                ● P2 has the initiative!';
+      ? `● P1 <@${game.player1Id}> has the initiative!`
+      : `● P2: <@${game.player2Id}> has the initiative!`;
     fields.push({ name: 'Initiative', value: initiativeValue, inline: false });
   }
 
