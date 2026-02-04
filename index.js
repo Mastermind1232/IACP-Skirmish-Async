@@ -498,7 +498,7 @@ function evaluateMovementStep(current, neighbor, board, profile) {
 
 function computeMovementCache(startCoord, mpLimit, board, profile) {
   const startTopLeft = normalizeCoord(startCoord);
-  if (!board?.spacesSet?.has(startTopLeft)) return { nodes: new Map(), cells: new Map(), maxMp: mpLimit };
+  if (!board?.spacesSet?.has(startTopLeft)) return { nodes: new Map(), cells: new Map(), parent: new Map(), maxMp: mpLimit };
   const startKey = movementStateKey(startTopLeft, profile.size);
   const queue = [
     {
@@ -512,6 +512,7 @@ function computeMovementCache(startCoord, mpLimit, board, profile) {
   const bestCost = new Map([[startKey, 0]]);
   const nodes = new Map();
   const cells = new Map();
+  const parent = new Map();
   while (queue.length > 0) {
     queue.sort((a, b) => a.cost - b.cost);
     const current = queue.shift();
@@ -542,6 +543,7 @@ function computeMovementCache(startCoord, mpLimit, board, profile) {
       const neighborKey = movementStateKey(neighbor.topLeft, neighbor.size);
       if (bestCost.has(neighborKey) && bestCost.get(neighborKey) <= newCost) continue;
       bestCost.set(neighborKey, newCost);
+      parent.set(neighborKey, current.key);
       queue.push({
         key: neighborKey,
         topLeft: neighbor.topLeft,
@@ -551,7 +553,7 @@ function computeMovementCache(startCoord, mpLimit, board, profile) {
       });
     }
   }
-  return { nodes, cells, maxMp: mpLimit };
+  return { nodes, cells, parent, maxMp: mpLimit };
 }
 
 function getSpacesAtCost(cache, mpCost) {
@@ -564,6 +566,23 @@ function getSpacesAtCost(cache, mpCost) {
 
 function getMovementTarget(cache, coord) {
   return cache.cells.get(normalizeCoord(coord)) || null;
+}
+
+/** Returns path of coords from start to dest (including both), or empty array if unreachable. */
+function getMovementPath(cache, startCoord, destTopLeft, destSize, profile) {
+  if (!cache?.parent) return [];
+  const startKey = movementStateKey(normalizeCoord(startCoord), profile.size);
+  const destKey = movementStateKey(normalizeCoord(destTopLeft), destSize || profile.size);
+  const path = [];
+  let key = destKey;
+  while (key) {
+    const node = cache.nodes.get(key);
+    if (!node) break;
+    path.unshift(node.topLeft);
+    if (key === startKey) break;
+    key = cache.parent.get(key);
+  }
+  return path;
 }
 
 function ensureMovementCache(moveState, startCoord, mpLimit, board, profile) {
@@ -2041,6 +2060,7 @@ async function runDraftRandom(game, client) {
   });
   game.roundActivationMessageId = sent.id;
   game.roundActivationButtonShown = showBtn;
+  game.currentActivationTurnPlayerId = game.initiativePlayerId;
   await clearPreGameSetup(game, client);
   saveGames();
 }
@@ -3202,8 +3222,9 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'DC message not found.', ephemeral: true }).catch(() => {});
       return;
     }
-    const isInitiative = ownerId === game.initiativePlayerId;
-    if (!isInitiative) {
+    const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
+    const isMyTurn = ownerId === turnPlayerId;
+    if (!isMyTurn) {
       await interaction.deferUpdate().catch(() => {});
       const playAreaCh = await client.channels.fetch(playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
       const promptRow = new ActionRowBuilder().addComponents(
@@ -3350,8 +3371,9 @@ client.on('interactionCreate', async (interaction) => {
 
     // When going ready → exhausted, that uses an activation and starts the action thread
     if (!wasExhausted && nowExhausted) {
-      const isInitiative = playerId === game.initiativePlayerId;
-      if (!isInitiative) {
+      const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
+      const isMyTurn = playerId === turnPlayerId;
+      if (!isMyTurn) {
         await interaction.deferUpdate().catch(() => {});
         const playAreaCh = await client.channels.fetch(meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
         const promptRow = new ActionRowBuilder().addComponents(
@@ -3843,7 +3865,11 @@ client.on('interactionCreate', async (interaction) => {
     const destDisplay = space.toUpperCase();
     const shortName = (displayName || meta.displayName || '').replace(/\s*\[Group \d+\]$/, '') || displayName;
     const pLabel = `P${playerNum}`;
-    await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** to **${destDisplay}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
+    const path = getMovementPath(cache, startCoord, newTopLeft, newSize, profile);
+    const pathStr = path.length > 1
+      ? ` (path: ${path.map((c) => String(c).toUpperCase()).join(' → ')})`
+      : '';
+    await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** to **${destDisplay}**${pathStr}`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
     const terminalsAfter = mapId ? countTerminalsControlledByPlayer(game, playerNum, mapId) : 0;
     if (terminalsAfter > terminalsBefore) {
       await logGameAction(game, client, `**${pLabel}: ${shortName}** has taken control of a terminal!`, { phase: 'ROUND', icon: 'deploy' });
@@ -4189,6 +4215,7 @@ client.on('interactionCreate', async (interaction) => {
     });
     game.roundActivationMessageId = sent.id;
     game.roundActivationButtonShown = showBtn;
+    game.currentActivationTurnPlayerId = game.initiativePlayerId;
     await interaction.message.edit({ components: [] }).catch(() => {});
     saveGames();
     return;
@@ -4383,6 +4410,7 @@ client.on('interactionCreate', async (interaction) => {
     } catch (err) {
       console.error('Failed to update DC card after End Turn:', err);
     }
+    game.currentActivationTurnPlayerId = otherPlayerId;
     await logGameAction(game, client, `<@${otherPlayerId}> (**Player ${otherPlayerNum}'s turn**) **${pending.displayName}** finished all actions — your turn to activate a figure!`, {
       allowedMentions: { users: [otherPlayerId] },
       phase: 'ROUND',
@@ -5167,6 +5195,7 @@ client.on('interactionCreate', async (interaction) => {
     });
     game.roundActivationMessageId = sent.id;
     game.roundActivationButtonShown = showBtn;
+    game.currentActivationTurnPlayerId = game.initiativePlayerId;
     await clearPreGameSetup(game, client);
     try {
       const p1HandChannel = await client.channels.fetch(game.p1HandId);
