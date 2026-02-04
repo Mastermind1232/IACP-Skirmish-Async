@@ -487,6 +487,10 @@ function getBoardStateForMovement(game, excludeFigureKey = null) {
   const movementBlockingSet = new Set(
     (mapSpaces.movementBlockingEdges || []).map((edge) => edgeKey(edge[0], edge[1]))
   );
+  // Hard walls (impassableEdges) also block movement — cannot cross them
+  for (const edge of mapSpaces.impassableEdges || []) {
+    if (edge?.length >= 2) movementBlockingSet.add(edgeKey(edge[0], edge[1]));
+  }
   const mapData = mapTokensData[game.selectedMap.id];
   const openedSet = new Set((game.openedDoors || []).map((k) => String(k).toLowerCase()));
   for (const edge of mapData?.doors || []) {
@@ -569,6 +573,9 @@ function buildTempBoardState(mapSpaces, occupiedSet, hostileOccupiedSet = null) 
   const movementBlockingSet = new Set(
     (mapSpaces.movementBlockingEdges || []).map((edge) => edgeKey(edge[0], edge[1]))
   );
+  for (const edge of mapSpaces.impassableEdges || []) {
+    if (edge?.length >= 2) movementBlockingSet.add(edgeKey(edge[0], edge[1]));
+  }
   const board = {
     mapSpaces,
     adjacency,
@@ -5161,6 +5168,18 @@ client.on('interactionCreate', async (interaction) => {
     const pathStr = path.length > 1
       ? ` (path: ${path.map((c) => String(c).toUpperCase()).join(' → ')})`
       : '';
+    pushUndo(game, {
+      type: 'move',
+      gameId: game.gameId,
+      playerNum,
+      figureKey,
+      msgId,
+      figureIndex,
+      previousTopLeft: startCoord,
+      previousSize: storedSize,
+      mpRemainingBefore: mpRemaining,
+      displayName: (displayName || meta.displayName || '').replace(/\s*\[Group \d+\]$/, '') || meta.dcName || figureKey,
+    });
     await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** to **${destDisplay}**${pathStr}`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
     const terminalsAfter = mapId ? countTerminalsControlledByPlayer(game, playerNum, mapId) : 0;
     if (terminalsAfter > terminalsBefore) {
@@ -6339,8 +6358,37 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Nothing to undo yet.', ephemeral: true }).catch(() => {});
       return;
     }
+    if (last.type === 'move') {
+      if (game.figurePositions?.[last.playerNum]) {
+        game.figurePositions[last.playerNum][last.figureKey] = last.previousTopLeft;
+      }
+      if (last.previousSize && game.figureOrientations) {
+        game.figureOrientations[last.figureKey] = last.previousSize;
+      }
+      const moveKey = `${last.msgId}_${last.figureIndex}`;
+      delete game.moveInProgress?.[moveKey];
+      if (game.movementBank?.[last.msgId] != null && last.mpRemainingBefore != null) {
+        game.movementBank[last.msgId].remaining = last.mpRemainingBefore;
+        try {
+          await updateMovementBankMessage(game, last.msgId, client);
+        } catch (e) { /* ignore */ }
+      }
+      if (game.boardId && game.selectedMap) {
+        try {
+          const boardChannel = await client.channels.fetch(game.boardId);
+          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
+        } catch (err) {
+          console.error('Failed to update map after undo move:', err);
+        }
+      }
+      await logGameAction(game, client, `<@${interaction.user.id}> undid movement of **${last.displayName}** (back to **${String(last.previousTopLeft).toUpperCase()}**)`, { allowedMentions: { users: [interaction.user.id] }, phase: 'ROUND', icon: 'move' });
+      saveGames();
+      await interaction.reply({ content: 'Movement undone.', ephemeral: true }).catch(() => {});
+      return;
+    }
     if (game.currentRound) {
-      await interaction.reply({ content: 'Undo is only available during deployment.', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: 'Undo is only available during deployment for that action.', ephemeral: true }).catch(() => {});
       return;
     }
     if (last.type === 'deploy_pick') {
