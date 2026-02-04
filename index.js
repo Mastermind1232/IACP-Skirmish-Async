@@ -85,6 +85,15 @@ try {
   const mtData = JSON.parse(readFileSync(join(rootDir, 'data', 'map-tokens.json'), 'utf8'));
   mapTokensData = mtData.maps || {};
 } catch {}
+let ccEffectsData = { cards: {} };
+try {
+  const ccData = JSON.parse(readFileSync(join(rootDir, 'data', 'cc-effects.json'), 'utf8'));
+  if (ccData?.cards) ccEffectsData = ccData;
+} catch {}
+
+function getCcEffect(cardName) {
+  return ccEffectsData.cards?.[cardName] || null;
+}
 
 function getMapSpaces(mapId) {
   return mapSpacesData[mapId] || null;
@@ -197,24 +206,31 @@ function isFigureInDeploymentZone(game, playerNum, figureKey, mapId) {
 
 /** True if figure footprint or any adjacent cell is in the given coord set. */
 function isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, coordSet) {
-  if (!coordSet?.size) return false;
+  return getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, coordSet).length > 0;
+}
+
+/** Returns coords from coordSet that the figure is on or adjacent to. */
+function getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, coordSet) {
+  if (!coordSet?.size) return [];
   const rawMapSpaces = getMapSpaces(mapId);
-  if (!rawMapSpaces?.adjacency) return false;
+  if (!rawMapSpaces?.adjacency) return [];
   const mapDef = mapRegistry.find((m) => m.id === mapId);
   const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
   const adjacency = mapSpaces.adjacency || {};
   const pos = game.figurePositions?.[playerNum]?.[figureKey];
-  if (!pos) return false;
+  if (!pos) return [];
   const dcName = figureKey.replace(/-\d+-\d+$/, '');
   const footprint = getFootprintCells(pos, game.figureOrientations?.[figureKey] || getFigureSize(dcName));
+  const result = new Set();
   for (const c of footprint) {
     const n = normalizeCoord(c);
-    if (coordSet.has(n)) return true;
+    if (coordSet.has(n)) result.add(n);
     for (const adj of adjacency[n] || []) {
-      if (coordSet.has(normalizeCoord(adj))) return true;
+      const na = normalizeCoord(adj);
+      if (coordSet.has(na)) result.add(na);
     }
   }
-  return false;
+  return [...result];
 }
 
 /** Returns legal interact options for a figure. Mission-specific first (blue), standard (grey). */
@@ -233,8 +249,15 @@ function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
 
   if (variant === 'a') {
     const launchPanels = mapData.missionA?.launchPanels || [];
-    if (launchPanels.length && isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, toLowerSet(launchPanels))) {
-      options.push({ id: 'launch_panel', label: 'Launch Panel', missionSpecific: true });
+    const flippedThisRound = playerNum === 1 ? game.p1LaunchPanelFlippedThisRound : game.p2LaunchPanelFlippedThisRound;
+    if (launchPanels.length && !flippedThisRound) {
+      const panelSet = toLowerSet(launchPanels);
+      const adjacent = getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, panelSet);
+      for (const coord of adjacent) {
+        const upper = String(coord).toUpperCase();
+        options.push({ id: `launch_panel_${coord}_colored`, label: `Launch Panel (${upper}) → Colored`, missionSpecific: true });
+        options.push({ id: `launch_panel_${coord}_gray`, label: `Launch Panel (${upper}) → Gray`, missionSpecific: true });
+      }
     }
   }
 
@@ -256,6 +279,24 @@ function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
   }
 
   return options;
+}
+
+/** Returns 1, 2, or null for who controls this space (only they have figure on/adjacent). Same logic as terminals. */
+function getSpaceController(game, mapId, coord) {
+  const rawMapSpaces = getMapSpaces(mapId);
+  if (!rawMapSpaces?.adjacency) return null;
+  const mapDef = mapRegistry.find((m) => m.id === mapId);
+  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+  const adjacency = mapSpaces.adjacency || {};
+  const t = normalizeCoord(coord);
+  const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
+  const p1Cells = getPlayerOccupiedCells(game, 1);
+  const p2Cells = getPlayerOccupiedCells(game, 2);
+  const p1Has = [...controlSet].some((c) => p1Cells.has(c));
+  const p2Has = [...controlSet].some((c) => p2Cells.has(c));
+  if (p1Has && !p2Has) return 1;
+  if (p2Has && !p1Has) return 2;
+  return null;
 }
 
 /** Count terminals exclusively controlled by player (on or adjacent; only they have presence). */
@@ -1127,7 +1168,10 @@ function loadGames() {
     const raw = readFileSync(GAMES_STATE_PATH, 'utf8');
     const data = JSON.parse(raw);
     if (data && typeof data === 'object') {
-      for (const [id, g] of Object.entries(data)) games.set(id, g);
+      for (const [id, g] of Object.entries(data)) {
+        if (g && typeof g === 'object') delete g.pendingAttack;
+        games.set(id, g);
+      }
     }
   } catch (err) {
     console.error('Failed to load games state:', err);
@@ -2024,6 +2068,60 @@ function getMapTokensForRender(mapId, missionVariant) {
   };
 }
 
+/** Check win conditions. Returns { ended, winnerId?, reason? }. Posts game-over and sets game.ended if ended. */
+async function checkWinConditions(game, client) {
+  const vp1 = game.player1VP?.total ?? 0;
+  const vp2 = game.player2VP?.total ?? 0;
+  const p1Figures = Object.keys(game.figurePositions?.[1] || {}).length;
+  const p2Figures = Object.keys(game.figurePositions?.[2] || {}).length;
+
+  if (vp1 >= 40 || vp2 >= 40) {
+    const winnerId = vp1 >= 40 ? game.player1Id : game.player2Id;
+    const reason = '40 VP';
+    await postGameOver(game, client, winnerId, reason);
+    return { ended: true, winnerId, reason };
+  }
+  if (p1Figures === 0 && p2Figures === 0) {
+    await postGameOver(game, client, null, 'draw (both eliminated)');
+    return { ended: true, winnerId: null, reason: 'draw' };
+  }
+  if (p1Figures === 0 || p2Figures === 0) {
+    const winnerId = p1Figures === 0 ? game.player2Id : game.player1Id;
+    const reason = 'elimination';
+    await postGameOver(game, client, winnerId, reason);
+    return { ended: true, winnerId, reason };
+  }
+  return { ended: false };
+}
+
+async function postGameOver(game, client, winnerId, reason) {
+  game.ended = true;
+  const embed = buildScorecardEmbed(game);
+  const content = winnerId
+    ? `\uD83C\uDFC1 **GAME OVER** — <@${winnerId}> wins by ${reason}!`
+    : `\uD83C\uDFC1 **GAME OVER** — ${reason}`;
+  try {
+    const ch = await client.channels.fetch(game.generalId);
+    await ch.send({
+      content,
+      embeds: [embed],
+      allowedMentions: winnerId ? { users: [winnerId] } : undefined,
+    });
+  } catch (err) {
+    console.error('Failed to post game over:', err);
+  }
+  saveGames();
+}
+
+/** Returns true if game ended (and replied to user). Call after games.get() in handlers to block further actions. */
+async function replyIfGameEnded(game, interaction) {
+  if (game?.ended) {
+    await interaction.reply({ content: 'This game has ended.', ephemeral: true }).catch(() => {});
+    return true;
+  }
+  return false;
+}
+
 /** Build Scorecard embed with VP breakdown per player. */
 function buildScorecardEmbed(game) {
   const vp1 = game.player1VP || { total: 0, kills: 0, objectives: 0 };
@@ -2641,6 +2739,25 @@ function getDcToggleButton(msgId, exhausted) {
   );
 }
 
+/** True if all figures in this deployment group are defeated (or never deployed). */
+function isGroupDefeated(game, playerNum, dcIndex) {
+  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  const dc = dcList[dcIndex];
+  if (!dc) return true;
+  const dcName = dc.dcName || dc;
+  const displayName = typeof dc === 'object' ? dc.displayName : dcName;
+  const dgMatch = displayName?.match(/\[Group (\d+)\]/);
+  const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const stats = getDcStats(dcName);
+  const figureCount = stats.figures ?? 1;
+  const poses = game.figurePositions?.[playerNum] || {};
+  for (let f = 0; f < figureCount; f++) {
+    const figureKey = `${dcName}-${dgIndex}-${f}`;
+    if (figureKey in poses) return false;
+  }
+  return true;
+}
+
 /** Returns ActionRow(s) for Activate buttons (DCs not yet activated). */
 function getActivateDcButtons(game, playerNum) {
   const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
@@ -2650,6 +2767,7 @@ function getActivateDcButtons(game, playerNum) {
   const btns = [];
   for (let i = 0; i < dcList.length; i++) {
     if (activatedSet.has(i)) continue;
+    if (isGroupDefeated(game, playerNum, i)) continue;
     const { displayName } = dcList[i];
     const fullLabel = `Activate ${displayName}`;
     const label = fullLabel.length > 80 ? fullLabel.slice(0, 77) + '…' : fullLabel;
@@ -3144,6 +3262,7 @@ client.on('messageCreate', async (message) => {
         player1VP: { total: 0, kills: 0, objectives: 0 },
         player2VP: { total: 0, kills: 0, objectives: 0 },
         isTestGame: true,
+        ended: false,
       };
       games.set(gameId, game);
 
@@ -3408,7 +3527,9 @@ client.on('interactionCreate', async (interaction) => {
       const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
       if (handMsg) {
         const handPayload = buildHandDisplayPayload(hand, deck, gameId);
-        handPayload.content = `**Command Cards** — Played **${card}**.\n\n` + handPayload.content;
+        const effectData = getCcEffect(card);
+        const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
+        handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
         await handMsg.edit({
           content: handPayload.content,
           embeds: handPayload.embeds,
@@ -3486,6 +3607,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
       return;
     }
+    if (await replyIfGameEnded(game, interaction)) return;
     const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
     if (interaction.user.id !== ownerId) {
       await interaction.reply({ content: 'Only the owner of this Play Area can activate their DCs.', ephemeral: true }).catch(() => {});
@@ -3806,6 +3928,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
       return;
     }
+    if (await replyIfGameEnded(game, interaction)) return;
     const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
     if (interaction.user.id !== ownerId) {
       await interaction.reply({ content: 'Only the owner of this Play Area can use these actions.', ephemeral: true }).catch(() => {});
@@ -4017,8 +4140,33 @@ client.on('interactionCreate', async (interaction) => {
       actionsData.remaining = Math.max(0, actionsData.remaining - 1);
       await updateDcActionsMessage(game, msgId, interaction.client);
     }
-    await interaction.reply({ content: `**${action}** — Coming soon.`, ephemeral: true }).catch(() => {});
+    const displayName = meta.displayName || meta.dcName;
+    const pLabel = `P${meta.playerNum}`;
+    await logGameAction(game, interaction.client, `**${pLabel}:** <@${ownerId}> used **${action}**.`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'activate' });
+    const doneRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`special_done_${game.gameId}_${msgId}`)
+        .setLabel('Done')
+        .setStyle(ButtonStyle.Success)
+    );
+    await interaction.reply({
+      content: `**${action}** — Resolve manually (see rules). Click **Done** when finished.`,
+      components: [doneRow],
+      ephemeral: false,
+    }).catch(() => {});
     saveGames();
+    return;
+  }
+
+  if (interaction.customId.startsWith('special_done_')) {
+    const match = interaction.customId.match(/^special_done_(.+)_(.+)$/);
+    if (match) {
+      await interaction.deferUpdate();
+      await interaction.message.edit({
+        content: (interaction.message.content || '').replace('Click **Done** when finished.', '✓ Resolved.'),
+        components: [],
+      }).catch(() => {});
+    }
     return;
   }
 
@@ -4260,6 +4408,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
       return;
     }
+    if (await replyIfGameEnded(game, interaction)) return;
     const targets = game.attackTargets?.[`${msgId}_${figureIndex}`];
     const target = targets?.[targetIndex];
     if (!target) {
@@ -4324,6 +4473,15 @@ client.on('interactionCreate', async (interaction) => {
           game[vpKey].total += vp;
           resultText += ` — **${target.label} defeated!** +${vp} VP`;
           await logGameAction(game, client, `<@${ownerId}> defeated **${target.label}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+          if (idx >= 0 && isGroupDefeated(game, enemyPlayerNum, idx)) {
+            const activatedIndices = enemyPlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+            if (!activatedIndices.includes(idx)) {
+              if (enemyPlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
+              else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+              await updateActivationsMessage(game, enemyPlayerNum, client);
+            }
+          }
+          await checkWinConditions(game, client);
         }
       }
     } else if (hit && damage === 0) {
@@ -4371,6 +4529,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
       return;
     }
+    if (await replyIfGameEnded(game, interaction)) return;
     if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
       await interaction.reply({ content: 'Only players in this game can end the activation phase.', ephemeral: true }).catch(() => {});
       return;
@@ -4482,9 +4641,58 @@ client.on('interactionCreate', async (interaction) => {
         if (scored > 0) {
           const pid = pn === 1 ? game.player1Id : game.player2Id;
           await logGameAction(game, client, `<@${pid}> gained **${15 * scored} VP** for ${scored} figure(s) delivering contraband to deployment zone.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+          await checkWinConditions(game, client);
+          if (game.ended) {
+            await interaction.message.edit({ components: [] }).catch(() => {});
+            saveGames();
+            return;
+          }
         }
       }
     }
+    if (game.selectedMission?.variant === 'a' && mapId) {
+      const launchPanels = mapTokensData[mapId]?.missionA?.launchPanels || [];
+      const state = game.launchPanelState || {};
+      let p1Vp = 0, p2Vp = 0;
+      for (const coord of launchPanels) {
+        const c = String(coord).toLowerCase();
+        const side = state[c];
+        if (!side) continue;
+        const controller = getSpaceController(game, mapId, coord);
+        if (!controller) continue;
+        const vp = side === 'colored' ? 5 : 2;
+        if (controller === 1) p1Vp += vp;
+        else p2Vp += vp;
+      }
+      if (p1Vp > 0 || p2Vp > 0) {
+        if (p1Vp > 0) {
+          game.player1VP = game.player1VP || { total: 0, kills: 0, objectives: 0 };
+          game.player1VP.total += p1Vp;
+          game.player1VP.objectives += p1Vp;
+          await logGameAction(game, client, `<@${game.player1Id}> gained **${p1Vp} VP** for launch panels controlled.`, { allowedMentions: { users: [game.player1Id] }, phase: 'ROUND', icon: 'round' });
+          await checkWinConditions(game, client);
+          if (game.ended) {
+            await interaction.message.edit({ components: [] }).catch(() => {});
+            saveGames();
+            return;
+          }
+        }
+        if (p2Vp > 0) {
+          game.player2VP = game.player2VP || { total: 0, kills: 0, objectives: 0 };
+          game.player2VP.total += p2Vp;
+          game.player2VP.objectives += p2Vp;
+          await logGameAction(game, client, `<@${game.player2Id}> gained **${p2Vp} VP** for launch panels controlled.`, { allowedMentions: { users: [game.player2Id] }, phase: 'ROUND', icon: 'round' });
+          await checkWinConditions(game, client);
+          if (game.ended) {
+            await interaction.message.edit({ components: [] }).catch(() => {});
+            saveGames();
+            return;
+          }
+        }
+      }
+    }
+    game.p1LaunchPanelFlippedThisRound = false;
+    game.p2LaunchPanelFlippedThisRound = false;
     const prevInitiative = game.initiativePlayerId;
     game.initiativePlayerId = prevInitiative === game.player1Id ? game.player2Id : game.player1Id;
     game.currentRound = (game.currentRound || 1) + 1;
@@ -4887,8 +5095,16 @@ client.on('interactionCreate', async (interaction) => {
       game.figureContraband = game.figureContraband || {};
       game.figureContraband[figureKey] = true;
       await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** retrieved contraband!`, { phase: 'ROUND', icon: 'deploy' });
-    } else if (optionId === 'launch_panel') {
-      await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** used Launch Panel.`, { phase: 'ROUND', icon: 'deploy' });
+    } else if (optionId.startsWith('launch_panel_')) {
+      const parts = optionId.replace('launch_panel_', '').split('_');
+      const coord = parts[0];
+      const side = parts[1];
+      game.launchPanelState = game.launchPanelState || {};
+      game.launchPanelState[coord.toLowerCase()] = side;
+      if (playerNum === 1) game.p1LaunchPanelFlippedThisRound = true;
+      else game.p2LaunchPanelFlippedThisRound = true;
+      const upper = String(coord).toUpperCase();
+      await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** flipped Launch Panel (${upper}) to **${side}**.`, { phase: 'ROUND', icon: 'deploy' });
     } else if (optionId === 'use_terminal') {
       await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** used terminal.`, { phase: 'ROUND', icon: 'deploy' });
     } else if (optionId.startsWith('open_door_')) {
@@ -6034,6 +6250,7 @@ client.on('interactionCreate', async (interaction) => {
         player1VP: { total: 0, kills: 0, objectives: 0 },
         player2VP: { total: 0, kills: 0, objectives: 0 },
         isTestGame: !!isTestGame,
+        ended: false,
       };
       games.set(gameId, game);
 

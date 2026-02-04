@@ -19,7 +19,7 @@
 - **VP sources:** Defeating figures (cost = VP), mission objectives, card effects
 
 ## Key Rules (Skirmish vs Campaign)
-- Strain (C) → Health (H) instead; can discard command card to prevent
+- **Strain:** No strain in Skirmish. If a card would inflict strain, the **receiving figure's player** chooses: **1 damage** OR **discard top card of their CC deck**
 - No resting
 - One attack per activation (including special-action attacks)
 - Heroes use Deployment cards, not hero sheets; function like normal figures

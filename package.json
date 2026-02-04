@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "extract-maps": "node scripts/extract-map-registry.js",
+    "extract-cc-names": "node scripts/extract-cc-names.js",
     "extract-dc-images": "node scripts/extract-dc-images.js",
     "test-map": "node scripts/test-map-render.js",
     "extract-zones": "npx --yes serve . -p 3456",

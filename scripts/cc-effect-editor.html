@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IA Skirmish — CC Effect Editor</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; padding: 20px; background: #1e1e1e; color: #eee; max-width: 720px; }
+    h1 { font-size: 1.3rem; margin-bottom: 8px; }
+    .hint { font-size: 12px; color: #999; margin-bottom: 16px; }
+    label { display: block; margin-top: 12px; margin-bottom: 4px; font-weight: 500; }
+    select, input, textarea { width: 100%; padding: 8px 12px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 14px; }
+    textarea { min-height: 80px; font-family: inherit; resize: vertical; }
+    .row { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    button.primary { background: #0d6efd; color: #fff; }
+    button.primary:hover { background: #0b5ed7; }
+    button.export { background: #198754; color: #fff; }
+    button.export:hover { background: #157347; }
+    .entries { margin-top: 24px; }
+    .entries h2 { font-size: 1rem; margin-bottom: 8px; }
+    .entry { padding: 8px 12px; margin-bottom: 6px; background: #2d2d2d; border-radius: 4px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+    .entry span { color: #aaa; }
+    .entry button { padding: 4px 10px; font-size: 12px; background: #dc3545; }
+    .entry button:hover { background: #bb2d3b; }
+  </style>
+</head>
+<body>
+  <h1>IA Skirmish — Command Card Effect Editor</h1>
+  <p class="hint">Run <code>node scripts/extract-cc-names.js</code> first. Open Vassal or card images separately for reference. Add/update entries and Export JSON to copy into <code>data/cc-effects.json</code>.</p>
+
+  <label>Card name</label>
+  <select id="cardSelect">
+    <option value="">— Select or type below —</option>
+  </select>
+  <input type="text" id="cardName" placeholder="Or type card name manually">
+
+  <label>Cost (bottom left of card, 0–3)</label>
+  <input type="number" id="cost" min="0" max="5" placeholder="e.g. 1">
+
+  <label>Playable by (center of card)</label>
+  <input type="text" id="playableBy" placeholder="e.g. Any Figure, Hunter, Boba Fett">
+
+  <label>Timing</label>
+  <select id="timing">
+    <option value="">—</option>
+    <option value="startOfRound">Start of round</option>
+    <option value="endOfRound">End of round</option>
+    <option value="startOfActivation">Start of activation</option>
+    <option value="duringActivation">During activation</option>
+    <option value="beforeAttack">Before attack</option>
+    <option value="duringAttack">During attack</option>
+    <option value="afterAttack">After attack</option>
+    <option value="statusPhase">Status Phase</option>
+    <option value="whenDefeated">When defeated</option>
+    <option value="other">Other</option>
+  </select>
+
+  <label>Effect (card text)</label>
+  <textarea id="effect" placeholder="Paste or type the card effect"></textarea>
+
+  <div class="row">
+    <button id="addBtn" class="primary">Add / Update</button>
+    <button id="exportBtn" class="export">Export JSON</button>
+  </div>
+
+  <div class="entries">
+    <h2>Entries (<span id="count">0</span>)</h2>
+    <div id="list"></div>
+  </div>
+
+  <script src="cc-names.js"></script>
+  <script>
+    const cardSelect = document.getElementById('cardSelect');
+    const cardName = document.getElementById('cardName');
+    const cost = document.getElementById('cost');
+    const playableBy = document.getElementById('playableBy');
+    const timing = document.getElementById('timing');
+    const effect = document.getElementById('effect');
+    const addBtn = document.getElementById('addBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const listEl = document.getElementById('list');
+    const countEl = document.getElementById('count');
+
+    const names = typeof CC_NAMES !== 'undefined' ? CC_NAMES : [];
+    names.forEach(n => {
+      const opt = document.createElement('option');
+      opt.value = n;
+      opt.textContent = n;
+      cardSelect.appendChild(opt);
+    });
+
+    cardSelect.addEventListener('change', () => { cardName.value = cardSelect.value || ''; });
+    cardName.addEventListener('input', () => {
+      const v = cardName.value.trim();
+      if (names.includes(v)) cardSelect.value = v;
+      else cardSelect.value = '';
+    });
+
+    let cards = {};
+
+    addBtn.addEventListener('click', () => {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      if (!name) { alert('Enter a card name'); return; }
+      const costVal = cost.value.trim();
+      cards[name] = {
+        cost: costVal === '' ? null : Math.max(0, parseInt(costVal, 10) || 0),
+        playableBy: playableBy.value.trim() || 'Any Figure',
+        timing: timing.value || 'other',
+        effect: effect.value.trim() || '',
+        effectType: 'manual',
+      };
+      effect.value = '';
+      render();
+    });
+
+    function render() {
+      listEl.innerHTML = '';
+      const entries = Object.entries(cards).sort((a, b) => a[0].localeCompare(b[0]));
+      countEl.textContent = entries.length;
+      entries.forEach(([name, data]) => {
+        const div = document.createElement('div');
+        div.className = 'entry';
+        const costStr = data.cost != null ? `[${data.cost}] ` : '';
+        div.innerHTML = `<strong>${costStr}${name}</strong> <span>${data.playableBy} • ${data.timing}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
+        div.querySelector('button').addEventListener('click', () => {
+          delete cards[name];
+          render();
+        });
+        listEl.appendChild(div);
+      });
+    }
+
+    exportBtn.addEventListener('click', () => {
+      const out = {
+        source: 'Manual entry via cc-effect-editor.html',
+        cards,
+      };
+      const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'cc-effects.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    const loadInput = document.createElement('input');
+    loadInput.type = 'file';
+    loadInput.accept = '.json';
+    loadInput.style.display = 'none';
+    loadInput.addEventListener('change', () => {
+      const f = loadInput.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const d = JSON.parse(r.result);
+          if (d.cards) { cards = d.cards; render(); }
+        } catch (e) { alert('Invalid JSON'); }
+      };
+      r.readAsText(f);
+    });
+    document.body.appendChild(loadInput);
+    const loadBtn = document.createElement('button');
+    loadBtn.textContent = 'Load from JSON';
+    loadBtn.onclick = () => loadInput.click();
+    document.querySelector('.row').appendChild(loadBtn);
+
+    render();
+  </script>
+</body>
+</html>
