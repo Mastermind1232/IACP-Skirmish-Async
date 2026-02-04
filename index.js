@@ -195,6 +195,63 @@ function isFigureInDeploymentZone(game, playerNum, figureKey, mapId) {
   return footprint.some((c) => zoneSpaces.has(normalizeCoord(c)));
 }
 
+/** True if figure footprint or any adjacent cell is in the given coord set. */
+function isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, coordSet) {
+  if (!coordSet?.size) return false;
+  const rawMapSpaces = getMapSpaces(mapId);
+  if (!rawMapSpaces?.adjacency) return false;
+  const mapDef = mapRegistry.find((m) => m.id === mapId);
+  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+  const adjacency = mapSpaces.adjacency || {};
+  const pos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!pos) return false;
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const footprint = getFootprintCells(pos, game.figureOrientations?.[figureKey] || getFigureSize(dcName));
+  for (const c of footprint) {
+    const n = normalizeCoord(c);
+    if (coordSet.has(n)) return true;
+    for (const adj of adjacency[n] || []) {
+      if (coordSet.has(normalizeCoord(adj))) return true;
+    }
+  }
+  return false;
+}
+
+/** Returns legal interact options for a figure. Mission-specific first (blue), standard (grey). */
+function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
+  const options = [];
+  const mapData = mapTokensData[mapId];
+  if (!mapData) return options;
+
+  const variant = game?.selectedMission?.variant;
+
+  if (variant === 'b') {
+    if (!game.figureContraband?.[figureKey] && isFigureAdjacentOrOnContraband(game, playerNum, figureKey, mapId)) {
+      options.push({ id: 'retrieve_contraband', label: 'Retrieve Contraband', missionSpecific: true });
+    }
+  }
+
+  if (variant === 'a') {
+    const launchPanels = mapData.missionA?.launchPanels || [];
+    if (launchPanels.length && isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, toLowerSet(launchPanels))) {
+      options.push({ id: 'launch_panel', label: 'Launch Panel', missionSpecific: true });
+    }
+  }
+
+  const terminals = mapData.terminals || [];
+  if (terminals.length && isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, toLowerSet(terminals))) {
+    options.push({ id: 'use_terminal', label: 'Use Terminal', missionSpecific: false });
+  }
+
+  const doorsRaw = mapData.doors || [];
+  const doorCoords = doorsRaw.flat().filter(Boolean);
+  if (doorCoords.length && isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, toLowerSet(doorCoords))) {
+    options.push({ id: 'open_door', label: 'Open Door', missionSpecific: false });
+  }
+
+  return options;
+}
+
 /** Count terminals exclusively controlled by player (on or adjacent; only they have presence). */
 function countTerminalsControlledByPlayer(game, playerNum, mapId) {
   const mapData = mapTokensData[mapId];
@@ -3893,6 +3950,55 @@ client.on('interactionCreate', async (interaction) => {
       }).catch(() => {});
       return;
     }
+    if (action === 'Interact') {
+      const dgIndex = (meta.displayName || '').match(/\[Group (\d+)\]/)?.[1] ?? 1;
+      const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+      const playerNum = meta.playerNum;
+      const mapId = game.selectedMap?.id;
+      const pos = game.figurePositions?.[playerNum]?.[figureKey];
+      if (!pos) {
+        await interaction.reply({ content: 'This figure has no position yet (deploy first).', ephemeral: true }).catch(() => {});
+        return;
+      }
+      const options = mapId ? getLegalInteractOptions(game, playerNum, figureKey, mapId) : [];
+      if (options.length === 0) {
+        await interaction.reply({ content: 'No valid interact options (must be on or adjacent to terminal, door, contraband, or launch panel).', ephemeral: true }).catch(() => {});
+        return;
+      }
+      const missionOpts = options.filter((o) => o.missionSpecific);
+      const standardOpts = options.filter((o) => !o.missionSpecific);
+      const sorted = [...missionOpts, ...standardOpts];
+      const rows = [];
+      for (let i = 0; i < sorted.length; i += 5) {
+        const chunk = sorted.slice(i, i + 5);
+        rows.push(
+          new ActionRowBuilder().addComponents(
+            chunk.map((opt) =>
+              new ButtonBuilder()
+                .setCustomId(`interact_choice_${game.gameId}_${msgId}_${figureIndex}_${opt.id}`)
+                .setLabel(opt.label)
+                .setStyle(opt.missionSpecific ? ButtonStyle.Primary : ButtonStyle.Secondary)
+            )
+          )
+        );
+      }
+      const cancelRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`interact_cancel_${game.gameId}_${msgId}_${figureIndex}`)
+          .setLabel('Cancel')
+          .setStyle(ButtonStyle.Danger)
+      );
+      rows.push(cancelRow);
+      const stats = getDcStats(meta.dcName);
+      const displayName = meta.displayName || meta.dcName;
+      const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
+      await interaction.reply({
+        content: `**Interact** — Choose action for **${figLabel}**:`,
+        components: rows.slice(0, 5),
+        ephemeral: false,
+      }).catch(() => {});
+      return;
+    }
     if (actionsData) {
       actionsData.remaining = Math.max(0, actionsData.remaining - 1);
       await updateDcActionsMessage(game, msgId, interaction.client);
@@ -4698,6 +4804,85 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.user.id !== ownerId) return;
     await interaction.deferUpdate();
     await interaction.message.edit({ components: [] }).catch(() => {});
+    return;
+  }
+
+  if (interaction.customId.startsWith('interact_cancel_')) {
+    const match = interaction.customId.match(/^interact_cancel_([^_]+)_(.+)_(\d+)$/);
+    if (!match) return;
+    const [, gameId, msgId, figureIdxStr] = match;
+    const game = games.get(gameId);
+    if (!game) return;
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta || meta.gameId !== gameId) return;
+    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) return;
+    await interaction.deferUpdate();
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    return;
+  }
+
+  if (interaction.customId.startsWith('interact_choice_')) {
+    const match = interaction.customId.match(/^interact_choice_([^_]+)_(.+)_(\d+)_(.+)$/);
+    if (!match) return;
+    const [, gameId, msgId, figureIdxStr, optionId] = match;
+    const figureIndex = parseInt(figureIdxStr, 10);
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta || meta.gameId !== gameId) {
+      await interaction.reply({ content: 'Invalid.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({ content: 'Only the owner can perform this action.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const actionsData = game.dcActionsData?.[msgId];
+    if ((actionsData?.remaining ?? 2) <= 0) {
+      await interaction.reply({ content: 'No actions remaining this activation.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const dgIndex = (meta.displayName || '').match(/\[Group (\d+)\]/)?.[1] ?? 1;
+    const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+    const playerNum = meta.playerNum;
+    const mapId = game.selectedMap?.id;
+    const options = mapId ? getLegalInteractOptions(game, playerNum, figureKey, mapId) : [];
+    const opt = options.find((o) => o.id === optionId);
+    if (!opt) {
+      await interaction.reply({ content: 'That interact is no longer valid.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate();
+    await interaction.message.edit({ components: [] }).catch(() => {});
+
+    actionsData.remaining = Math.max(0, (actionsData?.remaining ?? 2) - 1);
+    await updateDcActionsMessage(game, msgId, interaction.client);
+
+    const stats = getDcStats(meta.dcName);
+    const displayName = meta.displayName || meta.dcName;
+    const shortName = (displayName || meta.dcName || '').replace(/\s*\[Group \d+\]$/, '') || displayName;
+    const figLabel = (stats.figures ?? 1) > 1 ? `${shortName} ${FIGURE_LETTERS[figureIndex] || 'a'}` : shortName;
+    const pLabel = `P${playerNum}`;
+
+    if (optionId === 'retrieve_contraband') {
+      game.figureContraband = game.figureContraband || {};
+      game.figureContraband[figureKey] = true;
+      await logGameAction(game, client, `**${pLabel}: ${figLabel}** retrieved contraband!`, { phase: 'ROUND', icon: 'deploy' });
+    } else if (optionId === 'launch_panel') {
+      await logGameAction(game, client, `**${pLabel}: ${figLabel}** used Launch Panel.`, { phase: 'ROUND', icon: 'deploy' });
+    } else if (optionId === 'use_terminal') {
+      await logGameAction(game, client, `**${pLabel}: ${figLabel}** used terminal.`, { phase: 'ROUND', icon: 'deploy' });
+    } else if (optionId === 'open_door') {
+      await logGameAction(game, client, `**${pLabel}: ${figLabel}** opened a door.`, { phase: 'ROUND', icon: 'deploy' });
+    } else {
+      await logGameAction(game, client, `**${pLabel}: ${figLabel}** — ${opt.label}.`, { phase: 'ROUND', icon: 'deploy' });
+    }
+    saveGames();
     return;
   }
 
