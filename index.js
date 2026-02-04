@@ -2047,7 +2047,7 @@ function getGeneralSetupButtons(game) {
         .setStyle(ButtonStyle.Success)
     );
   }
-  if (!game.mapSelected && !game.draftRandomUsed && !game.initiativeDetermined) {
+  if (game.isTestGame && !game.mapSelected && !game.draftRandomUsed && !game.initiativeDetermined) {
     components.push(draftBtn);
   }
   components.push(killBtn);
@@ -2505,7 +2505,7 @@ async function updateDcActionsMessage(game, msgId, client) {
   }
 }
 
-/** Returns action rows: one [Move][Attack][Interact] row per figure, plus specials. Max 5 rows. Retrieve Contraband is shown as a prompt after movement (Mission B). */
+/** Returns action rows: one [Move][Attack][Interact] row per figure, plus specials. Max 5 rows. */
 function getDcActionButtons(msgId, dcName, displayName, actionsRemaining = 2, game = null) {
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
@@ -2646,7 +2646,7 @@ const CARD_BACK_CHAR = '▮';
 /** Tooltip embed at top of Play Area: player, CC count, DC list. */
 function getPlayAreaTooltipEmbed(game, playerNum) {
   const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
-  const handCount = (playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || [])).length;
+  const deckCount = (playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || [])).length;
   const dcList = playerNum === 1 ? (game.p1DcList || game.player1Squad?.dcList || []) : (game.p2DcList || game.player2Squad?.dcList || []);
   const dcNames = Array.isArray(dcList) ? dcList.map((d) => (typeof d === 'object' ? d.dcName || d.displayName : d)).filter(Boolean) : [];
   const dcText = dcNames.length > 0 ? dcNames.join(', ') : '—';
@@ -2654,7 +2654,7 @@ function getPlayAreaTooltipEmbed(game, playerNum) {
     .setTitle(`This is Player ${playerNum}'s Play Area`)
     .setDescription(
       `**Player:** <@${playerId}>\n` +
-      `**Command Cards in hand:** ${handCount}\n` +
+      `**Command Cards in Deck:** ${deckCount}\n` +
       `**Deployment Cards:** ${dcText}`
     )
     .setColor(0x5865f2);
@@ -3072,6 +3072,7 @@ client.on('messageCreate', async (message) => {
         player2Squad: null,
         player1VP: { total: 0, kills: 0, objectives: 0 },
         player2VP: { total: 0, kills: 0, objectives: 0 },
+        isTestGame: true,
       };
       games.set(gameId, game);
 
@@ -4089,25 +4090,6 @@ client.on('interactionCreate', async (interaction) => {
     if (terminalsAfter > terminalsBefore) {
       await logGameAction(game, client, `**${pLabel}: ${shortName}** has taken control of a terminal!`, { phase: 'ROUND', icon: 'deploy' });
     }
-    const showContrabandPrompt = game.selectedMission?.variant === 'b' && mapId &&
-      !game.figureContraband?.[figureKey] &&
-      isFigureAdjacentOrOnContraband(game, playerNum, figureKey, mapId);
-    if (showContrabandPrompt) {
-      const retrieveRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`retrieve_contraband_${game.gameId}_${msgId}_f${figureIndex}`)
-          .setLabel('Retrieve Contraband')
-          .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-          .setCustomId(`do_not_retrieve_${game.gameId}_${msgId}_f${figureIndex}`)
-          .setLabel('Do not Retrieve Contraband')
-          .setStyle(ButtonStyle.Secondary)
-      );
-      await interaction.channel.send({
-        content: `**${shortName}** is adjacent to contraband. Retrieve?`,
-        components: [retrieveRow],
-      }).catch(() => {});
-    }
     if (newMp <= 0) {
       await editDistanceMessage(moveState, interaction.channel, `✓ Moved **${displayName}** to **${destDisplay}**.`, []);
       delete game.moveInProgress[moveKey];
@@ -4716,76 +4698,6 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.user.id !== ownerId) return;
     await interaction.deferUpdate();
     await interaction.message.edit({ components: [] }).catch(() => {});
-    return;
-  }
-
-  if (interaction.customId.startsWith('do_not_retrieve_')) {
-    const match = interaction.customId.match(/^do_not_retrieve_([^_]+)_(.+)_f(\d+)$/);
-    if (!match) return;
-    const [, gameId, dcMsgId, figureIdxStr] = match;
-    const game = games.get(gameId);
-    if (!game) return;
-    const meta = dcMessageMeta.get(dcMsgId);
-    if (!meta || meta.gameId !== gameId) return;
-    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
-    if (interaction.user.id !== ownerId) return;
-    await interaction.deferUpdate();
-    await interaction.message.edit({ components: [] }).catch(() => {});
-    return;
-  }
-
-  if (interaction.customId.startsWith('retrieve_contraband_')) {
-    const match = interaction.customId.match(/^retrieve_contraband_([^_]+)_(.+)_f(\d+)$/);
-    if (!match) return;
-    const [, gameId, dcMsgId, figureIdxStr] = match;
-    const figureIndex = parseInt(figureIdxStr, 10);
-    const game = games.get(gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const meta = dcMessageMeta.get(dcMsgId);
-    if (!meta || meta.gameId !== gameId) {
-      await interaction.reply({ content: 'Invalid.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (game.selectedMission?.variant !== 'b') {
-      await interaction.reply({ content: 'Mission B only.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
-    if (interaction.user.id !== ownerId) {
-      await interaction.reply({ content: 'Only the owner can retrieve contraband.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const dgIndex = (meta.displayName || '').match(/\[Group (\d+)\]/)?.[1] ?? 1;
-    const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
-    if (game.figureContraband?.[figureKey]) {
-      await interaction.reply({ content: 'This figure is already carrying contraband.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const mapId = game.selectedMap?.id;
-    if (!mapId || !isFigureAdjacentOrOnContraband(game, meta.playerNum, figureKey, mapId)) {
-      await interaction.reply({ content: 'Figure must be on or adjacent to contraband.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    await interaction.deferUpdate();
-    await interaction.message.edit({ components: [] }).catch(() => {});
-    game.figureContraband = game.figureContraband || {};
-    game.figureContraband[figureKey] = true;
-    const actionsData = game.dcActionsData?.[dcMsgId];
-    if (actionsData?.messageId && actionsData?.threadId) {
-      try {
-        const thread = await client.channels.fetch(actionsData.threadId);
-        const msg = await thread.messages.fetch(actionsData.messageId);
-        const components = getDcActionButtons(dcMsgId, meta.dcName, meta.displayName, actionsData.remaining, game);
-        await msg.edit({ components }).catch(() => {});
-      } catch {}
-    }
-    const shortName = (meta.displayName || meta.dcName || '').replace(/\s*\[Group \d+\]$/, '') || meta.displayName;
-    const pLabel = `P${meta.playerNum}`;
-    await logGameAction(game, client, `**${pLabel}: ${shortName}** retrieved contraband!`, { phase: 'ROUND', icon: 'deploy' });
-    saveGames();
     return;
   }
 
@@ -5918,6 +5830,7 @@ client.on('interactionCreate', async (interaction) => {
         player2Squad: null,
         player1VP: { total: 0, kills: 0, objectives: 0 },
         player2VP: { total: 0, kills: 0, objectives: 0 },
+        isTestGame: !!isTestGame,
       };
       games.set(gameId, game);
 
