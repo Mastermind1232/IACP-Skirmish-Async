@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IA Skirmish — CC Review Tool</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; background: #1a1a1a; color: #e0e0e0; min-height: 100vh; }
+    h1 { font-size: 1.2rem; margin: 0 0 12px 0; }
+    .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .toolbar input, .toolbar select { padding: 6px 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; }
+    .toolbar input[type="search"] { min-width: 200px; }
+    .toolbar button { padding: 8px 14px; background: #0d6efd; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .toolbar button:hover { background: #0b5ed7; }
+    .toolbar button.export { background: #198754; }
+    .toolbar button.export:hover { background: #157347; }
+    .toolbar button.secondary { background: #6c757d; }
+    .layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; min-height: calc(100vh - 120px); }
+    @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+    .card-list { overflow-y: auto; max-height: 70vh; background: #222; border-radius: 8px; padding: 8px; }
+    .card-item { padding: 6px 10px; margin-bottom: 4px; border-radius: 4px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+    .card-item:hover { background: #333; }
+    .card-item.active { background: #0d6efd; color: #fff; }
+    .card-item .cost { font-weight: bold; color: #888; width: 18px; text-align: center; }
+    .card-item.active .cost { color: #ddd; }
+    .card-item.empty .cost::before { content: '?'; }
+    .detail { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+    .detail img { max-width: 180px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+    .detail .form { flex: 1; min-width: 280px; }
+    .detail label { display: block; margin-top: 12px; margin-bottom: 4px; font-weight: 500; font-size: 13px; }
+    .detail input, .detail select, .detail textarea { width: 100%; padding: 8px 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 14px; }
+    .detail textarea { min-height: 100px; resize: vertical; }
+    .nav-row { display: flex; gap: 8px; margin-top: 16px; align-items: center; }
+    .nav-row button { padding: 8px 16px; }
+    .hint { font-size: 12px; color: #888; margin-bottom: 12px; }
+    .status { font-size: 12px; color: #6c757d; }
+    .empty-state { padding: 40px; text-align: center; color: #666; }
+  </style>
+</head>
+<body>
+  <h1>IA Skirmish — Command Card Review Tool</h1>
+  <p class="hint">1) Run <code>npm run scrape-cc-data</code> to OCR all cards (takes ~5–10 min). 2) Run <code>npm run cc-review</code> and open <code>http://localhost:3456/scripts/cc-review-tool.html</code>. 3) Load All, browse with arrows/Prev/Next, fix data, Export.</p>
+
+  <div class="toolbar">
+    <button id="loadAll">Load All (scraped + effects + names)</button>
+    <button id="loadScraped" class="secondary">Scraped only</button>
+    <button id="loadEffects" class="secondary">Effects only</button>
+    <button id="loadFile" class="secondary">Load from file...</button>
+    <input type="file" id="fileInput" accept=".json" style="display:none">
+    <input type="search" id="search" placeholder="Filter cards...">
+    <button id="exportBtn" class="export">Export cc-effects.json</button>
+    <span class="status" id="status">Load data to begin.</span>
+  </div>
+
+  <div class="layout">
+    <div class="card-list" id="cardList"></div>
+    <div class="detail-panel">
+      <div id="detail"></div>
+    </div>
+  </div>
+
+  <script>
+    const IMAGES_BASE = '/vassal_extracted/images/';
+    const TIMING_OPTIONS = [
+      ['', '—'],
+      ['startOfRound', 'Start of round'],
+      ['endOfRound', 'End of round'],
+      ['startOfActivation', 'Start of activation'],
+      ['duringActivation', 'During activation'],
+      ['beforeAttack', 'Before attack'],
+      ['duringAttack', 'During attack'],
+      ['afterAttack', 'After attack'],
+      ['statusPhase', 'Status Phase'],
+      ['whenDefeated', 'When defeated'],
+      ['other', 'Other'],
+    ];
+
+    let allCards = [];
+    let cardsData = {};
+    let imageMap = {};
+    let currentIndex = 0;
+
+    const cardListEl = document.getElementById('cardList');
+    const detailEl = document.getElementById('detail');
+    const searchEl = document.getElementById('search');
+    const statusEl = document.getElementById('status');
+
+    function imageUrl(name, imagePath) {
+      if (imagePath) return IMAGES_BASE + encodeURIComponent(imagePath);
+      const tries = [`C card--${name}.jpg`, `C card--${name}.png`, `IACP_C card--${name}.png`];
+      return IMAGES_BASE + encodeURIComponent(tries[0]);
+    }
+
+    async function fetchJson(path) {
+      const r = await fetch(path);
+      if (!r.ok) throw new Error(`${path}: ${r.status}`);
+      return r.json();
+    }
+
+    document.getElementById('loadAll').onclick = async () => {
+      try {
+        const [scraped, effects, names] = await Promise.allSettled([
+          fetch('/data/cc-scraped.json').then(r => r.ok ? r.json() : {}),
+          fetch('/data/cc-effects.json').then(r => r.ok ? r.json() : {}),
+          fetch('/data/cc-names.json').then(r => r.ok ? r.json() : {}),
+        ]);
+        const n = names.status === 'fulfilled' && names.value?.cards ? names.value.cards : [];
+        allCards = [...new Set(n)].sort((a,b) => a.localeCompare(b));
+        if (scraped.status === 'fulfilled' && scraped.value?.cards) {
+          for (const [name, data] of Object.entries(scraped.value.cards)) {
+            cardsData[name] = { ...cardsData[name], ...data, effectType: 'manual' };
+            if (data.imagePath) imageMap[name] = data.imagePath;
+          }
+        }
+        if (effects.status === 'fulfilled' && effects.value?.cards) {
+          for (const [name, data] of Object.entries(effects.value.cards)) {
+            cardsData[name] = { ...cardsData[name], ...data };
+          }
+        }
+        if (allCards.length === 0) allCards = Object.keys(cardsData).sort((a,b) => a.localeCompare(b));
+        updateCardsList();
+        if (allCards.length > 0) { currentIndex = 0; renderDetail(allCards[0]); }
+        statusEl.textContent = `Loaded ${allCards.length} cards. Scraped → Effects merge.`;
+      } catch (e) {
+        statusEl.textContent = 'Failed: ' + e.message;
+      }
+    };
+
+    document.getElementById('loadScraped').onclick = async () => {
+      try {
+        const d = await fetchJson('/data/cc-scraped.json');
+        if (d.cards) {
+          for (const [name, data] of Object.entries(d.cards)) {
+            if (!cardsData[name]) cardsData[name] = {};
+            Object.assign(cardsData[name], { ...data, effectType: 'manual' });
+            if (data.imagePath) imageMap[name] = data.imagePath;
+          }
+          updateCardsList();
+          statusEl.textContent = `Loaded scraped data (${Object.keys(d.cards).length} cards).`;
+        }
+      } catch (e) {
+        statusEl.textContent = 'Failed: ' + e.message;
+      }
+    };
+
+    document.getElementById('loadEffects').onclick = async () => {
+      try {
+        const d = await fetchJson('/data/cc-effects.json');
+        if (d.cards) {
+          for (const [name, data] of Object.entries(d.cards)) {
+            if (!cardsData[name]) cardsData[name] = {};
+            Object.assign(cardsData[name], data);
+          }
+          updateCardsList();
+          statusEl.textContent = `Loaded effects (${Object.keys(d.cards).length} cards).`;
+        }
+      } catch (e) {
+        statusEl.textContent = 'Failed: ' + e.message;
+      }
+    };
+
+    document.getElementById('loadFile').onclick = () => document.getElementById('fileInput').click();
+
+    document.getElementById('fileInput').onchange = async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      try {
+        const d = JSON.parse(await f.text());
+        const src = d.cards ? 'effects' : 'names';
+        if (d.cards) {
+          for (const [name, data] of Object.entries(d.cards)) {
+            allCards = [...new Set([...allCards, name])].sort((a,b) => a.localeCompare(b));
+            cardsData[name] = { ...cardsData[name], ...data };
+          }
+        } else if (Array.isArray(d)) {
+          allCards = [...new Set([...allCards, ...d])].sort((a,b) => a.localeCompare(b));
+        }
+        updateCardsList();
+        statusEl.textContent = `Loaded from file. Total: ${allCards.length}.`;
+      } catch (err) {
+        statusEl.textContent = 'Invalid JSON: ' + err.message;
+      }
+      e.target.value = '';
+    };
+
+    function updateCardsList() {
+      if (allCards.length === 0 && Object.keys(cardsData).length > 0) {
+        allCards = Object.keys(cardsData).sort((a,b) => a.localeCompare(b));
+      }
+      const q = (searchEl.value || '').toLowerCase().trim();
+      const filtered = allCards.filter((n) => !q || n.toLowerCase().includes(q));
+      cardListEl.innerHTML = filtered.map((name, i) => {
+        const d = cardsData[name] || {};
+        const cost = d.cost != null ? d.cost : '?';
+        const idx = allCards.indexOf(name);
+        return `<div class="card-item ${idx === currentIndex ? 'active' : ''} ${d.cost == null && !d.effect ? 'empty' : ''}" data-index="${idx}" data-name="${name.replace(/"/g, '&quot;')}">
+          <span class="cost">${cost}</span>
+          <span>${name}</span>
+        </div>`;
+      }).join('');
+      cardListEl.querySelectorAll('.card-item').forEach((el) => {
+        el.onclick = () => {
+          currentIndex = parseInt(el.dataset.index, 10);
+          renderDetail(allCards[currentIndex]);
+          updateCardsList();
+        };
+      });
+    }
+
+    function renderDetail(name) {
+      const d = cardsData[name] || { cost: null, playableBy: 'Any Figure', timing: 'other', effect: '', effectType: 'manual' };
+      const imgPath = imageMap[name];
+      const url = imageUrl(name, imgPath);
+      detailEl.innerHTML = `
+        <div class="detail">
+          <div>
+            <img src="${url}" alt="${name}" onerror="this.style.display='none'">
+          </div>
+          <div class="form">
+            <label>Cost</label>
+            <input type="number" id="fCost" min="0" max="5" value="${d.cost ?? ''}" placeholder="0-3">
+            <label>Playable by</label>
+            <input type="text" id="fPlayableBy" value="${(d.playableBy || '').replace(/"/g, '&quot;')}" placeholder="Any Figure, Hunter, etc.">
+            <label>Timing</label>
+            <select id="fTiming">
+              ${TIMING_OPTIONS.map(([val, label]) => `<option value="${val}" ${d.timing === val ? 'selected' : ''}>${label}</option>`).join('')}
+            </select>
+            <label>Effect (mechanics for implementation)</label>
+            <textarea id="fEffect" placeholder="Card text or implementation notes">${(d.effect || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+            <div class="nav-row">
+              <button id="prevBtn">← Prev</button>
+              <button id="nextBtn">Next →</button>
+              <span class="status">${currentIndex + 1} / ${allCards.length}</span>
+            </div>
+          </div>
+        </div>`;
+      detailEl.querySelector('#fCost').oninput = () => saveCurrent();
+      detailEl.querySelector('#fPlayableBy').oninput = () => saveCurrent();
+      detailEl.querySelector('#fTiming').onchange = () => saveCurrent();
+      detailEl.querySelector('#fEffect').oninput = () => saveCurrent();
+      detailEl.querySelector('#prevBtn').onclick = () => { currentIndex = Math.max(0, currentIndex - 1); renderDetail(allCards[currentIndex]); updateCardsList(); };
+      detailEl.querySelector('#nextBtn').onclick = () => { currentIndex = Math.min(allCards.length - 1, currentIndex + 1); renderDetail(allCards[currentIndex]); updateCardsList(); };
+    }
+
+    function saveCurrent() {
+      const name = allCards[currentIndex];
+      if (!name) return;
+      const costVal = detailEl.querySelector('#fCost')?.value;
+      cardsData[name] = cardsData[name] || {};
+      cardsData[name].cost = costVal === '' ? null : Math.max(0, parseInt(costVal, 10) || 0);
+      cardsData[name].playableBy = detailEl.querySelector('#fPlayableBy')?.value?.trim() || 'Any Figure';
+      cardsData[name].timing = detailEl.querySelector('#fTiming')?.value || 'other';
+      cardsData[name].effect = detailEl.querySelector('#fEffect')?.value?.trim() || '';
+      cardsData[name].effectType = 'manual';
+    }
+
+    document.getElementById('exportBtn').onclick = () => {
+      saveCurrent();
+      const out = { source: 'cc-review-tool', cards: {} };
+      for (const name of allCards) {
+        const d = cardsData[name];
+        if (!d) continue;
+        out.cards[name] = {
+          cost: d.cost,
+          playableBy: d.playableBy || 'Any Figure',
+          timing: d.timing || 'other',
+          effect: d.effect || '',
+          effectType: d.effectType || 'manual',
+        };
+      }
+      const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'cc-effects.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      statusEl.textContent = `Exported ${Object.keys(out.cards).length} cards.`;
+    };
+
+    searchEl.oninput = () => updateCardsList();
+
+    document.body.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+      if (e.key === 'ArrowDown' || e.key === 'j') {
+        currentIndex = Math.min(allCards.length - 1, currentIndex + 1);
+        renderDetail(allCards[currentIndex]);
+        updateCardsList();
+        e.preventDefault();
+      } else if (e.key === 'ArrowUp' || e.key === 'k') {
+        currentIndex = Math.max(0, currentIndex - 1);
+        renderDetail(allCards[currentIndex]);
+        updateCardsList();
+        e.preventDefault();
+      }
+    });
+
+    async function init() {
+      try {
+        const [scraped, effects, names] = await Promise.allSettled([
+          fetchJson('/data/cc-scraped.json'),
+          fetchJson('/data/cc-effects.json'),
+          fetchJson('/data/cc-names.json'),
+        ]);
+        if (names.status === 'fulfilled' && names.value?.cards) {
+          allCards = [...names.value.cards].sort((a,b) => a.localeCompare(b));
+        }
+        if (scraped.status === 'fulfilled' && scraped.value?.cards) {
+          for (const [name, data] of Object.entries(scraped.value.cards)) {
+            cardsData[name] = { ...cardsData[name], ...data, effectType: 'manual' };
+            if (data.imagePath) imageMap[name] = data.imagePath;
+          }
+        }
+        if (effects.status === 'fulfilled' && effects.value?.cards) {
+          for (const [name, data] of Object.entries(effects.value.cards)) {
+            cardsData[name] = { ...cardsData[name], ...data };
+          }
+        }
+        if (allCards.length === 0 && Object.keys(cardsData).length > 0) {
+          allCards = Object.keys(cardsData).sort((a,b) => a.localeCompare(b));
+        }
+        updateCardsList();
+        if (allCards.length > 0) {
+          renderDetail(allCards[0]);
+          statusEl.textContent = `Loaded ${allCards.length} cards. Use Prev/Next or arrow keys to browse.`;
+        }
+      } catch (e) {
+        statusEl.textContent = 'Auto-load failed. Use Load buttons or drag JSON file. ' + e.message;
+      }
+    }
+    init();
+  </script>
+</body>
+</html>

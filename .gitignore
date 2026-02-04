@@ -3,6 +3,9 @@ node_modules/
 test-map-output.png
 data/games-state.json
 
+# Tesseract language data (downloaded by tesseract.js)
+eng.traineddata
+
 # Large files (GitHub 100MB limit)
 Imperial_Assault_-_Skirmish_12.11.3.0.vmod
 IA Continuity Project Official Changes - 10.2.2.docx

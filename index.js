@@ -1359,8 +1359,33 @@ function getCommandCardImagePath(cardName) {
   return null;
 }
 
+/** Get window button row for Hand channel when in Start/End of Round window and it's this player's turn. */
+function getHandWindowButtonRow(game, playerNum, gameId) {
+  if (!game) return null;
+  const whoseTurn = game.endOfRoundWhoseTurn ?? game.startOfRoundWhoseTurn;
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (whoseTurn !== playerId) return null;
+  if (game.endOfRoundWhoseTurn) {
+    return new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`end_end_of_round_${gameId}`)
+        .setLabel(`End 'End of Round' window`)
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
+  if (game.startOfRoundWhoseTurn) {
+    return new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`end_start_of_round_${gameId}`)
+        .setLabel(`End 'Start of Round' window`)
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
+  return null;
+}
+
 /** Build hand channel message payload: vertical list of embeds, one per CC, same thumbnail size as DC embeds in Play Area. */
-function buildHandDisplayPayload(hand, deck, gameId) {
+function buildHandDisplayPayload(hand, deck, gameId, game = null, playerNum = 1) {
   const files = [];
   const embeds = [];
 
@@ -1390,11 +1415,14 @@ function buildHandDisplayPayload(hand, deck, gameId) {
     ? `**Hand:** ${hand.join(', ')}\n**Deck:** ${deck.length} cards remaining.`
     : `**Hand:** (empty)\n**Deck:** ${deck.length} cards remaining.`;
   const hasHandOrDeck = hand.length > 0 || deck.length > 0;
+  const rows = hasHandOrDeck ? [getCcActionButtons(gameId, hand, deck)] : [];
+  const windowRow = getHandWindowButtonRow(game, playerNum, gameId);
+  if (windowRow) rows.push(windowRow);
   return {
     content,
     embeds,
     files: files.length > 0 ? files : undefined,
-    components: hasHandOrDeck ? [getCcActionButtons(gameId, hand, deck)] : [],
+    components: rows,
   };
 }
 
@@ -2408,7 +2436,7 @@ async function runDraftRandom(game, client) {
         allowedMentions: { users: [playerId] },
       });
     }
-    const handPayload = buildHandDisplayPayload(hand, deck, game.gameId);
+    const handPayload = buildHandDisplayPayload(hand, deck, game.gameId, game, playerNum);
     await handChannel.send({
       content: handPayload.content,
       embeds: handPayload.embeds,
@@ -2422,30 +2450,24 @@ async function runDraftRandom(game, client) {
 
   await logGameAction(game, client, '**Draft Random** — Auto-deployed all figures and drew starting CCs.', { phase: 'DEPLOYMENT', icon: 'deployed' });
 
-  const roundEmbed = new EmbedBuilder()
-    .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND 1`)
-    .setColor(PHASE_COLOR);
-  const showBtn = shouldShowEndActivationPhaseButton(game, game.gameId);
-  const components = showBtn ? [new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`status_phase_${game.gameId}`)
-      .setLabel('End R1 Activation Phase')
-      .setStyle(ButtonStyle.Secondary)
-  )] : [];
+  game.startOfRoundWhoseTurn = game.initiativePlayerId;
   const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-  const content = showBtn
-    ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Draft Random complete.** Your turn! Both players: click **End R1 Activation Phase** when you've used all activations and any end-of-activation effects.`
-    : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Draft Random complete.** Your turn! Use all activations and actions. The **End R1 Activation Phase** button will appear when both players have done so.`;
-  const sent = await generalChannel.send({
-    content,
+  const otherId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
+  await logGameAction(game, client, `**Start of Round** — 1. Mission Rules/Effects (resolve as needed). 2. <@${game.initiativePlayerId}> (Initiative). 3. <@${otherId}>. 4. Go. Initiative player: play any start-of-round effects/CCs, then click **End 'Start of Round' window** in your Hand.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId] } });
+  const roundEmbed = new EmbedBuilder()
+    .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND 1 — Start of Round window`)
+    .setDescription(`1. Mission Rules/Effects 2. <@${game.initiativePlayerId}> (Initiative) 3. <@${otherId}> 4. Go. Both must click **End 'Start of Round' window** in their Hand.`)
+    .setColor(PHASE_COLOR);
+  await generalChannel.send({
+    content: `**Start of Round** — <@${game.initiativePlayerId}> (Player ${initPlayerNum}), play any start-of-round effects/CCs, then click **End 'Start of Round' window** in your Hand.`,
     embeds: [roundEmbed],
-    components,
     allowedMentions: { users: [game.initiativePlayerId] },
   });
-  game.roundActivationMessageId = sent.id;
-  game.roundActivationButtonShown = showBtn;
+  game.roundActivationMessageId = null;
+  game.roundActivationButtonShown = false;
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
   await clearPreGameSetup(game, client);
+  await updateHandChannelMessages(game, client);
   saveGames();
 }
 
@@ -2758,7 +2780,7 @@ function isGroupDefeated(game, playerNum, dcIndex) {
   return true;
 }
 
-/** Returns ActionRow(s) for Activate buttons (DCs not yet activated). */
+/** Returns ActionRow(s) for Activate buttons (DCs not yet activated). Includes Pass turn to opponent when other has more activations. */
 function getActivateDcButtons(game, playerNum) {
   const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
   const activated = playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
@@ -2776,10 +2798,21 @@ function getActivateDcButtons(game, playerNum) {
       .setLabel(label)
       .setStyle(ButtonStyle.Success));
   }
-  if (btns.length === 0) return [];
   const rows = [];
   for (let r = 0; r < btns.length; r += 5) {
     rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  }
+  const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const myRemaining = playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+  const otherRemaining = playerNum === 1 ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
+  if (turnPlayerId === playerId && otherRemaining > myRemaining && myRemaining > 0) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`pass_activation_turn_${gameId}`)
+        .setLabel('Pass turn to opponent')
+        .setStyle(ButtonStyle.Secondary)
+    ));
   }
   return rows;
 }
@@ -2934,6 +2967,27 @@ function buildDiscardPileDisplayPayload(discard) {
   }
   if (embeds.length > 0) chunks.push({ embeds, files: files.length > 0 ? files : undefined });
   return chunks;
+}
+
+/** Update both Hand channel messages (for window buttons). Call when entering/exiting Start or End of Round window. */
+async function updateHandChannelMessages(game, client) {
+  for (const pn of [1, 2]) {
+    const hand = pn === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+    const deck = pn === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+    const handId = pn === 1 ? game.p1HandId : game.p2HandId;
+    if (!handId) continue;
+    try {
+      const handCh = await client.channels.fetch(handId);
+      const msgs = await handCh.messages.fetch({ limit: 20 });
+      const handMsg = msgs.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
+      if (handMsg) {
+        const payload = buildHandDisplayPayload(hand, deck, game.gameId, game, pn);
+        await handMsg.edit({ content: payload.content, embeds: payload.embeds, files: payload.files || [], components: payload.components }).catch(() => {});
+      }
+    } catch (err) {
+      console.error('Failed to update hand channel message:', err);
+    }
+  }
 }
 
 /** Call after changing player1CcHand/player2CcHand to refresh the Play Area hand visual. */
@@ -3523,10 +3577,10 @@ client.on('interactionCreate', async (interaction) => {
       game[discardKey].push(card);
       const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
       const handMessages = await handChannel.messages.fetch({ limit: 20 });
-      const handMsg = handMessages.find((m) => m.author.bot && m.content?.includes('Command Cards') && (m.content?.includes('Hand:') || m.content?.includes('Hand (')));
+      const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
       const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
       if (handMsg) {
-        const handPayload = buildHandDisplayPayload(hand, deck, gameId);
+        const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
         const effectData = getCcEffect(card);
         const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
         handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
@@ -3577,7 +3631,7 @@ client.on('interactionCreate', async (interaction) => {
       const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')));
       const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
       if (handMsg) {
-        const handPayload = buildHandDisplayPayload(hand, deck, gameId);
+        const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
         handPayload.content = `**Discard CC** — Discarded **${card}**.\n\n` + handPayload.content;
         await handMsg.edit({
           content: handPayload.content,
@@ -4433,89 +4487,248 @@ client.on('interactionCreate', async (interaction) => {
     const attackInfo = attackerStats.attack || { dice: ['red'], range: [1, 3] };
     const targetDcName = target.figureKey.replace(/-\d+-\d+$/, '');
     const targetStats = getDcStats(targetDcName);
-    const defenseType = targetStats.defense || 'white';
+    const attackerDisplayName = meta.displayName || meta.dcName;
+    const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
+    const combatDeclare = `**P${attackerPlayerNum}:** "${attackerDisplayName}" is attacking **P${defenderPlayerNum}:** "${target.label}"!`;
 
-    const roll = rollAttackDice(attackInfo.dice);
-    const defRoll = rollDefenseDice(defenseType);
-    const hit = roll.acc >= defRoll.evade;
-    const damage = hit ? Math.max(0, roll.dmg - defRoll.block) : 0;
+    const generalChannel = await client.channels.fetch(game.generalId);
+    const declareMsg = await generalChannel.send({
+      content: `${ACTION_ICONS.attack || '⚔️'} <t:${Math.floor(Date.now() / 1000)}:t> — ${combatDeclare}`,
+      allowedMentions: { users: [game.player1Id, game.player2Id] },
+    });
+    const thread = await declareMsg.startThread({
+      name: `Combat: P${attackerPlayerNum} vs P${defenderPlayerNum}`,
+      autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+    });
+    const readyRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`combat_ready_${game.gameId}`)
+        .setLabel('Ready to roll combat dice')
+        .setStyle(ButtonStyle.Secondary)
+    );
+    const preCombatMsg = await thread.send({
+      content: '**Pre-combat window** — Both players: resolve any Command Cards, add/remove dice, apply/block damage, etc. When ready, click **Ready to roll combat dice** below.',
+      components: [readyRow],
+    });
+    game.pendingCombat = {
+      gameId: game.gameId,
+      attackerPlayerNum,
+      attackerMsgId: msgId,
+      attackerDcName: meta.dcName,
+      attackerDisplayName,
+      attackerFigureIndex: figureIndex,
+      target: { ...target },
+      targetStats: { defense: targetStats.defense || 'white', cost: targetStats.cost ?? 5 },
+      attackInfo,
+      combatThreadId: thread.id,
+      combatDeclareMsgId: declareMsg.id,
+      combatPreMsgId: preCombatMsg.id,
+      p1Ready: false,
+      p2Ready: false,
+      attackRoll: null,
+      defenseRoll: null,
+      attackTargetMsgId: interaction.message.id,
+    };
 
-    const targetMsgId = findDcMessageIdForFigure(game.gameId, attackerPlayerNum === 1 ? 2 : 1, target.figureKey);
-    const tm = target.figureKey.match(/-(\d+)-(\d+)$/);
-    const targetFigIndex = tm ? parseInt(tm[2], 10) : 0;
+    await interaction.message.edit({
+      content: `**Combat declared** — See thread in Game Log.`,
+      components: [],
+    }).catch(() => {});
+    saveGames();
+    return;
+  }
 
-    let resultText = `Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
-    if (!hit) resultText += ' → **Miss**';
-    else resultText += ` → **${damage} damage**`;
+  if (interaction.customId.startsWith('combat_ready_')) {
+    const gameId = interaction.customId.replace('combat_ready_', '');
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (await replyIfGameEnded(game, interaction)) return;
+    const combat = game.pendingCombat;
+    if (!combat || combat.gameId !== gameId) {
+      await interaction.reply({ content: 'No pending combat.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const clickerIsP1 = interaction.user.id === game.player1Id;
+    const clickerIsP2 = interaction.user.id === game.player2Id;
+    if (!clickerIsP1 && !clickerIsP2) {
+      await interaction.reply({ content: 'Only players in this game can indicate ready.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const playerNum = clickerIsP1 ? 1 : 2;
+    if (playerNum === 1) combat.p1Ready = true;
+    else combat.p2Ready = true;
+    await interaction.deferUpdate();
+    await interaction.message.channel.send(`**Player ${playerNum}** has indicated they are ready to roll combat.`);
+    if (!combat.p1Ready || !combat.p2Ready) {
+      saveGames();
+      return;
+    }
+    const combatRound = game.currentRound ?? 1;
+    const combatEmbed = new EmbedBuilder()
+      .setTitle(`COMBAT: ROUND ${combatRound}`)
+      .setColor(0xe67e22)
+      .setDescription(`Attacker rolls offense, Defender rolls defense.`);
+    const rollRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`combat_roll_${gameId}`)
+        .setLabel('Roll Combat Dice')
+        .setStyle(ButtonStyle.Danger)
+    );
+    const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+    const rollMsgSent = await thread.send({
+      embeds: [combatEmbed],
+      components: [rollRow],
+    });
+    combat.rollMessageId = rollMsgSent.id;
+    try {
+      const preMsg = await thread.messages.fetch(combat.combatPreMsgId);
+      await preMsg.edit({ components: [] }).catch(() => {});
+    } catch {}
+    saveGames();
+    return;
+  }
 
-    if (damage > 0 && targetMsgId) {
-      const healthState = dcHealthState.get(targetMsgId) || [];
-      const entry = healthState[targetFigIndex];
-      if (entry) {
-        const [cur, max] = entry;
-        const newCur = Math.max(0, (cur ?? max) - damage);
-        healthState[targetFigIndex] = [newCur, max ?? newCur];
-        dcHealthState.set(targetMsgId, healthState);
-        const enemyPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
-        const dcMessageIds = enemyPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcList = enemyPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-        const idx = (dcMessageIds || []).indexOf(targetMsgId);
-        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-        if (newCur <= 0) {
-          const enemyPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
-          if (game.figurePositions?.[enemyPlayerNum]) {
-            delete game.figurePositions[enemyPlayerNum][target.figureKey];
-          }
-          const vp = targetStats.cost ?? 5;
-          const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-          game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-          game[vpKey].kills += vp;
-          game[vpKey].total += vp;
-          resultText += ` — **${target.label} defeated!** +${vp} VP`;
-          await logGameAction(game, client, `<@${ownerId}> defeated **${target.label}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
-          if (idx >= 0 && isGroupDefeated(game, enemyPlayerNum, idx)) {
-            const activatedIndices = enemyPlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
-            if (!activatedIndices.includes(idx)) {
-              if (enemyPlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
-              else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
-              await updateActivationsMessage(game, enemyPlayerNum, client);
+  if (interaction.customId.startsWith('combat_roll_')) {
+    const gameId = interaction.customId.replace('combat_roll_', '');
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (await replyIfGameEnded(game, interaction)) return;
+    const combat = game.pendingCombat;
+    if (!combat || combat.gameId !== gameId) {
+      await interaction.reply({ content: 'No pending combat.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const clickerIsP1 = interaction.user.id === game.player1Id;
+    const clickerIsP2 = interaction.user.id === game.player2Id;
+    if (!clickerIsP1 && !clickerIsP2) {
+      await interaction.reply({ content: 'Only players in this game can roll.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const attackerPlayerNum = combat.attackerPlayerNum;
+    const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
+    const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+
+    if (!combat.attackRoll) {
+      if (!clickerIsP1 && attackerPlayerNum === 1) {
+        await interaction.reply({ content: 'Only the attacker (P1) may roll attack dice.', ephemeral: true }).catch(() => {});
+        return;
+      }
+      if (!clickerIsP2 && attackerPlayerNum === 2) {
+        await interaction.reply({ content: 'Only the attacker (P2) may roll attack dice.', ephemeral: true }).catch(() => {});
+        return;
+      }
+      combat.attackRoll = rollAttackDice(combat.attackInfo.dice);
+      await interaction.deferUpdate();
+      await thread.send(`**Attack roll** — ${combat.attackRoll.acc} accuracy, ${combat.attackRoll.dmg} damage, ${combat.attackRoll.surge} surge`);
+      saveGames();
+      return;
+    }
+
+    if (!combat.defenseRoll) {
+      if (!clickerIsP1 && defenderPlayerNum === 1) {
+        await interaction.reply({ content: 'Only the defender (P1) may roll defense dice.', ephemeral: true }).catch(() => {});
+        return;
+      }
+      if (!clickerIsP2 && defenderPlayerNum === 2) {
+        await interaction.reply({ content: 'Only the defender (P2) may roll defense dice.', ephemeral: true }).catch(() => {});
+        return;
+      }
+      combat.defenseRoll = rollDefenseDice(combat.targetStats.defense);
+      await interaction.deferUpdate();
+      await thread.send(`**Defense roll** — ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade`);
+      const roll = combat.attackRoll;
+      const defRoll = combat.defenseRoll;
+      const hit = roll.acc >= defRoll.evade;
+      const damage = hit ? Math.max(0, roll.dmg - defRoll.block) : 0;
+      const ownerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+      const targetMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, combat.target.figureKey);
+      const tm = combat.target.figureKey.match(/-(\d+)-(\d+)$/);
+      const targetFigIndex = tm ? parseInt(tm[2], 10) : 0;
+
+      let resultText = `**Result:** Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
+      if (!hit) resultText += ' → **Miss**';
+      else resultText += ` → **${damage} damage**`;
+
+      if (damage > 0 && targetMsgId) {
+        const healthState = dcHealthState.get(targetMsgId) || [];
+        const entry = healthState[targetFigIndex];
+        if (entry) {
+          const [cur, max] = entry;
+          const newCur = Math.max(0, (cur ?? max) - damage);
+          healthState[targetFigIndex] = [newCur, max ?? newCur];
+          dcHealthState.set(targetMsgId, healthState);
+          const dcMessageIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+          const idx = (dcMessageIds || []).indexOf(targetMsgId);
+          if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+          if (newCur <= 0) {
+            if (game.figurePositions?.[defenderPlayerNum]) {
+              delete game.figurePositions[defenderPlayerNum][combat.target.figureKey];
             }
+            const vp = combat.targetStats.cost ?? 5;
+            const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+            game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+            game[vpKey].kills += vp;
+            game[vpKey].total += vp;
+            resultText += ` — **${combat.target.label} defeated!** +${vp} VP`;
+            await logGameAction(game, interaction.client, `<@${ownerId}> defeated **${combat.target.label}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+            if (idx >= 0 && isGroupDefeated(game, defenderPlayerNum, idx)) {
+              const activatedIndices = defenderPlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+              if (!activatedIndices.includes(idx)) {
+                if (defenderPlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
+                else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+                await updateActivationsMessage(game, defenderPlayerNum, interaction.client);
+              }
+            }
+            await checkWinConditions(game, interaction.client);
           }
-          await checkWinConditions(game, client);
         }
+      } else if (hit && damage === 0) {
+        await logGameAction(game, interaction.client, `<@${ownerId}> attacked **${combat.target.label}** — blocked`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+      } else if (!hit) {
+        await logGameAction(game, interaction.client, `<@${ownerId}> attacked **${combat.target.label}** — miss`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+      } else if (damage > 0) {
+        await logGameAction(game, interaction.client, `<@${ownerId}> dealt **${damage}** damage to **${combat.target.label}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
       }
-    } else if (hit && damage === 0) {
-      await logGameAction(game, client, `<@${ownerId}> attacked **${target.label}** — blocked`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
-    } else if (!hit) {
-      await logGameAction(game, client, `<@${ownerId}> attacked **${target.label}** — miss`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
-    } else if (damage > 0) {
-      await logGameAction(game, client, `<@${ownerId}> dealt **${damage}** damage to **${target.label}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
-    }
 
-    await interaction.message.edit({ content: resultText, components: [] }).catch(() => {});
-    if (damage > 0 && targetMsgId) {
-      try {
-        const targetMeta = dcMessageMeta.get(targetMsgId);
-        if (targetMeta) {
-          const channelId = targetMeta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
-          const channel = await client.channels.fetch(channelId);
-          const dcMsg = await channel.messages.fetch(targetMsgId);
-          const exhausted = dcExhaustedState.get(targetMsgId) ?? false;
-          const healthState = dcHealthState.get(targetMsgId) || [];
-          const { embed, files } = await buildDcEmbedAndFiles(targetMeta.dcName, exhausted, targetMeta.displayName, healthState);
-          await dcMsg.edit({ embeds: [embed], files }).catch(() => {});
-        }
-      } catch (err) {
-        console.error('Failed to update target DC embed:', err);
+      await thread.send(resultText);
+      delete game.pendingCombat;
+      if (combat.rollMessageId) {
+        try {
+          const rollMsg = await thread.messages.fetch(combat.rollMessageId);
+          await rollMsg.edit({ components: [] }).catch(() => {});
+        } catch {}
       }
-    }
-    if (game.boardId && game.selectedMap) {
-      try {
-        const boardChannel = await client.channels.fetch(game.boardId);
-        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-        await boardChannel.send(payload);
-      } catch (err) {
-        console.error('Failed to update map after attack:', err);
+      if (damage > 0 && targetMsgId) {
+        try {
+          const targetMeta = dcMessageMeta.get(targetMsgId);
+          if (targetMeta) {
+            const channelId = targetMeta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+            const channel = await interaction.client.channels.fetch(channelId);
+            const dcMsg = await channel.messages.fetch(targetMsgId);
+            const exhausted = dcExhaustedState.get(targetMsgId) ?? false;
+            const healthState = dcHealthState.get(targetMsgId) || [];
+            const { embed, files } = await buildDcEmbedAndFiles(targetMeta.dcName, exhausted, targetMeta.displayName, healthState);
+            await dcMsg.edit({ embeds: [embed], files }).catch(() => {});
+          }
+        } catch (err) {
+          console.error('Failed to update target DC embed:', err);
+        }
+      }
+      if (game.boardId && game.selectedMap) {
+        try {
+          const boardChannel = await interaction.client.channels.fetch(game.boardId);
+          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
+        } catch (err) {
+          console.error('Failed to update map after attack:', err);
+        }
       }
     }
     saveGames();
@@ -4580,6 +4793,55 @@ client.on('interactionCreate', async (interaction) => {
     }
     game.p1ActivationPhaseEnded = false;
     game.p2ActivationPhaseEnded = false;
+    await interaction.deferUpdate();
+    game.endOfRoundWhoseTurn = game.initiativePlayerId;
+    const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    const otherPlayerId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
+    await logGameAction(game, client, `**End of Round** — 1. Mission Rules/Effects (resolve as needed). 2. <@${game.initiativePlayerId}> (Initiative). 3. <@${otherPlayerId}>. 4. Next phase. Initiative player: play any end-of-round effects or CCs, then click **End 'End of Round' window** in your Hand.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId, otherPlayerId] } });
+    const generalChannel = await client.channels.fetch(game.generalId);
+    const roundEmbed = new EmbedBuilder()
+      .setTitle(`${GAME_PHASES.ROUND.emoji}  End of Round — waiting for both players`)
+      .setDescription(`1. Mission Rules/Effects 2. <@${game.initiativePlayerId}> (Initiative) 3. <@${otherPlayerId}> 4. Go. Both must click **End 'End of Round' window** in their Hand.`)
+      .setColor(PHASE_COLOR);
+    await generalChannel.send({
+      content: `**End of Round window** — <@${game.initiativePlayerId}> (Player ${initPlayerNum}), play any end-of-round effects/CCs, then click the button in your Hand.`,
+      embeds: [roundEmbed],
+      allowedMentions: { users: [game.initiativePlayerId] },
+    });
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    await updateHandChannelMessages(game, client);
+    saveGames();
+    return;
+  }
+
+  if (interaction.customId.startsWith('end_end_of_round_')) {
+    const gameId = interaction.customId.replace('end_end_of_round_', '');
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (await replyIfGameEnded(game, interaction)) return;
+    if (!game.endOfRoundWhoseTurn) {
+      await interaction.reply({ content: 'Not in End of Round window.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (interaction.user.id !== game.endOfRoundWhoseTurn) {
+      await interaction.reply({ content: "It's not your turn in the End of Round window.", ephemeral: true }).catch(() => {});
+      return;
+    }
+    const initiativeId = game.initiativePlayerId;
+    const otherId = initiativeId === game.player1Id ? game.player2Id : game.player1Id;
+    if (interaction.user.id === initiativeId) {
+      game.endOfRoundWhoseTurn = otherId;
+      const initNum = initiativeId === game.player1Id ? 1 : 2;
+      const otherNum = 3 - initNum;
+      await logGameAction(game, client, `**End of Round** — 2. Initiative done ✓. 3. <@${otherId}> (Player ${otherNum}) — your turn for end-of-round effects. Click **End 'End of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
+      await updateHandChannelMessages(game, client);
+      saveGames();
+      return;
+    }
+    game.endOfRoundWhoseTurn = null;
     await interaction.deferUpdate();
     game.dcFinishedPinged = {};
     game.pendingEndTurn = {};
@@ -4706,9 +4968,9 @@ client.on('interactionCreate', async (interaction) => {
       try {
         const handCh = await client.channels.fetch(handId);
         const msgs = await handCh.messages.fetch({ limit: 20 });
-        const handMsg = msgs.find((m) => m.author.bot && m.content?.includes('Command Cards') && (m.content?.includes('Hand:') || m.content?.includes('Hand (')));
+        const handMsg = msgs.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
         if (handMsg) {
-          const payload = buildHandDisplayPayload(hand, deck, game.gameId);
+          const payload = buildHandDisplayPayload(hand, deck, game.gameId, game, pn);
           await handMsg.edit({ content: payload.content, embeds: payload.embeds, files: payload.files || [], components: payload.components }).catch(() => {});
         }
       } catch (err) {
@@ -4719,24 +4981,88 @@ client.on('interactionCreate', async (interaction) => {
     const drawDesc = p1Terminals > 0 || p2Terminals > 0
       ? `Draw 1 CC each (P1 +${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''}, P2 +${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''}).`
       : 'Draw 1 command card each.';
-    await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) — resolve manually. 4. Initiative passes to <@${game.initiativePlayerId}>. Round **${game.currentRound}** begins.`, { phase: 'ROUND', icon: 'round' });
+    await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to <@${game.initiativePlayerId}> (after end of round effects). Round **${game.currentRound}** — **Start of Round** window: 1. Mission Rules/Effects 2. Initiative 3. Non-initiative 4. Go.`, { phase: 'ROUND', icon: 'round' });
+    game.startOfRoundWhoseTurn = game.initiativePlayerId;
+    const startInitPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    const startOtherId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
+    const startRoundEmbed = new EmbedBuilder()
+      .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound} — Start of Round window`)
+      .setDescription(`1. Mission Rules/Effects 2. <@${game.initiativePlayerId}> (Initiative) 3. <@${startOtherId}> 4. Go. Both must click **End 'Start of Round' window** in their Hand.`)
+      .setColor(PHASE_COLOR);
+    await generalChannel.send({
+      content: `**Start of Round** — <@${game.initiativePlayerId}> (Player ${startInitPlayerNum}), play any start-of-round effects/CCs, then click **End 'Start of Round' window** in your Hand.`,
+      embeds: [startRoundEmbed],
+      allowedMentions: { users: [game.initiativePlayerId] },
+    });
+    await updateHandChannelMessages(game, client);
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    saveGames();
+    return;
+  }
+
+  if (interaction.customId.startsWith('end_start_of_round_')) {
+    const gameId = interaction.customId.replace('end_start_of_round_', '');
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (await replyIfGameEnded(game, interaction)) return;
+    if (!game.startOfRoundWhoseTurn) {
+      await interaction.reply({ content: 'Not in Start of Round window.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (interaction.user.id !== game.startOfRoundWhoseTurn) {
+      await interaction.reply({ content: "It's not your turn in the Start of Round window.", ephemeral: true }).catch(() => {});
+      return;
+    }
+    const initiativeId = game.initiativePlayerId;
+    const otherId = initiativeId === game.player1Id ? game.player2Id : game.player1Id;
+    if (interaction.user.id === initiativeId) {
+      game.startOfRoundWhoseTurn = otherId;
+      const initNum = initiativeId === game.player1Id ? 1 : 2;
+      const otherNum = 3 - initNum;
+      await logGameAction(game, client, `**Start of Round** — 2. Initiative done ✓. 3. <@${otherId}> (Player ${otherNum}) — your turn for start-of-round effects. Click **End 'Start of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
+      await updateHandChannelMessages(game, client);
+      saveGames();
+      return;
+    }
+    game.startOfRoundWhoseTurn = null;
+    await interaction.deferUpdate();
+    const generalChannel = await client.channels.fetch(game.generalId);
     const roundEmbed = new EmbedBuilder()
       .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound}`)
       .setColor(PHASE_COLOR);
     const showBtn = shouldShowEndActivationPhaseButton(game, gameId);
-    const components = showBtn ? [new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`status_phase_${gameId}`)
-        .setLabel(`End R${game.currentRound} Activation Phase`)
-        .setStyle(ButtonStyle.Secondary)
-    )] : [];
+    const components = [];
+    if (showBtn) {
+      components.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`status_phase_${gameId}`)
+          .setLabel(`End R${game.currentRound} Activation Phase`)
+          .setStyle(ButtonStyle.Secondary)
+      ));
+    }
+    const initRem = game.initiativePlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+    const otherRem = game.initiativePlayerId === game.player1Id ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
+    if (otherRem > initRem && initRem > 0) {
+      components.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`pass_activation_turn_${gameId}`)
+          .setLabel('Pass turn to opponent')
+          .setStyle(ButtonStyle.Secondary)
+      ));
+    }
+    const p1Terminals = game.selectedMap?.id ? countTerminalsControlledByPlayer(game, 1, game.selectedMap.id) : 0;
+    const p2Terminals = game.selectedMap?.id ? countTerminalsControlledByPlayer(game, 2, game.selectedMap.id) : 0;
     const drawRule = (p1Terminals > 0 || p2Terminals > 0)
       ? 'Draw 1 CC (+1 per controlled terminal). '
       : 'Draw 1 CC. ';
     const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    const passHint = otherRem > initRem && initRem > 0 ? ' You may pass back (opponent has more activations).' : '';
     const content = showBtn
-      ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Both players: click **End R${game.currentRound} Activation Phase** when you've used all activations and any end-of-activation effects.`
-      : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Use all activations and actions. The **End R${game.currentRound} Activation Phase** button will appear when both players have done so.`;
+      ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Both players: click **End R${game.currentRound} Activation Phase** when you've used all activations and any end-of-activation effects.${passHint}`
+      : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Use all activations and actions. The **End R${game.currentRound} Activation Phase** button will appear when both players have done so.${passHint}`;
     const sent = await generalChannel.send({
       content,
       embeds: [roundEmbed],
@@ -4746,6 +5072,7 @@ client.on('interactionCreate', async (interaction) => {
     game.roundActivationMessageId = sent.id;
     game.roundActivationButtonShown = showBtn;
     game.currentActivationTurnPlayerId = game.initiativePlayerId;
+    await updateHandChannelMessages(game, client);
     await interaction.message.edit({ components: [] }).catch(() => {});
     saveGames();
     return;
@@ -4870,6 +5197,60 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  if (interaction.customId.startsWith('pass_activation_turn_')) {
+    const gameId = interaction.customId.replace('pass_activation_turn_', '');
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (await replyIfGameEnded(game, interaction)) return;
+    const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
+    if (interaction.user.id !== turnPlayerId) {
+      await interaction.reply({ content: "It's not your turn to pass.", ephemeral: true }).catch(() => {});
+      return;
+    }
+    const myRem = turnPlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+    const otherRem = turnPlayerId === game.player1Id ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
+    if (otherRem <= myRem) {
+      await interaction.reply({ content: 'The other player does not have more activations than you.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const otherPlayerId = turnPlayerId === game.player1Id ? game.player2Id : game.player1Id;
+    const otherPlayerNum = otherPlayerId === game.player1Id ? 1 : 2;
+    game.currentActivationTurnPlayerId = otherPlayerId;
+    await interaction.deferUpdate();
+    await logGameAction(game, client, `<@${turnPlayerId}> passed the turn to <@${otherPlayerId}> (Player ${otherPlayerNum} has more activations remaining).`, { phase: 'ROUND', icon: 'activate', allowedMentions: { users: [otherPlayerId] } });
+    if (game.roundActivationMessageId && game.generalId) {
+      try {
+        const ch = await client.channels.fetch(game.generalId);
+        const msg = await ch.messages.fetch(game.roundActivationMessageId);
+        const round = game.currentRound || 1;
+        const initNum = otherPlayerId === game.player1Id ? 1 : 2;
+        const newCurrentRem = otherPlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+        const justPassedRem = turnPlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+        const passRows = [];
+        if (justPassedRem > newCurrentRem && newCurrentRem > 0) {
+          passRows.push(new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`pass_activation_turn_${gameId}`)
+              .setLabel('Pass turn to opponent')
+              .setStyle(ButtonStyle.Secondary)
+          ));
+        }
+        await msg.edit({
+          content: `<@${otherPlayerId}> (**Player ${initNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back if the other player has more activations.' : ''}`,
+          components: passRows,
+          allowedMentions: { users: [otherPlayerId] },
+        }).catch(() => {});
+      } catch (err) {
+        console.error('Failed to update round message for pass:', err);
+      }
+    }
+    saveGames();
+    return;
+  }
+
   if (interaction.customId.startsWith('end_turn_')) {
     const match = interaction.customId.match(/^end_turn_([^_]+)_(.+)$/);
     if (!match) return;
@@ -4946,6 +5327,31 @@ client.on('interactionCreate', async (interaction) => {
       phase: 'ROUND',
       icon: 'activate',
     });
+    if (game.roundActivationMessageId && game.generalId && !game.roundActivationButtonShown) {
+      try {
+        const ch = await client.channels.fetch(game.generalId);
+        const msg = await ch.messages.fetch(game.roundActivationMessageId);
+        const round = game.currentRound || 1;
+        const newCurrentRem = otherPlayerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+        const justActedRem = meta.playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+        const passRows = [];
+        if (justActedRem > newCurrentRem && newCurrentRem > 0) {
+          passRows.push(new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`pass_activation_turn_${gameId}`)
+              .setLabel('Pass turn to opponent')
+              .setStyle(ButtonStyle.Secondary)
+          ));
+        }
+        await msg.edit({
+          content: `<@${otherPlayerId}> (**Player ${otherPlayerNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back (opponent has more activations).' : ''}`,
+          components: passRows,
+          allowedMentions: { users: [otherPlayerId] },
+        }).catch(() => {});
+      } catch (err) {
+        console.error('Failed to update round message after end turn:', err);
+      }
+    }
     await maybeShowEndActivationPhaseButton(game, client);
     saveGames();
     return;
@@ -5736,8 +6142,8 @@ client.on('interactionCreate', async (interaction) => {
     )] : [];
     const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
     const content = showBtn
-      ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Both players have deployed.** Your turn! Both players: click **End R1 Activation Phase** when you've used all activations and any end-of-activation effects.`
-      : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Both players have deployed.** Your turn! Use all activations and actions. The **End R1 Activation Phase** button will appear when both players have done so.`;
+      ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands below. After both have drawn, the **Start of Round** window begins. Then click **End R1 Activation Phase** when you've used all activations.`
+      : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands below. After both have drawn, the **Start of Round** window begins.`;
     const sent = await generalChannel.send({
       content,
       embeds: [roundEmbed],
@@ -5800,7 +6206,7 @@ client.on('interactionCreate', async (interaction) => {
     game[deckKey] = deck;
     game[handKey] = hand;
     game[drawnKey] = true;
-    const handPayload = buildHandDisplayPayload(hand, deck, gameId);
+    const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
     await interaction.message.edit({
       content: handPayload.content,
       embeds: handPayload.embeds,
@@ -5808,6 +6214,23 @@ client.on('interactionCreate', async (interaction) => {
       components: handPayload.components,
     }).catch(() => {});
     await updateHandVisualMessage(game, playerNum, client);
+    if (game.player1CcDrawn && game.player2CcDrawn) {
+      game.startOfRoundWhoseTurn = game.initiativePlayerId;
+      const generalChannel = await client.channels.fetch(game.generalId);
+      const initNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+      const otherId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
+      await logGameAction(game, client, `**Start of Round** — 1. Mission Rules/Effects (resolve as needed). 2. <@${game.initiativePlayerId}> (Initiative). 3. <@${game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id}>. 4. Go. Initiative player: play any start-of-round effects/CCs, then click **End 'Start of Round' window** in your Hand.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId] } });
+      const startRoundEmbed = new EmbedBuilder()
+        .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND 1 — Start of Round window`)
+        .setDescription(`1. Mission Rules/Effects 2. <@${game.initiativePlayerId}> (Initiative) 3. <@${otherId}>. Both must click **End 'Start of Round' window** in their Hand.`)
+        .setColor(PHASE_COLOR);
+      await generalChannel.send({
+        content: `**Start of Round** — <@${game.initiativePlayerId}> (Player ${initNum}), play any start-of-round effects/CCs, then click **End 'Start of Round' window** in your Hand.`,
+        embeds: [startRoundEmbed],
+        allowedMentions: { users: [game.initiativePlayerId] },
+      });
+      await updateHandChannelMessages(game, client);
+    }
     saveGames();
     return;
   }
@@ -5872,7 +6295,7 @@ client.on('interactionCreate', async (interaction) => {
     hand.push(card);
     game[deckKey] = deck;
     game[handKey] = hand;
-    const handPayload = buildHandDisplayPayload(hand, deck, gameId);
+    const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
     handPayload.content = `**Draw CC** — Drew **${card}**.\n\n` + handPayload.content;
     await interaction.message.edit({
       content: handPayload.content,

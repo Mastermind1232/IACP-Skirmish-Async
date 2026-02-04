@@ -6,6 +6,8 @@
   "scripts": {
     "extract-maps": "node scripts/extract-map-registry.js",
     "extract-cc-names": "node scripts/extract-cc-names.js",
+    "scrape-cc-data": "node scripts/scrape-cc-data.js",
+    "cc-review": "npx --yes serve . -p 3456",
     "extract-dc-images": "node scripts/extract-dc-images.js",
     "test-map": "node scripts/test-map-render.js",
     "extract-zones": "npx --yes serve . -p 3456",
@@ -16,6 +18,8 @@
   "dependencies": {
     "canvas": "^3.2.1",
     "discord.js": "^14.25.1",
-    "dotenv": "^17.2.3"
+    "dotenv": "^17.2.3",
+    "sharp": "^0.34.5",
+    "tesseract.js": "^7.0.0"
   }
 }
