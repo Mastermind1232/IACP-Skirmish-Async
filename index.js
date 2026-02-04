@@ -1358,7 +1358,7 @@ const CHANNELS = {
   activeGames: { name: 'active-games', parent: 'lfg', type: ChannelType.GuildText },
   botLogs: { name: 'bot-logs', parent: 'admin', type: ChannelType.GuildText },
   suggestions: { name: 'suggestions', parent: 'admin', type: ChannelType.GuildText },
-  requestsAndSuggestions: { name: 'requests-and-suggestions', parent: 'admin', type: ChannelType.GuildForum },
+  requestsAndSuggestions: { name: 'bot-requests-and-suggestions', parent: 'admin', type: ChannelType.GuildForum },
 };
 
 function getMainMenu() {
@@ -3616,11 +3616,11 @@ client.once('ready', async () => {
           (c) => c.type === ChannelType.GuildCategory && c.name === CATEGORIES.admin
         );
         const hasRequestsForum = guild.channels.cache.some(
-          (c) => c.type === ChannelType.GuildForum && c.name === 'requests-and-suggestions'
+          (c) => c.type === ChannelType.GuildForum && c.name === 'bot-requests-and-suggestions'
         );
         if (adminCat && !hasRequestsForum) {
           await guild.channels.create({
-            name: 'requests-and-suggestions',
+            name: 'bot-requests-and-suggestions',
             type: ChannelType.GuildForum,
             parent: adminCat.id,
           });
@@ -3632,7 +3632,7 @@ client.once('ready', async () => {
   }
 });
 
-/** Resolve/Reject buttons for requests-and-suggestions forum posts. Admin-only (checked on click). */
+/** Resolve/Reject buttons for bot-requests-and-suggestions forum posts. Admin-only (checked on click). */
 function getRequestActionButtons(threadId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -3673,7 +3673,7 @@ async function maybeAddRequestButtons(message) {
   const thread = message.channel;
   if (!thread?.isThread?.()) return false;
   const parent = thread.parent;
-  if (parent?.name !== 'requests-and-suggestions') return false;
+  if (parent?.name !== 'bot-requests-and-suggestions') return false;
   if (requestsWithButtons.has(thread.id)) return false;
   requestsWithButtons.add(thread.id);
   await thread.send({
