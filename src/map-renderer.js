@@ -344,6 +344,61 @@ export async function renderMap(mapId, options = {}) {
     await drawTokenAt(coord, tc.missionB, 'rgba(255,183,77,0.8)', 'square', 'Contraband');
   }
 
+  const drawDoorAtEdge = async (edge) => {
+    if (!edge || edge.length < 2) return;
+    const a = parseCoord(edge[0]);
+    const b = parseCoord(edge[1]);
+    if (a.col < 0 || a.row < 0 || b.col < 0 || b.row < 0) return;
+    const cxA = sx0 + a.col * sdx + sdx / 2;
+    const cyA = sy0 + a.row * sdy + sdy / 2;
+    const cxB = sx0 + b.col * sdx + sdx / 2;
+    const cyB = sy0 + b.row * sdy + sdy / 2;
+    const midX = (cxA + cxB) / 2;
+    const midY = (cyA + cyB) / 2;
+    const doorSize = Math.min(sdx, sdy) * 0.85;
+    const imageFilename = tc.doors || 'Token--Door.png';
+    const resolved = resolveImagePath(join('vassal_extracted', 'images', imageFilename), 'tokens');
+    const imgPath = join(rootDir, resolved);
+    const horizontalEdge = a.row === b.row;
+    if (existsSync(imgPath)) {
+      try {
+        const tokenImg = await loadImage(imgPath);
+        const tw = tokenImg.width;
+        const th = tokenImg.height;
+        const tScale = Math.min(doorSize / tw, doorSize / th);
+        const dw = Math.round(tw * tScale);
+        const dh = Math.round(th * tScale);
+        ctx.save();
+        ctx.translate(midX, midY);
+        if (horizontalEdge) ctx.rotate(Math.PI / 2);
+        ctx.drawImage(tokenImg, -dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
+      } catch (err) {
+        console.error('Door image load failed:', imageFilename, err);
+        drawDoorFallback();
+      }
+    } else {
+      drawDoorFallback();
+    }
+    function drawDoorFallback() {
+      ctx.save();
+      ctx.translate(midX, midY);
+      if (horizontalEdge) ctx.rotate(Math.PI / 2);
+      ctx.fillStyle = 'rgba(101,67,33,0.95)';
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.lineWidth = 2;
+      const hw = doorSize * 0.4;
+      const hh = doorSize * 0.15;
+      ctx.fillRect(-hw, -hh, hw * 2, hh * 2);
+      ctx.strokeRect(-hw, -hh, hw * 2, hh * 2);
+      ctx.restore();
+    }
+  };
+
+  for (const edge of tokens.doors || []) {
+    await drawDoorAtEdge(edge);
+  }
+
   // Optionally crop to deployment zone for zoomed-in view
   if (cropToZone && Array.isArray(cropToZone) && cropToZone.length > 0) {
     const parsed = cropToZone.map((c) => parseCoord(c)).filter((p) => p.col >= 0 && p.row >= 0);

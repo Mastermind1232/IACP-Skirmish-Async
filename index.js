@@ -2302,17 +2302,25 @@ function getFiguresForRender(game) {
   return figures;
 }
 
-/** Get map tokens (terminals + mission-specific) for renderMap. */
-function getMapTokensForRender(mapId, missionVariant) {
+/** Get map tokens (terminals + mission-specific + closed doors) for renderMap. */
+function getMapTokensForRender(mapId, missionVariant, openedDoors = []) {
   const mapData = mapTokensData[mapId];
-  if (!mapData) return { terminals: [], missionA: [], missionB: [] };
+  if (!mapData) return { terminals: [], missionA: [], missionB: [], doors: [] };
   const terminals = mapData.terminals || [];
   const missionA = mapData.missionA?.launchPanels || [];
   const missionB = mapData.missionB?.contraband || mapData.missionB?.crates || [];
+  const doorEdges = mapData.doors || [];
+  const openedSet = new Set((openedDoors || []).map((k) => String(k).toLowerCase()));
+  const doors = doorEdges.filter((edge) => {
+    if (!edge || edge.length < 2) return false;
+    const ek = edgeKey(edge[0], edge[1]);
+    return !openedSet.has(ek);
+  });
   return {
     terminals,
     missionA: missionVariant === 'a' ? missionA : [],
     missionB: missionVariant === 'b' ? missionB : [],
+    doors,
   };
 }
 
@@ -2353,7 +2361,7 @@ async function getActivationMinimapAttachment(game, msgId) {
   if (cropCoords.length === 0) return null;
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors);
     const buffer = await renderMap(map.id, {
       figures,
       tokens,
@@ -2396,7 +2404,7 @@ async function getMovementMinimapAttachment(game, msgId, figureKey, spacesAtCost
   const labelCoords = spacesAtCost.map((s) => String(s).toLowerCase());
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors);
     const buffer = await renderMap(map.id, {
       figures,
       tokens,
@@ -2419,7 +2427,7 @@ async function getDeploymentMapAttachment(game, zone) {
   if (!map?.id) return null;
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors);
     const zoneSpaces = zone && deploymentZones[map.id]?.[zone] ? deploymentZones[map.id][zone] : null;
     const occupiedSet = toLowerSet(getOccupiedSpacesForMovement(game) || []);
     const validLabelCoords =
@@ -2602,9 +2610,9 @@ async function buildBoardMapPayload(gameId, map, game) {
   const components = [getBoardButtons(gameId)];
   const embeds = game ? [buildScorecardEmbed(game)] : [];
   const figures = game ? getFiguresForRender(game) : [];
-  const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant);
+  const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors);
   const hasFigures = figures.length > 0;
-  const hasTokens = tokens.terminals?.length > 0 || tokens.missionA?.length > 0 || tokens.missionB?.length > 0;
+  const hasTokens = tokens.terminals?.length > 0 || tokens.missionA?.length > 0 || tokens.missionB?.length > 0 || tokens.doors?.length > 0;
   const resolvedMapPath = map.imagePath ? resolveAssetPath(map.imagePath, 'maps') : null;
   const imagePath = resolvedMapPath ? join(rootDir, resolvedMapPath) : null;
   const pdfPath = join(rootDir, 'data', 'map-pdfs', `${map.id}.pdf`);
