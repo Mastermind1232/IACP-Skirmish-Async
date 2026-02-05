@@ -1227,6 +1227,19 @@ const processedTestGameMessageIds = new Set();
 const games = new Map(); // gameId -> { ..., p1ActivationsMessageId, p2ActivationsMessageId, p1ActivationsRemaining, p2ActivationsRemaining, p1ActivationsTotal, p2ActivationsTotal }
 let gameIdCounter = 1;
 
+const MAX_ACTIVE_GAMES_PER_PLAYER = 3;
+
+/** Count active (non-ended) games the player is in. */
+function countActiveGamesForPlayer(playerId) {
+  if (!playerId) return 0;
+  let count = 0;
+  for (const [, game] of games) {
+    if (game.ended) continue;
+    if (game.player1Id === playerId || game.player2Id === playerId) count++;
+  }
+  return count;
+}
+
 const GAMES_STATE_PATH = join(rootDir, 'data', 'games-state.json');
 
 async function loadGames() {
@@ -3917,6 +3930,10 @@ client.on('messageCreate', async (message) => {
     const userId = message.author.id;
     if (testGameCreationInProgress.has(userId)) {
       await message.reply('A test game is already being created. Please wait.');
+      return;
+    }
+    if (countActiveGamesForPlayer(userId) >= MAX_ACTIVE_GAMES_PER_PLAYER) {
+      await message.reply(`You are already in **${MAX_ACTIVE_GAMES_PER_PLAYER}** active games. Finish or leave a game before creating another.`);
       return;
     }
     testGameCreationInProgress.add(userId);
@@ -7443,6 +7460,14 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'This game already has two players.', ephemeral: true });
       return;
     }
+    const joinerId = interaction.user.id;
+    if (joinerId !== lobby.creatorId && countActiveGamesForPlayer(joinerId) >= MAX_ACTIVE_GAMES_PER_PLAYER) {
+      await interaction.reply({
+        content: `You are already in **${MAX_ACTIVE_GAMES_PER_PLAYER}** active games. Finish or leave a game before joining another.`,
+        ephemeral: true,
+      });
+      return;
+    }
     if (interaction.user.id === lobby.creatorId) {
       lobby.joinedId = interaction.user.id;
       lobby.status = 'Full';
@@ -7473,6 +7498,19 @@ client.on('interactionCreate', async (interaction) => {
     }
     if (interaction.user.id !== lobby.creatorId && interaction.user.id !== lobby.joinedId) {
       await interaction.reply({ content: 'Only players in this game can start it.', ephemeral: true });
+      return;
+    }
+    const c1 = countActiveGamesForPlayer(lobby.creatorId);
+    const c2 = countActiveGamesForPlayer(lobby.joinedId);
+    if (c1 >= MAX_ACTIVE_GAMES_PER_PLAYER || c2 >= MAX_ACTIVE_GAMES_PER_PLAYER) {
+      const who = [];
+      if (c1 >= MAX_ACTIVE_GAMES_PER_PLAYER) who.push('<@' + lobby.creatorId + '>');
+      if (c2 >= MAX_ACTIVE_GAMES_PER_PLAYER) who.push('<@' + lobby.joinedId + '>');
+      await interaction.reply({
+        content: `${who.join(' and ')} ${who.length > 1 ? 'are' : 'is'} already in **${MAX_ACTIVE_GAMES_PER_PLAYER}** active games. Finish or leave a game before starting another.`,
+        ephemeral: true,
+        allowedMentions: { users: [lobby.creatorId, lobby.joinedId] },
+      });
       return;
     }
     lobby.status = 'Launched';
