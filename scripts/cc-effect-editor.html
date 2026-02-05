@@ -79,6 +79,7 @@
     <option value="whenDefeated">When defeated</option>
     <option value="whenYouDeclareAttack">When you declare an attack</option>
     <option value="whenYouWouldSufferDamage">When you would suffer damage</option>
+    <option value="whileDefending">While defending</option>
   </select>
 
   <label>Effect (card text)</label>
@@ -171,6 +172,14 @@
       if (names.includes(v) && !cards[v]) cardSelect.value = v;
       else cardSelect.value = '';
       onCardChange();
+    });
+
+    timing.addEventListener('change', () => {
+      if (!effect.value.trim()) {
+        const opt = timing.options[timing.selectedIndex];
+        const label = opt && opt.value ? opt.textContent : '';
+        if (label) effect.value = 'Use (' + label + ').';
+      }
     });
 
     let cards = {};

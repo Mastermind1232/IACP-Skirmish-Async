@@ -147,6 +147,13 @@
       "timing": "specialAction",
       "effect": "Place this card on a hostile Deployment card. When an attack targeting a figure in that group is declared, apply +1 Damage to the attack results.",
       "effectType": "manual"
+    },
+    "Bodyguard": {
+      "cost": 1,
+      "playableBy": "GUARDIAN",
+      "timing": "whenAttackDeclaredOnAdjacentFriendly",
+      "effect": "Use when an attack targeting an adjacent friendly figure is declared. If you could be the target of the attack, the attack targets you instead.",
+      "effectType": "manual"
     }
   }
 }
