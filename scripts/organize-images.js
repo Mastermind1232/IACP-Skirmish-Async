@@ -67,7 +67,7 @@ function getDestSubfolder(filename, figurelessFilenames) {
   if (SUBFOLDERS.tokens.some((p) => filename.startsWith(p))) return 'tokens';
   if (SUBFOLDERS.conditions.some((p) => filename.startsWith(p))) return 'conditions';
   if (filename.startsWith('Icon-') && SUBFOLDERS.conditionIcons.some((c) => filename.includes(c))) return 'conditions';
-  if ((filename.startsWith('Icon-') && ['Block', 'Damage', 'Evade', 'Surge', 'Crate'].some((c) => filename.includes(c))) || filename.startsWith('Icon--') || filename.startsWith('Icon_')) return 'tokens';
+  if ((filename.startsWith('Icon-') && ['Block', 'Evade', 'Hit', 'Surge', 'Crate'].some((c) => filename.includes(c))) || filename.startsWith('Icon--') || filename.startsWith('Icon_')) return 'tokens';
   if (SUBFOLDERS.companions.some((p) => filename.startsWith(p))) return 'companions';
   if (SUBFOLDERS.dice.some((p) => filename.startsWith(p))) return 'dice';
   if (SUBFOLDERS['dc-supplemental'].some((p) => filename.startsWith(p))) return 'dc-supplemental';

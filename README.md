@@ -1,6 +1,14 @@
 # IACP-Skirmish-Async
 IACP - Skirmish Async
 
+## Power token terminology
+
+- **Hit** token: +1 Hit during combat (not “Damage” token)
+- **Block** token: +1 Block during combat (not “Armor” token)
+- **Surge** and **Evade** tokens: same names, same effects
+- **“Power token”** (generic): player chooses which type to add
+- Maximum **2 power tokens** per figure
+
 ## Command card images (CC folder)
 
 - **Naming:** Images in `vassal_extracted/images/cc/` use standardized filenames so the folder sorts A–Z: base game `CardName.ext`, IACP variants `CardName (IACP).ext` when both exist. The script strips `C card--` / `IACP_C card--` prefixes and keeps whatever name is in the file. Run `npm run normalize-cc-images`.

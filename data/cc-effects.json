@@ -259,6 +259,41 @@
       "timing": "duringActivation",
       "effect": "Use during your activation. During this round, other friendly Mobile figures gain the following abilities based on your army affiliation: \nSCUM: \"Personal Combat Shield\"\nIMPERIAL: \"Gar Saxon's Flamethrower\"",
       "effectType": "manual"
+    },
+    "Cloned Reinforcements": {
+      "cost": 2,
+      "playableBy": "Dr. Royce Hemlock",
+      "timing": "doubleActionSpecial",
+      "effect": "Special Action: Choose a defeated friendly non-DROID, non-unique TROOPER with a figure cost of 4 or less and place it in an empty adjacent space.",
+      "effectType": "manual"
+    },
+    "Close and Personal": {
+      "cost": 1,
+      "playableBy": "Biv Bodhrik",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to move up to 2 spaces. Then perform a melee attack without using an action using 1 red and 1 yellow die. The attack uses only the following abilities:\n- Pierce 1\n- Surge: +1 Hit\n- Surge: Stun",
+      "effectType": "manual"
+    },
+    "Close the Gap": {
+      "cost": 3,
+      "playableBy": "Any Figure",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Each friendly BRAWLER may move up to 2 spaces. Then each friendly BRAWLER within 4 spaces of a hostile figure gains 1 Armor Token.",
+      "effectType": "manual"
+    },
+    "Collateral Damage": {
+      "cost": 1,
+      "playableBy": "HEAVY WEAPON",
+      "timing": "afterAttack",
+      "effect": "Use after you resolve an attack. Choose a figure or object other than the defender within 2 spaces of the target space. That figure or object suffers 2 Damage.",
+      "effectType": "manual"
+    },
+    "Collect Intel": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round if you have 1 or more SPIES on the map. Look at your opponent's hand of Command cards.",
+      "effectType": "manual"
     }
   }
 }
