@@ -10,7 +10,7 @@
     },
     "Advance Warning": {
       "cost": 0,
-      "playableBy": "Leader",
+      "playableBy": "LEADER",
       "timing": "duringActivation",
       "effect": "Use during your activation. You and an adjacent friendly figure each gain 1 movement point.",
       "effectType": "manual"
@@ -24,7 +24,7 @@
     },
     "All in a Day's Work": {
       "cost": 3,
-      "playableBy": "Technician",
+      "playableBy": "TECHNICIAN",
       "timing": "afterSpecialOrInteract",
       "effect": "Use after you resolve a Special or Interact during your activation to become Focused and perform 1 additional action.",
       "effectType": "manual"
@@ -52,9 +52,72 @@
     },
     "Armed Escort": {
       "cost": 1,
-      "playableBy": "Vehicle or Droid",
+      "playableBy": "VEHICLE or DROID",
       "timing": "duringActivation",
       "effect": "Use during your activation. During this round, other friendly figures within 2 spaces of you gain +1 Evade.",
+      "effectType": "manual"
+    },
+    "Assassinate": {
+      "cost": 3,
+      "playableBy": "HUNTER",
+      "timing": "duringAttack",
+      "effect": "Use while attacking a figure. If this is the first Command card you play during this attack, apply +3 damage to the attack results. You cannot play Command cards during this attack.",
+      "effectType": "manual"
+    },
+    "Balancing Force": {
+      "cost": 2,
+      "playableBy": "Rebel",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round if your affiliation is Rebel. Each player chooses up to 3 figures. Roll 1 red die. Each of those figures recovers damage equal to the damage results on the die.",
+      "effectType": "manual"
+    },
+    "Ballistics Matrix": {
+      "cost": 1,
+      "playableBy": "BT-1",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. Place this card on your Deployment card as an Attachment.\n----------------\nAttachment: Exhaust this card before you declare an attack. Figures do not block line of sight during this attack.",
+      "effectType": "manual"
+    },
+    "Battle Scars": {
+      "cost": 0,
+      "playableBy": "WOOKIE",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to get 1 Power Token of your choice. If you have suffered 3 or more damage, gain 2 Power Tokens of your choice instead.",
+      "effectType": "manual"
+    },
+    "Battlefield Awareness": {
+      "cost": 1,
+      "playableBy": "LEADER",
+      "timing": "afterAttackDice",
+      "effect": "Use after another friendly figure within 3 spaces rolls any number of dice to reroll 1 of those dice.",
+      "effectType": "manual"
+    },
+    "Beatdown": {
+      "cost": 0,
+      "playableBy": "BRAWLER",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. During your group's activation, apply +1 damage to the attack results of the next 2 attacks performed by friendly figures.",
+      "effectType": "manual"
+    },
+    "Behind Enemy Lines": {
+      "cost": 1,
+      "playableBy": "SPY",
+      "timing": "duringActivation",
+      "effect": "Use during your activation while in your opponents deployment zone to look at the top 3 cards of their Command deck and return those cards in any order.",
+      "effectType": "manual"
+    },
+    "Black Market Prices": {
+      "cost": 1,
+      "playableBy": "SMUGGLER",
+      "timing": "specialAction",
+      "effect": "Special Action: Draw 2 Command cards. Then discard 1 card from your hand. You gain VPs equal to the cost of the discarded card.",
+      "effectType": "manual"
+    },
+    "Bladestorm": {
+      "cost": 1,
+      "playableBy": "Shyla Varad",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to apply +1 Surge to the attack results. After the attack resolves, each hostile figure within 2 spaces of you suffers 1 damage.",
       "effectType": "manual"
     }
   }
