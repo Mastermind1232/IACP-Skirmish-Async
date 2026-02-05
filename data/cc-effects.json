@@ -168,6 +168,62 @@
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when an attack targeting you is declared. if it is not the attackers activation, apply +2 Block to the defense results.",
       "effectType": "manual"
+    },
+    "Built on Hope": {
+      "cost": 1,
+      "playableBy": "Jyn Erso",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to look at the top 3 cards of your Command deck. Place 1 of them into your hand and the others on the top of bottom of your Command deck in any order.\n\nPassive: When this card is discarded from your Command deck, re-draw it.",
+      "effectType": "manual"
+    },
+    "Burst Fire": {
+      "cost": 2,
+      "playableBy": "Fenn Signis",
+      "timing": "specialAction",
+      "effect": "Special Action: Perform an attack. If the target suffers 1 or more Damage, each figure adjacent to the target space is Stunned.",
+      "effectType": "manual"
+    },
+    "Cal's Buddy": {
+      "cost": 1,
+      "playableBy": "Cal Kestis",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to deploy the BD-1 Companion figure to your space or an adjacent space. For the rest of the mission, it activates at the start or end of your activation.",
+      "effectType": "manual"
+    },
+    "Call the Vanguard": {
+      "cost": 2,
+      "playableBy": "Any Figure",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. A friendly TROOPER with a figure cost of 4 or greater may interrupt to perform a move and an attack.",
+      "effectType": "manual"
+    },
+    "Camouflage": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "whenAttackDeclaredOnYou",
+      "effect": "Use when an attack targeting you is declared. You become Hidden.",
+      "effectType": "manual"
+    },
+    "Capitalize": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to choose 1 die. The player that rolled that die must reroll that die.\n\nPassive (Discard Pile): When a hostile figure with a HARMFUL condition gains another HARMFUL condition, you may re-draw this card.",
+      "effectType": "manual"
+    },
+    "Capture the Weary": {
+      "cost": 1,
+      "playableBy": "HUNTER",
+      "timing": "specialAction",
+      "effect": "Special Action: Choose an adjacent hostile figure. That figure becomes Weakened. If that figure was already Weakened, it suffers 2 Strain instead.",
+      "effectType": "manual"
+    },
+    "Cavalry Charge": {
+      "cost": 1,
+      "playableBy": "Captain Terro",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. During this round, you gain +1 Block, and while a friendly TROOPER within 3 spaces is attacking, apply +1 Hit to the attack results.",
+      "effectType": "manual"
     }
   }
 }
