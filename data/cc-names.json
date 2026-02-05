@@ -1,6 +1,6 @@
 {
   "source": "Vassal buildFile.xml",
-  "extractedAt": "2026-02-05T19:30:40.848Z",
+  "extractedAt": "2026-02-05T19:57:50.570Z",
   "cards": [
     "Adrenaline",
     "Advance Warning",
@@ -44,7 +44,7 @@
     "Close the Gap",
     "Collateral Damage",
     "Collect Intel",
-    "Combat Resupply (Imperial)",
+    "Combat Resupply",
     "Comm Disruption",
     "Concentrated Fire",
     "Coordinated Attack",

@@ -40,7 +40,10 @@ while ((m = nameRe.exec(ccSection)) !== null) {
 }
 
 // Prefer display names that match image filenames (e.g. "Chaotic Force" not "Chaotic Force (Mercenary)")
-const NAME_OVERRIDES = { 'Chaotic Force (Mercenary)': 'Chaotic Force' };
+const NAME_OVERRIDES = {
+  'Chaotic Force (Mercenary)': 'Chaotic Force',
+  'Combat Resupply (Imperial)': 'Combat Resupply',
+};
 const overridden = names.map((n) => NAME_OVERRIDES[n] ?? n);
 const namesFinal = [...new Set(overridden)].sort((a, b) => a.localeCompare(b));
 

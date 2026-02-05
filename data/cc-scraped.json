@@ -260,7 +260,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Combat Resupply (Imperial)": {
+    "Combat Resupply": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
