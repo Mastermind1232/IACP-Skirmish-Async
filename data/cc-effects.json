@@ -119,6 +119,34 @@
       "timing": "duringAttack",
       "effect": "Use while attacking to apply +1 Surge to the attack results. After the attack resolves, each hostile figure within 2 spaces of you suffers 1 damage.",
       "effectType": "manual"
+    },
+    "Blaze of Glory": {
+      "cost": 2,
+      "playableBy": "IG-88",
+      "timing": "afterActivationResolves",
+      "effect": "Use after an activation resolves to ready your Deployment card. At the end of this round, you suffer 3 Damage.",
+      "effectType": "manual"
+    },
+    "Blend In": {
+      "cost": 2,
+      "playableBy": "K-2SO",
+      "timing": "startOfRound",
+      "effect": "Place this card on your Deployment card at the start of a round. It is now an Attachment.\n\nAttachment: You cannot be the target of an attack. Discard this card at the end of your activation or when you declare an attack.",
+      "effectType": "manual"
+    },
+    "Blitz": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to apply +1 Surge to the attack results.",
+      "effectType": "manual"
+    },
+    "Blood Feud": {
+      "cost": 2,
+      "playableBy": "Jabba the Hutt",
+      "timing": "specialAction",
+      "effect": "Place this card on a hostile Deployment card. When an attack targeting a figure in that group is declared, apply +1 Damage to the attack results.",
+      "effectType": "manual"
     }
   }
 }
