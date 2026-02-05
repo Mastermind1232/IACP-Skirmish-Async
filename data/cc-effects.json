@@ -224,6 +224,13 @@
       "timing": "startOfRound",
       "effect": "Use at the start of a round. During this round, you gain +1 Block, and while a friendly TROOPER within 3 spaces is attacking, apply +1 Hit to the attack results.",
       "effectType": "manual"
+    },
+    "Celebration": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "afterUniqueHostileDefeated",
+      "effect": "Use after a unique hostile figure is defeated to gain 4 VPs.",
+      "effectType": "manual"
     }
   }
 }
