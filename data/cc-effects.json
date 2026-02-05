@@ -154,6 +154,20 @@
       "timing": "whenAttackDeclaredOnAdjacentFriendly",
       "effect": "Use when an attack targeting an adjacent friendly figure is declared. If you could be the target of the attack, the attack targets you instead.",
       "effectType": "manual"
+    },
+    "Brace for Impact": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "whileDefending",
+      "effect": "Use while defending to add 1 black die to your defense pool.",
+      "effectType": "manual"
+    },
+    "Brace Yourself": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "whenAttackDeclaredOnYou",
+      "effect": "Use when an attack targeting you is declared. if it is not the attackers activation, apply +2 Block to the defense results.",
+      "effectType": "manual"
     }
   }
 }
