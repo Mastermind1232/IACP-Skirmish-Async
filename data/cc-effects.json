@@ -1,4 +1,40 @@
 {
-  "source": "Manual entry via scripts/cc-effect-editor.html",
-  "cards": {}
+  "source": "CC Effect Editor",
+  "cards": {
+    "Adrenaline": {
+      "cost": 2,
+      "playableBy": "Any Figure",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. During this round, apply +5 Health to each of your WOOKIES.",
+      "effectType": "manual"
+    },
+    "Advance Warning": {
+      "cost": 0,
+      "playableBy": "Leader",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. You and an adjacent friendly figure each gain 1 movement point.",
+      "effectType": "manual"
+    },
+    "Against the Odds": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "endOfRound",
+      "effect": "Use at the end of a round. If your opponent has at least 8 more VPs than you, choose up to 3 of your figures. Those figures become Focused.",
+      "effectType": "manual"
+    },
+    "All in a Day's Work": {
+      "cost": 3,
+      "playableBy": "Technician",
+      "timing": "afterSpecialOrInteract",
+      "effect": "Use after you resolve a Special or Interact during your activation to become Focused and perform 1 additional action.",
+      "effectType": "manual"
+    },
+    "Ambush": {
+      "cost": 1,
+      "playableBy": "Cara Dune",
+      "timing": "whenAttackDeclaredOnYou",
+      "effect": "Use when an attack targeting you is declared. If you share an edge or corner with a space containing blocking, impassable, or difficult terrain, interrupt to move 4 spaces to a space adjacent to the attacker, then the attacker suffers 2 damage.",
+      "effectType": "manual"
+    }
+  }
 }

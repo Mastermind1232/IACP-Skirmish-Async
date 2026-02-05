@@ -1,12 +1,10 @@
 {
   "source": "Vassal buildFile.xml",
-  "extractedAt": "2026-02-04T19:54:15.613Z",
+  "extractedAt": "2026-02-05T17:03:45.496Z",
   "cards": [
-    "- Any Figure -",
     "Adrenaline",
     "Advance Warning",
     "Against the Odds",
-    "All CCs",
     "All in a Day's Work",
     "Ambush",
     "Apex Predator",
@@ -49,7 +47,6 @@
     "Collect Intel",
     "Combat Resupply (Imperial)",
     "Comm Disruption",
-    "Command Cards",
     "Concentrated Fire",
     "Coordinated Attack",
     "Corrupting Force (Imperial)",

@@ -5,9 +5,14 @@
   <title>IA Skirmish — CC Effect Editor</title>
   <style>
     * { box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; padding: 20px; background: #1e1e1e; color: #eee; max-width: 720px; }
+    body { font-family: system-ui, sans-serif; padding: 20px; background: #1e1e1e; color: #eee; max-width: 960px; }
     h1 { font-size: 1.3rem; margin-bottom: 8px; }
     .hint { font-size: 12px; color: #999; margin-bottom: 16px; }
+    .main { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+    .card-img-wrap { flex-shrink: 0; width: 180px; min-height: 250px; background: #2d2d2d; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .card-img-wrap img { max-width: 100%; max-height: 280px; object-fit: contain; }
+    .card-img-wrap .placeholder { color: #666; font-size: 13px; text-align: center; padding: 16px; }
+    .form-wrap { flex: 1; min-width: 280px; }
     label { display: block; margin-top: 12px; margin-bottom: 4px; font-weight: 500; }
     select, input, textarea { width: 100%; padding: 8px 12px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 14px; }
     textarea { min-height: 80px; font-family: inherit; resize: vertical; }
@@ -27,8 +32,14 @@
 </head>
 <body>
   <h1>IA Skirmish — Command Card Effect Editor</h1>
-  <p class="hint">Run <code>node scripts/extract-cc-names.js</code> first. Open Vassal or card images separately for reference. Add/update entries and Export JSON to copy into <code>data/cc-effects.json</code>.</p>
+  <p class="hint">Run <code>npm run cc-review</code> and open this page at <code>http://localhost:3456/scripts/cc-effect-editor.html</code>. Select a card — its image appears for transcription. Add/Update, then Save or Export JSON.</p>
 
+  <div class="main">
+    <div class="card-img-wrap" id="cardImgWrap">
+      <div class="placeholder" id="cardImgPlaceholder">Select a card</div>
+      <img id="cardImg" alt="" style="display:none">
+    </div>
+    <div class="form-wrap">
   <label>Card name</label>
   <select id="cardSelect">
     <option value="">— Select or type below —</option>
@@ -48,9 +59,19 @@
     <option value="endOfRound">End of round</option>
     <option value="startOfActivation">Start of activation</option>
     <option value="duringActivation">During activation</option>
+    <option value="afterSpecial">After resolving a Special (during activation)</option>
+    <option value="afterInteract">After Interact (during activation)</option>
+    <option value="afterSpecialOrInteract">After Special or Interact (during activation)</option>
+    <option value="whenAttackDeclaredOnYou">When an attack targeting you is declared</option>
+    <option value="beforeYouDeclareAttack">Before you declare an attack</option>
+    <option value="whenYouDeclareAttack">When you declare an attack</option>
     <option value="beforeAttack">Before attack</option>
+    <option value="beforeAttackDice">Before attack dice are rolled</option>
     <option value="duringAttack">During attack</option>
+    <option value="afterAttackDice">After attack dice are rolled</option>
     <option value="afterAttack">After attack</option>
+    <option value="whenYouWouldSufferDamage">When you would suffer damage</option>
+    <option value="afterDamage">After damage is applied</option>
     <option value="statusPhase">Status Phase</option>
     <option value="whenDefeated">When defeated</option>
     <option value="other">Other</option>
@@ -62,7 +83,10 @@
 
   <div class="row">
     <button id="addBtn" class="primary">Add / Update</button>
+    <button id="saveBtn" class="export">Save to data/cc-effects.json</button>
     <button id="exportBtn" class="export">Export JSON</button>
+  </div>
+    </div>
   </div>
 
   <div class="entries">
@@ -84,18 +108,62 @@
     const countEl = document.getElementById('count');
 
     const names = typeof CC_NAMES !== 'undefined' ? CC_NAMES : [];
-    names.forEach(n => {
-      const opt = document.createElement('option');
-      opt.value = n;
-      opt.textContent = n;
-      cardSelect.appendChild(opt);
-    });
 
-    cardSelect.addEventListener('change', () => { cardName.value = cardSelect.value || ''; });
+    function updateCardSelect() {
+      const done = Object.keys(cards);
+      const remaining = names.filter((n) => !done.includes(n));
+      cardSelect.innerHTML = '<option value="">— Select or type below —</option>';
+      remaining.forEach((n) => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        opt.textContent = n;
+        cardSelect.appendChild(opt);
+      });
+    }
+
+    function updateCardImage() {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      const img = document.getElementById('cardImg');
+      const placeholder = document.getElementById('cardImgPlaceholder');
+      if (!name) {
+        img.style.display = 'none';
+        placeholder.style.display = 'block';
+        placeholder.textContent = 'Select a card';
+        return;
+      }
+      const apiUrl = '/api/cc-image/' + encodeURIComponent(name);
+      img.src = apiUrl;
+      img.alt = name;
+      img.style.display = 'block';
+      img.onload = () => { placeholder.style.display = 'none'; };
+      img.onerror = () => {
+        img.style.display = 'none';
+        placeholder.style.display = 'block';
+        placeholder.textContent = 'No image (run npm run cc-review)';
+      };
+      placeholder.style.display = 'none';
+    }
+
+    function onCardChange() {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      updateCardImage();
+      if (name && cards[name]) {
+        cost.value = cards[name].cost != null ? cards[name].cost : '';
+        playableBy.value = cards[name].playableBy || '';
+        timing.value = cards[name].timing || '';
+        effect.value = cards[name].effect || '';
+      }
+    }
+
+    cardSelect.addEventListener('change', () => {
+      cardName.value = cardSelect.value || '';
+      onCardChange();
+    });
     cardName.addEventListener('input', () => {
       const v = cardName.value.trim();
-      if (names.includes(v)) cardSelect.value = v;
+      if (names.includes(v) && !cards[v]) cardSelect.value = v;
       else cardSelect.value = '';
+      onCardChange();
     });
 
     let cards = {};
@@ -113,9 +181,21 @@
       };
       effect.value = '';
       render();
+      // Auto-advance to next card alphabetically (first option in dropdown after the placeholder)
+      const nextOpt = cardSelect.options[1];
+      if (nextOpt && nextOpt.value) {
+        cardSelect.value = nextOpt.value;
+        cardName.value = nextOpt.value;
+        onCardChange();
+      } else {
+        cardSelect.value = '';
+        cardName.value = '';
+        onCardChange();
+      }
     });
 
     function render() {
+      updateCardSelect();
       listEl.innerHTML = '';
       const entries = Object.entries(cards).sort((a, b) => a[0].localeCompare(b[0]));
       countEl.textContent = entries.length;
@@ -124,13 +204,37 @@
         div.className = 'entry';
         const costStr = data.cost != null ? `[${data.cost}] ` : '';
         div.innerHTML = `<strong>${costStr}${name}</strong> <span>${data.playableBy} • ${data.timing}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
-        div.querySelector('button').addEventListener('click', () => {
+        div.querySelector('button').addEventListener('click', (e) => {
+          e.stopPropagation();
           delete cards[name];
           render();
+        });
+        div.style.cursor = 'pointer';
+        div.addEventListener('click', (e) => {
+          if (e.target.tagName === 'BUTTON') return;
+          cardSelect.value = '';
+          cardName.value = name;
+          onCardChange();
         });
         listEl.appendChild(div);
       });
     }
+
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+      const out = { source: 'CC Effect Editor', cards };
+      try {
+        const r = await fetch('/api/save-cc-effects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(out),
+        });
+        const j = await r.json();
+        if (j.ok) alert('Saved to data/cc-effects.json');
+        else alert('Save failed: ' + (j.error || r.status));
+      } catch (e) {
+        alert('Save failed: ' + e.message + '. Run npm run cc-review first.');
+      }
+    });
 
     exportBtn.addEventListener('click', () => {
       const out = {
@@ -156,18 +260,91 @@
       r.onload = () => {
         try {
           const d = JSON.parse(r.result);
-          if (d.cards) { cards = d.cards; render(); }
+          if (d.cards) {
+            cards = d.cards;
+            render();
+            const current = (cardName.value || cardSelect.value || '').trim();
+            if (current && cards[current]) {
+              const nextOpt = cardSelect.options[1];
+              if (nextOpt && nextOpt.value) {
+                cardSelect.value = nextOpt.value;
+                cardName.value = nextOpt.value;
+                onCardChange();
+              } else {
+                cardSelect.value = '';
+                cardName.value = '';
+                onCardChange();
+              }
+            }
+          }
         } catch (e) { alert('Invalid JSON'); }
       };
       r.readAsText(f);
     });
     document.body.appendChild(loadInput);
     const loadBtn = document.createElement('button');
-    loadBtn.textContent = 'Load from JSON';
+    loadBtn.textContent = 'Load from file';
     loadBtn.onclick = () => loadInput.click();
     document.querySelector('.row').appendChild(loadBtn);
 
+    const loadExistingBtn = document.createElement('button');
+    loadExistingBtn.textContent = 'Load existing (data/cc-effects.json)';
+    loadExistingBtn.onclick = async () => {
+      try {
+        const r = await fetch('/data/cc-effects.json');
+        if (!r.ok) throw new Error(r.status);
+        const d = await r.json();
+        if (d.cards) {
+          cards = d.cards;
+          render();
+          const current = (cardName.value || cardSelect.value || '').trim();
+          if (current && cards[current]) {
+            const nextOpt = cardSelect.options[1];
+            if (nextOpt && nextOpt.value) {
+              cardSelect.value = nextOpt.value;
+              cardName.value = nextOpt.value;
+              onCardChange();
+            } else {
+              cardSelect.value = '';
+              cardName.value = '';
+              onCardChange();
+            }
+          }
+          alert('Loaded ' + Object.keys(cards).length + ' entries');
+        }
+      } catch (e) {
+        alert('Load failed: ' + e.message + '. Run npm run cc-review first.');
+      }
+    };
+    document.querySelector('.row').appendChild(loadExistingBtn);
+
+    function selectFirstRemainingCard() {
+      const firstOpt = cardSelect.options[1];
+      if (firstOpt && firstOpt.value) {
+        cardSelect.value = firstOpt.value;
+        cardName.value = firstOpt.value;
+        onCardChange();
+      } else {
+        cardSelect.value = '';
+        cardName.value = '';
+        onCardChange();
+      }
+    }
+
     render();
+    (async () => {
+      try {
+        const r = await fetch('/data/cc-effects.json');
+        if (r.ok) {
+          const d = await r.json();
+          if (d.cards && Object.keys(d.cards).length > 0) {
+            cards = d.cards;
+            render();
+          }
+        }
+      } catch (_) {}
+      selectFirstRemainingCard();
+    })();
   </script>
 </body>
 </html>

@@ -38,9 +38,8 @@
 - Interact "Launch Panel" logs use but doesn't change game state.
 - **Needed:** Confirm what Launch Panel does (likely mission-specific VP or trigger) and implement it.
 
-### 8. Doors not drawn on map
-- Door data exists; Open Door works. Closed doors are not rendered on the map image.
-- **Needed:** Draw door tokens on edges (e.g. R11–S11, R12–S12) when rendering the map.
+### 8. ~~Doors not drawn on map~~ (done)
+- Door tokens drawn on map edges (R11–S11, R12–S12 on Mos Eisley Outskirts). Horizontal orientation, matte white backfill, single span across cells.
 
 ---
 
@@ -67,7 +66,7 @@
 | Defeated group filtering | Yes (weird UX) | Low |
 | DC cost completeness | Partial (fallback 5) | Low |
 | Launch Panel effect | For Mission A | Low–Medium |
-| Door rendering | No | Medium |
+| Door rendering | No | — (done) |
 | Multi-figure defeat display | Edge case | Low |
 | CC timing | Edge case | Low |
 

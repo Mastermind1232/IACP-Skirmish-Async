@@ -45,15 +45,23 @@ const server = createServer(async (req, res) => {
     if (cardName.trim().toLowerCase() === 'smoke grenade') {
       candidates.push('Smoke Grenade Final.png', '003 Smoke Grenade Final.png');
     }
+    // Vassal filenames sometimes drop apostrophes (e.g. "All in a Days Work" vs "All in a Day's Work")
+    const noApostrophe = cardName.replace(/'/g, '');
     candidates.push(
       `C card--${cardName}.jpg`,
       `C card--${cardName}.png`,
+      `C card--${noApostrophe}.jpg`,
+      `C card--${noApostrophe}.png`,
       `C card--${titleCase(cardName.toLowerCase())}.jpg`,
       `C card--${titleCase(cardName.toLowerCase())}.png`,
       `IACP_C card--${cardName}.png`,
       `IACP_C card--${cardName}.jpg`,
+      `IACP_C card--${noApostrophe}.png`,
+      `IACP_C card--${noApostrophe}.jpg`,
       `IACP9_C card--${cardName}.png`,
       `IACP9_C card--${cardName}.jpg`,
+      `IACP9_C card--${noApostrophe}.png`,
+      `IACP9_C card--${noApostrophe}.jpg`,
       `IACP10_C card--${cardName}.png`,
       `IACP10_C card--${cardName}.jpg`,
       `IACP11_C card--${cardName}.png`,
@@ -138,5 +146,6 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`CC Review server: http://localhost:${PORT}/scripts/cc-review-tool.html`);
-  console.log('Save button writes to data/cc-effects.json');
+  console.log(`CC Effect Editor:  http://localhost:${PORT}/scripts/cc-effect-editor.html`);
+  console.log('Save writes to data/cc-effects.json');
 });
