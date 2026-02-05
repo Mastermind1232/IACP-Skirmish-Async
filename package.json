@@ -13,6 +13,7 @@
     "extract-zones": "npx --yes serve . -p 3456",
     "generate-map-spaces": "node scripts/generate-map-spaces.js",
     "organize-images": "node scripts/organize-images.js",
+    "normalize-cc-images": "node scripts/normalize-cc-images.js",
     "test-db": "node scripts/test-db-connection.js",
     "test-movement": "node index.js --test-movement"
   },

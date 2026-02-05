@@ -35,6 +35,27 @@
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when an attack targeting you is declared. If you share an edge or corner with a space containing blocking, impassable, or difficult terrain, interrupt to move 4 spaces to a space adjacent to the attacker, then the attacker suffers 2 damage.",
       "effectType": "manual"
+    },
+    "Apex Predator": {
+      "cost": 3,
+      "playableBy": "Large Creature",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to become focused, Hidden, gain 2 Power Tokens of your choice, and 2 movement points. The next time a hostile figure within 2 spaces is defeated during this activation, recover 2 damage.",
+      "effectType": "manual"
+    },
+    "Arcing Shot": {
+      "cost": 1,
+      "playableBy": "Drokkotta",
+      "timing": "beforeYouDeclareAttack",
+      "effect": "Use before you declare an attack. You may target a figure or object adjacent to an empty space in your line of sight.",
+      "effectType": "manual"
+    },
+    "Armed Escort": {
+      "cost": 1,
+      "playableBy": "Vehicle or Droid",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. During this round, other friendly figures within 2 spaces of you gain +1 Evade.",
+      "effectType": "manual"
     }
   }
 }

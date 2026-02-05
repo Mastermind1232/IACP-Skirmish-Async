@@ -1,8 +1,8 @@
 /**
- * Serves the CC review tool with a Save endpoint.
+ * Serves the CC Effect Editor and Save endpoint.
  * Run: npm run cc-review
- * Open: http://localhost:3456/scripts/cc-review-tool.html
- * Save button writes directly to data/cc-effects.json.
+ * Open: http://localhost:3456/scripts/cc-effect-editor.html
+ * Save writes to data/cc-effects.json.
  */
 import { createServer } from 'http';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
@@ -28,7 +28,7 @@ const MIME = {
 
 const server = createServer(async (req, res) => {
   const requestPath = (req.url || '/').split('?')[0];
-  const pathname = requestPath === '/' ? '/scripts/cc-review-tool.html' : requestPath;
+  const pathname = requestPath === '/' ? '/scripts/cc-effect-editor.html' : requestPath;
 
   if (req.method === 'GET' && pathname === '/api/cc-review-server') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -36,36 +36,45 @@ const server = createServer(async (req, res) => {
     return;
   }
   if (req.method === 'GET' && pathname.startsWith('/api/cc-image/')) {
-    const cardName = decodeURIComponent(pathname.replace('/api/cc-image/', ''));
+    const cardName = decodeURIComponent(pathname.replace('/api/cc-image/', '')).trim();
     const imagesDir = join(root, 'vassal_extracted', 'images');
     const ccDir = join(imagesDir, 'cc');
-    // Also check root for backward compatibility
+    const safeFilename = (s) => (s || '').replace(/[/\\?*:|"]/g, '_');
     const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+    const base = safeFilename(cardName);
+    const baseIacp = `${base} (IACP)`;
+    const noApostrophe = safeFilename(cardName.replace(/'/g, ''));
+    const noApostropheIacp = `${noApostrophe} (IACP)`;
+    const exts = ['.png', '.jpg', '.gif'];
     const candidates = [];
+    // Prefer IACP variants first (CardName (IACP).ext), then base (CardName.ext)
+    for (const ext of exts) {
+      candidates.push(`${baseIacp}${ext}`, `${noApostropheIacp}${ext}`);
+    }
+    for (const ext of exts) {
+      candidates.push(`${base}${ext}`, `${noApostrophe}${ext}`);
+    }
     if (cardName.trim().toLowerCase() === 'smoke grenade') {
       candidates.push('Smoke Grenade Final.png', '003 Smoke Grenade Final.png');
     }
-    // Vassal filenames sometimes drop apostrophes (e.g. "All in a Days Work" vs "All in a Day's Work")
-    const noApostrophe = cardName.replace(/'/g, '');
+    // Legacy Vassal-style filenames (backward compatibility)
     candidates.push(
-      `C card--${cardName}.jpg`,
-      `C card--${cardName}.png`,
-      `C card--${noApostrophe}.jpg`,
-      `C card--${noApostrophe}.png`,
-      `C card--${titleCase(cardName.toLowerCase())}.jpg`,
-      `C card--${titleCase(cardName.toLowerCase())}.png`,
       `IACP_C card--${cardName}.png`,
       `IACP_C card--${cardName}.jpg`,
-      `IACP_C card--${noApostrophe}.png`,
-      `IACP_C card--${noApostrophe}.jpg`,
+      `IACP_C card--${cardName.replace(/'/g, '')}.png`,
+      `IACP_C card--${cardName.replace(/'/g, '')}.jpg`,
       `IACP9_C card--${cardName}.png`,
       `IACP9_C card--${cardName}.jpg`,
-      `IACP9_C card--${noApostrophe}.png`,
-      `IACP9_C card--${noApostrophe}.jpg`,
       `IACP10_C card--${cardName}.png`,
       `IACP10_C card--${cardName}.jpg`,
       `IACP11_C card--${cardName}.png`,
-      `IACP11_C card--${cardName}.jpg`
+      `IACP11_C card--${cardName}.jpg`,
+      `C card--${cardName}.jpg`,
+      `C card--${cardName}.png`,
+      `C card--${cardName.replace(/'/g, '')}.jpg`,
+      `C card--${cardName.replace(/'/g, '')}.png`,
+      `C card--${titleCase(cardName.toLowerCase())}.jpg`,
+      `C card--${titleCase(cardName.toLowerCase())}.png`
     );
     let found = null;
     for (const c of candidates) {
@@ -84,7 +93,7 @@ const server = createServer(async (req, res) => {
       try {
         const buf = readFileSync(found);
         const ext = extname(found).toLowerCase();
-        const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
+        const mime = MIME[ext] || (ext === '.png' ? 'image/png' : 'image/jpeg');
         res.writeHead(200, { 'Content-Type': mime });
         res.end(buf);
       } catch {
@@ -145,7 +154,6 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`CC Review server: http://localhost:${PORT}/scripts/cc-review-tool.html`);
-  console.log(`CC Effect Editor:  http://localhost:${PORT}/scripts/cc-effect-editor.html`);
+  console.log(`CC Effect Editor: http://localhost:${PORT}/scripts/cc-effect-editor.html`);
   console.log('Save writes to data/cc-effects.json');
 });

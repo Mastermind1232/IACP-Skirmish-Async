@@ -32,7 +32,7 @@
 </head>
 <body>
   <h1>IA Skirmish — Command Card Effect Editor</h1>
-  <p class="hint">Run <code>npm run cc-review</code> and open this page at <code>http://localhost:3456/scripts/cc-effect-editor.html</code>. Select a card — its image appears for transcription. Add/Update, then Save or Export JSON.</p>
+  <p class="hint">Run <code>npm run cc-review</code> and open this page at <code>http://localhost:3456/scripts/cc-effect-editor.html</code>. Select a card — its image appears for transcription. Add/Update auto-saves; use Save after Remove.</p>
 
   <div class="main">
     <div class="card-img-wrap" id="cardImgWrap">
@@ -83,8 +83,7 @@
 
   <div class="row">
     <button id="addBtn" class="primary">Add / Update</button>
-    <button id="saveBtn" class="export">Save to data/cc-effects.json</button>
-    <button id="exportBtn" class="export">Export JSON</button>
+    <button id="saveBtn" class="export">Save to data/cc-effects.json (e.g. after Remove)</button>
   </div>
     </div>
   </div>
@@ -103,7 +102,6 @@
     const timing = document.getElementById('timing');
     const effect = document.getElementById('effect');
     const addBtn = document.getElementById('addBtn');
-    const exportBtn = document.getElementById('exportBtn');
     const listEl = document.getElementById('list');
     const countEl = document.getElementById('count');
 
@@ -192,6 +190,7 @@
         cardName.value = '';
         onCardChange();
       }
+      saveToFile(true);
     });
 
     function render() {
@@ -220,7 +219,7 @@
       });
     }
 
-    document.getElementById('saveBtn').addEventListener('click', async () => {
+    async function saveToFile(silent = false) {
       const out = { source: 'CC Effect Editor', cards };
       try {
         const r = await fetch('/api/save-cc-effects', {
@@ -229,25 +228,14 @@
           body: JSON.stringify(out),
         });
         const j = await r.json();
-        if (j.ok) alert('Saved to data/cc-effects.json');
+        if (j.ok) { if (!silent) alert('Saved to data/cc-effects.json'); }
         else alert('Save failed: ' + (j.error || r.status));
       } catch (e) {
         alert('Save failed: ' + e.message + '. Run npm run cc-review first.');
       }
-    });
+    }
 
-    exportBtn.addEventListener('click', () => {
-      const out = {
-        source: 'Manual entry via cc-effect-editor.html',
-        cards,
-      };
-      const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'cc-effects.json';
-      a.click();
-      URL.revokeObjectURL(a.href);
-    });
+    document.getElementById('saveBtn').addEventListener('click', () => saveToFile(false));
 
     const loadInput = document.createElement('input');
     loadInput.type = 'file';
