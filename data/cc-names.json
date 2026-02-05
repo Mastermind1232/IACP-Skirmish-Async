@@ -1,6 +1,6 @@
 {
   "source": "Vassal buildFile.xml",
-  "extractedAt": "2026-02-05T19:09:40.877Z",
+  "extractedAt": "2026-02-05T19:30:40.848Z",
   "cards": [
     "Adrenaline",
     "Advance Warning",
@@ -36,7 +36,7 @@
     "Cavalry Charge",
     "Celebration",
     "Change of Plans",
-    "Chaotic Force (Mercenary)",
+    "Chaotic Force",
     "Cheat to Win",
     "Choose a Side",
     "Cloned Reinforcements",

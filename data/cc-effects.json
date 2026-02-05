@@ -231,6 +231,13 @@
       "timing": "afterUniqueHostileDefeated",
       "effect": "Use after a unique hostile figure is defeated to gain 4 VPs.",
       "effectType": "manual"
+    },
+    "Change of Plans": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "afterYouResolveGroupsActivation",
+      "effect": "Use after you resolve a group's activation. Exhaust 1 of your Deployment cards to ready 1 other Deployment card of equal or lower Deployment cost that shares at least 1 trait.",
+      "effectType": "manual"
     }
   }
 }

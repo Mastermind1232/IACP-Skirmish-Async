@@ -45,6 +45,8 @@ const server = createServer(async (req, res) => {
     const baseIacp = `${base} (IACP)`;
     const noApostrophe = safeFilename(cardName.replace(/'/g, ''));
     const noApostropheIacp = `${noApostrophe} (IACP)`;
+    const withoutParen = cardName.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    const baseNoParen = withoutParen !== cardName ? safeFilename(withoutParen) : null;
     const exts = ['.png', '.jpg', '.gif'];
     const candidates = [];
     // Prefer IACP variants first (CardName (IACP).ext), then base (CardName.ext)
@@ -53,6 +55,7 @@ const server = createServer(async (req, res) => {
     }
     for (const ext of exts) {
       candidates.push(`${base}${ext}`, `${noApostrophe}${ext}`);
+      if (baseNoParen) candidates.push(`${baseNoParen}${ext}`);
     }
     if (cardName.trim().toLowerCase() === 'smoke grenade') {
       candidates.push('Smoke Grenade Final.png', '003 Smoke Grenade Final.png');
