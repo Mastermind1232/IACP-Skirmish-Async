@@ -387,29 +387,32 @@ export async function renderMap(mapId, options = {}) {
     if (!horizontalBoundary) ctx.rotate(Math.PI / 2);
     const hw = dw / 2;
     const hh = dh / 2;
+    // White backfill: only ~15% into adjacent cells (not full cell height)
+    const backfillH = Math.max(4, Math.round(dh * 0.15));
+    const hhBf = backfillH / 2;
     ctx.fillStyle = 'rgba(255,255,255,0.95)';
-    ctx.fillRect(-hw, -hh, dw, dh);
+    ctx.fillRect(-hw, -hhBf, dw, backfillH);
     if (existsSync(imgPath)) {
       try {
         const tokenImg = await loadImage(imgPath);
         const tw = tokenImg.width;
         const th = tokenImg.height;
-        const tScale = Math.min(dw / tw, dh / th);
+        const tScale = Math.min(dw / tw, backfillH / th);
         const iw = Math.round(tw * tScale);
         const ih = Math.round(th * tScale);
         ctx.drawImage(tokenImg, -iw / 2, -ih / 2, iw, ih);
       } catch (err) {
         console.error('Door image load failed:', imageFilename, err);
         ctx.fillStyle = 'rgba(101,67,33,0.95)';
-        ctx.fillRect(-hw * 0.8, -hh * 0.3, hw * 1.6, hh * 0.6);
+        ctx.fillRect(-hw * 0.8, -hhBf, hw * 1.6, backfillH);
       }
     } else {
       ctx.fillStyle = 'rgba(101,67,33,0.95)';
-      ctx.fillRect(-hw * 0.8, -hh * 0.3, hw * 1.6, hh * 0.6);
+      ctx.fillRect(-hw * 0.8, -hhBf, hw * 1.6, backfillH);
     }
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
-    ctx.strokeRect(-hw, -hh, dw, dh);
+    ctx.strokeRect(-hw, -hhBf, dw, backfillH);
     ctx.restore();
   };
 
