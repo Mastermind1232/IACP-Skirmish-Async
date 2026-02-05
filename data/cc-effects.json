@@ -238,6 +238,27 @@
       "timing": "afterYouResolveGroupsActivation",
       "effect": "Use after you resolve a group's activation. Exhaust 1 of your Deployment cards to ready 1 other Deployment card of equal or lower Deployment cost that shares at least 1 trait.",
       "effectType": "manual"
+    },
+    "Chaotic Force": {
+      "cost": 2,
+      "playableBy": "SCUM",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round if your affiliation is SCUM. Each player chooses up to 3 figures. Roll 1 green die. Each of those figures suffers Strain equal to the Accuracy result.",
+      "effectType": "manual"
+    },
+    "Cheat to Win": {
+      "cost": 1,
+      "playableBy": "Lando Calrissian",
+      "timing": "useWhenYouUseGambit",
+      "effect": "Use when you use \"Gambit\", after rolling the new die. You may change that die's result to another result of your choice on that die.",
+      "effectType": "manual"
+    },
+    "Choose a Side": {
+      "cost": 1,
+      "playableBy": "Gar Saxon",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. During this round, other friendly Mobile figures gain the following abilities based on your army affiliation: \nSCUM: \"Personal Combat Shield\"\nIMPERIAL: \"Gar Saxon's Flamethrower\"",
+      "effectType": "manual"
     }
   }
 }
