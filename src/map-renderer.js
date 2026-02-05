@@ -365,13 +365,22 @@ export async function renderMap(mapId, options = {}) {
         const tokenImg = await loadImage(imgPath);
         const tw = tokenImg.width;
         const th = tokenImg.height;
-        const tScale = Math.min(doorSize / tw, doorSize / th);
-        const dw = Math.round(tw * tScale);
-        const dh = Math.round(th * tScale);
+        let tScale = doorSize / Math.max(tw, th);
+        let dw = Math.round(tw * tScale);
+        let dh = Math.round(th * tScale);
+        const minDim = Math.max(10, doorSize * 0.3);
+        if (Math.min(dw, dh) < minDim) {
+          tScale *= minDim / Math.min(dw, dh);
+          dw = Math.round(tw * tScale);
+          dh = Math.round(th * tScale);
+        }
         ctx.save();
         ctx.translate(midX, midY);
         if (horizontalEdge) ctx.rotate(Math.PI / 2);
         ctx.drawImage(tokenImg, -dw / 2, -dh / 2, dw, dh);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-dw / 2, -dh / 2, dw, dh);
         ctx.restore();
       } catch (err) {
         console.error('Door image load failed:', imageFilename, err);
