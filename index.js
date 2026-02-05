@@ -2024,7 +2024,7 @@ function getDeploymentDoneButton(gameId) {
   );
 }
 
-/** Same display names as Play Area: duplicate DCs get [Group 1], [Group 2], etc. */
+/** Same display names as Play Area: duplicate DCs get [DG 1], [DG 2], etc. */
 function getDeployDisplayNames(dcList) {
   if (!dcList?.length) return [];
   const totals = {};
@@ -2033,7 +2033,7 @@ function getDeployDisplayNames(dcList) {
   return dcList.map((dcName) => {
     counts[dcName] = (counts[dcName] || 0) + 1;
     const dgIndex = counts[dcName];
-    return totals[dcName] > 1 ? `${dcName} [Group ${dgIndex}]` : dcName;
+    return totals[dcName] > 1 ? `${dcName} [DG ${dgIndex}]` : dcName;
   });
 }
 
@@ -2056,8 +2056,8 @@ function getDeployFigureLabels(dcList) {
     const dcName = figureDcs[i];
     counts[dcName] = (counts[dcName] || 0) + 1;
     const dgIndex = counts[dcName];
-    const displayName = totals[dcName] > 1 ? `${dcName} [Group ${dgIndex}]` : dcName;
-    const baseName = displayName.replace(/\s*\[Group \d+\]$/, '');
+    const displayName = totals[dcName] > 1 ? `${dcName} [DG ${dgIndex}]` : dcName;
+    const baseName = displayName.replace(/\s*\[(?:DG|Group) \d+\]$/, '');
     const figures = getDcStats(dcName).figures ?? 1;
     if (figures <= 1) {
       labels.push(`Deploy ${displayName}`);
@@ -2331,7 +2331,7 @@ async function getActivationMinimapAttachment(game, msgId) {
   if (!meta || !map?.id) return null;
   const playerNum = meta.playerNum;
   const dcName = meta.dcName;
-  const dgIndex = (meta.displayName || '').match(/\[Group (\d+)\]/)?.[1] ?? 1;
+  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const poses = game.figurePositions?.[playerNum] || {};
   let figureKey = null;
   let pos = null;
@@ -3022,7 +3022,7 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
   const dgIndex = m ? m[2] : '1';
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId || meta.playerNum !== playerNum) continue;
-    const dn = (meta.displayName || '').match(/\[Group (\d+)\]/);
+    const dn = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
     if (meta.dcName === dcName && dn && String(dn[1]) === String(dgIndex)) return msgId;
   }
   return null;
@@ -3225,7 +3225,7 @@ function getDcActionButtons(msgId, dcName, displayName, actionsRemaining = 2, ga
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   const specials = stats.specials || [];
-  const dgIndex = displayName?.match(/\[Group (\d+)\]/)?.[1] ?? 1;
+  const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const noActions = (actionsRemaining ?? 2) <= 0;
   const playerNum = game ? (dcMessageMeta.get(msgId)?.playerNum ?? 1) : 1;
   const rows = [];
@@ -3294,7 +3294,7 @@ function isGroupDefeated(game, playerNum, dcIndex) {
   if (!dc) return true;
   const dcName = dc.dcName || dc;
   const displayName = typeof dc === 'object' ? dc.displayName : dcName;
-  const dgMatch = displayName?.match(/\[Group (\d+)\]/);
+  const dgMatch = displayName?.match(/\[(?:DG|Group) (\d+)\]/);
   const dgIndex = dgMatch ? dgMatch[1] : '1';
   const stats = getDcStats(dcName);
   const figureCount = stats.figures ?? 1;
@@ -3350,7 +3350,7 @@ async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState)
   const status = exhausted ? 'EXHAUSTED' : 'READIED';
   const color = exhausted ? 0xed4245 : 0x57f287; // red : green
   const figureless = isFigurelessDc(dcName);
-  const dgIndex = displayName.match(/\[Group (\d+)\]/)?.[1] ?? 1;
+  const dgIndex = displayName.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   const variant = dcName?.includes('(Elite)') ? 'Elite' : dcName?.includes('(Regular)') ? 'Regular' : null;
@@ -3630,7 +3630,7 @@ async function populatePlayAreas(game, client) {
       const dcName = resolveDcName(entry);
       counts[dcName] = (counts[dcName] || 0) + 1;
       const dgIndex = counts[dcName];
-      const displayName = totals[dcName] > 1 ? `${dcName} [Group ${dgIndex}]` : dcName;
+      const displayName = totals[dcName] > 1 ? `${dcName} [DG ${dgIndex}]` : dcName;
       const stats = getDcStats(dcName);
       const figureless = isFigurelessDc(dcName);
       const health = figureless ? null : (stats.health ?? '?');
@@ -4714,7 +4714,7 @@ client.on('interactionCreate', async (interaction) => {
     }
     if (action === 'Move') {
       try {
-      const dgIndex = (meta.displayName || '').match(/\[Group (\d+)\]/)?.[1] ?? 1;
+      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
       const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
       const playerNum = meta.playerNum;
       const pos = game.figurePositions?.[playerNum]?.[figureKey];
@@ -4728,7 +4728,7 @@ client.on('interactionCreate', async (interaction) => {
       const currentMp = bank?.remaining ?? 0;
       const mpRemaining = currentMp + speed;
       const displayName = meta.displayName || meta.dcName;
-      const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
+      const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
       game.movementBank = game.movementBank || {};
       if (!game.movementBank[msgId]) {
         game.movementBank[msgId] = {
@@ -4793,7 +4793,7 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
     if (action === 'Attack') {
-      const dgIndex = (meta.displayName || '').match(/\[Group (\d+)\]/)?.[1] ?? 1;
+      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
       const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
       const playerNum = meta.playerNum;
       const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
@@ -4826,7 +4826,7 @@ client.on('interactionCreate', async (interaction) => {
         const dg = m ? parseInt(m[1], 10) : 1;
         const fi = m ? parseInt(m[2], 10) : 0;
         const figCount = getDcStats(dcName).figures ?? 1;
-        const label = figCount > 1 ? `${dcName} ${FIGURE_LETTERS[fi] || 'a'}` : (totals[dcName] > 1 ? `${dcName} [Group ${dg}]` : dcName);
+        const label = figCount > 1 ? `${dg}${FIGURE_LETTERS[fi] || 'a'}` : (totals[dcName] > 1 ? `${dcName} [DG ${dg}]` : dcName);
         targets.push({ figureKey: k, coord, label });
       }
       if (targets.length === 0) {
@@ -4834,7 +4834,7 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
       const displayName = meta.displayName || meta.dcName;
-      const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
+      const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
       const targetRows = [];
       for (let i = 0; i < targets.length; i += 5) {
         const chunk = targets.slice(i, i + 5);
@@ -4860,7 +4860,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
     if (action === 'Interact') {
-      const dgIndex = (meta.displayName || '').match(/\[Group (\d+)\]/)?.[1] ?? 1;
+      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
       const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
       const playerNum = meta.playerNum;
       const mapId = game.selectedMap?.id;
@@ -4900,7 +4900,7 @@ client.on('interactionCreate', async (interaction) => {
       rows.push(cancelRow);
       const stats = getDcStats(meta.dcName);
       const displayName = meta.displayName || meta.dcName;
-      const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
+      const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
       await interaction.reply({
         content: `**Interact** — Choose action for **${figLabel}**:`,
         components: rows.slice(0, 5),
@@ -5170,7 +5170,7 @@ client.on('interactionCreate', async (interaction) => {
       await updateMovementBankMessage(game, msgId, client);
     }
     const destDisplay = space.toUpperCase();
-    const shortName = (displayName || meta.displayName || '').replace(/\s*\[Group \d+\]$/, '') || displayName;
+    const shortName = (displayName || meta.displayName || '').replace(/\s*\[(?:DG|Group) \d+\]$/, '') || displayName;
     const pLabel = `P${playerNum}`;
     const path = getMovementPath(cache, startCoord, newTopLeft, newSize, profile);
     const pathStr = path.length > 1
@@ -5186,7 +5186,7 @@ client.on('interactionCreate', async (interaction) => {
       previousTopLeft: startCoord,
       previousSize: storedSize,
       mpRemainingBefore: mpRemaining,
-      displayName: (displayName || meta.displayName || '').replace(/\s*\[Group \d+\]$/, '') || meta.dcName || figureKey,
+      displayName: (displayName || meta.displayName || '').replace(/\s*\[(?:DG|Group) \d+\]$/, '') || meta.dcName || figureKey,
     });
     await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** to **${destDisplay}**${pathStr}`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
     const terminalsAfter = mapId ? countTerminalsControlledByPlayer(game, playerNum, mapId) : 0;
@@ -6250,7 +6250,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({ content: 'No actions remaining this activation.', ephemeral: true }).catch(() => {});
       return;
     }
-    const dgIndex = (meta.displayName || '').match(/\[Group (\d+)\]/)?.[1] ?? 1;
+    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
     const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
     const playerNum = meta.playerNum;
     const mapId = game.selectedMap?.id;
@@ -6268,8 +6268,8 @@ client.on('interactionCreate', async (interaction) => {
 
     const stats = getDcStats(meta.dcName);
     const displayName = meta.displayName || meta.dcName;
-    const shortName = (displayName || meta.dcName || '').replace(/\s*\[Group \d+\]$/, '') || displayName;
-    const figLabel = (stats.figures ?? 1) > 1 ? `${shortName} ${FIGURE_LETTERS[figureIndex] || 'a'}` : shortName;
+    const shortName = (displayName || meta.dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/, '') || displayName;
+    const figLabel = (stats.figures ?? 1) > 1 ? `${shortName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : shortName;
     const pLabel = `P${playerNum}`;
 
     if (optionId === 'retrieve_contraband') {

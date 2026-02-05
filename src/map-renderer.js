@@ -344,68 +344,87 @@ export async function renderMap(mapId, options = {}) {
     await drawTokenAt(coord, tc.missionB, 'rgba(255,183,77,0.8)', 'square', 'Contraband');
   }
 
-  const drawDoorAtEdge = async (edge) => {
-    if (!edge || edge.length < 2) return;
+  const doorEdges = tokens.doors || [];
+  const grouped = new Map();
+  for (const edge of doorEdges) {
+    if (!edge || edge.length < 2) continue;
     const a = parseCoord(edge[0]);
     const b = parseCoord(edge[1]);
-    if (a.col < 0 || a.row < 0 || b.col < 0 || b.row < 0) return;
-    const cxA = sx0 + a.col * sdx + sdx / 2;
-    const cyA = sy0 + a.row * sdy + sdy / 2;
-    const cxB = sx0 + b.col * sdx + sdx / 2;
-    const cyB = sy0 + b.row * sdy + sdy / 2;
-    const midX = (cxA + cxB) / 2;
-    const midY = (cyA + cyB) / 2;
-    const doorSize = Math.min(sdx, sdy) * 0.85;
+    if (a.col < 0 || a.row < 0 || b.col < 0 || b.row < 0) continue;
+    const horizontalBoundary = a.col === b.col;
+    const boundaryRow = Math.min(a.row, b.row);
+    const boundaryCol = Math.min(a.col, b.col);
+    const key = horizontalBoundary ? `h_${boundaryRow}` : `v_${boundaryCol}`;
+    const col = horizontalBoundary ? a.col : a.row;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push({ edge, col, horizontalBoundary });
+  }
+
+  const drawDoorSpan = async (items) => {
+    if (!items?.length) return;
+    const { horizontalBoundary } = items[0];
+    const cols = [...new Set(items.map((x) => x.col))].sort((a, b) => a - b);
+    const minCol = cols[0];
+    const maxCol = cols[cols.length - 1];
+    const boundaryRow = Math.min(parseCoord(items[0].edge[0]).row, parseCoord(items[0].edge[1]).row);
+    const leftX = sx0 + minCol * sdx;
+    const rightX = sx0 + (maxCol + 1) * sdx;
+    const topY = sy0 + boundaryRow * sdy;
+    const bottomY = sy0 + (boundaryRow + 1) * sdy;
+    const midX = (leftX + rightX) / 2;
+    const midY = (topY + bottomY) / 2;
+    const spanWidth = (maxCol - minCol + 1) * sdx;
+    const spanHeight = sdy;
+    const doorW = horizontalBoundary ? spanWidth : spanHeight;
+    const doorH = horizontalBoundary ? spanHeight : spanWidth;
+    const dw = Math.round(doorW);
+    const dh = Math.round(doorH);
     const imageFilename = tc.doors || 'Token--Door.png';
     const resolved = resolveImagePath(join('vassal_extracted', 'images', imageFilename), 'tokens');
     const imgPath = join(rootDir, resolved);
-    const horizontalEdge = a.row === b.row;
+    ctx.save();
+    ctx.translate(midX, midY);
+    if (!horizontalBoundary) ctx.rotate(Math.PI / 2);
+    const hw = dw / 2;
+    const hh = dh / 2;
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fillRect(-hw, -hh, dw, dh);
     if (existsSync(imgPath)) {
       try {
         const tokenImg = await loadImage(imgPath);
         const tw = tokenImg.width;
         const th = tokenImg.height;
-        let tScale = doorSize / Math.max(tw, th);
-        let dw = Math.round(tw * tScale);
-        let dh = Math.round(th * tScale);
-        const minDim = Math.max(10, doorSize * 0.3);
-        if (Math.min(dw, dh) < minDim) {
-          tScale *= minDim / Math.min(dw, dh);
-          dw = Math.round(tw * tScale);
-          dh = Math.round(th * tScale);
-        }
-        ctx.save();
-        ctx.translate(midX, midY);
-        if (horizontalEdge) ctx.rotate(Math.PI / 2);
-        ctx.drawImage(tokenImg, -dw / 2, -dh / 2, dw, dh);
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(-dw / 2, -dh / 2, dw, dh);
-        ctx.restore();
+        const tScale = Math.min(dw / tw, dh / th);
+        const iw = Math.round(tw * tScale);
+        const ih = Math.round(th * tScale);
+        ctx.drawImage(tokenImg, -iw / 2, -ih / 2, iw, ih);
       } catch (err) {
         console.error('Door image load failed:', imageFilename, err);
-        drawDoorFallback();
+        ctx.fillStyle = 'rgba(101,67,33,0.95)';
+        ctx.fillRect(-hw * 0.8, -hh * 0.3, hw * 1.6, hh * 0.6);
       }
     } else {
-      drawDoorFallback();
-    }
-    function drawDoorFallback() {
-      ctx.save();
-      ctx.translate(midX, midY);
-      if (horizontalEdge) ctx.rotate(Math.PI / 2);
       ctx.fillStyle = 'rgba(101,67,33,0.95)';
-      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-      ctx.lineWidth = 2;
-      const hw = doorSize * 0.4;
-      const hh = doorSize * 0.15;
-      ctx.fillRect(-hw, -hh, hw * 2, hh * 2);
-      ctx.strokeRect(-hw, -hh, hw * 2, hh * 2);
-      ctx.restore();
+      ctx.fillRect(-hw * 0.8, -hh * 0.3, hw * 1.6, hh * 0.6);
     }
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-hw, -hh, dw, dh);
+    ctx.restore();
   };
 
-  for (const edge of tokens.doors || []) {
-    await drawDoorAtEdge(edge);
+  for (const [, items] of grouped) {
+    const sorted = [...items].sort((a, b) => a.col - b.col);
+    let span = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].col <= sorted[i - 1].col + 1) {
+        span.push(sorted[i]);
+      } else {
+        await drawDoorSpan(span);
+        span = [sorted[i]];
+      }
+    }
+    await drawDoorSpan(span);
   }
 
   // Optionally crop to deployment zone for zoomed-in view
