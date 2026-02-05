@@ -178,7 +178,7 @@
       if (!effect.value.trim()) {
         const opt = timing.options[timing.selectedIndex];
         const label = opt && opt.value ? opt.textContent : '';
-        if (label) effect.value = 'Use (' + label + ').';
+        if (label) effect.value = 'Use ' + label.charAt(0).toLowerCase() + label.slice(1) + '.';
       }
     });
 
