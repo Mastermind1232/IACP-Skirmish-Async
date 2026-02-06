@@ -362,7 +362,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Deadly Precision (Imperial)": {
+    "Deadly Precision": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -716,7 +716,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Get Behind Me! (Rebel)": {
+    "Get Behind Me!": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -770,7 +770,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Heart of Freedom (Rebel)": {
+    "Heart of Freedom": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -830,7 +830,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Hour of Need (Rebel)": {
+    "Hour of Need": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -926,7 +926,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Knowledge and Defense (Rebel)": {
+    "Knowledge and Defense": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -1010,7 +1010,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Meditation (Rebel)": {
+    "Meditation": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -1088,7 +1088,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Opportunistic (Mercenary)": {
+    "Opportunistic": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -1100,7 +1100,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Out of Time (Mercenary)": {
+    "Out of Time": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -1202,7 +1202,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Price of Glory (Imperial)": {
+    "Price of Glory": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -1274,7 +1274,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Rebel Graffiti (Rebel)": {
+    "Rebel Graffiti": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -1412,7 +1412,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Shoot the Messenger (Mercenary)": {
+    "Shoot the Messenger": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -1730,7 +1730,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Worth Every Credit (Mercenary)": {
+    "Worth Every Credit": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,

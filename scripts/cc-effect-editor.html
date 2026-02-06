@@ -22,6 +22,8 @@
     button.primary:hover { background: #0b5ed7; }
     button.export { background: #198754; color: #fff; }
     button.export:hover { background: #157347; }
+    button.verified { background: #dc3545; color: #fff; }
+    button.verified:hover { background: #bb2d3b; }
     .entries { margin-top: 24px; }
     .entries h2 { font-size: 1rem; margin-bottom: 8px; }
     .entry { padding: 8px 12px; margin-bottom: 6px; background: #2d2d2d; border-radius: 4px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
@@ -32,7 +34,7 @@
 </head>
 <body>
   <h1>IA Skirmish — Command Card Effect Editor</h1>
-  <p class="hint">Run <code>npm run cc-review</code> and open this page at <code>http://localhost:3456/scripts/cc-effect-editor.html</code>. Select a card — its image appears for transcription. Add/Update auto-saves; use Save after Remove.</p>
+  <p class="hint">Run <code>npm run cc-review</code> and open this page at <code>http://localhost:3456/scripts/cc-effect-editor.html</code>. Cards load from cc-effects.json. Correct any fields as needed, then click <strong>VERIFIED</strong> to mark a card 100% play-ready — verified cards are removed from the list. Progress = list shrinking to 0.</p>
 
   <div class="main">
     <div class="card-img-wrap" id="cardImgWrap">
@@ -89,6 +91,11 @@
     <option value="whenCommandCardPlayed">When a command card is played</option>
     <option value="whenEnemyFigureActivates">When an enemy figure activates</option>
     <option value="whenEnemyFigureEndsActivation">When an enemy figure ends its activation</option>
+    <option value="whenHostileFigureExitsAdjacentSpace">When a hostile figure exits an adjacent space</option>
+    <option value="whenFigureWithin3SpacesDefending">While a figure within 3 spaces is defending</option>
+    <option value="whenYouWouldBeDefeated">When you would be defeated</option>
+    <option value="whenFriendlyFigureWithin3SpacesWouldBeDefeated">When a friendly figure within 3 spaces would be defeated</option>
+    <option value="afterLastFigureInNonUniqueGroupDefeated">After the last figure in a non-unique group is defeated</option>
     <option value="whenDiceRolled">When dice are rolled</option>
     <option value="whenDefeated">When defeated</option>
     <option value="whenOneOfYourFiguresDefeated">When one of your figures is defeated</option>
@@ -113,13 +120,14 @@
 
   <div class="row">
     <button id="addBtn" class="primary">Add / Update</button>
+    <button id="verifyBtn" class="verified">VERIFIED</button>
     <button id="saveBtn" class="export">Save to data/cc-effects.json (e.g. after Remove)</button>
   </div>
     </div>
   </div>
 
   <div class="entries">
-    <h2>Entries (<span id="count">0</span>)</h2>
+    <h2>Unverified: <span id="count">0</span> — Verified: <span id="verifiedCount">0</span> — Shrink list to 0 by clicking VERIFIED</h2>
     <div id="list"></div>
   </div>
 
@@ -134,14 +142,44 @@
     const addBtn = document.getElementById('addBtn');
     const listEl = document.getElementById('list');
     const countEl = document.getElementById('count');
+    const verifiedCountEl = document.getElementById('verifiedCount');
 
     const names = typeof CC_NAMES !== 'undefined' ? CC_NAMES : [];
+    const VERIFIED_KEY = 'cc-verified';
+    let verified = new Set(JSON.parse(localStorage.getItem(VERIFIED_KEY) || '[]'));
+
+    function saveVerified() {
+      localStorage.setItem(VERIFIED_KEY, JSON.stringify([...verified]));
+      saveVerifiedToFile(false);
+    }
+
+    async function saveVerifiedToFile(silent = false) {
+      try {
+        const r = await fetch('/api/save-cc-verified', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ verified: [...verified] }),
+        });
+        const text = await r.text();
+        let j;
+        try { j = JSON.parse(text); } catch { j = {}; }
+        if (r.ok && j.ok) return;
+        if (!silent) alert('Save verified failed: ' + (j.error || r.status + ' ' + text.slice(0, 80)));
+      } catch (e) {
+        if (!silent) alert('Save verified failed: ' + e.message + '. Restart npm run cc-review?');
+      }
+    }
+
+    function getUnverifiedCards() {
+      return Object.keys(cards)
+        .filter((n) => !verified.has(n))
+        .sort((a, b) => a.localeCompare(b));
+    }
 
     function updateCardSelect() {
-      const done = Object.keys(cards);
-      const remaining = names.filter((n) => !done.includes(n));
+      const unverified = getUnverifiedCards();
       cardSelect.innerHTML = '<option value="">— Select or type below —</option>';
-      remaining.forEach((n) => {
+      unverified.forEach((n) => {
         const opt = document.createElement('option');
         opt.value = n;
         opt.textContent = n;
@@ -220,9 +258,7 @@
         effect: effect.value.trim() || '',
         effectType: 'manual',
       };
-      effect.value = '';
       render();
-      // Auto-advance to next card alphabetically (first option in dropdown after the placeholder)
       const nextOpt = cardSelect.options[1];
       if (nextOpt && nextOpt.value) {
         cardSelect.value = nextOpt.value;
@@ -236,16 +272,45 @@
       saveToFile(true);
     });
 
+    document.getElementById('verifyBtn').addEventListener('click', () => {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      if (!name) { alert('Select a card to verify'); return; }
+      const costVal = cost.value.trim();
+      cards[name] = {
+        cost: costVal === '' ? null : Math.max(0, parseInt(costVal, 10) || 0),
+        playableBy: playableBy.value.trim() || 'Any Figure',
+        timing: timing.value || 'other',
+        effect: effect.value.trim() || '',
+        effectType: 'manual',
+      };
+      verified.add(name);
+      saveVerified();
+      saveToFile(true);
+      render();
+      const nextOpt = cardSelect.options[1];
+      if (nextOpt && nextOpt.value) {
+        cardSelect.value = nextOpt.value;
+        cardName.value = nextOpt.value;
+        onCardChange();
+      } else {
+        cardSelect.value = '';
+        cardName.value = '';
+        onCardChange();
+      }
+    });
+
     function render() {
       updateCardSelect();
       listEl.innerHTML = '';
-      const entries = Object.entries(cards).sort((a, b) => a[0].localeCompare(b[0]));
-      countEl.textContent = entries.length;
-      entries.forEach(([name, data]) => {
+      const unverified = getUnverifiedCards();
+      countEl.textContent = unverified.length;
+      verifiedCountEl.textContent = verified.size;
+      unverified.forEach((name) => {
+        const data = cards[name] || {};
         const div = document.createElement('div');
         div.className = 'entry';
         const costStr = data.cost != null ? `[${data.cost}] ` : '';
-        div.innerHTML = `<strong>${costStr}${name}</strong> <span>${data.playableBy} • ${data.timing}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
+        div.innerHTML = `<strong>${costStr}${name}</strong> <span>${(data.playableBy || '—')} • ${(data.timing || '—')}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
         div.querySelector('button').addEventListener('click', (e) => {
           e.stopPropagation();
           delete cards[name];
@@ -254,7 +319,7 @@
         div.style.cursor = 'pointer';
         div.addEventListener('click', (e) => {
           if (e.target.tagName === 'BUTTON') return;
-          cardSelect.value = '';
+          cardSelect.value = name;
           cardName.value = name;
           onCardChange();
         });
@@ -370,10 +435,20 @@
           const d = await r.json();
           if (d.cards && Object.keys(d.cards).length > 0) {
             cards = d.cards;
-            render();
           }
         }
       } catch (_) {}
+      try {
+        const rv = await fetch('/data/cc-verified.json');
+        if (rv.ok) {
+          const dv = await rv.json();
+          if (dv.verified && Array.isArray(dv.verified)) {
+            verified = new Set(dv.verified);
+            saveVerified(); // sync to localStorage
+          }
+        }
+      } catch (_) {}
+      render();
       selectFirstRemainingCard();
     })();
   </script>

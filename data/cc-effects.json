@@ -33,19 +33,19 @@
       "cost": 1,
       "playableBy": "Cara Dune",
       "timing": "whenAttackDeclaredOnYou",
-      "effect": "Use when an attack targeting you is declared. If you share an edge or corner with a space containing blocking, impassable, or difficult terrain, interrupt to move 4 spaces to a space adjacent to the attacker, then the attacker suffers 2 damage.",
+      "effect": "Use when an attack targeting you is declared. If you share an edge or corner with a space containing blocking, impassable, or difficult terrain, interrupt to move 4 spaces to a space adjacent to the attacker, then the attacker suffers 2 Damage.",
       "effectType": "manual"
     },
     "Apex Predator": {
       "cost": 3,
-      "playableBy": "Large Creature",
+      "playableBy": "LARGE CREATURE",
       "timing": "duringActivation",
-      "effect": "Use during your activation to become focused, Hidden, gain 2 Power Tokens of your choice, and 2 movement points. The next time a hostile figure within 2 spaces is defeated during this activation, recover 2 damage.",
+      "effect": "Use during your activation to become focused, Hidden, gain 2 Power Tokens, and 2 movement points. The next time a hostile figure within 2 spaces is defeated during this activation, recover 2 Damage.",
       "effectType": "manual"
     },
     "Arcing Shot": {
       "cost": 1,
-      "playableBy": "Drokkotta",
+      "playableBy": "Drokkatta",
       "timing": "beforeYouDeclareAttack",
       "effect": "Use before you declare an attack. You may target a figure or object adjacent to an empty space in your line of sight.",
       "effectType": "manual"
@@ -61,14 +61,14 @@
       "cost": 3,
       "playableBy": "HUNTER",
       "timing": "duringAttack",
-      "effect": "Use while attacking a figure. If this is the first Command card you play during this attack, apply +3 damage to the attack results. You cannot play Command cards during this attack.",
+      "effect": "Use while attacking a figure. If this is the first Command card you play during this attack, apply +3 Hits to the attack results. You cannot play other Command cards during this attack.",
       "effectType": "manual"
     },
     "Balancing Force": {
       "cost": 2,
-      "playableBy": "Rebel",
+      "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round if your affiliation is Rebel. Each player chooses up to 3 figures. Roll 1 red die. Each of those figures recovers damage equal to the damage results on the die.",
+      "effect": "Use at the start of a round if your affiliation is Rebel. Each player chooses up to 3 figures. Roll 1 red die. Each of those figures recovers Damage equal to the Hit results.",
       "effectType": "manual"
     },
     "Ballistics Matrix": {
@@ -82,7 +82,7 @@
       "cost": 0,
       "playableBy": "WOOKIE",
       "timing": "duringActivation",
-      "effect": "Use during your activation to get 1 Power Token of your choice. If you have suffered 3 or more damage, gain 2 Power Tokens of your choice instead.",
+      "effect": "Use during your activation to get 1 Power Token. If you have suffered 3 or more Damage, gain 2 Power Tokens instead.",
       "effectType": "manual"
     },
     "Battlefield Awareness": {
@@ -96,7 +96,7 @@
       "cost": 0,
       "playableBy": "BRAWLER",
       "timing": "duringActivation",
-      "effect": "Use during your activation. During your group's activation, apply +1 damage to the attack results of the next 2 attacks performed by friendly figures.",
+      "effect": "Use during your activation. During your group's activation, apply +1 Hit to the attack results of the next 2 attacks performed by friendly figures.",
       "effectType": "manual"
     },
     "Behind Enemy Lines": {
@@ -117,7 +117,7 @@
       "cost": 1,
       "playableBy": "Shyla Varad",
       "timing": "duringAttack",
-      "effect": "Use while attacking to apply +1 Surge to the attack results. After the attack resolves, each hostile figure within 2 spaces of you suffers 1 damage.",
+      "effect": "Use while attacking to apply +1 Surge to the attack results. After the attack resolves, each hostile figure within 2 spaces of you suffers 1 Damage.",
       "effectType": "manual"
     },
     "Blaze of Glory": {
@@ -145,7 +145,7 @@
       "cost": 2,
       "playableBy": "Jabba the Hutt",
       "timing": "specialAction",
-      "effect": "Place this card on a hostile Deployment card. When an attack targeting a figure in that group is declared, apply +1 Damage to the attack results.",
+      "effect": "Special Action: Place this card on a hostile Deployment card. When an attack targeting a figure in that group is declared, apply +1 Hit to the attack results.",
       "effectType": "manual"
     },
     "Bodyguard": {
@@ -391,6 +391,1721 @@
       "playableBy": "IMPERIAL FORCE USER",
       "timing": "duringActivation",
       "effect": "Use during your activation. Choose another small figure within 3 spaces. Push that figure up to 1 space, then it suffers 1 Damage.",
+      "effectType": "manual"
+    },
+    "Data Theft": {
+      "cost": 1,
+      "playableBy": "SPY",
+      "timing": "specialAction",
+      "effect": "Choose a Command card in your opponent's discard pile. Once during this round, you may play that card as though it was in your hand.",
+      "effectType": "manual"
+    },
+    "De Wanna Wanga": {
+      "cost": 0,
+      "playableBy": "Bib Fortuna",
+      "timing": "specialAction",
+      "effect": "Choose 1 Command card in your discard pile and shuffle it into your Command deck.\n\nPassive: Once per round, when this card is discarded from your hand or deck, you may shuffle it into your Command deck.",
+      "effectType": "manual"
+    },
+    "Deadeye": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to apply +2 Accuracy to the attack results.",
+      "effectType": "manual"
+    },
+    "Deadly Precision": {
+      "cost": 0,
+      "playableBy": "Force User",
+      "timing": "startOfActivation",
+      "effect": "Use at the start of your activation. While attacking during this round, apply -1 to the defense results.",
+      "effectType": "manual"
+    },
+    "Deathblow": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "whenYouDeclareAttack",
+      "effect": "Use when you declare a melee attack to apply +1 damage to the attack results. If the defender has the Ranged attack type, apply an additional +1 damage to the attack results.",
+      "effectType": "manual"
+    },
+    "Debts Repaid": {
+      "cost": 3,
+      "playableBy": "Chewbacca",
+      "timing": "whenOneOfYourFiguresDefeated",
+      "effect": "Use when a friendly figure is defeated. Ready your Deployment card and become Focused.",
+      "effectType": "manual"
+    },
+    "Definition: 'Love'": {
+      "cost": 1,
+      "playableBy": "HK-47",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to perform an attack targeting a hostile figure 5 or more spaces away without spending an action. Remove 1 red die from the attack pool.",
+      "effectType": "manual"
+    },
+    "Deflection": {
+      "cost": 1,
+      "playableBy": "Force User",
+      "timing": "whenAttackDeclaredOnYou",
+      "effect": "Use when an attack targeting you is declared. Apply -2 Accuracy to the attack results. After the attack is resolved, if you did not suffer any damage, the attacker suffers 2 damage.",
+      "effectType": "manual"
+    },
+    "Demoralizing Monologue": {
+      "cost": 1,
+      "playableBy": "Moff Gideon",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to choose and reroll 1 defense die. Then you may reveal your hand. If you reveal 2 or more cards this way, remove the chosen die's results from the defense results.",
+      "effectType": "manual"
+    },
+    "Deploy the Garrison": {
+      "cost": 1,
+      "playableBy": "Director Krennic",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Each friendly TROOPER or GUARDIAN within 4 spaces gains 2 movement points or 1 Power Token.",
+      "effectType": "manual"
+    },
+    "Desperate Escape": {
+      "cost": 1,
+      "playableBy": "Kuiil",
+      "timing": "endOfRound",
+      "effect": "Use at the end of the round to move up to 6 spaces.\n\nPassive: At the end of the round, if your Kuiil is defeated, you may discard this card from your hand to distribute 2 damage among friendly figures.",
+      "effectType": "manual"
+    },
+    "Devotion": {
+      "cost": 0,
+      "playableBy": "DROID",
+      "timing": "specialAction",
+      "effect": "Choose an adjacent friendly figure. Then, search your Command deck and draw 1 card with that figure's name as a trait, reveal it, and then shuffle your Command deck.",
+      "effectType": "manual"
+    },
+    "Dirty Trick": {
+      "cost": 2,
+      "playableBy": "SMUGGLER or HUNTER",
+      "timing": "other",
+      "effect": "Use when a hostile figure enters an adjacent space. That figure must choose to either suffer 3 damage or become Stunned.",
+      "effectType": "manual"
+    },
+    "Disable": {
+      "cost": 2,
+      "playableBy": "SMUGGLER",
+      "timing": "specialAction",
+      "effect": "Choose an adjacent hostile figure. Until the end of the round, that figure cannot use attack or defense abilities.",
+      "effectType": "manual"
+    },
+    "Disarm": {
+      "cost": 1,
+      "playableBy": "Krrsantan",
+      "timing": "other",
+      "effect": "Use when an adjacent hostile figure becomes Bleeding from your attack. Put this card into play, then that figure suffers 1 damage, becomes Weakened, and cannot discard the Weakened condition.",
+      "effectType": "manual"
+    },
+    "Disengage": {
+      "cost": 1,
+      "playableBy": "Mak Eshka'rey",
+      "timing": "other",
+      "effect": "Use when a hostile figure enters a space within 3 spaces of you to gain 3 movement points.",
+      "effectType": "manual"
+    },
+    "Disorient": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "afterDamage",
+      "effect": "Use after a hostile figure with a BENEFICIAL condition suffers damage. Discard 1 BENEFICIAL condition from that figure. Then, that figure suffers 2 damage.",
+      "effectType": "manual"
+    },
+    "Double or Nothing": {
+      "cost": 2,
+      "playableBy": "SMUGGLER",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to choose a die. That die's controller rerolls it. If the rerolled result has the same number of symbols as the original die roll, you may double or cancel its results.",
+      "effectType": "manual"
+    },
+    "Draw!": {
+      "cost": 1,
+      "playableBy": "Vinto Hreeda",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to perform an attack without using an action.",
+      "effectType": "manual"
+    },
+    "Droid Mastery": {
+      "cost": 0,
+      "playableBy": "Jarrod Kelvin",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. J4X-7 becomes Focused, then may interrupt to perform an attack. If it is not in play, put J4X-7 into play in your space instead.",
+      "effectType": "manual"
+    },
+    "Dying Lunge": {
+      "cost": 2,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "Use when you have suffered damage equal to your Health, before you are defeated. Move up to 2 spaces, then perform a melee attack. Then, you are defeated.",
+      "effectType": "manual"
+    },
+    "Eerie Visage": {
+      "cost": 1,
+      "playableBy": "0-0-0",
+      "timing": "specialAction",
+      "effect": "Each hostile figure with line of sight to you suffers 1 damage and becomes Weakened.",
+      "effectType": "manual"
+    },
+    "Efficient Travel": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Until the end of the round, each of your figures ignores additional movement point costs for difficult terrain and hostile figures.",
+      "effectType": "manual"
+    },
+    "Element of Surprise": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "whenYouDeclareAttack",
+      "effect": "Use when you declare an attack. If the target figure did not have line of sight to you at the start of your activation, remove 1 die from its defense pool.",
+      "effectType": "manual"
+    },
+    "Elusive": {
+      "cost": 1,
+      "playableBy": "SPY",
+      "timing": "whileDefending",
+      "effect": "Use while defending to choose 1 attack die and remove all symbols on the chosen die from the attack results. Then, remove all symbols on a defense die from the defense results.",
+      "effectType": "manual"
+    },
+    "Emergency Aid": {
+      "cost": 2,
+      "playableBy": "Any Figure",
+      "timing": "specialAction",
+      "effect": "Choose an adjacent figure. That figure recovers 2 damage. If you are a GUARDIAN or LEADER, that figure recovers an additional 1 damage.",
+      "effectType": "manual"
+    },
+    "Endless Reserves": {
+      "cost": 2,
+      "playableBy": "General Weiss",
+      "timing": "specialAction",
+      "effect": "Choose a defeated friendly TROOPER and place it in an empty space adjacent to another figure in its group. Then, shuffle this card back into your Command deck.",
+      "effectType": "manual"
+    },
+    "Escalating Hostility": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "afterAttack",
+      "effect": "Use after you resolve an attack that did not miss. The defender suffers 1 damage, plus an additional 1 damage for each other Escalating Hostility Command card in your discard pile.",
+      "effectType": "manual"
+    },
+    "Espionage Mastery": {
+      "cost": 0,
+      "playableBy": "Agent Blaise",
+      "timing": "afterSpecial",
+      "effect": "Use after you resolve Interrogate. Return your discarded Command card to your hand. Then, draw 1 card.",
+      "effectType": "manual"
+    },
+    "Etiquette and Protocol": {
+      "cost": 2,
+      "playableBy": "C-3PO",
+      "timing": "specialAction",
+      "effect": "Choose 1 hostile and 1 friendly figure, both in your line of sight. Until the end of the round, these figures cannot declare attacks targeting each other.",
+      "effectType": "manual"
+    },
+    "Evacuate": {
+      "cost": 2,
+      "playableBy": "Hera Syndulla",
+      "timing": "specialAction",
+      "effect": "Choose a friendly figure within 2 spaces. That figure is defeated. Your opponent gains only half the VPs they would normally gain (rounded down).",
+      "effectType": "manual"
+    },
+    "Explosive Weaponry": {
+      "cost": 1,
+      "playableBy": "HEAVY WEAPON",
+      "timing": "whenYouDeclareAttack",
+      "effect": "Use when you declare an attack. This attack gains Blast 1.",
+      "effectType": "manual"
+    },
+    "Expose Weakness": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "specialAction",
+      "effect": "Choose an adjacent hostile figure. The next attack targeting that figure gains Pierce 3.",
+      "effectType": "manual"
+    },
+    "Extra Protection": {
+      "cost": 1,
+      "playableBy": "Onar Koma",
+      "timing": "doubleActionSpecial",
+      "effect": "Use when another friendly figure within 2 spaces suffers 3 or more damage. Move up to 2 spaces, then perform an attack.",
+      "effectType": "manual"
+    },
+    "Face Me!": {
+      "cost": 1,
+      "playableBy": "Agent Kallus",
+      "timing": "specialAction",
+      "effect": "Choose a unique hostile figure with line of sight to you. Push that figure a number of spaces equal to its speed to a space adjacent to you, then perform an attack targeting that figure.",
+      "effectType": "manual"
+    },
+    "Face to Face": {
+      "cost": 1,
+      "playableBy": "BRAWLER",
+      "timing": "specialAction",
+      "effect": "Move up to 2 spaces, then perform an attack targeting an adjacent figure or object.",
+      "effectType": "manual"
+    },
+    "Fatal Deception": {
+      "cost": 1,
+      "playableBy": "Murne Rin",
+      "timing": "startOfActivation",
+      "effect": "Use at the start of your activation. When you use False Orders this round, you may choose a figure with a figure cost of 5 or less within 5 spaces.",
+      "effectType": "manual"
+    },
+    "Feint": {
+      "cost": 1,
+      "playableBy": "BRAWLER",
+      "timing": "duringAttack",
+      "effect": "Use while attacking a figure within 2 spaces. Choose 1 attack die and 1 defense die and remove their results from the attack and defense results.",
+      "effectType": "manual"
+    },
+    "Feral Swipes": {
+      "cost": 1,
+      "playableBy": "CREATURE",
+      "timing": "specialAction",
+      "effect": "For each die in your attack pool, perform an attack using 1 red die.",
+      "effectType": "manual"
+    },
+    "Ferocity": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "endOfRound",
+      "effect": "Use at the end of the round. Choose 1 of your or 1 of your opponent's CREATURES. Perform 1 attack with that figure.",
+      "effectType": "manual"
+    },
+    "Field Promotion": {
+      "cost": 0,
+      "playableBy": "LEADER",
+      "timing": "afterAttack",
+      "effect": "Use after you resolve an attack targeting a figure. If that figure has been defeated and your army affiliation is Rebel or Imperial, you gain 4 VPs and increase your figure cost by 2.",
+      "effectType": "manual"
+    },
+    "Field Supply": {
+      "cost": 1,
+      "playableBy": "Ko-Tun Feralo",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Up to 2 other figures within 3 spaces of you gain 1 Power Token of your choice. During this round, a friendly figure who spends a Power Token may reroll 1 attack die during that attack.",
+      "effectType": "manual"
+    },
+    "Field Tactician": {
+      "cost": 1,
+      "playableBy": "Any Small Figure",
+      "timing": "specialAction",
+      "effect": "Choose a friendly figure within 2 spaces. That figure may interrupt to perform a move.",
+      "effectType": "manual"
+    },
+    "Final Stand": {
+      "cost": 2,
+      "playableBy": "Baze Malbus",
+      "timing": "other",
+      "effect": "Use when a friendly figure within 3 spaces has suffered damage equal to its Health, before it is defeated. Move up to 2 spaces, gain 1 Power Token, and then perform an attack. Then, that friendly figure is defeated.",
+      "effectType": "manual"
+    },
+    "Findsman Meditation": {
+      "cost": 0,
+      "playableBy": "Zuckuss",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round to choose one of your opponent's groups. When your opponent activates that group during this round, you may interrupt to perform a move or an attack.",
+      "effectType": "manual"
+    },
+    "Fleet Footed": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to gain 1 movement point.",
+      "effectType": "manual"
+    },
+    "Flurry of Blades": {
+      "cost": 2,
+      "playableBy": "Royal Guard Champion",
+      "timing": "doubleActionSpecial",
+      "effect": "Perform 3 attacks.",
+      "effectType": "manual"
+    },
+    "Focus": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "specialAction",
+      "effect": "You become Focused.",
+      "effectType": "manual"
+    },
+    "Fool Me Once": {
+      "cost": 2,
+      "playableBy": "Any Figure",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to return your opponent's Command discard pile to the game box. Then, if you are a SPY, draw 1 Command card.",
+      "effectType": "manual"
+    },
+    "Forbidden Knowledge": {
+      "cost": 1,
+      "playableBy": "Taron Malicos",
+      "timing": "startOfActivation",
+      "effect": "Use at the start of your activation to draw 1 Command card, then discard 1 or more Command cards from your hand. You recover 1 strain, gain 1 movement point, and discard 1 HARMFUL condition for each card discarded.",
+      "effectType": "manual"
+    },
+    "Force Drain": {
+      "cost": 1,
+      "playableBy": "Second Sister",
+      "timing": "specialAction",
+      "effect": "Choose a hostile figure within 2 spaces. That figure suffers 3 damage and becomes Stunned and Weakened. If that figure is a FORCE USER, you recover 3 strain.",
+      "effectType": "manual"
+    },
+    "Force Illusion": {
+      "cost": 2,
+      "playableBy": "Force User",
+      "timing": "duringAttack",
+      "effect": "Use while a hostile figure in your line of sight is attacking. The defender becomes Hidden.",
+      "effectType": "manual"
+    },
+    "Force Jump": {
+      "cost": 1,
+      "playableBy": "Force User",
+      "timing": "specialAction",
+      "effect": "Move up to 5 spaces. During this movement, you gain Mobile. You cannot end your movement in a space that contains blocking or impassable terrain.",
+      "effectType": "manual"
+    },
+    "Force Lightning": {
+      "cost": 3,
+      "playableBy": "Force User",
+      "timing": "specialAction",
+      "effect": "Choose a hostile figure in your line of sight within 2 spaces. That figure and each figure adjacent to it suffers 2 damage and becomes Stunned.",
+      "effectType": "manual"
+    },
+    "Force Push": {
+      "cost": 1,
+      "playableBy": "Force User",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. Choose another small figure within 3 spaces. Push that figure up to 2 spaces.",
+      "effectType": "manual"
+    },
+    "Force Rush": {
+      "cost": 0,
+      "playableBy": "Force User",
+      "timing": "startOfActivation",
+      "effect": "Use at the start of your activation. You gain 2 movement points.",
+      "effectType": "manual"
+    },
+    "Force Surge": {
+      "cost": 2,
+      "playableBy": "Force User",
+      "timing": "endOfActivation",
+      "effect": "Use at the end of your activation to move up to 1 space. Then, choose an adjacent hostile figure. That figure suffers 2 damage and 1 strain.",
+      "effectType": "manual"
+    },
+    "Foresee": {
+      "cost": 0,
+      "playableBy": "Thrawn",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to look at the top 2 Command cards of your opponent's deck and discard 1 of those cards. If its cost is 1 or less, draw 1 Command card.",
+      "effectType": "manual"
+    },
+    "Forward March": {
+      "cost": 1,
+      "playableBy": "VEHICLE",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. Each friendly figure within 2 spaces of you gains 1 movement point.",
+      "effectType": "manual"
+    },
+    "Fuel Upgrade": {
+      "cost": 1,
+      "playableBy": "VEHICLE",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Until the end of the round, each of your VEHICLES gains +1 Speed and applies +1 Block to its defense results.",
+      "effectType": "manual"
+    },
+    "Furious Charge": {
+      "cost": 2,
+      "playableBy": "Gaarkhan",
+      "timing": "afterAttackTargetingYouResolved",
+      "effect": "Use after an attack targeting you resolves. If you suffered 3 or more damage, ready your Deployment card.",
+      "effectType": "manual"
+    },
+    "Get Behind Me!": {
+      "cost": 2,
+      "playableBy": "GUARDIAN or Force User",
+      "timing": "whenAttackDeclaredOnAdjacentFriendly",
+      "effect": "Use when an attack is declared targeting another friendly small figure with a figure cost of 10 or less within 3 spaces. Move up to 3 spaces into a space adjacent to that figure that can be targeted by the attack. The attack targets you instead, if able.",
+      "effectType": "manual"
+    },
+    "Glory of the Kill": {
+      "cost": 1,
+      "playableBy": "HUNTER",
+      "timing": "afterAttack",
+      "effect": "Use after you resolve an attack targeting a figure. If the defender was defeated, recover 3 damage.",
+      "effectType": "manual"
+    },
+    "Grenadier": {
+      "cost": 3,
+      "playableBy": "TROOPER",
+      "timing": "specialAction",
+      "effect": "Choose a space within 3 spaces and roll 1 red die. Each figure on or adjacent to the chosen space suffers damage equal to the results.",
+      "effectType": "manual"
+    },
+    "Grisly Contest": {
+      "cost": 2,
+      "playableBy": "BRAWLER",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. An adjacent hostile figure suffers 2 damage. Then, you suffer 2 damage.",
+      "effectType": "manual"
+    },
+    "Guardian Stance": {
+      "cost": 1,
+      "playableBy": "GUARDIAN",
+      "timing": "other",
+      "effect": "Use while an adjacent friendly figure is defending. Reroll 1 or more attack or defense dice.",
+      "effectType": "manual"
+    },
+    "Guerilla Warfare": {
+      "cost": 1,
+      "playableBy": "Saw Gerrera",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Each friendly figure with no other friendly figures within 2 spaces gains 1 Surge token and becomes Hidden.",
+      "effectType": "manual"
+    },
+    "Guild Programming": {
+      "cost": 2,
+      "playableBy": "IG-11",
+      "timing": "other",
+      "effect": "Use when you perform Rapid Fire. Before you declare each attack, you become Focused.",
+      "effectType": "manual"
+    },
+    "Hard to Hit": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "whileDefending",
+      "effect": "Use while defending to reroll 1 defense die.",
+      "effectType": "manual"
+    },
+    "Harsh Environment": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Until the end of the round, figures on exterior spaces apply -1 Evade to their defense results, and figures not on exterior spaces apply +1 Block to their defense results.",
+      "effectType": "manual"
+    },
+    "Heart of Freedom": {
+      "cost": 2,
+      "playableBy": "Rebel",
+      "timing": "startOfActivation",
+      "effect": "Use at the start of your activation to discard 1 HARMFUL condition, recover 2 damage, and gain 2 movement points.",
+      "effectType": "manual"
+    },
+    "Heavy Armor": {
+      "cost": 1,
+      "playableBy": "VEHICLE",
+      "timing": "whileDefending",
+      "effect": "Use while defending. During this attack, the Pierce keyword has no effect.",
+      "effectType": "manual"
+    },
+    "Heavy Ordnance": {
+      "cost": 0,
+      "playableBy": "HEAVY WEAPON",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to apply +1 Hit to the attack results. If the defender is an object, apply +2 Hit and Pierce 2 to the attack results instead.",
+      "effectType": "manual"
+    },
+    "Heightened Reflexes": {
+      "cost": 2,
+      "playableBy": "HUNTER",
+      "timing": "duringAttack",
+      "effect": "Use while attacking a figure to choose 1 defense die and remove its results from the defense results.",
+      "effectType": "manual"
+    },
+    "Hidden Trap": {
+      "cost": 2,
+      "playableBy": "Saska Teft",
+      "timing": "specialAction",
+      "effect": "Choose a terminal. Each figure adjacent to that terminal suffers 2 damage.",
+      "effectType": "manual"
+    },
+    "Hide in Plain Sight": {
+      "cost": 3,
+      "playableBy": "SPY",
+      "timing": "specialAction",
+      "effect": "Until the end of the round, you cannot be the target of an attack.",
+      "effectType": "manual"
+    },
+    "Hit and Run": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "specialAction",
+      "effect": "Perform an attack. After the attack resolves, you gain 3 movement points.",
+      "effectType": "manual"
+    },
+    "Hold Ground": {
+      "cost": 2,
+      "playableBy": "GUARDIAN",
+      "timing": "specialAction",
+      "effect": "Until the end of the round, small hostile figures cannot voluntarily exit spaces adjacent to you.",
+      "effectType": "manual"
+    },
+    "Honoring the Fallen": {
+      "cost": 2,
+      "playableBy": "Migs Mayfeld",
+      "timing": "whenYouDeclareAttack",
+      "effect": "Use when you declare an attack to apply +1 damage to the attack results for each currently defeated friendly figure, to a maximum of +3 damage.",
+      "effectType": "manual"
+    },
+    "Hostile Negotiation": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to discard a random Command card from your hand. If you do, your opponent discards 2 random cards from their hand.",
+      "effectType": "manual"
+    },
+    "Hour of Need": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. You recover damage equal to the current round number.",
+      "effectType": "manual"
+    },
+    "Hunt Them Down": {
+      "cost": 2,
+      "playableBy": "The Grand Inquisitor",
+      "timing": "other",
+      "effect": "Use when you declare Lightsaber Throw. Apply +2 Accuracy to the attack results. The attack gains Cleave 2.",
+      "effectType": "manual"
+    },
+    "Hunter Protocol": {
+      "cost": 1,
+      "playableBy": "DROID",
+      "timing": "duringAttack",
+      "effect": "Use while attacking. You may trigger the same Special Action ability up to twice.",
+      "effectType": "manual"
+    },
+    "I Can Feel It": {
+      "cost": 0,
+      "playableBy": "Force User",
+      "timing": "duringActivation",
+      "effect": "Use while defending to reroll 1 defense die. Use while attacking to reroll 1 attack die. Special Action: Gain 1 VP.",
+      "effectType": "manual"
+    },
+    "I Make My Own Luck": {
+      "cost": 2,
+      "playableBy": "Han Solo",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. You claim the initiative token, and you must activate first this round.",
+      "effectType": "manual"
+    },
+    "Iron Will": {
+      "cost": 3,
+      "playableBy": "GUARDIAN",
+      "timing": "whenAttackDeclaredOnYou",
+      "effect": "Use when an attack targeting you is declared. You cannot suffer more than 3 damage from that attack.",
+      "effectType": "manual"
+    },
+    "Jump Jets": {
+      "cost": 1,
+      "playableBy": "Any Small Figure",
+      "timing": "specialAction",
+      "effect": "Place your figure in an empty space within 5 spaces.",
+      "effectType": "manual"
+    },
+    "Jundland Terror": {
+      "cost": 2,
+      "playableBy": "Any Figure",
+      "timing": "doubleActionSpecial",
+      "effect": "Use at the end of a round to choose a Tusken Raider or Bantha Rider figure. The chosen figure gains 2 movement points and may interrupt to perform an attack or move.",
+      "effectType": "manual"
+    },
+    "Just Business": {
+      "cost": 1,
+      "playableBy": "LEADER",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. During this round, friendly figures without the printed Professional ability gain Professional while within 3 spaces of you. (Those figures may reroll 1 attack die while attacking)",
+      "effectType": "manual"
+    },
+    "Karabast!": {
+      "cost": 1,
+      "playableBy": "Zeb Orellios",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. For each damage you have suffered, you may choose a hostile figure within 2 spaces. Each chosen figure suffers 1 damage.",
+      "effectType": "manual"
+    },
+    "Knowledge and Defense": {
+      "cost": 2,
+      "playableBy": "Force User",
+      "timing": "specialAction",
+      "effect": "Until the end of the round, add 1 white die to your defense pool.",
+      "effectType": "manual"
+    },
+    "Learn by Example": {
+      "cost": 1,
+      "playableBy": "Ezra Bridger",
+      "timing": "other",
+      "effect": "Play this card as a copy of a FORCE USER Command card in any discard pile, ignoring faction restrictions.",
+      "effectType": "manual"
+    },
+    "Let's Make a Deal": {
+      "cost": 0,
+      "playableBy": "Hondo Ohnaka",
+      "timing": "whileDefending",
+      "effect": "Use while defending. Pay your opponent X VPs to apply -X Block to the attack results. Then, you become Focused.",
+      "effectType": "manual"
+    },
+    "Lightbow": {
+      "cost": 1,
+      "playableBy": "Chirrut Imwe",
+      "timing": "specialAction",
+      "effect": "Perform an attack using 1 blue, 1 red, and 1 green die. This attack uses only the following abilities: +2 Accuracy; Surge: +1 Hit; Surge: Pierce 4.",
+      "effectType": "manual"
+    },
+    "Lock On": {
+      "cost": 2,
+      "playableBy": "HEAVY WEAPON",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to apply +3 Accuracy, or -1 Surge, or -1 Evade to the results.",
+      "effectType": "manual"
+    },
+    "Lure of the Dark Side": {
+      "cost": 3,
+      "playableBy": "Force User",
+      "timing": "specialAction",
+      "effect": "Choose a small hostile figure within 3 spaces. Perform 1 attack with that figure.",
+      "effectType": "manual"
+    },
+    "Negation": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "whenCommandCardPlayed",
+      "effect": "Use after your opponent plays a Command card with a cost of 0. Discard that card and cancel its effects.",
+      "effectType": "manual"
+    },
+    "Marksman": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "specialAction",
+      "effect": "Use before declaring an attack. Figures do not block line of sight for this attack.",
+      "effectType": "manual"
+    },
+    "Ready Weapons": {
+      "cost": 0,
+      "playableBy": "TROOPER or GUARDIAN",
+      "timing": "specialAction",
+      "effect": "Distribute 3 damage among figures in your group.",
+      "effectType": "manual"
+    },
+    "Size Advantage": {
+      "cost": 2,
+      "playableBy": "Any Large Figure",
+      "timing": "specialAction",
+      "effect": "Perform an attack targeting a small figure. Apply +2 damage to the attack results and the attack gains Weaken.",
+      "effectType": "manual"
+    },
+    "Smoke Grenade": {
+      "cost": 1,
+      "playableBy": "TROOPER or TECHNICIAN",
+      "timing": "specialAction",
+      "effect": "Choose a space within 3 spaces and mark it. A friendly figure within 2 spaces of the chosen space gains 2 movement points and becomes Hidden. Until the start of the next round, the marked space blocks line of sight.",
+      "effectType": "manual"
+    },
+    "Take Cover": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "specialAction",
+      "effect": "During this round, while defending, apply +1 Block and -2 Accuracy to the results.",
+      "effectType": "manual"
+    },
+    "Take Initiative": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round to claim the initiative token. Then exhaust 1 of your Deployment cards.",
+      "effectType": "manual"
+    },
+    "Urgency": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "specialAction",
+      "effect": "Gain a number of movement points equal to your Speed +2.",
+      "effectType": "manual"
+    },
+    "Wookiee Rage": {
+      "cost": 2,
+      "playableBy": "WOOKIE",
+      "timing": "specialAction",
+      "effect": "Choose an adjacent hostile figure. The chosen figure suffers 1 damage for each damage you have suffered, to a maximum of 3 damage.",
+      "effectType": "manual"
+    },
+    "Mandalorian Tactics": {
+      "cost": 3,
+      "playableBy": "Boba Fett",
+      "timing": "doubleActionSpecial",
+      "effect": "Perform 2 attacks. Apply +1 Surge to each attack's results. Instead of choosing 1 ability from Battle Discipline, apply all of its listed abilities.",
+      "effectType": "manual"
+    },
+    "Maximum Firepower": {
+      "cost": 3,
+      "playableBy": "HEAVY WEAPON",
+      "timing": "specialAction",
+      "effect": "Perform an attack. Apply +4 Hit to the attack results.",
+      "effectType": "manual"
+    },
+    "Meditation": {
+      "cost": 2,
+      "playableBy": "Force User",
+      "timing": "specialAction",
+      "effect": "During your next activation you may perform 1 additional action.",
+      "effectType": "manual"
+    },
+    "Opportunistic": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "afterDamage",
+      "effect": "Use after a hostile figure suffers damage. You gain 3 movement points.",
+      "effectType": "manual"
+    },
+    "Shoot the Messenger": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "afterAttack",
+      "effect": "Use after you resolve an attack targeting a figure. If the defender was defeated, your opponent discards the top 3 cards of their Command deck.",
+      "effectType": "manual"
+    },
+    "Droid": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Force User": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Guardian": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Heavy Weapon": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Hunter": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "I Must Go Alone": {
+      "cost": 1,
+      "playableBy": "Obi-Wan Kenobi",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Until the end of the round, hostile figures cannot declare attacks targeting you unless they are within 3 spaces of you.",
+      "effectType": "manual"
+    },
+    "Improvised Weapons": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "specialAction",
+      "effect": "Special Action: Perform an attack using 1 green and 1 yellow die. You cannot use abilities during this attack.",
+      "effectType": "manual"
+    },
+    "In the Shadows": {
+      "cost": 1,
+      "playableBy": "SMUGGLER or HUNTER",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Until the end of the round, hostile figures 4 or more spaces away from you do not have line of sight to you. You do not block line of sight for those figures.",
+      "effectType": "manual"
+    },
+    "Induce Rage": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round to choose up to 2 figures. Each of those figures discards each of its conditions, then gains 1 Surge for each condition discarded this way.",
+      "effectType": "manual"
+    },
+    "Inspiring Speech": {
+      "cost": 2,
+      "playableBy": "LEADER",
+      "timing": "specialAction",
+      "effect": "Special Action: Choose up to 2 friendly figures adjacent to you. Those figures become Focused.",
+      "effectType": "manual"
+    },
+    "Intelligence Leak": {
+      "cost": 1,
+      "playableBy": "SPY",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to look at your opponent's hand. You may choose and discard a Command card from it. Then, you suffer damage equal to that card's cost.",
+      "effectType": "manual"
+    },
+    "Leader": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Looking for a Fight": {
+      "cost": 0,
+      "playableBy": "BRAWLER",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to gain 1 Surge. Then, either move up to 1 space or push an adjacent small figure up to 1 space.",
+      "effectType": "manual"
+    },
+    "Lord of the Sith": {
+      "cost": 3,
+      "playableBy": "Darth Vader",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. For each hostile figure defeated during this activation, you may perform 1 additional action.",
+      "effectType": "manual"
+    },
+    "Mandalorian Steel": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Marked Territory": {
+      "cost": 0,
+      "playableBy": "CREATURE",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to gain 1 Strain. Then, a figure in your group in an exterior space gains 1 Evade.",
+      "effectType": "manual"
+    },
+    "Master Operative": {
+      "cost": 2,
+      "playableBy": "Verena Talos",
+      "timing": "other",
+      "effect": "Use when you declare \"Close Quarters.\" You become Focused. Apply +1 Surge to the attack results.",
+      "effectType": "manual"
+    },
+    "Merciless": {
+      "cost": 1,
+      "playableBy": "HUNTER",
+      "timing": "specialAction",
+      "effect": "Special Action: Choose an adjacent hostile figure. That figure's player may discard 2 cards from the top of his Command deck. If he does not, your player gains 3 VPs.",
+      "effectType": "manual"
+    },
+    "Miracle Worker": {
+      "cost": 2,
+      "playableBy": "MHD-19",
+      "timing": "other",
+      "effect": "Use when a friendly figure within 3 spaces of you has suffered damage equal to its Health. Instead of being defeated, it recovers 3 damage.",
+      "effectType": "manual"
+    },
+    "Mitigate": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to reroll 1 attack die.",
+      "effectType": "manual"
+    },
+    "Navigation Upgrade": {
+      "cost": 2,
+      "playableBy": "DROID",
+      "timing": "specialAction",
+      "effect": "Special Action: Place this card in your play area.\n----------------\nAttachment: Exhaust this card during a friendly DROID's activation. That figure gains 1 movement point.",
+      "effectType": "manual"
+    },
+    "New Orders": {
+      "cost": 3,
+      "playableBy": "LEADER",
+      "timing": "doubleActionSpecial",
+      "effect": "Double Action Special: Choose 1 adjacent friendly figure. Ready that figure's Deployment card.",
+      "effectType": "manual"
+    },
+    "No Cheating": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Of No Importance": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "Use after the last figure in one of your non-unique groups is defeated. That group's Deployment card is worth 2 fewer VPs, to a minimum of 0.",
+      "effectType": "manual"
+    },
+    "Officer's Training": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to reroll 1 attack die. Then, if you are a LEADER, draw 1 Command card.",
+      "effectType": "manual"
+    },
+    "On a Mission": {
+      "cost": 0,
+      "playableBy": "C1-10P",
+      "timing": "specialAction",
+      "effect": "Special Action: Move up to 5 spaces. Each time you enter a space containing a small figure, you may push that figure 1 space.",
+      "effectType": "manual"
+    },
+    "On the Lam": {
+      "cost": 3,
+      "playableBy": "SMUGGLER",
+      "timing": "whileDefending",
+      "effect": "Use while defending, before the attacker applies modifiers, to interrupt to perform a move.",
+      "effectType": "manual"
+    },
+    "One in a Million": {
+      "cost": 2,
+      "playableBy": "Jyn Erso",
+      "timing": "whenYouDeclareAttack",
+      "effect": "Use when you declare an attack. If it is not your activation, remove all dice from the target's defense pool.",
+      "effectType": "manual"
+    },
+    "Optimal Bombardment": {
+      "cost": 3,
+      "playableBy": "General Sorin",
+      "timing": "specialAction",
+      "effect": "Special Action: Choose up to 3 VEHICLES, DROIDS, or HEAVY WEAPONS adjacent to you. Each of these figures may interrupt to perform an attack. Each attack gains Blast 1.",
+      "effectType": "manual"
+    },
+    "Out of Time": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. A hostile figure within 3 spaces and line of sight suffers damage equal to the current round number.",
+      "effectType": "manual"
+    },
+    "Overcharged Weapons": {
+      "cost": 0,
+      "playableBy": "Any Ready VEHICLE",
+      "timing": "whenEnemyFigureActivates",
+      "effect": "Use when a hostile figure activates to interrupt to perform an attack targeting that figure. The attack gains Pierce 2. Then, exhaust your Deployment card and become Weakened.",
+      "effectType": "manual"
+    },
+    "Overdrive": {
+      "cost": 3,
+      "playableBy": "Any Figure",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. During this round, each of your DROIDS may suffer 2 damage during its activation to perform 1 additional action. Limit once per DROID.",
+      "effectType": "manual"
+    },
+    "Overheated": {
+      "cost": 1,
+      "playableBy": "Paz Vizsla",
+      "timing": "specialAction",
+      "effect": "Special Action: If you have the HEAVY WEAPON attack type, perform 2 attacks. Apply -1 Block to the attack results during these attacks. Then, your attack type becomes HEAVY WEAPON.",
+      "effectType": "manual"
+    },
+    "Overrun": {
+      "cost": 2,
+      "playableBy": "VEHICLE",
+      "timing": "startOfActivation",
+      "effect": "Use at the start of your activation. During this activation, when you enter a hostile figure's space, that figure suffers 2 damage. Limit once per hostile figure.",
+      "effectType": "manual"
+    },
+    "Overwhelming Impact": {
+      "cost": 3,
+      "playableBy": "HEAVY WEAPON or WOOKIEE",
+      "timing": "duringAttack",
+      "effect": "Use while attacking. For each defense die rolled, apply +1 damage and +1 Surge to the attack results. During this attack, ignore all defense results that are not on the defense dice.",
+      "effectType": "manual"
+    },
+    "Pack Alpha": {
+      "cost": 1,
+      "playableBy": "CREATURE",
+      "timing": "specialAction",
+      "effect": "Special Action: Up to 3 friendly CREATURES within 3 spaces each move up to 3 spaces. Then, choose a hostile figure. It suffers damage equal to the number of those figures adjacent to it.",
+      "effectType": "manual"
+    },
+    "Paid in Beskar": {
+      "cost": 0,
+      "playableBy": "HUNTER",
+      "timing": "other",
+      "effect": "Use when a hostile figure within 3 spaces is defeated to gain 2 Surge.",
+      "effectType": "manual"
+    },
+    "Parry": {
+      "cost": 0,
+      "playableBy": "BRAWLER or GUARDIAN",
+      "timing": "whileDefending",
+      "effect": "Use while defending to apply +1 Block to the defense results.",
+      "effectType": "manual"
+    },
+    "Parting Blow": {
+      "cost": 2,
+      "playableBy": "BRAWLER",
+      "timing": "other",
+      "effect": "Interrupt when a hostile figure exits an adjacent space. Before that figure moves, perform an attack targeting that figure. Then, you become Stunned.",
+      "effectType": "manual"
+    },
+    "Payback": {
+      "cost": 2,
+      "playableBy": "Dengar",
+      "timing": "afterAttackTargetingYouResolved",
+      "effect": "Use after an attack targeting you resolves to interrupt to perform an attack targeting the attacker. Apply +2 Surge to the attack results.",
+      "effectType": "manual"
+    },
+    "Personal Energy Shield": {
+      "cost": 1,
+      "playableBy": "TECHNICIAN",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to gain 1 Evade. While defending during this round, apply +1 Block to your defense results for each Evade result.",
+      "effectType": "manual"
+    },
+    "Pickpocket": {
+      "cost": 1,
+      "playableBy": "SMUGGLER",
+      "timing": "duringActivation",
+      "effect": "Use during your activation while adjacent to a hostile figure to roll 1 green die. Your opponent loses VPs and you gain VPs equal to the Accuracy result.",
+      "effectType": "manual"
+    },
+    "Planning": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "specialAction",
+      "effect": "Special Action: Draw 2 Command cards. Then, if you are not a LEADER, discard 1 of those cards.",
+      "effectType": "manual"
+    },
+    "Positioning Advantage": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to apply +1 Surge to the attack results.",
+      "effectType": "manual"
+    },
+    "Prepared for Battle": {
+      "cost": 2,
+      "playableBy": "Any Figure",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to gain 1 Surge and 1 Block. Then, if you are a LEADER, an adjacent friendly figure gains 1 Surge and 1 Block.",
+      "effectType": "manual"
+    },
+    "Preservation Protocol": {
+      "cost": 1,
+      "playableBy": "4-LOM",
+      "timing": "other",
+      "effect": "Use when you have suffered damage equal to your Health. Instead of being defeated, recover 1 damage. Until the end of the game, you lose 'Programming Override' and 'Shared Intuition'.",
+      "effectType": "manual"
+    },
+    "Price of Glory": {
+      "cost": 2,
+      "playableBy": "Any Figure",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to discard 1 HARMFUL condition and gain 2 movement points. Then, you may suffer 1 damage to gain up to 2 different Power Tokens of your choice.",
+      "effectType": "manual"
+    },
+    "Price on Their Heads": {
+      "cost": 1,
+      "playableBy": "HUNTER",
+      "timing": "specialAction",
+      "effect": "Special Action: Place this card on a hostile Deployment card. When the last figure in that group is defeated, gain an additional 4 VPs.",
+      "effectType": "manual"
+    },
+    "Primary Target": {
+      "cost": 1,
+      "playableBy": "HUNTER",
+      "timing": "whenYouDeclareAttack",
+      "effect": "Use when you declare an attack targeting a hostile figure with the highest figure cost of all hostile figures on the map. You become Focused and apply +1 Surge to the attack results.",
+      "effectType": "manual"
+    },
+    "Protect the Old Ways": {
+      "cost": 1,
+      "playableBy": "Kanan Jarrus",
+      "timing": "other",
+      "effect": "Use while a figure within 3 spaces is defending to apply +X Block to the defense results, where X is 1 plus the number of FORCE USER Command cards in your discard pile.",
+      "effectType": "manual"
+    },
+    "Provoke": {
+      "cost": 1,
+      "playableBy": "TROOPER or GUARDIAN",
+      "timing": "afterYouResolveGroupsActivation",
+      "effect": "Use after you resolve an activation to choose a hostile figure adjacent to one of your TROOPERS or GUARDIANS. That figure's group must activate next if able.",
+      "effectType": "manual"
+    },
+    "Pummel": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "doubleActionSpecial",
+      "effect": "Double Action Special: If you have the MELEE attack type, perform 2 attacks.",
+      "effectType": "manual"
+    },
+    "Rally": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "startOfActivation",
+      "effect": "Use at the start of your activation to discard all of your HARMFUL conditions.",
+      "effectType": "manual"
+    },
+    "Rally the Troops": {
+      "cost": 3,
+      "playableBy": "Kayn Somos",
+      "timing": "specialAction",
+      "effect": "Special Action: Choose another friendly TROOPER within 3 spaces. Ready that figure's Deployment card.",
+      "effectType": "manual"
+    },
+    "Rank and File": {
+      "cost": 1,
+      "playableBy": "TROOPER",
+      "timing": "startOfActivation",
+      "effect": "Use at the start of your activation. You and each friendly TROOPER adjacent to you gain 1 movement point.",
+      "effectType": "manual"
+    },
+    "Rapid Recalibration": {
+      "cost": 1,
+      "playableBy": "DROID",
+      "timing": "afterAttackDice",
+      "effect": "Use while attacking, after attack dice are rolled or rerolled, to choose 1 attack die and turn that die to any side.",
+      "effectType": "manual"
+    },
+    "Reactive Loyalties": {
+      "cost": 1,
+      "playableBy": "Mara Jade",
+      "timing": "afterAttackTargetingYouResolved",
+      "effect": "Use after an attack targeting you resolves. Perform 1 of the following based on your affiliation: Imperial: The attacker suffers 3 damage. Rebel: You gain 3 VPs. Scum: You recover 3 damage.",
+      "effectType": "manual"
+    },
+    "Rebel Graffiti": {
+      "cost": 0,
+      "playableBy": "Rebel",
+      "timing": "endOfActivation",
+      "effect": "Use at the end of your activation, if there are no adjacent hostile figures, to gain 2 VPs. Then, if you are Sabine Wren, you may re-draw this card.",
+      "effectType": "manual"
+    },
+    "Recovery": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "specialAction",
+      "effect": "Special Action: Recover 2 damage.",
+      "effectType": "manual"
+    },
+    "Reduce to Rubble": {
+      "cost": 2,
+      "playableBy": "HEAVY WEAPON",
+      "timing": "afterAttack",
+      "effect": "Use after you resolve an attack that did not miss due to accuracy. Each figure and object within 2 spaces of the target space suffers 1 damage. Then, place a Rubble token in the target space and each adjacent space.",
+      "effectType": "manual"
+    },
+    "Regroup": {
+      "cost": 1,
+      "playableBy": "LEADER",
+      "timing": "specialAction",
+      "effect": "Special Action: Discard all HARMFUL conditions from adjacent friendly figures.",
+      "effectType": "manual"
+    },
+    "Reinforcements": {
+      "cost": 2,
+      "playableBy": "TROOPER",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Choose 1 of your defeated TROOPERS that has a reinforcement cost of 3 or less. Place that figure adjacent to any other figure of its group.",
+      "effectType": "manual"
+    },
+    "Repair": {
+      "cost": 2,
+      "playableBy": "Any Figure",
+      "timing": "specialAction",
+      "effect": "Special Action: Choose an adjacent friendly DROID or VEHICLE. That figure recovers 3 damage.",
+      "effectType": "manual"
+    },
+    "Reposition": {
+      "cost": 1,
+      "playableBy": "LEADER",
+      "timing": "specialAction",
+      "effect": "Special Action: Choose a small friendly figure within 3 spaces. Push that figure up to 3 spaces.",
+      "effectType": "manual"
+    },
+    "Rest in Peace": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "startOfRound",
+      "effect": "Put this card into play at the start of a round. Players cannot choose, play, or re-draw Command cards in discard piles. At the end of the round, discard this card and draw 1 Command card.",
+      "effectType": "manual"
+    },
+    "Retaliation": {
+      "cost": 1,
+      "playableBy": "GUARDIAN",
+      "timing": "whenOneOfYourFiguresDefeated",
+      "effect": "Use when a friendly figure is defeated to either become Focused, gain 2 Surge, or move up to 2 spaces.",
+      "effectType": "manual"
+    },
+    "Reverse Engineer": {
+      "cost": 0,
+      "playableBy": "TECHNICIAN",
+      "timing": "specialAction",
+      "effect": "Special Action: Perform an attack. During this attack, you may use abilities on the defender's Deployment card instead of your own. Apply +1 Surge to the attack results.",
+      "effectType": "manual"
+    },
+    "Right Back At Ya!": {
+      "cost": 1,
+      "playableBy": "Ahsoka Tano",
+      "timing": "whenAttackDeclaredOnYou",
+      "effect": "Use when an attack targeting you is declared. The attacker suffers 1 damage (3 damage if you spent a Surge during this attack).",
+      "effectType": "manual"
+    },
+    "Roar": {
+      "cost": 1,
+      "playableBy": "WOOKIEE or CREATURE",
+      "timing": "specialAction",
+      "effect": "Special Action: If you have suffered 3 or more damage, choose up to 3 adjacent hostile figures. Those figures become Stunned.",
+      "effectType": "manual"
+    },
+    "Run for Cover": {
+      "cost": 2,
+      "playableBy": "SMUGGLER",
+      "timing": "whenAttackDeclaredOnYou",
+      "effect": "Use when an attack targeting you is declared. Choose 1 die and remove it from the attack pool.",
+      "effectType": "manual"
+    },
+    "Sarlacc Sweep": {
+      "cost": 2,
+      "playableBy": "Diala Passil",
+      "timing": "specialAction",
+      "effect": "Special Action: Perform 2 attacks. Each attack must target a different figure.",
+      "effectType": "manual"
+    },
+    "Savage Vigor": {
+      "cost": 2,
+      "playableBy": "CREATURE",
+      "timing": "whenAttackDeclaredOnYou",
+      "effect": "Use when an attack targeting you is declared. The attacker chooses 2 attack dice and removes the rest from the attack pool.",
+      "effectType": "manual"
+    },
+    "Second Chance": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Self-Augmentation": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Self-Defense": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Set a Trap": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Set for Stun": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Set the Charges": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Shadow Ops": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Shared Experience": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Signal Jammer": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Single Purpose": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Sit Tight": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Slippery Target": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Smuggled Supplies": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Smuggler": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Smuggler's Tricks": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Sniper Configuration": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Son of Skywalker": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Spinning Kick": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Spy": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Squad Swarm": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Stall for Time": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Static Pulse": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Stay Down": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Stealth Tactics": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Still Faster Than You": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Stimulants": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Strategic Shift": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Strength in Numbers": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Stroke of Brilliance": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Supercharge": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Support Specialist": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Survival Instincts": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Take it Down": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Take Position": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Targeting Network": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Technician": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Telekinetic Throw": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Terminal Network": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Terminal Protocol": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "There is Another": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "There Is No Try": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "To the Limit": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Tools for the Job": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Tough Luck": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Toxic Dart": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Trandoshan Terror": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Transmit the Plans": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Triangulate": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Trooper": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Unlimited Power": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Utinni!": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Vanish": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Vehicle": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Veteran Instincts": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Whistling Birds": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Wild Attack": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Wild Fire": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Wild Fury": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Windfall": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Wookiee": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Worth Every Credit": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "Wreak Vengeance": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
+      "effectType": "manual"
+    },
+    "You Will Not Deny Me": {
+      "cost": null,
+      "playableBy": "Any Figure",
+      "timing": "other",
+      "effect": "",
       "effectType": "manual"
     }
   }

@@ -45,9 +45,21 @@ const NAME_OVERRIDES = {
   'Combat Resupply (Imperial)': 'Combat Resupply',
   'Corrupting Force (Imperial)': 'Corrupting Force',
   'Dark Energy (Imperial)': 'Dark Energy',
+  'Deadly Precision (Imperial)': 'Deadly Precision',
   'Force Lightning (Imperial)': 'Force Lightning',
   'Force Push (Rebel)': 'Force Push',
+  'Get Behind Me! (Rebel)': 'Get Behind Me!',
+  'Heart of Freedom (Rebel)': 'Heart of Freedom',
+  'Hour of Need (Rebel)': 'Hour of Need',
+  'Knowledge and Defense (Rebel)': 'Knowledge and Defense',
   'Lure of the Dark Side (Imperial)': 'Lure of the Dark Side',
+  'Meditation (Rebel)': 'Meditation',
+  'Opportunistic (Mercenary)': 'Opportunistic',
+  'Out of Time (Mercenary)': 'Out of Time',
+  'Price of Glory (Imperial)': 'Price of Glory',
+  'Rebel Graffiti (Rebel)': 'Rebel Graffiti',
+  'Shoot the Messenger (Mercenary)': 'Shoot the Messenger',
+  'Worth Every Credit (Mercenary)': 'Worth Every Credit',
 };
 const overridden = names.map((n) => NAME_OVERRIDES[n] ?? n);
 const namesFinal = [...new Set(overridden)].sort((a, b) => a.localeCompare(b));
