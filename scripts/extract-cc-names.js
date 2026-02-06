@@ -43,6 +43,7 @@ while ((m = nameRe.exec(ccSection)) !== null) {
 const NAME_OVERRIDES = {
   'Chaotic Force (Mercenary)': 'Chaotic Force',
   'Combat Resupply (Imperial)': 'Combat Resupply',
+  'Corrupting Force (Imperial)': 'Corrupting Force',
 };
 const overridden = names.map((n) => NAME_OVERRIDES[n] ?? n);
 const namesFinal = [...new Set(overridden)].sort((a, b) => a.localeCompare(b));

@@ -1,6 +1,6 @@
 {
   "source": "Vassal buildFile.xml",
-  "extractedAt": "2026-02-05T19:57:50.570Z",
+  "extractedAt": "2026-02-06T02:09:41.778Z",
   "cards": [
     "Adrenaline",
     "Advance Warning",
@@ -48,7 +48,7 @@
     "Comm Disruption",
     "Concentrated Fire",
     "Coordinated Attack",
-    "Corrupting Force (Imperial)",
+    "Corrupting Force",
     "Counter Attack",
     "Covering Fire",
     "Creature",
