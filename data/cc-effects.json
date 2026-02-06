@@ -1668,7 +1668,7 @@
       "effectType": "manual"
     },
     "Set a Trap": {
-      "cost": 1,
+      "cost": 0,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round and choose a map tile. At the end of the round, choose one of your figures on that tile to interrupt to perform an attack targeting a hostile figure on that tile.",
@@ -1678,35 +1678,35 @@
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "specialAction",
-      "effect": "Perform an attack. If the target would suffer 1 or more Damage, reduce the Damage suffered to 0. Then, the target becomes Stunned.",
+      "effect": "Special Action: Perform an attack. If the target would suffer 1 or more Damage, reduce the Damage suffered to 0. Then, the target becomes Stunned.",
       "effectType": "manual"
     },
     "Set the Charges": {
       "cost": 2,
       "playableBy": "TECHNICIAN",
       "timing": "specialAction",
-      "effect": "Choose a space within 3 spaces and roll a blue die. Open any unlocked doors adjacent to that space. Then, each figure or object on or adjacent to that space suffers Damage equal to the combined Damage and Evade results.",
+      "effect": "Special Action: Choose a space within 3 spaces and roll a blue die. Open any unlocked doors adjacent to that space. Then, each figure or object on or adjacent to that space suffers Damage equal to the combined Hit and Surge results.",
       "effectType": "manual"
     },
     "Shadow Ops": {
       "cost": 3,
       "playableBy": "Mak Eshka'rey",
-      "timing": "duringActivation",
-      "effect": "Until the end of the round, the opposing player cannot play Command cards.",
+      "timing": "specialAction",
+      "effect": "Special Action: Until the end of the round, the opposing player cannot play Command cards.",
       "effectType": "manual"
     },
     "Shared Experience": {
       "cost": 1,
       "playableBy": "DROID or VEHICLE",
       "timing": "duringActivation",
-      "effect": "Use during your activation. Spend 3 movement points to become Focused. When a friendly DROID or VEHICLE is defeated, you may re-draw this card.",
+      "effect": "Use during your activation. Spend 3 movement points to become Focused. \n\nPassive (Discard): When a friendly DROID or VEHICLE is defeated, you may re-draw this card.",
       "effectType": "manual"
     },
     "Signal Jammer": {
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Put this card into play at the start of a round. When any player plays a Command card, discard that card and cancel its effects. Then, discard this card.",
+      "effect": "Put this card into play at the start of a round. (Play area in your discord channel)\n\n------\n\nWhen any player plays a Command card, discard that card and cancel its effects. Then, discard this card.",
       "effectType": "manual"
     },
     "Single Purpose": {
@@ -1734,7 +1734,7 @@
       "cost": 1,
       "playableBy": "SMUGGLER",
       "timing": "startOfActivation",
-      "effect": "Use at the start of your activation to recover 2 Damage, apply +1 Surge to your attack results until the end of the round, or apply +1 Block to your defense results until the end of the round.",
+      "effect": "Use at the start of your activation to recover 2 Damage, apply +1 Surge to your attack results until the end of the round, or apply +1 Evade to your defense results until the end of the round.",
       "effectType": "manual"
     },
     "Smuggler": {
@@ -1748,14 +1748,14 @@
       "cost": 1,
       "playableBy": "SMUGGLER",
       "timing": "duringActivation",
-      "effect": "Choose a tile or token you are on or adjacent to. Until the start of the next round, your opponent counts as having 1 fewer figure on or adjacent to that tile or token.",
+      "effect": "Special Action: Choose a tile or token you are on or adjacent to. Until the start of the next round, your opponent counts as having 1 fewer figure on or adjacent to that tile or token.",
       "effectType": "manual"
     },
     "Sniper Configuration": {
       "cost": 1,
       "playableBy": "Cassian Andor",
       "timing": "specialAction",
-      "effect": "Perform an attack. You may draw line of sight from any friendly figure, but still measure range from this figure. Apply +2 Accuracy and Pierce 2 to the attack results.",
+      "effect": "Special Action: Perform an attack. You may draw line of sight from any friendly figure, but still measure range from this figure. Apply +2 Accuracy and Pierce 2 to the attack results.",
       "effectType": "manual"
     },
     "Son of Skywalker": {
@@ -1795,15 +1795,15 @@
     },
     "Static Pulse": {
       "cost": 1,
-      "playableBy": "Iden Versio or Dio",
-      "timing": "duringActivation",
-      "effect": "For each hostile figure adjacent to a friendly 'Dio,' you may have that figure suffer 2 Damage or become Weakened. If 'Dio' is not in play, put 'Dio' into play in your space instead.",
+      "playableBy": "\"Iden Versio\" or \"Dio\"",
+      "timing": "specialAction",
+      "effect": "Special Action: For each hostile figure adjacent to a friendly 'Dio,' you may have that figure suffer 2 Strain or become Weakened. If 'Dio' is not in play, put 'Dio' into play in your space instead.",
       "effectType": "manual"
     },
     "Stay Down": {
       "cost": 2,
       "playableBy": "Biv Bodhrik",
-      "timing": "afterSpecial",
+      "timing": "afterYouResolveCloseAndPersonal",
       "effect": "Use after resolving \"Close and Personal.\" If the target was not defeated, perform an additional attack with the same target. Then, you become Stunned.",
       "effectType": "manual"
     },
