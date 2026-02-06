@@ -55,13 +55,16 @@
   <input type="text" id="playableBy" placeholder="e.g. Any Figure, Hunter, Boba Fett">
 
   <label>Timing</label>
+  <p class="hint" style="margin: 2px 0 4px 0;">Implementation note: only check a CC’s timing when it’s in hand; only check DC-correlated triggers when that DC is on the field (e.g. don’t check Agent Blaise’s card if he’s not in the game / his CC isn’t in hand).</p>
   <select id="timing">
     <option value="">—</option>
     <option value="afterUniqueHostileDefeated">After a unique hostile figure is defeated</option>
     <option value="afterActivationResolves">After an activation resolves</option>
     <option value="afterAttack">After attack</option>
+    <option value="afterYouResolveAttackTargetingFigure">After you resolve an attack targeting a figure</option>
     <option value="afterAttackDice">After attack dice are rolled</option>
     <option value="afterAttackTargetingYouResolved">After an attack targeting you is resolved</option>
+    <option value="afterYouResolveAttackTargetingFigure">After you resolve an attack targeting a figure</option>
     <option value="afterDamage">After damage is applied</option>
     <option value="afterInteract">After Interact (during activation)</option>
     <option value="afterSpecial">After resolving a Special (during activation)</option>
@@ -94,6 +97,7 @@
     <option value="whenEnemyFigureEndsActivation">When an enemy figure ends its activation</option>
     <option value="whenHostileFigureEntersSpaceWithin3Spaces">When a hostile figure enters a space within 3 spaces of you</option>
     <option value="whenHostileFigureExitsAdjacentSpace">When a hostile figure exits an adjacent space</option>
+    <option value="whenHostileFigureInYourLineOfSightAttacking">When a hostile figure in your line of sight is attacking</option>
     <option value="whenFigureWithin3SpacesDefending">While a figure within 3 spaces is defending</option>
     <option value="whenYouWouldBeDefeated">When you would be defeated</option>
     <option value="whenFriendlyFigureWithin3SpacesWouldBeDefeated">When a friendly figure within 3 spaces would be defeated</option>
@@ -115,6 +119,7 @@
     <option value="useWhenYouUseGambit">When you use "Gambit"</option>
     <option value="whenYouWouldSufferDamage">When you would suffer damage</option>
     <option value="whileDefending">While defending</option>
+    <option value="whileAdjacentFriendlyFigureDefending">While an adjacent friendly figure is defending</option>
   </select>
 
   <label>Effect (card text)</label>

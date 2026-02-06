@@ -30,6 +30,8 @@ const rootDir = join(__dirname);
 // DC message metadata (messageId -> { gameId, playerNum, dcName, displayName })
 const dcMessageMeta = new Map();
 const dcExhaustedState = new Map(); // messageId -> boolean
+// Pending illegal deck: key = `${gameId}_${playerNum}`, value = { squad, timestamp }
+const pendingIllegalSquad = new Map();
 
 let dcImages = {};
 let figureImages = {};
@@ -3085,6 +3087,95 @@ function getDcStats(dcName) {
   return { health: null, figures: isFigurelessDc(dcName) ? 0 : 1, specials: [] };
 }
 
+const DC_POINTS_LEGAL = 40;
+const CC_CARDS_LEGAL = 15;
+const CC_COST_LEGAL = 15;
+const PENDING_ILLEGAL_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Validate squad for legal build: DC total cost === 40, CC exactly 15 cards and total cost === 15.
+ * @param {{ dcList: string[], ccList: string[] }} squad
+ * @returns {{ legal: boolean, errors: string[], dcTotal: number, ccCount: number, ccCost: number }}
+ */
+function validateDeckLegal(squad) {
+  const errors = [];
+  let dcTotal = 0;
+  const dcList = squad?.dcList || [];
+  for (const entry of dcList) {
+    const name = resolveDcName(entry);
+    const stats = getDcStats(name);
+    const cost = stats?.cost;
+    if (cost == null) {
+      errors.push(`Unknown Deployment Card: "${name}" (cost not found).`);
+    } else {
+      dcTotal += cost;
+    }
+  }
+  if (dcTotal !== DC_POINTS_LEGAL) {
+    errors.push(`Deployment total is ${dcTotal} points. Legal total is exactly ${DC_POINTS_LEGAL}.`);
+  }
+  const ccList = squad?.ccList || [];
+  let ccCost = 0;
+  const unknownCc = [];
+  for (const name of ccList) {
+    const effect = getCcEffect(name);
+    if (!effect) {
+      unknownCc.push(name);
+    } else {
+      ccCost += (effect.cost ?? 0);
+    }
+  }
+  if (unknownCc.length) {
+    errors.push(`Unknown Command Card(s): ${unknownCc.slice(0, 5).join(', ')}${unknownCc.length > 5 ? '…' : ''}.`);
+  }
+  if (ccList.length !== CC_CARDS_LEGAL) {
+    errors.push(`Command deck has ${ccList.length} cards. Legal deck is exactly ${CC_CARDS_LEGAL} cards.`);
+  }
+  if (ccCost !== CC_COST_LEGAL) {
+    errors.push(`Command deck total cost is ${ccCost}. Legal total cost is exactly ${CC_COST_LEGAL}.`);
+  }
+  return {
+    legal: errors.length === 0,
+    errors,
+    dcTotal,
+    ccCount: ccList.length,
+    ccCost,
+  };
+}
+
+function getDeckIllegalPlayCustomId(gameId, playerNum) {
+  return `deck_illegal_play_${gameId}_${playerNum}`;
+}
+function getDeckIllegalRedoCustomId(gameId, playerNum) {
+  return `deck_illegal_redo_${gameId}_${playerNum}`;
+}
+
+async function sendDeckIllegalAlert(game, isP1, squad, validation, client) {
+  const gameId = game.gameId;
+  const playerNum = isP1 ? 1 : 2;
+  const playerId = isP1 ? game.player1Id : game.player2Id;
+  const key = `${gameId}_${playerNum}`;
+  pendingIllegalSquad.set(key, { squad, timestamp: Date.now() });
+  const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
+  const handChannel = await client.channels.fetch(handChannelId);
+  const errorList = validation.errors.map((e) => `• ${e}`).join('\n');
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(getDeckIllegalPlayCustomId(gameId, playerNum))
+      .setLabel('PLAY IT ANYWAY')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(getDeckIllegalRedoCustomId(gameId, playerNum))
+      .setLabel('REDO')
+      .setStyle(ButtonStyle.Danger)
+  );
+  await handChannel.send({
+    content: `<@${playerId}> — Your deck is **not legal**.\n\n${errorList}\n\nChoose an option below:`,
+    components: [row],
+    allowedMentions: { users: [playerId] },
+  });
+}
+
 const DC_ACTIONS_PER_ACTIVATION = 2;
 
 /** Returns "X/2 Actions Remaining" with green/red square visual (🟩=remaining, 🟥=used). */
@@ -4113,6 +4204,12 @@ client.on('messageCreate', async (message) => {
           dcCount: parsed.dcList.length,
           ccCount: parsed.ccList.length,
         };
+        const validation = validateDeckLegal(squad);
+        if (!validation.legal) {
+          await sendDeckIllegalAlert(game, isP1, squad, validation, message.client);
+          await message.reply(`Your deck did not pass validation. Check the message above for details and choose **PLAY IT ANYWAY** or **REDO**.`);
+          return;
+        }
         await applySquadSubmission(game, isP1, squad, message.client);
         await message.reply(`✓ Squad **${squad.name}** submitted from .vsav (${squad.dcCount} DCs, ${squad.ccCount} CCs)`);
       } catch (err) {
@@ -4141,6 +4238,12 @@ client.on('messageCreate', async (message) => {
         dcCount: parsed.dcList.length,
         ccCount: parsed.ccList.length,
       };
+      const validation = validateDeckLegal(squad);
+      if (!validation.legal) {
+        await sendDeckIllegalAlert(game, isP1, squad, validation, message.client);
+        await message.reply(`Your deck did not pass validation. Check the message above for details and choose **PLAY IT ANYWAY** or **REDO**.`);
+        return;
+      }
       await applySquadSubmission(game, isP1, squad, message.client);
       await message.reply(`✓ Squad **${squad.name}** submitted from pasted list (${squad.dcCount} DCs, ${squad.ccCount} CCs)`);
       return;
@@ -4229,6 +4332,12 @@ client.on('interactionCreate', async (interaction) => {
       const dcList = dcText ? dcText.split('\n').map((s) => s.trim()).filter(Boolean) : [];
       const ccList = ccText ? ccText.split('\n').map((s) => s.trim()).filter(Boolean) : [];
       const squad = { name, dcList, ccList, dcCount: dcList.length, ccCount: ccList.length };
+      const validation = validateDeckLegal(squad);
+      if (!validation.legal) {
+        await sendDeckIllegalAlert(game, isP1, squad, validation, interaction.client);
+        await interaction.reply({ content: 'Your deck did not pass validation. Check your Hand channel for details and choose **PLAY IT ANYWAY** or **REDO**.', ephemeral: true });
+        return;
+      }
       await applySquadSubmission(game, isP1, squad, interaction.client);
       await interaction.reply({ content: `Squad **${name}** submitted. (${dcList.length} DCs, ${ccList.length} CCs)`, ephemeral: true });
     }
@@ -4392,6 +4501,71 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (!interaction.isButton()) return;
+
+  if (interaction.customId.startsWith('deck_illegal_play_')) {
+    const parts = interaction.customId.replace('deck_illegal_play_', '').split('_');
+    const gameId = parts[0];
+    const playerNum = parseInt(parts[1], 10);
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const isP1 = playerNum === 1;
+    const ownerId = isP1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({ content: 'Only the owner of this hand can choose Play It Anyway.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const key = `${gameId}_${playerNum}`;
+    const pending = pendingIllegalSquad.get(key);
+    if (!pending || (Date.now() - pending.timestamp > PENDING_ILLEGAL_TTL_MS)) {
+      pendingIllegalSquad.delete(key);
+      await interaction.reply({ content: 'This deck choice has expired. Please submit your squad again.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    pendingIllegalSquad.delete(key);
+    await interaction.deferUpdate();
+    await applySquadSubmission(game, isP1, pending.squad, interaction.client);
+    await interaction.followUp({ content: `Squad **${pending.squad.name || 'Unnamed'}** accepted (Play It Anyway).`, ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (interaction.customId.startsWith('deck_illegal_redo_')) {
+    const parts = interaction.customId.replace('deck_illegal_redo_', '').split('_');
+    const gameId = parts[0];
+    const playerNum = parseInt(parts[1], 10);
+    const game = games.get(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const isP1 = playerNum === 1;
+    const ownerId = isP1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({ content: 'Only the owner of this hand can choose Redo.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const key = `${gameId}_${playerNum}`;
+    pendingIllegalSquad.delete(key);
+    if (isP1) game.player1Squad = null;
+    else game.player2Squad = null;
+    if (game.bothReadyPosted) game.bothReadyPosted = false;
+    const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
+    const handChannel = await interaction.client.channels.fetch(handChannelId);
+    const handMessages = await handChannel.messages.fetch({ limit: 15 });
+    const botMsg = handMessages.find((m) => m.author.bot && m.embeds?.some((e) => e.title?.includes('Deck Selection')));
+    if (botMsg) {
+      await botMsg.edit({
+        embeds: [getHandTooltipEmbed(game, playerNum), getSquadSelectEmbed(playerNum, null)],
+        components: [getHandSquadButtons(game.gameId, playerNum)],
+      }).catch(() => {});
+    }
+    saveGames();
+    await interaction.deferUpdate();
+    await interaction.message.edit({ content: 'Squad cleared. Please submit again using Select Squad, .vsav upload, or pasted list.', components: [] }).catch(() => {});
+    await interaction.followUp({ content: 'Your squad has been cleared. Submit a new squad using **Select Squad**, upload a .vsav file, or paste your list.', ephemeral: true }).catch(() => {});
+    return;
+  }
 
   if (interaction.customId.startsWith('dc_activate_')) {
     const parts = interaction.customId.replace('dc_activate_', '').split('_');
