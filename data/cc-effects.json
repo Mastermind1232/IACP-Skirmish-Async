@@ -294,6 +294,20 @@
       "timing": "startOfRound",
       "effect": "Use at the start of a round if you have 1 or more SPIES on the map. Look at your opponent's hand of Command cards.",
       "effectType": "manual"
+    },
+    "Combat Resupply": {
+      "cost": 1,
+      "playableBy": "IMPERIAL",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. Distribute Hit tokens equal to the current round number to friendly figures within 3 spaces.",
+      "effectType": "manual"
+    },
+    "Comm Disruption": {
+      "cost": 2,
+      "playableBy": "Any Figure",
+      "timing": "whenCommandCardPlayed",
+      "effect": "Use when a Command card with a cost of X is played, where X is equal to or less than the number of friendly SPY groups on the map. Discard that card and cancel is effects.",
+      "effectType": "manual"
     }
   }
 }
