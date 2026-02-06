@@ -3388,7 +3388,7 @@ async function updateDcActionsMessage(game, msgId, client) {
     try {
       const thread = await client.channels.fetch(data.threadId);
       const msg = await thread.messages.fetch(data.messageId);
-      const components = meta && game ? getDcActionButtons(msgId, meta.dcName, displayName, data.remaining, game) : [];
+      const components = meta && game ? getDcActionButtons(msgId, meta.dcName, displayName, data, game) : [];
       const editPayload = {
         content: getActionsCounterContent(data.remaining, data.total),
         components,
@@ -3431,12 +3431,15 @@ async function updateDcActionsMessage(game, msgId, client) {
   }
 }
 
-/** Returns action rows: one [Move][Attack][Interact] row per figure, plus specials. Max 5 rows. */
-function getDcActionButtons(msgId, dcName, displayName, actionsRemaining = 2, game = null) {
+/** Returns action rows: one [Move][Attack][Interact] row per figure, plus specials. Max 5 rows. Unless otherwise specified, each special can be used at most once per activation (specialsUsed). */
+function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRemaining = 2, game = null) {
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   const specials = stats.specials || [];
   const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const actionsData = typeof actionsDataOrRemaining === 'object' && actionsDataOrRemaining != null ? actionsDataOrRemaining : { remaining: actionsDataOrRemaining, specialsUsed: [] };
+  const actionsRemaining = actionsData.remaining ?? 2;
+  const specialsUsed = Array.isArray(actionsData.specialsUsed) ? actionsData.specialsUsed : [];
   const noActions = (actionsRemaining ?? 2) <= 0;
   const playerNum = game ? (dcMessageMeta.get(msgId)?.playerNum ?? 1) : 1;
   const rows = [];
@@ -3451,13 +3454,14 @@ function getDcActionButtons(msgId, dcName, displayName, actionsRemaining = 2, ga
     rows.push(new ActionRowBuilder().addComponents(...comps));
   }
   if (specials.length > 0 && rows.length < 5) {
-    const specialBtns = specials.slice(0, 5).map((name, idx) =>
-      new ButtonBuilder()
+    const specialBtns = specials.slice(0, 5).map((name, idx) => {
+      const alreadyUsed = specialsUsed.includes(idx);
+      return new ButtonBuilder()
         .setCustomId(`dc_special_${idx}_${msgId}`)
         .setLabel(name.slice(0, 80))
         .setStyle(ButtonStyle.Primary)
-        .setDisabled(noActions)
-    );
+        .setDisabled(noActions || alreadyUsed);
+    });
     rows.push(new ActionRowBuilder().addComponents(...specialBtns));
   }
   // CC Special Actions (legally playable) after DC specials, labeled "CC: card name"
@@ -4828,12 +4832,12 @@ client.on('interactionCreate', async (interaction) => {
     game.movementBank = game.movementBank || {};
     game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id };
+    game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
     const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
     const actMinimap = await getActivationMinimapAttachment(game, msgId);
     const actionsPayload = {
       content: pingContent,
-      components: getDcActionButtons(msgId, dcName, displayName, DC_ACTIONS_PER_ACTIVATION, game),
+      components: getDcActionButtons(msgId, dcName, displayName, game.dcActionsData[msgId], game),
       allowedMentions: { users: [ownerId] },
     };
     if (actMinimap) actionsPayload.files = [actMinimap];
@@ -4998,12 +5002,12 @@ client.on('interactionCreate', async (interaction) => {
         game.movementBank = game.movementBank || {};
         game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
         game.dcActionsData = game.dcActionsData || {};
-        game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id };
+        game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
         const pingContent = `<@${meta.playerNum === 1 ? game.player1Id : game.player2Id}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
         const actMinimap = await getActivationMinimapAttachment(game, msgId);
         const actionsPayload = {
           content: pingContent,
-          components: getDcActionButtons(msgId, meta.dcName, displayName, DC_ACTIONS_PER_ACTIVATION, game),
+          components: getDcActionButtons(msgId, meta.dcName, displayName, game.dcActionsData[msgId], game),
           allowedMentions: { users: [meta.playerNum === 1 ? game.player1Id : game.player2Id] },
         };
         if (actMinimap) actionsPayload.files = [actMinimap];
@@ -5187,6 +5191,17 @@ client.on('interactionCreate', async (interaction) => {
     if (actionsRemaining <= 0) {
       await interaction.reply({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch(() => {});
       return;
+    }
+    if (interaction.customId.startsWith('dc_special_')) {
+      const parts = interaction.customId.replace('dc_special_', '').split('_');
+      const specialIdx = parseInt(parts[0], 10);
+      const specialsUsed = actionsData?.specialsUsed ?? [];
+      if (specialsUsed.includes(specialIdx)) {
+        await interaction.reply({ content: "That special has already been used this activation (each special once per activation unless a card says otherwise).", ephemeral: true }).catch(() => {});
+        return;
+      }
+      if (!Array.isArray(actionsData.specialsUsed)) actionsData.specialsUsed = [];
+      actionsData.specialsUsed.push(specialIdx);
     }
     if (action === 'Move') {
       try {
@@ -6645,12 +6660,12 @@ client.on('interactionCreate', async (interaction) => {
     game.movementBank = game.movementBank || {};
     game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id };
+    game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
     const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
     const actMinimap = await getActivationMinimapAttachment(game, msgId);
     const actionsPayload = {
       content: pingContent,
-      components: getDcActionButtons(msgId, meta.dcName, displayName, DC_ACTIONS_PER_ACTIVATION, game),
+      components: getDcActionButtons(msgId, meta.dcName, displayName, game.dcActionsData[msgId], game),
       allowedMentions: { users: [ownerId] },
     };
     if (actMinimap) actionsPayload.files = [actMinimap];

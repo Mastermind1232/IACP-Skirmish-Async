@@ -1817,22 +1817,22 @@
     "Still Faster Than You": {
       "cost": 2,
       "playableBy": "Cad Bane",
-      "timing": "atStartOfActivationOfHostileFigureInYourLineOfSight",
+      "timing": "atStartOfHostileFigureActivation",
       "effect": "Use at the start of a hostile figure's activation to interrupt to move 2 spaces and perform an attack targeting a different hostile figure.",
       "effectType": "manual"
     },
     "Stimulants": {
       "cost": 0,
       "playableBy": "SMUGGLER",
-      "timing": "duringActivation",
-      "effect": "You or an adjacent figure suffers 1 Damage, then gains 1 movement point and becomes Focused.",
+      "timing": "specialAction",
+      "effect": "Special Action: You or an adjacent figure suffers 1 Damage, then gains 1 movement point and becomes Focused.",
       "effectType": "manual"
     },
     "Strategic Shift": {
       "cost": 1,
       "playableBy": "SPY",
-      "timing": "duringActivation",
-      "effect": "A player of your choice shuffles his hand of Command cards into his deck. Then, that player draws 2 cards.",
+      "timing": "specialAction",
+      "effect": "Special Action: A player of your choice shuffles his hand of Command cards into his deck. Then, that player draws 2 cards.",
       "effectType": "manual"
     },
     "Strength in Numbers": {
@@ -1853,14 +1853,14 @@
       "cost": 1,
       "playableBy": "TECHNICIAN",
       "timing": "specialAction",
-      "effect": "Perform an attack. As you roll dice, add yellow dice to the attack pool until there are 4 attack dice total. After the attack resolves, you suffer Damage equal to the number of dice added this way.",
+      "effect": "Special Action: Perform an attack. As you roll dice, add yellow dice to the attack pool until there are 4 attack dice total. After the attack resolves, you suffer Strain equal to the number of dice added this way.",
       "effectType": "manual"
     },
     "Support Specialist": {
       "cost": 2,
       "playableBy": "Del Meeko",
       "timing": "duringActivation",
-      "effect": "Choose a friendly DROID, TECHNICIAN, or TROOPER within 3 spaces. That figure interrupts to perform an action.",
+      "effect": "Special Action: Choose a friendly DROID, TECHNICIAN, or TROOPER within 3 spaces. That figure interrupts to perform an action.",
       "effectType": "manual"
     },
     "Survival Instincts": {
@@ -1873,8 +1873,8 @@
     "Take it Down": {
       "cost": 3,
       "playableBy": "Gideon Argus",
-      "timing": "duringActivation",
-      "effect": "Choose an adjacent friendly figure. That figure performs an attack. Apply +2 Damage to the attack results.",
+      "timing": "specialAction",
+      "effect": "Special Action: Choose an adjacent friendly figure. That figure performs an attack. Apply +2 Hits to the attack results.",
       "effectType": "manual"
     },
     "Take Position": {
@@ -1888,7 +1888,7 @@
       "cost": 0,
       "playableBy": "DROID or HEAVY WEAPON",
       "timing": "duringAttack",
-      "effect": "Use while attacking to reroll 1 attack die. While this card is in your discard pile, your DROIDS gain: Re-draw this card.",
+      "effect": "Use while attacking to reroll 1 attack die. \n\nPassive (Discard pile): While this card is in your discard pile, your DROIDS gain: \n- Surge: Re-draw this card.",
       "effectType": "manual"
     },
     "Technician": {
@@ -1902,14 +1902,14 @@
       "cost": 1,
       "playableBy": "FORCE USER",
       "timing": "specialAction",
-      "effect": "Choose a hostile figure in your line of sight within 3 spaces. Roll 2 blue dice. That figure suffers Damage equal to the Damage results.",
+      "effect": "Special Action: Choose a hostile figure in your line of sight within 3 spaces. Roll 2 blue dice. That figure suffers Damage equal to the Hit results.",
       "effectType": "manual"
     },
     "Terminal Network": {
       "cost": 2,
       "playableBy": "R2-D2",
       "timing": "specialAction",
-      "effect": "Use while adjacent to a terminal. Until the start of the next round, you gain control of all terminals, regardless of which figures are adjacent to them.",
+      "effect": "Special Action: Use while adjacent to a terminal. Until the start of the next round, you gain control of all terminals, regardless of which figures are adjacent to them.",
       "effectType": "manual"
     },
     "Terminal Protocol": {
@@ -1923,26 +1923,26 @@
       "cost": 0,
       "playableBy": "Leia Organa",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. Until the end of the round, you gain the FORCE USER trait and apply +1 Surge to your attack results.",
+      "effect": "Use at the start of a round. Draw 1 Command card. During this round, you may play Command cards whose restriction matches the name of another FORCE USER Deployment card in your army.",
       "effectType": "manual"
     },
     "There Is No Try": {
       "cost": 2,
       "playableBy": "Yoda",
-      "timing": "other",
-      "effect": "Use when a friendly FORCE USER within 4 spaces rolls any number of dice. Choose one of those dice and turn it to any other side. On that die, convert each Block result to 2 Damage and 1 Surge.",
+      "timing": "whenFriendlyRebelForceUserWithin4SpacesRollsDice",
+      "effect": "Use when a friendly REBEL FORCE USER within 4 spaces rolls any number of dice. Choose one of those dice and turn it to any other side. On that die, convert each Dodge result to 2 Blocks and 1 Evade.",
       "effectType": "manual"
     },
     "To the Limit": {
       "cost": 0,
       "playableBy": "Any Figure",
-      "timing": "afterYouMove",
-      "effect": "Use after you resolve a move during your activation to perform 1 additional action. Then you become Stunned.",
+      "timing": "afterSpecial",
+      "effect": "Use after you resolve a Special Action during your activation to perform 1 additional action. Then you become Stunned.",
       "effectType": "manual"
     },
     "Tools for the Job": {
       "cost": 2,
-      "playableBy": "Hunter or Smuggler",
+      "playableBy": "HUNTER or SMUGGLER",
       "timing": "whenYouDeclareAttack",
       "effect": "Use when you declare an attack to add 1 attack die of your choice to the attack pool.",
       "effectType": "manual"
@@ -1956,15 +1956,15 @@
     },
     "Toxic Dart": {
       "cost": 0,
-      "playableBy": "Hunter or Smuggler",
+      "playableBy": "HUNTER or SMUGGLER",
       "timing": "duringActivation",
-      "effect": "Use during your activation. A hostile figure within 3 spaces and in line of sight suffers 1 Damage and becomes Weakened.",
+      "effect": "Use during your activation. A hostile figure within 3 spaces and in line of sight suffers 1 Strain and becomes Weakened.",
       "effectType": "manual"
     },
     "Trandoshan Terror": {
-      "cost": 2,
+      "cost": 1,
       "playableBy": "Bossk",
-      "timing": "other",
+      "timing": "whenYouDeclareIndiscriminateFire",
       "effect": "Use when you declare 'Indiscriminate Fire.' Add 1 yellow die to the dice pool.",
       "effectType": "manual"
     },
@@ -1972,14 +1972,14 @@
       "cost": 0,
       "playableBy": "Bodhi Rook",
       "timing": "specialAction",
-      "effect": "Distribute 2 Strain among friendly figures. If you are adjacent to a terminal, gain 2 VPs.",
+      "effect": "Special Action: Distribute 2 Hit Tokens among friendly figures. If you are adjacent to a terminal, gain 2 VPs.",
       "effectType": "manual"
     },
     "Triangulate": {
-      "cost": 2,
+      "cost": 1,
       "playableBy": "DROID",
       "timing": "specialAction",
-      "effect": "A figure within 5 spaces and line of sight suffers Damage equal to the number of DROIDS friendly to you with line of sight to it, to a maximum of 3 Damage.",
+      "effect": "Special Action: Up to 3 friendly DROIDS each move up to 1 space. Then choose a hostile figure within 5 spaces and line of sight. It suffers Damage equal to the number of those friendly DROIDS who have line of sight to it.",
       "effectType": "manual"
     },
     "Trooper": {
@@ -1992,7 +1992,7 @@
     "Unlimited Power": {
       "cost": 2,
       "playableBy": "Emperor Palpatine",
-      "timing": "other",
+      "timing": "useWhenYouUseEmperor",
       "effect": "Use when you use \"Emperor.\" You may choose any other friendly figure on the map instead of another friendly figure within 4 spaces.",
       "effectType": "manual"
     },
@@ -2000,14 +2000,14 @@
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. During this round, each friendly Jawa Scavenger gains +1 Speed, +1 Accuracy, and [Surge]: If you are attacking a figure, gain 1 VP.",
+      "effect": "Use at the start of a round. During this round, each friendly Jawa Scavenger gains +1 Speed, +1 Accuracy, and \n- Surge: If you are attacking a figure, gain 1 VP.",
       "effectType": "manual"
     },
     "Vanish": {
       "cost": 2,
       "playableBy": "Davith Elso",
-      "timing": "duringActivation",
-      "effect": "You cannot suffer or receive conditions until your next activation. At the start of your next activation, gain 4 movement points.",
+      "timing": "specialAction",
+      "effect": "Special Action: You cannot suffer Damage or receive conditions until your next activation. At the start of your next activation, gain 4 movement points.",
       "effectType": "manual"
     },
     "Vehicle": {
@@ -2021,14 +2021,14 @@
       "cost": 1,
       "playableBy": "Any Unique Figure",
       "timing": "duringActivation",
-      "effect": "Use during your activation to gain 1 Surge or 1 Evade. Then, gain 1 Block or 1 Dodge.",
+      "effect": "Use during your activation to gain 1 Hit Token or Surge Token. Then, gain 1 Block Token or Evade Token.",
       "effectType": "manual"
     },
     "Whistling Birds": {
       "cost": 2,
       "playableBy": "The Mandalorian",
       "timing": "specialAction",
-      "effect": "Move up to 2 spaces, then choose up to 3 figures within 2 spaces and roll 1 red die. Each of those figures suffers Damage equal to the Damage results.",
+      "effect": "Special Action: Move up to 2 spaces, then choose up to 3 figures within 2 spaces and roll 1 red die. Each of those figures suffers Damage equal to the Hit results.",
       "effectType": "manual"
     },
     "Wild Attack": {
@@ -2041,13 +2041,13 @@
     "Wild Fire": {
       "cost": 1,
       "playableBy": "CT-1701",
-      "timing": "duringAttack",
-      "effect": "Use while attacking to remove up to 2 dice of your choice from the defense pool.",
+      "timing": "whenYouDeclareAttack",
+      "effect": "Use when you declare an attack. remove up to 2 dice of your choice from the defense pool.",
       "effectType": "manual"
     },
     "Wild Fury": {
       "cost": 2,
-      "playableBy": "Creature or Wookiee",
+      "playableBy": "CREATURE or WOOKIE",
       "timing": "duringActivation",
       "effect": "Use during your activation. You become Focused and may perform multiple attacks during this activation. At the end of your activation, become Stunned and Bleeding.",
       "effectType": "manual"
@@ -2055,7 +2055,7 @@
     "Windfall": {
       "cost": 0,
       "playableBy": "Doctor Aphra",
-      "timing": "other",
+      "timing": "whenCommandCardDiscardedFromHandOrDeck",
       "effect": "Use when a Command card is discarded from your hand or deck. You gain VPs equal to that card's cost. When this card is discarded from your hand or deck, gain 1 VP.",
       "effectType": "manual"
     },
@@ -2068,7 +2068,7 @@
     },
     "Worth Every Credit": {
       "cost": 2,
-      "playableBy": "Any Figure",
+      "playableBy": "SCUM",
       "timing": "duringActivation",
       "effect": "Use during your activation to discard 1 HARMFUL condition and gain 2 movement points. When the next hostile figure is defeated during this activation, gain 2 VPs.",
       "effectType": "manual"
@@ -2076,7 +2076,7 @@
     "Wreak Vengeance": {
       "cost": 1,
       "playableBy": "Maul",
-      "timing": "other",
+      "timing": "useWhenYouUseDualBladedFury",
       "effect": "Use when you use 'Dual-Bladed Fury.' You may choose both effects instead of only 1.",
       "effectType": "manual"
     },
@@ -2084,7 +2084,7 @@
       "cost": 2,
       "playableBy": "Fifth Brother",
       "timing": "other",
-      "effect": "When discarded, place this card on your 'Fifth Brother' Deployment card instead. You cannot be defeated nor recover Damage. You ignore your HARMFUL conditions. When a hostile figure is defeated, or at the end of the next round, return this card to the game box.",
+      "effect": "Passive: When discarded, place this card on your 'Fifth Brother' Deployment card instead as an Attachment.\n\nAttachment: You cannot be defeated nor recover Damage. You ignore your HARMFUL conditions. When a hostile figure is defeated, or at the end of the next round, return this card to the game box.",
       "effectType": "manual"
     }
   }

@@ -34,7 +34,7 @@
 </head>
 <body>
   <h1>IA Skirmish — Deployment Card Effect Editor</h1>
-  <p class="hint">Run <code>npm run cc-review</code> and open <code>http://localhost:3456/scripts/dc-effect-editor.html</code>. Cards load from dc-effects.json. Enter ability text and keywords, then click <strong>VERIFIED</strong> to mark done. Unverified + Verified = Total DCs.</p>
+  <p class="hint">Run <code>npm run cc-review</code> and open <code>http://localhost:3456/scripts/dc-effect-editor.html</code>. Cards load from dc-effects.json and dc-names.json. Correct ability text and keywords as needed, then click <strong>VERIFIED</strong> to mark a card 100% done — verified cards are removed from the list. Progress = unverified count shrinking to 0.</p>
 
   <div class="main">
     <div class="card-img-wrap" id="cardImgWrap">
@@ -55,6 +55,8 @@
   <label>Keywords (comma-separated, e.g. Massive, Mobile)</label>
   <input type="text" id="keywords" placeholder="e.g. Massive, Mobile">
 
+  <div id="statsWrap" class="hint" style="margin-top:12px; padding:8px; background:#2d2d2d; border-radius:4px; font-size:12px;"></div>
+
   <div class="row">
     <button id="addBtn" class="primary">Add / Update</button>
     <button id="verifyBtn" class="verified">VERIFIED</button>
@@ -64,7 +66,7 @@
   </div>
 
   <div class="entries">
-    <h2>Unverified: <span id="count">0</span> — Verified: <span id="verifiedCount">0</span> — Total: <span id="totalCount">0</span></h2>
+    <h2>Unverified: <span id="count">0</span> — Verified: <span id="verifiedCount">0</span> — Total: <span id="totalCount">0</span> — Shrink unverified to 0 by clicking VERIFIED</h2>
     <div id="list"></div>
   </div>
 
@@ -83,9 +85,28 @@
     let verified = new Set(JSON.parse(localStorage.getItem(VERIFIED_KEY) || '[]'));
     let names = [];
     let cards = {};
+    let dcStats = {};
 
     function saveVerified() {
       localStorage.setItem(VERIFIED_KEY, JSON.stringify([...verified]));
+      saveVerifiedToFile(false);
+    }
+
+    async function saveVerifiedToFile(silent = false) {
+      try {
+        const r = await fetch('/api/save-dc-verified', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ verified: [...verified] }),
+        });
+        const text = await r.text();
+        let j;
+        try { j = JSON.parse(text); } catch { j = {}; }
+        if (r.ok && j.ok) return;
+        if (!silent) alert('Save verified failed: ' + (j.error || r.status + ' ' + text.slice(0, 80)));
+      } catch (e) {
+        if (!silent) alert('Save verified failed: ' + e.message + '. Restart npm run cc-review?');
+      }
     }
 
     function getVerifiedCount() {
@@ -133,9 +154,26 @@
       placeholder.style.display = 'none';
     }
 
+    function updateStatsDisplay() {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      const wrap = document.getElementById('statsWrap');
+      if (!wrap) return;
+      const stats = dcStats[name] || dcStats[name.replace(/\s*\[.*\]\s*$/, '')];
+      if (!stats) {
+        wrap.textContent = '';
+        wrap.style.display = 'none';
+        return;
+      }
+      wrap.style.display = 'block';
+      const a = stats.attack;
+      const attackStr = a ? (Array.isArray(a.dice) ? a.dice.join(', ') : a.dice) + ' range ' + (a.range ? a.range.join('–') : '—') : '—';
+      wrap.innerHTML = 'Stats (from dc-stats): Cost ' + (stats.cost ?? '—') + ' · Health ' + (stats.health ?? '—') + ' · Figures ' + (stats.figures ?? '—') + ' · Speed ' + (stats.speed ?? '—') + ' · Attack ' + attackStr + ' · Defense ' + (stats.defense ?? '—') + (stats.specials && stats.specials.length ? ' · Specials: ' + stats.specials.join(', ') : '');
+    }
+
     function onCardChange() {
       const name = (cardName.value || cardSelect.value || '').trim();
       updateCardImage();
+      updateStatsDisplay();
       if (name && cards[name]) {
         abilityText.value = cards[name].abilityText || '';
         keywords.value = Array.isArray(cards[name].keywords) ? cards[name].keywords.join(', ') : (cards[name].keywords || '');
@@ -239,6 +277,26 @@
 
     document.getElementById('saveBtn').addEventListener('click', () => saveToFile(false));
 
+    const loadExistingBtn = document.createElement('button');
+    loadExistingBtn.textContent = 'Load existing (data/dc-effects.json)';
+    loadExistingBtn.onclick = async () => {
+      try {
+        const r = await fetch('/data/dc-effects.json');
+        if (!r.ok) throw new Error(r.status);
+        const d = await r.json();
+        if (d.cards) {
+          cards = d.cards;
+          render();
+          const current = (cardName.value || cardSelect.value || '').trim();
+          if (current && cards[current]) onCardChange();
+          alert('Loaded ' + Object.keys(cards).length + ' entries');
+        }
+      } catch (e) {
+        alert('Load failed: ' + e.message + '. Run npm run cc-review first.');
+      }
+    };
+    document.querySelector('.row').appendChild(loadExistingBtn);
+
     render();
     (async () => {
       try {
@@ -253,6 +311,23 @@
         if (r.ok) {
           const d = await r.json();
           if (d.cards && Object.keys(d.cards).length > 0) cards = d.cards;
+        }
+      } catch (_) {}
+      try {
+        const rv = await fetch('/data/dc-verified.json');
+        if (rv.ok) {
+          const dv = await rv.json();
+          if (dv.verified && Array.isArray(dv.verified)) {
+            verified = new Set(dv.verified);
+            localStorage.setItem(VERIFIED_KEY, JSON.stringify([...verified]));
+          }
+        }
+      } catch (_) {}
+      try {
+        const rs = await fetch('/data/dc-stats.json');
+        if (rs.ok) {
+          const ds = await rs.json();
+          dcStats = ds.dcStats || ds || {};
         }
       } catch (_) {}
       render();

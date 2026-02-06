@@ -206,6 +206,26 @@ const server = createServer(async (req, res) => {
     }
     return;
   }
+  if (req.method === 'POST' && pathname === '/api/save-dc-verified') {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    try {
+      const data = JSON.parse(body);
+      const outPath = join(root, 'data', 'dc-verified.json');
+      const toWrite = {
+        source: 'DC Effect Editor',
+        verified: data.verified || [],
+        updatedAt: new Date().toISOString(),
+      };
+      writeFileSync(outPath, JSON.stringify(toWrite, null, 2), 'utf8');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+    return;
+  }
 
   let decodedPath;
   try {
