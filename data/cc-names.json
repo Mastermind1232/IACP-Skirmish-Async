@@ -1,6 +1,6 @@
 {
   "source": "Vassal buildFile.xml",
-  "extractedAt": "2026-02-06T02:09:41.778Z",
+  "extractedAt": "2026-02-06T02:13:48.850Z",
   "cards": [
     "Adrenaline",
     "Advance Warning",
@@ -51,7 +51,6 @@
     "Corrupting Force",
     "Counter Attack",
     "Covering Fire",
-    "Creature",
     "Cripple",
     "Cruel Strike",
     "Crush",

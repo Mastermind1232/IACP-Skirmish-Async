@@ -22,7 +22,7 @@ const sectionEnd = xml.indexOf('</VASSAL.build.widget.TabWidget>', sectionStart)
 const ccSection = xml.slice(sectionStart, sectionEnd);
 
 // UI labels / dividers / traits from Vassal — not actual playable cards
-const BLOCKLIST = new Set(['All CCs', 'Command Cards', '- Any Figure -', 'Brawler']);
+const BLOCKLIST = new Set(['All CCs', 'Command Cards', '- Any Figure -', 'Brawler', 'Creature']);
 
 // Match PieceSlot entryName where line contains "Command Card" (actual cards, not dividers)
 const nameRe = /entryName="([^"]+)"[\s\S]*?Command Card/g;

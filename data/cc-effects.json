@@ -322,6 +322,27 @@
       "timing": "doubleActionSpecial",
       "effect": "Special Action: You and a friendly figure within 3 spaces may each perform an attack targeting the same figure. Figures do not block line of sight for these attacks.",
       "effectType": "manual"
+    },
+    "Corrupting Force": {
+      "cost": 2,
+      "playableBy": "IMPERIAL",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round if your affiliation is IMPERIAL. Each player chooses up to 3 figures. Roll 1 blue die. Each of those figures suffers Damage equal to the Hit results.",
+      "effectType": "manual"
+    },
+    "Counter Attack": {
+      "cost": 2,
+      "playableBy": "BRAWLER",
+      "timing": "afterAttackTargetingYouResolved",
+      "effect": "Use after an attack targeting you is resolved. If you were not defeated and are adjacent to the attacker, the attacker suffers 2 Damage.",
+      "effectType": "manual"
+    },
+    "Covering Fire": {
+      "cost": 3,
+      "playableBy": "Any Figure",
+      "timing": "startOfRound",
+      "effect": "Use at the start of the round. Up to 3 friendly TROOPERS become Hidden. During this round, each of your TROOPERS gains: \n\n- Surge: Stun. If the target was already stunned, apply +2 Hits to the attack results.",
+      "effectType": "manual"
     }
   }
 }
