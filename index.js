@@ -151,6 +151,36 @@ function getCcEffect(cardName) {
   return ccEffectsData.cards?.[cardName] || null;
 }
 
+/** True if this DC can legally play this CC (for Special Action timing). playableBy: "Any Figure", specific name, or trait. */
+function isCcPlayableByDc(ccName, dcName, displayName) {
+  const effect = getCcEffect(ccName);
+  if (!effect || (effect.timing || '').toLowerCase() !== 'specialaction') return false;
+  const playableBy = (effect.playableBy || '').trim();
+  if (!playableBy) return false;
+  if (playableBy.toLowerCase() === 'any figure') return true;
+  const dcBase = (dcName || '')
+    .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
+    .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
+    .trim();
+  const displayBase = (displayName || dcBase)
+    .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
+    .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
+    .trim();
+  const p = playableBy.toLowerCase();
+  const d = dcBase.toLowerCase();
+  const disp = displayBase.toLowerCase();
+  if (d.includes(p) || p.includes(d) || disp.includes(p) || p.includes(disp)) return true;
+  const keywords = dcKeywords[dcName] || dcKeywords[dcBase];
+  if (keywords && Array.isArray(keywords) && keywords.some((k) => String(k).toLowerCase() === p)) return true;
+  return false;
+}
+
+/** CC names in hand that are Special Action and legally playable by this DC. */
+function getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName) {
+  const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+  return hand.filter((ccName) => isCcPlayableByDc(ccName, dcName, displayName));
+}
+
 function getMapSpaces(mapId) {
   return mapSpacesData[mapId] || null;
 }
@@ -3375,6 +3405,21 @@ function getDcActionButtons(msgId, dcName, displayName, actionsRemaining = 2, ga
     );
     rows.push(new ActionRowBuilder().addComponents(...specialBtns));
   }
+  // CC Special Actions (legally playable) after DC specials, labeled "CC: card name"
+  if (game && rows.length < 5) {
+    const playableCc = getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName);
+    const ccSpecials = playableCc.slice(0, 5);
+    if (ccSpecials.length > 0) {
+      const ccBtns = ccSpecials.map((ccName, idx) =>
+        new ButtonBuilder()
+          .setCustomId(`dc_cc_special_${msgId}_${idx}`)
+          .setLabel(`CC: ${ccName}`.slice(0, 80))
+          .setStyle(ButtonStyle.Primary)
+          .setDisabled(noActions)
+      );
+      rows.push(new ActionRowBuilder().addComponents(...ccBtns));
+    }
+  }
   return rows;
 }
 
@@ -4875,6 +4920,66 @@ client.on('interactionCreate', async (interaction) => {
       files,
       components: toggleRow ? [toggleRow] : [],
     });
+    return;
+  }
+
+  if (interaction.customId.startsWith('dc_cc_special_')) {
+    const rest = interaction.customId.replace('dc_cc_special_', '');
+    const lastUnderscore = rest.lastIndexOf('_');
+    const msgId = rest.slice(0, lastUnderscore);
+    const idx = parseInt(rest.slice(lastUnderscore + 1), 10);
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) {
+      await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const game = games.get(meta.gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (await replyIfGameEnded(game, interaction)) return;
+    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({ content: 'Only the owner of this activation can play a CC here.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const playable = getPlayableCcSpecialsForDc(game, meta.playerNum, meta.dcName, meta.displayName);
+    const card = playable[idx];
+    const handKey = meta.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const discardKey = meta.playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const hand = game[handKey] || [];
+    if (!card || hand.indexOf(card) < 0) {
+      await interaction.reply({ content: "That card isn't in your hand or isn't playable for this figure.", ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate();
+    hand.splice(hand.indexOf(card), 1);
+    game[handKey] = hand;
+    game[discardKey] = game[discardKey] || [];
+    game[discardKey].push(card);
+    const handChannelId = meta.playerNum === 1 ? game.p1HandId : game.p2HandId;
+    const handChannel = await interaction.client.channels.fetch(handChannelId);
+    const handMessages = await handChannel.messages.fetch({ limit: 20 });
+    const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
+    const deck = meta.playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+    if (handMsg) {
+      const handPayload = buildHandDisplayPayload(hand, deck, game.gameId, game, meta.playerNum);
+      const effectData = getCcEffect(card);
+      const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
+      handPayload.content = `**Command Cards** — Played **${card}** (Special Action).${effectReminder}\n\n` + (handPayload.content || '');
+      await handMsg.edit({
+        content: handPayload.content,
+        embeds: handPayload.embeds || [],
+        files: handPayload.files || [],
+        components: handPayload.components || [],
+      }).catch(() => {});
+    }
+    await updateHandVisualMessage(game, meta.playerNum, interaction.client);
+    await updateDiscardPileMessage(game, meta.playerNum, interaction.client);
+    await updateDcActionsMessage(game, msgId, interaction.client);
+    await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}** (Special Action).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+    saveGames();
     return;
   }
 

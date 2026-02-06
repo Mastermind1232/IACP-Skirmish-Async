@@ -1083,7 +1083,7 @@
       "cost": 0,
       "playableBy": "TROOPER or GUARDIAN",
       "timing": "specialAction",
-      "effect": "Distribute 3 damage among figures in your group.",
+      "effect": "Special Action: Distribute 3 Hit Tokens among figures in your group.",
       "effectType": "manual"
     },
     "Size Advantage": {
@@ -1454,21 +1454,21 @@
       "cost": 2,
       "playableBy": "Any Figure",
       "timing": "duringActivation",
-      "effect": "Use during your activation to gain 1 Surge and 1 Block. Then, if you are a LEADER, an adjacent friendly figure gains 1 Surge and 1 Block.",
+      "effect": "Use during your activation to gain 1 Hit Token and 1 Block Token. Then, if you are a LEADER, an adjacent friendly figure gains 1 Hit Token and 1 Block Token.",
       "effectType": "manual"
     },
     "Preservation Protocol": {
       "cost": 1,
       "playableBy": "4-LOM",
-      "timing": "other",
-      "effect": "Use when you have suffered damage equal to your Health. Instead of being defeated, recover 1 damage. Until the end of the game, you lose 'Programming Override' and 'Shared Intuition'.",
+      "timing": "whenYouHaveSufferedDamageEqualToYourHealth",
+      "effect": "Use when you have suffered Damage equal to your Health. Instead of being defeated, recover 1 Damage. Until the end of the game, you lose 'Programming Override' and 'Shared Intuition'.",
       "effectType": "manual"
     },
     "Price of Glory": {
       "cost": 2,
-      "playableBy": "Any Figure",
+      "playableBy": "IMPERIAL",
       "timing": "duringActivation",
-      "effect": "Use during your activation to discard 1 HARMFUL condition and gain 2 movement points. Then, you may suffer 1 damage to gain up to 2 different Power Tokens of your choice.",
+      "effect": "Use during your activation to discard 1 HARMFUL condition and gain 2 movement points. Then, you may suffer 1 Damage to gain up to 2 different Power Tokens.",
       "effectType": "manual"
     },
     "Price on Their Heads": {
@@ -1481,20 +1481,20 @@
     "Primary Target": {
       "cost": 1,
       "playableBy": "HUNTER",
-      "timing": "whenYouDeclareAttack",
-      "effect": "Use when you declare an attack targeting a hostile figure with the highest figure cost of all hostile figures on the map. You become Focused and apply +1 Surge to the attack results.",
+      "timing": "whenYouDeclareAttackTargetingHostileWithHighestFigureCost",
+      "effect": "Use when you declare an attack targeting a hostile figure with the highest figure cost of all hostile figures on the map. You become Focused and apply +1 Hit to the attack results.",
       "effectType": "manual"
     },
     "Protect the Old Ways": {
       "cost": 1,
       "playableBy": "Kanan Jarrus",
-      "timing": "other",
+      "timing": "whenFigureWithin3SpacesDefending",
       "effect": "Use while a figure within 3 spaces is defending to apply +X Block to the defense results, where X is 1 plus the number of FORCE USER Command cards in your discard pile.",
       "effectType": "manual"
     },
     "Provoke": {
       "cost": 1,
-      "playableBy": "TROOPER or GUARDIAN",
+      "playableBy": "Any Figure",
       "timing": "afterYouResolveGroupsActivation",
       "effect": "Use after you resolve an activation to choose a hostile figure adjacent to one of your TROOPERS or GUARDIANS. That figure's group must activate next if able.",
       "effectType": "manual"
@@ -1503,7 +1503,7 @@
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "doubleActionSpecial",
-      "effect": "Double Action Special: If you have the MELEE attack type, perform 2 attacks.",
+      "effect": "Special Action: If you have the MELEE attack type, perform 2 attacks.",
       "effectType": "manual"
     },
     "Rally": {
@@ -1530,7 +1530,7 @@
     "Rapid Recalibration": {
       "cost": 1,
       "playableBy": "DROID",
-      "timing": "afterAttackDice",
+      "timing": "whileAttackingAfterAttackDiceRolledOrRerolled",
       "effect": "Use while attacking, after attack dice are rolled or rerolled, to choose 1 attack die and turn that die to any side.",
       "effectType": "manual"
     },
@@ -1538,21 +1538,21 @@
       "cost": 1,
       "playableBy": "Mara Jade",
       "timing": "afterAttackTargetingYouResolved",
-      "effect": "Use after an attack targeting you resolves. Perform 1 of the following based on your affiliation: Imperial: The attacker suffers 3 damage. Rebel: You gain 3 VPs. Scum: You recover 3 damage.",
+      "effect": "Use after an attack targeting you resolves. Perform 1 of the following based on your affiliation: \n\n- IMPERIAL: The attacker suffers 3 Damage\n- SCUM: You gain 3 VPs\n- REBEL:  You recover 3 Damage",
       "effectType": "manual"
     },
     "Rebel Graffiti": {
       "cost": 0,
-      "playableBy": "Rebel",
+      "playableBy": "REBEL",
       "timing": "endOfActivation",
-      "effect": "Use at the end of your activation, if there are no adjacent hostile figures, to gain 2 VPs. Then, if you are Sabine Wren, you may re-draw this card.",
+      "effect": "Use at the end of your activation, if there are no adjacent hostile figures, to gain 2 VPs. Then, if you are \"Sabine Wren\", you may re-draw this card.",
       "effectType": "manual"
     },
     "Recovery": {
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "specialAction",
-      "effect": "Special Action: Recover 2 damage.",
+      "effect": "Special Action: Recover 2 Damage.",
       "effectType": "manual"
     },
     "Reduce to Rubble": {
@@ -1587,7 +1587,7 @@
       "cost": 1,
       "playableBy": "LEADER",
       "timing": "specialAction",
-      "effect": "Special Action: Choose a small friendly figure within 3 spaces. Push that figure up to 3 spaces.",
+      "effect": "Special Action: Choose a SMALL friendly figure within 3 spaces. Push that figure up to 3 spaces.",
       "effectType": "manual"
     },
     "Rest in Peace": {
