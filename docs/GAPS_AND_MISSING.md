@@ -1,6 +1,6 @@
-# What's Missing / Blocking a Full Game
+# Gaps & To-Do
 
-**Purpose:** Identify gaps that prevent running a complete game front-to-back. Prioritized by impact.
+**Purpose:** Identify what’s missing or blocking a full game, plus planned work and feature requests. Prioritized by impact.
 
 ---
 
@@ -52,6 +52,16 @@
 ### 10. Command card timing
 - When can you play a CC? Typically before/during/after attacks or at specific phases. Current flow may not enforce timing.
 - **Needed:** Document or enforce when CCs can be played per rules.
+
+---
+
+## To-Do / Planned work
+
+- [ ] **Create UI tool to determine interior vs exterior spaces.** Many cards reference interior/exterior (e.g. MASSIVE cannot enter interior spaces). The backend needs to know which map cells are interior vs exterior so card effects and movement rules can be enforced correctly.
+
+- [ ] **Wire up all CCs so they have actual effects.** Command cards currently show effect text as a reminder; implement real game-state effects for each CC (or document which are manual).
+
+- [ ] **Wire up all DCs so they have actual effects.** Deployment card abilities (passives, surge, keywords, etc.) should affect game state where applicable; implement or document manual resolution.
 
 ---
 

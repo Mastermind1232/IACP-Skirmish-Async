@@ -243,94 +243,154 @@
       "affiliation": "Scum"
     },
     "[Lie in Ambush]": {
-      "abilityText": "NON-MASSIVE, NON-UNIQUE ONLY\n\nNe",
+      "abilityText": "NON-MASSIVE, NON-UNIQUE ONLY\n\nBefore Deployment, set one of your groups aside, out of play, and attach this to it. This group does not deploy during deployment.\n\nAfter an opponent activates a group, if you have 3 or more exhausted or defeated groups and it is not the first round, deploy this group to any deployment zone.",
       "keywords": [],
       "cost": 0,
       "attachment": true,
       "affiliation": "Any"
     },
     "[Mortar Trooper]": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": [],
-      "cost": 0
+      "abilityText": "SHORETROOPER ONLY\n\nDouble Action Special (Fire Mission): Perform an attack. You may draw line of sight from any figure in this group, but still measure range from this figure. Apply Blast 1 to the attack results.\n\nHaul: While moving, treat blocking and impassable terrain as difficult terrain.",
+      "keywords": [
+        "TROOPER",
+        "HEAVY WEAPON",
+        "SQUAD UPGRADE"
+      ],
+      "cost": 4,
+      "health": 7,
+      "speed": 3,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "blue",
+          "green"
+        ]
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "accuracy 2",
+        "damage 2"
+      ],
+      "attachment": true,
+      "affiliation": "Imperial"
     },
     "[Motivation]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "UNIQUE FIGURE ONLY\n\nExhaust this card during your activation and choose a friendly figure with a lower figure cost than you with a line of sight to you. That figure may discard a HARMFUL condition or recover 1 Damage. Then, that figure gains 1 movement point.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Any"
     },
     "[On a Diplomatic Mission]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "LEADER ONLY\n\nExhaust this card at the end of your activation, if you did not perform an attack, to choose one of the following:\n- You gain 2 movement points\n- Until the end of the round, apply +1 Evade to your defense results\n- You gain 1 VP",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Rebel"
     },
     "[Orbital Bombardment]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "UNIQUE FIGURE WITH FIGURE COST 4 OR MORE ONLY\n\nYou gain: \n\nSpecial Action: Place Bombardment tokens on this card equal to the current round number. Then, you may perform an attack.\n\nYou may deplete this card at the start of your activation to choose a number of spaces equal to the number of Bombardment tokens that were on this card. Each figure on a chose space suffers 2 Damage.",
       "keywords": [],
-      "cost": 0
+      "cost": 0,
+      "attachment": true,
+      "affiliation": "Any"
     },
     "[Overwatch]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "E-WEB ENGINEER ONLY\n\nChoose an Overwatch token to be associated with this group.\n\nFigures in this group gain:\n\nSpecial Action: Place this group's Overwatch token in a space within your line of sight.\n\nExhaust this card when a hostile figure enters a space on or adjacent to this group's Overwatch token to interrupt to perform an attack targeting that figure. Then remove that Overwatch token.",
       "keywords": [],
-      "cost": 0
+      "cost": 0,
+      "attachment": true,
+      "affiliation": "Imperial"
     },
     "[Prey on the Weak]": {
-      "abilityText": "Upgrade. Restrictions: hunter.",
+      "abilityText": "HUNTER ONLY\n\nWhile attacking a figure with a figure cost lower than yours, apply Pierce 1 and +1 Accuracy to the attack results.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Scum"
     },
     "[Punishing Strike]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Exhaust this card when one of your figures applies a HARMFUL condition to a figure. Discard that condition and apply a different HARMFUL condition of your choice.",
+      "keywords": [],
+      "cost": 2,
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "[Rebel High Command]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "At the end of each game round, draw 1 additional Command card.",
       "keywords": [],
-      "cost": 2
+      "cost": 2,
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "[Rogue Smuggler]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "HAN SOLO (SCOUNDREL) ONLY\n\nYou lose \"Distracting\"\n\nWhile attacking, you may reroll 1 attack die. \n\nYou can use \"Return Fire\" even if you suffered Damage during the attack.\n\nExhaust this card at the end of the round to interrupt to perform an attack.",
       "keywords": [],
-      "cost": -2
+      "cost": -2,
+      "attachment": true,
+      "affiliation": "Rebel"
     },
     "[Rule by Fear]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "At the start of the first game round, draw 2 Command Cards, then choose 1 card in your hand to discard.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "[Scavenged Walker]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "AT-ST OR AT-DP ONLY\n\nInclude one of the named groups in your army and attach this card to it. Treat this group's affiliation as SCUM\n\nYou lose ASSAULT. After deployment, you may perform a move.\n\nAt the end of the round, you may interrupt to perform an attack. Apply -1 Hit to the attack results.",
       "keywords": [],
-      "cost": 0
+      "cost": -1,
+      "attachment": true,
+      "affiliation": "Scum"
     },
     "[Scavenged Weaponry]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "DROID OR VEHICLE ONLY\n\nExhaust this card when you declare an attack to apply +1 Hit to the attack results.\n\nWhen the last figure in this group is defeated, you may attach this card to a friendly DROID or VEHICLE group. (Your opponent scores VPs for this attachment each time a group it is attached to is defeated.)",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Any"
     },
     "[Smuggler's Run]": {
-      "abilityText": "Upgrade. Restrictions: smuggler.",
+      "abilityText": "SMUGGLER ONLY\n\nSpecial Action: Deplete this card while you are in your opponent's deployment zone. You gain 5 VPs.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Rebel"
     },
     "[Smuggling Compartment]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "Before your opponent resolves a Command card or ability, you may exhaust this card to set aside any number of Command cards from your hand. Return them to your hand at the start of the next activation or phase.\n\n-----------\n\nBefore the start of the Status Phase, you may look at the top and bottom cards of your Command deck. You may move 1 of those cards to the top or bottom of your Command deck.",
       "keywords": [],
-      "cost": 0
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Any"
     },
     "[Spectre Cell]": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Include this card in your army only if each group in your army has \"Spectre\" or \"Chopper\" as part of its sub-name.\n\nFriendly figures gain the following passives: +1 Hit, +1 Block\n\nExhaust this card during a friendly figure's activation to choose another friendly figure. The chosen figure gains 2 movement points and may interrupt to perform an attack.",
+      "keywords": [],
+      "cost": 2,
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "[Suppressive Fire]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "TROOPER OR HEAVY WEAPON ONLY\n\nExhaust this card after you resolve a Ranged attack. If the attack did not miss, the target becomes Weakened. Then, you may choose another SMALL friendly figure within 3 spaces. The chosen figure gains 2 movement points.",
       "keywords": [],
-      "cost": 0
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Any"
     },
     "[Survivalist]": {
-      "abilityText": "Upgrade. Restrictions: hunter, trooper.",
+      "abilityText": "HUNTER OR TROOPER ONLY\n\nYou ignore additional movement point costs for difficult terrain and hostile figures.\n\nAt the end of each round, if you are in an exterior space, you recover 1 Damage.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Any"
     },
     "[Targeting Computer]": {
       "abilityText": "Upgrade. Restrictions: vehicle, droid, heavyweapon.",
@@ -1084,6 +1144,12 @@
     "Zuckuss": {
       "abilityText": "TBD (IACP – verify from card).",
       "keywords": []
+    },
+    "[Nemik's Manifesto]": {
+      "abilityText": "Your command deck may include up to 3 additional Command cards. Exhaust this card during a friendly figure's activation to have that figure suffer 2 Strain and gain 1 movement point.",
+      "keywords": [],
+      "attachment": false,
+      "affiliation": "Rebel"
     }
   }
 }
