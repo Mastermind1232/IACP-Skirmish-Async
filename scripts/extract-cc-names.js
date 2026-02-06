@@ -44,6 +44,10 @@ const NAME_OVERRIDES = {
   'Chaotic Force (Mercenary)': 'Chaotic Force',
   'Combat Resupply (Imperial)': 'Combat Resupply',
   'Corrupting Force (Imperial)': 'Corrupting Force',
+  'Dark Energy (Imperial)': 'Dark Energy',
+  'Force Lightning (Imperial)': 'Force Lightning',
+  'Force Push (Rebel)': 'Force Push',
+  'Lure of the Dark Side (Imperial)': 'Lure of the Dark Side',
 };
 const overridden = names.map((n) => NAME_OVERRIDES[n] ?? n);
 const namesFinal = [...new Set(overridden)].sort((a, b) => a.localeCompare(b));

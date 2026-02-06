@@ -338,7 +338,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Dark Energy (Imperial)": {
+    "Dark Energy": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -662,13 +662,13 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Force Lightning (Imperial)": {
+    "Force Lightning": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
       "effectType": "manual"
     },
-    "Force Push (Rebel)": {
+    "Force Push": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,
@@ -968,7 +968,7 @@
       "effect": null,
       "effectType": "manual"
     },
-    "Lure of the Dark Side (Imperial)": {
+    "Lure of the Dark Side": {
       "cost": null,
       "playableBy": "Any Figure",
       "effect": null,

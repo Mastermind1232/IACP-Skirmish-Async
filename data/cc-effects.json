@@ -343,6 +343,55 @@
       "timing": "startOfRound",
       "effect": "Use at the start of the round. Up to 3 friendly TROOPERS become Hidden. During this round, each of your TROOPERS gains: \n\n- Surge: Stun. If the target was already stunned, apply +2 Hits to the attack results.",
       "effectType": "manual"
+    },
+    "Cripple": {
+      "cost": 2,
+      "playableBy": "BRAWLER or HUNTER",
+      "timing": "specialAction",
+      "effect": "Special Action: Choose an adjacent hostile figure. Until the end of the round, that figure cannot voluntarily exit its space.",
+      "effectType": "manual"
+    },
+    "Cruel Strike": {
+      "cost": 0,
+      "playableBy": "Any Figure",
+      "timing": "specialAction",
+      "effect": "Special Action: Perform an an attack. This attack gains:\n\n- Surge: Pierce 1, Weaken",
+      "effectType": "manual"
+    },
+    "Crush": {
+      "cost": 3,
+      "playableBy": "MASSIVE",
+      "timing": "whenYouEndMovementInSpacesWithOtherFigures",
+      "effect": "Use when you end your movement in spaces that contain one or more other figures. Choose one of those figures that is SMALL. That figure suffers 4 Damage.",
+      "effectType": "manual"
+    },
+    "Cut Lines": {
+      "cost": 0,
+      "playableBy": "SPY",
+      "timing": "startOfStatusPhase",
+      "effect": "Use at the start of a Status Phase. Players cannot draw Command cards during this round.",
+      "effectType": "manual"
+    },
+    "Dangerous Bargains": {
+      "cost": 1,
+      "playableBy": "Any Figure",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round if you have 30 or fewer VPs. You and your opponent each gain 3 VPs.",
+      "effectType": "manual"
+    },
+    "Dangerous Prey": {
+      "cost": 1,
+      "playableBy": "Fennec Shand",
+      "timing": "afterAttackTargetingYouResolved",
+      "effect": "Use after an attack targeting you resolves. If you are within 4 spaces of the attacker, the attacker suffers 1 Damage (3 Damage if you are adjacent). Then, move up to 2 spaces.",
+      "effectType": "manual"
+    },
+    "Dark Energy": {
+      "cost": 1,
+      "playableBy": "IMPERIAL FORCE USER",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. Choose another small figure within 3 spaces. Push that figure up to 1 space, then it suffers 1 Damage.",
+      "effectType": "manual"
     }
   }
 }
