@@ -241,7 +241,7 @@
     },
     "Chaotic Force": {
       "cost": 2,
-      "playableBy": "SCUM",
+      "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if your affiliation is SCUM. Each player chooses up to 3 figures. Roll 1 green die. Each of those figures suffers Strain equal to the Accuracy result.",
       "effectType": "manual"
