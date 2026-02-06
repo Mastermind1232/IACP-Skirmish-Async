@@ -1088,23 +1088,23 @@
     },
     "Size Advantage": {
       "cost": 2,
-      "playableBy": "Any Large Figure",
+      "playableBy": "LARGE",
       "timing": "specialAction",
-      "effect": "Perform an attack targeting a small figure. Apply +2 damage to the attack results and the attack gains Weaken.",
+      "effect": "Special Action: Perform an attack targeting a SMALL figure. Apply +2 Hit to the attack results and the attack gains Weaken.",
       "effectType": "manual"
     },
     "Smoke Grenade": {
       "cost": 1,
       "playableBy": "TROOPER or TECHNICIAN",
       "timing": "specialAction",
-      "effect": "Choose a space within 3 spaces and mark it. A friendly figure within 2 spaces of the chosen space gains 2 movement points and becomes Hidden. Until the start of the next round, the marked space blocks line of sight.",
+      "effect": "Special Action: Choose a space within 2 spaces. Place 1 energy shield in that space, then a friendly figure within 2 spaces of the chosen space gains 2 movement points. Discard that energy shield at the end of the next round.",
       "effectType": "manual"
     },
     "Take Cover": {
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "specialAction",
-      "effect": "During this round, while defending, apply +1 Block and -2 Accuracy to the results.",
+      "effect": "Special Action: During this round, while defending, apply +1 Block and -2 Accuracy to the results.",
       "effectType": "manual"
     },
     "Take Initiative": {
@@ -1118,14 +1118,14 @@
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "specialAction",
-      "effect": "Gain a number of movement points equal to your Speed +2.",
+      "effect": "Special Action: Gain a number of movement points equal to your Speed +2.",
       "effectType": "manual"
     },
     "Wookiee Rage": {
       "cost": 2,
       "playableBy": "WOOKIE",
       "timing": "specialAction",
-      "effect": "Choose an adjacent hostile figure. The chosen figure suffers 1 damage for each damage you have suffered, to a maximum of 3 damage.",
+      "effect": "Special Action: Choose an adjacent hostile figure. The chosen figure suffers 1 Damage for each Damage you have suffered, to a maximum of 3 Damage.",
       "effectType": "manual"
     },
     "Mandalorian Tactics": {
@@ -1158,8 +1158,8 @@
     },
     "Shoot the Messenger": {
       "cost": 0,
-      "playableBy": "Any Figure",
-      "timing": "afterAttack",
+      "playableBy": "SCUM",
+      "timing": "afterYouResolveAttackTargetingFigure",
       "effect": "Use after you resolve an attack targeting a figure. If the defender was defeated, your opponent discards the top 3 cards of their Command deck.",
       "effectType": "manual"
     },
@@ -1558,8 +1558,8 @@
     "Reduce to Rubble": {
       "cost": 2,
       "playableBy": "HEAVY WEAPON",
-      "timing": "afterAttack",
-      "effect": "Use after you resolve an attack that did not miss due to accuracy. Each figure and object within 2 spaces of the target space suffers 1 damage. Then, place a Rubble token in the target space and each adjacent space.",
+      "timing": "afterYouResolveAttackThatDidNotMissDueToAccuracy",
+      "effect": "Use after you resolve an attack that did not miss due to accuracy. Each figure and object within 2 spaces of the target space suffers 1 Damage. Then, place a Rubble token in the target space and each adjacent space.",
       "effectType": "manual"
     },
     "Regroup": {
@@ -1579,8 +1579,8 @@
     "Repair": {
       "cost": 2,
       "playableBy": "Any Figure",
-      "timing": "specialAction",
-      "effect": "Special Action: Choose an adjacent friendly DROID or VEHICLE. That figure recovers 3 damage.",
+      "timing": "duringActivation",
+      "effect": "If you a are TECHNICIAN, you may use this card during your activation without spending an action.\n\nSpecial Action: Choose an adjacent friendly DROID or VEHICLE. That figure recovers 3 damage.\nFree Action (TECHNICIAN): Choose an adjacent friendly DROID or VEHICLE. That figure recovers 3 damage.",
       "effectType": "manual"
     },
     "Reposition": {
@@ -1594,14 +1594,14 @@
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Put this card into play at the start of a round. Players cannot choose, play, or re-draw Command cards in discard piles. At the end of the round, discard this card and draw 1 Command card.",
+      "effect": "Put this card into play at the start of a round. At the end of the round, discard this card and draw 1 Command card.\n\nPassive (Play area): Players cannot choose, play, or re-draw Command cards in discard piles.",
       "effectType": "manual"
     },
     "Retaliation": {
       "cost": 1,
       "playableBy": "GUARDIAN",
       "timing": "whenOneOfYourFiguresDefeated",
-      "effect": "Use when a friendly figure is defeated to either become Focused, gain 2 Surge, or move up to 2 spaces.",
+      "effect": "Use when a friendly figure is defeated to either become Focused, gain 2 Hit Tokens, or move up to 2 spaces.",
       "effectType": "manual"
     },
     "Reverse Engineer": {
@@ -1615,7 +1615,7 @@
       "cost": 1,
       "playableBy": "Ahsoka Tano",
       "timing": "whenAttackDeclaredOnYou",
-      "effect": "Use when an attack targeting you is declared. The attacker suffers 1 damage (3 damage if you spent a Surge during this attack).",
+      "effect": "Use when an attack targeting you is declared. The attacker suffers 1 Damage (3 Damage if you spent a Block Token during this attack).",
       "effectType": "manual"
     },
     "Roar": {

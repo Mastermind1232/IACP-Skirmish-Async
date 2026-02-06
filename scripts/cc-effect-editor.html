@@ -147,6 +147,7 @@
 
   <div class="entries">
     <h2>Unverified: <span id="count">0</span> — Verified: <span id="verifiedCount">0</span> — Total: <span id="totalCount">0</span> — Shrink unverified to 0 by clicking VERIFIED</h2>
+    <p id="debugHint" class="hint" style="display:none; margin-top:4px;"></p>
     <div id="list"></div>
   </div>
 
@@ -191,13 +192,12 @@
     }
 
     const TRAIT_PLACEHOLDER_NAMES = new Set(['All CCs', 'Command Cards', 'Brawler', 'Creature', 'Droid', 'Force User', 'Guardian', 'Heavy Weapon', 'Hunter', 'Leader', 'Smuggler', 'Spy', 'Technician', 'Trooper', 'Vehicle', 'Wookiee']);
-    function isPlaceholderCard(name, data) {
-      if (TRAIT_PLACEHOLDER_NAMES.has(name)) return true;
-      const d = data || cards[name] || {};
-      return (d.effect === '' || d.effect == null) && (d.cost == null);
+    function isPlaceholderCard(name, _data) {
+      return TRAIT_PLACEHOLDER_NAMES.has(name);
     }
     function getUnverifiedCards() {
-      return Object.keys(cards)
+      const source = (names && names.length > 0) ? names : Object.keys(cards);
+      return source
         .filter((n) => !verified.has(n) && !isPlaceholderCard(n, cards[n]))
         .sort((a, b) => a.localeCompare(b));
     }
@@ -330,8 +330,9 @@
       return names.filter((n) => verified.has(n)).length;
     }
     function getUnverifiedCount() {
-      return TOTAL_CANONICAL_CC - getVerifiedCount();
+      return getUnverifiedCards().length;
     }
+    const debugHintEl = document.getElementById('debugHint');
     function render() {
       updateCardSelect();
       listEl.innerHTML = '';
@@ -339,6 +340,14 @@
       countEl.textContent = getUnverifiedCount();
       verifiedCountEl.textContent = getVerifiedCount();
       totalCountEl.textContent = TOTAL_CANONICAL_CC;
+      if (debugHintEl) {
+        if (names.length === 0) {
+          debugHintEl.textContent = 'Debug: CC_NAMES not loaded (names=0). Check that cc-names.js loads from /scripts/cc-names.js.';
+          debugHintEl.style.display = 'block';
+        } else {
+          debugHintEl.style.display = 'none';
+        }
+      }
       unverified.forEach((name) => {
         const data = cards[name] || {};
         const div = document.createElement('div');

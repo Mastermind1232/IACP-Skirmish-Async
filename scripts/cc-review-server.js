@@ -49,7 +49,7 @@ const server = createServer(async (req, res) => {
     const baseNoParen = withoutParen !== cardName ? safeFilename(withoutParen) : null;
     const exts = ['.png', '.jpg', '.gif'];
     const candidates = [];
-    // Prefer IACP variants first (CardName (IACP).ext), then base (CardName.ext)
+    // Preferred: clean names only — "CardName.ext" and "Card Name (IACP).ext". No "C card--" / "IACP*_C card--" except as fallback for old files.
     for (const ext of exts) {
       candidates.push(`${baseIacp}${ext}`, `${noApostropheIacp}${ext}`);
     }
@@ -61,13 +61,13 @@ const server = createServer(async (req, res) => {
       candidates.push('Smoke Grenade Final.png', '003 Smoke Grenade Final.png');
     }
     if (cardName.trim().toLowerCase() === 'overcharged weapons') {
-      candidates.unshift('Overcharged Wapons.jpg', 'C card--Overcharged Wapons.jpg');
+      candidates.unshift('Overcharged Weapons.png', 'Overcharged Weapons.jpg', 'Overcharged Wapons.jpg');
     }
     const defLoveNorm = cardName.trim().toLowerCase().replace(/['':]/g, '').replace(/\s+/g, ' ');
     if (defLoveNorm === 'definition love') {
-      candidates.unshift('Definition Love.png', 'IACP_C card--Definition Love.png');
+      candidates.unshift('Definition Love.png');
     }
-    // Legacy Vassal-style filenames (backward compatibility)
+    // Fallback only: legacy Vassal "C card--" / "IACP*_C card--" names (prefer renaming to CardName.png)
     candidates.push(
       `IACP_C card--${cardName}.png`,
       `IACP_C card--${cardName}.jpg`,
