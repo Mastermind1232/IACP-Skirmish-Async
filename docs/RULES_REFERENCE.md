@@ -34,3 +34,9 @@
 ## Terminals
 - Player controls terminal if only they have a figure on or adjacent
 - +1 command card draw per controlled terminal (Status Phase step 2)
+
+## Figure Size Traits (for effects)
+- **Default:** If a DC does not explicitly have LARGE or MASSIVE, it is considered **SMALL** for all effects (command cards, abilities, etc.).
+- **LARGE:** 1x2 or 2x2 footprint (or explicit Large keyword in dc-keywords.json)
+- **MASSIVE:** 2x3 footprint or explicit Massive keyword
+- **SMALL:** 1x1 footprint or unknown DC

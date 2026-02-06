@@ -390,14 +390,14 @@
       "cost": 1,
       "playableBy": "IMPERIAL FORCE USER",
       "timing": "duringActivation",
-      "effect": "Use during your activation. Choose another small figure within 3 spaces. Push that figure up to 1 space, then it suffers 1 Damage.",
+      "effect": "Use during your activation. Choose another SMALL figure within 3 spaces. Push that figure up to 1 space, then it suffers 1 Damage.",
       "effectType": "manual"
     },
     "Data Theft": {
       "cost": 1,
       "playableBy": "SPY",
       "timing": "specialAction",
-      "effect": "Choose a Command card in your opponent's discard pile. Once during this round, you may play that card as though it was in your hand.",
+      "effect": "Special Action: Choose a Command card in your opponent's discard pile. Once during this round, you may play that card as though it was in your hand.",
       "effectType": "manual"
     },
     "De Wanna Wanga": {
@@ -416,16 +416,16 @@
     },
     "Deadly Precision": {
       "cost": 0,
-      "playableBy": "Force User",
+      "playableBy": "IMPERIAL FORCE USER",
       "timing": "startOfActivation",
-      "effect": "Use at the start of your activation. While attacking during this round, apply -1 to the defense results.",
+      "effect": "Use at the start of your activation. While attacking during this round, apply -1 Dodge to the defense results.",
       "effectType": "manual"
     },
     "Deathblow": {
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "whenYouDeclareAttack",
-      "effect": "Use when you declare a melee attack to apply +1 damage to the attack results. If the defender has the Ranged attack type, apply an additional +1 damage to the attack results.",
+      "effect": "Use when you declare a Melee attack to apply +1 Hit to the attack results. If the defender has the Ranged attack type, apply an additional +1 Hit to the attack results.",
       "effectType": "manual"
     },
     "Debts Repaid": {
@@ -444,9 +444,9 @@
     },
     "Deflection": {
       "cost": 1,
-      "playableBy": "Force User",
+      "playableBy": "FORCE USER",
       "timing": "whenAttackDeclaredOnYou",
-      "effect": "Use when an attack targeting you is declared. Apply -2 Accuracy to the attack results. After the attack is resolved, if you did not suffer any damage, the attacker suffers 2 damage.",
+      "effect": "Use when a Ranged attack targeting you is declared. Apply -2 Accuracy to the attack results. After the attack is resolved, if you did not suffer any Damage, the attacker suffers 2 Damage.",
       "effectType": "manual"
     },
     "Demoralizing Monologue": {
@@ -460,48 +460,48 @@
       "cost": 1,
       "playableBy": "Director Krennic",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. Each friendly TROOPER or GUARDIAN within 4 spaces gains 2 movement points or 1 Power Token.",
+      "effect": "Use at the start of a round. Each friendly TROOPER or GUARDIAN within 4 spaces gains 2 movement points or 1 Hit Token.",
       "effectType": "manual"
     },
     "Desperate Escape": {
       "cost": 1,
       "playableBy": "Kuiil",
       "timing": "endOfRound",
-      "effect": "Use at the end of the round to move up to 6 spaces.\n\nPassive: At the end of the round, if your Kuiil is defeated, you may discard this card from your hand to distribute 2 damage among friendly figures.",
+      "effect": "Use at the end of the round to move up to 6 spaces.\n\nPassive: At the end of the round, if your Kuiil is defeated, you may discard this card from your hand to distribute 2 Hit Tokens among friendly figures.",
       "effectType": "manual"
     },
     "Devotion": {
       "cost": 0,
       "playableBy": "DROID",
       "timing": "specialAction",
-      "effect": "Choose an adjacent friendly figure. Then, search your Command deck and draw 1 card with that figure's name as a trait, reveal it, and then shuffle your Command deck.",
+      "effect": "Special Action: Choose an adjacent friendly figure. Then, search your Command deck and draw 1 card with that figure's name as a trait, reveal it, and then shuffle your Command deck.",
       "effectType": "manual"
     },
     "Dirty Trick": {
       "cost": 2,
       "playableBy": "SMUGGLER or HUNTER",
       "timing": "other",
-      "effect": "Use when a hostile figure enters an adjacent space. That figure must choose to either suffer 3 damage or become Stunned.",
+      "effect": "Use when a hostile figure enters an adjacent space. That figure must choose to either suffer 3 Strain or become Stunned.",
       "effectType": "manual"
     },
     "Disable": {
       "cost": 2,
-      "playableBy": "SMUGGLER",
+      "playableBy": "TECHNICIAN or SMUGGLER",
       "timing": "specialAction",
-      "effect": "Choose an adjacent hostile figure. Until the end of the round, that figure cannot use attack or defense abilities.",
+      "effect": "Special Action: Choose an adjacent hostile figure. Until the end of the round, that figure cannot use Surge abilities or Special actions.",
       "effectType": "manual"
     },
     "Disarm": {
       "cost": 1,
       "playableBy": "Krrsantan",
       "timing": "other",
-      "effect": "Use when an adjacent hostile figure becomes Bleeding from your attack. Put this card into play, then that figure suffers 1 damage, becomes Weakened, and cannot discard the Weakened condition.",
+      "effect": "Use when an adjacent hostile figure becomes Bleeding from your attack. Put this card into play, then that figure suffers 1 Damage, becomes Weakened, and can't discard the Weakened condition.",
       "effectType": "manual"
     },
     "Disengage": {
       "cost": 1,
       "playableBy": "Mak Eshka'rey",
-      "timing": "other",
+      "timing": "whenHostileFigureEntersSpaceWithin3Spaces",
       "effect": "Use when a hostile figure enters a space within 3 spaces of you to gain 3 movement points.",
       "effectType": "manual"
     },
@@ -509,7 +509,7 @@
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "afterDamage",
-      "effect": "Use after a hostile figure with a BENEFICIAL condition suffers damage. Discard 1 BENEFICIAL condition from that figure. Then, that figure suffers 2 damage.",
+      "effect": "Use after a hostile figure with a BENEFICIAL condition suffers Damage. Discard 1 BENEFICIAL condition from that figure. Then, that figure suffers 2 Strain.",
       "effectType": "manual"
     },
     "Double or Nothing": {
@@ -537,14 +537,14 @@
       "cost": 2,
       "playableBy": "Any Figure",
       "timing": "other",
-      "effect": "Use when you have suffered damage equal to your Health, before you are defeated. Move up to 2 spaces, then perform a melee attack. Then, you are defeated.",
+      "effect": "Use when you have suffered Damage equal to your Health, before you are defeated. Move up to 2 spaces, then perform a Melee attack. Then, you are defeated.",
       "effectType": "manual"
     },
     "Eerie Visage": {
       "cost": 1,
       "playableBy": "0-0-0",
       "timing": "specialAction",
-      "effect": "Each hostile figure with line of sight to you suffers 1 damage and becomes Weakened.",
+      "effect": "Special Action: Each hostile figure with line of sight to you suffers 1 Strain and becomes Weakened.",
       "effectType": "manual"
     },
     "Efficient Travel": {
@@ -572,35 +572,35 @@
       "cost": 2,
       "playableBy": "Any Figure",
       "timing": "specialAction",
-      "effect": "Choose an adjacent figure. That figure recovers 2 damage. If you are a GUARDIAN or LEADER, that figure recovers an additional 1 damage.",
+      "effect": "Special Action: Choose an adjacent figure. That figure recovers 2 Damage. If you are a GUARDIAN or LEADER, that figure recovers an additional 1 Damage.",
       "effectType": "manual"
     },
     "Endless Reserves": {
       "cost": 2,
       "playableBy": "General Weiss",
       "timing": "specialAction",
-      "effect": "Choose a defeated friendly TROOPER and place it in an empty space adjacent to another figure in its group. Then, shuffle this card back into your Command deck.",
+      "effect": "Special Action: Choose a defeated friendly TROOPER and place it in an empty space adjacent to another figure in its group. Then, shuffle this card back into your Command deck.",
       "effectType": "manual"
     },
     "Escalating Hostility": {
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "afterAttack",
-      "effect": "Use after you resolve an attack that did not miss. The defender suffers 1 damage, plus an additional 1 damage for each other Escalating Hostility Command card in your discard pile.",
+      "effect": "Use after you resolve an attack that did not miss. The defender suffers 1 Strain , plus an additional 1 Strain for each other \"Escalating Hostility\" Command card in your discard pile.",
       "effectType": "manual"
     },
     "Espionage Mastery": {
       "cost": 0,
       "playableBy": "Agent Blaise",
-      "timing": "afterSpecial",
-      "effect": "Use after you resolve Interrogate. Return your discarded Command card to your hand. Then, draw 1 card.",
+      "timing": "afterYouResolveInterrogate",
+      "effect": "Use after you resolve \"Interrogate.\" Return your discarded Command card to your hand. Then, draw 1 card.",
       "effectType": "manual"
     },
     "Etiquette and Protocol": {
       "cost": 2,
       "playableBy": "C-3PO",
       "timing": "specialAction",
-      "effect": "Choose 1 hostile and 1 friendly figure, both in your line of sight. Until the end of the round, these figures cannot declare attacks targeting each other.",
+      "effect": "Special Action: Choose 1 hostile and 1 friendly figure, both in your line of sight. Until the end of the round, these figures cannot declare attacks targeting each other.",
       "effectType": "manual"
     },
     "Evacuate": {
@@ -620,15 +620,15 @@
     "Expose Weakness": {
       "cost": 0,
       "playableBy": "Any Figure",
-      "timing": "specialAction",
-      "effect": "Choose an adjacent hostile figure. The next attack targeting that figure gains Pierce 3.",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to choose an adjacent hostile figure. The next attack targeting that figure gains Pierce 3.",
       "effectType": "manual"
     },
     "Extra Protection": {
       "cost": 1,
       "playableBy": "Onar Koma",
-      "timing": "doubleActionSpecial",
-      "effect": "Use when another friendly figure within 2 spaces suffers 3 or more damage. Move up to 2 spaces, then perform an attack.",
+      "timing": "whenFriendlyFigureWithin2SpacesSuffers3PlusDamage",
+      "effect": "Use when another friendly figure within 2 spaces suffers 3 or more Damage. Move up to 2 spaces, then perform an attack.",
       "effectType": "manual"
     },
     "Face Me!": {
@@ -1161,13 +1161,6 @@
       "playableBy": "Any Figure",
       "timing": "afterAttack",
       "effect": "Use after you resolve an attack targeting a figure. If the defender was defeated, your opponent discards the top 3 cards of their Command deck.",
-      "effectType": "manual"
-    },
-    "Droid": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
       "effectType": "manual"
     },
     "Force User": {

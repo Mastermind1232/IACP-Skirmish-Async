@@ -2979,6 +2979,28 @@ function getFigureSize(dcName) {
   return key2 ? figureSizes[key2] : '1x1';
 }
 
+/**
+ * Get size trait (SMALL | LARGE | MASSIVE) for effects (command cards, abilities).
+ * Rule: if a DC does not explicitly have LARGE or MASSIVE, it is SMALL.
+ * Explicit: dc-keywords "Massive"/"Large" OR footprint from figure-sizes (1x2/2x2→LARGE, 2x3→MASSIVE).
+ * Default: SMALL (unknown DCs, 1x1 footprint).
+ */
+function getFigureSizeTrait(dcName) {
+  const keywords = getMovementKeywords(dcName);
+  if (keywords.has('massive')) return 'MASSIVE';
+  if (keywords.has('large')) return 'LARGE';
+  const footprint = getFigureSize(dcName) || '1x1';
+  const [cols, rows] = String(footprint).toLowerCase().split('x').map((n) => parseInt(n, 10) || 1);
+  const c = cols || 1;
+  const r = rows || 1;
+  if (c === 2 && r === 3) return 'MASSIVE';
+  if (c === 3 && r === 2) return 'MASSIVE';
+  if (c === 1 && r === 2) return 'LARGE';
+  if (c === 2 && r === 1) return 'LARGE';
+  if (c === 2 && r === 2) return 'LARGE';
+  return 'SMALL';
+}
+
 /** Resolve DC name to circular figure image (for map tokens). Tries figures/ subfolder first, then root. */
 function getFigureImagePath(dcName) {
   if (!dcName || typeof dcName !== 'string') return null;

@@ -60,6 +60,10 @@ const server = createServer(async (req, res) => {
     if (cardName.trim().toLowerCase() === 'smoke grenade') {
       candidates.push('Smoke Grenade Final.png', '003 Smoke Grenade Final.png');
     }
+    const defLoveNorm = cardName.trim().toLowerCase().replace(/['':]/g, '').replace(/\s+/g, ' ');
+    if (defLoveNorm === 'definition love') {
+      candidates.unshift('Definition Love.png', 'IACP_C card--Definition Love.png');
+    }
     // Legacy Vassal-style filenames (backward compatibility)
     candidates.push(
       `IACP_C card--${cardName}.png`,
