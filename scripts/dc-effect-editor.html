@@ -9,8 +9,8 @@
     h1 { font-size: 1.3rem; margin-bottom: 8px; }
     .hint { font-size: 12px; color: #999; margin-bottom: 16px; }
     .main { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
-    .card-img-wrap { flex-shrink: 0; width: 180px; min-height: 250px; background: #2d2d2d; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-    .card-img-wrap img { max-width: 100%; max-height: 280px; object-fit: contain; }
+    .card-img-wrap { flex-shrink: 0; width: 320px; min-height: 420px; background: #2d2d2d; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .card-img-wrap img { max-width: 100%; max-height: 460px; object-fit: contain; }
     .card-img-wrap .placeholder { color: #666; font-size: 13px; text-align: center; padding: 16px; }
     .form-wrap { flex: 1; min-width: 280px; }
     label { display: block; margin-top: 12px; margin-bottom: 4px; font-weight: 500; }
@@ -30,11 +30,19 @@
     .entry span { color: #aaa; }
     .entry button { padding: 4px 10px; font-size: 12px; background: #dc3545; }
     .entry button:hover { background: #bb2d3b; }
+    .dup-panel { margin-top: 16px; padding: 12px; background: #2d2d2d; border-radius: 8px; border: 1px solid #555; }
+    .dup-panel h3 { font-size: 0.95rem; margin: 0 0 8px 0; }
+    .dup-group { margin-bottom: 12px; padding: 8px; background: #1e1e1e; border-radius: 4px; }
+    .dup-group .path { font-size: 11px; color: #888; margin-bottom: 4px; word-break: break-all; }
+    .dup-card-line { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+    .dup-card-line .iacp-badge { background: #198754; color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 4px; }
+    button.iacp { background: #6f42c1; color: #fff; }
+    button.iacp:hover { background: #5a32a3; }
   </style>
 </head>
 <body>
   <h1>IA Skirmish — Deployment Card Effect Editor</h1>
-  <p class="hint">Run <code>npm run cc-review</code> and open <code>http://localhost:3456/scripts/dc-effect-editor.html</code>. Cards load from dc-effects.json and dc-names.json. Correct ability text and keywords as needed, then click <strong>VERIFIED</strong> to mark a card 100% done — verified cards are removed from the list. Progress = unverified count shrinking to 0.</p>
+  <p class="hint">Run <code>npm run cc-review</code> and open <code>http://localhost:3456/scripts/dc-effect-editor.html</code>. Showing <strong>DC Skirmish Upgrades</strong> only (from dc-images). Correct ability text and keywords, then click <strong>VERIFIED</strong>. Progress = unverified count shrinking to 0.</p>
 
   <div class="main">
     <div class="card-img-wrap" id="cardImgWrap">
@@ -55,14 +63,41 @@
   <label>Keywords (comma-separated, e.g. Massive, Mobile)</label>
   <input type="text" id="keywords" placeholder="e.g. Massive, Mobile">
 
+  <label>Cost (points)</label>
+  <input type="number" id="cost" placeholder="e.g. 8" min="-10" max="40" step="1" style="width: 80px;">
+  <p class="hint" style="margin: 2px 0 0 0;">Deployment cost (-10 to 40); meta deck has 40 points to spend.</p>
+
+  <label style="display: flex; align-items: center; gap: 8px; margin-top: 12px;">
+    <input type="checkbox" id="attachment" style="width: auto;">
+    <span>Attachment</span>
+  </label>
+  <p class="hint" style="margin: 2px 0 0 0;">Check if this Skirmish upgrade is an attachment (e.g. weapon, armor).</p>
+
+  <label>Affiliation</label>
+  <select id="affiliation" style="width: auto; min-width: 140px;">
+    <option value="">— Not set —</option>
+    <option value="Imperial">Imperial</option>
+    <option value="Rebel">Rebel</option>
+    <option value="Scum">Scum</option>
+    <option value="Any">Any</option>
+  </select>
+  <p class="hint" style="margin: 2px 0 0 0;">Deck draft is same affiliation only; use &quot;Any&quot; for cards that bypass this (e.g. Temporary Alliance).</p>
+
   <div id="statsWrap" class="hint" style="margin-top:12px; padding:8px; background:#2d2d2d; border-radius:4px; font-size:12px;"></div>
 
   <div class="row">
     <button id="addBtn" class="primary">Add / Update</button>
     <button id="verifyBtn" class="verified">VERIFIED</button>
-    <button id="saveBtn" class="export">Save to data/dc-effects.json</button>
+    <button id="showDupBtn" class="iacp">Show duplicate cards</button>
+    <span id="markIacpWrap" style="display:none;"><button id="markIacpBtn" class="iacp">Mark as IACP variant</button></span>
   </div>
     </div>
+  </div>
+
+  <div id="dupPanel" class="dup-panel" style="display: none; margin-top: 16px;">
+    <h3>Suspected duplicates (same image path)</h3>
+    <p class="hint">Use "Mark as IACP" to set which variant is the IACP one for priority. Saved in dc-effects.json.</p>
+    <div id="dupList"></div>
   </div>
 
   <div class="entries">
@@ -75,6 +110,9 @@
     const cardName = document.getElementById('cardName');
     const abilityText = document.getElementById('abilityText');
     const keywords = document.getElementById('keywords');
+    const costInput = document.getElementById('cost');
+    const attachmentCheckbox = document.getElementById('attachment');
+    const affiliationSelect = document.getElementById('affiliation');
     const addBtn = document.getElementById('addBtn');
     const listEl = document.getElementById('list');
     const countEl = document.getElementById('count');
@@ -86,6 +124,17 @@
     let names = [];
     let cards = {};
     let dcStats = {};
+    let dcImages = {};
+
+    function getDuplicateGroups() {
+      const pathToCards = {};
+      for (const [card, path] of Object.entries(dcImages)) {
+        if (!path) continue;
+        if (!pathToCards[path]) pathToCards[path] = [];
+        pathToCards[path].push(card);
+      }
+      return Object.entries(pathToCards).filter(([, arr]) => arr.length > 1);
+    }
 
     function saveVerified() {
       localStorage.setItem(VERIFIED_KEY, JSON.stringify([...verified]));
@@ -117,7 +166,12 @@
     }
 
     function getUnverifiedCards() {
-      return names.filter((n) => !verified.has(n)).sort((a, b) => a.localeCompare(b));
+      return names.filter((n) => !verified.has(n)).sort((a, b) => {
+        const aNonFig = a.startsWith('[') ? 0 : 1;
+        const bNonFig = b.startsWith('[') ? 0 : 1;
+        if (aNonFig !== bNonFig) return aNonFig - bNonFig;
+        return a.localeCompare(b);
+      });
     }
 
     function updateCardSelect() {
@@ -174,12 +228,23 @@
       const name = (cardName.value || cardSelect.value || '').trim();
       updateCardImage();
       updateStatsDisplay();
+      updateMarkIacpVisibility();
       if (name && cards[name]) {
         abilityText.value = cards[name].abilityText || '';
         keywords.value = Array.isArray(cards[name].keywords) ? cards[name].keywords.join(', ') : (cards[name].keywords || '');
+        const c = cards[name].cost;
+        const statsCost = name && (dcStats[name] || dcStats[name.replace(/\s*\[.*\]\s*$/, '')]);
+        costInput.value = c !== undefined && c !== null && c !== '' ? Number(c) : (statsCost && (statsCost.cost !== undefined && statsCost.cost !== null) ? statsCost.cost : '');
+        attachmentCheckbox.checked = !!(cards[name].attachment);
+        const aff = cards[name].affiliation || '';
+        affiliationSelect.value = (aff === 'Mercenary' ? 'Scum' : aff === 'Neutral' ? 'Any' : aff) || '';
       } else {
         abilityText.value = '';
         keywords.value = '';
+        const statsCost = name && (dcStats[name] || dcStats[name.replace(/\s*\[.*\]\s*$/, '')]);
+        costInput.value = statsCost && (statsCost.cost !== undefined && statsCost.cost !== null) ? statsCost.cost : '';
+        attachmentCheckbox.checked = false;
+        affiliationSelect.value = '';
       }
     }
 
@@ -198,9 +263,16 @@
       const name = (cardName.value || cardSelect.value || '').trim();
       if (!name) { alert('Enter a card name'); return; }
       const kw = keywords.value.trim().split(/\s*,\s*/).filter(Boolean);
+      const costVal = costInput.value.trim();
+      const costNum = costVal === '' ? undefined : (parseInt(costVal, 10) || 0);
+      const existing = cards[name] || {};
       cards[name] = {
         abilityText: abilityText.value.trim() || '',
         keywords: kw,
+        cost: costNum,
+        attachment: attachmentCheckbox.checked,
+        affiliation: affiliationSelect.value || undefined,
+        isIACPVariant: existing.isIACPVariant,
       };
       render();
       saveToFile(true);
@@ -210,9 +282,16 @@
       const name = (cardName.value || cardSelect.value || '').trim();
       if (!name) { alert('Select a card to verify'); return; }
       const kw = keywords.value.trim().split(/\s*,\s*/).filter(Boolean);
+      const costVal = costInput.value.trim();
+      const costNum = costVal === '' ? undefined : (parseInt(costVal, 10) || 0);
+      const existing = cards[name] || {};
       cards[name] = {
         abilityText: abilityText.value.trim() || '',
         keywords: kw,
+        cost: costNum,
+        attachment: attachmentCheckbox.checked,
+        affiliation: affiliationSelect.value || undefined,
+        isIACPVariant: existing.isIACPVariant,
       };
       verified.add(name);
       saveVerified();
@@ -230,19 +309,97 @@
       }
     });
 
+    function renderDupPanel() {
+      const panel = document.getElementById('dupPanel');
+      const list = document.getElementById('dupList');
+      const groups = getDuplicateGroups();
+      if (groups.length === 0) {
+        list.innerHTML = '<p class="hint">No suspected duplicates (no image path shared by multiple card names).</p>';
+      } else {
+        list.innerHTML = '';
+        groups.forEach(([path, cardNames]) => {
+          const g = document.createElement('div');
+          g.className = 'dup-group';
+          g.innerHTML = '<div class="path">' + path.replace(/</g, '&lt;') + '</div>';
+          cardNames.forEach((c) => {
+            const line = document.createElement('div');
+            line.className = 'dup-card-line';
+            const isIACP = !!(cards[c] && cards[c].isIACPVariant);
+            line.innerHTML = '<span class="card-name"></span> ' + (isIACP ? '<span class="iacp-badge">IACP</span>' : '') + (isIACP ? '' : ' <button type="button" class="iacp mark-iacp-btn">Mark as IACP</button>');
+            line.querySelector('.card-name').textContent = c;
+            const markBtn = line.querySelector('.mark-iacp-btn');
+            if (markBtn) markBtn.addEventListener('click', () => {
+              cardNames.forEach((other) => {
+                if (!cards[other]) cards[other] = {};
+                cards[other].isIACPVariant = other === c;
+              });
+              saveToFile(true);
+              renderDupPanel();
+              updateMarkIacpVisibility();
+            });
+            line.querySelector('.card-name').addEventListener('click', () => {
+              cardSelect.value = c;
+              cardName.value = c;
+              onCardChange();
+            });
+            line.querySelector('.card-name').style.cursor = 'pointer';
+            g.appendChild(line);
+          });
+          list.appendChild(g);
+        });
+      }
+    }
+
+    function updateMarkIacpVisibility() {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      const wrap = document.getElementById('markIacpWrap');
+      const groups = getDuplicateGroups();
+      const inDup = name && groups.some(([, arr]) => arr.includes(name));
+      const alreadyMarked = name && !!(cards[name] && cards[name].isIACPVariant);
+      wrap.style.display = inDup && !alreadyMarked ? 'inline-block' : 'none';
+    }
+
+    document.getElementById('showDupBtn').addEventListener('click', () => {
+      const panel = document.getElementById('dupPanel');
+      const show = panel.style.display === 'none';
+      panel.style.display = show ? 'block' : 'none';
+      if (show) renderDupPanel();
+      document.getElementById('showDupBtn').textContent = show ? 'Hide duplicate cards' : 'Show duplicate cards';
+    });
+
+    document.getElementById('markIacpBtn').addEventListener('click', () => {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      if (!name) return;
+      const groups = getDuplicateGroups();
+      const group = groups.find(([, arr]) => arr.includes(name));
+      if (!group) return;
+      const [, cardNames] = group;
+      cardNames.forEach((c) => {
+        if (!cards[c]) cards[c] = {};
+        cards[c].isIACPVariant = c === name;
+      });
+      saveToFile(true);
+      renderDupPanel();
+      updateMarkIacpVisibility();
+    });
+
     function render() {
       updateCardSelect();
       listEl.innerHTML = '';
       countEl.textContent = getUnverifiedCount();
       verifiedCountEl.textContent = getVerifiedCount();
       totalCountEl.textContent = names.length;
+      updateMarkIacpVisibility();
       const unverified = getUnverifiedCards();
       unverified.forEach((name) => {
         const data = cards[name] || {};
         const kwStr = Array.isArray(data.keywords) ? data.keywords.join(', ') : (data.keywords || '');
         const div = document.createElement('div');
         div.className = 'entry';
-        div.innerHTML = `<strong>${name}</strong> <span>${kwStr || '—'}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
+        const costStr = data.cost !== undefined && data.cost !== null ? data.cost + ' pts' : '—';
+        const attStr = data.attachment ? ' · Attachment' : '';
+        const affStr = data.affiliation ? ' · ' + data.affiliation : '';
+        div.innerHTML = `<strong>${name}</strong> <span>${costStr} · ${kwStr || '—'}${attStr}${affStr}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
         div.querySelector('button').addEventListener('click', (e) => {
           e.stopPropagation();
           delete cards[name];
@@ -275,35 +432,14 @@
       }
     }
 
-    document.getElementById('saveBtn').addEventListener('click', () => saveToFile(false));
-
-    const loadExistingBtn = document.createElement('button');
-    loadExistingBtn.textContent = 'Load existing (data/dc-effects.json)';
-    loadExistingBtn.onclick = async () => {
-      try {
-        const r = await fetch('/data/dc-effects.json');
-        if (!r.ok) throw new Error(r.status);
-        const d = await r.json();
-        if (d.cards) {
-          cards = d.cards;
-          render();
-          const current = (cardName.value || cardSelect.value || '').trim();
-          if (current && cards[current]) onCardChange();
-          alert('Loaded ' + Object.keys(cards).length + ' entries');
-        }
-      } catch (e) {
-        alert('Load failed: ' + e.message + '. Run npm run cc-review first.');
-      }
-    };
-    document.querySelector('.row').appendChild(loadExistingBtn);
-
     render();
     (async () => {
       try {
-        const r = await fetch('/data/dc-names.json');
-        if (r.ok) {
-          const d = await r.json();
-          names = d.cards || d || [];
+        const ri = await fetch('/data/dc-images.json');
+        if (ri.ok) {
+          const di = await ri.json();
+          dcImages = di.dcImages || di || {};
+          names = Object.keys(dcImages).filter((k) => dcImages[k] && dcImages[k].includes('DC Skirmish Upgrades')).sort((a, b) => a.localeCompare(b));
         }
       } catch (_) {}
       try {

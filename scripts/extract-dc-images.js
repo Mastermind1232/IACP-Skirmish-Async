@@ -50,8 +50,8 @@ while ((m = pieceRe.exec(xml)) !== null) {
 function findImagePath(imageFile) {
   const basePath = join(imagesDir, imageFile);
   if (existsSync(basePath)) return `vassal_extracted/images/${imageFile}`;
-  // Try dc-figures/dc-figureless subfolders
-  for (const sub of ['dc-figures', 'dc-figureless']) {
+  // Try dc-figures/DC Skirmish Upgrades subfolders
+  for (const sub of ['dc-figures', 'DC Skirmish Upgrades']) {
     const subPath = join(imagesDir, sub, imageFile.split('/').pop());
     if (existsSync(subPath)) return `vassal_extracted/images/${sub}/${imageFile.split('/').pop()}`;
   }

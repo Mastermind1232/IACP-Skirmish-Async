@@ -3,7 +3,7 @@
  * Organize images into subfolders:
  *   cc/           - Command Cards
  *   dc-figures/   - Deployment Cards with figures
- *   dc-figureless/- Deployment Cards without figures (upgrades)
+ *   DC Skirmish Upgrades/ - Deployment Cards without figures (Skirmish upgrades)
  *   figures/      - Circular figure tokens for map (Figure-*)
  *   tokens/       - Counters, mission tokens (Counter--*, Mission Token--*)
  *   maps/         - Map images (Map_*)
@@ -27,7 +27,7 @@ const imagesDir = join(root, 'vassal_extracted', 'images');
 const SUBFOLDERS = {
   cc: ['C card--', 'IACP_C card--', 'IACP9_C card--', 'IACP10_C card--', 'IACP11_C card--', 'Smoke Grenade Final'],
   'dc-figures': [], // populated by dc-images (non-bracket keys)
-  'dc-figureless': [], // populated by dc-images (bracket keys)
+  'DC Skirmish Upgrades': [], // populated by dc-images (bracket keys)
   figures: ['Figure-'],
   tokens: ['Counter--', 'Mission Token--', 'Door', 'Initiative Token', 'Power Token--', 'Layer_PowerToken_', 'P1 PT Button', 'P2 PT Button', 'P3 PT Button', 'P4 PT Button'],
   maps: ['Map_'],
@@ -75,7 +75,7 @@ function getDestSubfolder(filename, figurelessFilenames) {
 
   const dcPrefixes = ['D card-', 'IACP_D card-', 'IACP9_D card-', 'IACP11_D card-', 'IACP10_D card-'];
   if (dcPrefixes.some((p) => filename.startsWith(p))) {
-    return figurelessFilenames.has(filename) ? 'dc-figureless' : 'dc-figures';
+    return figurelessFilenames.has(filename) ? 'DC Skirmish Upgrades' : 'dc-figures';
   }
   return null;
 }
@@ -100,7 +100,7 @@ function main() {
   }
 
   const figurelessFilenames = loadFigurelessDcFilenames();
-  const dirs = ['cc', 'dc-figures', 'dc-figureless', 'dc-supplemental', 'figures', 'tokens', 'maps', 'mission-cards', 'conditions', 'companions', 'cardbacks', 'dice'];
+  const dirs = ['cc', 'dc-figures', 'DC Skirmish Upgrades', 'dc-supplemental', 'figures', 'tokens', 'maps', 'mission-cards', 'conditions', 'companions', 'cardbacks', 'dice'];
   for (const d of dirs) {
     const p = join(imagesDir, d);
     if (!existsSync(p)) mkdirSync(p, { recursive: true });

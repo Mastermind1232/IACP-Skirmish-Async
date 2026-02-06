@@ -3019,7 +3019,7 @@ function getSquadSelectEmbed(playerNum, squad) {
   return embed;
 }
 
-/** Resolve DC name to DC card image path (for deployment card embeds). Looks in dc-figures/ or dc-figureless/ first, then root. */
+/** Resolve DC name to DC card image path (for deployment card embeds). Looks in dc-figures/ or DC Skirmish Upgrades/ first, then root. */
 function getDcImagePath(dcName) {
   if (!dcName || typeof dcName !== 'string') return null;
   const exact = dcImages[dcName];
@@ -3040,14 +3040,14 @@ function getDcImagePath(dcName) {
   return key ? resolveDcImagePath(dcImages[key], key) : null;
 }
 
-/** Prefer dc-figures/ or dc-figureless/ subfolder over root for a given dc-images path. */
+/** Prefer dc-figures/ or DC Skirmish Upgrades/ subfolder over root for a given dc-images path. */
 function resolveDcImagePath(relPath, dcName) {
   if (!relPath || typeof relPath !== 'string') return null;
   const filename = relPath.split(/[/\\]/).pop() || relPath;
-  const subfolder = dcName && isFigurelessDc(dcName) ? 'dc-figureless' : 'dc-figures';
+  const subfolder = dcName && isFigurelessDc(dcName) ? 'DC Skirmish Upgrades' : 'dc-figures';
   const inSub = `vassal_extracted/images/${subfolder}/${filename}`;
   if (existsSync(join(rootDir, inSub))) return inSub;
-  const otherSub = subfolder === 'dc-figures' ? 'dc-figureless' : 'dc-figures';
+  const otherSub = subfolder === 'dc-figures' ? 'DC Skirmish Upgrades' : 'dc-figures';
   const inOther = `vassal_extracted/images/${otherSub}/${filename}`;
   if (existsSync(join(rootDir, inOther))) return inOther;
   if (existsSync(join(rootDir, relPath))) return relPath;

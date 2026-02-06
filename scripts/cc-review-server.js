@@ -163,7 +163,16 @@ const server = createServer(async (req, res) => {
       const dcData = JSON.parse(readFileSync(join(root, 'data', 'dc-images.json'), 'utf8'));
       dcImages = dcData.dcImages || {};
     } catch (_) {}
-    const relPath = dcImages[dcName] || dcImages[dcName.replace(/\s*\([^)]*\)\s*$/, '').trim()];
+    const innerName = dcName.replace(/^\[|\]$/g, '').trim();
+    let relPath = dcImages[dcName] || dcImages[innerName] || dcImages[dcName.replace(/\s*\([^)]*\)\s*$/, '').trim()];
+    if (!relPath && innerName) {
+      for (const [k, v] of Object.entries(dcImages)) {
+        if (v && (k.replace(/^\[|\]$/g, '').trim() === innerName)) {
+          relPath = v;
+          break;
+        }
+      }
+    }
     if (!relPath) {
       res.writeHead(404);
       res.end('Not found');

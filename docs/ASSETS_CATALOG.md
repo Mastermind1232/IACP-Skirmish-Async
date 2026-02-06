@@ -22,7 +22,7 @@ Images are organized into subfolders. Run `npm run organize-images` to sort exis
 |-----------|----------|
 | `cc/` | Command cards (C card--, IACP_C card--, etc.) |
 | `dc-figures/` | Deployment cards with figures |
-| `dc-figureless/` | Deployment cards without figures (upgrades like [Zillo Technique]) |
+| `DC Skirmish Upgrades/` | Deployment cards without figures (Skirmish upgrades like [Zillo Technique]) |
 | `figures/` | Circular figure tokens for map (Figure-Imperial--, etc.) |
 | `tokens/` | Counters, mission tokens (Counter--Terminal, Mission Token--, etc.) |
 | `maps/` | Map backgrounds (Map_*.gif) |

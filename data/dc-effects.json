@@ -1,57 +1,96 @@
 {
-  "source": "DC Effect Editor (seeded by scripts/seed-dc-effects-full.js; iaspec + dc-keywords + dc-stats)",
+  "source": "DC Effect Editor",
   "cards": {
-    "[A Fightiing Chance]": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+    "[A Fighting Chance]": {
+      "abilityText": "If you are Daniel Taylor, you must add this card to any skirmish army you play.\n\nAt the start of the game, each figure in your army becomes Stunned.",
+      "keywords": [],
+      "cost": 3
     },
     "[A New Hope]": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Include this card in your army only if each group in your army has one of the following names or sub-names:\n- \"Hero of the Rebellion\"\n- \"C-3PO'\n- \"Chewbacca\"\n- \"Han Solo\"\n- \"Leia Organa\"\n- \"Obi-Wan Kenobi\"\n- \"R2-D2\"\n\n--------------------------\nDeplete this card to have a friendly figure play a Command card with a restriction matching the name of another Deployment card in your army.",
+      "keywords": [],
+      "cost": -1
     },
     "[Advanced Com Systems]": {
-      "abilityText": "Upgrade. Restrictions: leader.",
-      "keywords": []
+      "abilityText": "LEADER ONLY\n\nAbilities on your Deployment card that choose or affect adjacent friendly figures or friendly figures within 2 spaces can choose or affect other friendly figures within 3 spaces instead.",
+      "keywords": [
+        "LEADER"
+      ],
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Imperial"
     },
     "[Balance of the Force]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "You may include an additional 3 points worth of Command cards in your deck.",
+      "keywords": [],
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "[Beast Tamer]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Exhaust this card at the start of a CREATURE's activation for that figure to perform a move.\n\nExhaust this card at the start of a figure's activation if that figure has the \"NON-SENTIENT\" trait. During this activation, that figure can interact.",
+      "keywords": [
+        "CREATURE"
+      ],
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "[Black Market]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "At the end of each round, a friendly SMUGGLER may suffer 1 Strain. If it does, reveal the top Command card of your deck. Then, you may choose one of the following: \n- Spend VPs equal to the card's cost to draw it\n- Discard that card and gain VPs equal to it's cost\n- Return that card to the top of your deck",
+      "keywords": [],
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "[Channel the Force]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Exhaust this card when you would draw 1 or more Command cards. Draw 1 fewer card than you would have. Then, search your Command deck for a card with the FORCE USER trait, reveal it, and put it in your hand. Then, shuffle your Command deck. Then, choose a friendly FORCE USER. That figure suffers Strain equal to the cost of the revealed card.",
+      "keywords": [],
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Any"
     },
     "[Clan of Two]": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "At the start of the mission, place The Child companion in your space or an adjacent space. The Child activates at the start or end of your activation. At the end of your activation, push the Child figure or its incapacitated token to your space or an adjacent space. While incapacitated, The Child is not counted for the purposes of control.\n\nThe Child cannot suffer Damage unless it is being attacked.\n\nWhile you are defeated, a UNIQUE figure may retrieve The Child or its incapacitated token to gain 1 VP.",
+      "keywords": [
+        "GUARDIAN"
+      ],
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Scum"
     },
     "[Combat Suit]": {
-      "abilityText": "Upgrade. Restrictions: trooper, leader, guardian.",
-      "keywords": []
+      "abilityText": "While you are defending, reduce the Piece value of the attack results by 1, to a minimum of 0.",
+      "keywords": [
+        "TROOPER",
+        "LEADER",
+        "GUARDIAN"
+      ],
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Rebel"
     },
     "[Cross Training]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "[Devious Scheme]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 1
     },
     "[Doubt]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Driven by Hatred]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": -5
     },
     "[Explosive Armaments]": {
       "abilityText": "Upgrade. Restrictions: hunter, droid.",
@@ -59,11 +98,13 @@
     },
     "[Extra Armor]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Feeding Frenzy]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 1
     },
     "[First Strike]": {
       "abilityText": "Upgrade (see card).",
@@ -71,107 +112,131 @@
     },
     "[Flame Trooper]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Focused on the Kill]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 0
     },
     "[Fury of Kashyyyk]": {
       "abilityText": "TBD (IACP – verify from card).",
       "keywords": []
     },
     "[Headhunter]": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 1
     },
     "[Heavy Fire]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Heir to the Jedi]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Heroic Effort]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 0
     },
     "[Imperial Citadel]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Imperial Retrofitting]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Indentured Jester]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 1
     },
     "[Last Resort]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 1
     },
     "[Lie in Ambush]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Mortar Trooper]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Motivation]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 1
     },
     "[On a Diplomatic Mission]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 1
     },
     "[Orbital Bombardment]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Overwatch]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Prey on the Weak]": {
       "abilityText": "Upgrade. Restrictions: hunter.",
-      "keywords": []
+      "keywords": [],
+      "cost": 1
     },
     "[Punishing Strike]": {
       "abilityText": "Upgrade (see card).",
       "keywords": []
     },
     "[Rebel High Command]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 2
     },
     "[Rogue Smuggler]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": -2
     },
     "[Rule by Fear]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 1
     },
     "[Scavenged Walker]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Scavenged Weaponry]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 1
     },
     "[Smuggler's Run]": {
       "abilityText": "Upgrade. Restrictions: smuggler.",
-      "keywords": []
+      "keywords": [],
+      "cost": 1
     },
     "[Smuggling Compartment]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Spectre Cell]": {
       "abilityText": "TBD (IACP – verify from card).",
@@ -179,27 +244,33 @@
     },
     "[Suppressive Fire]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Survivalist]": {
       "abilityText": "Upgrade. Restrictions: hunter, trooper.",
-      "keywords": []
+      "keywords": [],
+      "cost": 1
     },
     "[Targeting Computer]": {
       "abilityText": "Upgrade. Restrictions: vehicle, droid, heavyweapon.",
-      "keywords": []
+      "keywords": [],
+      "cost": 1
     },
     "[Technician Training]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Temporary Alliance]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 1
     },
     "[The Darksaber]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[The General's Ranks]": {
       "abilityText": "Upgrade (see card).",
@@ -207,31 +278,36 @@
     },
     "[Trusted Ally]": {
       "abilityText": "Upgrade. Restrictions: droid.",
-      "keywords": []
+      "keywords": [],
+      "cost": 1
     },
     "[Under Duress]": {
       "abilityText": "Upgrade (see card).",
       "keywords": []
     },
     "[Unshakable]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": 1
     },
     "[Vader's Finest]": {
       "abilityText": "Upgrade (see card).",
       "keywords": []
     },
     "[Wookiee Avenger]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "Upgrade. (see card).",
+      "keywords": [],
+      "cost": -4
     },
     "[Z-6 Trooper]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "[Zillo Technique]": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "cost": 0
     },
     "0-0-0": {
       "abilityText": "Traits: DROID. Attack (Range): red, yellow. Defense: black. Surge: pierce 2. Surge: recover 2",
@@ -357,19 +433,23 @@
     },
     "Clawdite Shapeshifter (Elite)": {
       "abilityText": "Traits: HUNTER, SPY. Attack (Range): red, green. Defense: black.",
-      "keywords": []
+      "keywords": [],
+      "isIACPVariant": false
     },
     "Clawdite Shapeshifter (IACP) (Elite)": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "isIACPVariant": true
     },
     "Clawdite Shapeshifter (IACP) (Regular)": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "isIACPVariant": true
     },
     "Clawdite Shapeshifter (Regular)": {
       "abilityText": "Traits: HUNTER, SPY. Attack (Range): red, green. Defense: black.",
-      "keywords": []
+      "keywords": [],
+      "isIACPVariant": false
     },
     "CT-1701": {
       "abilityText": "TBD (IACP – verify from card).",
