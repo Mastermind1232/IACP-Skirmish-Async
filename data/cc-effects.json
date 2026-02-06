@@ -1341,20 +1341,20 @@
     "Optimal Bombardment": {
       "cost": 3,
       "playableBy": "General Sorin",
-      "timing": "specialAction",
+      "timing": "doubleActionSpecial",
       "effect": "Special Action: Choose up to 3 VEHICLES, DROIDS, or HEAVY WEAPONS adjacent to you. Each of these figures may interrupt to perform an attack. Each attack gains Blast 1.",
       "effectType": "manual"
     },
     "Out of Time": {
       "cost": 1,
-      "playableBy": "Any Figure",
+      "playableBy": "SCUM",
       "timing": "duringActivation",
-      "effect": "Use during your activation. A hostile figure within 3 spaces and line of sight suffers damage equal to the current round number.",
+      "effect": "Use during your activation. A hostile figure within 3 spaces and line of sight suffers Strain equal to the current round number.",
       "effectType": "manual"
     },
     "Overcharged Weapons": {
       "cost": 0,
-      "playableBy": "Any Ready VEHICLE",
+      "playableBy": "Readied VEHICLE",
       "timing": "whenEnemyFigureActivates",
       "effect": "Use when a hostile figure activates to interrupt to perform an attack targeting that figure. The attack gains Pierce 2. Then, exhaust your Deployment card and become Weakened.",
       "effectType": "manual"
@@ -1363,55 +1363,55 @@
       "cost": 3,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. During this round, each of your DROIDS may suffer 2 damage during its activation to perform 1 additional action. Limit once per DROID.",
+      "effect": "Use at the start of a round. During this round, each of your DROIDS may suffer 2 Damage during its activation to perform 1 additional action. Limit once per DROID.",
       "effectType": "manual"
     },
     "Overheated": {
       "cost": 1,
       "playableBy": "Paz Vizsla",
       "timing": "specialAction",
-      "effect": "Special Action: If you have the HEAVY WEAPON attack type, perform 2 attacks. Apply -1 Block to the attack results during these attacks. Then, your attack type becomes HEAVY WEAPON.",
+      "effect": "Special Action: Strain 4. If you have the Ranged attack type, perform 2 attacks. Apply -1 Hit to the attack results during these attacks. Then, your attack type becomes Melee.",
       "effectType": "manual"
     },
     "Overrun": {
       "cost": 2,
       "playableBy": "VEHICLE",
       "timing": "startOfActivation",
-      "effect": "Use at the start of your activation. During this activation, when you enter a hostile figure's space, that figure suffers 2 damage. Limit once per hostile figure.",
+      "effect": "Use at the start of your activation. During this activation, when you enter a hostile figure's space, that figure suffers 2 Damage. Limit once per hostile figure.",
       "effectType": "manual"
     },
     "Overwhelming Impact": {
       "cost": 3,
       "playableBy": "HEAVY WEAPON or WOOKIEE",
       "timing": "duringAttack",
-      "effect": "Use while attacking. For each defense die rolled, apply +1 damage and +1 Surge to the attack results. During this attack, ignore all defense results that are not on the defense dice.",
+      "effect": "Use while attacking. For each defense die rolled, apply +1 Hit and +1 Surge to the attack results. During this attack, ignore all defense results that are not on the defense dice.",
       "effectType": "manual"
     },
     "Pack Alpha": {
       "cost": 1,
       "playableBy": "CREATURE",
       "timing": "specialAction",
-      "effect": "Special Action: Up to 3 friendly CREATURES within 3 spaces each move up to 3 spaces. Then, choose a hostile figure. It suffers damage equal to the number of those figures adjacent to it.",
+      "effect": "Special Action: Up to 3 friendly CREATURES within 3 spaces each move up to 3 spaces. Then, choose a hostile figure. It suffers Damage equal to the number of those figures adjacent to it.",
       "effectType": "manual"
     },
     "Paid in Beskar": {
       "cost": 0,
       "playableBy": "HUNTER",
-      "timing": "other",
-      "effect": "Use when a hostile figure within 3 spaces is defeated to gain 2 Surge.",
+      "timing": "whenHostileFigureWithin3SpacesDefeated",
+      "effect": "Use when a hostile figure within 3 spaces is defeated to gain 2 Block tokens.",
       "effectType": "manual"
     },
     "Parry": {
       "cost": 0,
       "playableBy": "BRAWLER or GUARDIAN",
       "timing": "whileDefending",
-      "effect": "Use while defending to apply +1 Block to the defense results.",
+      "effect": "Use while defending to apply +1 Block or +1 Evade to the defense results.",
       "effectType": "manual"
     },
     "Parting Blow": {
       "cost": 2,
       "playableBy": "BRAWLER",
-      "timing": "other",
+      "timing": "whenHostileFigureExitsAdjacentSpace",
       "effect": "Interrupt when a hostile figure exits an adjacent space. Before that figure moves, perform an attack targeting that figure. Then, you become Stunned.",
       "effectType": "manual"
     },
@@ -1426,7 +1426,7 @@
       "cost": 1,
       "playableBy": "TECHNICIAN",
       "timing": "duringActivation",
-      "effect": "Use during your activation to gain 1 Evade. While defending during this round, apply +1 Block to your defense results for each Evade result.",
+      "effect": "Use during your activation to gain 1 Evade Token. While defending during this round, apply +1 Block to your defense results for each Evade result.",
       "effectType": "manual"
     },
     "Pickpocket": {
@@ -1447,7 +1447,7 @@
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "duringAttack",
-      "effect": "Use while attacking to apply +1 Surge to the attack results.",
+      "effect": "Use while attacking to apply +1 Hit to the attack results.",
       "effectType": "manual"
     },
     "Prepared for Battle": {

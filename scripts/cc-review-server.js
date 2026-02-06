@@ -60,6 +60,9 @@ const server = createServer(async (req, res) => {
     if (cardName.trim().toLowerCase() === 'smoke grenade') {
       candidates.push('Smoke Grenade Final.png', '003 Smoke Grenade Final.png');
     }
+    if (cardName.trim().toLowerCase() === 'overcharged weapons') {
+      candidates.unshift('Overcharged Wapons.jpg', 'C card--Overcharged Wapons.jpg');
+    }
     const defLoveNorm = cardName.trim().toLowerCase().replace(/['':]/g, '').replace(/\s+/g, ' ');
     if (defLoveNorm === 'definition love') {
       candidates.unshift('Definition Love.png', 'IACP_C card--Definition Love.png');
