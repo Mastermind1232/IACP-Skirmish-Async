@@ -134,63 +134,120 @@
       "affiliation": "Scum"
     },
     "[Flame Trooper]": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": [],
-      "cost": 0
+      "abilityText": "NON-UNIQUE IMPERIAL TROOPER GROUP WITH 2 FIGURES ONLY\n\nIncinerate: After resolving an attack, each figure that suffered damage since this attack was declared suffers 1 Strain. Then, if the attack did not miss, place a Rubble token in the target space.\n\nFireproof: You cannot suffer Strain. you are unaffected by your own Blast and abilities \"Flamethrower\" in their name.",
+      "keywords": [
+        "TROOPER",
+        "HEAVY WEAPON",
+        "SQUAD UPGRADE"
+      ],
+      "cost": 5,
+      "health": 8,
+      "speed": 4,
+      "passives": [
+        "Priority Target",
+        "Bleed",
+        "+2 Accuracy",
+        "Pierce 1"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green"
+        ]
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "blast 1"
+      ],
+      "attachment": true,
+      "affiliation": "Imperial"
     },
     "[Focused on the Kill]": {
-      "abilityText": "Upgrade. (see card).",
-      "keywords": [],
-      "cost": 0
+      "abilityText": "IG-88 (ASSASSIN DROID) ONLY\n\nPassive bonus: +5 Health\n\nAt the start of your activation, gain 2 movement points. Before you declare an attack, you become Focused. \n\nYou lose \"Surge: Recover 3 Damage.\" \n\nYou gain: \"Surge: Pierce 1.\"",
+      "keywords": [
+        "IG-88"
+      ],
+      "cost": 0,
+      "attachment": true,
+      "affiliation": "Scum"
     },
     "[Fury of Kashyyyk]": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "WOOKIE ONLY\n\nAfter an attack targeting a figure in this group is resolved, if that figure suffered 3 or more Damage, it becomes Focused.",
+      "keywords": [
+        "WOOKIE"
+      ],
+      "cost": 2,
+      "attachment": true,
+      "affiliation": "Rebel"
     },
     "[Headhunter]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "Exhaust this card when a hostile figure suffers Strain during your activation. Reduce the amount of Strain suffered by 1. Then, the player controlling that figure must discard 1 random Command card from his hand. If he cannot, that figure suffers 1 Damage.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Scum"
     },
     "[Heavy Fire]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "Exhaust this card after a friendly VEHICLE or HEAVY WEAPON resolves an attack.\n\nFor each die in that figure's printed attack pool, you may choose 1 hostile figure within 2 spaces of the target space. Each chosen figure suffers 1 Damage.\n\nThen, for each chosen figure, the figure that attacked gains 1 HARMFUL condition of your opponent's choice.",
       "keywords": [],
-      "cost": 0
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Any"
     },
     "[Heir to the Jedi]": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": [],
-      "cost": 0
+      "abilityText": "LUKE SKYWALKER ONLY\n\nWhile attacking, you may reroll 1 attack die.\n\nWhen you declare a Ranged attack, apply +1 Hit to the attack results.\n\nBefore you declare an attack using \"Saber Strike\" you become Focused.",
+      "keywords": [
+        "LUKE SKYWALKER"
+      ],
+      "cost": 0,
+      "attachment": true,
+      "affiliation": "Rebel"
     },
     "[Heroic Effort]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "Include this card in your army only if all Deployment cards in your army are unique. \n\nWhen one of your unique figures is defeated, you may draw 1 Command card, then place 1 Command card from your hand on the bottom of your deck.",
       "keywords": [],
-      "cost": 0
+      "cost": 0,
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "[Imperial Citadel]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "Whenever a friendly IMPERIAL figure is defeated, for each Power Token on that figure, place a matching Power Token on this card.\n\nAt the start of a friendly IMPERIAL figure's activation, it may gain 1 Power Token from this card. \n\nAt the start of each round, place 1 Hit Token or Block Token on this card.",
       "keywords": [],
-      "cost": 0
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "[Imperial Retrofitting]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "\"AT-ST\", \"GENERAL WEISS\" or \"SC2-M REPULSOR TANK\" ONLY\n\nExhaust this card at the start of a friendly MASSIVE VEHICLE's activation if it has one of the above name to choose one of the following:\n- That figure may perform multiple attacks during this activation.\n- That figure performs a move.\n\nDeplete this card before a friendly MASSIVE VEHICLE with one of the above names declares an attack. That figure becomes Focused.",
       "keywords": [],
-      "cost": 0
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "[Indentured Jester]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "UNIQUE FIGURE ONLY\n\nAt the start of the mission, place the Salacious B. Crumb companion in your space. Salacious B. Crumb activates at the start or end of your activation. Salacious. B Crumb is not counted for the purposes of control.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Scum"
     },
     "[Last Resort]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "Deplete this card when a figure in this group has suffered Damage equal to its Health. Before that figure is defeated, roll 1 red die. Each figure and object on or adjacent to that figure suffers Damage equal to the Hit results.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Scum"
     },
     "[Lie in Ambush]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "NON-MASSIVE, NON-UNIQUE ONLY\n\nNe",
       "keywords": [],
-      "cost": 0
+      "cost": 0,
+      "attachment": true,
+      "affiliation": "Any"
     },
     "[Mortar Trooper]": {
       "abilityText": "TBD (IACP – verify from card).",

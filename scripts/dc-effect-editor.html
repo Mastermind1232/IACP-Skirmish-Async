@@ -38,6 +38,25 @@
     .dup-card-line .iacp-badge { background: #198754; color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 4px; }
     button.iacp { background: #6f42c1; color: #fff; }
     button.iacp:hover { background: #5a32a3; }
+    .form-section { margin-top: 14px; padding-top: 12px; border-top: 1px solid #444; }
+    .form-section-title { font-size: 12px; font-weight: 600; color: #aaa; margin-bottom: 8px; }
+    .form-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; margin-top: 8px; }
+    .field { display: flex; flex-direction: column; gap: 2px; }
+    .field.inline { flex: 0 0 auto; min-width: 72px; }
+    .field.wide { flex: 1; min-width: 120px; }
+    .field.grow { flex: 1; min-width: 160px; }
+    .field label { margin-top: 0; font-size: 12px; }
+    .field .hint { margin: 0; font-size: 11px; }
+    .form-wrap .form-row input[type="number"], .form-wrap .form-row select { width: 100%; }
+    .form-wrap .form-row .field.inline input { width: 100%; }
+    .chip-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 32px; padding: 4px 0; }
+    .chip { display: inline-flex; align-items: center; gap: 4px; background: #444; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+    .chip button { background: none; border: none; color: #999; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; }
+    .chip button:hover { color: #fff; }
+    .add-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .add-row select { width: auto; min-width: 120px; }
+    button.secondary-btn { padding: 6px 12px; font-size: 12px; background: #444; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; }
+    button.secondary-btn:hover { background: #555; }
   </style>
 </head>
 <body>
@@ -51,37 +70,139 @@
     </div>
     <div class="form-wrap">
   <label>Card name</label>
-  <select id="cardSelect">
-    <option value="">— Select or type below —</option>
-  </select>
-  <input type="text" id="cardName" placeholder="Or type DC name manually">
+  <div class="form-row">
+    <div class="field grow"><select id="cardSelect"><option value="">— Select or type below —</option></select></div>
+    <div class="field grow"><input type="text" id="cardName" placeholder="Or type DC name manually"></div>
+  </div>
 
   <label>Ability text (passives, card text)</label>
-  <p class="hint" style="margin: 2px 0 4px 0;">Full text of abilities, passives, and traits as printed. Use ALL CAPS for keywords (e.g. MASSIVE, MOBILE).</p>
+  <p class="hint" style="margin: 2px 0 4px 0;">Full text of abilities, passives, and traits. Use ALL CAPS for keywords.</p>
   <textarea id="abilityText" placeholder="Paste or type card ability text"></textarea>
 
-  <label>Keywords (comma-separated, e.g. Massive, Mobile)</label>
-  <input type="text" id="keywords" placeholder="e.g. Massive, Mobile">
+  <label>Keywords</label>
+  <input type="text" id="keywords" placeholder="e.g. Massive, Mobile (comma-separated)">
 
-  <label>Cost (points)</label>
-  <input type="number" id="cost" placeholder="e.g. 8" min="-10" max="40" step="1" style="width: 80px;">
-  <p class="hint" style="margin: 2px 0 0 0;">Deployment cost (-10 to 40); meta deck has 40 points to spend.</p>
+  <div class="form-row">
+    <div class="field inline">
+      <label>Cost</label>
+      <input type="number" id="cost" placeholder="pts" min="-10" max="40" step="1">
+      <span class="hint">-10 to 40</span>
+    </div>
+    <div class="field inline">
+      <label>Health</label>
+      <input type="number" id="health" placeholder="—" min="1" max="99" step="1">
+    </div>
+    <div class="field inline">
+      <label>Speed</label>
+      <input type="number" id="speed" placeholder="—" min="1" max="8" step="1">
+    </div>
+    <div class="field inline">
+      <label>Figures</label>
+      <input type="number" id="figures" placeholder="—" min="0" max="4" step="1">
+    </div>
+  </div>
 
-  <label style="display: flex; align-items: center; gap: 8px; margin-top: 12px;">
-    <input type="checkbox" id="attachment" style="width: auto;">
-    <span>Attachment</span>
-  </label>
-  <p class="hint" style="margin: 2px 0 0 0;">Check if this Skirmish upgrade is an attachment (e.g. weapon, armor).</p>
+  <div class="form-section">
+    <div class="form-section-title">Figure stats (Squad Upgrades)</div>
+    <div class="form-row">
+      <div class="field wide">
+        <label>Attack dice</label>
+        <div class="add-row">
+          <select id="attackDiceSelect">
+            <option value="">Add die…</option>
+            <option value="red">Red</option>
+            <option value="blue">Blue</option>
+            <option value="yellow">Yellow</option>
+            <option value="green">Green</option>
+          </select>
+          <button type="button" id="attackDiceAdd" class="secondary-btn">Add</button>
+        </div>
+        <div id="attackDiceList" class="chip-list"></div>
+      </div>
+      <div class="field wide">
+        <label>Defense die</label>
+        <div class="add-row">
+          <select id="defenseSelect">
+            <option value="">Add die…</option>
+            <option value="white">White</option>
+            <option value="black">Black</option>
+          </select>
+          <button type="button" id="defenseAdd" class="secondary-btn">Add</button>
+        </div>
+        <div id="defenseList" class="chip-list"></div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="field wide">
+        <label>Surge abilities</label>
+        <div class="add-row">
+          <select id="surgeSelect">
+            <option value="">Add surge…</option>
+            <option value="damage 1">Damage +1</option>
+            <option value="damage 2">Damage +2</option>
+            <option value="stun">Stun</option>
+            <option value="pierce 1">Pierce 1</option>
+            <option value="pierce 2">Pierce 2</option>
+            <option value="pierce 3">Pierce 3</option>
+            <option value="accuracy 2">Accuracy +2</option>
+            <option value="accuracy 3">Accuracy +3</option>
+            <option value="recover 1">Recover 1</option>
+            <option value="recover 2">Recover 2</option>
+            <option value="recover 3">Recover 3</option>
+            <option value="weaken">Weaken</option>
+            <option value="blast 1">Blast 1</option>
+            <option value="blast 2">Blast 2</option>
+            <option value="focus">Focus</option>
+            <option value="cleave 2">Cleave 2</option>
+            <option value="cancel 1">Cancel 1</option>
+          </select>
+          <button type="button" id="surgeAdd" class="secondary-btn">Add</button>
+        </div>
+        <div id="surgeList" class="chip-list"></div>
+      </div>
+      <div class="field grow">
+        <label>Passives</label>
+        <div class="add-row">
+          <select id="passivesSelect">
+            <option value="">Add passive…</option>
+            <option value="MASSIVE">MASSIVE</option>
+            <option value="MOBILE">MOBILE</option>
+            <option value="Reach">Reach</option>
+            <option value="Block 1">Block 1</option>
+            <option value="Block 2">Block 2</option>
+            <option value="Bleed">Bleed</option>
+            <option value="Priority Target">Priority Target</option>
+            <option value="+2 Accuracy">+2 Accuracy</option>
+            <option value="+3 Accuracy">+3 Accuracy</option>
+            <option value="Pierce 1">Pierce 1</option>
+            <option value="Pierce 2">Pierce 2</option>
+            <option value="__other__">Other…</option>
+          </select>
+          <button type="button" id="passivesAdd" class="secondary-btn">Add</button>
+        </div>
+        <div id="passivesList" class="chip-list"></div>
+      </div>
+    </div>
+  </div>
 
-  <label>Affiliation</label>
-  <select id="affiliation" style="width: auto; min-width: 140px;">
-    <option value="">— Not set —</option>
-    <option value="Imperial">Imperial</option>
-    <option value="Rebel">Rebel</option>
-    <option value="Scum">Scum</option>
-    <option value="Any">Any</option>
-  </select>
-  <p class="hint" style="margin: 2px 0 0 0;">Deck draft is same affiliation only; use &quot;Any&quot; for cards that bypass this (e.g. Temporary Alliance).</p>
+  <div class="form-section">
+    <div class="form-row" style="align-items: center;">
+      <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
+        <input type="checkbox" id="attachment" style="width: auto;">
+        <span>Attachment</span>
+      </label>
+      <div class="field inline">
+        <label>Affiliation</label>
+        <select id="affiliation">
+          <option value="">— Not set —</option>
+          <option value="Imperial">Imperial</option>
+          <option value="Rebel">Rebel</option>
+          <option value="Scum">Scum</option>
+          <option value="Any">Any</option>
+        </select>
+      </div>
+    </div>
+  </div>
 
   <div id="statsWrap" class="hint" style="margin-top:12px; padding:8px; background:#2d2d2d; border-radius:4px; font-size:12px;"></div>
 
@@ -111,6 +232,21 @@
     const abilityText = document.getElementById('abilityText');
     const keywords = document.getElementById('keywords');
     const costInput = document.getElementById('cost');
+    const healthInput = document.getElementById('health');
+    const speedInput = document.getElementById('speed');
+    const passivesSelect = document.getElementById('passivesSelect');
+    const passivesAddBtn = document.getElementById('passivesAdd');
+    const passivesListEl = document.getElementById('passivesList');
+    const figuresInput = document.getElementById('figures');
+    const attackDiceSelect = document.getElementById('attackDiceSelect');
+    const attackDiceAddBtn = document.getElementById('attackDiceAdd');
+    const attackDiceListEl = document.getElementById('attackDiceList');
+    const defenseSelect = document.getElementById('defenseSelect');
+    const defenseAddBtn = document.getElementById('defenseAdd');
+    const defenseListEl = document.getElementById('defenseList');
+    const surgeSelect = document.getElementById('surgeSelect');
+    const surgeAddBtn = document.getElementById('surgeAdd');
+    const surgeListEl = document.getElementById('surgeList');
     const attachmentCheckbox = document.getElementById('attachment');
     const affiliationSelect = document.getElementById('affiliation');
     const addBtn = document.getElementById('addBtn');
@@ -135,6 +271,63 @@
       }
       return Object.entries(pathToCards).filter(([, arr]) => arr.length > 1);
     }
+
+    function addChip(container, value, label) {
+      if (!value) return;
+      const span = document.createElement('span');
+      span.className = 'chip';
+      span.dataset.value = value;
+      span.textContent = label || value;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = '×';
+      btn.setAttribute('aria-label', 'Remove');
+      btn.addEventListener('click', () => span.remove());
+      span.appendChild(btn);
+      container.appendChild(span);
+    }
+
+    function getChipValues(container) {
+      return Array.from(container.querySelectorAll('.chip')).map((el) => el.dataset.value);
+    }
+
+    function setChipList(container, values, labelByValue) {
+      container.innerHTML = '';
+      (values || []).forEach((v) => addChip(container, v, labelByValue ? (labelByValue[v] || v) : v));
+    }
+
+    const SURGE_LABELS = { 'damage 1': 'Damage +1', 'damage 2': 'Damage +2', 'stun': 'Stun', 'pierce 1': 'Pierce 1', 'pierce 2': 'Pierce 2', 'pierce 3': 'Pierce 3', 'accuracy 2': 'Accuracy +2', 'accuracy 3': 'Accuracy +3', 'recover 1': 'Recover 1', 'recover 2': 'Recover 2', 'recover 3': 'Recover 3', 'weaken': 'Weaken', 'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'focus': 'Focus', 'cleave 2': 'Cleave 2', 'cancel 1': 'Cancel 1' };
+    const DICE_LABELS = { red: 'Red', blue: 'Blue', yellow: 'Yellow', green: 'Green' };
+    const DEFENSE_LABELS = { white: 'White', black: 'Black' };
+
+    attackDiceAddBtn.addEventListener('click', () => {
+      const v = attackDiceSelect.value;
+      if (!v) return;
+      addChip(attackDiceListEl, v, DICE_LABELS[v] || v);
+      attackDiceSelect.value = '';
+    });
+    defenseAddBtn.addEventListener('click', () => {
+      const v = defenseSelect.value;
+      if (!v) return;
+      addChip(defenseListEl, v, DEFENSE_LABELS[v] || v);
+      defenseSelect.value = '';
+    });
+    surgeAddBtn.addEventListener('click', () => {
+      const v = surgeSelect.value;
+      if (!v) return;
+      addChip(surgeListEl, v, SURGE_LABELS[v] || v);
+      surgeSelect.value = '';
+    });
+    passivesAddBtn.addEventListener('click', () => {
+      let v = passivesSelect.value;
+      if (!v) return;
+      if (v === '__other__') {
+        v = (prompt('Enter passive name (e.g. Custom Trait)') || '').trim();
+        if (!v) return;
+      }
+      addChip(passivesListEl, v, v);
+      passivesSelect.value = '';
+    });
 
     function saveVerified() {
       localStorage.setItem(VERIFIED_KEY, JSON.stringify([...verified]));
@@ -220,7 +413,7 @@
       }
       wrap.style.display = 'block';
       const a = stats.attack;
-      const attackStr = a ? (Array.isArray(a.dice) ? a.dice.join(', ') : a.dice) + ' range ' + (a.range ? a.range.join('–') : '—') : '—';
+      const attackStr = a ? (Array.isArray(a.dice) ? a.dice.join(', ') : a.dice) : '—';
       wrap.innerHTML = 'Stats (from dc-stats): Cost ' + (stats.cost ?? '—') + ' · Health ' + (stats.health ?? '—') + ' · Figures ' + (stats.figures ?? '—') + ' · Speed ' + (stats.speed ?? '—') + ' · Attack ' + attackStr + ' · Defense ' + (stats.defense ?? '—') + (stats.specials && stats.specials.length ? ' · Specials: ' + stats.specials.join(', ') : '');
     }
 
@@ -229,20 +422,47 @@
       updateCardImage();
       updateStatsDisplay();
       updateMarkIacpVisibility();
+      const statsFallback = name && (dcStats[name] || dcStats[name.replace(/\s*\[.*\]\s*$/, '')]);
       if (name && cards[name]) {
-        abilityText.value = cards[name].abilityText || '';
-        keywords.value = Array.isArray(cards[name].keywords) ? cards[name].keywords.join(', ') : (cards[name].keywords || '');
-        const c = cards[name].cost;
-        const statsCost = name && (dcStats[name] || dcStats[name.replace(/\s*\[.*\]\s*$/, '')]);
-        costInput.value = c !== undefined && c !== null && c !== '' ? Number(c) : (statsCost && (statsCost.cost !== undefined && statsCost.cost !== null) ? statsCost.cost : '');
-        attachmentCheckbox.checked = !!(cards[name].attachment);
-        const aff = cards[name].affiliation || '';
+        const card = cards[name];
+        abilityText.value = card.abilityText || '';
+        keywords.value = Array.isArray(card.keywords) ? card.keywords.join(', ') : (card.keywords || '');
+        costInput.value = card.cost !== undefined && card.cost !== null && card.cost !== '' ? Number(card.cost) : (statsFallback?.cost != null ? statsFallback.cost : '');
+        healthInput.value = card.health !== undefined && card.health !== null && card.health !== '' ? Number(card.health) : (statsFallback?.health != null ? statsFallback.health : '');
+        speedInput.value = card.speed !== undefined && card.speed !== null && card.speed !== '' ? Number(card.speed) : (statsFallback?.speed != null ? statsFallback.speed : '');
+        const passivesRaw = card.passives ?? statsFallback?.passives;
+        const passivesArr = passivesRaw == null ? [] : (Array.isArray(passivesRaw) ? passivesRaw : String(passivesRaw).split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean));
+        setChipList(passivesListEl, passivesArr);
+        figuresInput.value = card.figures !== undefined && card.figures !== null && card.figures !== '' ? Number(card.figures) : (statsFallback?.figures != null ? statsFallback.figures : '');
+        const a = card.attack || statsFallback?.attack;
+        if (a) {
+          const dice = Array.isArray(a.dice) ? a.dice : (a.dice ? [a.dice] : []);
+          setChipList(attackDiceListEl, dice, DICE_LABELS);
+        } else {
+          setChipList(attackDiceListEl, []);
+        }
+        const def = card.defense != null ? card.defense : statsFallback?.defense;
+        const defenseArr = def == null ? [] : (Array.isArray(def) ? def : [def]);
+        setChipList(defenseListEl, defenseArr, DEFENSE_LABELS);
+        const surgeArr = card.surgeAbilities || statsFallback?.surgeAbilities || [];
+        setChipList(surgeListEl, surgeArr, SURGE_LABELS);
+        attachmentCheckbox.checked = !!(card.attachment);
+        const aff = card.affiliation || '';
         affiliationSelect.value = (aff === 'Mercenary' ? 'Scum' : aff === 'Neutral' ? 'Any' : aff) || '';
       } else {
         abilityText.value = '';
         keywords.value = '';
-        const statsCost = name && (dcStats[name] || dcStats[name.replace(/\s*\[.*\]\s*$/, '')]);
-        costInput.value = statsCost && (statsCost.cost !== undefined && statsCost.cost !== null) ? statsCost.cost : '';
+        costInput.value = statsFallback?.cost != null ? statsFallback.cost : '';
+        healthInput.value = statsFallback?.health != null ? statsFallback.health : '';
+        speedInput.value = statsFallback?.speed != null ? statsFallback.speed : '';
+        setChipList(passivesListEl, statsFallback?.passives ? (Array.isArray(statsFallback.passives) ? statsFallback.passives : [statsFallback.passives]) : []);
+        figuresInput.value = statsFallback?.figures != null ? statsFallback.figures : '';
+        const a = statsFallback?.attack;
+        const dice = a && (Array.isArray(a.dice) ? a.dice : (a.dice ? [a.dice] : [])) || [];
+        setChipList(attackDiceListEl, dice, DICE_LABELS);
+        const def = statsFallback?.defense;
+        setChipList(defenseListEl, def == null ? [] : (Array.isArray(def) ? def : [def]), DEFENSE_LABELS);
+        setChipList(surgeListEl, statsFallback?.surgeAbilities || [], SURGE_LABELS);
         attachmentCheckbox.checked = false;
         affiliationSelect.value = '';
       }
@@ -259,17 +479,42 @@
       onCardChange();
     });
 
+    function getFigureStatsFromForm() {
+      const speedVal = speedInput.value.trim();
+      const speedNum = speedVal === '' ? undefined : (parseInt(speedVal, 10) || 0);
+      const passivesArr = getChipValues(passivesListEl);
+      const passives = passivesArr.length ? passivesArr : undefined;
+      const figuresVal = figuresInput.value.trim();
+      const figuresNum = figuresVal === '' ? undefined : (parseInt(figuresVal, 10) || 0);
+      const attackDice = getChipValues(attackDiceListEl);
+      const attack = attackDice.length ? { dice: attackDice } : undefined;
+      const defenseArr = getChipValues(defenseListEl);
+      const defense = defenseArr.length ? defenseArr : undefined;
+      const surgeAbilities = getChipValues(surgeListEl);
+      return { speed: speedNum, passives, figures: figuresNum, attack, defense, surgeAbilities: surgeAbilities.length ? surgeAbilities : undefined };
+    }
+
     addBtn.addEventListener('click', () => {
       const name = (cardName.value || cardSelect.value || '').trim();
       if (!name) { alert('Enter a card name'); return; }
       const kw = keywords.value.trim().split(/\s*,\s*/).filter(Boolean);
       const costVal = costInput.value.trim();
       const costNum = costVal === '' ? undefined : (parseInt(costVal, 10) || 0);
+      const healthVal = healthInput.value.trim();
+      const healthNum = healthVal === '' ? undefined : (parseInt(healthVal, 10) || 0);
       const existing = cards[name] || {};
+      const fig = getFigureStatsFromForm();
       cards[name] = {
         abilityText: abilityText.value.trim() || '',
         keywords: kw,
         cost: costNum,
+        health: healthNum,
+        speed: fig.speed,
+        passives: fig.passives,
+        figures: fig.figures,
+        attack: fig.attack,
+        defense: fig.defense,
+        surgeAbilities: fig.surgeAbilities,
         attachment: attachmentCheckbox.checked,
         affiliation: affiliationSelect.value || undefined,
         isIACPVariant: existing.isIACPVariant,
@@ -284,11 +529,21 @@
       const kw = keywords.value.trim().split(/\s*,\s*/).filter(Boolean);
       const costVal = costInput.value.trim();
       const costNum = costVal === '' ? undefined : (parseInt(costVal, 10) || 0);
+      const healthVal = healthInput.value.trim();
+      const healthNum = healthVal === '' ? undefined : (parseInt(healthVal, 10) || 0);
       const existing = cards[name] || {};
+      const fig = getFigureStatsFromForm();
       cards[name] = {
         abilityText: abilityText.value.trim() || '',
         keywords: kw,
         cost: costNum,
+        health: healthNum,
+        speed: fig.speed,
+        passives: fig.passives,
+        figures: fig.figures,
+        attack: fig.attack,
+        defense: fig.defense,
+        surgeAbilities: fig.surgeAbilities,
         attachment: attachmentCheckbox.checked,
         affiliation: affiliationSelect.value || undefined,
         isIACPVariant: existing.isIACPVariant,
@@ -397,9 +652,11 @@
         const div = document.createElement('div');
         div.className = 'entry';
         const costStr = data.cost !== undefined && data.cost !== null ? data.cost + ' pts' : '—';
+        const healthStr = data.health !== undefined && data.health !== null ? data.health + ' HP' : '';
         const attStr = data.attachment ? ' · Attachment' : '';
         const affStr = data.affiliation ? ' · ' + data.affiliation : '';
-        div.innerHTML = `<strong>${name}</strong> <span>${costStr} · ${kwStr || '—'}${attStr}${affStr}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
+        const mid = [costStr, healthStr, kwStr || '—'].filter(Boolean).join(' · ');
+        div.innerHTML = `<strong>${name}</strong> <span>${mid}${attStr}${affStr}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
         div.querySelector('button').addEventListener('click', (e) => {
           e.stopPropagation();
           delete cards[name];

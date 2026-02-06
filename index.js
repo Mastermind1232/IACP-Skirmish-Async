@@ -3157,7 +3157,7 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
   return null;
 }
 
-/** DCs whose image is in DC Skirmish Upgrades are figureless; if image is in dc-figures, it's a figure (e.g. [Flame Trooper]). */
+/** DCs whose image is in DC Skirmish Upgrades are figureless (incl. Squad Upgrades like [Flame Trooper]); if image is in dc-figures, it's a figure. */
 function isFigurelessDc(dcName) {
   if (!dcName || typeof dcName !== 'string') return false;
   const n = dcName.trim();
@@ -3925,6 +3925,8 @@ async function populatePlayAreas(game, client) {
   game.p2DcMessageIds = [];
   game.p1DcAttachmentMessageIds = [];
   game.p2DcAttachmentMessageIds = [];
+  game.p1DcCompanionMessageIds = [];
+  game.p2DcCompanionMessageIds = [];
   game.p1CcAttachments = game.p1CcAttachments || {};
   game.p2CcAttachments = game.p2CcAttachments || {};
 
@@ -3971,6 +3973,10 @@ async function populatePlayAreas(game, client) {
       embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
     });
     game.p1DcAttachmentMessageIds.push(attachMsg.id);
+    const companionMsg = await p1PlayArea.send({
+      embeds: [new EmbedBuilder().setTitle('Companion').setDescription('*None*').setColor(0x2f3136)],
+    });
+    game.p1DcCompanionMessageIds.push(companionMsg.id);
   }
   for (const { dcName, displayName, healthState } of p2Dcs) {
     const { embed, files } = await buildDcEmbedAndFiles(dcName, false, displayName, healthState);
@@ -3986,6 +3992,10 @@ async function populatePlayAreas(game, client) {
       embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
     });
     game.p2DcAttachmentMessageIds.push(attachMsg.id);
+    const companionMsg = await p2PlayArea.send({
+      embeds: [new EmbedBuilder().setTitle('Companion').setDescription('*None*').setColor(0x2f3136)],
+    });
+    game.p2DcCompanionMessageIds.push(companionMsg.id);
   }
 
 }
