@@ -2,6 +2,8 @@
 
 When entering Deployment Card ability text in `dc-effects.json` (via the DC Effect Editor):
 
+**Unique for card effects:** A DC is considered unique if there is only one copy in the deck and that DC has only one figure in its DG. See `CC_DATA_CONVENTIONS.md` for the full definition used by all card effects.
+
 ## Ability text
 
 - **Use full card text** — Type out passives, abilities, and trait text as printed on the card.

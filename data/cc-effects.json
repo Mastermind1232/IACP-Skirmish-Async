@@ -1241,10 +1241,10 @@
       "effectType": "manual"
     },
     "Mandalorian Steel": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "The Armorer",
+      "timing": "startOfRound",
+      "effect": "Use at the start of the round. During this round, after an attack resolves targeting a friendly figure, if that figure spent a Block Token during that attack, it recovers 1 Damage.",
       "effectType": "manual"
     },
     "Marked Territory": {
@@ -1297,10 +1297,10 @@
       "effectType": "manual"
     },
     "No Cheating": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "Asajj Ventress",
+      "timing": "atStartOfActivationOfHostileFigureInYourLineOfSight",
+      "effect": "Use at the start of the activation of a hostile figure in your line of sight. During this round, that figure's attack becomes Melee, and when it declares an attack, it removes one attack die from its attack pool.",
       "effectType": "manual"
     },
     "Of No Importance": {
@@ -1647,94 +1647,94 @@
       "effectType": "manual"
     },
     "Second Chance": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "Unique",
+      "timing": "startOfRound",
+      "effect": "Place this card on your Deployment card at the start of a round as an Attachment.\n\nAttachment: Before you would be defeated, or at the end of this round, recover 2 Damage and discard this card.",
       "effectType": "manual"
     },
     "Self-Augmentation": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 0,
+      "playableBy": "TECHNICIAN",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to place this card on your Deployment card as an Attachment.\n\nAttachment: You gain the DROID trait. While attacking, you may reroll one attack die.",
       "effectType": "manual"
     },
     "Self-Defense": {
-      "cost": null,
+      "cost": 0,
       "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "timing": "whenHostileFigureEntersAdjacentSpace",
+      "effect": "Use when a hostile figure enters a space adjacent to you. That figure suffers 1 Damage.",
       "effectType": "manual"
     },
     "Set a Trap": {
-      "cost": null,
+      "cost": 1,
       "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round and choose a map tile. At the end of the round, choose one of your figures on that tile to interrupt to perform an attack targeting a hostile figure on that tile.",
       "effectType": "manual"
     },
     "Set for Stun": {
-      "cost": null,
+      "cost": 0,
       "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "timing": "specialAction",
+      "effect": "Perform an attack. If the target would suffer 1 or more Damage, reduce the Damage suffered to 0. Then, the target becomes Stunned.",
       "effectType": "manual"
     },
     "Set the Charges": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "TECHNICIAN",
+      "timing": "specialAction",
+      "effect": "Choose a space within 3 spaces and roll a blue die. Open any unlocked doors adjacent to that space. Then, each figure or object on or adjacent to that space suffers Damage equal to the combined Damage and Evade results.",
       "effectType": "manual"
     },
     "Shadow Ops": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 3,
+      "playableBy": "Mak Eshka'rey",
+      "timing": "duringActivation",
+      "effect": "Until the end of the round, the opposing player cannot play Command cards.",
       "effectType": "manual"
     },
     "Shared Experience": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "DROID or VEHICLE",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. Spend 3 movement points to become Focused. When a friendly DROID or VEHICLE is defeated, you may re-draw this card.",
       "effectType": "manual"
     },
     "Signal Jammer": {
-      "cost": null,
+      "cost": 1,
       "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "timing": "startOfRound",
+      "effect": "Put this card into play at the start of a round. When any player plays a Command card, discard that card and cancel its effects. Then, discard this card.",
       "effectType": "manual"
     },
     "Single Purpose": {
-      "cost": null,
+      "cost": 1,
       "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "timing": "startOfActivation",
+      "effect": "Use at the start of your activation. You may use the same special action up to twice during this activation.",
       "effectType": "manual"
     },
     "Sit Tight": {
-      "cost": null,
+      "cost": 0,
       "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. You do not activate any groups this round until you have more ready Deployment cards than your opponent.",
       "effectType": "manual"
     },
     "Slippery Target": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "SMUGGLER or SPY",
+      "timing": "whenHostileFigureEntersAdjacentSpace",
+      "effect": "Use when a hostile figure enters an adjacent space. Gain movement points equal to your Speed.",
       "effectType": "manual"
     },
     "Smuggled Supplies": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "SMUGGLER",
+      "timing": "startOfActivation",
+      "effect": "Use at the start of your activation to recover 2 Damage, apply +1 Surge to your attack results until the end of the round, or apply +1 Block to your defense results until the end of the round.",
       "effectType": "manual"
     },
     "Smuggler": {
@@ -1745,31 +1745,31 @@
       "effectType": "manual"
     },
     "Smuggler's Tricks": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "SMUGGLER",
+      "timing": "duringActivation",
+      "effect": "Choose a tile or token you are on or adjacent to. Until the start of the next round, your opponent counts as having 1 fewer figure on or adjacent to that tile or token.",
       "effectType": "manual"
     },
     "Sniper Configuration": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "Cassian Andor",
+      "timing": "specialAction",
+      "effect": "Perform an attack. You may draw line of sight from any friendly figure, but still measure range from this figure. Apply +2 Accuracy and Pierce 2 to the attack results.",
       "effectType": "manual"
     },
     "Son of Skywalker": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 3,
+      "playableBy": "Luke Skywalker",
+      "timing": "afterActivationResolves",
+      "effect": "After a figure resolves an activation, ready your Deployment card.",
       "effectType": "manual"
     },
     "Spinning Kick": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "Tress Hacnua",
+      "timing": "duringAttack",
+      "effect": "Use while attacking. This attack gains Cleave 1 and Cleave 2.",
       "effectType": "manual"
     },
     "Spy": {
@@ -1780,115 +1780,115 @@
       "effectType": "manual"
     },
     "Squad Swarm": {
-      "cost": null,
+      "cost": 2,
       "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "timing": "afterYouResolveGroupsActivation",
+      "effect": "Use after activating a group. You may immediately activate another ready group with the same name. The combined cost of both groups cannot exceed 15.",
       "effectType": "manual"
     },
     "Stall for Time": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 0,
+      "playableBy": "LEADER or SPY",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Your opponent places 1 random Command card from his hand on top of his Command deck.",
       "effectType": "manual"
     },
     "Static Pulse": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "Iden Versio or Dio",
+      "timing": "duringActivation",
+      "effect": "For each hostile figure adjacent to a friendly 'Dio,' you may have that figure suffer 2 Damage or become Weakened. If 'Dio' is not in play, put 'Dio' into play in your space instead.",
       "effectType": "manual"
     },
     "Stay Down": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "Biv Bodhrik",
+      "timing": "afterSpecial",
+      "effect": "Use after resolving \"Close and Personal.\" If the target was not defeated, perform an additional attack with the same target. Then, you become Stunned.",
       "effectType": "manual"
     },
     "Stealth Tactics": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "Any Small Figure",
+      "timing": "whileDefending",
+      "effect": "Use while defending to add 1 white die to your defense pool.",
       "effectType": "manual"
     },
     "Still Faster Than You": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "Cad Bane",
+      "timing": "atStartOfActivationOfHostileFigureInYourLineOfSight",
+      "effect": "Use at the start of a hostile figure's activation to interrupt to move 2 spaces and perform an attack targeting a different hostile figure.",
       "effectType": "manual"
     },
     "Stimulants": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 0,
+      "playableBy": "SMUGGLER",
+      "timing": "duringActivation",
+      "effect": "You or an adjacent figure suffers 1 Damage, then gains 1 movement point and becomes Focused.",
       "effectType": "manual"
     },
     "Strategic Shift": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "SPY",
+      "timing": "duringActivation",
+      "effect": "A player of your choice shuffles his hand of Command cards into his deck. Then, that player draws 2 cards.",
       "effectType": "manual"
     },
     "Strength in Numbers": {
-      "cost": null,
+      "cost": 1,
       "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "timing": "afterYouResolveGroupsActivation",
+      "effect": "Use after you resolve a group's activation. You may immediately activate another group. The combined deployment cost of these groups cannot exceed 12.",
       "effectType": "manual"
     },
     "Stroke of Brilliance": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 0,
+      "playableBy": "Greedo",
+      "timing": "whenAttackDeclaredOnYou",
+      "effect": "Use when an attack targeting you is declared. Apply +2 Block and +1 Evade to the defense results.",
       "effectType": "manual"
     },
     "Supercharge": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "TECHNICIAN",
+      "timing": "specialAction",
+      "effect": "Perform an attack. As you roll dice, add yellow dice to the attack pool until there are 4 attack dice total. After the attack resolves, you suffer Damage equal to the number of dice added this way.",
       "effectType": "manual"
     },
     "Support Specialist": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "Del Meeko",
+      "timing": "duringActivation",
+      "effect": "Choose a friendly DROID, TECHNICIAN, or TROOPER within 3 spaces. That figure interrupts to perform an action.",
       "effectType": "manual"
     },
     "Survival Instincts": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "CREATURE",
+      "timing": "startOfActivation",
+      "effect": "Use at the start of your activation. Until the end of the round, apply +1 Block and +1 Evade to your defense results.",
       "effectType": "manual"
     },
     "Take it Down": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 3,
+      "playableBy": "Gideon Argus",
+      "timing": "duringActivation",
+      "effect": "Choose an adjacent friendly figure. That figure performs an attack. Apply +2 Damage to the attack results.",
       "effectType": "manual"
     },
     "Take Position": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 0,
+      "playableBy": "Non-Massive GUARDIAN or VEHICLE",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. During this round, apply +1 Block to your defense results and you cannot be pushed, except by MASSIVE figures.",
       "effectType": "manual"
     },
     "Targeting Network": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 0,
+      "playableBy": "DROID or HEAVY WEAPON",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to reroll 1 attack die. While this card is in your discard pile, your DROIDS gain: Re-draw this card.",
       "effectType": "manual"
     },
     "Technician": {
@@ -1899,87 +1899,87 @@
       "effectType": "manual"
     },
     "Telekinetic Throw": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "FORCE USER",
+      "timing": "specialAction",
+      "effect": "Choose a hostile figure in your line of sight within 3 spaces. Roll 2 blue dice. That figure suffers Damage equal to the Damage results.",
       "effectType": "manual"
     },
     "Terminal Network": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "R2-D2",
+      "timing": "specialAction",
+      "effect": "Use while adjacent to a terminal. Until the start of the next round, you gain control of all terminals, regardless of which figures are adjacent to them.",
       "effectType": "manual"
     },
     "Terminal Protocol": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "DROID",
+      "timing": "duringActivation",
+      "effect": "Roll 1 green die. Each other figure and object in or adjacent to your space suffers Damage equal to the Damage results. Then, you are defeated.",
       "effectType": "manual"
     },
     "There is Another": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 0,
+      "playableBy": "Leia Organa",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Until the end of the round, you gain the FORCE USER trait and apply +1 Surge to your attack results.",
       "effectType": "manual"
     },
     "There Is No Try": {
-      "cost": null,
-      "playableBy": "Any Figure",
+      "cost": 2,
+      "playableBy": "Yoda",
       "timing": "other",
-      "effect": "",
+      "effect": "Use when a friendly FORCE USER within 4 spaces rolls any number of dice. Choose one of those dice and turn it to any other side. On that die, convert each Block result to 2 Damage and 1 Surge.",
       "effectType": "manual"
     },
     "To the Limit": {
-      "cost": null,
+      "cost": 0,
       "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "timing": "afterYouMove",
+      "effect": "Use after you resolve a move during your activation to perform 1 additional action. Then you become Stunned.",
       "effectType": "manual"
     },
     "Tools for the Job": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "Hunter or Smuggler",
+      "timing": "whenYouDeclareAttack",
+      "effect": "Use when you declare an attack to add 1 attack die of your choice to the attack pool.",
       "effectType": "manual"
     },
     "Tough Luck": {
-      "cost": null,
+      "cost": 1,
       "playableBy": "Any Figure",
       "timing": "other",
-      "effect": "",
+      "effect": "Use after your opponent rerolls a die. Remove that die's result from the results.",
       "effectType": "manual"
     },
     "Toxic Dart": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 0,
+      "playableBy": "Hunter or Smuggler",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. A hostile figure within 3 spaces and in line of sight suffers 1 Damage and becomes Weakened.",
       "effectType": "manual"
     },
     "Trandoshan Terror": {
-      "cost": null,
-      "playableBy": "Any Figure",
+      "cost": 2,
+      "playableBy": "Bossk",
       "timing": "other",
-      "effect": "",
+      "effect": "Use when you declare 'Indiscriminate Fire.' Add 1 yellow die to the dice pool.",
       "effectType": "manual"
     },
     "Transmit the Plans": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 0,
+      "playableBy": "Bodhi Rook",
+      "timing": "specialAction",
+      "effect": "Distribute 2 Strain among friendly figures. If you are adjacent to a terminal, gain 2 VPs.",
       "effectType": "manual"
     },
     "Triangulate": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "DROID",
+      "timing": "specialAction",
+      "effect": "A figure within 5 spaces and line of sight suffers Damage equal to the number of DROIDS friendly to you with line of sight to it, to a maximum of 3 Damage.",
       "effectType": "manual"
     },
     "Trooper": {
@@ -1990,24 +1990,24 @@
       "effectType": "manual"
     },
     "Unlimited Power": {
-      "cost": null,
-      "playableBy": "Any Figure",
+      "cost": 2,
+      "playableBy": "Emperor Palpatine",
       "timing": "other",
-      "effect": "",
+      "effect": "Use when you use \"Emperor.\" You may choose any other friendly figure on the map instead of another friendly figure within 4 spaces.",
       "effectType": "manual"
     },
     "Utinni!": {
-      "cost": null,
+      "cost": 1,
       "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. During this round, each friendly Jawa Scavenger gains +1 Speed, +1 Accuracy, and [Surge]: If you are attacking a figure, gain 1 VP.",
       "effectType": "manual"
     },
     "Vanish": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "Davith Elso",
+      "timing": "duringActivation",
+      "effect": "You cannot suffer or receive conditions until your next activation. At the start of your next activation, gain 4 movement points.",
       "effectType": "manual"
     },
     "Vehicle": {
@@ -2018,45 +2018,45 @@
       "effectType": "manual"
     },
     "Veteran Instincts": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "Any Unique Figure",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to gain 1 Surge or 1 Evade. Then, gain 1 Block or 1 Dodge.",
       "effectType": "manual"
     },
     "Whistling Birds": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "The Mandalorian",
+      "timing": "specialAction",
+      "effect": "Move up to 2 spaces, then choose up to 3 figures within 2 spaces and roll 1 red die. Each of those figures suffers Damage equal to the Damage results.",
       "effectType": "manual"
     },
     "Wild Attack": {
-      "cost": null,
+      "cost": 0,
       "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "timing": "whenYouDeclareAttack",
+      "effect": "Use when you declare an attack. Add 1 red die to the attack pool and 1 white die to the defense pool.",
       "effectType": "manual"
     },
     "Wild Fire": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 1,
+      "playableBy": "CT-1701",
+      "timing": "duringAttack",
+      "effect": "Use while attacking to remove up to 2 dice of your choice from the defense pool.",
       "effectType": "manual"
     },
     "Wild Fury": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "cost": 2,
+      "playableBy": "Creature or Wookiee",
+      "timing": "duringActivation",
+      "effect": "Use during your activation. You become Focused and may perform multiple attacks during this activation. At the end of your activation, become Stunned and Bleeding.",
       "effectType": "manual"
     },
     "Windfall": {
-      "cost": null,
-      "playableBy": "Any Figure",
+      "cost": 0,
+      "playableBy": "Doctor Aphra",
       "timing": "other",
-      "effect": "",
+      "effect": "Use when a Command card is discarded from your hand or deck. You gain VPs equal to that card's cost. When this card is discarded from your hand or deck, gain 1 VP.",
       "effectType": "manual"
     },
     "Wookiee": {
@@ -2067,24 +2067,24 @@
       "effectType": "manual"
     },
     "Worth Every Credit": {
-      "cost": null,
+      "cost": 2,
       "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": "",
+      "timing": "duringActivation",
+      "effect": "Use during your activation to discard 1 HARMFUL condition and gain 2 movement points. When the next hostile figure is defeated during this activation, gain 2 VPs.",
       "effectType": "manual"
     },
     "Wreak Vengeance": {
-      "cost": null,
-      "playableBy": "Any Figure",
+      "cost": 1,
+      "playableBy": "Maul",
       "timing": "other",
-      "effect": "",
+      "effect": "Use when you use 'Dual-Bladed Fury.' You may choose both effects instead of only 1.",
       "effectType": "manual"
     },
     "You Will Not Deny Me": {
-      "cost": null,
-      "playableBy": "Any Figure",
+      "cost": 2,
+      "playableBy": "Fifth Brother",
       "timing": "other",
-      "effect": "",
+      "effect": "When discarded, place this card on your 'Fifth Brother' Deployment card instead. You cannot be defeated nor recover Damage. You ignore your HARMFUL conditions. When a hostile figure is defeated, or at the end of the next round, return this card to the game box.",
       "effectType": "manual"
     }
   }

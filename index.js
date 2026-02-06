@@ -151,6 +151,61 @@ function getCcEffect(cardName) {
   return ccEffectsData.cards?.[cardName] || null;
 }
 
+/** True if this command card becomes an Attachment (placed on a Deployment card) when played. */
+function isCcAttachment(cardName) {
+  const data = getCcEffect(cardName);
+  const effect = (data?.effect || '').toLowerCase();
+  return /attachment|on your deployment card as an attachment|place this card on your deployment card/i.test(effect);
+}
+
+/** Build embeds and files for the "Attachments" message under a DC: one embed per attached CC (thumbnail = card image). */
+async function buildAttachmentEmbedsAndFiles(ccNames) {
+  const embeds = [];
+  const files = [];
+  for (let i = 0; i < (ccNames || []).length; i++) {
+    const card = ccNames[i];
+    const path = getCommandCardImagePath(card);
+    const ext = path ? (path.toLowerCase().endsWith('.png') ? 'png' : 'jpg') : 'jpg';
+    const fileName = `cc-attach-${i}-${(card || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
+    const embed = new EmbedBuilder()
+      .setTitle(`📎 ${card || `Attachment ${i + 1}`}`)
+      .setColor(0x5865f2);
+    if (path && existsSync(path)) {
+      files.push(new AttachmentBuilder(path, { name: fileName }));
+      embed.setThumbnail(`attachment://${fileName}`);
+    }
+    embeds.push(embed);
+  }
+  return { embeds, files };
+}
+
+/** Update the Play Area "Attachments" message for a DC (the embed under that DC). */
+async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, client) {
+  const attachKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+  const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+  const attachMsgIds = playerNum === 1 ? (game.p1DcAttachmentMessageIds || []) : (game.p2DcAttachmentMessageIds || []);
+  const idx = msgIds.indexOf(dcMsgId);
+  if (idx < 0 || idx >= attachMsgIds.length) return;
+  const attachMsgId = attachMsgIds[idx];
+  const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+  const list = (game[attachKey] || {})[dcMsgId] || [];
+  try {
+    const channel = await client.channels.fetch(channelId);
+    const msg = await channel.messages.fetch(attachMsgId);
+    if (list.length === 0) {
+      await msg.edit({
+        embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
+        files: [],
+      });
+    } else {
+      const { embeds, files } = await buildAttachmentEmbedsAndFiles(list);
+      await msg.edit({ embeds, files });
+    }
+  } catch (err) {
+    console.error('Failed to update attachment message for DC:', err);
+  }
+}
+
 /** True if this DC can legally play this CC (for Special Action timing). playableBy: "Any Figure", specific name, or trait. */
 function isCcPlayableByDc(ccName, dcName, displayName) {
   const effect = getCcEffect(ccName);
@@ -1859,7 +1914,7 @@ function extractGameIdFromInteraction(interaction) {
   const id = interaction.customId || interaction.values?.[0] || '';
   const prefixes = [
     'status_phase_', 'end_end_of_round_', 'end_start_of_round_', 'map_selection_', 'draft_random_',
-    'pass_activation_turn_', 'combat_ready_', 'combat_roll_', 'cc_play_select_', 'cc_discard_select_',
+    'pass_activation_turn_', 'combat_ready_', 'combat_roll_', 'cc_play_select_', 'cc_discard_select_', 'cc_attach_to_',
     'kill_game_', 'refresh_map_', 'refresh_all_', 'undo_', 'deployment_zone_red_', 'deployment_zone_blue_',
   ];
   for (const p of prefixes) {
@@ -3819,6 +3874,10 @@ async function populatePlayAreas(game, client) {
   game.p2ActivatedDcIndices = game.p2ActivatedDcIndices || [];
   game.p1DcMessageIds = [];
   game.p2DcMessageIds = [];
+  game.p1DcAttachmentMessageIds = [];
+  game.p2DcAttachmentMessageIds = [];
+  game.p1CcAttachments = game.p1CcAttachments || {};
+  game.p2CcAttachments = game.p2CcAttachments || {};
 
   // Tooltip embeds at top of each Play Area
   await p1PlayArea.send({ embeds: [getPlayAreaTooltipEmbed(game, 1)] });
@@ -3858,6 +3917,10 @@ async function populatePlayAreas(game, client) {
     const p1Toggle = getDcToggleButton(msg.id, false, game);
     await msg.edit({ components: p1Toggle ? [p1Toggle] : [] });
     game.p1DcMessageIds.push(msg.id);
+    const attachMsg = await p1PlayArea.send({
+      embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
+    });
+    game.p1DcAttachmentMessageIds.push(attachMsg.id);
   }
   for (const { dcName, displayName, healthState } of p2Dcs) {
     const { embed, files } = await buildDcEmbedAndFiles(dcName, false, displayName, healthState);
@@ -3868,6 +3931,10 @@ async function populatePlayAreas(game, client) {
     const p2Toggle = getDcToggleButton(msg.id, false, game);
     await msg.edit({ components: p2Toggle ? [p2Toggle] : [] });
     game.p2DcMessageIds.push(msg.id);
+    const attachMsg = await p2PlayArea.send({
+      embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
+    });
+    game.p2DcAttachmentMessageIds.push(attachMsg.id);
   }
 
 }
@@ -4442,6 +4509,67 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (interaction.isStringSelectMenu()) {
+    if (interaction.customId.startsWith('cc_attach_to_')) {
+      const gameId = interaction.customId.replace('cc_attach_to_', '');
+      const game = games.get(gameId);
+      const pending = game?.pendingCcAttachment;
+      if (!game || !pending) {
+        await interaction.reply({ content: 'No attachment pending or game not found.', ephemeral: true }).catch(() => {});
+        return;
+      }
+      const { playerNum, card } = pending;
+      const channelId = interaction.channel?.id;
+      const isP1Hand = channelId === game.p1HandId;
+      const isP2Hand = channelId === game.p2HandId;
+      if ((isP1Hand && playerNum !== 1) || (isP2Hand && playerNum !== 2)) {
+        await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+        return;
+      }
+      const dcMsgId = interaction.values[0];
+      const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+      const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+      const hand = game[handKey] || [];
+      const idx = hand.indexOf(card);
+      if (idx < 0) {
+        delete game.pendingCcAttachment;
+        await interaction.reply({ content: "That card is no longer in your hand.", ephemeral: true }).catch(() => {});
+        saveGames();
+        return;
+      }
+      await interaction.deferUpdate();
+      hand.splice(idx, 1);
+      game[handKey] = hand;
+      game[discardKey] = game[discardKey] || [];
+      game[discardKey].push(card);
+      const attachKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+      game[attachKey] = game[attachKey] || {};
+      if (!Array.isArray(game[attachKey][dcMsgId])) game[attachKey][dcMsgId] = [];
+      game[attachKey][dcMsgId].push(card);
+      delete game.pendingCcAttachment;
+      await updateAttachmentMessageForDc(game, playerNum, dcMsgId, interaction.client);
+      const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+      const handMessages = await handChannel.messages.fetch({ limit: 20 });
+      const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
+      const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+      if (handMsg) {
+        const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
+        const effectData = getCcEffect(card);
+        const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
+        handPayload.content = `**Command Cards** — Played **${card}** (Attachment).${effectReminder}\n\n` + handPayload.content;
+        await handMsg.edit({
+          content: handPayload.content,
+          embeds: handPayload.embeds,
+          files: handPayload.files || [],
+          components: handPayload.components,
+        }).catch(() => {});
+      }
+      await interaction.message.delete().catch(() => {});
+      await updateHandVisualMessage(game, playerNum, interaction.client);
+      await updateDiscardPileMessage(game, playerNum, interaction.client);
+      await logGameAction(game, interaction.client, `<@${interaction.user.id}> played **${card}** as an attachment.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+      saveGames();
+      return;
+    }
     if (interaction.customId.startsWith('cc_play_select_')) {
       const gameId = interaction.customId.replace('cc_play_select_', '');
       const game = games.get(gameId);
@@ -4464,6 +4592,29 @@ client.on('interactionCreate', async (interaction) => {
       const idx = hand.indexOf(card);
       if (idx < 0) {
         await interaction.reply({ content: "That card isn't in your hand.", ephemeral: true }).catch(() => {});
+        return;
+      }
+      if (isCcAttachment(card)) {
+        const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+        const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+        if (dcMsgIds.length === 0 || dcList.length === 0) {
+          await interaction.reply({ content: 'No Deployment cards to attach to.', ephemeral: true }).catch(() => {});
+          return;
+        }
+        game.pendingCcAttachment = { playerNum, card };
+        const options = dcList.slice(0, 25).map((d, i) => ({
+          label: (d.displayName || d.dcName || `DC ${i + 1}`).slice(0, 100),
+          value: dcMsgIds[i] || String(i),
+        })).filter((o) => o.value);
+        const select = new StringSelectMenuBuilder()
+          .setCustomId(`cc_attach_to_${gameId}`)
+          .setPlaceholder('Attach to which Deployment Card?')
+          .addOptions(options);
+        await interaction.reply({
+          content: `**${card}** is an Attachment. Choose which Deployment Card to attach it to:`,
+          components: [new ActionRowBuilder().addComponents(select)],
+          ephemeral: false,
+        });
         return;
       }
       await interaction.deferUpdate();
@@ -4958,6 +5109,13 @@ client.on('interactionCreate', async (interaction) => {
     game[handKey] = hand;
     game[discardKey] = game[discardKey] || [];
     game[discardKey].push(card);
+    if (isCcAttachment(card)) {
+      const attachKey = meta.playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+      game[attachKey] = game[attachKey] || {};
+      if (!Array.isArray(game[attachKey][msgId])) game[attachKey][msgId] = [];
+      game[attachKey][msgId].push(card);
+      await updateAttachmentMessageForDc(game, meta.playerNum, msgId, interaction.client);
+    }
     const handChannelId = meta.playerNum === 1 ? game.p1HandId : game.p2HandId;
     const handChannel = await interaction.client.channels.fetch(handChannelId);
     const handMessages = await handChannel.messages.fetch({ limit: 20 });
