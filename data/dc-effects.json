@@ -71,44 +71,67 @@
       "affiliation": "Rebel"
     },
     "[Cross Training]": {
-      "abilityText": "Upgrade. (see card).",
-      "keywords": [],
+      "abilityText": "This group gains the SPY trait. When an attack targeting you is declared, you may replace 1 die in your defense pool with a white die.",
+      "keywords": [
+        "TROOPER"
+      ],
       "cost": 1,
-      "attachment": false,
+      "attachment": true,
       "affiliation": "Imperial"
     },
     "[Devious Scheme]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "After setup, choose your Deployment zone. Your opponent starts the game with initiative and must deploy their figures first.\n\nIf your opponent also has \"Devious Scheme\", this card has no effect.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "[Doubt]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "At the end of the round, you may choose a hostile figure and discard 1 condition or Power Token from that figure. \n\nDeplete this card while a hostile figure is attacking to choose 1 attack die. Your opponent must reroll that die.",
       "keywords": [],
-      "cost": 0
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Any"
     },
     "[Driven by Hatred]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "DARTH VADER (LORD OF THE SITH) ONLY\n\nPassive bonus: +1 Hit\n\nYou lose \"Brutality.\" While attacking, you may reroll 1 attack die.\n\nAt the end of each round, move up to 2 spaces. Then you may use \"Force Choke\" or perform an attack. When you declare this attack, remove 1 die from your attack pool.",
       "keywords": [],
-      "cost": -5
+      "cost": -5,
+      "attachment": true,
+      "affiliation": "Imperial"
     },
     "[Explosive Armaments]": {
-      "abilityText": "Upgrade. Restrictions: hunter, droid.",
-      "keywords": []
+      "abilityText": "Each figure in this group gains:\n\nDouble surge: +1 Hit, Blast 2",
+      "keywords": [
+        "HUNTER",
+        "DROID"
+      ],
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Scum"
     },
     "[Extra Armor]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "After deployment, distribute 4 Block Tokens among friendly figures.",
       "keywords": [],
-      "cost": 0
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Any"
     },
     "[Feeding Frenzy]": {
-      "abilityText": "Upgrade. (see card).",
-      "keywords": [],
-      "cost": 1
+      "abilityText": "CREATURE ONLY\n\nExhaust this card while attacking a figure that has suffered damage to apply +1 Hit to the attack results.\n\nWhile attacking an adjacent figure, you gain: \n- Surge: Recover 2 Damage",
+      "keywords": [
+        "CREATURE"
+      ],
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Any"
     },
     "[First Strike]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "After setup, you and your opponent both receive 4 VPs",
+      "keywords": [],
+      "cost": 2,
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "[Flame Trooper]": {
       "abilityText": "TBD (IACP – verify from card).",

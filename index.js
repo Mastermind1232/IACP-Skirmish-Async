@@ -30,6 +30,7 @@ const rootDir = join(__dirname);
 // DC message metadata (messageId -> { gameId, playerNum, dcName, displayName })
 const dcMessageMeta = new Map();
 const dcExhaustedState = new Map(); // messageId -> boolean
+const dcDepletedState = new Map(); // messageId -> boolean (Skirmish Upgrades with Deplete effect)
 // Pending illegal deck: key = `${gameId}_${playerNum}`, value = { squad, timestamp }
 const pendingIllegalSquad = new Map();
 
@@ -67,6 +68,11 @@ let mapSpacesData = {};
 try {
   const msData = JSON.parse(readFileSync(join(rootDir, 'data', 'map-spaces.json'), 'utf8'));
   mapSpacesData = msData.maps || {};
+} catch {}
+let dcEffects = {};
+try {
+  const effData = JSON.parse(readFileSync(join(rootDir, 'data', 'dc-effects.json'), 'utf8'));
+  dcEffects = effData.cards || {};
 } catch {}
 let dcKeywords = {};
 try {
@@ -1861,6 +1867,7 @@ const ACTION_ICONS = {
   special: '✴️',
   deployed: '✅',
   card: '🎴',
+  deplete: '🔄',
 };
 
 /** Post a phase header to the game log (only when phase changes) */
@@ -2670,6 +2677,7 @@ async function refreshAllGameComponents(game, client) {
   for (const msgId of allDcMsgIds) {
     const meta = dcMessageMeta.get(msgId);
     if (!meta || meta.gameId !== gameId) continue;
+    if (isDepletedRemovedFromGame(game, msgId)) continue;
     const exhausted = dcExhaustedState.get(msgId) ?? false;
     const displayName = meta.displayName || meta.dcName;
     let healthState = dcHealthState.get(msgId) ?? [];
@@ -2690,8 +2698,7 @@ async function refreshAllGameComponents(game, client) {
       const channel = await client.channels.fetch(channelId);
       const msg = await channel.messages.fetch(msgId);
       const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState);
-      const toggleRow = getDcToggleButton(msgId, exhausted, game);
-      const components = toggleRow ? [toggleRow] : [];
+      const components = getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
       await msg.edit({ embeds: [embed], files: files?.length ? files : [], components });
     } catch (err) {
       console.error('Refresh All: DC message failed', msgId, err);
@@ -3150,14 +3157,25 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
   return null;
 }
 
-/** DCs in brackets (e.g. [Zillo Technique], [Extra Armor]) are upgrades with no figure; no health, no deployment. */
+/** DCs whose image is in DC Skirmish Upgrades are figureless; if image is in dc-figures, it's a figure (e.g. [Flame Trooper]). */
 function isFigurelessDc(dcName) {
   if (!dcName || typeof dcName !== 'string') return false;
   const n = dcName.trim();
   if (!n) return false;
+  const path = dcImages[n] || dcImages[`[${n}]`] || (() => { const k = Object.keys(dcImages).find((key) => key === n || (key.startsWith('[') && key.slice(1, -1) === n)); return k ? dcImages[k] : ''; })();
+  if (path && path.includes('dc-figures')) return false;
+  if (path && path.includes('DC Skirmish Upgrades')) return true;
   if (/^\[.+\]$/.test(n)) return true;
   if (dcImages[`[${n}]`]) return true;
   return Object.keys(dcImages).some((k) => /^\[.+\]$/.test(k) && (k.slice(1, -1) === n || k === n));
+}
+
+/** True if this Skirmish Upgrade has a Deplete effect (ability text contains "Deplete"). */
+function hasDepleteEffect(dcName) {
+  if (!dcName || !isFigurelessDc(dcName)) return false;
+  const card = dcEffects[dcName] || (typeof dcName === 'string' && !dcName.startsWith('[') ? dcEffects[`[${dcName}]`] : null);
+  const text = card?.abilityText || '';
+  return /deplete/i.test(text);
 }
 
 function getDcStats(dcName) {
@@ -3517,6 +3535,32 @@ function getDcToggleButton(msgId, exhausted, game = null) {
   );
 }
 
+/** True if this DC message was depleted and removed from the game (one-time use). */
+function isDepletedRemovedFromGame(game, msgId) {
+  if (!game || !msgId) return false;
+  const p1 = game.p1DepletedDcMessageIds || [];
+  const p2 = game.p2DepletedDcMessageIds || [];
+  return p1.includes(msgId) || p2.includes(msgId);
+}
+
+/** Returns component rows for a DC message in Play Area: Exhaust/Activate row, then optional Deplete row for Skirmish Upgrades with Deplete effect. Depleted cards are removed from game and have no components. */
+function getDcPlayAreaComponents(msgId, exhausted, game, dcName) {
+  if (game && isDepletedRemovedFromGame(game, msgId)) return [];
+  const toggleRow = getDcToggleButton(msgId, exhausted, game);
+  const rows = toggleRow ? [toggleRow] : [];
+  if (hasDepleteEffect(dcName)) {
+    rows.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`dc_deplete_${msgId}`)
+          .setLabel('Deplete')
+          .setStyle(ButtonStyle.Primary)
+      )
+    );
+  }
+  return rows;
+}
+
 /** True if all figures in this deployment group are defeated (or never deployed). */
 function isGroupDefeated(game, playerNum, dcIndex) {
   const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
@@ -3808,10 +3852,11 @@ async function updatePlayAreaDcButtons(game, client) {
       for (const msgId of msgIds) {
         const meta = dcMessageMeta.get(msgId);
         if (!meta || meta.gameId !== game.gameId) continue;
+        if (isDepletedRemovedFromGame(game, msgId)) continue;
         const exhausted = dcExhaustedState.get(msgId) ?? false;
-        const toggleRow = getDcToggleButton(msgId, exhausted, game);
+        const components = getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
         const msg = await channel.messages.fetch(msgId);
-        await msg.edit({ components: toggleRow ? [toggleRow] : [] }).catch(() => {});
+        await msg.edit({ components }).catch(() => {});
       }
     } catch (err) {
       console.error('Failed to update Play Area DC buttons:', err);
@@ -3917,9 +3962,10 @@ async function populatePlayAreas(game, client) {
     const msg = await p1PlayArea.send({ embeds: [embed], files });
     dcMessageMeta.set(msg.id, { gameId, playerNum: 1, dcName, displayName });
     dcExhaustedState.set(msg.id, false);
+    dcDepletedState.set(msg.id, false);
     dcHealthState.set(msg.id, healthState);
-    const p1Toggle = getDcToggleButton(msg.id, false, game);
-    await msg.edit({ components: p1Toggle ? [p1Toggle] : [] });
+    const p1Components = getDcPlayAreaComponents(msg.id, false, game, dcName);
+    await msg.edit({ components: p1Components });
     game.p1DcMessageIds.push(msg.id);
     const attachMsg = await p1PlayArea.send({
       embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
@@ -3931,9 +3977,10 @@ async function populatePlayAreas(game, client) {
     const msg = await p2PlayArea.send({ embeds: [embed], files });
     dcMessageMeta.set(msg.id, { gameId, playerNum: 2, dcName, displayName });
     dcExhaustedState.set(msg.id, false);
+    dcDepletedState.set(msg.id, false);
     dcHealthState.set(msg.id, healthState);
-    const p2Toggle = getDcToggleButton(msg.id, false, game);
-    await msg.edit({ components: p2Toggle ? [p2Toggle] : [] });
+    const p2Components = getDcPlayAreaComponents(msg.id, false, game, dcName);
+    await msg.edit({ components: p2Components });
     game.p2DcMessageIds.push(msg.id);
     const attachMsg = await p2PlayArea.send({
       embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
@@ -4246,6 +4293,7 @@ client.on('messageCreate', async (message) => {
       games.clear();
       dcMessageMeta.clear();
       dcExhaustedState.clear();
+      dcDepletedState.clear();
       dcHealthState.clear();
       await message.channel.send(`Done. Deleted ${deleted} channel(s).`);
     } catch (err) {
@@ -4825,7 +4873,7 @@ client.on('interactionCreate', async (interaction) => {
     const msg = await channel.messages.fetch(msgId);
     dcExhaustedState.set(msgId, true);
     const { embed, files } = await buildDcEmbedAndFiles(dcName, true, displayName, healthState);
-    await msg.edit({ embeds: [embed], files, components: [getDcToggleButton(msgId, true, game)] });
+    await msg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, dcName) });
     const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
     const thread = await msg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
     const speed = getDcStats(dcName).speed ?? 4;
@@ -4930,7 +4978,7 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.message.edit({
       embeds: [embed],
       files,
-      components: (() => { const r = getDcToggleButton(msgId, false, game); return r ? [r] : []; })(),
+      components: getDcPlayAreaComponents(msgId, false, game, meta.dcName),
     });
     saveGames();
     return;
@@ -5069,12 +5117,52 @@ client.on('interactionCreate', async (interaction) => {
     const actionText = nowExhausted ? `**${pLabel}:** <@${playerId}> activated **${displayName}**!` : `**${pLabel}:** <@${playerId}> readied **${displayName}**`;
     await logGameAction(game, client, actionText, { allowedMentions: { users: [playerId] }, icon: actionIcon });
     const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, nowExhausted, displayName, healthState);
-    const toggleRow = getDcToggleButton(msgId, nowExhausted, game);
+    const components = getDcPlayAreaComponents(msgId, nowExhausted, game, meta.dcName);
     await interaction.update({
       embeds: [embed],
       files,
-      components: toggleRow ? [toggleRow] : [],
+      components,
     });
+    return;
+  }
+
+  if (interaction.customId.startsWith('dc_deplete_')) {
+    const msgId = interaction.customId.replace('dc_deplete_', '');
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) {
+      await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const game = games.get(meta.gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+    if (interaction.user.id !== ownerId) {
+      await interaction.reply({ content: 'Only the owner of this Play Area can Deplete their upgrade.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (isDepletedRemovedFromGame(game, msgId)) {
+      await interaction.reply({ content: 'This upgrade was already depleted and removed from the game.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (meta.playerNum === 1) {
+      game.p1DepletedDcMessageIds = game.p1DepletedDcMessageIds || [];
+      if (!game.p1DepletedDcMessageIds.includes(msgId)) game.p1DepletedDcMessageIds.push(msgId);
+    } else {
+      game.p2DepletedDcMessageIds = game.p2DepletedDcMessageIds || [];
+      if (!game.p2DepletedDcMessageIds.includes(msgId)) game.p2DepletedDcMessageIds.push(msgId);
+    }
+    const displayName = meta.displayName || meta.dcName;
+    await interaction.deferUpdate();
+    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, displayName, []);
+    embed.setTitle(`REMOVED FROM GAME (Depleted) — ${displayName}`);
+    embed.setDescription((embed.data.description || '') + '\n\n*This upgrade was depleted and is no longer in play (one-time use).*');
+    embed.setColor(0x95a5a6);
+    await interaction.message.edit({ embeds: [embed], files, components: [] });
+    await logGameAction(game, client, `**P${meta.playerNum}:** <@${ownerId}> depleted **${displayName}** — removed from game`, { allowedMentions: { users: [ownerId] }, icon: 'deplete' });
+    saveGames();
     return;
   }
 
@@ -6120,21 +6208,21 @@ client.on('interactionCreate', async (interaction) => {
     game.dcFinishedPinged = {};
     game.pendingEndTurn = {};
     for (const [msgId, meta] of dcMessageMeta) {
-      if (meta.gameId === gameId) {
-        dcExhaustedState.set(msgId, false);
-        if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
-        if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
-        try {
-          const chId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
-          const ch = await client.channels.fetch(chId);
-          const msg = await ch.messages.fetch(msgId);
-          const healthState = dcHealthState.get(msgId) || [];
-          const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState);
-          const toggleRow = getDcToggleButton(msgId, false, game);
-          await msg.edit({ embeds: [embed], files, components: toggleRow ? [toggleRow] : [] }).catch(() => {});
-        } catch (err) {
-          console.error('Failed to ready DC embed:', err);
-        }
+      if (meta.gameId !== gameId) continue;
+      if (isDepletedRemovedFromGame(game, msgId)) continue;
+      dcExhaustedState.set(msgId, false);
+      if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
+      if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
+      try {
+        const chId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+        const ch = await client.channels.fetch(chId);
+        const msg = await ch.messages.fetch(msgId);
+        const healthState = dcHealthState.get(msgId) || [];
+        const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState);
+        const components = getDcPlayAreaComponents(msgId, false, game, meta.dcName);
+        await msg.edit({ embeds: [embed], files, components }).catch(() => {});
+      } catch (err) {
+        console.error('Failed to ready DC embed:', err);
       }
     }
     game.p1ActivationsRemaining = game.p1ActivationsTotal ?? 0;
@@ -6575,11 +6663,11 @@ client.on('interactionCreate', async (interaction) => {
       const dcMsg = await playChannel.messages.fetch(dcMsgId);
       const healthState = dcHealthState.get(dcMsgId) ?? [[null, null]];
       const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, meta.displayName, healthState);
-      const toggleRow = getDcToggleButton(dcMsgId, true, game);
+      const components = getDcPlayAreaComponents(dcMsgId, true, game, meta.dcName);
       await dcMsg.edit({
         embeds: [embed],
         files,
-        components: toggleRow ? [toggleRow] : [],
+        components,
       }).catch(() => {});
     } catch (err) {
       console.error('Failed to update DC card after End Turn:', err);
@@ -6654,7 +6742,7 @@ client.on('interactionCreate', async (interaction) => {
     const playChannel = await client.channels.fetch(playAreaId);
     const dcMsg = await playChannel.messages.fetch(msgId);
     const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, dcHealthState.get(msgId) ?? [[null, null]]);
-    await dcMsg.edit({ embeds: [embed], files, components: [getDcToggleButton(msgId, true, game)] });
+    await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, meta.dcName) });
     const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
     const thread = await dcMsg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
     game.movementBank = game.movementBank || {};
@@ -7813,6 +7901,7 @@ client.on('interactionCreate', async (interaction) => {
         if (meta.gameId === gameId) {
           dcMessageMeta.delete(msgId);
           dcExhaustedState.delete(msgId);
+          dcDepletedState.delete(msgId);
           dcHealthState.delete(msgId);
         }
       }

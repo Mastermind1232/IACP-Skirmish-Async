@@ -35,6 +35,13 @@
 - Player controls terminal if only they have a figure on or adjacent
 - +1 command card draw per controlled terminal (Status Phase step 2)
 
+## Deplete (Skirmish Upgrades)
+- **Deplete** = use the card’s one-time effect; the card is **removed from the game** (no longer in play). It is not readied at end of round.
+
+## Surge / Double surge
+- **Surge:** An ability that triggers when the attacker spends 1 surge (from the attack roll) on it.
+- **Double surge:** A surge ability that requires **2 surge** to be spent on it to trigger (e.g. “Double surge: +1 Hit, Blast 2”).
+
 ## Figure Size Traits (for effects)
 - **Default:** If a DC does not explicitly have LARGE or MASSIVE, it is considered **SMALL** for all effects (command cards, abilities, etc.).
 - **LARGE:** 1x2 or 2x2 footprint (or explicit Large keyword in dc-keywords.json)
