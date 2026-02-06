@@ -153,6 +153,57 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'GET' && pathname.startsWith('/api/dc-image/')) {
+    const dcName = decodeURIComponent(pathname.replace('/api/dc-image/', '')).trim();
+    let dcImages = {};
+    try {
+      const dcData = JSON.parse(readFileSync(join(root, 'data', 'dc-images.json'), 'utf8'));
+      dcImages = dcData.dcImages || {};
+    } catch (_) {}
+    const relPath = dcImages[dcName] || dcImages[dcName.replace(/\s*\([^)]*\)\s*$/, '').trim()];
+    if (!relPath) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+    const filePath = join(root, relPath);
+    if (!existsSync(filePath)) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+    try {
+      const buf = readFileSync(filePath);
+      const ext = extname(filePath).toLowerCase();
+      const mime = MIME[ext] || (ext === '.png' ? 'image/png' : 'image/jpeg');
+      res.writeHead(200, { 'Content-Type': mime });
+      res.end(buf);
+    } catch {
+      res.writeHead(500);
+      res.end('Error reading image');
+    }
+    return;
+  }
+  if (req.method === 'POST' && pathname === '/api/save-dc-effects') {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    try {
+      const data = JSON.parse(body);
+      const outPath = join(root, 'data', 'dc-effects.json');
+      const toWrite = {
+        source: data.source || 'DC Effect Editor',
+        cards: data.cards || {},
+      };
+      writeFileSync(outPath, JSON.stringify(toWrite, null, 2), 'utf8');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+    return;
+  }
+
   let decodedPath;
   try {
     decodedPath = decodeURIComponent(pathname.replace(/^\//, ''));
@@ -182,5 +233,6 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`CC Effect Editor: http://localhost:${PORT}/scripts/cc-effect-editor.html`);
-  console.log('Save writes to data/cc-effects.json');
+  console.log(`DC Effect Editor: http://localhost:${PORT}/scripts/dc-effect-editor.html`);
+  console.log('CC save → data/cc-effects.json | DC save → data/dc-effects.json');
 });

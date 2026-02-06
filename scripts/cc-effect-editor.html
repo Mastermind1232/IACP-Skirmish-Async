@@ -66,6 +66,7 @@
     <option value="afterAttackTargetingYouResolved">After an attack targeting you is resolved</option>
     <option value="afterYouResolveAttackTargetingFigure">After you resolve an attack targeting a figure</option>
     <option value="afterDamage">After damage is applied</option>
+    <option value="afterHostileFigureSuffersDamage">After a hostile figure suffers Damage</option>
     <option value="afterInteract">After Interact (during activation)</option>
     <option value="afterSpecial">After resolving a Special (during activation)</option>
     <option value="afterSpecialOrInteract">After Special or Interact (during activation)</option>
@@ -75,6 +76,7 @@
     <option value="beforeAttack">Before attack</option>
     <option value="beforeAttackDice">Before attack dice are rolled</option>
     <option value="beforeYouDeclareAttack">Before you declare an attack</option>
+    <option value="beforeDeclaringRangedAttack">Before declaring a Ranged attack</option>
     <option value="beforeYouPerformInteract">Before you perform an Interact</option>
     <option value="duringActivation">During activation</option>
     <option value="duringAttack">During attack</option>
@@ -91,6 +93,7 @@
     <option value="whenFigureWouldSufferDamage">When a figure would suffer damage</option>
     <option value="whenAnotherFriendlyTrooperDeclaresAttackTargetingInYourLineOfSight">When another friendly TROOPER declares an attack targeting a target in your line of sight</option>
     <option value="whenAttackDeclaredOnAdjacentFriendly">When an attack targeting an adjacent friendly figure is declared</option>
+    <option value="whenAttackDeclaredTargetingFriendlySmallFigureCost10OrLessWithin3Spaces">When an attack is declared targeting another friendly SMALL figure with a figure cost of 10 or less within 3 spaces</option>
     <option value="whenAttackDeclaredOnYou">When an attack targeting you is declared</option>
     <option value="whenCommandCardPlayed">When a command card is played</option>
     <option value="whenEnemyFigureActivates">When an enemy figure activates</option>
@@ -107,12 +110,16 @@
     <option value="whenDefeated">When defeated</option>
     <option value="whenOneOfYourFiguresDefeated">When one of your figures is defeated</option>
     <option value="whenYouDeclareAttack">When you declare an attack</option>
+    <option value="whenYouDeclareLightsaberThrow">When you declare "Lightsaber Throw"</option>
+    <option value="whenYouDeclareCloseQuarters">When you declare "Close Quarters"</option>
     <option value="whenYouDefeatFigure">When you defeat a figure</option>
+    <option value="whenHostileFigureDefeatedNotYourActivation">When a hostile figure is defeated and it is not your activation</option>
     <option value="whenYouEndMovementInSpacesWithOtherFigures">When you end your movement in spaces that contain one or more other figures</option>
     <option value="whenYouMove">When you move</option>
     <option value="whenYouPerformAttack">When you perform an attack</option>
     <option value="whenYouPerformInteract">When you perform an Interact</option>
     <option value="whenYouPerformSpecial">When you perform a Special</option>
+    <option value="whenYouPerformRapidFire">When you perform "Rapid Fire"</option>
     <option value="whenYouPlayCommandCard">When you play a command card</option>
     <option value="whenYouRestoreFigure">When you restore a figure</option>
     <option value="whenYouRevealCommandCard">When you reveal a command card</option>
@@ -135,7 +142,7 @@
   </div>
 
   <div class="entries">
-    <h2>Unverified: <span id="count">0</span> — Verified: <span id="verifiedCount">0</span> — Shrink list to 0 by clicking VERIFIED</h2>
+    <h2>Unverified: <span id="count">0</span> — Verified: <span id="verifiedCount">0</span> — Total: <span id="totalCount">0</span> — Shrink unverified to 0 by clicking VERIFIED</h2>
     <div id="list"></div>
   </div>
 
@@ -151,6 +158,7 @@
     const listEl = document.getElementById('list');
     const countEl = document.getElementById('count');
     const verifiedCountEl = document.getElementById('verifiedCount');
+    const totalCountEl = document.getElementById('totalCount');
 
     const names = typeof CC_NAMES !== 'undefined' ? CC_NAMES : [];
     const VERIFIED_KEY = 'cc-verified';
@@ -178,9 +186,15 @@
       }
     }
 
+    const TRAIT_PLACEHOLDER_NAMES = new Set(['All CCs', 'Command Cards', 'Brawler', 'Creature', 'Droid', 'Force User', 'Guardian', 'Heavy Weapon', 'Hunter', 'Leader', 'Smuggler', 'Spy', 'Technician', 'Trooper', 'Vehicle', 'Wookiee']);
+    function isPlaceholderCard(name, data) {
+      if (TRAIT_PLACEHOLDER_NAMES.has(name)) return true;
+      const d = data || cards[name] || {};
+      return (d.effect === '' || d.effect == null) && (d.cost == null);
+    }
     function getUnverifiedCards() {
       return Object.keys(cards)
-        .filter((n) => !verified.has(n))
+        .filter((n) => !verified.has(n) && !isPlaceholderCard(n, cards[n]))
         .sort((a, b) => a.localeCompare(b));
     }
 
@@ -307,12 +321,20 @@
       }
     });
 
+    const TOTAL_CANONICAL_CC = names.length;
+    function getVerifiedCount() {
+      return names.filter((n) => verified.has(n)).length;
+    }
+    function getUnverifiedCount() {
+      return TOTAL_CANONICAL_CC - getVerifiedCount();
+    }
     function render() {
       updateCardSelect();
       listEl.innerHTML = '';
       const unverified = getUnverifiedCards();
-      countEl.textContent = unverified.length;
-      verifiedCountEl.textContent = verified.size;
+      countEl.textContent = getUnverifiedCount();
+      verifiedCountEl.textContent = getVerifiedCount();
+      totalCountEl.textContent = TOTAL_CANONICAL_CC;
       unverified.forEach((name) => {
         const data = cards[name] || {};
         const div = document.createElement('div');

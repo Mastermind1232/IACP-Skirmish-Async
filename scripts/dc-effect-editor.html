@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IA Skirmish — DC Effect Editor</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; padding: 20px; background: #1e1e1e; color: #eee; max-width: 960px; }
+    h1 { font-size: 1.3rem; margin-bottom: 8px; }
+    .hint { font-size: 12px; color: #999; margin-bottom: 16px; }
+    .main { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+    .card-img-wrap { flex-shrink: 0; width: 180px; min-height: 250px; background: #2d2d2d; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .card-img-wrap img { max-width: 100%; max-height: 280px; object-fit: contain; }
+    .card-img-wrap .placeholder { color: #666; font-size: 13px; text-align: center; padding: 16px; }
+    .form-wrap { flex: 1; min-width: 280px; }
+    label { display: block; margin-top: 12px; margin-bottom: 4px; font-weight: 500; }
+    select, input, textarea { width: 100%; padding: 8px 12px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 14px; }
+    textarea { min-height: 80px; font-family: inherit; resize: vertical; }
+    .row { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    button.primary { background: #0d6efd; color: #fff; }
+    button.primary:hover { background: #0b5ed7; }
+    button.export { background: #198754; color: #fff; }
+    button.export:hover { background: #157347; }
+    button.verified { background: #dc3545; color: #fff; }
+    button.verified:hover { background: #bb2d3b; }
+    .entries { margin-top: 24px; }
+    .entries h2 { font-size: 1rem; margin-bottom: 8px; }
+    .entry { padding: 8px 12px; margin-bottom: 6px; background: #2d2d2d; border-radius: 4px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+    .entry span { color: #aaa; }
+    .entry button { padding: 4px 10px; font-size: 12px; background: #dc3545; }
+    .entry button:hover { background: #bb2d3b; }
+  </style>
+</head>
+<body>
+  <h1>IA Skirmish — Deployment Card Effect Editor</h1>
+  <p class="hint">Run <code>npm run cc-review</code> and open <code>http://localhost:3456/scripts/dc-effect-editor.html</code>. Cards load from dc-effects.json. Enter ability text and keywords, then click <strong>VERIFIED</strong> to mark done. Unverified + Verified = Total DCs.</p>
+
+  <div class="main">
+    <div class="card-img-wrap" id="cardImgWrap">
+      <div class="placeholder" id="cardImgPlaceholder">Select a card</div>
+      <img id="cardImg" alt="" style="display:none">
+    </div>
+    <div class="form-wrap">
+  <label>Card name</label>
+  <select id="cardSelect">
+    <option value="">— Select or type below —</option>
+  </select>
+  <input type="text" id="cardName" placeholder="Or type DC name manually">
+
+  <label>Ability text (passives, card text)</label>
+  <p class="hint" style="margin: 2px 0 4px 0;">Full text of abilities, passives, and traits as printed. Use ALL CAPS for keywords (e.g. MASSIVE, MOBILE).</p>
+  <textarea id="abilityText" placeholder="Paste or type card ability text"></textarea>
+
+  <label>Keywords (comma-separated, e.g. Massive, Mobile)</label>
+  <input type="text" id="keywords" placeholder="e.g. Massive, Mobile">
+
+  <div class="row">
+    <button id="addBtn" class="primary">Add / Update</button>
+    <button id="verifyBtn" class="verified">VERIFIED</button>
+    <button id="saveBtn" class="export">Save to data/dc-effects.json</button>
+  </div>
+    </div>
+  </div>
+
+  <div class="entries">
+    <h2>Unverified: <span id="count">0</span> — Verified: <span id="verifiedCount">0</span> — Total: <span id="totalCount">0</span></h2>
+    <div id="list"></div>
+  </div>
+
+  <script>
+    const cardSelect = document.getElementById('cardSelect');
+    const cardName = document.getElementById('cardName');
+    const abilityText = document.getElementById('abilityText');
+    const keywords = document.getElementById('keywords');
+    const addBtn = document.getElementById('addBtn');
+    const listEl = document.getElementById('list');
+    const countEl = document.getElementById('count');
+    const verifiedCountEl = document.getElementById('verifiedCount');
+    const totalCountEl = document.getElementById('totalCount');
+
+    const VERIFIED_KEY = 'dc-verified';
+    let verified = new Set(JSON.parse(localStorage.getItem(VERIFIED_KEY) || '[]'));
+    let names = [];
+    let cards = {};
+
+    function saveVerified() {
+      localStorage.setItem(VERIFIED_KEY, JSON.stringify([...verified]));
+    }
+
+    function getVerifiedCount() {
+      return names.filter((n) => verified.has(n)).length;
+    }
+    function getUnverifiedCount() {
+      return names.length - getVerifiedCount();
+    }
+
+    function getUnverifiedCards() {
+      return names.filter((n) => !verified.has(n)).sort((a, b) => a.localeCompare(b));
+    }
+
+    function updateCardSelect() {
+      const unverified = getUnverifiedCards();
+      cardSelect.innerHTML = '<option value="">— Select or type below —</option>';
+      unverified.forEach((n) => {
+        const opt = document.createElement('option');
+        opt.value = n;
+        opt.textContent = n;
+        cardSelect.appendChild(opt);
+      });
+    }
+
+    function updateCardImage() {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      const img = document.getElementById('cardImg');
+      const placeholder = document.getElementById('cardImgPlaceholder');
+      if (!name) {
+        img.style.display = 'none';
+        placeholder.style.display = 'block';
+        placeholder.textContent = 'Select a card';
+        return;
+      }
+      const apiUrl = '/api/dc-image/' + encodeURIComponent(name);
+      img.src = apiUrl;
+      img.alt = name;
+      img.style.display = 'block';
+      img.onload = () => { placeholder.style.display = 'none'; };
+      img.onerror = () => {
+        img.style.display = 'none';
+        placeholder.style.display = 'block';
+        placeholder.textContent = 'No image';
+      };
+      placeholder.style.display = 'none';
+    }
+
+    function onCardChange() {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      updateCardImage();
+      if (name && cards[name]) {
+        abilityText.value = cards[name].abilityText || '';
+        keywords.value = Array.isArray(cards[name].keywords) ? cards[name].keywords.join(', ') : (cards[name].keywords || '');
+      } else {
+        abilityText.value = '';
+        keywords.value = '';
+      }
+    }
+
+    cardSelect.addEventListener('change', () => {
+      cardName.value = cardSelect.value || '';
+      onCardChange();
+    });
+    cardName.addEventListener('input', () => {
+      const v = cardName.value.trim();
+      if (names.includes(v)) cardSelect.value = v;
+      else cardSelect.value = '';
+      onCardChange();
+    });
+
+    addBtn.addEventListener('click', () => {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      if (!name) { alert('Enter a card name'); return; }
+      const kw = keywords.value.trim().split(/\s*,\s*/).filter(Boolean);
+      cards[name] = {
+        abilityText: abilityText.value.trim() || '',
+        keywords: kw,
+      };
+      render();
+      saveToFile(true);
+    });
+
+    document.getElementById('verifyBtn').addEventListener('click', () => {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      if (!name) { alert('Select a card to verify'); return; }
+      const kw = keywords.value.trim().split(/\s*,\s*/).filter(Boolean);
+      cards[name] = {
+        abilityText: abilityText.value.trim() || '',
+        keywords: kw,
+      };
+      verified.add(name);
+      saveVerified();
+      saveToFile(true);
+      render();
+      const nextOpt = cardSelect.options[1];
+      if (nextOpt && nextOpt.value) {
+        cardSelect.value = nextOpt.value;
+        cardName.value = nextOpt.value;
+        onCardChange();
+      } else {
+        cardSelect.value = '';
+        cardName.value = '';
+        onCardChange();
+      }
+    });
+
+    function render() {
+      updateCardSelect();
+      listEl.innerHTML = '';
+      countEl.textContent = getUnverifiedCount();
+      verifiedCountEl.textContent = getVerifiedCount();
+      totalCountEl.textContent = names.length;
+      const unverified = getUnverifiedCards();
+      unverified.forEach((name) => {
+        const data = cards[name] || {};
+        const kwStr = Array.isArray(data.keywords) ? data.keywords.join(', ') : (data.keywords || '');
+        const div = document.createElement('div');
+        div.className = 'entry';
+        div.innerHTML = `<strong>${name}</strong> <span>${kwStr || '—'}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
+        div.querySelector('button').addEventListener('click', (e) => {
+          e.stopPropagation();
+          delete cards[name];
+          render();
+        });
+        div.style.cursor = 'pointer';
+        div.addEventListener('click', (e) => {
+          if (e.target.tagName === 'BUTTON') return;
+          cardSelect.value = name;
+          cardName.value = name;
+          onCardChange();
+        });
+        listEl.appendChild(div);
+      });
+    }
+
+    async function saveToFile(silent = false) {
+      const out = { source: 'DC Effect Editor', cards };
+      try {
+        const r = await fetch('/api/save-dc-effects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(out),
+        });
+        const j = await r.json();
+        if (j.ok && !silent) alert('Saved to data/dc-effects.json');
+        else if (!j.ok) alert('Save failed: ' + (j.error || r.status));
+      } catch (e) {
+        alert('Save failed: ' + e.message + '. Run npm run cc-review first.');
+      }
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', () => saveToFile(false));
+
+    render();
+    (async () => {
+      try {
+        const r = await fetch('/data/dc-names.json');
+        if (r.ok) {
+          const d = await r.json();
+          names = d.cards || d || [];
+        }
+      } catch (_) {}
+      try {
+        const r = await fetch('/data/dc-effects.json');
+        if (r.ok) {
+          const d = await r.json();
+          if (d.cards && Object.keys(d.cards).length > 0) cards = d.cards;
+        }
+      } catch (_) {}
+      render();
+      const firstOpt = cardSelect.options[1];
+      if (firstOpt && firstOpt.value) {
+        cardSelect.value = firstOpt.value;
+        cardName.value = firstOpt.value;
+        onCardChange();
+      }
+    })();
+  </script>
+</body>
+</html>

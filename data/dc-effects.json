@@ -1,0 +1,929 @@
+{
+  "source": "DC Effect Editor (seeded by scripts/seed-dc-effects-full.js; iaspec + dc-keywords + dc-stats)",
+  "cards": {
+    "[A Fightiing Chance]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[A New Hope]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Advanced Com Systems]": {
+      "abilityText": "Upgrade. Restrictions: leader.",
+      "keywords": []
+    },
+    "[Balance of the Force]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Beast Tamer]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Black Market]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Channel the Force]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Clan of Two]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Combat Suit]": {
+      "abilityText": "Upgrade. Restrictions: trooper, leader, guardian.",
+      "keywords": []
+    },
+    "[Cross Training]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Devious Scheme]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Doubt]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Driven by Hatred]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Explosive Armaments]": {
+      "abilityText": "Upgrade. Restrictions: hunter, droid.",
+      "keywords": []
+    },
+    "[Extra Armor]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Feeding Frenzy]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[First Strike]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Flame Trooper]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Focused on the Kill]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Fury of Kashyyyk]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Headhunter]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Heavy Fire]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Heir to the Jedi]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Heroic Effort]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Imperial Citadel]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Imperial Retrofitting]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Indentured Jester]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Last Resort]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Lie in Ambush]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Mortar Trooper]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Motivation]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[On a Diplomatic Mission]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Orbital Bombardment]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Overwatch]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Prey on the Weak]": {
+      "abilityText": "Upgrade. Restrictions: hunter.",
+      "keywords": []
+    },
+    "[Punishing Strike]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Rebel High Command]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Rogue Smuggler]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Rule by Fear]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Scavenged Walker]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Scavenged Weaponry]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Smuggler's Run]": {
+      "abilityText": "Upgrade. Restrictions: smuggler.",
+      "keywords": []
+    },
+    "[Smuggling Compartment]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Spectre Cell]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Suppressive Fire]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Survivalist]": {
+      "abilityText": "Upgrade. Restrictions: hunter, trooper.",
+      "keywords": []
+    },
+    "[Targeting Computer]": {
+      "abilityText": "Upgrade. Restrictions: vehicle, droid, heavyweapon.",
+      "keywords": []
+    },
+    "[Technician Training]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Temporary Alliance]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[The Darksaber]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[The General's Ranks]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Trusted Ally]": {
+      "abilityText": "Upgrade. Restrictions: droid.",
+      "keywords": []
+    },
+    "[Under Duress]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Unshakable]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Vader's Finest]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Wookiee Avenger]": {
+      "abilityText": "Upgrade (see card).",
+      "keywords": []
+    },
+    "[Z-6 Trooper]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "[Zillo Technique]": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "0-0-0": {
+      "abilityText": "Traits: DROID. Attack (Range): red, yellow. Defense: black. Surge: pierce 2. Surge: recover 2",
+      "keywords": []
+    },
+    "4-LOM": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Agent Blaise": {
+      "abilityText": "Traits: SPY, LEADER. Attack (Range): green, yellow, yellow. Defense: black. Surge: damage 1. Surge: damage 1. Surge: pierce 2. Surge: accuracy 3",
+      "keywords": []
+    },
+    "Agent Kallus": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Ahsoka Tano": {
+      "abilityText": "Traits: FORCEUSER, LEADER, SPY. Attack (Melee): blue, green, green. Defense: white. Surge: damage 2. Surge: pierce 3. Surge: powerdamage 1",
+      "keywords": []
+    },
+    "Alliance Ranger (Elite)": {
+      "abilityText": "Traits: TROOPER, HUNTER. Attack (Range): blue, blue. Defense: black. accuracy 1; pierce 1. Surge: damage 2. Surge: accuracy 3. Surge: pierce 1",
+      "keywords": []
+    },
+    "Alliance Ranger (Regular)": {
+      "abilityText": "Traits: TROOPER, HUNTER. Attack (Range): blue, blue. Defense: black. accuracy 1. Surge: damage 2. Surge: pierce 1. Surge: accuracy 2",
+      "keywords": []
+    },
+    "Alliance Smuggler (Elite)": {
+      "abilityText": "Traits: SMUGGLER. Attack (Range): green, yellow. Defense: white. Surge: stun. Surge: focus. Surge: pierce 2. Surge: accuracy 3",
+      "keywords": []
+    },
+    "Alliance Smuggler (Regular)": {
+      "abilityText": "Traits: SMUGGLER. Attack (Range): green, yellow. Defense: white. Surge: stun. Surge: pierce 1. Surge: accuracy 2",
+      "keywords": []
+    },
+    "AT-DP": {
+      "abilityText": "Traits: VEHICLE. Attack (Range): blue, red, yellow. Defense: black. MASSIVE. Block 1; accuracy 3. Surge: damage 1. Surge: pierce 2",
+      "keywords": [
+        "Massive"
+      ]
+    },
+    "AT-RT": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "AT-ST": {
+      "abilityText": "Traits: VEHICLE, HEAVYWEAPON. Attack (Range): blue, red, red. Defense: black, black. MASSIVE. accuracy 3. Surge: blast 2. Surge: pierce 2",
+      "keywords": [
+        "Massive"
+      ]
+    },
+    "Bantha Rider": {
+      "abilityText": "Traits: CREATURE, BRAWLER. Attack (Range): blue, red. MASSIVE. Surge: pierce 2. Surge: accuracy 2. desert",
+      "keywords": [
+        "Massive"
+      ]
+    },
+    "Baze Malbus": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Bib Fortuna": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Biv Bodhrik": {
+      "abilityText": "Traits: HUNTER, BRAWLER. Attack (Range): blue, red, yellow. Defense: black. Surge: accuracy 2; Surge: damage 1. Surge: damage 1",
+      "keywords": []
+    },
+    "Boba Fett": {
+      "abilityText": "Traits: HUNTER. Attack (Range): blue, green, yellow. Defense: black. Block 1; Surge: cancel 1. MOBILE. Surge: pierce 1. Surge: weaken",
+      "keywords": []
+    },
+    "Bodhi Rook": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Bossk": {
+      "abilityText": "Traits: BRAWLER, HUNTER. Attack (Range): red, green. Defense: white. Block 1. damage 2. accuracy 2. Surge: pierce 2",
+      "keywords": []
+    },
+    "BT-1": {
+      "abilityText": "Traits: DROID, HEAVYWEAPON, HUNTER. Attack (Range): blue, red, yellow. Defense: black. Surge: pierce 2. Surge: blast 1. Surge: recover 1",
+      "keywords": []
+    },
+    "C-3P0": {
+      "abilityText": "Traits: DROID. Defense: white.",
+      "keywords": []
+    },
+    "C1-10P \"Chopper\"": {
+      "abilityText": "Traits: DROID. Attack (Melee): red, green. Defense: black. Surge: pierce 2. Surge: recover 2",
+      "keywords": []
+    },
+    "Cad Bane": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Cal Kestis": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Captain Terro": {
+      "abilityText": "Traits: TROOPER, LEADER, CREATURE. Attack (Range): blue, green, yellow. Defense: black. Surge: damage 2. Surge: pierce 2",
+      "keywords": []
+    },
+    "Cara Dune": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Cassian Andor": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Chewbacca": {
+      "abilityText": "Traits: SMUGGLER, WOOKIEE, GUARDIAN. Attack (Range): blue, red, yellow. Defense: white, black. Surge: damage 2. Surge: stun. Surge: accuracy 2",
+      "keywords": []
+    },
+    "Chirrut Imwe": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Clawdite Shapeshifter (Elite)": {
+      "abilityText": "Traits: HUNTER, SPY. Attack (Range): red, green. Defense: black.",
+      "keywords": []
+    },
+    "Clawdite Shapeshifter (IACP) (Elite)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Clawdite Shapeshifter (IACP) (Regular)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Clawdite Shapeshifter (Regular)": {
+      "abilityText": "Traits: HUNTER, SPY. Attack (Range): red, green. Defense: black.",
+      "keywords": []
+    },
+    "CT-1701": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Dark Trooper Mk III": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Darth Vader": {
+      "abilityText": "Traits: FORCEUSER, LEADER, BRAWLER. Attack (Melee): red, red, yellow. Defense: black, black. Surge: pierce 3. Surge: damage 2",
+      "keywords": []
+    },
+    "Davith Elso": {
+      "abilityText": "Traits: SPY, FORCEUSER. Attack (Melee): green, yellow. Defense: white. Surge: damage 1; Surge: hide. Surge: pierce 3",
+      "keywords": []
+    },
+    "Death Trooper (Elite)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Death Trooper (Regular)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Del Meeko": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Dengar": {
+      "abilityText": "Traits: HUNTER. Attack (Range): green, yellow. Defense: black. accuracy 2. Surge: damage 2",
+      "keywords": []
+    },
+    "Dewback Rider": {
+      "abilityText": "Traits: TROOPER, CREATURE. Attack (Range): blue, green, yellow. Defense: black. Surge: damage 1. Surge: damage 1. Surge: pierce 2",
+      "keywords": [
+        "Mobile"
+      ]
+    },
+    "Diala Passil": {
+      "abilityText": "Traits: FORCEUSER, BRAWLER. Attack (Melee): red, green. Defense: white. Surge: recover 2. Surge: pierce 3. Surge: cleave 2",
+      "keywords": []
+    },
+    "Director Krennic": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Doctor Aphra": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Dr. Royce Hemlock": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Drokkatta": {
+      "abilityText": "Traits: WOOKIEE, HEAVYWEAPON. Attack (Range): blue, green, yellow. Defense: black. damage 1; accuracy 1; Block 1. Surge: damage 2",
+      "keywords": []
+    },
+    "E-Web Engineer (Elite)": {
+      "abilityText": "Traits: TROOPER, HEAVYWEAPON. Attack (Range): blue, red, yellow. Defense: black. Block 1. accuracy 3. Surge: recover 2. Surge: damage 2",
+      "keywords": []
+    },
+    "E-Web Engineer (Regular)": {
+      "abilityText": "Traits: TROOPER, HEAVYWEAPON. Attack (Range): blue, red, yellow. Defense: black. accuracy 3. Surge: recover 2. Surge: damage 1",
+      "keywords": []
+    },
+    "Echo Base Trooper (Elite)": {
+      "abilityText": "Traits: BRAWLER, WOOKIEE. Attack (Range): blue, green. Defense: black. Surge: damage 2. Surge: accuracy 3",
+      "keywords": []
+    },
+    "Echo Base Trooper (Regular)": {
+      "abilityText": "Traits: BRAWLER, WOOKIEE. Attack (Range): blue, green. Defense: black. Surge: damage 2. Surge: accuracy 3",
+      "keywords": []
+    },
+    "Emperor Palpatine": {
+      "abilityText": "Traits: FORCEUSER, LEADER. Attack (Melee): red, green. Defense: black. pierce 3. Surge: damage 1",
+      "keywords": []
+    },
+    "Ewok Warrior (Elite)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Ezra Bridger": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Fenn Signis": {
+      "abilityText": "Traits: TROOPER, LEADER. Attack (Range): blue, red, green. Defense: black. Surge: blast 1. Surge: damage 1. Surge: accuracy 1",
+      "keywords": []
+    },
+    "Fennec Shand": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Fifth Brother": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Gaarkhan": {
+      "abilityText": "Traits: TROOPER, HUNTER. Attack (Melee): red, yellow. Defense: black. Block 1. Surge: pierce 1; Surge: bleed. Surge: focus",
+      "keywords": []
+    },
+    "Gamorrean Guard (Elite)": {
+      "abilityText": "Traits: GUARDIAN, BRAWLER. Attack (Melee): red, red. Defense: black. Reach. Surge: cleave 2",
+      "keywords": []
+    },
+    "Gamorrean Guard (Regular)": {
+      "abilityText": "Traits: GUARDIAN, BRAWLER. Attack (Melee): red, red. Defense: black. Reach. damage -1. Surge: cleave 1",
+      "keywords": []
+    },
+    "Gar Saxon": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "General Sorin": {
+      "abilityText": "Traits: LEADER. Attack (Range): blue, yellow. Defense: black. Surge: pierce 1. Surge: stun. Surge: focus",
+      "keywords": []
+    },
+    "General Weiss": {
+      "abilityText": "Traits: VEHICLE, LEADER, HEAVYWEAPON. Attack (Range): any, any, any. Defense: black, black. MASSIVE. accuracy 2. Surge: blast 3. Surge: pierce 2",
+      "keywords": []
+    },
+    "Gideon Argus": {
+      "abilityText": "Traits: LEADER. Attack (Range): blue, green. Defense: black. Surge: focus. Surge: damage 2",
+      "keywords": []
+    },
+    "Greedo": {
+      "abilityText": "Traits: HUNTER, SMUGGLER. Attack (Range): green, green. Defense: white. accuracy 1; damage 1. Surge: bleed. Surge: damage 2. Surge: accuracy 3",
+      "keywords": []
+    },
+    "Han Solo": {
+      "abilityText": "Traits: SMUGGLER, LEADER. Attack (Range): blue, green, green. Defense: white. Surge: damage 1; Surge: accuracy 2. Surge: damage 2",
+      "keywords": []
+    },
+    "Heavy Stormtrooper (Elite)": {
+      "abilityText": "Traits: TROOPER, HEAVYWEAPON. Attack (Melee): blue, red. Defense: black. accuracy 2. Surge: damage 2. Surge: blast 2",
+      "keywords": []
+    },
+    "Heavy Stormtrooper (Regular)": {
+      "abilityText": "Traits: TROOPER, HEAVYWEAPON. Attack (Range): blue, green. Defense: black. accuracy 2. Surge: damage 1. Surge: blast 1",
+      "keywords": []
+    },
+    "Hera Syndulla": {
+      "abilityText": "Traits: LEADER, SMUGGLER. Attack (Range): blue, green, yellow. Defense: black. Surge: damage 1. Surge: pierce 2",
+      "keywords": []
+    },
+    "Hired Gun (Elite)": {
+      "abilityText": "Traits: SMUGGLER. Attack (Range): green, yellow. Defense: white. Surge: cancel 1. accuracy 1. Surge: damage 1. Surge: damage 1",
+      "keywords": []
+    },
+    "Hired Gun (Regular)": {
+      "abilityText": "Traits: SMUGGLER. Attack (Range): green, yellow. Defense: white. Surge: damage 1. Surge: pierce 1. Surge: accuracy 1",
+      "keywords": []
+    },
+    "HK Assassin Droid (Elite)": {
+      "abilityText": "Traits: DROID, HUNTER. Attack (Range): blue, blue, yellow. Defense: black. Surge: weaken. Surge: damage 1. Surge: damage 1. Surge: pierce 1",
+      "keywords": []
+    },
+    "HK Assassin Droid (Regular)": {
+      "abilityText": "Traits: DROID, HUNTER. Attack (Range): blue, blue, yellow. Defense: black. Surge: weaken. Surge: damage 1. Surge: pierce 1",
+      "keywords": []
+    },
+    "HK-47": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Hondo Ohnaka": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Iden Versio": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "IG-11": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "IG-88": {
+      "abilityText": "Traits: DROID, HUNTER. Attack (Range): any, any. Defense: black. Block 1. accuracy 2. Surge: recover 3. Surge: damage 2",
+      "keywords": []
+    },
+    "Imperial Officer (Elite)": {
+      "abilityText": "Traits: LEADER. Attack (Range): blue, yellow. Defense: white. Surge: focus. Surge: stun. Surge: damage 1. Surge: accuracy 3",
+      "keywords": []
+    },
+    "Imperial Officer (Regular)": {
+      "abilityText": "Traits: LEADER. Attack (Range): blue, yellow. Defense: white. Surge: focus. Surge: damage 1. Surge: accuracy 2",
+      "keywords": []
+    },
+    "ISB Infiltrator (Elite)": {
+      "abilityText": "Traits: SPY. Attack (Range): blue, green. Defense: white. Surge: pierce 1; Surge: hide. Surge: damage 2. Surge: pierce 1; Surge: accuracy 2",
+      "keywords": []
+    },
+    "ISB Infiltrator (Regular)": {
+      "abilityText": "Traits: SPY. Attack (Range): blue, green. Defense: white. Surge: hide. Surge: damage 1. Surge: accuracy 2",
+      "keywords": []
+    },
+    "Jabba the Hutt": {
+      "abilityText": "Traits: LEADER, SMUGGLER, HUNTER. Attack (Melee): red, green. Defense: black.",
+      "keywords": []
+    },
+    "Jarrod Kelvin": {
+      "abilityText": "Traits: BRAWLER, LEADER, SPY. Attack (Melee): yellow, yellow. Defense: black. Surge: cancel; damage 1. Surge: damage 2. Surge: pierce 2. Surge: powerdamage 1",
+      "keywords": []
+    },
+    "Jawa Scavenger (Elite)": {
+      "abilityText": "Traits: SMUGGLER. Attack (Range): yellow, yellow. Defense: white. accuracy 2. Surge: damage 2. Surge: pierce 2. Surge: accuracy 2",
+      "keywords": []
+    },
+    "Jawa Scavenger (Regular)": {
+      "abilityText": "Traits: SMUGGLER. Attack (Range): yellow, yellow. Defense: white. accuracy 2. Surge: damage 2. Surge: accuracy 2",
+      "keywords": []
+    },
+    "Jet Trooper (Elite)": {
+      "abilityText": "Traits: TROOPER, VEHICLE. Attack (Range): blue, green. Defense: black. MOBILE. Surge: damage 2. Surge: accuracy 3",
+      "keywords": [
+        "Mobile"
+      ]
+    },
+    "Jet Trooper (Regular)": {
+      "abilityText": "Traits: TROOPER, VEHICLE. Attack (Range): blue, green. Defense: black. MOBILE. Surge: damage 1. Surge: accuracy 2",
+      "keywords": [
+        "Mobile"
+      ]
+    },
+    "Jyn Erso": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Jyn Odan": {
+      "abilityText": "Traits: SMUGGLER. Attack (Range): green, green. Defense: white. Surge: stun; Surge: pierce 1. Surge: damage 2; Surge: accuracy 2",
+      "keywords": []
+    },
+    "K-2S0": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Kanan Jarrus": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Kayn Somos": {
+      "abilityText": "Traits: TROOPER, LEADER. Attack (Range): blue, blue, green. Defense: black. Surge: damage 1. Surge: pierce 1",
+      "keywords": []
+    },
+    "Ko-Tun Feralo": {
+      "abilityText": "Traits: LEADER, TROOPER. Attack (Range): blue, blue, green. Defense: black. Surge: damage 2. Surge: accuracy 1",
+      "keywords": []
+    },
+    "Krrsantan": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Kuiil": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Lando Calrissian": {
+      "abilityText": "Traits: LEADER, SMUGGLER. Attack (Range): green, yellow. Defense: black. accuracy 2. Surge: hide 2; Surge: stun. Surge: damage 2",
+      "keywords": []
+    },
+    "Leia Organa": {
+      "abilityText": "Traits: LEADER, SPY. Attack (Range): blue, yellow, yellow. Defense: white. Surge: cancel 1. Surge: damage 2. Surge: recover 2. Surge: accuracy 3",
+      "keywords": []
+    },
+    "Loku Kanoloa": {
+      "abilityText": "Traits: SPY. Attack (Range): blue, red. Defense: white. accuracy 2. Surge: damage 1. Surge: pierce 1",
+      "keywords": []
+    },
+    "Loth-cat (Elite)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Loth-cat (Regular)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Luke Skywalker": {
+      "abilityText": "Traits: FORCEUSER. Attack (Range): blue, green, yellow. Defense: white. Block 1. Surge: damage 2. Surge: recover 2. Surge: accuracy 2",
+      "keywords": []
+    },
+    "Luke Skywalker (Jedi Knight)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Mak Eshka'rey": {
+      "abilityText": "Traits: SPY. Attack (Range): blue, blue. Defense: white. Surge: accuracy 2. Surge: damage 1",
+      "keywords": []
+    },
+    "Mara Jade": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Maul": {
+      "abilityText": "Traits: FORCEUSER, BRAWLER. Attack (Melee): red, yellow. Defense: black. damage 1. Surge: pierce 3",
+      "keywords": []
+    },
+    "MHD-19": {
+      "abilityText": "Traits: DROID. Attack (Range): blue, yellow. Defense: black. Surge: focus. Surge: damage 1. Surge: recover 2",
+      "keywords": []
+    },
+    "Migs Mayfeld": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Murne Rin": {
+      "abilityText": "Traits: SPY, LEADER. Attack (Range): blue, yellow. Defense: black. Surge: damage 2. Surge: accuracy 2",
+      "keywords": []
+    },
+    "Nexu (Elite)": {
+      "abilityText": "Traits: CREATURE, BRAWLER. Attack (Melee): red, green. Defense: white. MOBILE. bleed. cleave 2. Surge: damage 2",
+      "keywords": [
+        "Mobile"
+      ]
+    },
+    "Nexu (Regular)": {
+      "abilityText": "Traits: CREATURE, BRAWLER. Attack (Melee): red, green. Defense: white. MOBILE. bleed. Surge: cleave 1. Surge: pierce 2",
+      "keywords": [
+        "Mobile"
+      ]
+    },
+    "Obi-Wan Kenobi": {
+      "abilityText": "Traits: FORCEUSER. Attack (Melee): red, green, yellow. Defense: black. Surge: cancel 1. Surge: damage 2. Surge: pierce 3",
+      "keywords": []
+    },
+    "Onar Koma": {
+      "abilityText": "Traits: GUARDIAN, HUNTER. Attack (Range): blue, red, green. Surge: damage 2; Surge: accuracy -2. Surge: damage 1; Surge: accuracy -1",
+      "keywords": []
+    },
+    "Probe Droid (Elite)": {
+      "abilityText": "Traits: DROID. Attack (Range): blue, yellow, yellow. Defense: black. MOBILE. Surge: damage 2. Surge: pierce 2. Surge: recover 2",
+      "keywords": []
+    },
+    "Probe Droid (Regular)": {
+      "abilityText": "Traits: DROID. Attack (Range): blue, yellow, yellow. Defense: black. MOBILE. Surge: damage 1. Surge: pierce 1. Surge: recover 1",
+      "keywords": []
+    },
+    "Purge Commander (Elite)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Purge Trooper (Elite)": {
+      "abilityText": "Cost 4. Health 8. Speed 4. Attack: red range 1-2. Defense: white",
+      "keywords": []
+    },
+    "R2-D2": {
+      "abilityText": "Traits: DROID. Attack (Range): yellow. Defense: white. accuracy 2; surge 1. Surge: pierce 2. Surge: stun. Surge: weaken",
+      "keywords": []
+    },
+    "Rancor": {
+      "abilityText": "Traits: CREATURE, BRAWLER. Attack (Melee): red, green, green. Defense: black. MASSIVE. Reach. Surge: damage 2. Surge: cleave 2",
+      "keywords": [
+        "Massive"
+      ]
+    },
+    "Rebel Pathfinder (Elite)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Rebel Saboteur (Elite)": {
+      "abilityText": "Traits: SPY, HEAVYWEAPON. Attack (Range): red, yellow. Defense: white. accuracy 3. Surge: pierce 2. Surge: stun. Surge: blast 1",
+      "keywords": []
+    },
+    "Rebel Saboteur (Regular)": {
+      "abilityText": "Traits: SPY, HEAVYWEAPON. Attack (Range): red, yellow. Defense: white. accuracy. Surge: pierce 2. Surge: stun. Surge: blast 1",
+      "keywords": []
+    },
+    "Rebel Trooper (Elite)": {
+      "abilityText": "Traits: TROOPER. Attack (Range): blue, yellow. Defense: white. Surge: pierce 2. Surge: accuracy 2",
+      "keywords": []
+    },
+    "Rebel Trooper (Regular)": {
+      "abilityText": "Traits: TROOPER. Attack (Range): blue, yellow. Defense: white. Surge: pierce 1. Surge: accuracy 1",
+      "keywords": []
+    },
+    "Riot Trooper (Elite)": {
+      "abilityText": "Traits: TROOPER, BRAWLER, GUARDIAN. Attack (Range): blue, red. Defense: black. Surge: damage 1. Surge: damage 1",
+      "keywords": []
+    },
+    "Riot Trooper (Regular)": {
+      "abilityText": "Traits: TROOPER, BRAWLER, GUARDIAN. Attack (Range): blue, red. Defense: black. Surge: damage 1. Surge: damage 1",
+      "keywords": []
+    },
+    "Royal Guard (Regular)": {
+      "abilityText": "Traits: GUARDIAN, BRAWLER. Attack (Melee): red, yellow. Defense: black. Reach. Surge: stun. Surge: pierce 1",
+      "keywords": []
+    },
+    "Royal Guard Champion": {
+      "abilityText": "Traits: GUARDIAN, BRAWLER. Attack (Melee): red, green, yellow. Defense: black, white. Surge: bleed. Surge: pierce 2. Surge: damage 2",
+      "keywords": []
+    },
+    "Sabine Wren": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Saska Teft": {
+      "abilityText": "Traits: SMUGGLER, SPY. Attack (Range): green, yellow. Defense: white. accuracy 1. Surge: accuracy 1; Surge: damage 1. Surge: pierce 1; Surge: weaken",
+      "keywords": []
+    },
+    "Saw Gerrerra": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "SC2-M Repulsor Tank": {
+      "abilityText": "Traits: VEHICLE. Attack (Range): blue, red, green. Defense: black. MASSIVE. accuracy 2. Surge: blast 1. Surge: damage 2",
+      "keywords": [
+        "Massive"
+      ]
+    },
+    "Scout Trooper (Elite)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Second Sister": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Sentry Droid (Elite)": {
+      "abilityText": "Traits: TROOPER, DROID, GUARDIAN. Attack (Range): green, green. Defense: black. Surge: damage 1. Surge: pierce 2. Surge: accuracy 1",
+      "keywords": []
+    },
+    "Sentry Droid (Regular)": {
+      "abilityText": "Traits: TROOPER, DROID, GUARDIAN. Attack (Range): green, green. Defense: black. Surge: damage 1. Surge: pierce 2. Surge: accuracy 1",
+      "keywords": []
+    },
+    "Shoretrooper (Elite)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Shyla Varad": {
+      "abilityText": "Traits: HUNTER, BRAWLER. Attack (Melee): green, green, yellow. Defense: black. Surge: cancel 1. Surge: damage 2. Surge: pierce 2. Surge: cleave 2",
+      "keywords": []
+    },
+    "Snowtrooper (Elite)": {
+      "abilityText": "Traits: TROOPER. Attack (Range): blue, green. Defense: black. Surge: pierce 2. Surge: accuracy 3. Surge: focus; Surge: weaken",
+      "keywords": []
+    },
+    "Snowtrooper (Regular)": {
+      "abilityText": "Traits: TROOPER. Attack (Range): blue, green. Defense: black. Surge: weaken. Surge: pierce 1. Surge: accuracy 2",
+      "keywords": []
+    },
+    "Stormtrooper (Elite)": {
+      "abilityText": "Traits: TROOPER. Attack (Range): blue, green. Defense: black. Surge: damage 1. Surge: accuracy 2",
+      "keywords": []
+    },
+    "Stormtrooper (Regular)": {
+      "abilityText": "Traits: TROOPER. Attack (Range): blue, green. Defense: black. Surge: damage 1. Surge: accuracy 2",
+      "keywords": []
+    },
+    "Super Commando (Elite)": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Taron Malicos": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "The Grand Inquisitor": {
+      "abilityText": "Traits: FORCEUSER, HUNTER. Attack (Melee): red, green, yellow. Defense: white. Surge: damage 1. Surge: pierce 3. Surge: cleave 3",
+      "keywords": []
+    },
+    "The Mandalorian, Renegade Hunter": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "The Mandalorian, Rising Phoenix": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Thrawn": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Trandoshan Hunter (Elite)": {
+      "abilityText": "Traits: HUNTER, BRAWLER. Attack (Range): blue, green. Defense: black. Surge: focus. Surge: bleed. Surge: pierce 2",
+      "keywords": []
+    },
+    "Trandoshan Hunter (Regular)": {
+      "abilityText": "Traits: HUNTER, BRAWLER. Attack (Range): blue, green. Defense: black. Surge: bleed. Surge: pierce 2",
+      "keywords": []
+    },
+    "Tress Hacnua": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Tusken Raider (Elite)": {
+      "abilityText": "Traits: BRAWLER. Attack (Melee): red, green. Defense: black. damage 1. Surge: weaken. Surge: cleave 1. desert",
+      "keywords": []
+    },
+    "Tusken Raider (Regular)": {
+      "abilityText": "Traits: BRAWLER. Attack (Melee): red, green. Defense: black. Surge: weaken. Surge: cleave 1. desert",
+      "keywords": []
+    },
+    "Ugnaught Tinkerer (Elite)": {
+      "abilityText": "Traits: SMUGGLER. Attack (Range): blue, yellow. Defense: black. Surge: bleed. Surge: pierce 2",
+      "keywords": []
+    },
+    "Ugnaught Tinkerer (Regular)": {
+      "abilityText": "Traits: SMUGGLER. Attack (Range): blue, yellow. Defense: black. Surge: bleed. Surge: pierce 1",
+      "keywords": []
+    },
+    "Verena Talos": {
+      "abilityText": "Traits: SPY, BRAWLER. Attack (Range): blue, green. Defense: black. Surge: cancel 1. Surge: damage 2. Surge: pierce 1",
+      "keywords": []
+    },
+    "Vinto Hreeda": {
+      "abilityText": "Traits: HUNTER, SMUGGLER. Attack (Range): blue, green. Defense: white. Surge: weaken; Surge: damage 1. Surge: pierce 1; Surge: accuracy 2; Surge: hide",
+      "keywords": []
+    },
+    "Wampa (Elite)": {
+      "abilityText": "Traits: CREATURE, BRAWLER. Attack (Melee): red, red. Defense: black. damage 2. Surge: bleed; Surge: stun. Surge: cleave 3. snow",
+      "keywords": []
+    },
+    "Wampa (Regular)": {
+      "abilityText": "Traits: CREATURE, BRAWLER. Attack (Melee): red, red. Defense: black. damage 1. Surge: stun. Surge: cleave 2. snow",
+      "keywords": []
+    },
+    "Weequay Pirate (Elite)": {
+      "abilityText": "Traits: SMUGGLER, HUNTER. Attack (Range): green, green. Defense: black. accuracy 2. Surge: damage 2. Surge: pierce 1. Surge: accuracy 2",
+      "keywords": []
+    },
+    "Weequay Pirate (Regular)": {
+      "abilityText": "Traits: HUNTER, SMUGGLER. Attack (Melee): green, green. Defense: black. accuracy 1. Surge: damage 1. Surge: accuracy 1",
+      "keywords": []
+    },
+    "Wing Guard (Elite)": {
+      "abilityText": "Traits: GUARDIAN, TROOPER. Attack (Range): blue, green. Defense: black. Surge: damage 2. Surge: recover 2",
+      "keywords": []
+    },
+    "Wing Guard (Regular)": {
+      "abilityText": "Traits: GUARDIAN, TROOPER. Attack (Range): blue, green. Defense: black. Surge: damage 1. Surge: recover 1",
+      "keywords": []
+    },
+    "Wookiee Warrior (Elite)": {
+      "abilityText": "Traits: BRAWLER, WOOKIEE. Attack (Melee): red, green. Defense: black. Surge: damage 2. Surge: bleed. Surge: cleave 2",
+      "keywords": []
+    },
+    "Wookiee Warrior (Regular)": {
+      "abilityText": "Traits: BRAWLER, WOOKIEE. Attack (Melee): red, green. Defense: black. Surge: damage 1. Surge: bleed; Surge: cleave 2",
+      "keywords": []
+    },
+    "Yoda": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Zeb Orrelios": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    },
+    "Zuckuss": {
+      "abilityText": "TBD (IACP – verify from card).",
+      "keywords": []
+    }
+  }
+}
