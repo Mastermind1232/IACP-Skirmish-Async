@@ -61,7 +61,7 @@
 </head>
 <body>
   <h1>IA Skirmish — Deployment Card Effect Editor</h1>
-  <p class="hint">Run <code>npm run cc-review</code> and open <code>http://localhost:3456/scripts/dc-effect-editor.html</code>. Showing <strong>DC Skirmish Upgrades</strong> only (from dc-images). Correct ability text and keywords, then click <strong>VERIFIED</strong>. Progress = unverified count shrinking to 0.</p>
+  <p class="hint">Run <code>npm run cc-review</code> and open <code>http://localhost:3456/scripts/dc-effect-editor.html</code>. Shows <strong>all Deployment Cards</strong> (figure DCs and Skirmish Upgrades from dc-images). Correct ability text and keywords, then click <strong>VERIFIED</strong>. Progress = unverified count shrinking to 0.</p>
 
   <div class="main">
     <div class="card-img-wrap" id="cardImgWrap">
@@ -722,7 +722,12 @@
         if (ri.ok) {
           const di = await ri.json();
           dcImages = di.dcImages || di || {};
-          names = Object.keys(dcImages).filter((k) => dcImages[k] && dcImages[k].includes('DC Skirmish Upgrades')).sort((a, b) => a.localeCompare(b));
+          names = Object.keys(dcImages).filter((k) => dcImages[k]).sort((a, b) => {
+          const aSkirmish = a.startsWith('[') ? 1 : 0;
+          const bSkirmish = b.startsWith('[') ? 1 : 0;
+          if (aSkirmish !== bSkirmish) return aSkirmish - bSkirmish;
+          return a.localeCompare(b);
+        });
         }
       } catch (_) {}
       try {
