@@ -393,61 +393,112 @@
       "affiliation": "Any"
     },
     "[Targeting Computer]": {
-      "abilityText": "Upgrade. Restrictions: vehicle, droid, heavyweapon.",
+      "abilityText": "VEHICLE, DROID, OR HEAVY WEAPON ONLY\n\nWhile attacking, figures in this group may reroll 1 attack die.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Any"
     },
     "[Technician Training]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "All figures in all armies with the names listed below gain the TECHNICIAN trait.\n\nC1-10P (\"Chopper\"), Jarrod Kelvin, Mak Eskha'rey, R2-D2, Chewbacca, Jawa Scavenger, Ugnaught Tinkerer, Doctor Aphra, Zuckuss, E-Web Engineer, General Sorin",
       "keywords": [],
-      "cost": 0
+      "cost": 0,
+      "attachment": false,
+      "affiliation": "Any"
     },
     "[Temporary Alliance]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "You may include up to 2 SCUM Deployment cards in your army.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "[The Darksaber]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "MAUL OR SABINE WREN ONLY\n\nIf you are a FORCE USER, you may use IMPERIAL Command cards. \n\nExhaust this card while attacking to reroll 1 attack die.\n\nSpecial Action: Perform a Melee attack with 1 red die. Treat Blast X as Cleave X during this attack. Then you may perform an attack.",
       "keywords": [],
-      "cost": 0
+      "subname": "WEAPON OF THE ANCIENTS",
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Any"
     },
     "[The General's Ranks]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "NON-UNIQUE ONLY\n\nWhen you perform a move, if it is not your activation, you gain 2 additional movement points. \n\nWhen you perform an attack, if it is not your activation, apply +1 Hit to the attack results.",
+      "keywords": [],
+      "attachment": true,
+      "affiliation": "Imperial"
     },
     "[Trusted Ally]": {
-      "abilityText": "Upgrade. Restrictions: droid.",
+      "abilityText": "DROID ONLY\n\nExhaust this card while another friendly figure within 3 spaces is attacking. It may reroll 1 attack die.\n\nExhaust this card during your activation. An adjacent friendly figure recovers 1 Damage or discards 1 HARMFUL condition.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": true,
+      "affiliation": "Any"
     },
     "[Under Duress]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "When a hostile figure suffers Strain, for each resulting Damage they wish to prevent, the player controlling that figure must discard 2 Command cards from the top of their deck instead of 1.",
+      "keywords": [],
+      "cost": 2,
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "[Unshakable]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "Exhaust this card at the start of one of your activations and choose 1 of your figures with a figure cost of 9 or greater. That figure discards 1 HARMFUL condition and suffers 1 Strain.",
       "keywords": [],
-      "cost": 1
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Any"
     },
     "[Vader's Finest]": {
-      "abilityText": "Upgrade (see card).",
-      "keywords": []
+      "abilityText": "TROOPER ONLY\n\nFigures in this group gain:\n\nSpecial Action: Perform an attack, then gain 2 movement points.\n\nDouble Action Special: Discard 1 HARMFUL condition and become Focused.",
+      "keywords": [],
+      "cost": 2,
+      "attachment": true,
+      "affiliation": "Imperial"
     },
     "[Wookiee Avenger]": {
-      "abilityText": "Upgrade. (see card).",
+      "abilityText": "CHEWBACCA (LOYAL WOOKIE) ONLY\n\nPassive Bonus: +1 Hit\n\nYou lose \"Protector\". While defending, convert all Dodge results to Evade results.\n\nDuring setup, search your Command deck for \"Debts Repaid\", reveal it, put it into your hand, and shuffle your deck. Then, draw 1 fewer card into your initial hand. \n\nOnce during your activation, you may use \"Slam\" without spending an action.",
       "keywords": [],
-      "cost": -4
+      "cost": -4,
+      "attachment": true,
+      "affiliation": "Rebel"
     },
     "[Z-6 Trooper]": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": [],
-      "cost": 0
+      "abilityText": "NON-UNIQUE REBEL TROOPER GROUP WITH 2 FIGURES ONLY\n\nRotary Cannon: Before you declare an attack, become Focused.\n\nSpecial Action (Autofire): Perform an attack. The defending figure adds one white die to its defense pool. This attack gains:\n- Surge: After this attack resolves, perform an attack targeting a figure within 3 spaces of the target space.",
+      "keywords": [
+        "TROOPER",
+        "HEAVY WEAPON",
+        "SQUAD UPGRADE"
+      ],
+      "cost": 5,
+      "health": 8,
+      "speed": 4,
+      "passives": [
+        "Blast 1"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 2, pierce 1"
+      ],
+      "attachment": true,
+      "affiliation": "Rebel"
     },
     "[Zillo Technique]": {
-      "abilityText": "TBD (IACP – verify from card).",
+      "abilityText": "Exhaust this card while a friendly figure is defending to reduce the Pierce value of the attack results by 2, to a minimum of 0.\n\nWhile a friendly figure is defending, you may discard 1 Command card to apply +1 Block to the defense results. Limit once per attack.",
       "keywords": [],
-      "cost": 0
+      "cost": 1,
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "0-0-0": {
       "abilityText": "Traits: DROID. Attack (Range): red, yellow. Defense: black. Surge: pierce 2. Surge: recover 2",

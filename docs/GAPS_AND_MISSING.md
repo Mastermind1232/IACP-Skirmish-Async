@@ -41,15 +41,18 @@
 ### 8. ~~Doors not drawn on map~~ (done)
 - Door tokens drawn on map edges (R11–S11, R12–S12 on Mos Eisley Outskirts). Horizontal orientation, matte white backfill, single span across cells.
 
+### 9. ~~Skirmish Upgrades (backend display & Deplete)~~ (done)
+- Figureless DCs (DC Skirmish Upgrades) appear in Play Area with card image, Exhaust/Activate, and (when applicable) Deplete button. Deplete marks the card as removed from game and clears components. Card effects are **visible** (via the card image); they are not **automated** (see To-Do: wire up DC effects).
+
 ---
 
 ## Lower (Polish / Edge Cases)
 
-### 9. Multi-figure defeat and DC display
+### 10. Multi-figure defeat and DC display
 - When one figure in a 3-figure group dies, healthState and display should reflect survivors. Needs verification.
 - **Needed:** Ensure healthState and DC embeds correctly show remaining figures and that dead figures are removed from figurePositions.
 
-### 10. Command card timing
+### 11. Command card timing
 - When can you play a CC? Typically before/during/after attacks or at specific phases. Current flow may not enforce timing.
 - **Needed:** Document or enforce when CCs can be played per rules.
 
@@ -61,7 +64,7 @@
 
 - [ ] **Wire up all CCs so they have actual effects.** Command cards currently show effect text as a reminder; implement real game-state effects for each CC (or document which are manual).
 
-- [ ] **Wire up all DCs so they have actual effects.** Deployment card abilities (passives, surge, keywords, etc.) should affect game state where applicable; implement or document manual resolution.
+- [ ] **Wire up all DCs so they have actual effects.** Deployment card abilities (passives, surge, keywords, etc.) should affect game state where applicable; implement or document manual resolution. *(Card effects are already **visible** in play—each DC shows its card image in the Play Area—but the bot does not automate applying those effects to game state.)*
 
 ---
 

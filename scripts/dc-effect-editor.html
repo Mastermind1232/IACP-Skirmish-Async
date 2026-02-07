@@ -109,6 +109,14 @@
   <div class="form-section">
     <div class="form-section-title">Figure stats (Squad Upgrades)</div>
     <div class="form-row">
+      <div class="field inline" style="min-width: 120px;">
+        <label>Attack type</label>
+        <select id="attackType">
+          <option value="">— Not set —</option>
+          <option value="range">Ranged</option>
+          <option value="melee">Melee</option>
+        </select>
+      </div>
       <div class="field wide">
         <label>Attack dice</label>
         <div class="add-row">
@@ -149,6 +157,7 @@
             <option value="pierce 2">Pierce 2</option>
             <option value="pierce 3">Pierce 3</option>
             <option value="accuracy 2">Accuracy +2</option>
+            <option value="accuracy 2, pierce 1">+2 Accuracy, Pierce 1</option>
             <option value="accuracy 3">Accuracy +3</option>
             <option value="recover 1">Recover 1</option>
             <option value="recover 2">Recover 2</option>
@@ -175,6 +184,7 @@
             <option value="Block 1">Block 1</option>
             <option value="Block 2">Block 2</option>
             <option value="Bleed">Bleed</option>
+            <option value="Blast 1">Blast 1</option>
             <option value="Priority Target">Priority Target</option>
             <option value="+2 Accuracy">+2 Accuracy</option>
             <option value="+3 Accuracy">+3 Accuracy</option>
@@ -243,6 +253,7 @@
     const passivesAddBtn = document.getElementById('passivesAdd');
     const passivesListEl = document.getElementById('passivesList');
     const figuresInput = document.getElementById('figures');
+    const attackTypeSelect = document.getElementById('attackType');
     const attackDiceSelect = document.getElementById('attackDiceSelect');
     const attackDiceAddBtn = document.getElementById('attackDiceAdd');
     const attackDiceListEl = document.getElementById('attackDiceList');
@@ -301,7 +312,7 @@
       (values || []).forEach((v) => addChip(container, v, labelByValue ? (labelByValue[v] || v) : v));
     }
 
-    const SURGE_LABELS = { 'damage 1': 'Damage +1', 'damage 2': 'Damage +2', 'stun': 'Stun', 'pierce 1': 'Pierce 1', 'pierce 2': 'Pierce 2', 'pierce 3': 'Pierce 3', 'accuracy 2': 'Accuracy +2', 'accuracy 3': 'Accuracy +3', 'recover 1': 'Recover 1', 'recover 2': 'Recover 2', 'recover 3': 'Recover 3', 'weaken': 'Weaken', 'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'focus': 'Focus', 'cleave 2': 'Cleave 2', 'cancel 1': 'Cancel 1' };
+    const SURGE_LABELS = { 'damage 1': 'Damage +1', 'damage 2': 'Damage +2', 'stun': 'Stun', 'pierce 1': 'Pierce 1', 'pierce 2': 'Pierce 2', 'pierce 3': 'Pierce 3', 'accuracy 2': 'Accuracy +2', 'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1', 'accuracy 3': 'Accuracy +3', 'recover 1': 'Recover 1', 'recover 2': 'Recover 2', 'recover 3': 'Recover 3', 'weaken': 'Weaken', 'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'focus': 'Focus', 'cleave 2': 'Cleave 2', 'cancel 1': 'Cancel 1' };
     const DICE_LABELS = { red: 'Red', blue: 'Blue', yellow: 'Yellow', green: 'Green' };
     const DEFENSE_LABELS = { white: 'White', black: 'Black' };
 
@@ -444,8 +455,10 @@
         if (a) {
           const dice = Array.isArray(a.dice) ? a.dice : (a.dice ? [a.dice] : []);
           setChipList(attackDiceListEl, dice, DICE_LABELS);
+          attackTypeSelect.value = (a.type === 'melee' || a.type === 'range') ? a.type : '';
         } else {
           setChipList(attackDiceListEl, []);
+          attackTypeSelect.value = '';
         }
         const def = card.defense != null ? card.defense : statsFallback?.defense;
         const defenseArr = def == null ? [] : (Array.isArray(def) ? def : [def]);
@@ -467,6 +480,7 @@
         const a = statsFallback?.attack;
         const dice = a && (Array.isArray(a.dice) ? a.dice : (a.dice ? [a.dice] : [])) || [];
         setChipList(attackDiceListEl, dice, DICE_LABELS);
+        attackTypeSelect.value = (a && (a.type === 'melee' || a.type === 'range')) ? a.type : '';
         const def = statsFallback?.defense;
         setChipList(defenseListEl, def == null ? [] : (Array.isArray(def) ? def : [def]), DEFENSE_LABELS);
         setChipList(surgeListEl, statsFallback?.surgeAbilities || [], SURGE_LABELS);
@@ -494,7 +508,10 @@
       const figuresVal = figuresInput.value.trim();
       const figuresNum = figuresVal === '' ? undefined : (parseInt(figuresVal, 10) || 0);
       const attackDice = getChipValues(attackDiceListEl);
-      const attack = attackDice.length ? { dice: attackDice } : undefined;
+      const attackType = attackTypeSelect.value;
+      const attack = attackDice.length
+        ? { dice: attackDice, ...(attackType === 'range' || attackType === 'melee' ? { type: attackType } : {}) }
+        : undefined;
       const defenseArr = getChipValues(defenseListEl);
       const defense = defenseArr.length ? defenseArr : undefined;
       const surgeAbilities = getChipValues(surgeListEl);
