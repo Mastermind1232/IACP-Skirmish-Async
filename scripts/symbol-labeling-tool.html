@@ -48,19 +48,22 @@
     .symbol-card .del:hover { color: #dc3545; }
     .dice-face-layout { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
     .dice-face-wrap { position: relative; display: inline-block; }
-    .dice-face-wrap img { max-width: 800px; height: auto; display: block; }
-    .dice-face-wrap canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
-    .dice-face-wrap .dice-overlay { position: absolute; left: 0; top: 0; right: 0; bottom: 0; cursor: crosshair; }
-    .dice-symbol-rows { min-width: 280px; }
-    .dice-symbol-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-    .dice-symbol-num { width: 24px; height: 24px; border-radius: 50%; background: #0d6efd; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; flex-shrink: 0; }
-    .dice-symbol-line { width: 24px; height: 2px; background: #555; flex-shrink: 0; }
-    .dice-symbol-row input { flex: 1; padding: 6px 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; }
-    .dice-symbol-row .remove-region { font-size: 11px; color: #999; cursor: pointer; flex-shrink: 0; }
-    .dice-symbol-row .remove-region:hover { color: #dc3545; }
-    .dice-meta { margin-bottom: 12px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-    .dice-meta label { font-size: 12px; color: #aaa; }
-    .dice-meta input { padding: 6px 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; width: 100px; }
+    .dice-face-wrap { text-align: center; margin: 16px 0; }
+    .dice-face-wrap img { max-width: 480px; width: 100%; height: auto; display: block; margin: 0 auto; }
+    .dice-progress { font-size: 14px; color: #aaa; margin-bottom: 8px; }
+    .dice-estimate { font-size: 12px; color: #888; margin-bottom: 8px; }
+    .dice-outcome-row { margin: 16px 0; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .dice-outcome-row input { padding: 10px 14px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; min-width: 300px; font-size: 14px; }
+    .dice-nav { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+    .dice-remaining { margin-top: 20px; }
+    .dice-remaining h4 { margin: 0 0 8px 0; font-size: 12px; color: #999; }
+    .dice-remaining-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 280px; overflow-y: auto; }
+    .dice-remaining-list .entry { padding: 6px 12px; font-size: 13px; background: #2d2d2d; border-radius: 4px; cursor: pointer; color: #ccc; }
+    .dice-remaining-list .entry:hover { background: #3d3d3d; color: #fff; }
+    .dice-saved-list { margin-top: 12px; max-height: 160px; overflow-y: auto; }
+    .dice-saved-list h4 { margin: 0 0 6px 0; font-size: 12px; color: #999; }
+    .dice-saved-list ul { list-style: none; padding: 0; margin: 0; }
+    .dice-saved-list li { padding: 4px 8px; font-size: 13px; color: #ccc; }
   </style>
 </head>
 <body>
@@ -75,7 +78,7 @@
     <p class="hint">Confirm or edit the label for each symbol file. Then click Save to glossary.</p>
     <div id="assetList"></div>
     <div>
-      <button type="button" id="saveAssetsBtn" class="primary">Save to glossary</button>
+      <button type="button" id="saveAssetsBtn" class="primary">Save</button>
       <span id="assetsStatus" class="status"></span>
     </div>
   </div>
@@ -103,39 +106,34 @@
       <button type="button" id="addCropBtn" class="primary">Add symbol to glossary</button>
     </div>
     <div style="margin-top:12px">
-      <button type="button" id="saveGlossaryBtn" class="primary">Save glossary to file</button>
+      <button type="button" id="saveGlossaryBtn" class="primary">Save</button>
       <span id="cropStatus" class="status"></span>
     </div>
   </div>
 
   <div id="panelDice" class="panel">
-    <p class="hint">Pick die color and face (1–6). Draw a box around each symbol on the face; each box gets a label input. Label the die color once. Save this face, then do all 6 sides of every die (attack: red, blue, green, yellow; defense: white, black).</p>
-    <div class="dice-meta">
-      <label>Die color: <input type="text" id="diceColorInput" placeholder="e.g. red" value="red"></label>
-      <label>Face: <select id="diceFaceSelect"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select></label>
-      <label>Die type: <select id="diceTypeSelect">
-        <option value="Red">Red (attack)</option>
-        <option value="Blue">Blue (attack)</option>
-        <option value="Green">Green (attack)</option>
-        <option value="Yellow">Yellow (attack)</option>
-        <option value="White">White (defense)</option>
-        <option value="Black">Black (defense)</option>
-      </select></label>
+    <p class="hint">We show one dice face at a time with our estimate. Verify as-is or edit the field, then click Verify to save and go to the next.</p>
+    <div id="diceProgress" class="dice-progress"></div>
+    <div id="diceEstimate" class="dice-estimate"></div>
+    <div id="diceFaceWrap" class="dice-face-wrap">
+      <img id="diceFaceImage" alt="">
     </div>
-    <div class="dice-face-layout">
-      <div id="diceFaceWrap" class="dice-face-wrap" style="display:none">
-        <img id="diceFaceImage" alt="">
-        <canvas id="diceBoxCanvas"></canvas>
-        <div id="diceOverlay" class="dice-overlay"></div>
-      </div>
-      <div class="dice-symbol-rows">
-        <div id="diceSymbolRows"></div>
-        <p class="hint" style="margin-top:8px">Draw a box around each symbol on the die face. Numbered rows appear here; enter the label for each (e.g. +1 Hit, +1 Surge).</p>
-      </div>
+    <div class="dice-outcome-row">
+      <label style="flex-shrink:0">This face indicates:</label>
+      <input type="text" id="diceOutcomeInput" placeholder="e.g. +1 Hit, +1 Block">
     </div>
-    <div style="margin-top:12px">
-      <button type="button" id="saveDiceFaceBtn" class="primary">Save this face to glossary</button>
+    <div class="dice-nav">
+      <button type="button" id="dicePrevBtn" class="primary">Previous</button>
+      <button type="button" id="diceVerifyBtn" class="primary">Verify &amp; Next</button>
       <span id="diceFaceStatus" class="status"></span>
+    </div>
+    <div class="dice-remaining">
+      <h4>Remaining to verify (<span id="diceRemainingCount">36</span>)</h4>
+      <div id="diceRemainingList" class="dice-remaining-list"></div>
+    </div>
+    <div class="dice-saved-list">
+      <h4>Verified outcomes</h4>
+      <ul id="diceSavedList"></ul>
     </div>
   </div>
 
@@ -172,25 +170,54 @@
   let cardList = [];
   let drag = null;
   let cropRect = null;
-  let diceRegions = [];
-  let diceDrag = null;
+  let diceData = { attack: {}, defense: {} };
+  let diceOutcomes = {};
 
   const tabDice = document.getElementById('tabDice');
   const panelDice = document.getElementById('panelDice');
-  const diceColorInput = document.getElementById('diceColorInput');
-  const diceFaceSelect = document.getElementById('diceFaceSelect');
-  const diceTypeSelect = document.getElementById('diceTypeSelect');
+  const diceProgress = document.getElementById('diceProgress');
+  const diceEstimate = document.getElementById('diceEstimate');
   const diceFaceWrap = document.getElementById('diceFaceWrap');
   const diceFaceImage = document.getElementById('diceFaceImage');
-  const diceBoxCanvas = document.getElementById('diceBoxCanvas');
-  const diceOverlay = document.getElementById('diceOverlay');
-  const diceSymbolRows = document.getElementById('diceSymbolRows');
-  const saveDiceFaceBtn = document.getElementById('saveDiceFaceBtn');
+  const diceOutcomeInput = document.getElementById('diceOutcomeInput');
+  const dicePrevBtn = document.getElementById('dicePrevBtn');
+  const diceVerifyBtn = document.getElementById('diceVerifyBtn');
   const diceFaceStatus = document.getElementById('diceFaceStatus');
+  const diceRemainingCount = document.getElementById('diceRemainingCount');
+  const diceRemainingList = document.getElementById('diceRemainingList');
+  const diceSavedList = document.getElementById('diceSavedList');
 
-  tabAssets.addEventListener('click', () => { panelAssets.classList.add('active'); panelCards.classList.remove('active'); panelDice.classList.remove('active'); tabAssets.classList.add('active'); tabCards.classList.remove('active'); tabDice.classList.remove('active'); });
-  tabCards.addEventListener('click', () => { panelCards.classList.add('active'); panelAssets.classList.remove('active'); panelDice.classList.remove('active'); tabCards.classList.add('active'); tabAssets.classList.remove('active'); tabDice.classList.remove('active'); });
-  tabDice.addEventListener('click', () => { panelDice.classList.add('active'); panelAssets.classList.remove('active'); panelCards.classList.remove('active'); tabDice.classList.add('active'); tabAssets.classList.remove('active'); tabCards.classList.remove('active'); loadDiceFace(); });
+  const DICE_FACES = [];
+  ['red', 'blue', 'green', 'yellow', 'white', 'black'].forEach((color) => {
+    for (let face = 1; face <= 6; face++) DICE_FACES.push({ color, face: String(face) });
+  });
+  let diceCurrentIndex = 0;
+
+  const TAB_STORAGE_KEY = 'symbol-labeling-tool-tab';
+  function switchTab(tabId) {
+    [panelAssets, panelCards, panelDice].forEach((p) => p.classList.remove('active'));
+    [tabAssets, tabCards, tabDice].forEach((t) => t.classList.remove('active'));
+    if (tabId === 'assets') { panelAssets.classList.add('active'); tabAssets.classList.add('active'); }
+    else if (tabId === 'cards') { panelCards.classList.add('active'); tabCards.classList.add('active'); }
+    else if (tabId === 'dice') { panelDice.classList.add('active'); tabDice.classList.add('active'); loadDiceOutcomes(); }
+    try { localStorage.setItem(TAB_STORAGE_KEY, tabId); } catch (_) {}
+  }
+  tabAssets.addEventListener('click', () => switchTab('assets'));
+  tabCards.addEventListener('click', () => switchTab('cards'));
+  tabDice.addEventListener('click', () => switchTab('dice'));
+
+  (function restoreTab() {
+    try {
+      const saved = localStorage.getItem(TAB_STORAGE_KEY);
+      if (saved === 'cards' || saved === 'dice' || saved === 'assets') {
+        [panelAssets, panelCards, panelDice].forEach((p) => p.classList.remove('active'));
+        [tabAssets, tabCards, tabDice].forEach((t) => t.classList.remove('active'));
+        if (saved === 'assets') { panelAssets.classList.add('active'); tabAssets.classList.add('active'); }
+        else if (saved === 'cards') { panelCards.classList.add('active'); tabCards.classList.add('active'); }
+        else if (saved === 'dice') { panelDice.classList.add('active'); tabDice.classList.add('active'); }
+      }
+    } catch (_) {}
+  })();
 
   async function loadGlossary() {
     const r = await fetch('/api/symbol-glossary');
@@ -414,133 +441,125 @@
     }
   });
 
-  diceTypeSelect.addEventListener('change', () => {
-    const c = diceTypeSelect.value.toLowerCase();
-    diceColorInput.value = c;
-  });
-
-  function loadDiceFace() {
-    const color = diceTypeSelect.value;
-    const face = diceFaceSelect.value;
-    const path = `vassal_extracted/images/dice/Dice-${color} ${face}.jpg`;
-    diceFaceImage.src = '/' + path;
-    diceFaceWrap.style.display = 'inline-block';
-    diceRegions = [];
-    diceDrag = null;
-    renderDiceSymbolRows();
-    diceFaceImage.onload = () => {
-      diceBoxCanvas.width = diceFaceImage.offsetWidth;
-      diceBoxCanvas.height = diceFaceImage.offsetHeight;
-      drawDiceBoxes();
-    };
+  function formatDiceFaceSuggested(color, faceNum) {
+    const c = color.toLowerCase();
+    const f = parseInt(faceNum, 10) - 1;
+    if (diceData.attack[c] && diceData.attack[c][f]) {
+      const x = diceData.attack[c][f];
+      const parts = [];
+      if (x.acc > 0) parts.push('+' + x.acc + ' Accuracy');
+      if (x.dmg > 0) parts.push('+' + x.dmg + ' Hit');
+      if (x.surge > 0) parts.push('+' + x.surge + ' Surge');
+      return parts.length ? parts.join(', ') : '0';
+    }
+    if (diceData.defense[c] && diceData.defense[c][f]) {
+      const x = diceData.defense[c][f];
+      const parts = [];
+      if (x.block > 0) parts.push('+' + x.block + ' Block');
+      if (x.evade > 0) parts.push('+' + x.evade + ' Evade');
+      return parts.length ? parts.join(', ') : '0';
+    }
+    return '';
   }
 
-  diceFaceSelect.addEventListener('change', loadDiceFace);
-  diceTypeSelect.addEventListener('change', loadDiceFace);
+  function showDiceFaceAtIndex(i) {
+    diceCurrentIndex = Math.max(0, Math.min(i, DICE_FACES.length - 1));
+    const { color, face } = DICE_FACES[diceCurrentIndex];
+    const cap = color.charAt(0).toUpperCase() + color.slice(1);
+    diceFaceImage.src = '/' + `vassal_extracted/images/dice/Dice-${cap} ${face}.jpg`;
+    diceProgress.textContent = `${cap} die — Face ${face} of 6  ·  ${diceCurrentIndex + 1} of ${DICE_FACES.length}`;
+    const estimate = formatDiceFaceSuggested(color, face);
+    diceEstimate.textContent = estimate ? 'Our estimate: ' + estimate : '';
+    const saved = (diceOutcomes[color] && diceOutcomes[color][face]) || '';
+    diceOutcomeInput.value = saved || estimate;
+    diceFaceStatus.textContent = '';
+    dicePrevBtn.disabled = diceCurrentIndex === 0;
+  }
 
-  function renderDiceSymbolRows() {
-    diceSymbolRows.innerHTML = '';
-    diceRegions.forEach((reg, i) => {
-      const row = document.createElement('div');
-      row.className = 'dice-symbol-row';
-      row.innerHTML = `<span class="dice-symbol-num">${i + 1}</span><span class="dice-symbol-line">———</span><input type="text" data-dice-region="${i}" placeholder="e.g. +1 Hit" value="${escapeHtml(reg.label || '')}"><span class="remove-region" data-dice-region="${i}">Remove</span>`;
-      const input = row.querySelector('input');
-      const remove = row.querySelector('.remove-region');
-      input.addEventListener('input', () => { reg.label = input.value; drawDiceBoxes(); });
-      remove.addEventListener('click', () => {
-        diceRegions.splice(i, 1);
-        renderDiceSymbolRows();
-        drawDiceBoxes();
-      });
-      diceSymbolRows.appendChild(row);
+  async function loadDiceOutcomes() {
+    try {
+      const r = await fetch('/api/dice-face-outcomes');
+      const data = await r.json();
+      diceOutcomes = data.outcomes || {};
+    } catch {
+      diceOutcomes = {};
+    }
+    renderDiceSavedList();
+    renderDiceRemainingList();
+    showDiceFaceAtIndex(diceCurrentIndex);
+  }
+
+  function renderDiceSavedList() {
+    const entries = [];
+    DICE_FACES.forEach(({ color, face }) => {
+      const text = (diceOutcomes[color] && diceOutcomes[color][face]) || '';
+      if (text) entries.push({ color, face, text });
+    });
+    diceSavedList.innerHTML = entries.map((e) => `<li><strong>${e.color} face ${e.face}:</strong> ${escapeHtml(e.text)}</li>`).join('') || '<li class="hint">None yet.</li>';
+  }
+
+  function renderDiceRemainingList() {
+    const remaining = DICE_FACES.filter(({ color, face }) => !(diceOutcomes[color] && diceOutcomes[color][face]));
+    diceRemainingCount.textContent = remaining.length;
+    diceRemainingList.innerHTML = '';
+    remaining.forEach(({ color, face }, i) => {
+      const idx = DICE_FACES.findIndex((f) => f.color === color && f.face === face);
+      const cap = color.charAt(0).toUpperCase() + color.slice(1);
+      const el = document.createElement('span');
+      el.className = 'entry';
+      el.textContent = cap + ' face ' + face;
+      el.addEventListener('click', () => showDiceFaceAtIndex(idx));
+      diceRemainingList.appendChild(el);
     });
   }
 
-  diceOverlay.addEventListener('mousedown', (e) => {
-    const rect = diceOverlay.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    diceDrag = { x1: x, y1: y, x2: x, y2: y };
-  });
-  diceOverlay.addEventListener('mousemove', (e) => {
-    if (!diceDrag) return;
-    const rect = diceOverlay.getBoundingClientRect();
-    diceDrag.x2 = e.clientX - rect.left;
-    diceDrag.y2 = e.clientY - rect.top;
-    drawDiceBoxes();
-  });
-  diceOverlay.addEventListener('mouseup', () => {
-    if (!diceDrag) return;
-    const x1 = Math.min(diceDrag.x1, diceDrag.x2);
-    const y1 = Math.min(diceDrag.y1, diceDrag.y2);
-    const x2 = Math.max(diceDrag.x1, diceDrag.x2);
-    const y2 = Math.max(diceDrag.y1, diceDrag.y2);
-    if (x2 - x1 > 4 && y2 - y1 > 4) diceRegions.push({ x1, y1, x2, y2, label: '' });
-    diceDrag = null;
-    renderDiceSymbolRows();
-    drawDiceBoxes();
-  });
+  dicePrevBtn.addEventListener('click', () => showDiceFaceAtIndex(diceCurrentIndex - 1));
 
-  function drawDiceBoxes() {
-    const ctx = diceBoxCanvas.getContext('2d');
-    ctx.clearRect(0, 0, diceBoxCanvas.width, diceBoxCanvas.height);
-    const draw = (r, num) => {
-      const x1 = Math.min(r.x1, r.x2);
-      const y1 = Math.min(r.y1, r.y2);
-      const w = Math.abs(r.x2 - r.x1);
-      const h = Math.abs(r.y2 - r.y1);
-      ctx.strokeStyle = '#0d6efd';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x1, y1, w, h);
-      if (num != null) {
-        ctx.fillStyle = '#0d6efd';
-        ctx.font = 'bold 14px system-ui';
-        ctx.fillText(String(num), x1 + 4, y1 + 18);
-      }
-    };
-    if (diceDrag) draw(diceDrag);
-    diceRegions.forEach((r, i) => draw(r, i + 1));
-  }
-
-  saveDiceFaceBtn.addEventListener('click', async () => {
-    const dieColor = diceColorInput.value.trim() || diceTypeSelect.value.toLowerCase();
-    const faceNum = diceFaceSelect.value;
-    if (!diceFaceImage.complete || !diceFaceImage.naturalWidth) {
-      diceFaceStatus.textContent = 'Load a die face first.';
+  diceVerifyBtn.addEventListener('click', async () => {
+    const { color, face } = DICE_FACES[diceCurrentIndex];
+    const text = diceOutcomeInput.value.trim();
+    if (!text) {
+      diceFaceStatus.textContent = 'Enter or confirm what this face indicates.';
       diceFaceStatus.className = 'status err';
       return;
     }
-    const scaleX = diceFaceImage.naturalWidth / diceFaceImage.offsetWidth;
-    const scaleY = diceFaceImage.naturalHeight / diceFaceImage.offsetHeight;
-    let added = 0;
-    diceRegions.forEach((r, i) => {
-      const label = (r.label && r.label.trim()) || '';
-      if (!label) return;
-      const c = document.createElement('canvas');
-      c.width = Math.max(1, (r.x2 - r.x1) * scaleX);
-      c.height = Math.max(1, (r.y2 - r.y1) * scaleY);
-      const ctx = c.getContext('2d');
-      ctx.drawImage(diceFaceImage, r.x1 * scaleX, r.y1 * scaleY, c.width, c.height, 0, 0, c.width, c.height);
-      const id = `dice-${dieColor}-face${faceNum}-${i + 1}`;
-      glossary.symbols.push({
-        id,
-        label,
-        category: ['white', 'black'].includes(dieColor.toLowerCase()) ? 'defense-die' : 'attack-die',
-        imageBase64: c.toDataURL('image/png'),
-        notes: `Die: ${dieColor}, Face: ${faceNum}`,
-      });
-      added++;
+    if (!diceOutcomes[color]) diceOutcomes[color] = {};
+    diceOutcomes[color][face] = text;
+    const res = await fetch('/api/save-dice-face-outcomes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'Symbol Labeling Tool', outcomes: diceOutcomes }),
     });
-    glossaryCount.textContent = glossary.symbols.length;
-    renderGlossaryPreview();
-    diceFaceStatus.textContent = added ? `Added ${added} symbol(s). Save glossary to file to write to disk.` : 'Draw boxes and fill labels first.';
-    diceFaceStatus.className = added ? 'status ok' : 'status err';
+    const result = await res.json();
+    if (result.ok) {
+      renderDiceSavedList();
+      renderDiceRemainingList();
+      diceFaceStatus.textContent = 'Saved.';
+      diceFaceStatus.className = 'status ok';
+      if (diceCurrentIndex < DICE_FACES.length - 1) showDiceFaceAtIndex(diceCurrentIndex + 1);
+      else diceFaceStatus.textContent = diceRemainingCount.textContent === '0' ? 'All 36 faces verified.' : 'Use Previous or click a remaining face to continue.';
+    } else {
+      diceFaceStatus.textContent = result.error || 'Error';
+      diceFaceStatus.className = 'status err';
+    }
   });
 
   (async function init() {
+    try {
+      const r = await fetch('/data/dice.json');
+      const d = await r.json();
+      diceData.attack = d.attack || {};
+      diceData.defense = d.defense || {};
+    } catch {
+      diceData = { attack: {}, defense: {} };
+    }
     await loadGlossary();
     await loadAssetList();
     await loadCardList();
+    try {
+      const saved = localStorage.getItem(TAB_STORAGE_KEY);
+      if (saved === 'dice') loadDiceOutcomes();
+    } catch (_) {}
   })();
 })();
   </script>

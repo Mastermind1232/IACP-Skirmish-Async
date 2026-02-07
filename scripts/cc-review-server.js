@@ -303,6 +303,42 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'GET' && pathname === '/api/dice-face-outcomes') {
+    try {
+      const outPath = join(root, 'data', 'dice-face-outcomes.json');
+      const data = existsSync(outPath)
+        ? JSON.parse(readFileSync(outPath, 'utf8'))
+        : { source: 'Symbol Labeling Tool', outcomes: {} };
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(data));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ outcomes: {}, error: err.message }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && pathname === '/api/save-dice-face-outcomes') {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    try {
+      const data = JSON.parse(body);
+      const outcomes = data.outcomes && typeof data.outcomes === 'object' ? data.outcomes : {};
+      const toWrite = {
+        source: data.source || 'Symbol Labeling Tool',
+        outcomes,
+        updatedAt: new Date().toISOString(),
+      };
+      writeFileSync(join(root, 'data', 'dice-face-outcomes.json'), JSON.stringify(toWrite, null, 2), 'utf8');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+    return;
+  }
+
   if (req.method === 'GET' && pathname === '/api/symbol-glossary') {
     try {
       const outPath = join(root, 'data', 'symbol-glossary.json');
