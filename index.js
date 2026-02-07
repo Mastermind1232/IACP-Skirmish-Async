@@ -151,6 +151,10 @@ function reloadGameData() {
     const mtData = JSON.parse(readFileSync(join(rootDir, 'data', 'map-tokens.json'), 'utf8'));
     mapTokensData = mtData.maps || {};
   } catch {}
+  try {
+    const effData = JSON.parse(readFileSync(join(rootDir, 'data', 'dc-effects.json'), 'utf8'));
+    dcEffects = effData.cards || {};
+  } catch {}
 }
 
 function getCcEffect(cardName) {
@@ -1977,11 +1981,27 @@ function extractGameIdFromMessage(message) {
   return null;
 }
 
+// Match your existing bot logs channel (name or slug)
+const BOT_LOGS_CHANNEL_NAMES = ['bot-logs', 'bot-log', 'bot logs'];
+
 async function logGameErrorToBotLogs(client, guild, gameId, error, context = '') {
   try {
-    await guild?.channels?.fetch().catch(() => {});
-    const ch = guild?.channels?.cache?.find((c) => c.name === 'bot-logs' && c.type === ChannelType.GuildText);
-    if (!ch) return;
+    if (!guild) {
+      console.error('logGameErrorToBotLogs: no guild (interaction may be in DMs)');
+      return;
+    }
+    await guild.channels.fetch().catch(() => {});
+    const ch = guild.channels.cache.find((c) => {
+      if (c.type !== ChannelType.GuildText) return false;
+      const name = (c.name || '').toLowerCase().trim();
+      return BOT_LOGS_CHANNEL_NAMES.includes(name) || name.replace(/\s+/g, '-') === 'bot-logs';
+    });
+    if (!ch) {
+      console.error(
+        `Bot logs channel not found in guild "${guild.name}" (${guild.id}). Ensure your existing bot logs text channel is named one of: ${BOT_LOGS_CHANNEL_NAMES.join(', ')}.`
+      );
+      return;
+    }
     const errMsg = error?.message || String(error);
     const stack = error?.stack ? `\n\`\`\`\n${error.stack.slice(0, 800)}\n\`\`\`` : '';
     const ctx = context ? ` (${context})` : '';
@@ -2705,6 +2725,38 @@ async function refreshAllGameComponents(game, client) {
     }
   }
 
+  // Update Companion embeds from dc-effects (so figure DC companions show after edit + Refresh All)
+  const p1PlayAreaId = game.p1PlayAreaId;
+  const p2PlayAreaId = game.p2PlayAreaId;
+  const p1CompanionIds = game.p1DcCompanionMessageIds || [];
+  const p2CompanionIds = game.p2DcCompanionMessageIds || [];
+  const p1DcList = game.p1DcList || [];
+  const p2DcList = game.p2DcList || [];
+  for (let i = 0; i < p1CompanionIds.length; i++) {
+    const dcName = p1DcList[i]?.dcName;
+    if (!dcName) continue;
+    try {
+      const ch = await client.channels.fetch(p1PlayAreaId);
+      const companionMsg = await ch.messages.fetch(p1CompanionIds[i]);
+      const desc = getCompanionDescriptionForDc(dcName);
+      await companionMsg.edit({ embeds: [new EmbedBuilder().setTitle('Companion').setDescription(desc).setColor(0x2f3136)] });
+    } catch (err) {
+      console.error('Refresh All: P1 companion message failed', p1CompanionIds[i], err);
+    }
+  }
+  for (let i = 0; i < p2CompanionIds.length; i++) {
+    const dcName = p2DcList[i]?.dcName;
+    if (!dcName) continue;
+    try {
+      const ch = await client.channels.fetch(p2PlayAreaId);
+      const companionMsg = await ch.messages.fetch(p2CompanionIds[i]);
+      const desc = getCompanionDescriptionForDc(dcName);
+      await companionMsg.edit({ embeds: [new EmbedBuilder().setTitle('Companion').setDescription(desc).setColor(0x2f3136)] });
+    } catch (err) {
+      console.error('Refresh All: P2 companion message failed', p2CompanionIds[i], err);
+    }
+  }
+
   await updateHandChannelMessages(game, client);
   for (const pn of [1, 2]) {
     await updateHandVisualMessage(game, pn, client);
@@ -3176,6 +3228,15 @@ function hasDepleteEffect(dcName) {
   const card = dcEffects[dcName] || (typeof dcName === 'string' && !dcName.startsWith('[') ? dcEffects[`[${dcName}]`] : null);
   const text = card?.abilityText || '';
   return /deplete/i.test(text);
+}
+
+/** Description for the Companion embed under a DC (from dc-effects.companion). */
+function getCompanionDescriptionForDc(dcName) {
+  const card = dcEffects[dcName] || (typeof dcName === 'string' && !dcName.startsWith('[') ? dcEffects[`[${dcName}]`] : null);
+  const c = card?.companion;
+  if (!c) return '*None*';
+  if (typeof c === 'string' && c.trim()) return c.trim();
+  return 'Companion (see ability text)';
 }
 
 function getDcStats(dcName) {
@@ -3973,8 +4034,9 @@ async function populatePlayAreas(game, client) {
       embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
     });
     game.p1DcAttachmentMessageIds.push(attachMsg.id);
+    const p1CompanionDesc = getCompanionDescriptionForDc(dcName);
     const companionMsg = await p1PlayArea.send({
-      embeds: [new EmbedBuilder().setTitle('Companion').setDescription('*None*').setColor(0x2f3136)],
+      embeds: [new EmbedBuilder().setTitle('Companion').setDescription(p1CompanionDesc).setColor(0x2f3136)],
     });
     game.p1DcCompanionMessageIds.push(companionMsg.id);
   }
@@ -3992,8 +4054,9 @@ async function populatePlayAreas(game, client) {
       embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
     });
     game.p2DcAttachmentMessageIds.push(attachMsg.id);
+    const p2CompanionDesc = getCompanionDescriptionForDc(dcName);
     const companionMsg = await p2PlayArea.send({
-      embeds: [new EmbedBuilder().setTitle('Companion').setDescription('*None*').setColor(0x2f3136)],
+      embeds: [new EmbedBuilder().setTitle('Companion').setDescription(p2CompanionDesc).setColor(0x2f3136)],
     });
     game.p2DcCompanionMessageIds.push(companionMsg.id);
   }
@@ -4267,6 +4330,7 @@ client.on('messageCreate', async (message) => {
       saveGames();
     } catch (err) {
       console.error('Test game creation error:', err);
+      await logGameErrorToBotLogs(message.client, message.guild, null, err, 'test_game_create');
       await creatingMsg.edit(`Failed to create test game: ${err.message}`).catch(() => {});
     } finally {
       testGameCreationInProgress.delete(userId);
@@ -4308,6 +4372,7 @@ client.on('messageCreate', async (message) => {
       await message.channel.send(`Done. Deleted ${deleted} channel(s).`);
     } catch (err) {
       console.error('Cleanup error:', err);
+      await logGameErrorToBotLogs(message.client, message.guild, null, err, 'cleanup');
       await message.channel.send(`Cleanup failed: ${err.message}`);
     }
     return;
@@ -4388,6 +4453,7 @@ client.on('messageCreate', async (message) => {
         await message.reply(`✓ Squad **${squad.name}** submitted from .vsav (${squad.dcCount} DCs, ${squad.ccCount} CCs)`);
       } catch (err) {
         console.error('vsav parse error:', err);
+        await logGameErrorToBotLogs(message.client, message.guild, null, err, 'messageCreate_vsav');
         await message.reply(`Failed to parse .vsav: ${err.message}`);
       }
       return;
@@ -4453,6 +4519,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.deferUpdate();
         await interaction.message.edit({ content: '✓ Marked as resolved.', components: [] }).catch(() => {});
       } catch (err) {
+        await logGameErrorToBotLogs(interaction.client, interaction.guild, null, err, 'request_resolve');
         await interaction.reply({ content: `Failed: ${err.message}`, ephemeral: true }).catch(() => {});
       }
       return;
@@ -4476,6 +4543,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.deferUpdate();
         await interaction.message.edit({ content: '✓ Marked as rejected.', components: [] }).catch(() => {});
       } catch (err) {
+        await logGameErrorToBotLogs(interaction.client, interaction.guild, null, err, 'request_reject');
         await interaction.reply({ content: `Failed: ${err.message}`, ephemeral: true }).catch(() => {});
       }
       return;
@@ -4918,6 +4986,7 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.update({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch(() => interaction.deferUpdate().catch(() => {}));
     } catch (err) {
       console.error('dc_activate_ error:', err);
+      await logGameErrorToBotLogs(interaction.client, interaction.guild, extractGameIdFromInteraction(interaction), err, 'dc_activate');
       await interaction.followUp({ content: `Activation failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch(() => {});
     }
     return;
@@ -5377,6 +5446,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
       } catch (err) {
         console.error('Move button error:', err);
+        await logGameErrorToBotLogs(interaction.client, interaction.guild, extractGameIdFromInteraction(interaction), err, 'dc_move');
         await interaction.reply({ content: `Move failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch(() => {});
         return;
       }
@@ -6556,6 +6626,7 @@ client.on('interactionCreate', async (interaction) => {
       saveGames();
     } catch (err) {
       console.error('Draft Random error:', err);
+      await logGameErrorToBotLogs(interaction.client, interaction.guild, extractGameIdFromInteraction(interaction), err, 'draft_random');
       await interaction.followUp({ content: `Draft Random failed: ${err.message}`, ephemeral: true }).catch(() => {});
     }
     return;
@@ -6912,6 +6983,7 @@ client.on('interactionCreate', async (interaction) => {
       await boardChannel.send(payload);
     } catch (err) {
       console.error('Failed to refresh map:', err);
+      await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'refresh_map');
       await interaction.followUp({ content: 'Failed to refresh map.', ephemeral: true }).catch(() => {});
     }
     return;
@@ -6934,6 +7006,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.followUp({ content: '✓ Full refresh complete. Reloaded all JSON data, map renderer cache, map, DCs, hands, discard piles.', ephemeral: true }).catch(() => {});
     } catch (err) {
       console.error('Failed to refresh all:', err);
+      await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'refresh_all');
       await interaction.followUp({ content: 'Failed to refresh: ' + (err?.message || String(err)), ephemeral: true }).catch(() => {});
     }
     return;
@@ -7922,6 +7995,7 @@ client.on('interactionCreate', async (interaction) => {
       }
     } catch (err) {
       console.error('Kill game error:', err);
+      await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'kill_game');
       try {
         await interaction.editReply({ content: `Failed to delete: ${err.message}` }).catch(() => {});
       } catch {
@@ -7967,6 +8041,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.editReply({ content: `Loaded **${squad.name}** (${squad.dcCount} DCs, ${squad.ccCount} CCs).` }).catch(() => {});
     } catch (err) {
       console.error('Failed to apply default deck:', err);
+      await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'default_deck');
       await interaction.editReply({ content: `Failed to load deck: ${err.message}` }).catch(() => {});
     }
     return;
@@ -8153,6 +8228,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.channel.setArchived(true);
     } catch (err) {
       console.error('Failed to create game channels:', err);
+      await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'create_game_channels');
       await interaction.followUp({
         content: `Failed to create game: ${err.message}. Ensure the bot has **Manage Channels** permission.`,
         ephemeral: true,

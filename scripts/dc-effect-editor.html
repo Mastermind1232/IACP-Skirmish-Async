@@ -205,6 +205,14 @@
         <input type="checkbox" id="attachment" style="width: auto;">
         <span>Attachment</span>
       </label>
+      <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
+        <input type="checkbox" id="companion" style="width: auto;">
+        <span>Companion</span>
+      </label>
+      <div class="field inline" style="max-width: 180px;">
+        <label>Companion name</label>
+        <input type="text" id="companionName" placeholder="e.g. The Child">
+      </div>
       <div class="field inline">
         <label>Affiliation</label>
         <select id="affiliation">
@@ -264,6 +272,8 @@
     const surgeAddBtn = document.getElementById('surgeAdd');
     const surgeListEl = document.getElementById('surgeList');
     const attachmentCheckbox = document.getElementById('attachment');
+    const companionCheckbox = document.getElementById('companion');
+    const companionNameInput = document.getElementById('companionName');
     const affiliationSelect = document.getElementById('affiliation');
     const addBtn = document.getElementById('addBtn');
     const listEl = document.getElementById('list');
@@ -466,6 +476,8 @@
         const surgeArr = card.surgeAbilities || statsFallback?.surgeAbilities || [];
         setChipList(surgeListEl, surgeArr, SURGE_LABELS);
         attachmentCheckbox.checked = !!(card.attachment);
+        companionCheckbox.checked = !!(card.companion);
+        companionNameInput.value = typeof card.companion === 'string' ? card.companion : '';
         const aff = card.affiliation || '';
         affiliationSelect.value = (aff === 'Mercenary' ? 'Scum' : aff === 'Neutral' ? 'Any' : aff) || '';
       } else {
@@ -485,6 +497,8 @@
         setChipList(defenseListEl, def == null ? [] : (Array.isArray(def) ? def : [def]), DEFENSE_LABELS);
         setChipList(surgeListEl, statsFallback?.surgeAbilities || [], SURGE_LABELS);
         attachmentCheckbox.checked = false;
+        companionCheckbox.checked = false;
+        companionNameInput.value = '';
         affiliationSelect.value = '';
       }
     }
@@ -541,6 +555,7 @@
         defense: fig.defense,
         surgeAbilities: fig.surgeAbilities,
         attachment: attachmentCheckbox.checked,
+        companion: companionCheckbox.checked ? (companionNameInput.value.trim() || true) : undefined,
         affiliation: affiliationSelect.value || undefined,
         isIACPVariant: existing.isIACPVariant,
       };
@@ -571,6 +586,7 @@
         defense: fig.defense,
         surgeAbilities: fig.surgeAbilities,
         attachment: attachmentCheckbox.checked,
+        companion: companionCheckbox.checked ? (companionNameInput.value.trim() || true) : undefined,
         affiliation: affiliationSelect.value || undefined,
         isIACPVariant: existing.isIACPVariant,
       };
@@ -680,9 +696,10 @@
         const costStr = data.cost !== undefined && data.cost !== null ? data.cost + ' pts' : '—';
         const healthStr = data.health !== undefined && data.health !== null ? data.health + ' HP' : '';
         const attStr = data.attachment ? ' · Attachment' : '';
+        const compStr = data.companion ? (' · Companion' + (typeof data.companion === 'string' ? ` (${data.companion})` : '')) : '';
         const affStr = data.affiliation ? ' · ' + data.affiliation : '';
         const mid = [costStr, healthStr, kwStr || '—'].filter(Boolean).join(' · ');
-        div.innerHTML = `<strong>${name}</strong> <span>${mid}${attStr}${affStr}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
+        div.innerHTML = `<strong>${name}</strong> <span>${mid}${attStr}${compStr}${affStr}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
         div.querySelector('button').addEventListener('click', (e) => {
           e.stopPropagation();
           delete cards[name];

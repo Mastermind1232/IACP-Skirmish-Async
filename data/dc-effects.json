@@ -502,7 +502,10 @@
     },
     "0-0-0": {
       "abilityText": "Traits: DROID. Attack (Range): red, yellow. Defense: black. Surge: pierce 2. Surge: recover 2",
-      "keywords": []
+      "keywords": [],
+      "subname": "Specialized in Pain",
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "4-LOM": {
       "abilityText": "TBD (IACP – verify from card).",

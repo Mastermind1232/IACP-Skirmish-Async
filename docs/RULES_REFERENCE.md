@@ -1390,6 +1390,8 @@ to mark that the figures in that group have already activated during this round.
 abilities that must be used before, during, or after the player's figure activates.
 - Abilities on exhausted cards can be used as long as the abilities do not require the player to exhaust the card
 to use the ability.
+- Static or passive abilities (abilities that are always “on” and do not require exhausting the card) remain
+active even when the card is exhausted.
 - If a card has multiple abilities that each require exhausting the card, the player may use only one of them per
 ready cycle—once the card is exhausted to pay for one such ability, the others cannot be used until the card is
 readied (unless another effect readies the card).
