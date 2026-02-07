@@ -5,7 +5,7 @@
  * Save writes to data/cc-effects.json.
  */
 import { createServer } from 'http';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
 import { join, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -250,6 +250,120 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'GET' && pathname === '/api/symbol-asset-list') {
+    try {
+      const imagesRoot = join(root, 'vassal_extracted', 'images');
+      const suggest = (folder, name) => {
+        const n = name.toLowerCase();
+        if (folder === 'dice') {
+          if (n.includes('dice icon-red')) return { label: 'red', category: 'attack-die' };
+          if (n.includes('dice icon-blue')) return { label: 'blue', category: 'attack-die' };
+          if (n.includes('dice icon-green')) return { label: 'green', category: 'attack-die' };
+          if (n.includes('dice icon-yellow')) return { label: 'yellow', category: 'attack-die' };
+          if (n.includes('dice icon-white')) return { label: 'white', category: 'defense-die' };
+          if (n.includes('dice icon-black')) return { label: 'black', category: 'defense-die' };
+          if (n.includes('diceicon--damage')) return { label: '+1 Hit', category: 'surge' };
+          if (n.includes('diceicon--block')) return { label: '+1 Block', category: 'surge' };
+          if (n.includes('diceicon--evade')) return { label: '+1 Evade', category: 'surge' };
+          if (n.includes('diceicon--surge')) return { label: '+1 Surge', category: 'surge' };
+        }
+        if (folder === 'tokens') {
+          if (n.includes('melee attack')) return { label: 'Melee', category: 'other' };
+          if (n.includes('ranged attack')) return { label: 'Range', category: 'other' };
+        }
+        if (folder === 'conditions') {
+          if (n.includes('bleeding')) return { label: 'Bleed', category: 'keyword' };
+          if (n.includes('focused')) return { label: 'Focus', category: 'keyword' };
+          if (n.includes('stunned')) return { label: 'Stun', category: 'keyword' };
+          if (n.includes('weakened')) return { label: 'Weaken', category: 'keyword' };
+          if (n.includes('hidden')) return { label: 'Hidden', category: 'keyword' };
+        }
+        return { label: '', category: 'other' };
+      };
+      const list = (subdir) => {
+        const dir = join(imagesRoot, subdir);
+        if (!existsSync(dir)) return [];
+        return readdirSync(dir)
+          .filter((f) => /\.(png|jpg|jpeg|gif)$/i.test(f))
+          .map((f) => {
+            const rel = `vassal_extracted/images/${subdir}/${f}`;
+            const s = suggest(subdir, f);
+            return { path: rel, suggestedLabel: s.label, suggestedCategory: s.category };
+          });
+      };
+      const dice = list('dice').filter((e) => /Dice Icon-|DiceIcon--/.test(e.path));
+      const tokens = list('tokens').filter((e) => /Icon--(Melee|Ranged) Attack|Power Token--(Block|Evade|Hit|Surge)/i.test(e.path));
+      const conditions = list('conditions').filter((e) => /Condition (card|Marker)--(Bleeding|Focused|Hidden|Stunned|Weakened)/i.test(e.path));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ dice, tokens, conditions }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && pathname === '/api/symbol-glossary') {
+    try {
+      const outPath = join(root, 'data', 'symbol-glossary.json');
+      const data = existsSync(outPath)
+        ? JSON.parse(readFileSync(outPath, 'utf8'))
+        : { source: 'Symbol Labeling Tool', symbols: [] };
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(data));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ symbols: [], error: err.message }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && pathname === '/api/save-symbol-glossary') {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    try {
+      const data = JSON.parse(body);
+      const symbols = Array.isArray(data.symbols) ? data.symbols : [];
+      const imagesDir = join(root, 'data', 'symbol-images');
+      if (!existsSync(imagesDir)) mkdirSync(imagesDir, { recursive: true });
+      const safeId = (id) => String(id || '').replace(/[^a-zA-Z0-9-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'symbol';
+      const outSymbols = symbols.map((s) => {
+        const id = safeId(s.id || s.label);
+        const base64 = typeof s.imageBase64 === 'string' && s.imageBase64.length > 0 ? s.imageBase64 : null;
+        const sourcePath = typeof s.sourcePath === 'string' && s.sourcePath.length > 0 ? s.sourcePath : null;
+        let imagePath = s.imagePath;
+        if (base64 && base64.length > 0) {
+          const base = base64.replace(/^data:image\/\w+;base64,/, '');
+          const buf = Buffer.from(base, 'base64');
+          const fname = `${id}.png`;
+          writeFileSync(join(imagesDir, fname), buf);
+          imagePath = `symbol-images/${fname}`;
+        } else if (sourcePath) {
+          imagePath = sourcePath;
+        }
+        return {
+          id: id || s.id,
+          label: s.label || '',
+          category: s.category || 'other',
+          imagePath: imagePath || (s.imagePath ? s.imagePath : null),
+          notes: s.notes || '',
+        };
+      });
+      const toWrite = {
+        source: data.source || 'Symbol Labeling Tool',
+        symbols: outSymbols,
+        updatedAt: new Date().toISOString(),
+      };
+      writeFileSync(join(root, 'data', 'symbol-glossary.json'), JSON.stringify(toWrite, null, 2), 'utf8');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+    return;
+  }
+
   let decodedPath;
   try {
     decodedPath = decodeURIComponent(pathname.replace(/^\//, ''));
@@ -280,5 +394,6 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`CC Effect Editor: http://localhost:${PORT}/scripts/cc-effect-editor.html`);
   console.log(`DC Effect Editor: http://localhost:${PORT}/scripts/dc-effect-editor.html`);
-  console.log('CC save → data/cc-effects.json | DC save → data/dc-effects.json');
+  console.log(`Symbol Labeling Tool: http://localhost:${PORT}/scripts/symbol-labeling-tool.html`);
+  console.log('CC save → data/cc-effects.json | DC save → data/dc-effects.json | Symbols → data/symbol-glossary.json + data/symbol-images/');
 });

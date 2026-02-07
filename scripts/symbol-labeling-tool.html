@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Symbol Labeling Tool — IA Skirmish</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; padding: 16px; background: #1e1e1e; color: #eee; max-width: 1000px; }
+    h1 { font-size: 1.2rem; margin-bottom: 8px; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+    .tabs button { padding: 8px 16px; background: #333; color: #ccc; border: 1px solid #555; border-radius: 6px; cursor: pointer; }
+    .tabs button.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .hint { font-size: 12px; color: #999; margin-bottom: 12px; }
+    .asset-section { margin-bottom: 20px; }
+    .asset-section h3 { font-size: 0.95rem; margin-bottom: 8px; }
+    .asset-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; padding: 6px 0; border-bottom: 1px solid #333; }
+    .asset-row img { width: 40px; height: 40px; object-fit: contain; background: #2d2d2d; border-radius: 4px; }
+    .asset-row input[type="text"] { width: 140px; padding: 6px 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; }
+    .asset-row select { padding: 6px 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; min-width: 120px; }
+    .card-picker { margin-bottom: 16px; }
+    .card-picker select { padding: 8px 12px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; min-width: 260px; }
+    .card-canvas-wrap { position: relative; display: inline-block; max-width: 100%; margin: 12px 0; }
+    .card-canvas-wrap img { max-width: 320px; height: auto; display: block; }
+    .card-canvas-wrap canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
+    .card-canvas-wrap .overlay { position: absolute; left: 0; top: 0; right: 0; bottom: 0; cursor: crosshair; }
+    .crop-form { margin-top: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .crop-form input[type="text"] { padding: 8px 12px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; width: 160px; }
+    .crop-form select { padding: 8px 12px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; }
+    button.primary { padding: 8px 16px; background: #0d6efd; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+    button.primary:hover { background: #0b5ed7; }
+    .status { font-size: 12px; margin-left: 12px; }
+    .status.ok { color: #198754; }
+    .status.err { color: #dc3545; }
+    .symbol-list { margin-top: 24px; padding-top: 16px; border-top: 1px solid #444; }
+    .symbol-list h3 { font-size: 0.95rem; margin-bottom: 8px; }
+    .glossary-list { list-style: none; padding: 0; margin: 0; max-height: 320px; overflow-y: auto; }
+    .glossary-list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin-bottom: 4px; background: #2d2d2d; border-radius: 4px; font-size: 13px; }
+    .glossary-list li img { width: 28px; height: 28px; object-fit: contain; background: #1e1e1e; border-radius: 3px; flex-shrink: 0; }
+    .glossary-list li .line-text { flex: 1; min-width: 0; }
+    .glossary-list li .del { font-size: 11px; color: #999; cursor: pointer; flex-shrink: 0; }
+    .glossary-list li .del:hover { color: #dc3545; }
+    .symbol-card { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; background: #2d2d2d; padding: 8px; border-radius: 6px; margin: 4px; width: 100px; vertical-align: top; }
+    .symbol-card img { width: 40px; height: 40px; object-fit: contain; }
+    .symbol-card .label { font-size: 11px; text-align: center; word-break: break-word; }
+    .symbol-card .del { font-size: 10px; color: #999; cursor: pointer; }
+    .symbol-card .del:hover { color: #dc3545; }
+    .dice-face-layout { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+    .dice-face-wrap { position: relative; display: inline-block; }
+    .dice-face-wrap img { max-width: 800px; height: auto; display: block; }
+    .dice-face-wrap canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
+    .dice-face-wrap .dice-overlay { position: absolute; left: 0; top: 0; right: 0; bottom: 0; cursor: crosshair; }
+    .dice-symbol-rows { min-width: 280px; }
+    .dice-symbol-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .dice-symbol-num { width: 24px; height: 24px; border-radius: 50%; background: #0d6efd; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; flex-shrink: 0; }
+    .dice-symbol-line { width: 24px; height: 2px; background: #555; flex-shrink: 0; }
+    .dice-symbol-row input { flex: 1; padding: 6px 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; }
+    .dice-symbol-row .remove-region { font-size: 11px; color: #999; cursor: pointer; flex-shrink: 0; }
+    .dice-symbol-row .remove-region:hover { color: #dc3545; }
+    .dice-meta { margin-bottom: 12px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .dice-meta label { font-size: 12px; color: #aaa; }
+    .dice-meta input { padding: 6px 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; width: 100px; }
+  </style>
+</head>
+<body>
+  <h1>Symbol Labeling Tool</h1>
+  <div class="tabs">
+    <button type="button" id="tabAssets" class="active">1. Label existing files</button>
+    <button type="button" id="tabCards">2. Label symbol on card</button>
+    <button type="button" id="tabDice">3. Dice faces</button>
+  </div>
+
+  <div id="panelAssets" class="panel active">
+    <p class="hint">Confirm or edit the label for each symbol file. Then click Save to glossary.</p>
+    <div id="assetList"></div>
+    <div>
+      <button type="button" id="saveAssetsBtn" class="primary">Save to glossary</button>
+      <span id="assetsStatus" class="status"></span>
+    </div>
+  </div>
+
+  <div id="panelCards" class="panel">
+    <p class="hint">Pick a card, draw a box around one symbol, then enter the label and add.</p>
+    <div class="card-picker">
+      <select id="cardSelect"><option value="">— Select a card —</option></select>
+    </div>
+    <div id="cardImageWrap" class="card-canvas-wrap" style="display:none">
+      <img id="cardImage" alt="">
+      <canvas id="boxCanvas"></canvas>
+      <div id="overlay" class="overlay"></div>
+    </div>
+    <div id="cropForm" class="crop-form" style="display:none">
+      <input type="text" id="cropLabel" placeholder="Label (e.g. Pierce 2)">
+      <select id="cropCategory">
+        <option value="surge">Surge</option>
+        <option value="attack-die">Attack die</option>
+        <option value="defense-die">Defense die</option>
+        <option value="keyword">Keyword</option>
+        <option value="passive">Passive</option>
+        <option value="other">Other</option>
+      </select>
+      <button type="button" id="addCropBtn" class="primary">Add symbol to glossary</button>
+    </div>
+    <div style="margin-top:12px">
+      <button type="button" id="saveGlossaryBtn" class="primary">Save glossary to file</button>
+      <span id="cropStatus" class="status"></span>
+    </div>
+  </div>
+
+  <div id="panelDice" class="panel">
+    <p class="hint">Pick die color and face (1–6). Draw a box around each symbol on the face; each box gets a label input. Label the die color once. Save this face, then do all 6 sides of every die (attack: red, blue, green, yellow; defense: white, black).</p>
+    <div class="dice-meta">
+      <label>Die color: <input type="text" id="diceColorInput" placeholder="e.g. red" value="red"></label>
+      <label>Face: <select id="diceFaceSelect"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select></label>
+      <label>Die type: <select id="diceTypeSelect">
+        <option value="Red">Red (attack)</option>
+        <option value="Blue">Blue (attack)</option>
+        <option value="Green">Green (attack)</option>
+        <option value="Yellow">Yellow (attack)</option>
+        <option value="White">White (defense)</option>
+        <option value="Black">Black (defense)</option>
+      </select></label>
+    </div>
+    <div class="dice-face-layout">
+      <div id="diceFaceWrap" class="dice-face-wrap" style="display:none">
+        <img id="diceFaceImage" alt="">
+        <canvas id="diceBoxCanvas"></canvas>
+        <div id="diceOverlay" class="dice-overlay"></div>
+      </div>
+      <div class="dice-symbol-rows">
+        <div id="diceSymbolRows"></div>
+        <p class="hint" style="margin-top:8px">Draw a box around each symbol on the die face. Numbered rows appear here; enter the label for each (e.g. +1 Hit, +1 Surge).</p>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <button type="button" id="saveDiceFaceBtn" class="primary">Save this face to glossary</button>
+      <span id="diceFaceStatus" class="status"></span>
+    </div>
+  </div>
+
+  <div class="symbol-list">
+    <h3>Glossary (<span id="glossaryCount">0</span>)</h3>
+    <div id="glossaryPreview"></div>
+  </div>
+
+  <script>
+(function () {
+  const tabAssets = document.getElementById('tabAssets');
+  const tabCards = document.getElementById('tabCards');
+  const panelAssets = document.getElementById('panelAssets');
+  const panelCards = document.getElementById('panelCards');
+  const assetList = document.getElementById('assetList');
+  const saveAssetsBtn = document.getElementById('saveAssetsBtn');
+  const assetsStatus = document.getElementById('assetsStatus');
+  const cardSelect = document.getElementById('cardSelect');
+  const cardImageWrap = document.getElementById('cardImageWrap');
+  const cardImage = document.getElementById('cardImage');
+  const boxCanvas = document.getElementById('boxCanvas');
+  const overlay = document.getElementById('overlay');
+  const cropForm = document.getElementById('cropForm');
+  const cropLabel = document.getElementById('cropLabel');
+  const cropCategory = document.getElementById('cropCategory');
+  const addCropBtn = document.getElementById('addCropBtn');
+  const saveGlossaryBtn = document.getElementById('saveGlossaryBtn');
+  const cropStatus = document.getElementById('cropStatus');
+  const glossaryCount = document.getElementById('glossaryCount');
+  const glossaryPreview = document.getElementById('glossaryPreview');
+
+  let glossary = { symbols: [] };
+  let assetRows = [];
+  let cardList = [];
+  let drag = null;
+  let cropRect = null;
+  let diceRegions = [];
+  let diceDrag = null;
+
+  const tabDice = document.getElementById('tabDice');
+  const panelDice = document.getElementById('panelDice');
+  const diceColorInput = document.getElementById('diceColorInput');
+  const diceFaceSelect = document.getElementById('diceFaceSelect');
+  const diceTypeSelect = document.getElementById('diceTypeSelect');
+  const diceFaceWrap = document.getElementById('diceFaceWrap');
+  const diceFaceImage = document.getElementById('diceFaceImage');
+  const diceBoxCanvas = document.getElementById('diceBoxCanvas');
+  const diceOverlay = document.getElementById('diceOverlay');
+  const diceSymbolRows = document.getElementById('diceSymbolRows');
+  const saveDiceFaceBtn = document.getElementById('saveDiceFaceBtn');
+  const diceFaceStatus = document.getElementById('diceFaceStatus');
+
+  tabAssets.addEventListener('click', () => { panelAssets.classList.add('active'); panelCards.classList.remove('active'); panelDice.classList.remove('active'); tabAssets.classList.add('active'); tabCards.classList.remove('active'); tabDice.classList.remove('active'); });
+  tabCards.addEventListener('click', () => { panelCards.classList.add('active'); panelAssets.classList.remove('active'); panelDice.classList.remove('active'); tabCards.classList.add('active'); tabAssets.classList.remove('active'); tabDice.classList.remove('active'); });
+  tabDice.addEventListener('click', () => { panelDice.classList.add('active'); panelAssets.classList.remove('active'); panelCards.classList.remove('active'); tabDice.classList.add('active'); tabAssets.classList.remove('active'); tabCards.classList.remove('active'); loadDiceFace(); });
+
+  async function loadGlossary() {
+    const r = await fetch('/api/symbol-glossary');
+    glossary = await r.json();
+    if (!glossary.symbols) glossary.symbols = [];
+    glossaryCount.textContent = glossary.symbols.length;
+    renderGlossaryPreview();
+    return glossary;
+  }
+
+  function formatGlossaryLine(s) {
+    const label = s.label || '—';
+    if (s.notes && /Die:\s*(\w+).*Face:\s*(\d+)/i.test(s.notes)) {
+      const m = s.notes.match(/Die:\s*(\w+).*Face:\s*(\d+)/i);
+      return (m[1] + ' face ' + m[2] + ': ' + label).trim();
+    }
+    if (s.notes && s.notes.trim()) return s.notes.trim() + ' — ' + label;
+    return label;
+  }
+
+  function renderGlossaryPreview() {
+    glossaryPreview.innerHTML = '';
+    const ul = document.createElement('ul');
+    ul.className = 'glossary-list';
+    glossary.symbols.forEach((s, i) => {
+      const li = document.createElement('li');
+      const src = s.imagePath ? (s.imagePath.startsWith('symbol-images/') ? '/data/' + s.imagePath : '/' + s.imagePath) : '';
+      const lineText = formatGlossaryLine(s);
+      li.innerHTML = (src ? `<img src="${src.replace(/"/g, '&quot;')}" alt="">` : '') + `<span class="line-text">${escapeHtml(lineText)}</span><span class="del">Remove</span>`;
+      li.querySelector('.del').addEventListener('click', () => { glossary.symbols.splice(i, 1); renderGlossaryPreview(); glossaryCount.textContent = glossary.symbols.length; });
+      ul.appendChild(li);
+    });
+    glossaryPreview.appendChild(ul);
+  }
+
+  function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  async function loadAssetList() {
+    const r = await fetch('/api/symbol-asset-list');
+    const data = await r.json();
+    assetList.innerHTML = '';
+    assetRows = [];
+    ['dice', 'tokens', 'conditions'].forEach(key => {
+      const items = data[key] || [];
+      if (items.length === 0) return;
+      const section = document.createElement('div');
+      section.className = 'asset-section';
+      section.innerHTML = `<h3>${key}</h3>`;
+      items.forEach((item) => {
+        const existing = glossary.symbols.find((s) => s.imagePath === item.path);
+        const row = document.createElement('div');
+        row.className = 'asset-row';
+        row.innerHTML = `
+          <img src="/${item.path}" alt="" onerror="this.style.background='#333'">
+          <input type="text" data-path="${escapeHtml(item.path)}" value="${escapeHtml(existing ? existing.label : item.suggestedLabel)}" placeholder="Label">
+          <select data-path="${escapeHtml(item.path)}">
+            <option value="attack-die" ${(existing ? existing.category : item.suggestedCategory) === 'attack-die' ? 'selected' : ''}>Attack die</option>
+            <option value="defense-die" ${(existing ? existing.category : item.suggestedCategory) === 'defense-die' ? 'selected' : ''}>Defense die</option>
+            <option value="surge" ${(existing ? existing.category : item.suggestedCategory) === 'surge' ? 'selected' : ''}>Surge</option>
+            <option value="keyword" ${(existing ? existing.category : item.suggestedCategory) === 'keyword' ? 'selected' : ''}>Keyword</option>
+            <option value="passive" ${(existing ? existing.category : item.suggestedCategory) === 'passive' ? 'selected' : ''}>Passive</option>
+            <option value="other" ${(existing ? existing.category : item.suggestedCategory) === 'other' ? 'selected' : ''}>Other</option>
+          </select>
+        `;
+        section.appendChild(row);
+        assetRows.push({ path: item.path, input: row.querySelector('input'), select: row.querySelector('select') });
+      });
+      assetList.appendChild(section);
+    });
+  }
+
+  saveAssetsBtn.addEventListener('click', async () => {
+    const byPath = {};
+    glossary.symbols.forEach((s) => {
+      if (s.imagePath && !s.imagePath.startsWith('symbol-images/')) byPath[s.imagePath] = s;
+    });
+    assetRows.forEach(({ path, input, select }) => {
+      const label = input.value.trim();
+      if (!label) return;
+      byPath[path] = { id: label.toLowerCase().replace(/\s+/g, '-'), label, category: select.value, sourcePath: path };
+    });
+    const fromAssets = Object.values(byPath);
+    const fromCrops = glossary.symbols.filter((s) => s.imagePath && s.imagePath.startsWith('symbol-images/'));
+    glossary.symbols = [...fromCrops, ...fromAssets];
+    const res = await fetch('/api/save-symbol-glossary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'Symbol Labeling Tool', symbols: glossary.symbols }),
+    });
+    const result = await res.json();
+    if (result.ok) {
+      await loadGlossary();
+      assetsStatus.textContent = 'Saved.';
+      assetsStatus.className = 'status ok';
+    } else {
+      assetsStatus.textContent = result.error || 'Error';
+      assetsStatus.className = 'status err';
+    }
+  });
+
+  async function loadCardList() {
+    const r = await fetch('/data/dc-images.json');
+    const data = await r.json();
+    cardList = Object.keys(data.dcImages || {}).sort();
+    cardSelect.innerHTML = '<option value="">— Select a card —</option>' + cardList.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  }
+
+  cardSelect.addEventListener('change', () => {
+    const name = cardSelect.value;
+    if (!name) {
+      cardImageWrap.style.display = 'none';
+      cropForm.style.display = 'none';
+      return;
+    }
+    cardImage.src = '/api/dc-image/' + encodeURIComponent(name);
+    cardImageWrap.style.display = 'inline-block';
+    cropForm.style.display = 'block';
+    cropRect = null;
+    cardImage.onload = () => {
+      boxCanvas.width = cardImage.offsetWidth;
+      boxCanvas.height = cardImage.offsetHeight;
+      drawBox();
+    };
+  });
+
+  overlay.addEventListener('mousedown', (e) => {
+    const rect = overlay.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    drag = { x1: x, y1: y, x2: x, y2: y };
+  });
+  overlay.addEventListener('mousemove', (e) => {
+    if (!drag) return;
+    const rect = overlay.getBoundingClientRect();
+    drag.x2 = e.clientX - rect.left;
+    drag.y2 = e.clientY - rect.top;
+    drawBox();
+  });
+  overlay.addEventListener('mouseup', () => {
+    if (!drag) return;
+    const x1 = Math.min(drag.x1, drag.x2);
+    const y1 = Math.min(drag.y1, drag.y2);
+    const x2 = Math.max(drag.x1, drag.x2);
+    const y2 = Math.max(drag.y1, drag.y2);
+    if (x2 - x1 > 4 && y2 - y1 > 4) cropRect = { x1, y1, x2, y2 };
+    drag = null;
+    drawBox();
+  });
+
+  function drawBox() {
+    const ctx = boxCanvas.getContext('2d');
+    ctx.clearRect(0, 0, boxCanvas.width, boxCanvas.height);
+    const r = drag || cropRect;
+    if (r) {
+      const x1 = Math.min(r.x1, r.x2);
+      const y1 = Math.min(r.y1, r.y2);
+      const w = Math.abs(r.x2 - r.x1);
+      const h = Math.abs(r.y2 - r.y1);
+      ctx.strokeStyle = '#0d6efd';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x1, y1, w, h);
+    }
+  }
+
+  addCropBtn.addEventListener('click', async () => {
+    if (!cropRect || !cardImage.complete) {
+      cropStatus.textContent = 'Draw a box on the card first.';
+      cropStatus.className = 'status err';
+      return;
+    }
+    const label = cropLabel.value.trim();
+    if (!label) {
+      cropStatus.textContent = 'Enter a label.';
+      cropStatus.className = 'status err';
+      return;
+    }
+    const scaleX = cardImage.naturalWidth / cardImage.offsetWidth;
+    const scaleY = cardImage.naturalHeight / cardImage.offsetHeight;
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, (cropRect.x2 - cropRect.x1) * scaleX);
+    c.height = Math.max(1, (cropRect.y2 - cropRect.y1) * scaleY);
+    const ctx = c.getContext('2d');
+    ctx.drawImage(cardImage,
+      cropRect.x1 * scaleX, cropRect.y1 * scaleY, c.width, c.height,
+      0, 0, c.width, c.height);
+    const dataUrl = c.toDataURL('image/png');
+    const id = label.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    glossary.symbols.push({
+      id: id || 'symbol',
+      label,
+      category: cropCategory.value,
+      imageBase64: dataUrl,
+    });
+    glossaryCount.textContent = glossary.symbols.length;
+    renderGlossaryPreview();
+    cropLabel.value = '';
+    cropRect = null;
+    drawBox();
+    cropStatus.textContent = 'Added. Click Save glossary to file to write to disk.';
+    cropStatus.className = 'status ok';
+  });
+
+  saveGlossaryBtn.addEventListener('click', async () => {
+    const res = await fetch('/api/save-symbol-glossary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'Symbol Labeling Tool', symbols: glossary.symbols }),
+    });
+    const result = await res.json();
+    if (result.ok) {
+      await loadGlossary();
+      cropStatus.textContent = 'Saved.';
+      cropStatus.className = 'status ok';
+    } else {
+      cropStatus.textContent = result.error || 'Error';
+      cropStatus.className = 'status err';
+    }
+  });
+
+  diceTypeSelect.addEventListener('change', () => {
+    const c = diceTypeSelect.value.toLowerCase();
+    diceColorInput.value = c;
+  });
+
+  function loadDiceFace() {
+    const color = diceTypeSelect.value;
+    const face = diceFaceSelect.value;
+    const path = `vassal_extracted/images/dice/Dice-${color} ${face}.jpg`;
+    diceFaceImage.src = '/' + path;
+    diceFaceWrap.style.display = 'inline-block';
+    diceRegions = [];
+    diceDrag = null;
+    renderDiceSymbolRows();
+    diceFaceImage.onload = () => {
+      diceBoxCanvas.width = diceFaceImage.offsetWidth;
+      diceBoxCanvas.height = diceFaceImage.offsetHeight;
+      drawDiceBoxes();
+    };
+  }
+
+  diceFaceSelect.addEventListener('change', loadDiceFace);
+  diceTypeSelect.addEventListener('change', loadDiceFace);
+
+  function renderDiceSymbolRows() {
+    diceSymbolRows.innerHTML = '';
+    diceRegions.forEach((reg, i) => {
+      const row = document.createElement('div');
+      row.className = 'dice-symbol-row';
+      row.innerHTML = `<span class="dice-symbol-num">${i + 1}</span><span class="dice-symbol-line">———</span><input type="text" data-dice-region="${i}" placeholder="e.g. +1 Hit" value="${escapeHtml(reg.label || '')}"><span class="remove-region" data-dice-region="${i}">Remove</span>`;
+      const input = row.querySelector('input');
+      const remove = row.querySelector('.remove-region');
+      input.addEventListener('input', () => { reg.label = input.value; drawDiceBoxes(); });
+      remove.addEventListener('click', () => {
+        diceRegions.splice(i, 1);
+        renderDiceSymbolRows();
+        drawDiceBoxes();
+      });
+      diceSymbolRows.appendChild(row);
+    });
+  }
+
+  diceOverlay.addEventListener('mousedown', (e) => {
+    const rect = diceOverlay.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    diceDrag = { x1: x, y1: y, x2: x, y2: y };
+  });
+  diceOverlay.addEventListener('mousemove', (e) => {
+    if (!diceDrag) return;
+    const rect = diceOverlay.getBoundingClientRect();
+    diceDrag.x2 = e.clientX - rect.left;
+    diceDrag.y2 = e.clientY - rect.top;
+    drawDiceBoxes();
+  });
+  diceOverlay.addEventListener('mouseup', () => {
+    if (!diceDrag) return;
+    const x1 = Math.min(diceDrag.x1, diceDrag.x2);
+    const y1 = Math.min(diceDrag.y1, diceDrag.y2);
+    const x2 = Math.max(diceDrag.x1, diceDrag.x2);
+    const y2 = Math.max(diceDrag.y1, diceDrag.y2);
+    if (x2 - x1 > 4 && y2 - y1 > 4) diceRegions.push({ x1, y1, x2, y2, label: '' });
+    diceDrag = null;
+    renderDiceSymbolRows();
+    drawDiceBoxes();
+  });
+
+  function drawDiceBoxes() {
+    const ctx = diceBoxCanvas.getContext('2d');
+    ctx.clearRect(0, 0, diceBoxCanvas.width, diceBoxCanvas.height);
+    const draw = (r, num) => {
+      const x1 = Math.min(r.x1, r.x2);
+      const y1 = Math.min(r.y1, r.y2);
+      const w = Math.abs(r.x2 - r.x1);
+      const h = Math.abs(r.y2 - r.y1);
+      ctx.strokeStyle = '#0d6efd';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x1, y1, w, h);
+      if (num != null) {
+        ctx.fillStyle = '#0d6efd';
+        ctx.font = 'bold 14px system-ui';
+        ctx.fillText(String(num), x1 + 4, y1 + 18);
+      }
+    };
+    if (diceDrag) draw(diceDrag);
+    diceRegions.forEach((r, i) => draw(r, i + 1));
+  }
+
+  saveDiceFaceBtn.addEventListener('click', async () => {
+    const dieColor = diceColorInput.value.trim() || diceTypeSelect.value.toLowerCase();
+    const faceNum = diceFaceSelect.value;
+    if (!diceFaceImage.complete || !diceFaceImage.naturalWidth) {
+      diceFaceStatus.textContent = 'Load a die face first.';
+      diceFaceStatus.className = 'status err';
+      return;
+    }
+    const scaleX = diceFaceImage.naturalWidth / diceFaceImage.offsetWidth;
+    const scaleY = diceFaceImage.naturalHeight / diceFaceImage.offsetHeight;
+    let added = 0;
+    diceRegions.forEach((r, i) => {
+      const label = (r.label && r.label.trim()) || '';
+      if (!label) return;
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, (r.x2 - r.x1) * scaleX);
+      c.height = Math.max(1, (r.y2 - r.y1) * scaleY);
+      const ctx = c.getContext('2d');
+      ctx.drawImage(diceFaceImage, r.x1 * scaleX, r.y1 * scaleY, c.width, c.height, 0, 0, c.width, c.height);
+      const id = `dice-${dieColor}-face${faceNum}-${i + 1}`;
+      glossary.symbols.push({
+        id,
+        label,
+        category: ['white', 'black'].includes(dieColor.toLowerCase()) ? 'defense-die' : 'attack-die',
+        imageBase64: c.toDataURL('image/png'),
+        notes: `Die: ${dieColor}, Face: ${faceNum}`,
+      });
+      added++;
+    });
+    glossaryCount.textContent = glossary.symbols.length;
+    renderGlossaryPreview();
+    diceFaceStatus.textContent = added ? `Added ${added} symbol(s). Save glossary to file to write to disk.` : 'Draw boxes and fill labels first.';
+    diceFaceStatus.className = added ? 'status ok' : 'status err';
+  });
+
+  (async function init() {
+    await loadGlossary();
+    await loadAssetList();
+    await loadCardList();
+  })();
+})();
+  </script>
+</body>
+</html>

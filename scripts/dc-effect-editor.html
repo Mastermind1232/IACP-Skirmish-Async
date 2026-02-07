@@ -198,6 +198,10 @@
             <option value="+3 Accuracy">+3 Accuracy</option>
             <option value="Pierce 1">Pierce 1</option>
             <option value="Pierce 2">Pierce 2</option>
+            <option value="Habitat: City">Habitat: City</option>
+            <option value="Habitat: Desert">Habitat: Desert</option>
+            <option value="Habitat: Forest">Habitat: Forest</option>
+            <option value="Habitat: Snow">Habitat: Snow</option>
             <option value="__other__">Other…</option>
           </select>
           <button type="button" id="passivesAdd" class="secondary-btn">Add</button>
@@ -345,13 +349,11 @@
       const v = attackDiceSelect.value;
       if (!v) return;
       addChip(attackDiceListEl, v, DICE_LABELS[v] || v);
-      attackDiceSelect.value = '';
     });
     defenseAddBtn.addEventListener('click', () => {
       const v = defenseSelect.value;
       if (!v) return;
       addChip(defenseListEl, v, DEFENSE_LABELS[v] || v);
-      defenseSelect.value = '';
     });
     surgeAddBtn.addEventListener('click', () => {
       const v = surgeSelect.value;
