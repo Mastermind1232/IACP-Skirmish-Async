@@ -49,24 +49,32 @@
     .dice-face-layout { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
     .dice-face-wrap { position: relative; display: inline-block; }
     .dice-face-wrap { text-align: center; margin: 16px 0; }
-    .dice-face-wrap img { max-width: 480px; width: 100%; height: auto; display: block; margin: 0 auto; }
+    .dice-face-wrap img { width: 50px; max-width: 100%; height: auto; display: block; margin: 0 auto; image-rendering: auto; }
     .dice-progress { font-size: 14px; color: #aaa; margin-bottom: 8px; }
     .dice-estimate { font-size: 12px; color: #888; margin-bottom: 8px; }
     .dice-outcome-row { margin: 16px 0; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
     .dice-outcome-row input { padding: 10px 14px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; min-width: 300px; font-size: 14px; }
     .dice-nav { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
-    .dice-remaining { margin-top: 20px; }
-    .dice-remaining h4 { margin: 0 0 8px 0; font-size: 12px; color: #999; }
-    .dice-remaining-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 280px; overflow-y: auto; }
-    .dice-remaining-list .entry { padding: 6px 12px; font-size: 13px; background: #2d2d2d; border-radius: 4px; cursor: pointer; color: #ccc; }
+    .dice-remaining { margin-top: 24px; padding-top: 16px; border-top: 1px solid #333; }
+    .dice-remaining h4 { margin: 0 0 8px 0; font-size: 14px; color: #ccc; }
+    .dice-remaining-list { display: flex; flex-direction: column; flex-wrap: wrap; max-height: 320px; overflow-y: auto; gap: 4px; }
+    .dice-remaining-list .entry { display: block; padding: 6px 10px; font-size: 13px; background: #2d2d2d; border-radius: 4px; cursor: pointer; color: #ccc; }
     .dice-remaining-list .entry:hover { background: #3d3d3d; color: #fff; }
     .dice-saved-list { margin-top: 12px; max-height: 160px; overflow-y: auto; }
     .dice-saved-list h4 { margin: 0 0 6px 0; font-size: 12px; color: #999; }
     .dice-saved-list ul { list-style: none; padding: 0; margin: 0; }
     .dice-saved-list li { padding: 4px 8px; font-size: 13px; color: #ccc; }
+    .server-warning { background: #3d2a1a; border: 1px solid #8b5a00; color: #ffc; padding: 12px 16px; margin-bottom: 16px; border-radius: 6px; font-size: 13px; }
+    .server-warning code { background: #2d2d2d; padding: 2px 6px; border-radius: 4px; }
+    .server-warning a { color: #8cf; }
   </style>
 </head>
 <body>
+  <div id="serverWarning" class="server-warning" style="display: none;">
+    <strong>Save won’t work.</strong> You must use the <strong>cc-review</strong> server, not a plain static server.
+    In the project folder run: <code>npm run cc-review</code>, then open:
+    <a href="http://localhost:3456/scripts/symbol-labeling-tool.html" target="_blank" rel="noopener">http://localhost:3456/scripts/symbol-labeling-tool.html</a>
+  </div>
   <h1>Symbol Labeling Tool</h1>
   <div class="tabs">
     <button type="button" id="tabAssets" class="active">1. Label existing files</button>
@@ -124,6 +132,7 @@
     </div>
     <div class="dice-nav">
       <button type="button" id="dicePrevBtn" class="primary">Previous</button>
+      <button type="button" id="diceUpdateBtn" class="primary">Update</button>
       <button type="button" id="diceVerifyBtn" class="primary">Verify &amp; Next</button>
       <span id="diceFaceStatus" class="status"></span>
     </div>
@@ -144,6 +153,9 @@
 
   <script>
 (function () {
+  const serverWarning = document.getElementById('serverWarning');
+  fetch('/api/cc-review-server').then(function (r) { if (!r.ok && serverWarning) serverWarning.style.display = 'block'; }).catch(function () { if (serverWarning) serverWarning.style.display = 'block'; });
+
   const tabAssets = document.getElementById('tabAssets');
   const tabCards = document.getElementById('tabCards');
   const panelAssets = document.getElementById('panelAssets');
@@ -181,6 +193,7 @@
   const diceFaceImage = document.getElementById('diceFaceImage');
   const diceOutcomeInput = document.getElementById('diceOutcomeInput');
   const dicePrevBtn = document.getElementById('dicePrevBtn');
+  const diceUpdateBtn = document.getElementById('diceUpdateBtn');
   const diceVerifyBtn = document.getElementById('diceVerifyBtn');
   const diceFaceStatus = document.getElementById('diceFaceStatus');
   const diceRemainingCount = document.getElementById('diceRemainingCount');
@@ -199,7 +212,13 @@
     [tabAssets, tabCards, tabDice].forEach((t) => t.classList.remove('active'));
     if (tabId === 'assets') { panelAssets.classList.add('active'); tabAssets.classList.add('active'); }
     else if (tabId === 'cards') { panelCards.classList.add('active'); tabCards.classList.add('active'); }
-    else if (tabId === 'dice') { panelDice.classList.add('active'); tabDice.classList.add('active'); loadDiceOutcomes(); }
+    else if (tabId === 'dice') {
+      panelDice.classList.add('active'); tabDice.classList.add('active');
+      showDiceFaceAtIndex(diceCurrentIndex);
+      renderDiceSavedList();
+      renderDiceRemainingList();
+      loadDiceOutcomes();
+    }
     try { localStorage.setItem(TAB_STORAGE_KEY, tabId); } catch (_) {}
   }
   tabAssets.addEventListener('click', () => switchTab('assets'));
@@ -214,7 +233,12 @@
         [tabAssets, tabCards, tabDice].forEach((t) => t.classList.remove('active'));
         if (saved === 'assets') { panelAssets.classList.add('active'); tabAssets.classList.add('active'); }
         else if (saved === 'cards') { panelCards.classList.add('active'); tabCards.classList.add('active'); }
-        else if (saved === 'dice') { panelDice.classList.add('active'); tabDice.classList.add('active'); }
+        else if (saved === 'dice') {
+          panelDice.classList.add('active'); tabDice.classList.add('active');
+          showDiceFaceAtIndex(diceCurrentIndex);
+          renderDiceSavedList();
+          renderDiceRemainingList();
+        }
       }
     } catch (_) {}
   })();
@@ -466,7 +490,9 @@
     diceCurrentIndex = Math.max(0, Math.min(i, DICE_FACES.length - 1));
     const { color, face } = DICE_FACES[diceCurrentIndex];
     const cap = color.charAt(0).toUpperCase() + color.slice(1);
-    diceFaceImage.src = '/' + `vassal_extracted/images/dice/Dice-${cap} ${face}.jpg`;
+    const path = `vassal_extracted/images/dice/Dice-${cap} ${face}.jpg`;
+    diceFaceImage.src = '/' + encodeURI(path);
+    diceFaceImage.alt = cap + ' die face ' + face;
     diceProgress.textContent = `${cap} die — Face ${face} of 6  ·  ${diceCurrentIndex + 1} of ${DICE_FACES.length}`;
     const estimate = formatDiceFaceSuggested(color, face);
     diceEstimate.textContent = estimate ? 'Our estimate: ' + estimate : '';
@@ -486,7 +512,8 @@
     }
     renderDiceSavedList();
     renderDiceRemainingList();
-    showDiceFaceAtIndex(diceCurrentIndex);
+    const firstRemainingIdx = DICE_FACES.findIndex(({ color, face }) => !(diceOutcomes[color] && diceOutcomes[color][face]));
+    showDiceFaceAtIndex(firstRemainingIdx >= 0 ? firstRemainingIdx : 0);
   }
 
   function renderDiceSavedList() {
@@ -495,19 +522,22 @@
       const text = (diceOutcomes[color] && diceOutcomes[color][face]) || '';
       if (text) entries.push({ color, face, text });
     });
-    diceSavedList.innerHTML = entries.map((e) => `<li><strong>${e.color} face ${e.face}:</strong> ${escapeHtml(e.text)}</li>`).join('') || '<li class="hint">None yet.</li>';
+    diceSavedList.innerHTML = entries.map((e) => {
+      const cap = e.color.charAt(0).toUpperCase() + e.color.slice(1);
+      return `<li><strong>${cap}: Face ${e.face}</strong> — ${escapeHtml(e.text)}</li>`;
+    }).join('') || '<li class="hint">None yet.</li>';
   }
 
   function renderDiceRemainingList() {
     const remaining = DICE_FACES.filter(({ color, face }) => !(diceOutcomes[color] && diceOutcomes[color][face]));
     diceRemainingCount.textContent = remaining.length;
     diceRemainingList.innerHTML = '';
-    remaining.forEach(({ color, face }, i) => {
+    remaining.forEach(({ color, face }) => {
       const idx = DICE_FACES.findIndex((f) => f.color === color && f.face === face);
       const cap = color.charAt(0).toUpperCase() + color.slice(1);
       const el = document.createElement('span');
       el.className = 'entry';
-      el.textContent = cap + ' face ' + face;
+      el.textContent = cap + ': Face ' + face;
       el.addEventListener('click', () => showDiceFaceAtIndex(idx));
       diceRemainingList.appendChild(el);
     });
@@ -515,34 +545,50 @@
 
   dicePrevBtn.addEventListener('click', () => showDiceFaceAtIndex(diceCurrentIndex - 1));
 
-  diceVerifyBtn.addEventListener('click', async () => {
+  async function saveDiceOutcomesAndUpdateUI(thenAdvance) {
     const { color, face } = DICE_FACES[diceCurrentIndex];
     const text = diceOutcomeInput.value.trim();
     if (!text) {
       diceFaceStatus.textContent = 'Enter or confirm what this face indicates.';
       diceFaceStatus.className = 'status err';
-      return;
+      return false;
     }
     if (!diceOutcomes[color]) diceOutcomes[color] = {};
     diceOutcomes[color][face] = text;
-    const res = await fetch('/api/save-dice-face-outcomes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: 'Symbol Labeling Tool', outcomes: diceOutcomes }),
-    });
-    const result = await res.json();
-    if (result.ok) {
-      renderDiceSavedList();
-      renderDiceRemainingList();
-      diceFaceStatus.textContent = 'Saved.';
-      diceFaceStatus.className = 'status ok';
-      if (diceCurrentIndex < DICE_FACES.length - 1) showDiceFaceAtIndex(diceCurrentIndex + 1);
-      else diceFaceStatus.textContent = diceRemainingCount.textContent === '0' ? 'All 36 faces verified.' : 'Use Previous or click a remaining face to continue.';
-    } else {
-      diceFaceStatus.textContent = result.error || 'Error';
+    renderDiceSavedList();
+    renderDiceRemainingList();
+    diceFaceStatus.textContent = 'Saving…';
+    diceFaceStatus.className = 'status';
+    try {
+      const res = await fetch('/api/save-dice-face-outcomes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'Symbol Labeling Tool', outcomes: diceOutcomes }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (res.ok && result.ok) {
+        diceFaceStatus.textContent = 'Saved.';
+        diceFaceStatus.className = 'status ok';
+        if (thenAdvance) {
+          if (diceCurrentIndex < DICE_FACES.length - 1) showDiceFaceAtIndex(diceCurrentIndex + 1);
+          else diceFaceStatus.textContent = diceRemainingCount.textContent === '0' ? 'All 36 faces verified.' : 'Use Previous or click a remaining face to continue.';
+        }
+        return true;
+      } else {
+        const msg = result.error || (res.status === 404 ? 'Server route not found. Open this page from http://localhost:3456/scripts/symbol-labeling-tool.html (run: npm run cc-review).' : res.status ? 'Save failed (' + res.status + ').' : 'Save failed.');
+        diceFaceStatus.textContent = msg;
+        diceFaceStatus.className = 'status err';
+        return false;
+      }
+    } catch (e) {
+      diceFaceStatus.textContent = 'Network error. Open from http://localhost:3456/scripts/symbol-labeling-tool.html (run: npm run cc-review).';
       diceFaceStatus.className = 'status err';
+      return false;
     }
-  });
+  }
+
+  diceUpdateBtn.addEventListener('click', () => saveDiceOutcomesAndUpdateUI(false));
+  diceVerifyBtn.addEventListener('click', () => saveDiceOutcomesAndUpdateUI(true));
 
   (async function init() {
     try {

@@ -192,6 +192,18 @@ const server = createServer(async (req, res) => {
       res.end('Not found');
       return;
     }
+    // Prefer IACP variant image when it exists in the same folder (e.g. "Boba Fett (IACP).jpg")
+    const relParts = relPath.split('/');
+    const dirRel = relParts.slice(0, -1).join('/');
+    const baseWithExt = relParts[relParts.length - 1];
+    const baseName = baseWithExt.replace(/\.[^.]+$/, '');
+    for (const ext of ['.jpg', '.png', '.gif']) {
+      const iacpRel = dirRel + '/' + baseName + ' (IACP)' + ext;
+      if (existsSync(join(root, ...iacpRel.split('/')))) {
+        relPath = iacpRel;
+        break;
+      }
+    }
     const filePath = join(root, ...relPath.split('/'));
     if (!existsSync(filePath)) {
       res.writeHead(404, { 'Cache-Control': 'no-store' });
@@ -202,7 +214,7 @@ const server = createServer(async (req, res) => {
       const buf = readFileSync(filePath);
       const ext = extname(filePath).toLowerCase();
       const mime = MIME[ext] || (ext === '.png' ? 'image/png' : 'image/jpeg');
-      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' });
+      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-store, no-cache, must-revalidate' });
       res.end(buf);
     } catch {
       res.writeHead(500);
@@ -329,7 +341,9 @@ const server = createServer(async (req, res) => {
         outcomes,
         updatedAt: new Date().toISOString(),
       };
-      writeFileSync(join(root, 'data', 'dice-face-outcomes.json'), JSON.stringify(toWrite, null, 2), 'utf8');
+      const dataDir = join(root, 'data');
+      if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+      writeFileSync(join(dataDir, 'dice-face-outcomes.json'), JSON.stringify(toWrite, null, 2), 'utf8');
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true }));
     } catch (err) {

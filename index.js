@@ -3099,10 +3099,18 @@ function getDcImagePath(dcName) {
   return key ? resolveDcImagePath(dcImages[key], key) : null;
 }
 
-/** Prefer dc-figures/ or DC Skirmish Upgrades/ subfolder over root for a given dc-images path. */
+/** Prefer IACP variant image when it exists (e.g. "Boba Fett (IACP).jpg" in same folder). Then prefer dc-figures/ or DC Skirmish Upgrades/ subfolder. */
 function resolveDcImagePath(relPath, dcName) {
   if (!relPath || typeof relPath !== 'string') return null;
-  const filename = relPath.split(/[/\\]/).pop() || relPath;
+  const parts = relPath.split(/[/\\]/);
+  const dirRel = parts.slice(0, -1).join('/');
+  const baseWithExt = parts[parts.length - 1] || relPath;
+  const baseName = baseWithExt.replace(/\.[^.]+$/, '');
+  for (const ext of ['.jpg', '.png', '.gif']) {
+    const iacpRel = dirRel + '/' + baseName + ' (IACP)' + ext;
+    if (existsSync(join(rootDir, ...iacpRel.split('/')))) return iacpRel;
+  }
+  const filename = baseWithExt;
   const subfolder = dcName && isFigurelessDc(dcName) ? 'DC Skirmish Upgrades' : 'dc-figures';
   const inSub = `vassal_extracted/images/${subfolder}/${filename}`;
   if (existsSync(join(rootDir, inSub))) return inSub;

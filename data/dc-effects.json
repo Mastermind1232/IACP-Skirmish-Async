@@ -872,7 +872,7 @@
       "affiliation": "Imperial"
     },
     "Bantha Rider": {
-      "abilityText": "Traits: CREATURE, BRAWLER. Attack (Range): blue, red. MASSIVE. Surge: pierce 2. Surge: accuracy 2. desert",
+      "abilityText": "Special Action (Trample): Choose up to 3 adjacent hostile figures and roll 1 red die. Each of those figures suffers Damage equal to the Hit results.",
       "keywords": [
         "MASSIVE",
         "CREATURE",
@@ -881,6 +881,9 @@
       "cost": 9,
       "health": 21,
       "speed": 5,
+      "passives": [
+        "Habitat: Desert"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -889,25 +892,131 @@
         ],
         "type": "range"
       },
+      "surgeAbilities": [
+        "accuracy 2",
+        "pierce 2"
+      ],
       "attachment": false,
       "elite": true,
       "affiliation": "Scum"
     },
     "Baze Malbus": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Into the Fray: At the start of your activation, gain 1 Surge Token for each hostile figure with line of sight to you. Then, gain 1 movement point.\n\nAssault: You can perform multiple attacks each activation.\n\nHold the Line: At the end of your activation, gain 1 Block Token for each hostile figure with line of sight to you.",
+      "keywords": [
+        "GUARDIAN",
+        "HEAVY WEAPON"
+      ],
+      "subname": "FAITHFUL PROTECTOR",
+      "cost": 6,
+      "health": 11,
+      "speed": 3,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1, cleave 1",
+        "blast 1, cleave 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Bib Fortuna": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Dirty Dealing: You cannot be included in the same army as any REBEL Deployment cards.\n\nSpecial Action (Bartered Information): Choose another friendly SCUM figure within 2 spaces. Then, you may spend 1 VP to choose another such figure. Each chose figure becomes Focused.\n\nIllicit Arms: While a friendly figure is attacking, if your army's affiliation is SCUM, you may discard 1 Command card from your hand to apply +1 Hit to the attack results. Limit once per attack.",
+      "keywords": [
+        "LEADER",
+        "SMUGGLER"
+      ],
+      "subname": "CUNNING MAJORDOMO",
+      "cost": 3,
+      "health": 5,
+      "speed": 3,
+      "passives": [
+        "+1 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 1, pierce 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Biv Bodhrik": {
-      "abilityText": "Traits: HUNTER, BRAWLER. Attack (Range): blue, red, yellow. Defense: black. Surge: accuracy 2; Surge: damage 1. Surge: damage 1",
-      "keywords": []
+      "abilityText": "Special Action (Multi-Fire): Perform 2 attacks. Each attack must have a different target. Apply -1 Hit to each attack's results.\n\nSurge (Suppression): After resolving a Ranged attack, if it did not miss due to accuracy, the target suffers Strain equal to the number of targets Block, Evade, and Dodge, results, to a maximum of 2.",
+      "keywords": [
+        "HUNTER",
+        "BRAWLER"
+      ],
+      "subname": "FUELED BY VENGEANCE",
+      "cost": 7,
+      "health": 12,
+      "speed": 4,
+      "passives": [
+        "Block 1",
+        "+2 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "red",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "blast 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Boba Fett": {
       "abilityText": "Traits: HUNTER. Attack (Range): blue, green, yellow. Defense: black. Block 1; Surge: cancel 1. MOBILE. Surge: pierce 1. Surge: weaken",
-      "keywords": []
+      "keywords": [],
+      "subname": "INFAMOUS BOUNTY HUNTER",
+      "cost": 12,
+      "health": 12,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "yellow"
+        ]
+      },
+      "defense": [
+        "white"
+      ],
+      "attachment": false
     },
     "Bodhi Rook": {
       "abilityText": "TBD (IACP – verify from card).",

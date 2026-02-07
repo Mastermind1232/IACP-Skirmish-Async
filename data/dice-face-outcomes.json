@@ -1,4 +1,54 @@
 {
-  "source": "Symbol Labeling Tool — dice face outcomes",
-  "outcomes": {}
+  "source": "Symbol Labeling Tool",
+  "outcomes": {
+    "red": {
+      "1": "+1 Hit",
+      "2": "+2 Hit",
+      "3": "+2 Hit",
+      "4": "+2 Hit, +1 Surge",
+      "5": "+3 Hit",
+      "6": "+3 Hit"
+    },
+    "blue": {
+      "1": "+2 Accuracy, +1 Surge",
+      "2": "+2 Accuracy, +1 Hit",
+      "3": "+5 Accuracy, +1 Hit",
+      "4": "+3 Accuracy, +1 Hit, +1 Surge",
+      "5": "+3 Accuracy, +2 Hit",
+      "6": "+4 Accuracy, +2 Hit"
+    },
+    "green": {
+      "1": "+1 Accuracy, +1 Surge",
+      "2": "+1 Accuracy, +1 Hit, +1 Surge",
+      "3": "+2 Accuracy, +1 Hit, +1 Surge",
+      "4": "+3 Accuracy, +2 Hit",
+      "5": "+1 Accuracy, +2 Hit",
+      "6": "+2 Accuracy, +2 Hit"
+    },
+    "yellow": {
+      "1": "+1 Surge",
+      "2": "+2 Accuracy, +1 Surge",
+      "3": "+2 Accuracy, +1 Hit",
+      "4": "+1 Accuracy, +1 Hit, +1 Surge",
+      "5": "+1 Accuracy, +2 Hit",
+      "6": "+1 Hit, +2 Surge"
+    },
+    "white": {
+      "1": "blank",
+      "2": "+1 Evade",
+      "3": "+1 Block",
+      "4": "+1 Evade, +1 Block",
+      "5": "+1 Block, +1 Evade",
+      "6": "Dodge"
+    },
+    "black": {
+      "1": "+1 Block",
+      "2": "+1 Block",
+      "3": "+2 Block",
+      "4": "+2 Block",
+      "5": "+3 Block",
+      "6": "+1 Evade"
+    }
+  },
+  "updatedAt": "2026-02-07T17:58:52.643Z"
 }

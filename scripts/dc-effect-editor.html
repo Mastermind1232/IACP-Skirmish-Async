@@ -5,14 +5,17 @@
   <title>IA Skirmish — DC Effect Editor</title>
   <style>
     * { box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; padding: 20px; background: #1e1e1e; color: #eee; max-width: 960px; }
+    body { font-family: system-ui, sans-serif; padding: 20px; background: #1e1e1e; color: #eee; max-width: 1600px; }
     h1 { font-size: 1.3rem; margin-bottom: 8px; }
     .hint { font-size: 12px; color: #999; margin-bottom: 16px; }
     .main { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
-    .card-img-wrap { flex-shrink: 0; width: 320px; min-height: 420px; background: #2d2d2d; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-    .card-img-wrap img { max-width: 100%; max-height: 460px; object-fit: contain; }
+    .card-img-wrap { flex-shrink: 0; width: 328px; height: 485px; background: #2d2d2d; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .card-img-wrap img { width: 100%; height: 100%; object-fit: contain; object-position: center; }
     .card-img-wrap .placeholder { color: #666; font-size: 13px; text-align: center; padding: 16px; }
-    .form-wrap { flex: 1; min-width: 280px; }
+    .form-wrap { flex: 1; min-width: 280px; display: flex; flex-direction: column; }
+    .form-columns { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+    .form-main { flex: 1; min-width: 280px; }
+    .form-stats { flex: 0 0 340px; min-width: 300px; }
     label { display: block; margin-top: 12px; margin-bottom: 4px; font-weight: 500; }
     select, input, textarea { width: 100%; padding: 8px 12px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 14px; }
     textarea { min-height: 80px; font-family: inherit; resize: vertical; }
@@ -55,6 +58,7 @@
     .chip button:hover { color: #fff; }
     .add-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .add-row select { width: auto; min-width: 120px; }
+    #surgeSelect { min-width: 240px; }
     button.secondary-btn { padding: 6px 12px; font-size: 12px; background: #444; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; }
     button.secondary-btn:hover { background: #555; }
   </style>
@@ -69,6 +73,8 @@
       <img id="cardImg" alt="" style="display:none">
     </div>
     <div class="form-wrap">
+  <div class="form-columns">
+    <div class="form-main">
   <label>Card name</label>
   <div class="form-row">
     <div class="field grow"><select id="cardSelect"><option value="">— Select or type below —</option></select></div>
@@ -111,6 +117,8 @@
     </div>
   </div>
 
+    </div>
+    <div class="form-stats">
   <div class="form-section">
     <div class="form-section-title">Figure stats (Squad Upgrades)</div>
     <div class="form-row">
@@ -157,12 +165,16 @@
             <option value="">Add surge…</option>
             <option value="damage 1">+1 Hit</option>
             <option value="damage 2">+2 Hit</option>
+            <option value="accuracy 1, pierce 1">+1 Accuracy, Pierce 1</option>
             <option value="accuracy 2">+2 Accuracy</option>
             <option value="accuracy 3">+3 Accuracy</option>
             <option value="blast 1">Blast 1</option>
             <option value="blast 2">Blast 2</option>
             <option value="cancel 1">Cancel 1</option>
+            <option value="cleave 1">Cleave 1</option>
             <option value="cleave 2">Cleave 2</option>
+            <option value="damage 1, cleave 1">+1 Hit, Cleave 1</option>
+            <option value="blast 1, cleave 1">Blast 1, Cleave 1</option>
             <option value="focus">Focus</option>
             <option value="hit token">Hit Token</option>
             <option value="pierce 1">Pierce 1</option>
@@ -251,6 +263,8 @@
     <span id="markIacpWrap" style="display:none;"><button id="markIacpBtn" class="iacp">Mark as IACP variant</button></span>
   </div>
     </div>
+    </div>
+  </div>
   </div>
 
   <div id="dupPanel" class="dup-panel" style="display: none; margin-top: 16px;">
@@ -341,7 +355,7 @@
       (values || []).forEach((v) => addChip(container, v, labelByValue ? (labelByValue[v] || v) : v));
     }
 
-    const SURGE_LABELS = { 'damage 1, accuracy 1': '+1 Hit, +1 Accuracy', 'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1', 'accuracy 2': '+2 Accuracy', 'accuracy 3': '+3 Accuracy', 'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'cancel 1': 'Cancel 1', 'cleave 2': 'Cleave 2', 'damage 1': '+1 Hit', 'damage 2': '+2 Hit', 'focus': 'Focus', 'hit token': 'Hit Token', 'pierce 1': 'Pierce 1', 'pierce 2': 'Pierce 2', 'pierce 3': 'Pierce 3', 'recover 1': 'Recover 1', 'recover 2': 'Recover 2', 'recover 3': 'Recover 3', 'weaken, focus': 'Weaken, Focus', 'bleed': 'Bleed', 'stun': 'Stun', 'weaken': 'Weaken' };
+    const SURGE_LABELS = { 'damage 1, accuracy 1': '+1 Hit, +1 Accuracy', 'damage 1, cleave 1': '+1 Hit, Cleave 1', 'blast 1, cleave 1': 'Blast 1, Cleave 1', 'accuracy 1, pierce 1': '+1 Accuracy, Pierce 1', 'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1', 'accuracy 2': '+2 Accuracy', 'accuracy 3': '+3 Accuracy', 'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'cancel 1': 'Cancel 1', 'cleave 1': 'Cleave 1', 'cleave 2': 'Cleave 2', 'damage 1': '+1 Hit', 'damage 2': '+2 Hit', 'focus': 'Focus', 'hit token': 'Hit Token', 'pierce 1': 'Pierce 1', 'pierce 2': 'Pierce 2', 'pierce 3': 'Pierce 3', 'recover 1': 'Recover 1', 'recover 2': 'Recover 2', 'recover 3': 'Recover 3', 'weaken, focus': 'Weaken, Focus', 'bleed': 'Bleed', 'stun': 'Stun', 'weaken': 'Weaken' };
     const DICE_LABELS = { red: 'Red', blue: 'Blue', yellow: 'Yellow', green: 'Green' };
     const DEFENSE_LABELS = { white: 'White', black: 'Black' };
 
