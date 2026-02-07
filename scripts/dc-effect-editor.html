@@ -93,6 +93,11 @@
       <span class="hint">-10 to 40</span>
     </div>
     <div class="field inline">
+      <label>Sub-cost</label>
+      <input type="number" id="subCost" placeholder="VP per figure" min="0" max="20" step="1">
+      <span class="hint">VP per figure when one is defeated (multifigure DCs)</span>
+    </div>
+    <div class="field inline">
       <label>Health</label>
       <input type="number" id="health" placeholder="—" min="1" max="99" step="1">
     </div>
@@ -150,24 +155,28 @@
         <div class="add-row">
           <select id="surgeSelect">
             <option value="">Add surge…</option>
-            <option value="damage 1">Damage +1</option>
-            <option value="damage 2">Damage +2</option>
-            <option value="stun">Stun</option>
+            <option value="damage 1">+1 Hit</option>
+            <option value="damage 2">+2 Hit</option>
+            <option value="accuracy 2">+2 Accuracy</option>
+            <option value="accuracy 3">+3 Accuracy</option>
+            <option value="blast 1">Blast 1</option>
+            <option value="blast 2">Blast 2</option>
+            <option value="cancel 1">Cancel 1</option>
+            <option value="cleave 2">Cleave 2</option>
+            <option value="focus">Focus</option>
+            <option value="hit token">Hit Token</option>
             <option value="pierce 1">Pierce 1</option>
             <option value="pierce 2">Pierce 2</option>
             <option value="pierce 3">Pierce 3</option>
-            <option value="accuracy 2">Accuracy +2</option>
-            <option value="accuracy 2, pierce 1">+2 Accuracy, Pierce 1</option>
-            <option value="accuracy 3">Accuracy +3</option>
             <option value="recover 1">Recover 1</option>
             <option value="recover 2">Recover 2</option>
             <option value="recover 3">Recover 3</option>
+            <option value="accuracy 2, pierce 1">+2 Accuracy, Pierce 1</option>
+            <option value="damage 1, accuracy 1">+1 Hit, +1 Accuracy</option>
+            <option value="weaken, focus">Weaken, Focus</option>
+            <option value="bleed">Bleed</option>
+            <option value="stun">Stun</option>
             <option value="weaken">Weaken</option>
-            <option value="blast 1">Blast 1</option>
-            <option value="blast 2">Blast 2</option>
-            <option value="focus">Focus</option>
-            <option value="cleave 2">Cleave 2</option>
-            <option value="cancel 1">Cancel 1</option>
           </select>
           <button type="button" id="surgeAdd" class="secondary-btn">Add</button>
         </div>
@@ -178,14 +187,13 @@
         <div class="add-row">
           <select id="passivesSelect">
             <option value="">Add passive…</option>
-            <option value="MASSIVE">MASSIVE</option>
-            <option value="MOBILE">MOBILE</option>
             <option value="Reach">Reach</option>
             <option value="Block 1">Block 1</option>
             <option value="Block 2">Block 2</option>
             <option value="Bleed">Bleed</option>
             <option value="Blast 1">Blast 1</option>
             <option value="Priority Target">Priority Target</option>
+            <option value="+1 Accuracy">+1 Accuracy</option>
             <option value="+2 Accuracy">+2 Accuracy</option>
             <option value="+3 Accuracy">+3 Accuracy</option>
             <option value="Pierce 1">Pierce 1</option>
@@ -208,6 +216,10 @@
       <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
         <input type="checkbox" id="companion" style="width: auto;">
         <span>Companion</span>
+      </label>
+      <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
+        <input type="checkbox" id="elite" style="width: auto;">
+        <span>Elite</span>
       </label>
       <div class="field inline" style="max-width: 180px;">
         <label>Companion name</label>
@@ -255,6 +267,7 @@
     const abilityText = document.getElementById('abilityText');
     const keywords = document.getElementById('keywords');
     const costInput = document.getElementById('cost');
+    const subCostInput = document.getElementById('subCost');
     const healthInput = document.getElementById('health');
     const speedInput = document.getElementById('speed');
     const passivesSelect = document.getElementById('passivesSelect');
@@ -274,6 +287,7 @@
     const attachmentCheckbox = document.getElementById('attachment');
     const companionCheckbox = document.getElementById('companion');
     const companionNameInput = document.getElementById('companionName');
+    const eliteCheckbox = document.getElementById('elite');
     const affiliationSelect = document.getElementById('affiliation');
     const addBtn = document.getElementById('addBtn');
     const listEl = document.getElementById('list');
@@ -287,6 +301,7 @@
     let cards = {};
     let dcStats = {};
     let dcImages = {};
+    let companionNames = new Set();
 
     function getDuplicateGroups() {
       const pathToCards = {};
@@ -322,7 +337,7 @@
       (values || []).forEach((v) => addChip(container, v, labelByValue ? (labelByValue[v] || v) : v));
     }
 
-    const SURGE_LABELS = { 'damage 1': 'Damage +1', 'damage 2': 'Damage +2', 'stun': 'Stun', 'pierce 1': 'Pierce 1', 'pierce 2': 'Pierce 2', 'pierce 3': 'Pierce 3', 'accuracy 2': 'Accuracy +2', 'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1', 'accuracy 3': 'Accuracy +3', 'recover 1': 'Recover 1', 'recover 2': 'Recover 2', 'recover 3': 'Recover 3', 'weaken': 'Weaken', 'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'focus': 'Focus', 'cleave 2': 'Cleave 2', 'cancel 1': 'Cancel 1' };
+    const SURGE_LABELS = { 'damage 1, accuracy 1': '+1 Hit, +1 Accuracy', 'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1', 'accuracy 2': '+2 Accuracy', 'accuracy 3': '+3 Accuracy', 'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'cancel 1': 'Cancel 1', 'cleave 2': 'Cleave 2', 'damage 1': '+1 Hit', 'damage 2': '+2 Hit', 'focus': 'Focus', 'hit token': 'Hit Token', 'pierce 1': 'Pierce 1', 'pierce 2': 'Pierce 2', 'pierce 3': 'Pierce 3', 'recover 1': 'Recover 1', 'recover 2': 'Recover 2', 'recover 3': 'Recover 3', 'weaken, focus': 'Weaken, Focus', 'bleed': 'Bleed', 'stun': 'Stun', 'weaken': 'Weaken' };
     const DICE_LABELS = { red: 'Red', blue: 'Blue', yellow: 'Yellow', green: 'Green' };
     const DEFENSE_LABELS = { white: 'White', black: 'Black' };
 
@@ -386,9 +401,12 @@
 
     function getUnverifiedCards() {
       return names.filter((n) => !verified.has(n)).sort((a, b) => {
-        const aNonFig = a.startsWith('[') ? 0 : 1;
-        const bNonFig = b.startsWith('[') ? 0 : 1;
-        if (aNonFig !== bNonFig) return aNonFig - bNonFig;
+        const aCompanion = companionNames.has(a) ? 2 : 0;
+        const bCompanion = companionNames.has(b) ? 2 : 0;
+        if (aCompanion !== bCompanion) return aCompanion - bCompanion;
+        const aSkirmish = a.startsWith('[') ? 1 : 0;
+        const bSkirmish = b.startsWith('[') ? 1 : 0;
+        if (aSkirmish !== bSkirmish) return aSkirmish - bSkirmish;
         return a.localeCompare(b);
       });
     }
@@ -414,7 +432,7 @@
         placeholder.textContent = 'Select a card';
         return;
       }
-      const apiUrl = '/api/dc-image/' + encodeURIComponent(name);
+      const apiUrl = '/api/dc-image/' + encodeURIComponent(name) + '?t=' + Date.now();
       img.src = apiUrl;
       img.alt = name;
       img.style.display = 'block';
@@ -455,6 +473,7 @@
         keywords.value = Array.isArray(card.keywords) ? card.keywords.join(', ') : (card.keywords || '');
         subnameInput.value = card.subname || '';
         costInput.value = card.cost !== undefined && card.cost !== null && card.cost !== '' ? Number(card.cost) : (statsFallback?.cost != null ? statsFallback.cost : '');
+        subCostInput.value = card.subCost !== undefined && card.subCost !== null && card.subCost !== '' ? Number(card.subCost) : '';
         healthInput.value = card.health !== undefined && card.health !== null && card.health !== '' ? Number(card.health) : (statsFallback?.health != null ? statsFallback.health : '');
         speedInput.value = card.speed !== undefined && card.speed !== null && card.speed !== '' ? Number(card.speed) : (statsFallback?.speed != null ? statsFallback.speed : '');
         const passivesRaw = card.passives ?? statsFallback?.passives;
@@ -480,11 +499,13 @@
         companionNameInput.value = typeof card.companion === 'string' ? card.companion : '';
         const aff = card.affiliation || '';
         affiliationSelect.value = (aff === 'Mercenary' ? 'Scum' : aff === 'Neutral' ? 'Any' : aff) || '';
+        eliteCheckbox.checked = card.elite === true || (card.elite !== false && /\(Elite\)\s*$/i.test(name));
       } else {
         abilityText.value = '';
         keywords.value = '';
         subnameInput.value = '';
         costInput.value = statsFallback?.cost != null ? statsFallback.cost : '';
+        subCostInput.value = '';
         healthInput.value = statsFallback?.health != null ? statsFallback.health : '';
         speedInput.value = statsFallback?.speed != null ? statsFallback.speed : '';
         setChipList(passivesListEl, statsFallback?.passives ? (Array.isArray(statsFallback.passives) ? statsFallback.passives : [statsFallback.passives]) : []);
@@ -499,6 +520,7 @@
         attachmentCheckbox.checked = false;
         companionCheckbox.checked = false;
         companionNameInput.value = '';
+        eliteCheckbox.checked = /\(Elite\)\s*$/i.test((cardName.value || cardSelect.value || '').trim());
         affiliationSelect.value = '';
       }
     }
@@ -538,6 +560,8 @@
       const kw = keywords.value.trim().split(/\s*,\s*/).filter(Boolean);
       const costVal = costInput.value.trim();
       const costNum = costVal === '' ? undefined : (parseInt(costVal, 10) || 0);
+      const subCostVal = subCostInput.value.trim();
+      const subCostNum = subCostVal === '' ? undefined : (parseInt(subCostVal, 10) || 0);
       const healthVal = healthInput.value.trim();
       const healthNum = healthVal === '' ? undefined : (parseInt(healthVal, 10) || 0);
       const existing = cards[name] || {};
@@ -547,6 +571,7 @@
         keywords: kw,
         subname: subnameInput.value.trim() || undefined,
         cost: costNum,
+        subCost: subCostNum,
         health: healthNum,
         speed: fig.speed,
         passives: fig.passives,
@@ -556,6 +581,7 @@
         surgeAbilities: fig.surgeAbilities,
         attachment: attachmentCheckbox.checked,
         companion: companionCheckbox.checked ? (companionNameInput.value.trim() || true) : undefined,
+        elite: eliteCheckbox.checked || undefined,
         affiliation: affiliationSelect.value || undefined,
         isIACPVariant: existing.isIACPVariant,
       };
@@ -569,6 +595,8 @@
       const kw = keywords.value.trim().split(/\s*,\s*/).filter(Boolean);
       const costVal = costInput.value.trim();
       const costNum = costVal === '' ? undefined : (parseInt(costVal, 10) || 0);
+      const subCostVal = subCostInput.value.trim();
+      const subCostNum = subCostVal === '' ? undefined : (parseInt(subCostVal, 10) || 0);
       const healthVal = healthInput.value.trim();
       const healthNum = healthVal === '' ? undefined : (parseInt(healthVal, 10) || 0);
       const existing = cards[name] || {};
@@ -578,6 +606,7 @@
         keywords: kw,
         subname: subnameInput.value.trim() || undefined,
         cost: costNum,
+        subCost: subCostNum,
         health: healthNum,
         speed: fig.speed,
         passives: fig.passives,
@@ -587,6 +616,7 @@
         surgeAbilities: fig.surgeAbilities,
         attachment: attachmentCheckbox.checked,
         companion: companionCheckbox.checked ? (companionNameInput.value.trim() || true) : undefined,
+        elite: eliteCheckbox.checked || undefined,
         affiliation: affiliationSelect.value || undefined,
         isIACPVariant: existing.isIACPVariant,
       };
@@ -694,12 +724,14 @@
         const div = document.createElement('div');
         div.className = 'entry';
         const costStr = data.cost !== undefined && data.cost !== null ? data.cost + ' pts' : '—';
+        const subCostStr = data.subCost !== undefined && data.subCost !== null ? data.subCost + ' VP/fig' : '';
         const healthStr = data.health !== undefined && data.health !== null ? data.health + ' HP' : '';
         const attStr = data.attachment ? ' · Attachment' : '';
         const compStr = data.companion ? (' · Companion' + (typeof data.companion === 'string' ? ` (${data.companion})` : '')) : '';
+        const eliteStr = data.elite ? ' · Elite' : '';
         const affStr = data.affiliation ? ' · ' + data.affiliation : '';
-        const mid = [costStr, healthStr, kwStr || '—'].filter(Boolean).join(' · ');
-        div.innerHTML = `<strong>${name}</strong> <span>${mid}${attStr}${compStr}${affStr}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
+        const mid = [costStr, subCostStr, healthStr, kwStr || '—'].filter(Boolean).join(' · ');
+        div.innerHTML = `<strong>${name}</strong> <span>${mid}${attStr}${compStr}${eliteStr}${affStr}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
         div.querySelector('button').addEventListener('click', (e) => {
           e.stopPropagation();
           delete cards[name];
@@ -745,10 +777,15 @@
         const rc = await fetch('/data/companion-images.json');
         if (rc.ok) {
           const ci = await rc.json();
-          Object.assign(dcImages, ci.companionImages || ci || {});
+          const companionImages = ci.companionImages || ci || {};
+          companionNames = new Set(Object.keys(companionImages));
+          Object.assign(dcImages, companionImages);
         }
       } catch (_) {}
       names = Object.keys(dcImages).filter((k) => dcImages[k]).sort((a, b) => {
+        const aCompanion = companionNames.has(a) ? 2 : 0;
+        const bCompanion = companionNames.has(b) ? 2 : 0;
+        if (aCompanion !== bCompanion) return aCompanion - bCompanion;
         const aSkirmish = a.startsWith('[') ? 1 : 0;
         const bSkirmish = b.startsWith('[') ? 1 : 0;
         if (aSkirmish !== bSkirmish) return aSkirmish - bSkirmish;

@@ -503,43 +503,258 @@
       "affiliation": "Imperial"
     },
     "0-0-0": {
-      "abilityText": "Traits: DROID. Attack (Range): red, yellow. Defense: black. Surge: pierce 2. Surge: recover 2",
-      "keywords": [],
-      "subname": "Specialized in Pain",
+      "abilityText": "Surge (Shocking Palm): The attack misses and the defender becomes Stunned.\n\nSpecial Action (Invasive Procedure): An adjacent figure suffers 1 Damage, 1 Strain, and becomes Bleeding. You become Focused.\n\nUnnerving: At the end of your activation, each adjacent hostile figure becomes Weakened.",
+      "keywords": [
+        "DROID"
+      ],
+      "subname": "SPECIALIZED IN PAIN",
+      "cost": 4,
+      "health": 8,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "pierce 2",
+        "recover 2"
+      ],
       "attachment": false,
       "affiliation": "Imperial"
     },
     "4-LOM": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Programming Override: At the start of each round, choose one TRAIT. You gain that TRAIT until the end of the round.\n\nSurge (Concussive Bolt): After this attack resolves, if you are targeting a SMALL figure and it did not miss, you may push that figure 1 space.\n\nShared Intuition: While attacking, if another friendly HUNTER within 3 spaces has line of sight to the target space, apply +1 Hit to your attack results.",
+      "keywords": [
+        "DROID"
+      ],
+      "subname": "ASSASSIN DROID",
+      "cost": 7,
+      "health": 9,
+      "speed": 5,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "red",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "blast 1",
+        "weaken",
+        "damage 1, accuracy 1"
+      ],
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "Agent Blaise": {
-      "abilityText": "Traits: SPY, LEADER. Attack (Range): green, yellow, yellow. Defense: black. Surge: damage 1. Surge: damage 1. Surge: pierce 2. Surge: accuracy 3",
-      "keywords": []
+      "abilityText": "Adapt: The first time your opponent plays a Command card each round, choose 1 SPY or TROOPER. That figure becomes Hidden\n\nSurge (Interrogate): Look at your opponent's hand and choose a Command card. You may discard a card of equal or greater cost from your hand to discard the chosen card.",
+      "keywords": [
+        "SPY",
+        "LEADER"
+      ],
+      "subname": "ISB INVESTIGATOR",
+      "cost": 6,
+      "health": 8,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow",
+          "yellow",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "accuracy 3",
+        "pierce 2",
+        "damage 1",
+        "damage 1"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Agent Kallus": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Hunt Dissent: When your opponent plays a Command card, you may distribute 2 Hit Tokens among friendly figures within 1 space. Limit once per round.\n\nFulcrum: At the start of your activation, you may have each player draw 1 Command card.\n\nBo-Rifle: Before you declare an attack, you may treat your attack type as Melee. If you do, replace 1 blue die with 1 red die.",
+      "keywords": [
+        "SPY",
+        "LEADER",
+        "BRAWLER"
+      ],
+      "subname": "TENACIOUS INTERROGATOR",
+      "cost": 6,
+      "health": 11,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "weaken, focus",
+        "accuracy 2",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Ahsoka Tano": {
-      "abilityText": "Traits: FORCEUSER, LEADER, SPY. Attack (Melee): blue, green, green. Defense: white. Surge: damage 2. Surge: pierce 3. Surge: powerdamage 1",
-      "keywords": []
+      "abilityText": "Special Action (Force Leap): Place your figure in an empty space within 6 spaces.\n\nVigor: At the start of your activation, you may gain 2 movement points or 1 Block Token.\n\nTwin Sabers: While attacking, you may reroll all attack die or force the defender to reroll all defense die.",
+      "keywords": [
+        "FORCE USER",
+        "LEADER",
+        "SPY"
+      ],
+      "subname": "REBEL INSTIGATOR",
+      "cost": 8,
+      "health": 12,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "blue",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "pierce 3",
+        "damage 2",
+        "hit token"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Alliance Ranger (Elite)": {
-      "abilityText": "Traits: TROOPER, HUNTER. Attack (Range): blue, blue. Defense: black. accuracy 1; pierce 1. Surge: damage 2. Surge: accuracy 3. Surge: pierce 1",
-      "keywords": []
+      "abilityText": "Guerilla: After you resolve an attack, if the defender was defeated, become Hidden\n\nElite Sniper: While attacking, if the target space is 5 or more spaces away, you may reroll up to 2 attack dice.",
+      "keywords": [
+        "TROOPER",
+        "HUNTER"
+      ],
+      "cost": 12,
+      "health": 7,
+      "speed": 4,
+      "passives": [
+        "Pierce 1",
+        "+1 Accuracy"
+      ],
+      "figures": 3,
+      "attack": {
+        "dice": [
+          "blue",
+          "blue"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "pierce 1",
+        "damage 2",
+        "accuracy 3"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Alliance Ranger (Regular)": {
-      "abilityText": "Traits: TROOPER, HUNTER. Attack (Range): blue, blue. Defense: black. accuracy 1. Surge: damage 2. Surge: pierce 1. Surge: accuracy 2",
-      "keywords": []
+      "abilityText": "Guerilla: After you resolve an attack, if the defender was defeated, become Hidden.\n\nSniper: While attacking, if the target space is 5 or more spaces away, you reroll 1 attack die.",
+      "keywords": [
+        "TROOPER",
+        "HUNTER"
+      ],
+      "cost": 9,
+      "subCost": 3,
+      "health": 5,
+      "speed": 4,
+      "passives": [
+        "+1 Accuracy"
+      ],
+      "figures": 3,
+      "attack": {
+        "dice": [
+          "blue",
+          "blue"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "pierce 1",
+        "damage 2",
+        "accuracy 2"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Alliance Smuggler (Elite)": {
-      "abilityText": "Traits: SMUGGLER. Attack (Range): green, yellow. Defense: white. Surge: stun. Surge: focus. Surge: pierce 2. Surge: accuracy 3",
-      "keywords": []
+      "abilityText": "Special Action (Improved Smuggler's Instincts): Perform an interact, then move up to 3 spaces.\n\nSlippery: While defending, apply -2 Accuracy to the attack results. After an attack targeting you resolves, gain 2 movement points.",
+      "keywords": [
+        "SMUGGLER"
+      ],
+      "cost": 4,
+      "health": 5,
+      "speed": 5,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "stun",
+        "focus",
+        "accuracy 3",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "elite": true
     },
     "Alliance Smuggler (Regular)": {
       "abilityText": "Traits: SMUGGLER. Attack (Range): green, yellow. Defense: white. Surge: stun. Surge: pierce 1. Surge: accuracy 2",
-      "keywords": []
+      "keywords": [],
+      "cost": 2,
+      "health": 3,
+      "speed": 4,
+      "figures": 1,
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "AT-DP": {
       "abilityText": "Traits: VEHICLE. Attack (Range): blue, red, yellow. Defense: black. MASSIVE. Block 1; accuracy 3. Surge: damage 1. Surge: pierce 2",
@@ -1208,6 +1423,12 @@
       "keywords": [],
       "attachment": false,
       "affiliation": "Rebel"
+    },
+    "88-Z": {
+      "abilityText": "",
+      "keywords": [],
+      "attachment": false,
+      "companion": true
     }
   }
 }

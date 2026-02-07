@@ -157,7 +157,8 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && pathname.startsWith('/api/dc-image/')) {
-    const dcName = decodeURIComponent(pathname.replace('/api/dc-image/', '')).trim();
+    const raw = pathname.replace(/^\/api\/dc-image\/?/, '').replace(/\/$/, '');
+    const dcName = decodeURIComponent(raw).trim();
     let dcImages = {};
     try {
       const dcData = JSON.parse(readFileSync(join(root, 'data', 'dc-images.json'), 'utf8'));
@@ -179,13 +180,21 @@ const server = createServer(async (req, res) => {
       }
     }
     if (!relPath) {
+      for (const [k, v] of Object.entries(companionImages)) {
+        if (v && (k === dcName || k.replace(/\s+/g, ' ').trim() === dcName || k === innerName)) {
+          relPath = v;
+          break;
+        }
+      }
+    }
+    if (!relPath) {
       res.writeHead(404);
       res.end('Not found');
       return;
     }
-    const filePath = join(root, relPath);
+    const filePath = join(root, ...relPath.split('/'));
     if (!existsSync(filePath)) {
-      res.writeHead(404);
+      res.writeHead(404, { 'Cache-Control': 'no-store' });
       res.end('Not found');
       return;
     }
@@ -193,7 +202,7 @@ const server = createServer(async (req, res) => {
       const buf = readFileSync(filePath);
       const ext = extname(filePath).toLowerCase();
       const mime = MIME[ext] || (ext === '.png' ? 'image/png' : 'image/jpeg');
-      res.writeHead(200, { 'Content-Type': mime });
+      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' });
       res.end(buf);
     } catch {
       res.writeHead(500);

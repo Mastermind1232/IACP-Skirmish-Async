@@ -5927,6 +5927,7 @@ client.on('interactionCreate', async (interaction) => {
     const attackInfo = attackerStats.attack || { dice: ['red'], range: [1, 3] };
     const targetDcName = target.figureKey.replace(/-\d+-\d+$/, '');
     const targetStats = getDcStats(targetDcName);
+    const targetEff = dcEffects[targetDcName] || dcEffects[targetDcName.replace(/\s*\[.*\]\s*$/, '')];
     const attackerDisplayName = meta.displayName || meta.dcName;
     const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
     const combatDeclare = `**P${attackerPlayerNum}:** "${attackerDisplayName}" is attacking **P${defenderPlayerNum}:** "${target.label}"!`;
@@ -5958,7 +5959,12 @@ client.on('interactionCreate', async (interaction) => {
       attackerDisplayName,
       attackerFigureIndex: figureIndex,
       target: { ...target },
-      targetStats: { defense: targetStats.defense || 'white', cost: targetStats.cost ?? 5 },
+      targetStats: {
+        defense: targetStats.defense || 'white',
+        cost: targetStats.cost ?? 5,
+        subCost: targetEff?.subCost,
+        figures: targetStats.figures ?? 1,
+      },
       attackInfo,
       combatThreadId: thread.id,
       combatDeclareMsgId: declareMsg.id,
@@ -6111,7 +6117,8 @@ client.on('interactionCreate', async (interaction) => {
             if (game.figurePositions?.[defenderPlayerNum]) {
               delete game.figurePositions[defenderPlayerNum][combat.target.figureKey];
             }
-            const vp = combat.targetStats.cost ?? 5;
+            const { cost, subCost, figures } = combat.targetStats;
+            const vp = (figures > 1 && subCost != null) ? subCost : (cost ?? 5);
             const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
             game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
             game[vpKey].kills += vp;
