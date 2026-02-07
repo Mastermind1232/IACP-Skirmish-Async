@@ -57,6 +57,7 @@
       ],
       "cost": 1,
       "attachment": true,
+      "companion": "The Child",
       "affiliation": "Scum"
     },
     "[Combat Suit]": {
@@ -233,6 +234,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": true,
+      "companion": "Salacious B. Crumb",
       "affiliation": "Scum"
     },
     "[Last Resort]": {
@@ -603,7 +605,8 @@
     },
     "Cal Kestis": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "companion": "BD-1"
     },
     "Captain Terro": {
       "abilityText": "Traits: TROOPER, LEADER, CREATURE. Attack (Range): blue, green, yellow. Defense: black. Surge: damage 2. Surge: pierce 2",
@@ -817,7 +820,8 @@
     },
     "Iden Versio": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "companion": "Dio"
     },
     "IG-11": {
       "abilityText": "TBD (IACP – verify from card).",

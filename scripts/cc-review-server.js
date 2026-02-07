@@ -163,8 +163,13 @@ const server = createServer(async (req, res) => {
       const dcData = JSON.parse(readFileSync(join(root, 'data', 'dc-images.json'), 'utf8'));
       dcImages = dcData.dcImages || {};
     } catch (_) {}
+    let companionImages = {};
+    try {
+      const ci = JSON.parse(readFileSync(join(root, 'data', 'companion-images.json'), 'utf8'));
+      companionImages = ci.companionImages || {};
+    } catch (_) {}
     const innerName = dcName.replace(/^\[|\]$/g, '').trim();
-    let relPath = dcImages[dcName] || dcImages[innerName] || dcImages[dcName.replace(/\s*\([^)]*\)\s*$/, '').trim()];
+    let relPath = dcImages[dcName] || companionImages[dcName] || dcImages[innerName] || companionImages[innerName] || dcImages[dcName.replace(/\s*\([^)]*\)\s*$/, '').trim()];
     if (!relPath && innerName) {
       for (const [k, v] of Object.entries(dcImages)) {
         if (v && (k.replace(/^\[|\]$/g, '').trim() === innerName)) {

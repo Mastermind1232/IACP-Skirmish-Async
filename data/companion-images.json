@@ -1,0 +1,15 @@
+{
+  "source": "vassal_extracted/images/companions",
+  "companionImages": {
+    "88-Z": "vassal_extracted/images/companions/Companion Card--88-Z.jpg",
+    "BD-1": "vassal_extracted/images/companions/IACP_Comp card--BD-1.png",
+    "Cam Droid": "vassal_extracted/images/companions/Companion Card--Cam Droid.jpg",
+    "Dio": "vassal_extracted/images/companions/IACP_Comp card--Dio.png",
+    "J4X-7": "vassal_extracted/images/companions/Companion Card--J4X-7.jpg",
+    "Junk Droid": "vassal_extracted/images/companions/Companion Card--Junk Droid.jpg",
+    "Pit Droid": "vassal_extracted/images/companions/Companion Card--Pit Droid.jpg",
+    "R5 Astromech": "vassal_extracted/images/companions/Companion Card--R5 Astromech.jpg",
+    "Salacious B. Crumb": "vassal_extracted/images/companions/Companion Card--Salacious B. Crumb.jpg",
+    "The Child": "vassal_extracted/images/companions/IACP_Comp card--The Child.jpg"
+  }
+}

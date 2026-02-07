@@ -61,7 +61,7 @@
 </head>
 <body>
   <h1>IA Skirmish — Deployment Card Effect Editor</h1>
-  <p class="hint">Run <code>npm run cc-review</code> and open <code>http://localhost:3456/scripts/dc-effect-editor.html</code>. Shows <strong>all Deployment Cards</strong> (figure DCs and Skirmish Upgrades from dc-images). Correct ability text and keywords, then click <strong>VERIFIED</strong>. Progress = unverified count shrinking to 0.</p>
+  <p class="hint">Run <code>npm run cc-review</code> and open <code>http://localhost:3456/scripts/dc-effect-editor.html</code>. Shows <strong>Deployment Cards</strong> (figure DCs, Skirmish Upgrades) and <strong>Companion cards</strong>. Correct ability text and keywords, then click <strong>VERIFIED</strong>. Progress = unverified count shrinking to 0.</p>
 
   <div class="main">
     <div class="card-img-wrap" id="cardImgWrap">
@@ -739,14 +739,21 @@
         if (ri.ok) {
           const di = await ri.json();
           dcImages = di.dcImages || di || {};
-          names = Object.keys(dcImages).filter((k) => dcImages[k]).sort((a, b) => {
-          const aSkirmish = a.startsWith('[') ? 1 : 0;
-          const bSkirmish = b.startsWith('[') ? 1 : 0;
-          if (aSkirmish !== bSkirmish) return aSkirmish - bSkirmish;
-          return a.localeCompare(b);
-        });
         }
       } catch (_) {}
+      try {
+        const rc = await fetch('/data/companion-images.json');
+        if (rc.ok) {
+          const ci = await rc.json();
+          Object.assign(dcImages, ci.companionImages || ci || {});
+        }
+      } catch (_) {}
+      names = Object.keys(dcImages).filter((k) => dcImages[k]).sort((a, b) => {
+        const aSkirmish = a.startsWith('[') ? 1 : 0;
+        const bSkirmish = b.startsWith('[') ? 1 : 0;
+        if (aSkirmish !== bSkirmish) return aSkirmish - bSkirmish;
+        return a.localeCompare(b);
+      });
       try {
         const r = await fetch('/data/dc-effects.json');
         if (r.ok) {
