@@ -1173,8 +1173,36 @@
       "affiliation": "Rebel"
     },
     "Cad Bane": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Flawless Execution: Before you declare an attack, you become Focused. If you are already Focused, you may gain 1 Focus and add 1 attack die of any color to your attack pool instead of 1 green die.\n\nI Make the Rules Now: At the start of another figure's activation, a friendly HUNTER within 4 spaces may gain 1 movement point. Limit once per round.",
+      "keywords": [
+        "HUNTER",
+        "LEADER",
+        "MOBILE"
+      ],
+      "subname": "NOTORIOUS OUTLOAW",
+      "cost": 5,
+      "health": 9,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "surgeAbilities": [
+        "recover 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Cal Kestis": {
       "abilityText": "TBD (IACP – verify from card).",

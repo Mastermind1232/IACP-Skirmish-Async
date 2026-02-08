@@ -182,6 +182,7 @@
             <option value="focus">Focus</option>
             <option value="hit token">Hit Token</option>
             <option value="block token">Block Token</option>
+            <option value="recover 1 block token">Recover 1 Block Token</option>
             <option value="evade token">Evade Token</option>
             <option value="pierce 1">Pierce 1</option>
             <option value="pierce 2">Pierce 2</option>
@@ -364,7 +365,7 @@
       (values || []).forEach((v) => addChip(container, v, labelByValue ? (labelByValue[v] || v) : v));
     }
 
-    const SURGE_LABELS = { 'damage 1, accuracy 1': '+1 Hit, +1 Accuracy', 'damage 1, cleave 1': '+1 Hit, Cleave 1', 'blast 1, cleave 1': 'Blast 1, Cleave 1', 'accuracy 1, pierce 1': '+1 Accuracy, Pierce 1', 'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1', 'accuracy 2': '+2 Accuracy', 'accuracy 3': '+3 Accuracy', 'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'cancel 1': 'Cancel 1', 'cleave 1': 'Cleave 1', 'cleave 2': 'Cleave 2', 'damage 1': '+1 Hit', 'damage 2': '+2 Hit', 'focus': 'Focus', 'hit token': 'Hit Token', 'block token': 'Block Token', 'evade token': 'Evade Token', 'pierce 1': 'Pierce 1', 'pierce 2': 'Pierce 2', 'pierce 3': 'Pierce 3', 'recover 1': 'Recover 1', 'recover 2': 'Recover 2', 'recover 3': 'Recover 3', 'weaken, focus': 'Weaken, Focus', 'bleed': 'Bleed', 'stun': 'Stun', 'weaken': 'Weaken' };
+    const SURGE_LABELS = { 'damage 1, accuracy 1': '+1 Hit, +1 Accuracy', 'damage 1, cleave 1': '+1 Hit, Cleave 1', 'blast 1, cleave 1': 'Blast 1, Cleave 1', 'accuracy 1, pierce 1': '+1 Accuracy, Pierce 1', 'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1', 'accuracy 2': '+2 Accuracy', 'accuracy 3': '+3 Accuracy', 'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'cancel 1': 'Cancel 1', 'cleave 1': 'Cleave 1', 'cleave 2': 'Cleave 2', 'damage 1': '+1 Hit', 'damage 2': '+2 Hit', 'focus': 'Focus', 'hit token': 'Hit Token', 'block token': 'Block Token', 'recover 1 block token': 'Recover 1 Block Token', 'evade token': 'Evade Token', 'pierce 1': 'Pierce 1', 'pierce 2': 'Pierce 2', 'pierce 3': 'Pierce 3', 'recover 1': 'Recover 1', 'recover 2': 'Recover 2', 'recover 3': 'Recover 3', 'weaken, focus': 'Weaken, Focus', 'bleed': 'Bleed', 'stun': 'Stun', 'weaken': 'Weaken' };
     const DICE_LABELS = { red: 'Red', blue: 'Blue', yellow: 'Yellow', green: 'Green' };
     const DEFENSE_LABELS = { white: 'White', black: 'Black' };
 

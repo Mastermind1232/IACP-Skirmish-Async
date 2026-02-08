@@ -1,5 +1,5 @@
 ---
-description: Spell out dice/symbol result types in ability text (Hit, Surge, Block, Evade, Damage)
+description: DC/CC ability text and populating figures from card images (dice symbols, passives vs surge, defense, recover)
 globs: data/dc-effects.json, data/cc-effects.json
 alwaysApply: false
 ---
@@ -12,3 +12,21 @@ When editing `abilityText` or `effect` in DC/CC data, **never leave a dice resul
 - **Wrong**: "Damage equal to the results", "suffers Damage equal to the ___"
 
 Use the appropriate word for the die face: **Hit**, **Surge**, **Block**, **Evade**, or **Damage** (for "Damage results" on dice). If the card says "combined Hit and Surge results", keep that. Always fill in the specific result type the card refers to.
+
+---
+
+# Populating DC figures from card images
+
+## Never guess. Ever.
+
+- If you are **not 100% sure** what the card says, **leave that field blank** (or leave the existing placeholder). The user will fill it in and can teach you so you read it better next time.
+- You **must tell the user which fields or parts you were not 100% sure on**, so they know where you need help. List them explicitly (e.g. "Uncertain: defense die color, surge symbol in Flawless Execution").
+- **Always use the best possible image recognition** when reading card images. These are playing cards with small text; low-quality or ambiguous descriptions are not a basis for filling in data.
+
+## When you are 100% sure (reading guidance)
+
+1. **Defense die:** White vs black are different; confirm from the card.
+2. **Passives vs surge:** Passives = always-on. Surge abilities = spend surge for. Do not put passives in `surgeAbilities`. Do not add or edit `subname`; leave that to the user.
+3. **Recover: Damage vs tokens:** Recover Damage (heart) = `recover 1`. Recover Block Token (shield) = `recover 1 block token`. Read the symbol.
+4. **Ability text:** Spell out dice/symbol names (Hit, Surge, Focus, etc.) as in the first section above.
+5. **Tokens/symbols:** Surge (starburst) ≠ Focus (focus token). Read the actual symbol.
