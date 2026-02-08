@@ -1000,27 +1000,53 @@
       "affiliation": "Rebel"
     },
     "Boba Fett": {
-      "abilityText": "Traits: HUNTER. Attack (Range): blue, green, yellow. Defense: black. Block 1; Surge: cancel 1. MOBILE. Surge: pierce 1. Surge: weaken",
-      "keywords": [],
+      "abilityText": "Wrist Cord: Once per round, you may spend 2 movement points to choose a SMALL figure within 3 spaces in your line of sight. Push the choses figure up to 3 spaces into a space adjacent to you.\n\nWrist Flamethrower: Once per round, you may spend 2 movement points to choose a space within 2 spaces. Each other figure on or adjacent to that spaces suffers 1 Damage and 1 Strain, then becomes Weakened.\n\nEE-3 Carbine: When you declare an attack, you may spend 2 movement points to change one of your attack die to a red die. Limit once per attack.",
+      "keywords": [
+        "HUNTER",
+        "VEHICLE. MOBILE"
+      ],
       "subname": "INFAMOUS BOUNTY HUNTER",
-      "cost": 12,
-      "health": 12,
-      "speed": 4,
+      "cost": 13,
+      "health": 14,
+      "speed": 6,
+      "passives": [
+        "Block 1",
+        "+1 Evade"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
-          "red",
-          "yellow"
-        ]
+          "blue",
+          "green",
+          "green"
+        ],
+        "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
-      "attachment": false
+      "surgeAbilities": [
+        "pierce 1",
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Bodhi Rook": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "subname": "THE PILOT",
+      "cost": 2,
+      "passives": [
+        "+1 Accuracy"
+      ],
+      "surgeAbilities": [
+        "damage 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Bossk": {
       "abilityText": "Traits: BRAWLER, HUNTER. Attack (Range): red, green. Defense: white. Block 1. damage 2. accuracy 2. Surge: pierce 2",
