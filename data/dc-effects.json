@@ -1207,13 +1207,25 @@
     "Cal Kestis": {
       "abilityText": "Special Action (Wall Run): Move a number of spaces up to your speed. During this movement, you may ignore terrain in spaces that share an edge or corner with a wall.\n\nForce Slow: At the start of the round, choose a hostile figure within 3 spaces. That figure's group cannot be activated during its owner's next opportunity to resolve an activation.",
       "keywords": [
-        "FORCEUSER",
+        "FORCE USER",
         "TECHNICIAN"
       ],
+      "subname": "JEDI SCAVENGER",
       "cost": 8,
       "health": 14,
       "speed": 5,
       "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow",
+          "yellow",
+          "red"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "white"
+      ],
       "surgeAbilities": [
         "damage 2",
         "cleave 2",
@@ -1221,7 +1233,7 @@
         "cleave 2"
       ],
       "attachment": false,
-      "companion": "BD-1",
+      "elite": true,
       "affiliation": "Rebel"
     },
     "Captain Terro": {
