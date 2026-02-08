@@ -1371,6 +1371,7 @@
         "hit token 2"
       ],
       "attachment": false,
+      "elite": true,
       "affiliation": "Rebel"
     },
     "Chewbacca": {
@@ -1381,12 +1382,22 @@
         "WOOKIEE",
         "GUARDIAN"
       ],
+      "subname": "LOYAL WOOKIE",
       "cost": 15,
       "health": 14,
       "speed": 4,
       "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "yellow",
+          "blue"
+        ],
+        "type": "range"
+      },
       "defense": [
-        "white"
+        "white",
+        "black"
       ],
       "surgeAbilities": [
         "damage 2",
@@ -1654,8 +1665,33 @@
       "keywords": []
     },
     "Han Solo": {
-      "abilityText": "Traits: SMUGGLER, LEADER. Attack (Range): blue, green, green. Defense: white. Surge: damage 1; Surge: accuracy 2. Surge: damage 2",
-      "keywords": []
+      "abilityText": "Return Fire: After an attack targeting you is resolved, if you did not suffer any Damage, you may interrupt to perform an attack targeting that attacker. Limit once per round.\n\nDistracting: While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Block to the defense results.\n\nCunning: While defending, apply +1 Evade to the defense results for each Block result.",
+      "keywords": [
+        "SMUGGLER",
+        "LEADER"
+      ],
+      "subname": "SCOUNDREL",
+      "cost": 12,
+      "health": 12,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "accuracy 2, damage 1",
+        "damage 2"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Heavy Stormtrooper (Elite)": {
       "abilityText": "Modular: You may include an attachment card in your army and decrease its cost by 1, to a minimum of 0. During setup, you must attach that card to this group.\n\nSpray Fire: While attacking, you may apply -3 Accuracy and +1 Damage to the attack results.",
@@ -1693,8 +1729,33 @@
       "keywords": []
     },
     "Hera Syndulla": {
-      "abilityText": "Traits: LEADER, SMUGGLER. Attack (Range): blue, green, yellow. Defense: black. Surge: damage 1. Surge: pierce 2",
-      "keywords": []
+      "abilityText": "Call the Shots: While another friendly figure within 3 spaces is attacking, you may apply +2 Accuracy, +1 Damage, or +1 Block to the attack results. Limit once per round.\n\nSmooth Landing: After Deployment, you and each adjacent friendly figure gains 1 movement point.",
+      "keywords": [
+        "LEADER",
+        "SMUGGLER"
+      ],
+      "subname": "SPECTRE-2",
+      "cost": 4,
+      "health": 7,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Hired Gun (Elite)": {
       "abilityText": "Traits: SMUGGLER. Attack (Range): green, yellow. Defense: white. Surge: cancel 1. accuracy 1. Surge: damage 1. Surge: damage 1",
@@ -1834,8 +1895,35 @@
       "affiliation": "Rebel"
     },
     "Jyn Odan": {
-      "abilityText": "Traits: SMUGGLER. Attack (Range): green, green. Defense: white. Surge: stun; Surge: pierce 1. Surge: damage 2; Surge: accuracy 2",
-      "keywords": []
+      "abilityText": "Hair Trigger: At the start of a hostile figure's activation, you may interrupt to perform an attack that targets that figure. Limit once per round.\n\nSidewinder: After you resolve an attack, you may suffer 1 Damage to move up to 2 spaces. Limit once per round.\n\nCunning: While defending, apply +1 Block to the defense results for each Evade result.",
+      "keywords": [
+        "SMUGGLER"
+      ],
+      "subname": "GUNSLINGING ROGUE",
+      "cost": 5,
+      "health": 8,
+      "speed": 5,
+      "passives": [
+        "+1 Accuracy",
+        "+1 Hit"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "stun, pierce 1",
+        "accuracy 2, damage 2"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "K-2S0": {
       "abilityText": "TBD (IACP – verify from card).",
@@ -1973,8 +2061,32 @@
       "affiliation": "Rebel"
     },
     "Mara Jade": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Adaptive Skills: Your affiliation matches your army's affiliation. You gain 1 of the following traits based on your army's affiliation: Imperial: Hunter | Scum: Smuggler | Rebel: Guardian.\n\nFast Learner: Once per round, you may play a Command card whose restriction matches the name of another Deployment card in your army, except \"Arcing Shot\".\n\nProfessional: While attacking, you may reroll 1 attack die.",
+      "keywords": [
+        "FORCE USER",
+        "BRAWLER"
+      ],
+      "subname": "LOST LEGEND",
+      "cost": 6,
+      "health": 11,
+      "speed": 5,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "red"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "pierce 3"
+      ],
+      "attachment": false,
+      "affiliation": "Any"
     },
     "Maul": {
       "abilityText": "Traits: FORCE USER, BRAWLER. Attack (Melee): red, yellow. Defense: black. damage 1. Surge: pierce 3",
@@ -2117,8 +2229,37 @@
       "keywords": []
     },
     "Rebel Saboteur (Elite)": {
-      "abilityText": "Traits: SPY, HEAVY WEAPON. Attack (Range): red, yellow. Defense: white. accuracy 3. Surge: pierce 2. Surge: stun. Surge: blast 1",
-      "keywords": []
+      "abilityText": "Overload: You can trigger the same Surge ability up to twice per attack.\n\nPriority Target: Figures do not block line of sight for this figure's attack.",
+      "keywords": [
+        "SPY",
+        "HEAVY WEAPON"
+      ],
+      "cost": 7,
+      "subCost": 3,
+      "health": 7,
+      "speed": 5,
+      "passives": [
+        "+4 Accuracy"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "red",
+          "red",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "stun",
+        "pierce 2",
+        "blast 2"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Rebel Saboteur (Regular)": {
       "abilityText": "Traits: SPY, HEAVY WEAPON. Attack (Range): red, yellow. Defense: white. accuracy. Surge: pierce 2. Surge: stun. Surge: blast 1",
@@ -2438,8 +2579,23 @@
       "keywords": []
     },
     "Yoda": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Calming Presence: At the start of a friendly Rebel figure's activation, that figure may remove one HARMFUL condition and suffer 1 Strain. Limit once per round.\n\nWisdom: At the start of your activation, you may draw 1 Command card. If you do, place 1 card from your hand on the bottom of your deck.\n\nSurge (Do or Do Not): Choose another friendly REBEL FORCE USER within 4 spaces. That figure becomes Focused.\n\nForce Deflection: After an attack targeting you or an adjacent friendly Rebel figure resolves, you may have the attacking figure suffer Damage equal to the number of attack dice rolled. Limit once per round.",
+      "keywords": [
+        "FORCE USER"
+      ],
+      "subname": "JEDI MASTER",
+      "cost": 4,
+      "health": 9,
+      "speed": 3,
+      "figures": 1,
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "focus (friendly REBEL FORCE USER within 4)"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Zeb Orrelios": {
       "abilityText": "Special Action (Bo-Rifle Staff Strike): Once during your activation, you may perform a melee attack using 2 red dice without spending an action.\n\nLasat Honor Guard: While attacking, after any rerolls, you may turn 1 die showing only a single attack icon to any other side.",
