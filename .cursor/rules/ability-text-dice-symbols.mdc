@@ -29,4 +29,5 @@ Use the appropriate word for the die face: **Hit**, **Surge**, **Block**, **Evad
 2. **Passives vs surge:** Passives = always-on. Surge abilities = spend surge for. Do not put passives in `surgeAbilities`. Do not add or edit `subname`; leave that to the user.
 3. **Recover: Damage vs tokens:** Recover Damage (heart) = `recover 1`. Recover Block Token (shield) = `recover 1 block token`. Read the symbol.
 4. **Ability text:** Spell out dice/symbol names (Hit, Surge, Focus, etc.) as in the first section above.
-5. **Tokens/symbols:** Surge (starburst) ≠ Focus (focus token). Read the actual symbol.
+5. **Special actions:** Always check the card for the **special action symbol** (e.g. triangle / action icon). When an ability has that symbol, use the format **Special Action (Ability Name):** — not just **Ability Name:**. If you are not 100% sure whether an ability is a special action, leave the format as-is and list it in uncertainties.
+6. **Tokens/symbols:** Surge (starburst) ≠ Focus (focus token) ≠ Power Token. **Question mark on a token background** = generic **Power Token** (player chooses any: Block, Hit, Surge, Evade, etc.). Write "gain 1 Power Token". Read the actual symbol.

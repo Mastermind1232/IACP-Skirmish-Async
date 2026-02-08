@@ -1173,16 +1173,19 @@
       "affiliation": "Rebel"
     },
     "Cad Bane": {
-      "abilityText": "Flawless Execution: Before you declare an attack, you become Focused. If you are already Focused, you may gain 1 Focus and add 1 attack die of any color to your attack pool instead of 1 green die.\n\nI Make the Rules Now: At the start of another figure's activation, a friendly HUNTER within 4 spaces may gain 1 movement point. Limit once per round.",
+      "abilityText": "Flawless Execution: Before you declare an attack, you become Focused. If you are already Focused, you may gain 1 Power Token and add 1 attack die of any color to your attack pool instead of 1 green die.\n\nI Make the Rules Now: At the start of another figure's activation, a friendly HUNTER within 4 spaces may gain 1 movement point. Limit once per round.",
       "keywords": [
         "HUNTER",
         "LEADER",
         "MOBILE"
       ],
-      "subname": "NOTORIOUS OUTLOAW",
+      "subname": "NOTORIOUS OUTLAW",
       "cost": 5,
       "health": 9,
       "speed": 4,
+      "passives": [
+        "+2 Accuracy"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -1194,9 +1197,6 @@
       "defense": [
         "white"
       ],
-      "passives": [
-        "+2 Accuracy"
-      ],
       "surgeAbilities": [
         "recover 1"
       ],
@@ -1205,25 +1205,138 @@
       "affiliation": "Scum"
     },
     "Cal Kestis": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": [],
-      "companion": "BD-1"
+      "abilityText": "Special Action (Wall Run): Move a number of spaces up to your speed. During this movement, you may ignore terrain in spaces that share an edge or corner with a wall.\n\nForce Slow: At the start of the round, choose a hostile figure within 3 spaces. That figure's group cannot be activated during its owner's next opportunity to resolve an activation.",
+      "keywords": [
+        "FORCEUSER",
+        "TECHNICIAN"
+      ],
+      "cost": 8,
+      "health": 14,
+      "speed": 5,
+      "figures": 1,
+      "surgeAbilities": [
+        "damage 2",
+        "cleave 2",
+        "pierce 3",
+        "cleave 2"
+      ],
+      "attachment": false,
+      "companion": "BD-1",
+      "affiliation": "Rebel"
     },
     "Captain Terro": {
-      "abilityText": "Traits: TROOPER, LEADER, CREATURE. Attack (Range): blue, green, yellow. Defense: black. Surge: damage 2. Surge: pierce 2",
-      "keywords": []
+      "abilityText": "Special Action (Flamethrower): Choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain, then becomes Weakened.\n\nMounted: At the start of your activation, gain 3 movement points.\n\nEfficient Travel: You ignore additional movement point costs for difficult terrain and hostile figures.\n\nProfessional: While attacking, you may reroll 1 attack die.",
+      "keywords": [
+        "TROOPER",
+        "LEADER",
+        "CREATURE"
+      ],
+      "cost": 7,
+      "health": 13,
+      "speed": 5,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "passives": [
+        "+2 Accuracy",
+        "Block 1"
+      ],
+      "surgeAbilities": [
+        "pierce 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Cara Dune": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Shock and Awe: When you declare an attack, you may replace 1 Yellow die in your attack pool with 1 Red die. Limit once per round.\n\nSpecial Action (Smash): Choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.\n\nHunker Down: While defending, if you share a corner or edge with a space containing blocking, impassable, or difficult terrain, apply +1 Block to your defense results.",
+      "keywords": [
+        "TROOPER",
+        "BRAWLER",
+        "HEAVYWEAPON"
+      ],
+      "cost": 9,
+      "health": 14,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "passives": [
+        "+1 Accuracy"
+      ],
+      "surgeAbilities": [
+        "blast 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Cassian Andor": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Strike Team: After deployment, you and an adjacent friendly figure gain 2 movement points. Then, up to 4 friendly figures outside of your deployment zone each gain 1 Focus.\n\nSpecial Action (It Will be Alright): Choose another friendly figure within 2 spaces that can be defeated. That figure is defeated, then perform a move or attack without spending an action.",
+      "keywords": [
+        "LEADER",
+        "SPY"
+      ],
+      "cost": 6,
+      "health": 10,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue"
+        ],
+        "type": "range"
+      },
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 2",
+        "bleed"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Chewbacca": {
-      "abilityText": "Traits: SMUGGLER, WOOKIEE, GUARDIAN. Attack (Range): blue, red, yellow. Defense: white, black. Surge: damage 2. Surge: stun. Surge: accuracy 2",
-      "keywords": []
+      "abilityText": "Special Action (Slam): Choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space.\n\nProtector: While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Block to the defense results. Limit 1 \"Protector\" ability used per attack.",
+      "keywords": [
+        "TECHNICIAN",
+        "SMUGGLER",
+        "WOOKIEE",
+        "GUARDIAN"
+      ],
+      "cost": 15,
+      "health": 14,
+      "speed": 4,
+      "figures": 1,
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "stun",
+        "accuracy 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Chirrut Imwe": {
       "abilityText": "TBD (IACP – verify from card).",
