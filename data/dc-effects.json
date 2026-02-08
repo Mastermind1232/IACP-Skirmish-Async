@@ -88,7 +88,7 @@
       "affiliation": "Scum"
     },
     "[Doubt]": {
-      "abilityText": "At the end of the round, you may choose a hostile figure and discard 1 condition or Power Token from that figure. \n\nDeplete this card while a hostile figure is attacking to choose 1 attack die. Your opponent must reroll that die.",
+      "abilityText": "At the end of the round, you may choose a hostile figure and discard 1 condition or power token from that figure.\n\nDeplete this card while a hostile figure is attacking to choose 1 attack die. Your opponent must reroll that die.",
       "keywords": [],
       "cost": 1,
       "attachment": false,
@@ -1309,15 +1309,20 @@
       "affiliation": "Imperial"
     },
     "Cara Dune": {
-      "abilityText": "Shock and Awe: When you declare an attack, you may replace 1 Yellow die in your attack pool with 1 Red die. Limit once per round.\n\nSpecial Action (Smash): Choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.\n\nHunker Down: While defending, if you share a corner or edge with a space containing blocking, impassable, or difficult terrain, apply +1 Block to your defense results.",
+      "abilityText": "Shock and Awe: When you declare an attack, you may replace 1 Yellow die in your attack pool with 1 Red die. Limit once per round.\n\nSmash: Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.\n\nHunker Down: While defending, if you share a corner or edge with a space containing blocking, impassable, or difficult terrain, apply +1 Evade to your defense results.",
       "keywords": [
         "TROOPER",
         "BRAWLER",
-        "HEAVYWEAPON"
+        "HEAVY WEAPON",
+        "PROFESSIONAL"
       ],
+      "subname": "DROPPER VETERAN",
       "cost": 9,
       "health": 14,
       "speed": 4,
+      "passives": [
+        "+1 Accuracy"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -1330,9 +1335,6 @@
       "defense": [
         "black"
       ],
-      "passives": [
-        "+1 Accuracy"
-      ],
       "surgeAbilities": [
         "damage 2",
         "blast 2"
@@ -1342,25 +1344,29 @@
       "affiliation": "Rebel"
     },
     "Cassian Andor": {
-      "abilityText": "Strike Team: After deployment, you and an adjacent friendly figure gain 2 movement points. Then, up to 4 friendly figures outside of your deployment zone each gain 1 Focus.\n\nSpecial Action (It Will be Alright): Choose another friendly figure within 2 spaces that can be defeated. That figure is defeated, then perform a move or attack without spending an action.",
+      "abilityText": "Strike Team: After deployment, you and an adjacent friendly figure gain 2 movement points. Then, up to 4 friendly figures outside of your deployment zone each gain 1 Hit Token.\n\nIt Will be Alright: Once during your activation, you may choose another friendly figure within 2 spaces that can be defeated. That figure is defeated, then perform a move or attack without spending an action.",
       "keywords": [
         "LEADER",
         "SPY"
       ],
+      "subname": "RESTLESS AGENT",
       "cost": 6,
       "health": 10,
       "speed": 4,
       "figures": 1,
       "attack": {
         "dice": [
+          "blue",
           "blue"
         ],
         "type": "range"
       },
+      "defense": [
+        "white"
+      ],
       "surgeAbilities": [
         "damage 2",
-        "accuracy 2",
-        "bleed"
+        "accuracy 2"
       ],
       "attachment": false,
       "elite": true,
@@ -1651,8 +1657,35 @@
       "keywords": []
     },
     "Heavy Stormtrooper (Elite)": {
-      "abilityText": "Traits: TROOPER, HEAVYWEAPON. Attack (Melee): blue, red. Defense: black. accuracy 2. Surge: damage 2. Surge: blast 2",
-      "keywords": []
+      "abilityText": "Modular: You may include an attachment card in your army and decrease its cost by 1, to a minimum of 0. During setup, you must attach that card to this group.\n\nSpray Fire: While attacking, you may apply -3 Accuracy and +1 Damage to the attack results.",
+      "keywords": [
+        "TROOPER",
+        "HEAVY WEAPON"
+      ],
+      "cost": 8,
+      "health": 8,
+      "speed": 4,
+      "passives": [
+        "+3 Accuracy"
+      ],
+      "figures": 4,
+      "attack": {
+        "dice": [
+          "blue",
+          "red"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "blast 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Heavy Stormtrooper (Regular)": {
       "abilityText": "Traits: TROOPER, HEAVYWEAPON. Attack (Range): blue, green. Defense: black. accuracy 2. Surge: damage 1. Surge: blast 1",
@@ -1708,8 +1741,32 @@
       "keywords": []
     },
     "ISB Infiltrator (Elite)": {
-      "abilityText": "Traits: SPY. Attack (Range): blue, green. Defense: white. Surge: pierce 1; Surge: hide. Surge: damage 2. Surge: pierce 1; Surge: accuracy 2",
-      "keywords": []
+      "abilityText": "In The Shadows: When you are deployed and at the end of your activation, you become Hidden.\n\nComms Jammer: Your opponent cannot play Command cards during your activation.\n\nSpecial Action (Coordinated Raid): Another friendly Imperial figure with figure cost of 4 or less within 4 spaces may interrupt to perform an attack. Limit once per group per round.",
+      "keywords": [
+        "SPY"
+      ],
+      "cost": 7,
+      "health": 7,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "block 1",
+        "pierce 1, accuracy 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "ISB Infiltrator (Regular)": {
       "abilityText": "Traits: SPY. Attack (Range): blue, green. Defense: white. Surge: hide. Surge: damage 1. Surge: accuracy 2",
@@ -2105,8 +2162,32 @@
       "keywords": []
     },
     "Shoretrooper (Elite)": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Squad Training: While attacking, while adjacent to another friendly TROOPER, you may reroll 1 attack die.",
+      "keywords": [
+        "TROOPER"
+      ],
+      "cost": 6,
+      "health": 7,
+      "speed": 5,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "red",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "movement 2",
+        "accuracy 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Shyla Varad": {
       "abilityText": "Traits: HUNTER, BRAWLER. Attack (Melee): green, green, yellow. Defense: black. Surge: cancel 1. Surge: damage 2. Surge: pierce 2. Surge: cleave 2",
@@ -2137,8 +2218,35 @@
       "keywords": []
     },
     "The Grand Inquisitor": {
-      "abilityText": "Traits: FORCEUSER, HUNTER. Attack (Melee): red, green, yellow. Defense: white. Surge: damage 1. Surge: pierce 3. Surge: cleave 3",
-      "keywords": []
+      "abilityText": "Precision: While attacking or defending against an adjacent figure, you may choose 1 die. The player that rolled that die must reroll it.\n\nLightsaber Throw: Perform a ranged attack using your attack pool. Apply +2 Accuracy to the attack results.\n\nDeadly Spin: Apply -1 Block to the defense results. This attack gains Cleave 3.",
+      "keywords": [
+        "FORCE USER",
+        "LEADER",
+        "HUNTER"
+      ],
+      "subname": "SITH LOYALIST",
+      "cost": 7,
+      "health": 15,
+      "speed": 5,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "accuracy 2",
+        "pierce 3"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "The Mandalorian, Renegade Hunter": {
       "abilityText": "TBD (IACP – verify from card).",

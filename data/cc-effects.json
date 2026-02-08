@@ -822,7 +822,7 @@
     },
     "Get Behind Me!": {
       "cost": 2,
-      "playableBy": "GUARDIAN or Force User",
+      "playableBy": "GUARDIAN or FORCE USER",
       "timing": "whenAttackDeclaredTargetingFriendlySmallFigureCost10OrLessWithin3Spaces",
       "effect": "Use when an attack is declared targeting another friendly small figure with a figure cost of 10 or less within 3 spaces. Move up to 3 spaces into a space adjacent to that figure that can be targeted by the attack. The attack targets you instead, if able.",
       "effectType": "manual"
@@ -1384,7 +1384,7 @@
       "cost": 3,
       "playableBy": "HEAVY WEAPON or WOOKIEE",
       "timing": "duringAttack",
-      "effect": "Use while attacking. For each defense die rolled, apply +1 Hit and +1 Surge to the attack results. During this attack, ignore all defense results that are not on the defense dice.",
+      "effect": "Use while attacking. For each defense die rolled, apply +1 Damage and +1 Surge to the attack results. During this attack, ignore all defense results that are not on the defense dice.",
       "effectType": "manual"
     },
     "Pack Alpha": {
@@ -1530,8 +1530,8 @@
     "Rapid Recalibration": {
       "cost": 1,
       "playableBy": "DROID",
-      "timing": "whileAttackingAfterAttackDiceRolledOrRerolled",
-      "effect": "Use while attacking, after attack dice are rolled or rerolled, to choose 1 attack die and turn that die to any side.",
+      "timing": "whileAttackingBeforeDefenderRerolls",
+      "effect": "Use while attacking, before the defender performs rerolls. Choose 1 attack die and turn that die to any side.",
       "effectType": "manual"
     },
     "Reactive Loyalties": {
@@ -1594,7 +1594,7 @@
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Put this card into play at the start of a round. At the end of the round, discard this card and draw 1 Command card.\n\nPassive (Play area): Players cannot choose, play, or re-draw Command cards in discard piles.",
+      "effect": "Put this card into play at the start of a round.\n\nPlayers cannot choose, play, or re-draw Command cards in discard piles.\n\nAt the end of the round, discard this card and draw 1 Command card.",
       "effectType": "manual"
     },
     "Retaliation": {
