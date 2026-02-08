@@ -1145,8 +1145,32 @@
       "affiliation": "Rebel"
     },
     "C1-10P \"Chopper\"": {
-      "abilityText": "Traits: DROID. Attack (Melee): red, green. Defense: black. Surge: pierce 2. Surge: recover 2",
-      "keywords": []
+      "abilityText": "Special Action (Ram): Move up to 2 spaces, then choose an adjacent figure. If that figure is hostile, roll 1 green die. It suffers Damage equal to the results. Then, if that figure is SMALL, push it up to 1 space.\n\nSpecial Action (System Shock): Use while on or adjacent to a terminal. Choose a figure on or adjacent to any terminal. That figure suffers 2 Damage and 1 Strain.",
+      "keywords": [
+        "DROID"
+      ],
+      "subname": "CHOPPER",
+      "cost": 3,
+      "health": 5,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "pierce 2",
+        "recover 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Cad Bane": {
       "abilityText": "TBD (IACP – verify from card).",
