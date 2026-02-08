@@ -39,6 +39,7 @@
     "[Prey on the Weak]",
     "[Punishing Strike]",
     "[Rebel High Command]",
+    "[Rogue One]",
     "[Rogue Smuggler]",
     "[Rule by Fear]",
     "[Scavenged Walker]",
@@ -64,6 +65,7 @@
     "4-LOM",
     "Agent Blaise",
     "Agent Kallus",
+    "Asajj Ventress",
     "Ahsoka Tano",
     "Alliance Ranger (Elite)",
     "Alliance Ranger (Regular)",
@@ -82,7 +84,9 @@
     "BT-1",
     "C-3P0",
     "C1-10P \"Chopper\"",
-    "Cad Bane"
+    "Cad Bane",
+    "Cal Kestis",
+    "Captain Terro"
   ],
-  "updatedAt": "2026-02-08T21:32:44.071Z"
+  "updatedAt": "2026-02-08T21:54:02.595Z"
 }

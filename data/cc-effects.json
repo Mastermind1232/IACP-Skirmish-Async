@@ -516,7 +516,7 @@
       "cost": 2,
       "playableBy": "SMUGGLER",
       "timing": "duringAttack",
-      "effect": "Use while attacking to choose a die. That die's controller rerolls it. If the rerolled result has the same number of symbols as the original die roll, you may double or cancel its results.",
+      "effect": "Use while attacking to choose a die. That die's controller rerolls it. If the rerolled result has the same number of symbols as the original roll, you may double or cancel its results.",
       "effectType": "manual"
     },
     "Draw!": {
@@ -1013,7 +1013,7 @@
       "cost": 1,
       "playableBy": "LEADER",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. During this round, friendly figures without the printed PROFESSIONAL trait gain PROFESSIONAL while within 3 spaces of you.\n\n('Professional' figures may reroll 1 attack die while attacking)",
+      "effect": "Use at the start of the round. During this round, friendly Scum figures gain 'Professional' while within 3 spaces of you. (Those figures may reroll 1 attack die while attacking.)",
       "effectType": "manual"
     },
     "Karabast!": {
@@ -1237,7 +1237,7 @@
       "cost": 3,
       "playableBy": "Darth Vader",
       "timing": "whenHostileFigureDefeatedNotYourActivation",
-      "effect": "Use when a hostile figure is defeated. If it is not your activation, you may interrupt to move up to 2 spaces, and either use \"Force Choke\" or perform an attack. When you declare this attack, remove 1 die from your attack pool.",
+      "effect": "Use when a hostile figure is defeated to interrupt to move up to 2 spaces. Then, you may use \"Force Choke\" or perform an attack.",
       "effectType": "manual"
     },
     "Mandalorian Steel": {
@@ -1965,7 +1965,7 @@
       "cost": 1,
       "playableBy": "Bossk",
       "timing": "whenYouDeclareIndiscriminateFire",
-      "effect": "Use when you declare 'Indiscriminate Fire.' Add 1 yellow die to the dice pool.",
+      "effect": "Use when you declare \"Indiscriminate Fire\". Add 1 yellow die to the dice pool.",
       "effectType": "manual"
     },
     "Transmit the Plans": {
@@ -2084,7 +2084,7 @@
       "cost": 2,
       "playableBy": "Fifth Brother",
       "timing": "other",
-      "effect": "Passive: When discarded, place this card on your 'Fifth Brother' Deployment card instead as an Attachment.\n\nAttachment: You cannot be defeated nor recover Damage. You ignore your HARMFUL conditions. When a hostile figure is defeated, or at the end of the next round, return this card to the game box.",
+      "effect": "When this card is discarded, place it on your 'Fifth Brother' Deployment card.\n\nYou cannot be defeated. You ignore your Harmful conditions.\n\nWhen a hostile figure is defeated, recover 2 Damage and return this card to the game box.",
       "effectType": "manual"
     }
   }

@@ -102,7 +102,7 @@
       "affiliation": "Imperial"
     },
     "[Explosive Armaments]": {
-      "abilityText": "Each figure in this group gains:\n\nDouble surge: +1 Hit, Blast 2",
+      "abilityText": "HUNTER OR DROID ONLY\n\nEach figure in this group gains:\n\nSurge: +1 Damage, Blast 1\n\nExhaust this card while attacking to apply Blast 1 to the attack results.",
       "keywords": [
         "HUNTER",
         "DROID"
@@ -216,7 +216,7 @@
       "affiliation": "Rebel"
     },
     "[Imperial Citadel]": {
-      "abilityText": "Whenever a friendly IMPERIAL figure is defeated, for each Power Token on that figure, place a matching Power Token on this card.\n\nAt the start of a friendly IMPERIAL figure's activation, it may gain 1 Power Token from this card. \n\nAt the start of each round, place 1 Hit Token or Block Token on this card.",
+      "abilityText": "Whenever a friendly Imperial figure is defeated, for each power token on that figure, place a matching power token on this card.\n\nAt the start of a friendly Imperial figure's activation, it may gain 1 power token from this card.\n\nAt the start of each round, place 1 Focus or Damage on this card.",
       "keywords": [],
       "cost": 1,
       "attachment": false,
@@ -328,6 +328,13 @@
       "abilityText": "At the end of each game round, draw 1 additional Command card.",
       "keywords": [],
       "cost": 2,
+      "attachment": false,
+      "affiliation": "Rebel"
+    },
+    "[Rogue One]": {
+      "abilityText": "Your army must include Baze Malbus, Bodhi Rook, Cassian Andor, Chirrut Imwe, Jyn Erso, and K-2SO, and cannot include other unique figures that cost 3 or less.\n\nWhile a friendly figure listed above is attacking, it may discard 1 power token of any type from another friendly figure to add +1 Surge to the attack results.\n\nAt the start of the first game round, draw 3 Command cards, then place 2 Command cards from your hand on top of your deck.",
+      "keywords": [],
+      "cost": 0,
       "attachment": false,
       "affiliation": "Rebel"
     },
@@ -623,6 +630,39 @@
       "attachment": false,
       "affiliation": "Imperial"
     },
+    "Asajj Ventress": {
+      "abilityText": "Nimble: After an attack targeting you is resolved, gain 2 movement points for each of your Block results.\n\nConsider It My Payment: At the start of your activation, your opponent reveals a Command card from his hand. During this round, if the next Command card played by that player does not have the same name as the revealed card, that player discards a copy of the revealed card, or reveals a hand without any copies of that card.",
+      "keywords": [
+        "DARK DISCIPLE",
+        "FORCE USER",
+        "HUNTER",
+        "PROFESSIONAL"
+      ],
+      "subname": "DARK DISCIPLE",
+      "cost": 7,
+      "health": 12,
+      "speed": 5,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow",
+          "yellow",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "evade",
+        "accuracy 2, damage 2",
+        "pierce 3"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
+    },
     "Ahsoka Tano": {
       "abilityText": "Special Action (Force Leap): Place your figure in an empty space within 6 spaces.\n\nVigor: At the start of your activation, you may gain 2 movement points or 1 Block Token.\n\nTwin Sabers: While attacking, you may reroll all attack die or force the defender to reroll all defense die.",
       "keywords": [
@@ -807,7 +847,7 @@
       "affiliation": "Imperial"
     },
     "AT-RT": {
-      "abilityText": "Mortar Launcher: At the end of the round, yo may move up to 2 spaces. Then, choose a space within 3 spaces that contains a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Hit results.\n\nVanguard: While attacking a figure within 3 spaces, you may replace one die in your attack pool with 1 red die.",
+      "abilityText": "Mortar Launcher: At the end of the round, you may move up to 2 spaces. Then, choose a space within 3 spaces that contains a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Hit results.\n\nVanguard: While attacking a figure within 3 spaces, you may replace one die in your attack pool with 1 red die.",
       "keywords": [
         "MASSIVE",
         "TROOPER",
@@ -1063,7 +1103,7 @@
       "affiliation": "Rebel"
     },
     "Bossk": {
-      "abilityText": "Special Action (Indiscriminate Fire): Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red attack die. Each other figure within 2 spaces of the target space other than defender suffers Damage equal to the Hit results and Strain equal to the Surge results.\n\nRegenerate: At the end of each round, recover 2 Damage and discard all HARMFUL conditions.",
+      "abilityText": "Special Action (Indiscriminate Fire): Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red attack die. Each other figure within 2 spaces of the target space other than the defender suffers Damage equal to the Damage results and Strain equal to the Surge results.\n\nRegenerate: At the end of each round, recover 2 Damage and discard all Harmful conditions.",
       "keywords": [
         "HUNTER",
         "BRAWLER"
@@ -1074,21 +1114,22 @@
       "speed": 4,
       "passives": [
         "+2 Accuracy",
-        "Block 1",
-        "+2 Hit"
+        "Block 1"
       ],
       "figures": 1,
       "attack": {
         "dice": [
-          "green",
-          "red"
+          "red",
+          "red",
+          "green"
         ],
         "type": "range"
       },
       "defense": [
-        "black"
+        "white"
       ],
       "surgeAbilities": [
+        "damage 2",
         "pierce 2"
       ],
       "attachment": false,
@@ -1243,6 +1284,7 @@
         "LEADER",
         "CREATURE"
       ],
+      "subname": "WASTELAND ENFORCER",
       "cost": 7,
       "health": 13,
       "speed": 5,
@@ -1258,11 +1300,8 @@
       "defense": [
         "white"
       ],
-      "passives": [
-        "+2 Accuracy",
-        "Block 1"
-      ],
       "surgeAbilities": [
+        "damage 2",
         "pierce 2"
       ],
       "attachment": false,
@@ -1289,12 +1328,13 @@
         "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "passives": [
         "+1 Accuracy"
       ],
       "surgeAbilities": [
+        "damage 2",
         "blast 2"
       ],
       "attachment": false,
@@ -1399,12 +1439,64 @@
       "keywords": []
     },
     "Del Meeko": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Expertise: After you perform an attack, you may perform an additional action. Limit once per activation.\n\nGifted Mechanic: Choose an adjacent friendly DROID or VEHICLE. If you do, you and that figure each recover 1 Block token and suffer 1 Strain.\n\nOpen-Minded: After this attack resolves, gain 1 movement point or 1 Focus.",
+      "keywords": [
+        "TECHNICIAN",
+        "TROOPER",
+        "SPY"
+      ],
+      "subname": "INFERNO SQUAD SPECIALIST",
+      "cost": 5,
+      "health": 8,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Dengar": {
-      "abilityText": "Traits: HUNTER. Attack (Range): green, yellow. Defense: black. accuracy 2. Surge: damage 2",
-      "keywords": []
+      "abilityText": "Spread the Pain: Choose a HARMFUL condition you have not already chosen during this attack. After this attack resolves, if it did not miss, you may have a figure on or adjacent to the target space gain the chosen condition. This ability can be used multiple times per attack.",
+      "keywords": [
+        "HUNTER"
+      ],
+      "cost": 7,
+      "health": 12,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "block 2",
+        "accuracy 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Dewback Rider": {
       "abilityText": "Traits: TROOPER, CREATURE. Attack (Range): blue, green, yellow. Defense: black. Surge: damage 1. Surge: damage 1. Surge: pierce 2",
@@ -1425,8 +1517,34 @@
       "keywords": []
     },
     "Dr. Royce Hemlock": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Neurotoxin: Choose a space within 3 spaces and roll 1 yellow die. All hostile figures on or adjacent to that space become Weakened and suffer Damage equal to the Damage results.\n\nNeurostim: Choose an adjacent friendly figure and roll 1 yellow die. If you rolled a Block, that figure gains 1 Block token. Then, if you rolled a Surge, that figure gains 1 Focus.",
+      "keywords": [
+        "LEADER",
+        "TECHNICIAN"
+      ],
+      "subname": "NEFARIOUS GENETICIST",
+      "cost": 3,
+      "health": 5,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "focus",
+        "block 1",
+        "accuracy 3"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Drokkatta": {
       "abilityText": "Traits: WOOKIEE, HEAVYWEAPON. Attack (Range): blue, green, yellow. Defense: black. damage 1; accuracy 1; Block 1. Surge: damage 2",
@@ -1497,8 +1615,32 @@
       "keywords": []
     },
     "Gideon Argus": {
-      "abilityText": "Traits: LEADER. Attack (Range): blue, green. Defense: black. Surge: focus. Surge: damage 2",
-      "keywords": []
+      "abilityText": "Special Action (Tactical Maneuver): Choose another friendly figure in your line of sight. That figure gains 2 movement points.\n\nSpecial Action (On My Mark): Choose another friendly figure in your line of sight. That figure becomes Focused.",
+      "keywords": [
+        "LEADER"
+      ],
+      "cost": 3,
+      "health": 5,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "blue"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "focus",
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Greedo": {
       "abilityText": "Traits: HUNTER, SMUGGLER. Attack (Range): green, green. Defense: white. accuracy 1; damage 1. Surge: bleed. Surge: damage 2. Surge: accuracy 3",
@@ -1654,16 +1796,72 @@
       "keywords": []
     },
     "Luke Skywalker": {
-      "abilityText": "Traits: FORCEUSER. Attack (Range): blue, green, yellow. Defense: white. Block 1. Surge: damage 2. Surge: recover 2. Surge: accuracy 2",
-      "keywords": []
+      "abilityText": "Special Action (Saber Strike): Perform a melee attack using 1 red and 1 yellow die. This attack gains Pierce 3.\n\nInspiring: While another friendly figure within 3 spaces is attacking, it may reroll 1 die.",
+      "keywords": [
+        "FORCE USER"
+      ],
+      "cost": 7,
+      "health": 10,
+      "speed": 5,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "passives": [
+        "Block 1"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "recover 2",
+        "accuracy 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Luke Skywalker (Jedi Knight)": {
       "abilityText": "TBD (IACP – verify from card).",
       "keywords": []
     },
     "Mak Eshka'rey": {
-      "abilityText": "Traits: SPY. Attack (Range): blue, blue. Defense: white. Surge: accuracy 2. Surge: damage 1",
-      "keywords": []
+      "abilityText": "Surge (Critical Hit): This attack gains Pierce 2. If the target figure suffered 1 or more Damage during this attack, the target figure may not play command cards during this round.\n\nCamouflage: Hostile figures 4 or more spaces away cannot draw line of sight to you. You do not block line of sight for those figures.",
+      "keywords": [
+        "SPY",
+        "TECHNICIAN"
+      ],
+      "cost": 3,
+      "health": 4,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "passives": [
+        "Priority Target",
+        "+1 Accuracy"
+      ],
+      "surgeAbilities": [
+        "block 1",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Mara Jade": {
       "abilityText": "TBD (IACP – verify from card).",
@@ -1714,16 +1912,90 @@
       "keywords": []
     },
     "Purge Commander (Elite)": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Shock Grenade: Choose a space within 3 spaces and roll 1 green die. Each other figure on or adjacent to that space suffers Damage equal to the Damage results. If you rolled a Surge, those figures become Weakened.\n\nCoordinated Hunt: While you or a friendly Hunter in your line of sight is attacking, it may reroll 1 attack die. Limit one \"Coordinated Hunt\" per attack.",
+      "keywords": [
+        "TROOPER",
+        "HUNTER",
+        "LEADER"
+      ],
+      "cost": 5,
+      "health": 8,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "yellow",
+          "yellow",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Purge Trooper (Elite)": {
-      "abilityText": "Cost 4. Health 8. Speed 4. Attack: red range 1-2. Defense: white",
-      "keywords": []
+      "abilityText": "Imperial Loadout: When you are deployed, gain 1 loadout card from the supply.\n\nCortosis Armor: While you are defending, reduce the Pierce value of the attack results by 1, to a minimum of 0.",
+      "keywords": [
+        "BRAWLER",
+        "HUNTER",
+        "TROOPER"
+      ],
+      "cost": 4,
+      "health": 7,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "R2-D2": {
-      "abilityText": "Traits: DROID. Attack (Range): yellow. Defense: white. accuracy 2; surge 1. Surge: pierce 2. Surge: stun. Surge: weaken",
-      "keywords": []
+      "abilityText": "Scomp Link: If you are adjacent to a terminal, your player draws 1 Command card.\n\nService: You or an adjacent friendly DROID or VEHICLE recovers 1 Damage.\n\nLucky: While defending, if you roll a blank result, add +1 Block to the defense results.",
+      "keywords": [
+        "DROID"
+      ],
+      "cost": 3,
+      "health": 6,
+      "speed": 3,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "surgeAbilities": [
+        "pierce 2",
+        "stun",
+        "weaken"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Rancor": {
       "abilityText": "Traits: CREATURE, BRAWLER. Attack (Melee): red, green, green. Defense: black. MASSIVE. Reach. Surge: damage 2. Surge: cleave 2",
@@ -1764,8 +2036,39 @@
       "keywords": []
     },
     "Royal Guard Champion": {
-      "abilityText": "Traits: GUARDIAN, BRAWLER. Attack (Melee): red, green, yellow. Defense: black, white. Surge: bleed. Surge: pierce 2. Surge: damage 2",
-      "keywords": []
+      "abilityText": "Special Action (Brutality): Perform 2 attacks. Each attack must have a different target.\n\nExecutor: When a friendly figure within 3 spaces is defeated, you may interrupt to move up to 2 spaces and then perform an attack. Limit once per round.\n\nOverpower: While attacking, you may reroll 1 red die. While defending, you may reroll 1 black die.",
+      "keywords": [
+        "GUARDIAN",
+        "BRAWLER",
+        "Reach"
+      ],
+      "cost": 10,
+      "health": 13,
+      "speed": 6,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "red",
+          "green",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black",
+        "black",
+        "white",
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "bleed",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Sabine Wren": {
       "abilityText": "TBD (IACP – verify from card).",
@@ -1849,6 +2152,37 @@
       "abilityText": "TBD (IACP – verify from card).",
       "keywords": []
     },
+    "The Armorer": {
+      "abilityText": "Beskar Armor: After deployment, you gain 2 Block Tokens.\n\nThis is the Way: When another friendly figure resolves an attack, if the defender was defeated, that figure gains 1 Block Token.\n\nSurvival is Strength: While a friendly figure within 3 spaces is defending, if it spent a Block symbol during this attack, it may reroll 1 attack die.",
+      "keywords": [
+        "GUARDIAN",
+        "LEADER"
+      ],
+      "cost": 6,
+      "health": 10,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "green",
+          "yellow",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1, pierce 1",
+        "cleave 2",
+        "block token"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
+    },
     "Trandoshan Hunter (Elite)": {
       "abilityText": "Traits: HUNTER, BRAWLER. Attack (Range): blue, green. Defense: black. Surge: focus. Surge: bleed. Surge: pierce 2",
       "keywords": []
@@ -1922,8 +2256,36 @@
       "keywords": []
     },
     "Zeb Orrelios": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Special Action (Bo-Rifle Staff Strike): Once during your activation, you may perform a melee attack using 2 red dice without spending an action.\n\nLasat Honor Guard: While attacking, after any rerolls, you may turn 1 die showing only a single attack icon to any other side.",
+      "keywords": [
+        "BRAWLER",
+        "GUARDIAN"
+      ],
+      "cost": 8,
+      "health": 15,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "red",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "passives": [
+        "+3 Accuracy"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 2, recover 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Zuckuss": {
       "abilityText": "TBD (IACP – verify from card).",
