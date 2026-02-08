@@ -1409,8 +1409,37 @@
       "affiliation": "Rebel"
     },
     "Chirrut Imwe": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Devout: You may use Rebel FORCE USER Command cards.\n\nI'm One With the Force: At the start of a hostile figure's activation, you may move up to 2 spaces to a space adjacent to a hostile figure. Limit once per round.\n\nThe Force is With Me: When a Ranged attack targeting you is declared, choose an adjacent hostile figure. If you do, apply -1 Hit to the attack results and the chosen figure suffers 1 Damage.",
+      "keywords": [
+        "BRAWLER",
+        "GUARDIAN"
+      ],
+      "subname": "GUARDIAN OF THE WHILLS",
+      "cost": 4,
+      "health": 8,
+      "speed": 4,
+      "passives": [
+        "Reach"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "green",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "cleave 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Clawdite Shapeshifter (Elite)": {
       "abilityText": "Traits: HUNTER, SPY. Attack (Range): red, green. Defense: black.",
