@@ -1034,31 +1034,115 @@
       "affiliation": "Scum"
     },
     "Bodhi Rook": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": [],
+      "abilityText": "Smooth Landing: After deployment, you and each adjacent friendly figure gains 1 movement point.\n\nAir Support: When a friendly figure spends a power token while attacking, apply +2 Accuracy to the attack results.",
+      "keywords": [
+        "TECHNICIAN"
+      ],
       "subname": "THE PILOT",
       "cost": 2,
+      "health": 3,
+      "speed": 4,
       "passives": [
         "+1 Accuracy"
       ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow",
+          "green"
+        ],
+        "type": "range"
+      },
       "surgeAbilities": [
-        "damage 1"
+        "damage 1",
+        "accuracy 2",
+        "hit token"
       ],
       "attachment": false,
       "elite": true,
       "affiliation": "Rebel"
     },
     "Bossk": {
-      "abilityText": "Traits: BRAWLER, HUNTER. Attack (Range): red, green. Defense: white. Block 1. damage 2. accuracy 2. Surge: pierce 2",
-      "keywords": []
+      "abilityText": "Special Action (Indiscriminate Fire): Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red attack die. Each other figure within 2 spaces of the target space other than defender suffers Damage equal to the Hit results and Strain equal to the Surge results.\n\nRegenerate: At the end of each round, recover 2 Damage and discard all HARMFUL conditions.",
+      "keywords": [
+        "HUNTER",
+        "BRAWLER"
+      ],
+      "subname": "BORN HUNTER",
+      "cost": 7,
+      "health": 12,
+      "speed": 4,
+      "passives": [
+        "+2 Accuracy",
+        "Block 1",
+        "+2 Hit"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "red"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "pierce 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "BT-1": {
-      "abilityText": "Traits: DROID, HEAVYWEAPON, HUNTER. Attack (Range): blue, red, yellow. Defense: black. Surge: pierce 2. Surge: blast 1. Surge: recover 1",
-      "keywords": []
+      "abilityText": "Special Action (Missile Salvo): Perform up to 3 Ranged attacks with different targets using 1 blue, 1 red, or 1 yellow die. Limit once per die. Apply +3 accuracy to each of these attacks.\n\nAssassin: Before you declare an attack, become Focused.",
+      "keywords": [
+        "DROID",
+        "HEAVY WEAPON",
+        "HUNTER"
+      ],
+      "subname": "DESTRUCTIVE ASSASSIN",
+      "cost": 6,
+      "health": 10,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "blast 1",
+        "pierce 2",
+        "recover 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "C-3P0": {
-      "abilityText": "Traits: DROID. Defense: white.",
-      "keywords": []
+      "abilityText": "Special Action (Inform): Choose an adjacent friendly figure. That figure becomes Focused.\n\nCower: While defending, while adjacent to a friendly figure, you may reroll 1 defense die.\n\nDistracting: While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Evade to the defense results.\n\nNon-Combatant: You cannot attack.",
+      "keywords": [
+        "DROID"
+      ],
+      "subname": "HUMAN CYBORG RELATIONS",
+      "cost": 2,
+      "health": 4,
+      "speed": 3,
+      "figures": 1,
+      "defense": [
+        "white"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "C1-10P \"Chopper\"": {
       "abilityText": "Traits: DROID. Attack (Melee): red, green. Defense: black. Surge: pierce 2. Surge: recover 2",
