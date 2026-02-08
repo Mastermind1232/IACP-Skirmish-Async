@@ -26,8 +26,16 @@ Use the appropriate word for the die face: **Hit**, **Surge**, **Block**, **Evad
 ## When you are 100% sure (reading guidance)
 
 1. **Defense die:** White vs black are different; confirm from the card.
-2. **Passives vs surge:** Passives = always-on. Surge abilities = spend surge for. Do not put passives in `surgeAbilities`. Do not add or edit `subname`; leave that to the user.
+2. **Passives vs surge:** Passives = always-on. Surge abilities = spend surge for. Do not put passives in `surgeAbilities`. **Do not add passives unless the card clearly shows a passive**—if the card has no passives, leave `passives` out entirely. Never infer passives from stat-bar layout or guess. Do not add or edit `subname`; leave that to the user.
 3. **Recover: Damage vs tokens:** Recover Damage (heart) = `recover 1`. Recover Block Token (shield) = `recover 1 block token`. Read the symbol.
 4. **Ability text:** Spell out dice/symbol names (Hit, Surge, Focus, etc.) as in the first section above.
 5. **Special actions:** Always check the card for the **special action symbol** (e.g. triangle / action icon). When an ability has that symbol, use the format **Special Action (Ability Name):** — not just **Ability Name:**. If you are not 100% sure whether an ability is a special action, leave the format as-is and list it in uncertainties.
 6. **Tokens/symbols:** Surge (starburst) ≠ Focus (focus token) ≠ Power Token. **Question mark on a token background** = generic **Power Token** (player chooses any: Block, Hit, Surge, Evade, etc.). Write "gain 1 Power Token". Read the actual symbol.
+
+---
+
+# Trait and token wording (canonical form)
+
+- **Heavy Weapon** — Always two words with a space. Never "HeavyWeapon" or "HEAVYWEAPON" in text; use "HEAVY WEAPON" (or "Heavy Weapon" where title case applies).
+- **Force User** — Always two words with a space. Never "ForceUser" or "FORCEUSER"; use "FORCE USER" (or "Force User" where title case applies).
+- **Power Token** — Always capitalized (both words). Even if the card uses lowercase, in our data use "Power Token". Never "power token" or "Power token".

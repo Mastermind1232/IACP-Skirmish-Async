@@ -88,7 +88,7 @@
       "affiliation": "Scum"
     },
     "[Doubt]": {
-      "abilityText": "At the end of the round, you may choose a hostile figure and discard 1 condition or power token from that figure.\n\nDeplete this card while a hostile figure is attacking to choose 1 attack die. Your opponent must reroll that die.",
+      "abilityText": "At the end of the round, you may choose a hostile figure and discard 1 condition or Power Token from that figure.\n\nDeplete this card while a hostile figure is attacking to choose 1 attack die. Your opponent must reroll that die.",
       "keywords": [],
       "cost": 1,
       "attachment": false,
@@ -216,7 +216,7 @@
       "affiliation": "Rebel"
     },
     "[Imperial Citadel]": {
-      "abilityText": "Whenever a friendly Imperial figure is defeated, for each power token on that figure, place a matching power token on this card.\n\nAt the start of a friendly Imperial figure's activation, it may gain 1 power token from this card.\n\nAt the start of each round, place 1 Focus or Damage on this card.",
+      "abilityText": "Whenever a friendly Imperial figure is defeated, for each Power Token on that figure, place a matching Power Token on this card.\n\nAt the start of a friendly Imperial figure's activation, it may gain 1 Power Token from this card.\n\nAt the start of each round, place 1 Focus or Damage on this card.",
       "keywords": [],
       "cost": 1,
       "attachment": false,
@@ -332,7 +332,7 @@
       "affiliation": "Rebel"
     },
     "[Rogue One]": {
-      "abilityText": "Your army must include Baze Malbus, Bodhi Rook, Cassian Andor, Chirrut Imwe, Jyn Erso, and K-2SO, and cannot include other unique figures that cost 3 or less.\n\nWhile a friendly figure listed above is attacking, it may discard 1 power token of any type from another friendly figure to add +1 Surge to the attack results.\n\nAt the start of the first game round, draw 3 Command cards, then place 2 Command cards from your hand on top of your deck.",
+      "abilityText": "Your army must include Baze Malbus, Bodhi Rook, Cassian Andor, Chirrut Imwe, Jyn Erso, and K-2SO, and cannot include other unique figures that cost 3 or less.\n\nWhile a friendly figure listed above is attacking, it may discard 1 Power Token of any type from another friendly figure to add +1 Surge to the attack results.\n\nAt the start of the first game round, draw 3 Command cards, then place 2 Command cards from your hand on top of your deck.",
       "keywords": [],
       "cost": 0,
       "attachment": false,
@@ -1074,7 +1074,7 @@
       "affiliation": "Scum"
     },
     "Bodhi Rook": {
-      "abilityText": "Smooth Landing: After deployment, you and each adjacent friendly figure gains 1 movement point.\n\nAir Support: When a friendly figure spends a power token while attacking, apply +2 Accuracy to the attack results.",
+      "abilityText": "Smooth Landing: After Deployment, you and each adjacent friendly figure gains 1 movement point.\n\nAir Support: When a friendly figure spends a Power Token while attacking, apply +2 Accuracy to the attack results.",
       "keywords": [
         "TECHNICIAN"
       ],
@@ -1082,24 +1082,24 @@
       "cost": 2,
       "health": 3,
       "speed": 4,
-      "passives": [
-        "+1 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
-          "yellow",
-          "green"
+          "green",
+          "yellow"
         ],
         "type": "range"
       },
+      "defense": [
+        "white"
+      ],
       "surgeAbilities": [
-        "damage 1",
+        "accuracy 1",
         "accuracy 2",
-        "hit token"
+        "Block 1",
+        "damage 1, pierce 1"
       ],
       "attachment": false,
-      "elite": true,
       "affiliation": "Rebel"
     },
     "Bossk": {
@@ -1349,7 +1349,7 @@
         "LEADER",
         "SPY"
       ],
-      "subname": "RESTLESS AGENT",
+      "subname": "RUTHLESS AGENT",
       "cost": 6,
       "health": 10,
       "speed": 4,
@@ -1357,7 +1357,8 @@
       "attack": {
         "dice": [
           "blue",
-          "blue"
+          "blue",
+          "green"
         ],
         "type": "range"
       },
@@ -1366,10 +1367,10 @@
       ],
       "surgeAbilities": [
         "damage 2",
-        "accuracy 2"
+        "accuracy 2",
+        "hit token 2"
       ],
       "attachment": false,
-      "elite": true,
       "affiliation": "Rebel"
     },
     "Chewbacca": {
@@ -1429,11 +1430,11 @@
       "keywords": []
     },
     "Darth Vader": {
-      "abilityText": "Traits: FORCEUSER, LEADER, BRAWLER. Attack (Melee): red, red, yellow. Defense: black, black. Surge: pierce 3. Surge: damage 2",
+      "abilityText": "Traits: FORCE USER, LEADER, BRAWLER. Attack (Melee): red, red, yellow. Defense: black, black. Surge: pierce 3. Surge: damage 2",
       "keywords": []
     },
     "Davith Elso": {
-      "abilityText": "Traits: SPY, FORCEUSER. Attack (Melee): green, yellow. Defense: white. Surge: damage 1; Surge: hide. Surge: pierce 3",
+      "abilityText": "Traits: SPY, FORCE USER. Attack (Melee): green, yellow. Defense: white. Surge: damage 1; Surge: hide. Surge: pierce 3",
       "keywords": []
     },
     "Death Trooper (Elite)": {
@@ -1511,7 +1512,7 @@
       ]
     },
     "Diala Passil": {
-      "abilityText": "Traits: FORCEUSER, BRAWLER. Attack (Melee): red, green. Defense: white. Surge: recover 2. Surge: pierce 3. Surge: cleave 2",
+      "abilityText": "Traits: FORCE USER, BRAWLER. Attack (Melee): red, green. Defense: white. Surge: recover 2. Surge: pierce 3. Surge: cleave 2",
       "keywords": []
     },
     "Director Krennic": {
@@ -1553,15 +1554,15 @@
       "affiliation": "Imperial"
     },
     "Drokkatta": {
-      "abilityText": "Traits: WOOKIEE, HEAVYWEAPON. Attack (Range): blue, green, yellow. Defense: black. damage 1; accuracy 1; Block 1. Surge: damage 2",
+      "abilityText": "Traits: WOOKIEE, HEAVY WEAPON. Attack (Range): blue, green, yellow. Defense: black. damage 1; accuracy 1; Block 1. Surge: damage 2",
       "keywords": []
     },
     "E-Web Engineer (Elite)": {
-      "abilityText": "Traits: TROOPER, HEAVYWEAPON. Attack (Range): blue, red, yellow. Defense: black. Block 1. accuracy 3. Surge: recover 2. Surge: damage 2",
+      "abilityText": "Traits: TROOPER, HEAVY WEAPON. Attack (Range): blue, red, yellow. Defense: black. Block 1. accuracy 3. Surge: recover 2. Surge: damage 2",
       "keywords": []
     },
     "E-Web Engineer (Regular)": {
-      "abilityText": "Traits: TROOPER, HEAVYWEAPON. Attack (Range): blue, red, yellow. Defense: black. accuracy 3. Surge: recover 2. Surge: damage 1",
+      "abilityText": "Traits: TROOPER, HEAVY WEAPON. Attack (Range): blue, red, yellow. Defense: black. accuracy 3. Surge: recover 2. Surge: damage 1",
       "keywords": []
     },
     "Echo Base Trooper (Elite)": {
@@ -1573,7 +1574,7 @@
       "keywords": []
     },
     "Emperor Palpatine": {
-      "abilityText": "Traits: FORCEUSER, LEADER. Attack (Melee): red, green. Defense: black. pierce 3. Surge: damage 1",
+      "abilityText": "Traits: FORCE USER, LEADER. Attack (Melee): red, green. Defense: black. pierce 3. Surge: damage 1",
       "keywords": []
     },
     "Ewok Warrior (Elite)": {
@@ -1617,7 +1618,7 @@
       "keywords": []
     },
     "General Weiss": {
-      "abilityText": "Traits: VEHICLE, LEADER, HEAVYWEAPON. Attack (Range): any, any, any. Defense: black, black. MASSIVE. accuracy 2. Surge: blast 3. Surge: pierce 2",
+      "abilityText": "Traits: VEHICLE, LEADER, HEAVY WEAPON. Attack (Range): any, any, any. Defense: black, black. MASSIVE. accuracy 2. Surge: blast 3. Surge: pierce 2",
       "keywords": []
     },
     "Gideon Argus": {
@@ -1688,7 +1689,7 @@
       "affiliation": "Imperial"
     },
     "Heavy Stormtrooper (Regular)": {
-      "abilityText": "Traits: TROOPER, HEAVYWEAPON. Attack (Range): blue, green. Defense: black. accuracy 2. Surge: damage 1. Surge: blast 1",
+      "abilityText": "Traits: TROOPER, HEAVY WEAPON. Attack (Range): blue, green. Defense: black. accuracy 2. Surge: damage 1. Surge: blast 1",
       "keywords": []
     },
     "Hera Syndulla": {
@@ -1801,8 +1802,36 @@
       ]
     },
     "Jyn Erso": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Trust Goes Both Ways: At the start or end of your activation, choose an adjacent friendly figure. If you do, you and that figure Recover 1 Damage and gain 1 Power Token. Limit once per round.\n\nSpecial Action (Tonfa Strike): Move up to 2 spaces, then you may perform a Melee attack using 1 red and 1 green die. Then you may perform an attack.",
+      "keywords": [
+        "LEADER",
+        "BRAWLER"
+      ],
+      "subname": "STARDUST",
+      "cost": 6,
+      "health": 12,
+      "speed": 4,
+      "passives": [
+        "Pierce 1"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "accuracy 1, damage 1",
+        "damage 1"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Jyn Odan": {
       "abilityText": "Traits: SMUGGLER. Attack (Range): green, green. Defense: white. Surge: stun; Surge: pierce 1. Surge: damage 2; Surge: accuracy 2",
@@ -1829,8 +1858,31 @@
       "keywords": []
     },
     "Kuiil": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Mounted: At the start of your activation, gain 3 movement points.\n\nSpecial Action (Hop On!): Choose a SMALL friendly figure with a figure cost of 8 or less. When you enter that figure's space during this activation, you may interrupt to push that figure 1 space.",
+      "keywords": [
+        "CREATURE",
+        "GUARDIAN",
+        "TECHNICIAN"
+      ],
+      "subname": "A SIMPLE MOISTURE FARMER",
+      "cost": 3,
+      "health": 8,
+      "speed": 2,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "surgeAbilities": [
+        "accuracy 2",
+        "cancel 2",
+        "stun"
+      ],
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "Lando Calrissian": {
       "abilityText": "Traits: LEADER, SMUGGLER. Attack (Range): green, yellow. Defense: black. accuracy 2. Surge: hide 2; Surge: stun. Surge: damage 2",
@@ -1925,7 +1977,7 @@
       "keywords": []
     },
     "Maul": {
-      "abilityText": "Traits: FORCEUSER, BRAWLER. Attack (Melee): red, yellow. Defense: black. damage 1. Surge: pierce 3",
+      "abilityText": "Traits: FORCE USER, BRAWLER. Attack (Melee): red, yellow. Defense: black. damage 1. Surge: pierce 3",
       "keywords": []
     },
     "MHD-19": {
@@ -1953,7 +2005,7 @@
       ]
     },
     "Obi-Wan Kenobi": {
-      "abilityText": "Traits: FORCEUSER. Attack (Melee): red, green, yellow. Defense: black. Surge: cancel 1. Surge: damage 2. Surge: pierce 3",
+      "abilityText": "Traits: FORCE USER. Attack (Melee): red, green, yellow. Defense: black. Surge: cancel 1. Surge: damage 2. Surge: pierce 3",
       "keywords": []
     },
     "Onar Koma": {
@@ -2065,11 +2117,11 @@
       "keywords": []
     },
     "Rebel Saboteur (Elite)": {
-      "abilityText": "Traits: SPY, HEAVYWEAPON. Attack (Range): red, yellow. Defense: white. accuracy 3. Surge: pierce 2. Surge: stun. Surge: blast 1",
+      "abilityText": "Traits: SPY, HEAVY WEAPON. Attack (Range): red, yellow. Defense: white. accuracy 3. Surge: pierce 2. Surge: stun. Surge: blast 1",
       "keywords": []
     },
     "Rebel Saboteur (Regular)": {
-      "abilityText": "Traits: SPY, HEAVYWEAPON. Attack (Range): red, yellow. Defense: white. accuracy. Surge: pierce 2. Surge: stun. Surge: blast 1",
+      "abilityText": "Traits: SPY, HEAVY WEAPON. Attack (Range): red, yellow. Defense: white. accuracy. Surge: pierce 2. Surge: stun. Surge: blast 1",
       "keywords": []
     },
     "Rebel Trooper (Elite)": {
@@ -2146,8 +2198,34 @@
       ]
     },
     "Scout Trooper (Elite)": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Professional: While attacking, you may reroll 1 attack die.\n\nCamouflage: Hostile figures 4 or more spaces away from you cannot draw line of sight to you. You do not block line of sight for those figures.\n\nFind Weakness: While attacking, apply +3 Accuracy to the attack results and -1 Evade to the defense results.\n\nExploit Weakness: While attacking a figure with a HARMFUL condition, apply +1 Surge to the attack results.",
+      "keywords": [
+        "SPY",
+        "TROOPER"
+      ],
+      "cost": 8,
+      "subCost": 4,
+      "health": 7,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "blue",
+          "red"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "accuracy 3",
+        "damage 2",
+        "pierce 1, weaken"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Second Sister": {
       "abilityText": "TBD (IACP – verify from card).",

@@ -1251,7 +1251,7 @@
       "cost": 0,
       "playableBy": "CREATURE",
       "timing": "duringActivation",
-      "effect": "Use during your activation to gain 1 Power Token. Then, a figure in your group in an exterior space gains 1 Power token.",
+      "effect": "Use during your activation to gain 1 Power Token. Then, a figure in your group in an exterior space gains 1 Power Token.",
       "effectType": "manual"
     },
     "Master Operative": {

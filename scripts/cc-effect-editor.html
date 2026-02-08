@@ -200,6 +200,20 @@
       }
     }
 
+    function normalizeEffectText(s) {
+      if (!s || typeof s !== 'string') return s;
+      return s
+        .replace(/\bHEAVYWEAPON\b/gi, 'HEAVY WEAPON')
+        .replace(/\bFORCEUSER\b/gi, 'FORCE USER')
+        .replace(/\bpower token\b/gi, 'Power Token');
+    }
+    function normalizePlayableBy(s) {
+      if (!s || typeof s !== 'string') return s;
+      return s
+        .replace(/\bHeavyWeapon\b/gi, 'Heavy Weapon')
+        .replace(/\bForceUser\b/gi, 'Force User');
+    }
+
     const TRAIT_PLACEHOLDER_NAMES = new Set(['All CCs', 'Command Cards', 'Brawler', 'Creature', 'Droid', 'Force User', 'Guardian', 'Heavy Weapon', 'Hunter', 'Leader', 'Smuggler', 'Spy', 'Technician', 'Trooper', 'Vehicle', 'Wookiee']);
     function isPlaceholderCard(name, _data) {
       return TRAIT_PLACEHOLDER_NAMES.has(name);
@@ -288,9 +302,9 @@
       const costVal = cost.value.trim();
       cards[name] = {
         cost: costVal === '' ? null : Math.max(0, parseInt(costVal, 10) || 0),
-        playableBy: playableBy.value.trim() || 'Any Figure',
+        playableBy: normalizePlayableBy(playableBy.value.trim()) || 'Any Figure',
         timing: timing.value || 'other',
-        effect: effect.value.trim() || '',
+        effect: normalizeEffectText(effect.value.trim()) || '',
         effectType: 'manual',
       };
       render();
@@ -313,9 +327,9 @@
       const costVal = cost.value.trim();
       cards[name] = {
         cost: costVal === '' ? null : Math.max(0, parseInt(costVal, 10) || 0),
-        playableBy: playableBy.value.trim() || 'Any Figure',
+        playableBy: normalizePlayableBy(playableBy.value.trim()) || 'Any Figure',
         timing: timing.value || 'other',
-        effect: effect.value.trim() || '',
+        effect: normalizeEffectText(effect.value.trim()) || '',
         effectType: 'manual',
       };
       verified.add(name);
