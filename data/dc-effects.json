@@ -1145,7 +1145,7 @@
       "affiliation": "Rebel"
     },
     "C1-10P \"Chopper\"": {
-      "abilityText": "Special Action (Ram): Move up to 2 spaces, then choose an adjacent figure. If that figure is hostile, roll 1 green die. It suffers Damage equal to the results. Then, if that figure is SMALL, push it up to 1 space.\n\nSpecial Action (System Shock): Use while on or adjacent to a terminal. Choose a figure on or adjacent to any terminal. That figure suffers 2 Damage and 1 Strain.",
+      "abilityText": "Special Action (Ram): Move up to 2 spaces, then choose an adjacent figure. If that figure is hostile, roll 1 green die. It suffers Damage equal to the Hit results. Then, if that figure is SMALL, push it up to 1 space.\n\nSpecial Action (System Shock): Use while on or adjacent to a terminal. Choose a figure on or adjacent to any terminal. That figure suffers 2 Damage and 1 Strain.",
       "keywords": [
         "DROID"
       ],
