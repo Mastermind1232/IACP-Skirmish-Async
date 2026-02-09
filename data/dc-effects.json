@@ -1442,32 +1442,112 @@
       "affiliation": "Rebel"
     },
     "Clawdite Shapeshifter (Elite)": {
-      "abilityText": "Traits: HUNTER, SPY. Attack (Range): red, green. Defense: black.",
-      "keywords": [],
+      "abilityText": "Shape: When you are deployed, you may gain 1 Form card of your choice from the supply.\n\nShift: At the start of each round, you may switch your Form card with 1 other Form card of your choice.",
+      "keywords": [
+        "HUNTER",
+        "SPY"
+      ],
+      "cost": 6,
+      "health": 8,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "attachment": false,
+      "affiliation": "Scum",
       "isIACPVariant": false
     },
-    "Clawdite Shapeshifter (IACP) (Elite)": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": [],
-      "isIACPVariant": true
-    },
-    "Clawdite Shapeshifter (IACP) (Regular)": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": [],
-      "isIACPVariant": true
-    },
     "Clawdite Shapeshifter (Regular)": {
-      "abilityText": "Traits: HUNTER, SPY. Attack (Range): red, green. Defense: black.",
-      "keywords": [],
+      "abilityText": "Shape: When you are deployed, you may gain 1 Form card of your choice from the supply.\n\nShift: At the start of each round, you may switch your Form card with 1 other Form card of your choice.",
+      "keywords": [
+        "HUNTER",
+        "SPY"
+      ],
+      "cost": 4,
+      "health": 6,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "attachment": false,
+      "affiliation": "Scum",
       "isIACPVariant": false
     },
     "CT-1701": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Special Action (Barrage): Perform 2 attacks. The target of the second attack must be within 3 spaces of the first target space and adds 1 white die to the defense pool.\n\nCover Fire: After you resolve an attack, distribute 1 Block Token to a friendly figure within 3 spaces. Then, if it did not miss, you may discard 1 condition or Power Token from the target.",
+      "keywords": [
+        "TROOPER",
+        "GUARDIAN"
+      ],
+      "subname": "WILDFIRE",
+      "cost": 6,
+      "health": 11,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "hit token",
+        "accuracy 2, weaken"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Dark Trooper Mk III": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Advanced Targeting Computer: When you declare an attack, you become Focused. During this attack, you may reroll 1 attack die. If the rerolled die has fewer Surge symbols than before it was rerolled, apply +1 Damage to the attack results.\n\nDurasteel Fist: Once during your activation, you may choose 1 adjacent figure or object and roll 1 green die. It suffers Damage equal to the Damage results. Then, if you rolled a Surge and the target was a SMALL figure, you may push that figure up to 1 space.\n\nLift Off: Move up to 4 spaces. During this movement, you gain Mobile.",
+      "keywords": [
+        "DROID",
+        "TROOPER"
+      ],
+      "cost": 6,
+      "health": 8,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "accuracy 3, pierce 1"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Darth Vader": {
       "abilityText": "Traits: FORCE USER, LEADER, BRAWLER. Attack (Melee): red, red, yellow. Defense: black, black. Surge: pierce 3. Surge: damage 2",
@@ -1478,12 +1558,64 @@
       "keywords": []
     },
     "Death Trooper (Elite)": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Squad Captain: Once during your activation, an adjacent friendly TROOPER or LEADER may gain 1 Block Token.\n\nField Tactics: After your activation, you may immediately activate a friendly TROOPER or LEADER group with cost 6 or less. That group loses \"Field Tactics\" this round.",
+      "keywords": [
+        "TROOPER",
+        "GUARDIAN"
+      ],
+      "cost": 4,
+      "health": 7,
+      "speed": 4,
+      "passives": [
+        "+4 Accuracy"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "yellow",
+          "red"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "accuracy 2, pierce 1"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Death Trooper (Regular)": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Security Detail: After deployment, a friendly LEADER gains 1 Block Token.\n\nField Tactics: After your activation, you may immediately activate a friendly TROOPER or LEADER group with cost 6 or less. That group loses \"Field Tactics\" this round.",
+      "keywords": [
+        "TROOPER",
+        "GUARDIAN"
+      ],
+      "cost": 3,
+      "health": 5,
+      "speed": 4,
+      "passives": [
+        "+3 Accuracy"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "yellow",
+          "red"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "accuracy 2, pierce 1"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Del Meeko": {
       "abilityText": "Expertise: After you perform an attack, you may perform an additional action. Limit once per activation.\n\nGifted Mechanic: Choose an adjacent friendly DROID or VEHICLE. If you do, you and that figure each recover 1 Block token and suffer 1 Strain.\n\nOpen-Minded: After this attack resolves, gain 1 movement point or 1 Focus.",
@@ -1556,8 +1688,35 @@
       "keywords": []
     },
     "Director Krennic": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Advanced Weapons Research: At the start of your activation, a friendly figure within 2 spaces may gain 1 Hit Token or 1 Surge Token.\n\nUnhinged Director: When a friendly TROOPER or GUARDIAN within 2 spaces spends a Hit Token or Surge Token while declaring an attack, it may suffer 1 Strain to apply +2 of the chosen symbol to the results instead of +1.",
+      "keywords": [
+        "LEADER"
+      ],
+      "subname": "ASPIRATIONAL OFFICER",
+      "cost": 5,
+      "health": 7,
+      "speed": 4,
+      "passives": [
+        "+1 Surge"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2, accuracy 1",
+        "pierce 1",
+        "damage 1, accuracy 2"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Doctor Aphra": {
       "abilityText": "TBD (IACP – verify from card).",

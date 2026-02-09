@@ -66,6 +66,15 @@
 
 - [ ] **Wire up all DCs so they have actual effects.** Deployment card abilities (passives, surge, keywords, etc.) should affect game state where applicable; implement or document manual resolution. *(Card effects are already **visible** in play—each DC shows its card image in the Play Area—but the bot does not automate applying those effects to game state.)*
 
+### Stat tracking to the database
+
+- [ ] **Game history** — The database must store a history of all completed games (result, affiliations, DCs in each army, deployment zones, etc.) so that win-rate stats can be computed from it.
+- [ ] **Win rate globally by affiliation** — Persist game results and aggregate win rate per affiliation (Imperial, Rebel, Scum, etc.) to see faction balance.
+- [ ] **Win rate per DC** — Track which deployment cards appear in winning vs losing armies to help identify overpowered or underpowered DCs.
+- [ ] **Win rate per deployment zone** — Track wins/losses by deployment zone (e.g. which zones are favored) for map/balance analysis.
+- [ ] **Affiliation play rate** — Track what percentage of games each affiliation is played (e.g. 40% Imperial, 40% Scum, 20% Rebel) to see meta diversity.
+- [ ] **DC pick rate** — Track how often each Deployment card appears in armies (requires storing each player's army list per game). Show as a percentage (e.g. "Darth Vader appears in 35% of Imperial armies"). Feeds into the game history data.
+
 ---
 
 ## Summary
