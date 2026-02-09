@@ -1744,14 +1744,68 @@
       "affiliation": "Scum"
     },
     "Dewback Rider": {
-      "abilityText": "Traits: TROOPER, CREATURE. Attack (Range): blue, green, yellow. Defense: black. Surge: damage 1. Surge: damage 1. Surge: pierce 2",
+      "abilityText": "Special Action (Shock Lance): Choose a figure within 2 spaces and roll 1 green die. That figure suffers Damage equal to the Hit results. Then, if you rolled 1 or more Surge results, that figure becomes Weakened.\n\nMounted: At the start of your activation, you gain 3 movement points.",
       "keywords": [
-        "Mobile"
-      ]
+        "TROOPER",
+        "CREATURE"
+      ],
+      "cost": 5,
+      "health": 9,
+      "speed": 4,
+      "passives": [
+        "Efficient Travel",
+        "Professional"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1, pierce 1",
+        "damage 1",
+        "pierce 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Diala Passil": {
-      "abilityText": "Traits: FORCE USER, BRAWLER. Attack (Melee): red, green. Defense: white. Surge: recover 2. Surge: pierce 3. Surge: cleave 2",
-      "keywords": []
+      "abilityText": "Battle Meditation: Before you declare an attack, become Focused.\n\nDefensive Stance: While defending, you may reroll 1 defense die. If you do, convert each Dodge result to 2 Block and 1 Evade.\n\nForce Throw: Once during your activation, you may suffer 1 Strain to choose another small figure within 3 spaces. Push that figure up to 2 spaces.",
+      "keywords": [
+        "FORCE USER",
+        "BRAWLER"
+      ],
+      "subname": "EXILE REDEEMED",
+      "cost": 8,
+      "health": 12,
+      "speed": 5,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "pierce 3",
+        "damage 2",
+        "cleave 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Director Krennic": {
       "abilityText": "Advanced Weapons Research: At the start of your activation, a friendly figure within 2 spaces may gain 1 Hit Token or 1 Surge Token.\n\nUnhinged Director: When a friendly TROOPER or GUARDIAN within 2 spaces spends a Hit Token or Surge Token while declaring an attack, it may suffer 1 Strain to apply +2 of the chosen symbol to the results instead of +1.",
@@ -1774,7 +1828,7 @@
         "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "damage 2, accuracy 1",
@@ -1782,23 +1836,40 @@
         "damage 1, accuracy 2"
       ],
       "attachment": false,
-      "affiliation": "Imperial",
-      "elite": true
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Doctor Aphra": {
       "abilityText": "Dubious Counterparts: If your army's affiliation is Scum, you may include \"0-0-0\" and \"BT-1\" in your army together. After a friendly DROID resolves \"Invasive Procedure\" or \"Missile Salvo\", that figure may perform 1 additional action.\n\nExcavation: At the start of each round, you may choose 1 Command card in any discard pile that costs 1 or less, except \"Take Initiative\". Once during this round, your player may play that card from the discard pile and then return it to the game box.",
       "keywords": [
         "SMUGGLER"
       ],
+      "subname": "ROGUE ARCHAEOLOGIST",
       "cost": 4,
       "health": 7,
       "speed": 5,
       "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "accuracy 2",
+        "pierce 1"
+      ],
       "attachment": false,
-      "elite": true
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Dr. Royce Hemlock": {
-      "abilityText": "Neurotoxin: Choose a space within 3 spaces and roll 1 yellow die. All hostile figures on or adjacent to that space become Weakened and suffer Damage equal to the Damage results.\n\nNeurostim: Choose an adjacent friendly figure and roll 1 yellow die. If you rolled a Block, that figure gains 1 Block token. Then, if you rolled a Surge, that figure gains 1 Focus.",
+      "abilityText": "Special Action (Neurotoxin): Choose a space within 3 spaces and roll 1 yellow die. All hostile figures on or adjacent to that space become Weakened and suffer Damage equal to the Hit results.\n\nSpecial Action (Neurostim): Choose an adjacent friendly figure and roll 1 yellow die. If you rolled a Block, that figure gains a Block Token. Then, if you rolled a Surge, that figure gains a Focus.",
       "keywords": [
         "LEADER",
         "TECHNICIAN"

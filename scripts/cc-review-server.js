@@ -278,6 +278,22 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && pathname === '/api/reread-request') {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    try {
+      const data = JSON.parse(body);
+      const outPath = join(root, 'data', 'reread-request.json');
+      writeFileSync(outPath, JSON.stringify(data, null, 2), 'utf8');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+    return;
+  }
+
   if (req.method === 'GET' && pathname === '/api/symbol-asset-list') {
     try {
       const imagesRoot = join(root, 'vassal_extracted', 'images');

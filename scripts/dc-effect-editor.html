@@ -5,12 +5,12 @@
   <title>IA Skirmish — DC Effect Editor</title>
   <style>
     * { box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; padding: 20px; background: #1e1e1e; color: #eee; max-width: 1600px; }
+    body { font-family: system-ui, sans-serif; padding: 20px; background: #1e1e1e; color: #eee; max-width: 1600px; zoom: 1.10; }
     h1 { font-size: 1.3rem; margin-bottom: 8px; }
     .hint { font-size: 12px; color: #999; margin-bottom: 16px; }
     .main { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
-    .card-img-wrap { flex-shrink: 0; width: 394px; background: #2d2d2d; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
-    .card-img-wrap img { width: 100%; max-height: 582px; object-fit: contain; object-position: center; }
+    .card-img-wrap { flex-shrink: 0; width: 452px; background: #2d2d2d; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+    .card-img-wrap img { width: 100%; max-height: 667px; object-fit: contain; object-position: center; }
     .card-img-wrap .placeholder { color: #666; font-size: 13px; text-align: center; padding: 16px; }
     .form-wrap { flex: 1; min-width: 280px; display: flex; flex-direction: column; }
     .form-columns { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
@@ -19,8 +19,9 @@
     label { display: block; margin-top: 12px; margin-bottom: 4px; font-weight: 500; }
     select, input, textarea { width: 100%; padding: 8px 12px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 14px; }
     textarea { min-height: 80px; font-family: inherit; resize: vertical; }
+    textarea#abilityText { min-height: 160px; }
     .row { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
-    button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    button { padding: 7px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
     button.primary { background: #0d6efd; color: #fff; }
     button.primary:hover { background: #0b5ed7; }
     button.export { background: #198754; color: #fff; }
@@ -33,14 +34,6 @@
     .entry span { color: #aaa; }
     .entry button { padding: 4px 10px; font-size: 12px; background: #dc3545; }
     .entry button:hover { background: #bb2d3b; }
-    .dup-panel { margin-top: 16px; padding: 12px; background: #2d2d2d; border-radius: 8px; border: 1px solid #555; }
-    .dup-panel h3 { font-size: 0.95rem; margin: 0 0 8px 0; }
-    .dup-group { margin-bottom: 12px; padding: 8px; background: #1e1e1e; border-radius: 4px; }
-    .dup-group .path { font-size: 11px; color: #888; margin-bottom: 4px; word-break: break-all; }
-    .dup-card-line { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
-    .dup-card-line .iacp-badge { background: #198754; color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 4px; }
-    button.iacp { background: #6f42c1; color: #fff; }
-    button.iacp:hover { background: #5a32a3; }
     .form-section { margin-top: 14px; padding-top: 12px; border-top: 1px solid #444; }
     .form-section-title { font-size: 12px; font-weight: 600; color: #aaa; margin-bottom: 8px; }
     /* Section grouping: distinct backgrounds and left borders for quick scanning */
@@ -88,6 +81,14 @@
     .form-row-surge-passives { flex-direction: column; align-items: stretch; gap: 16px; }
     .form-row-surge-passives .field-surge { max-width: 100%; }
     .form-row-surge-passives .field-passives { max-width: 100%; margin-left: 0; }
+    /* Compact right column to fit on screen without scrolling */
+    .form-stats .form-block { padding: 10px 14px; margin-bottom: 8px; }
+    .form-stats .form-section { margin-top: 6px; padding-top: 6px; }
+    .form-stats .form-row { margin-top: 6px; }
+    .form-stats label { margin-top: 6px; margin-bottom: 2px; }
+    .form-stats .chip-list { min-height: 26px; padding: 2px 0; }
+    .form-stats .form-section-title { margin-bottom: 4px; }
+    .form-stats .form-row-surge-passives { gap: 10px; }
     button.secondary-btn { padding: 6px 12px; font-size: 12px; background: #444; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; }
     button.secondary-btn:hover { background: #555; }
   </style>
@@ -118,7 +119,6 @@
 
   <div class="form-block form-block-ability">
   <label>Ability text</label>
-  <p class="hint" style="margin: 2px 0 4px 0;">Only the main ability text from the middle of the card. Do not include the traits line or attack/defense/surge summary—those go in Keywords and the Figure stats section below. Check for the special action symbol on the card; when present, use "Special Action (Name):" for that ability—not just "Name:"; capitalize Damage and Strain; use all-caps SMALL when referring to the unit trait. When the card shows a dice symbol (e.g. for "Damage equal to the ___ results"), spell out the result type: Hit, Surge, Block, Evade, or Damage results—never leave it as "the results".</p>
   <textarea id="abilityText" placeholder="Paste or type the card's ability text (middle section only)"></textarea>
   <span class="hint ability-hint-empty" id="abilityHintEmpty" style="display:none;">Empty or TBD — needs attention</span>
 
@@ -299,25 +299,20 @@
         <div id="passivesList" class="chip-list"></div>
       </div>
     </div>
-  </div>
-  </div>
-
-  <div class="form-block form-block-flags">
-  <div class="form-section">
-    <div class="form-row" style="align-items: center;">
-      <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
+  <div class="form-row" style="align-items: center; margin-top: 8px; padding-top: 6px; border-top: 1px solid #444;">
+      <label style="display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px;">
         <input type="checkbox" id="attachment" style="width: auto;">
         <span>Attachment</span>
       </label>
-      <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
+      <label style="display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px;">
         <input type="checkbox" id="companion" style="width: auto;">
         <span>Companion</span>
       </label>
-      <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
+      <label style="display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px;">
         <input type="checkbox" id="elite" style="width: auto;">
         <span>Elite</span>
       </label>
-      <div class="field inline" style="max-width: 180px;">
+      <div class="field inline" style="max-width: 160px;">
         <label>Companion name</label>
         <input type="text" id="companionName" placeholder="e.g. The Child">
       </div>
@@ -335,24 +330,16 @@
   </div>
   </div>
 
-  <div id="statsWrap" class="hint" style="margin-top:12px; padding:8px; background:#2d2d2d; border-radius:4px; font-size:12px;"></div>
+  <div id="statsWrap" class="hint" style="margin-top:6px; padding:6px; background:#2d2d2d; border-radius:4px; font-size:12px;"></div>
 
-  <div class="row">
+  <div class="row" style="margin-top:8px;">
     <button id="addBtn" class="primary">Add / Update</button>
     <button id="verifyBtn" class="verified">VERIFIED</button>
     <button id="imgUpgradeBtn" class="export" style="background:#0dcaf0;color:#000;">IMG UPGRADED</button>
-    <button id="showDupBtn" class="iacp">Show duplicate cards</button>
-    <span id="markIacpWrap" style="display:none;"><button id="markIacpBtn" class="iacp">Mark as IACP variant</button></span>
   </div>
     </div>
     </div>
   </div>
-  </div>
-
-  <div id="dupPanel" class="dup-panel" style="display: none; margin-top: 16px;">
-    <h3>Suspected duplicates (same image path)</h3>
-    <p class="hint">Use "Mark as IACP" to set which variant is the IACP one for priority. Saved in dc-effects.json.</p>
-    <div id="dupList"></div>
   </div>
 
   <div class="entries">
@@ -410,16 +397,6 @@
     let dcStats = {};
     let dcImages = {};
     let companionNames = new Set();
-
-    function getDuplicateGroups() {
-      const pathToCards = {};
-      for (const [card, path] of Object.entries(dcImages)) {
-        if (!path) continue;
-        if (!pathToCards[path]) pathToCards[path] = [];
-        pathToCards[path].push(card);
-      }
-      return Object.entries(pathToCards).filter(([, arr]) => arr.length > 1);
-    }
 
     function addChip(container, value, label) {
       if (!value) return;
@@ -649,7 +626,6 @@
       const name = (cardName.value || cardSelect.value || '').trim();
       updateCardImage();
       updateStatsDisplay();
-      updateMarkIacpVisibility();
       const statsFallback = name && (dcStats[name] || dcStats[name.replace(/\s*\[.*\]\s*$/, '')]);
       if (name && cards[name]) {
         const card = cards[name];
@@ -823,80 +799,6 @@
       }
     });
 
-    function renderDupPanel() {
-      const panel = document.getElementById('dupPanel');
-      const list = document.getElementById('dupList');
-      const groups = getDuplicateGroups();
-      if (groups.length === 0) {
-        list.innerHTML = '<p class="hint">No suspected duplicates (no image path shared by multiple card names).</p>';
-      } else {
-        list.innerHTML = '';
-        groups.forEach(([path, cardNames]) => {
-          const g = document.createElement('div');
-          g.className = 'dup-group';
-          g.innerHTML = '<div class="path">' + path.replace(/</g, '&lt;') + '</div>';
-          cardNames.forEach((c) => {
-            const line = document.createElement('div');
-            line.className = 'dup-card-line';
-            const isIACP = !!(cards[c] && cards[c].isIACPVariant);
-            line.innerHTML = '<span class="card-name"></span> ' + (isIACP ? '<span class="iacp-badge">IACP</span>' : '') + (isIACP ? '' : ' <button type="button" class="iacp mark-iacp-btn">Mark as IACP</button>');
-            line.querySelector('.card-name').textContent = c;
-            const markBtn = line.querySelector('.mark-iacp-btn');
-            if (markBtn) markBtn.addEventListener('click', () => {
-              cardNames.forEach((other) => {
-                if (!cards[other]) cards[other] = {};
-                cards[other].isIACPVariant = other === c;
-              });
-              saveToFile(true);
-              renderDupPanel();
-              updateMarkIacpVisibility();
-            });
-            line.querySelector('.card-name').addEventListener('click', () => {
-              cardSelect.value = c;
-              cardName.value = c;
-              onCardChange();
-            });
-            line.querySelector('.card-name').style.cursor = 'pointer';
-            g.appendChild(line);
-          });
-          list.appendChild(g);
-        });
-      }
-    }
-
-    function updateMarkIacpVisibility() {
-      const name = (cardName.value || cardSelect.value || '').trim();
-      const wrap = document.getElementById('markIacpWrap');
-      const groups = getDuplicateGroups();
-      const inDup = name && groups.some(([, arr]) => arr.includes(name));
-      const alreadyMarked = name && !!(cards[name] && cards[name].isIACPVariant);
-      wrap.style.display = inDup && !alreadyMarked ? 'inline-block' : 'none';
-    }
-
-    document.getElementById('showDupBtn').addEventListener('click', () => {
-      const panel = document.getElementById('dupPanel');
-      const show = panel.style.display === 'none';
-      panel.style.display = show ? 'block' : 'none';
-      if (show) renderDupPanel();
-      document.getElementById('showDupBtn').textContent = show ? 'Hide duplicate cards' : 'Show duplicate cards';
-    });
-
-    document.getElementById('markIacpBtn').addEventListener('click', () => {
-      const name = (cardName.value || cardSelect.value || '').trim();
-      if (!name) return;
-      const groups = getDuplicateGroups();
-      const group = groups.find(([, arr]) => arr.includes(name));
-      if (!group) return;
-      const [, cardNames] = group;
-      cardNames.forEach((c) => {
-        if (!cards[c]) cards[c] = {};
-        cards[c].isIACPVariant = c === name;
-      });
-      saveToFile(true);
-      renderDupPanel();
-      updateMarkIacpVisibility();
-    });
-
     document.getElementById('imgUpgradeBtn').addEventListener('click', () => {
       const name = (cardName.value || cardSelect.value || '').trim();
       if (!name) return alert('Select a card first');
@@ -905,6 +807,7 @@
       badge.style.display = isImageUpgraded(name) ? 'block' : 'none';
     });
 
+
     function render() {
       updateCardSelect();
       listEl.innerHTML = '';
@@ -912,7 +815,6 @@
       verifiedCountEl.textContent = getVerifiedCount();
       document.getElementById('imgUpgradeCount').textContent = getImageUpgradeCount();
       totalCountEl.textContent = names.length;
-      updateMarkIacpVisibility();
       const unverified = getUnverifiedCards();
       unverified.forEach((name) => {
         const data = cards[name] || {};

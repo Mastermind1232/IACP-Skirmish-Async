@@ -36,9 +36,10 @@ Use the appropriate word for the die face: **Hit**, **Surge**, **Block**, **Evad
    - If no passives exist, do not add `passives` at all. If no surges exist, do not add `surgeAbilities` at all.
 3. **Recover: Damage vs tokens:** Recover Damage (heart) = `recover 1`. Recover Block Token (shield) = `recover 1 block token`. Read the symbol.
 4. **Ability text:** Spell out dice/symbol names (Hit, Surge, Focus, etc.) as in the first section above.
-5. **Ability prefix check (mandatory per-ability — check ALL prefix types):** For **every** named ability on the card, check whether it has ANY prefix symbol. This check must happen for **each ability individually** — do not batch-skip it.
-   - **⇒ (1 arrow)** = costs 1 action → format: **Special Action (Ability Name):**
-   - **⇒⇒ (2 arrows)** = costs 2 actions → format: **Double Action (Ability Name):**
+5. **Ability prefix check (mandatory per-ability — check ALL prefix types):** For **every** named ability on the card, check whether it has ANY prefix symbol. This check must happen for **each ability individually** — do not batch-skip it. **This applies to ALL cards you touch, even ones with pre-existing data — always re-verify prefixes.**
+   - **⇒ (Special Action icon)** = costs 1 action → format: **Special Action (Ability Name):**
+     - Visually: a double-triangle / connected-arrow icon (◄►) — this is ONE symbol meaning ONE special action, not two separate arrows.
+   - **⇒⇒ (2 of the above icon)** = costs 2 actions → format: **Double Action (Ability Name):**
    - **⟋ (surge zigzag)** = costs 1 surge token → format: **Surge (Ability Name):**
    - **⇒ + ⟋ (both)** = costs 1 action + 1 surge → format: **Special Action Surge (Ability Name):**
    - **NEVER** write "Special Action Special Action" — that is always wrong.
