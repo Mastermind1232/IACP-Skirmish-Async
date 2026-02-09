@@ -1463,6 +1463,7 @@
         "black"
       ],
       "attachment": false,
+      "elite": true,
       "affiliation": "Scum",
       "isIACPVariant": false
     },
@@ -1479,8 +1480,7 @@
       "attack": {
         "dice": [
           "red",
-          "green",
-          "yellow"
+          "green"
         ],
         "type": "range"
       },
@@ -1523,7 +1523,7 @@
       "affiliation": "Rebel"
     },
     "Dark Trooper Mk III": {
-      "abilityText": "Advanced Targeting Computer: When you declare an attack, you become Focused. During this attack, you may reroll 1 attack die. If the rerolled die has fewer Surge symbols than before it was rerolled, apply +1 Damage to the attack results.\n\nDurasteel Fist: Once during your activation, you may choose 1 adjacent figure or object and roll 1 green die. It suffers Damage equal to the Damage results. Then, if you rolled a Surge and the target was a SMALL figure, you may push that figure up to 1 space.\n\nLift Off: Move up to 4 spaces. During this movement, you gain Mobile.",
+      "abilityText": "Advanced Targeting Computer: When you declare an attack, you become Focused. During this attack, you may reroll 1 attack die. If the rerolled die has fewer Surge symbols than before it was rerolled, apply +1 Damage to the attack results.\n\nDurasteel Fist: Once during your activation, you may choose 1 adjacent figure or object and roll 1 green die. It suffers Damage equal to the Damage results. Then, if you rolled a Surge and the target was a SMALL figure, you may push that figure up to 1 space.\n\nSpecial Action (Lift Off): Move up to 4 spaces. During this movement, you gain Mobile.",
       "keywords": [
         "DROID",
         "TROOPER"
