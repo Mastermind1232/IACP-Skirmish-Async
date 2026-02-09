@@ -1529,7 +1529,7 @@
         "TROOPER"
       ],
       "cost": 6,
-      "health": 8,
+      "health": 10,
       "speed": 4,
       "figures": 1,
       "attack": {
@@ -1543,8 +1543,8 @@
         "black"
       ],
       "surgeAbilities": [
-        "damage 1",
-        "accuracy 3, pierce 1"
+        "damage 2",
+        "accuracy 2, pierce 1"
       ],
       "attachment": false,
       "affiliation": "Imperial"
