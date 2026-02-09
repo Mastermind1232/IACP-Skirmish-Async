@@ -40,8 +40,10 @@ When reading attack dice from a card image, follow this exact process:
 2. **Identify each.** Go through the dice left-to-right and name each color individually (e.g. "die 1 = red, die 2 = green, die 3 = yellow").
 3. **Verify count matches.** Confirm the number of colors you listed equals the count from step 1. If it doesn't, re-examine — you missed one.
 4. **Watch for yellow.** Yellow dice are the most commonly missed because they blend into card backgrounds, borders, or highlight elements. If you see only 2 dice on a card that costs 5+, double-check for a yellow die.
-5. **Cross-check against cost.** A unit costing 5+ with only 2 attack dice is unusual. If you see this, re-examine the image before committing.
-6. **If uncertain about count or color, flag it.** List it in your uncertainties — do not silently drop a die.
+5. **Watch for blue vs green.** Blue and green dice are both cool-toned and easily confused at small resolutions. Blue is darker/cooler; green is lighter/warmer. If you see a "green" die, double-check whether it's actually blue, and vice versa.
+6. **Cross-check against cost.** A unit costing 5+ with only 2 attack dice is unusual. If you see this, re-examine the image before committing.
+7. **Never resolve uncertainty by reasoning.** If you are unsure whether a die is "red or blue" or "green or yellow", do NOT pick one based on what "makes sense for the card's design." That is guessing. Flag it as uncertain and tell the user. Only commit a color you can clearly see.
+8. **If uncertain about count or color, flag it.** List it in your uncertainties — do not silently drop a die or pick a best-guess color.
 
 ---
 
