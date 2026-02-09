@@ -1680,7 +1680,7 @@
       "affiliation": "Imperial"
     },
     "Del Meeko": {
-      "abilityText": "Expertise: After you perform an attack, you may perform an additional action. Limit once per activation.\n\nGifted Mechanic: Choose an adjacent friendly DROID or VEHICLE. If you do, you and that figure each recover 1 Block token and suffer 1 Strain.\n\nOpen-Minded: After this attack resolves, gain 1 movement point or 1 Focus.",
+      "abilityText": "Expertise: After you perform a Special Action, you may perform an additional action. Limit once per activation.\n\nSpecial Action (Gifted Mechanic): Choose an adjacent friendly DROID or VEHICLE. If you do, you and that figure each recover 1 Damage and gain 1 Hit Token.\n\nOpen-Minded: After this attack resolves, gain 1 movement point or Power Token.",
       "keywords": [
         "TECHNICIAN",
         "TROOPER",
@@ -1711,13 +1711,18 @@
       "affiliation": "Imperial"
     },
     "Dengar": {
-      "abilityText": "Spread the Pain: Choose a HARMFUL condition you have not already chosen during this attack. After this attack resolves, if it did not miss, you may have a figure on or adjacent to the target space gain the chosen condition. This ability can be used multiple times per attack.",
+      "abilityText": "Surge (Spread the Pain): Choose a HARMFUL condition you have not already chosen during this attack. After this attack resolves, if it did not miss, you may have a figure on or adjacent to the target space gain the chosen condition. This ability can be used multiple times per attack.",
       "keywords": [
         "HUNTER"
       ],
+      "subname": "RUTHLESS KILLER",
       "cost": 7,
       "health": 12,
       "speed": 4,
+      "passives": [
+        "+1 Hit",
+        "Block 1"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -1731,9 +1736,8 @@
         "black"
       ],
       "surgeAbilities": [
-        "damage 1",
-        "block 2",
-        "accuracy 2"
+        "accuracy 2",
+        "damage 2"
       ],
       "attachment": false,
       "elite": true,
@@ -1846,7 +1850,7 @@
       "keywords": []
     },
     "Emperor Palpatine": {
-      "abilityText": "Emperor: Once during your activation, you may choose another figure within 4 spaces. That figure interrupts to perform an attack.\n\nTempt: At the start of your activation, a figure of your choice suffers 1 Damage and gains 1 Power Token.\n\nSpecial Action Surge (Force Lightning): Choose a figure within 4 spaces and line of sight. That figure suffers 3 Damage and becomes Weakened. Each figure adjacent to that figure suffers 1 Damage.",
+      "abilityText": "Emperor: Once during your activation, you may choose another figure within 4 spaces. That figure interrupts to perform an attack.\n\nTempt: At the start of your activation, a figure of your choice suffers 1 Damage and gains 1 Hit Token.\n\nSpecial Action (Force Lightning): Choose a figure within 4 spaces and line of sight. That figure suffers 3 Damage and becomes Weakened. Each figure adjacent to that figure suffers 1 Damage.",
       "keywords": [
         "FORCE USER",
         "LEADER"
@@ -1855,10 +1859,10 @@
       "cost": 8,
       "health": 13,
       "speed": 3,
-      "figures": 1,
       "passives": [
         "Pierce 3"
       ],
+      "figures": 1,
       "attack": {
         "dice": [
           "red",
@@ -1873,8 +1877,8 @@
         "damage 1"
       ],
       "attachment": false,
-      "affiliation": "Imperial",
-      "elite": true
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Ewok Warrior (Elite)": {
       "abilityText": "Ambush: After you are deployed, you become Hidden.\n\nForest Fighters: While performing a melee attack, apply +1 Damage to the attack results if you are Hidden.\n\nSpecial Action (Sling Barrage): Perform a melee attack using your printed attack pool. During this attack, you may reroll up to 1 attack die for each other figure in your group with line of sight to the defender.",

@@ -26,16 +26,28 @@ Use the appropriate word for the die face: **Hit**, **Surge**, **Block**, **Evad
 ## When you are 100% sure (reading guidance)
 
 1. **Defense die:** White vs black are different; confirm from the card.
-2. **Passives vs surge:** Passives = always-on. Surge abilities = spend surge for. Do not put passives in `surgeAbilities`. **Do not add passives unless the card clearly shows a passive**—if the card has no passives, leave `passives` out entirely. Never infer passives from stat-bar layout or guess. Do not add or edit `subname`; leave that to the user.
+2. **Stat bar: passives vs surges (CRITICAL — read the prefix symbol):**
+   - Items in the stat bar that have a **surge symbol (⟋) prefix** = **surge abilities** → go in `surgeAbilities`
+   - Items in the stat bar with **NO prefix symbol** = **passives** → go in `passives`
+   - **Read EACH item individually.** Check whether it has ⟋ in front. Do NOT assume all items in the same row are the same type.
+   - **Read the exact number.** "+1" is not "+2". Read the actual digit on the card.
+   - Common passives: "+2 Accuracy", "+3 Accuracy", "Reach", "Pierce 1", "Cleave 1", "Mobile", "Professional"
+   - Common surges: "⟋: +2 Hits", "⟋: Pierce 3", "⟋: +1 Hit, Hide"
+   - If no passives exist, do not add `passives` at all. If no surges exist, do not add `surgeAbilities` at all.
 3. **Recover: Damage vs tokens:** Recover Damage (heart) = `recover 1`. Recover Block Token (shield) = `recover 1 block token`. Read the symbol.
 4. **Ability text:** Spell out dice/symbol names (Hit, Surge, Focus, etc.) as in the first section above.
-5. **Special actions (mandatory per-ability check):** For **every** named ability on the card, check whether it has the **special action symbol** (⇒ arrow icon) next to its name. This check must happen for each ability individually — do not batch-skip it. Count the arrows:
-   - **1 arrow (⇒)** = costs 1 action → format: **Special Action (Ability Name):**
-   - **2 arrows (⇒⇒)** = costs 2 actions → format: **Double Action (Ability Name):**
+5. **Ability prefix check (mandatory per-ability — check ALL prefix types):** For **every** named ability on the card, check whether it has ANY prefix symbol. This check must happen for **each ability individually** — do not batch-skip it.
+   - **⇒ (1 arrow)** = costs 1 action → format: **Special Action (Ability Name):**
+   - **⇒⇒ (2 arrows)** = costs 2 actions → format: **Double Action (Ability Name):**
+   - **⟋ (surge zigzag)** = costs 1 surge token → format: **Surge (Ability Name):**
+   - **⇒ + ⟋ (both)** = costs 1 action + 1 surge → format: **Special Action Surge (Ability Name):**
    - **NEVER** write "Special Action Special Action" — that is always wrong.
-   - Some abilities also have a **surge symbol (⟋)** before the name, meaning they cost 1 surge token → format: **Surge (Ability Name):** or **Special Action Surge (Ability Name):** if both are present.
-   Movement abilities (e.g. "Lift Off", "Jump", "Fly") are especially likely to be special actions — double-check these. If you are not 100% sure whether an ability is a special action, list it in uncertainties.
+   - **Abilities with NO prefix symbol** are passive/triggered abilities — just write **Ability Name:**
+   - Movement abilities (e.g. "Lift Off", "Jump", "Fly") are especially likely to be special actions — double-check these. If you are not 100% sure, list it in uncertainties.
 6. **Tokens/symbols:** Surge (starburst) ≠ Focus (focus token) ≠ Power Token. **Question mark on a token background** = generic **Power Token** (player chooses any: Block, Hit, Surge, Evade, etc.). Write "gain 1 Power Token". Read the actual symbol.
+7. **Elite flag:** Check the **cost number color**. Red = elite → add `"elite": true`. Grey/white = not elite → do not add the field. ALL unique characters with red cost numbers are elite. ALL "(Elite)" group cards are elite.
+8. **Figure count from notches:** Below the cost number on the left edge, count the small notch marks. Red notches = elite, grey notches = regular. Number of notches = number of figures. Always check and record this.
+9. **New surge combos:** If a card has a surge combination not yet in the editor dropdown, add it to both the `<option>` list and `SURGE_LABELS` in `dc-effect-editor.html`. Use "Hit" not "Damage" in display labels.
 
 ## Mandatory visible checklist (output to user for EVERY card)
 
@@ -43,6 +55,8 @@ Before making ANY edit to a card's data, you MUST output the following checklist
 
 ```
 CARD: [Card Name]
+- Cost color: red (elite) / grey (not elite)
+- Notch count: ___ notches, color: red/grey → figures: ___
 - Dice count: ___ icons seen → ___ colors listed (match? yes/no)
 - Dice colors (L→R): die 1 = ___, die 2 = ___, die 3 = ___
 - Blue/green confusion check: confirmed ___ (not ___)
@@ -52,12 +66,14 @@ CARD: [Card Name]
 - Health: ___
 - Speed: ___
 - Cost: ___
-- Figures: ___
-- Passives: [list] or none
-- Surge abilities: [list each with exact numbers]
-- Special Action check (per ability):
-  - [Ability 1]: symbol present? yes/no
-  - [Ability 2]: symbol present? yes/no
+- Stat bar items (check EACH for ⟋ prefix):
+  - Item 1: has ⟋ prefix? yes/no → passive or surge? → value: ___
+  - Item 2: has ⟋ prefix? yes/no → passive or surge? → value: ___
+  - Item 3: has ⟋ prefix? yes/no → passive or surge? → value: ___
+  - ...
+- Ability prefix check (per ability — check for ⇒, ⇒⇒, ⟋, or none):
+  - [Ability 1]: prefix = ⇒ / ⇒⇒ / ⟋ / ⇒+⟋ / none
+  - [Ability 2]: prefix = ⇒ / ⇒⇒ / ⟋ / ⇒+⟋ / none
   - ...
 - Uncertainties: [list any, or "none"]
 ```
@@ -69,6 +85,10 @@ CARD: [Card Name]
 - Blue vs green: Blue is darker/cooler; green is lighter/warmer. Always double-check.
 - Yellow dice blend into backgrounds — if cost is 5+ with only 2 dice, re-examine for yellow.
 - If uncertain about ANY field, flag it and leave it blank. The user will fill it in.
+- **Elite flag is non-negotiable.** Every card must be checked for red vs grey cost. Red = `"elite": true`. If you see "(Elite)" in the name, it must also have `"elite": true`.
+- **Stat bar items must be checked individually for ⟋.** Do not assume they are all surges or all passives. Each item is independent.
+- **Ability prefixes must be checked individually.** For each named ability, look for ⇒, ⇒⇒, or ⟋ immediately before the name. Missing a prefix is a data error.
+- **Surge values in `surgeAbilities`** use the internal format (e.g., `"damage 2"`, `"pierce 3"`, `"accuracy 2"`, `"damage 2, hide"`). Display labels use "Hit/Hits" but internal keys use "damage".
 
 ---
 
