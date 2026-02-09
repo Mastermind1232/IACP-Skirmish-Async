@@ -8,10 +8,15 @@ alwaysApply: false
 
 When editing `abilityText` or `effect` in DC/CC data, **never leave a dice result as a blank or "the results"**. Cards show symbols; in plain text we spell out the result type.
 
-- **Correct**: "Damage equal to the **Hit** results", "Strain equal to the **Surge** results", "Damage equal to the **Damage** results"
-- **Wrong**: "Damage equal to the results", "suffers Damage equal to the ___"
+- **Correct**: "suffers Damage equal to the **Hit** results", "Strain equal to the **Surge** results"
+- **Wrong**: "Damage equal to the Damage results", "Damage equal to the results", "suffers Damage equal to the ___"
 
-Use the appropriate word for the die face: **Hit**, **Surge**, **Block**, **Evade**, or **Damage** (for "Damage results" on dice). If the card says "combined Hit and Surge results", keep that. Always fill in the specific result type the card refers to.
+**Critical distinction:**
+- **Hits** = what the dice show (the die face icon — the explosion/starburst symbol on attack dice)
+- **Damage** = the outcome suffered by the target (the effect, not the die face)
+- So the pattern is always: "suffers **Damage** equal to the **Hit** results" — NEVER "Damage equal to the Damage results"
+- Other die faces: **Surge** (zigzag), **Block** (shield), **Evade** (dodge). Use these for their respective die face symbols.
+- If the card says "combined Hit and Surge results", keep that. Always fill in the specific result type the card refers to.
 
 ---
 
@@ -38,7 +43,7 @@ Use the appropriate word for the die face: **Hit**, **Surge**, **Block**, **Evad
 4. **Ability text:** Spell out dice/symbol names (Hit, Surge, Focus, etc.) as in the first section above.
 5. **Ability prefix check (mandatory per-ability — check ALL prefix types):** For **every** named ability on the card, check whether it has ANY prefix symbol. This check must happen for **each ability individually** — do not batch-skip it. **This applies to ALL cards you touch, even ones with pre-existing data — always re-verify prefixes.**
    - **⇒ (Special Action icon)** = costs 1 action → format: **Special Action (Ability Name):**
-     - Visually: a double-triangle / connected-arrow icon (◄►) — this is ONE symbol meaning ONE special action, not two separate arrows.
+     - Visually: a double-triangle / connected-arrow icon (◄►) — this is ONE symbol meaning ONE special action, not two separate arrows. If you see this icon before an ability name, it is ALWAYS a Special Action.
    - **⇒⇒ (2 of the above icon)** = costs 2 actions → format: **Double Action (Ability Name):**
    - **⟋ (surge zigzag)** = costs 1 surge token → format: **Surge (Ability Name):**
    - **⇒ + ⟋ (both)** = costs 1 action + 1 surge → format: **Special Action Surge (Ability Name):**

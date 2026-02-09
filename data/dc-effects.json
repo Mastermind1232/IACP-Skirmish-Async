@@ -1110,7 +1110,7 @@
       "elite": true
     },
     "Bossk": {
-      "abilityText": "Special Action (Indiscriminate Fire): Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red attack die. Each other figure within 2 spaces of the target space other than the defender suffers Damage equal to the Damage results and Strain equal to the Surge results.\n\nRegenerate: At the end of each round, recover 2 Damage and discard all Harmful conditions.",
+      "abilityText": "Special Action (Indiscriminate Fire): Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red attack die. Each other figure within 2 spaces of the target space other than the defender suffers Damage equal to the Hit results and Strain equal to the Surge results.\n\nRegenerate: At the end of each round, recover 2 Damage and discard all Harmful conditions.",
       "keywords": [
         "HUNTER",
         "BRAWLER"
@@ -1899,17 +1899,93 @@
       "affiliation": "Imperial"
     },
     "Drokkatta": {
-      "abilityText": "Traits: WOOKIEE, HEAVY WEAPON. Attack (Range): blue, green, yellow. Defense: black. damage 1; accuracy 1; Block 1. Surge: damage 2",
-      "keywords": []
+      "abilityText": "Demolish: Once during your activation, you may choose a space within 3 spaces and line of sight. Each figure on or adjacent to that space suffers 1 Damage. Then, place a rubble token in that space and you suffer 1 Strain.\n\nSurge (Shrapnel): Choose one: This attack gains Blast 2, or after this attack resolves, if it did not miss, each figure and object within 2 spaces of the target space suffers 1 Damage.",
+      "keywords": [],
+      "cost": 9,
+      "health": 12,
+      "speed": 4,
+      "figures": 1,
+      "passives": [
+        "+1 Hit, +1 Accuracy, +1 Block"
+      ],
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "E-Web Engineer (Elite)": {
-      "abilityText": "Traits: TROOPER, HEAVY WEAPON. Attack (Range): blue, red, yellow. Defense: black. Block 1. accuracy 3. Surge: recover 2. Surge: damage 2",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Forward Emplacement: After deployment, you gain movement points equal to your speed.\n\nTripod: During your activation, you cannot voluntarily exit your space if you attack, and you cannot attack if you exit your space.\n\nAssault: You can perform multiple attacks during your activation.",
+      "keywords": [
+        "TROOPER",
+        "HEAVY WEAPON"
+      ],
+      "cost": 5,
+      "health": 8,
+      "speed": 3,
+      "passives": [
+        "+2 Accuracy, +1 Block"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "red",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 2",
+        "recover 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "E-Web Engineer (Regular)": {
-      "abilityText": "Traits: TROOPER, HEAVY WEAPON. Attack (Range): blue, red, yellow. Defense: black. accuracy 3. Surge: recover 2. Surge: damage 1",
-      "keywords": []
+      "abilityText": "Tripod: During your activation, you cannot voluntarily exit your space if you attack, and you cannot attack if you exit your space.\n\nAssault: You can perform multiple attacks each activation.",
+      "keywords": [],
+      "cost": 6,
+      "health": 5,
+      "speed": 2,
+      "figures": 1,
+      "passives": [
+        "+3 Accuracy"
+      ],
+      "attack": {
+        "dice": [
+          "blue",
+          "red",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "recover 2",
+        "damage 1"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Echo Base Trooper (Elite)": {
       "abilityText": "Traits: BRAWLER, WOOKIEE. Attack (Range): blue, green. Defense: black. Surge: damage 2. Surge: accuracy 3",
@@ -2312,7 +2388,7 @@
       "elite": true
     },
     "IG-11": {
-      "abilityText": "Special Action (Rapid Fire): Perform 2 attacks.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.\n\nSelf-Destruct Protocol: When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Damage results. Then, you are defeated.",
+      "abilityText": "Special Action (Rapid Fire): Perform 2 attacks.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.\n\nSelf-Destruct Protocol: When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.",
       "keywords": [
         "DROID",
         "GUARDIAN"
@@ -2681,7 +2757,7 @@
       "keywords": []
     },
     "Purge Commander (Elite)": {
-      "abilityText": "Shock Grenade: Choose a space within 3 spaces and roll 1 green die. Each other figure on or adjacent to that space suffers Damage equal to the Damage results. If you rolled a Surge, those figures become Weakened.\n\nCoordinated Hunt: While you or a friendly Hunter in your line of sight is attacking, it may reroll 1 attack die. Limit one \"Coordinated Hunt\" per attack.",
+      "abilityText": "Shock Grenade: Choose a space within 3 spaces and roll 1 green die. Each other figure on or adjacent to that space suffers Damage equal to the Hit results. If you rolled a Surge, those figures become Weakened.\n\nCoordinated Hunt: While you or a friendly Hunter in your line of sight is attacking, it may reroll 1 attack die. Limit one \"Coordinated Hunt\" per attack.",
       "keywords": [
         "TROOPER",
         "HUNTER",
