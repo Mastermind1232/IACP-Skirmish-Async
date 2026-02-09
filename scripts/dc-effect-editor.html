@@ -327,6 +327,7 @@
   <div class="row">
     <button id="addBtn" class="primary">Add / Update</button>
     <button id="verifyBtn" class="verified">VERIFIED</button>
+    <button id="imgUpgradeBtn" class="export" style="background:#0dcaf0;color:#000;">IMG UPGRADED</button>
     <button id="showDupBtn" class="iacp">Show duplicate cards</button>
     <span id="markIacpWrap" style="display:none;"><button id="markIacpBtn" class="iacp">Mark as IACP variant</button></span>
   </div>
@@ -342,7 +343,7 @@
   </div>
 
   <div class="entries">
-    <h2>Unverified: <span id="count">0</span> — Verified: <span id="verifiedCount">0</span> — Total: <span id="totalCount">0</span> — Shrink unverified to 0 by clicking VERIFIED</h2>
+    <h2>Unverified: <span id="count">0</span> — Verified: <span id="verifiedCount">0</span> — Img Upgraded: <span id="imgUpgradeCount">0</span> — Total: <span id="totalCount">0</span></h2>
     <div id="list"></div>
   </div>
 
@@ -481,6 +482,45 @@
       addChip(passivesListEl, v, v);
       passivesSelect.value = '';
     });
+
+    let imageUpgrades = { description: 'Tracks which cards have had their images upgraded with better quality versions', dc_figures: [], dc_upgrades: [], cc: [], companions: [] };
+
+    function isImageUpgraded(name) {
+      if (imageUpgrades.dc_figures.includes(name)) return true;
+      if (imageUpgrades.dc_upgrades.includes(name)) return true;
+      if (imageUpgrades.companions.includes(name)) return true;
+      return false;
+    }
+
+    function getImageUpgradeCount() {
+      return names.filter((n) => isImageUpgraded(n)).length;
+    }
+
+    function toggleImageUpgrade(name) {
+      if (!name) return;
+      const isUpgrade = name.startsWith('[');
+      const isCompanion = companionNames.has(name);
+      const list = isCompanion ? 'companions' : isUpgrade ? 'dc_upgrades' : 'dc_figures';
+      const idx = imageUpgrades[list].indexOf(name);
+      if (idx >= 0) {
+        imageUpgrades[list].splice(idx, 1);
+      } else {
+        imageUpgrades[list].push(name);
+        imageUpgrades[list].sort();
+      }
+      saveImageUpgrades();
+      render();
+    }
+
+    async function saveImageUpgrades() {
+      try {
+        await fetch('/api/save-image-upgrades', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(imageUpgrades),
+        });
+      } catch (_) {}
+    }
 
     function saveVerified() {
       localStorage.setItem(VERIFIED_KEY, JSON.stringify([...verified]));
@@ -833,11 +873,18 @@
       updateMarkIacpVisibility();
     });
 
+    document.getElementById('imgUpgradeBtn').addEventListener('click', () => {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      if (!name) return alert('Select a card first');
+      toggleImageUpgrade(name);
+    });
+
     function render() {
       updateCardSelect();
       listEl.innerHTML = '';
       countEl.textContent = getUnverifiedCount();
       verifiedCountEl.textContent = getVerifiedCount();
+      document.getElementById('imgUpgradeCount').textContent = getImageUpgradeCount();
       totalCountEl.textContent = names.length;
       updateMarkIacpVisibility();
       const unverified = getUnverifiedCards();
@@ -853,8 +900,9 @@
         const compStr = data.companion ? (' · Companion' + (typeof data.companion === 'string' ? ` (${data.companion})` : '')) : '';
         const eliteStr = data.elite ? ' · Elite' : '';
         const affStr = data.affiliation ? ' · ' + data.affiliation : '';
+        const imgBadge = isImageUpgraded(name) ? '<span style="background:#0dcaf0;color:#000;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:6px;">IMG</span>' : '';
         const mid = [costStr, subCostStr, healthStr, kwStr || '—'].filter(Boolean).join(' · ');
-        div.innerHTML = `<strong>${name}</strong> <span>${mid}${attStr}${compStr}${eliteStr}${affStr}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
+        div.innerHTML = `<strong>${name}</strong>${imgBadge} <span>${mid}${attStr}${compStr}${eliteStr}${affStr}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
         div.querySelector('button').addEventListener('click', (e) => {
           e.stopPropagation();
           delete cards[name];
@@ -936,6 +984,13 @@
         if (rs.ok) {
           const ds = await rs.json();
           dcStats = ds.dcStats || ds || {};
+        }
+      } catch (_) {}
+      try {
+        const ru = await fetch('/data/dc-image-upgrades.json');
+        if (ru.ok) {
+          const du = await ru.json();
+          if (du.dc_figures) imageUpgrades = du;
         }
       } catch (_) {}
       render();

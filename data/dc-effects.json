@@ -1817,8 +1817,39 @@
       "keywords": []
     },
     "General Weiss": {
-      "abilityText": "Traits: VEHICLE, LEADER, HEAVY WEAPON. Attack (Range): any, any, any. Defense: black, black. MASSIVE. accuracy 2. Surge: blast 3. Surge: pierce 2",
-      "keywords": []
+      "abilityText": "General's Orders: At the start of your activation choose up to 2 other friendly figures on the map. Those figures may each interrupt to perform a move.\n\nEpic Arsenal: Your attack pool consists of any combination of 3 attack dice. You cannot roll more than 2 dice of a single color.",
+      "keywords": [
+        "VEHICLE",
+        "LEADER",
+        "HEAVY WEAPON",
+        "Massive"
+      ],
+      "subname": "FIELD COMMANDER",
+      "cost": 13,
+      "health": 15,
+      "speed": 4,
+      "figures": 1,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "attack": {
+        "dice": [
+          "any",
+          "any",
+          "any"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white",
+        "white"
+      ],
+      "surgeAbilities": [
+        "blast 3 (2 surges)",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Gideon Argus": {
       "abilityText": "Special Action (Tactical Maneuver): Choose another friendly figure in your line of sight. That figure gains 2 movement points.\n\nSpecial Action (On My Mark): Choose another friendly figure in your line of sight. That figure becomes Focused.",
@@ -2601,8 +2632,35 @@
       "keywords": []
     },
     "Snowtrooper (Elite)": {
-      "abilityText": "Traits: TROOPER. Attack (Range): blue, green. Defense: black. Surge: pierce 2. Surge: accuracy 3. Surge: focus; Surge: weaken",
-      "keywords": []
+      "abilityText": "Special Action (Disruptor Rifle): Perform an attack. After this attack resolves, if it did not miss and the target has suffered Damage equal to its Health minus 1, the target suffers 1 Damage.\n\nSpiked Boots: You cannot be pushed out of your space except by massive figures.\n\nImmune: You cannot gain HARMFUL conditions.",
+      "keywords": [
+        "TROOPER"
+      ],
+      "cost": 11,
+      "subCost": 4,
+      "health": 7,
+      "speed": 4,
+      "passives": [
+        "Efficient Travel"
+      ],
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "accuracy 2, damage 1",
+        "damage 1, weaken",
+        "focus"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Snowtrooper (Regular)": {
       "abilityText": "Traits: TROOPER. Attack (Range): blue, green. Defense: black. Surge: weaken. Surge: pierce 1. Surge: accuracy 2",
