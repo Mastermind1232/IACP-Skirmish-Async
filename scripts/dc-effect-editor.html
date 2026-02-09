@@ -200,33 +200,40 @@
         <div class="add-row">
           <select id="surgeSelect">
             <option value="">Add surge…</option>
-            <optgroup label="── Damage ──">
-              <option value="damage 1">+1 Damage</option>
-              <option value="damage 2">+2 Damage</option>
-              <option value="damage 1, accuracy 1">+1 Damage, +1 Accuracy</option>
-              <option value="damage 1, cleave 1">+1 Damage, Cleave 1</option>
-              <option value="damage 2, accuracy 1">+2 Damage, +1 Accuracy</option>
-              <option value="damage 1, accuracy 2">+1 Damage, +2 Accuracy</option>
-              <option value="damage 1, pierce 1">+1 Damage, Pierce 1</option>
+            <optgroup label="── Hits ──">
+              <option value="damage 1">+1 Hit</option>
+              <option value="damage 2">+2 Hits</option>
+              <option value="damage 1, accuracy 1">+1 Hit, +1 Accuracy</option>
+              <option value="damage 1, accuracy 2">+1 Hit, +2 Accuracy</option>
+              <option value="damage 1, cleave 1">+1 Hit, Cleave 1</option>
+              <option value="damage 1, pierce 1">+1 Hit, Pierce 1</option>
+              <option value="damage 1, weaken">+1 Hit, Weaken</option>
+              <option value="damage 2, accuracy 1">+2 Hits, +1 Accuracy</option>
+              <option value="damage 2, hide">+2 Hits, Hide</option>
             </optgroup>
             <optgroup label="── Accuracy ──">
               <option value="accuracy 1">+1 Accuracy</option>
               <option value="accuracy 2">+2 Accuracy</option>
               <option value="accuracy 3">+3 Accuracy</option>
+              <option value="accuracy 1, damage 1">+1 Accuracy, +1 Hit</option>
               <option value="accuracy 1, pierce 1">+1 Accuracy, Pierce 1</option>
+              <option value="accuracy 2, damage 1">+2 Accuracy, +1 Hit</option>
+              <option value="accuracy 2, damage 2">+2 Accuracy, +2 Hits</option>
               <option value="accuracy 2, pierce 1">+2 Accuracy, Pierce 1</option>
               <option value="accuracy 2, weaken">+2 Accuracy, Weaken</option>
-              <option value="accuracy 3, pierce 1">+3 Accuracy, Pierce 1</option>
-              <option value="accuracy 2, damage 1">+2 Accuracy, +1 Damage</option>
               <option value="accuracy 2, recover 1">+2 Accuracy, Recover 1</option>
+              <option value="accuracy 3, pierce 1">+3 Accuracy, Pierce 1</option>
             </optgroup>
             <optgroup label="── Pierce / Blast / Cleave ──">
               <option value="pierce 1">Pierce 1</option>
               <option value="pierce 2">Pierce 2</option>
               <option value="pierce 3">Pierce 3</option>
+              <option value="pierce 1, accuracy 2">Pierce 1, +2 Accuracy</option>
+              <option value="pierce 1, hide">Pierce 1, Hide</option>
               <option value="pierce 1, weaken">Pierce 1, Weaken</option>
               <option value="blast 1">Blast 1</option>
               <option value="blast 2">Blast 2</option>
+              <option value="blast 3 (2 surges)">Blast 3 (2 surges)</option>
               <option value="blast 1, cleave 1">Blast 1, Cleave 1</option>
               <option value="cleave 1">Cleave 1</option>
               <option value="cleave 2">Cleave 2</option>
@@ -238,19 +245,24 @@
               <option value="stun">Stun</option>
               <option value="weaken">Weaken</option>
               <option value="stun, pierce 1">Stun, Pierce 1</option>
+              <option value="stun, evade token">Stun, Evade Token</option>
               <option value="weaken, focus">Weaken, Focus</option>
+              <option value="hide">Hide</option>
             </optgroup>
-            <optgroup label="── Tokens / Recover ──">
+            <optgroup label="── Tokens / Recover / Movement ──">
               <option value="focus">Focus</option>
+              <option value="evade">Evade</option>
               <option value="hit token">Hit Token</option>
               <option value="hit token 2">2 Hit Tokens</option>
               <option value="block token">Block Token</option>
               <option value="Block 1">+1 Block</option>
+              <option value="block 2">+2 Block</option>
               <option value="evade token">Evade Token</option>
               <option value="recover 1">Recover 1</option>
               <option value="recover 2">Recover 2</option>
               <option value="recover 3">Recover 3</option>
               <option value="recover 1 block token">Recover 1 Block Token</option>
+              <option value="movement 2">+2 Movement</option>
             </optgroup>
           </select>
           <button type="button" id="surgeAdd" class="secondary-btn">Add</button>
@@ -434,25 +446,33 @@
     }
 
     const SURGE_LABELS = {
-      'damage 1': '+1 Damage', 'damage 2': '+2 Damage',
-      'damage 1, accuracy 1': '+1 Damage, +1 Accuracy', 'damage 1, cleave 1': '+1 Damage, Cleave 1',
-      'damage 2, accuracy 1': '+2 Damage, +1 Accuracy', 'damage 1, accuracy 2': '+1 Damage, +2 Accuracy',
-      'damage 1, pierce 1': '+1 Damage, Pierce 1',
+      'damage 1': '+1 Hit', 'damage 2': '+2 Hits',
+      'damage 1, accuracy 1': '+1 Hit, +1 Accuracy', 'damage 1, accuracy 2': '+1 Hit, +2 Accuracy',
+      'damage 1, cleave 1': '+1 Hit, Cleave 1', 'damage 1, pierce 1': '+1 Hit, Pierce 1',
+      'damage 1, weaken': '+1 Hit, Weaken',
+      'damage 2, accuracy 1': '+2 Hits, +1 Accuracy', 'damage 2, hide': '+2 Hits, Hide',
       'accuracy 1': '+1 Accuracy', 'accuracy 2': '+2 Accuracy', 'accuracy 3': '+3 Accuracy',
-      'accuracy 1, pierce 1': '+1 Accuracy, Pierce 1', 'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1',
-      'accuracy 2, weaken': '+2 Accuracy, Weaken', 'accuracy 3, pierce 1': '+3 Accuracy, Pierce 1',
-      'accuracy 2, damage 1': '+2 Accuracy, +1 Damage', 'accuracy 2, recover 1': '+2 Accuracy, Recover 1',
+      'accuracy 1, damage 1': '+1 Accuracy, +1 Hit', 'accuracy 1, pierce 1': '+1 Accuracy, Pierce 1',
+      'accuracy 2, damage 1': '+2 Accuracy, +1 Hit', 'accuracy 2, damage 2': '+2 Accuracy, +2 Hits',
+      'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1', 'accuracy 2, weaken': '+2 Accuracy, Weaken',
+      'accuracy 2, recover 1': '+2 Accuracy, Recover 1', 'accuracy 3, pierce 1': '+3 Accuracy, Pierce 1',
       'pierce 1': 'Pierce 1', 'pierce 2': 'Pierce 2', 'pierce 3': 'Pierce 3',
+      'pierce 1, accuracy 2': 'Pierce 1, +2 Accuracy', 'pierce 1, hide': 'Pierce 1, Hide',
       'pierce 1, weaken': 'Pierce 1, Weaken',
-      'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'blast 1, cleave 1': 'Blast 1, Cleave 1',
+      'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'blast 3 (2 surges)': 'Blast 3 (2 surges)',
+      'blast 1, cleave 1': 'Blast 1, Cleave 1',
       'cleave 1': 'Cleave 1', 'cleave 2': 'Cleave 2',
       'cancel 1': 'Cancel 1', 'cancel 2': 'Cancel 2',
-      'bleed': 'Bleed', 'stun': 'Stun', 'weaken': 'Weaken',
-      'stun, pierce 1': 'Stun, Pierce 1', 'weaken, focus': 'Weaken, Focus',
-      'focus': 'Focus', 'hit token': 'Hit Token', 'hit token 2': '2 Hit Tokens',
-      'block token': 'Block Token', 'Block 1': '+1 Block', 'evade token': 'Evade Token',
+      'bleed': 'Bleed', 'stun': 'Stun', 'weaken': 'Weaken', 'hide': 'Hide',
+      'stun, pierce 1': 'Stun, Pierce 1', 'stun, evade token': 'Stun, Evade Token',
+      'weaken, focus': 'Weaken, Focus',
+      'focus': 'Focus', 'evade': 'Evade',
+      'hit token': 'Hit Token', 'hit token 2': '2 Hit Tokens',
+      'block token': 'Block Token', 'Block 1': '+1 Block', 'block 2': '+2 Block',
+      'evade token': 'Evade Token',
       'recover 1': 'Recover 1', 'recover 2': 'Recover 2', 'recover 3': 'Recover 3',
       'recover 1 block token': 'Recover 1 Block Token',
+      'movement 2': '+2 Movement',
     };
     const DICE_LABELS = { red: 'Red', blue: 'Blue', yellow: 'Yellow', green: 'Green' };
     const DEFENSE_LABELS = { white: 'White', black: 'Black' };
