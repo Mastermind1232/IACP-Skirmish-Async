@@ -2962,21 +2962,125 @@
       "affiliation": "Imperial"
     },
     "Jabba the Hutt": {
-      "abilityText": "Traits: LEADER, SMUGGLER, HUNTER. Attack (Melee): red, green. Defense: black.",
-      "keywords": []
+      "abilityText": "Special Action (Bully): A figure of your choice within 3 spaces suffers 3 Damage.\n\nSpecial Action (Incentivize): An elite figure of your choice becomes Focused.\n\nSpecial Action (Scheme): Draw 1 Command card.\n\nDouble Action Special (Order Hit): Spend 2 VPs. An elite figure of your choice may interrupt to perform an attack. Then, it gains 2 movement points.\n\nNefarious Gains: When a hostile figure is defeated, gain 1 VP.",
+      "keywords": [
+        "LEADER",
+        "SMUGGLER",
+        "HUNTER"
+      ],
+      "subname": "VILE GANGSTER",
+      "cost": 6,
+      "health": 10,
+      "speed": 2,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "red"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Jarrod Kelvin": {
-      "abilityText": "Traits: BRAWLER, LEADER, SPY. Attack (Melee): yellow, yellow. Defense: black. Surge: cancel; damage 1. Surge: damage 2. Surge: pierce 2. Surge: powerdamage 1",
-      "keywords": []
+      "abilityText": "Special Action (Leaping Slash): Move up to 2 spaces, then perform an attack.\n\nDroid Master: At the start of a mission, put J4X-7 into play in an adjacent space. J4X-7 activates at the start or end of your activation. J4X-7 is not counted for the purposes of control.",
+      "keywords": [
+        "BRAWLER",
+        "LEADER",
+        "SPY"
+      ],
+      "cost": 5,
+      "health": 7,
+      "speed": 5,
+      "passives": [
+        "+1 Hit",
+        "+1 Evade"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "pierce 2",
+        "power token"
+      ],
+      "attachment": false,
+      "companion": "J4X-7",
+      "affiliation": "Rebel"
     },
     "Jawa Scavenger (Elite)": {
-      "abilityText": "Traits: SMUGGLER. Attack (Range): yellow, yellow. Defense: white. accuracy 2. Surge: damage 2. Surge: pierce 2. Surge: accuracy 2",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Surge (Bargain): Spend 1 VP to roll 1 green die. For each Hit result, gain 1 VP.\n\nTake Cover: While defending, you may apply +1 Block and -1 Evade to the defense results.\n\nScavenged Stock: If your army's affiliation is Scum, you may include up to 3 DROID groups from any other affiliations in your army.",
+      "keywords": [
+        "SMUGGLER",
+        "LEADER"
+      ],
+      "cost": 3,
+      "health": 5,
+      "speed": 4,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 2",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Jawa Scavenger (Regular)": {
-      "abilityText": "Traits: SMUGGLER. Attack (Range): yellow, yellow. Defense: white. accuracy 2. Surge: damage 2. Surge: accuracy 2",
-      "keywords": []
+      "abilityText": "Surge (Harass): After the attack resolves, if it did not miss, the defender suffers 1 Strain.\n\nTake Cover: While defending, you may apply +1 Block and -1 Evade to the defense results.",
+      "keywords": [
+        "SMUGGLER"
+      ],
+      "cost": 2,
+      "health": 3,
+      "speed": 4,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 2"
+      ],
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "Jet Trooper (Elite)": {
       "abilityText": "Traits: TROOPER, VEHICLE. Attack (Range): blue, green. Defense: black. MOBILE. Surge: damage 2. Surge: accuracy 3",
@@ -2986,9 +3090,11 @@
       "elite": true
     },
     "Jet Trooper (Regular)": {
-      "abilityText": "Traits: TROOPER, VEHICLE. Attack (Range): blue, green. Defense: black. MOBILE. Surge: damage 1. Surge: accuracy 2",
+      "abilityText": "Agile: While defending, you may convert 1 Block to 1 Evade.\n\nJets: After you resolve an attack, if the target space is within 2 spaces, gain 1 movement point.",
       "keywords": [
-        "Mobile"
+        "TROOPER",
+        "VEHICLE",
+        "MOBILE"
       ]
     },
     "Jyn Erso": {

@@ -6,11 +6,12 @@ alwaysApply: false
 
 # Updated card images: standard scope
 
-**Default (DC card updates):** When the user provides an updated card image for a DC, update **only** these three things:
+**Default (DC card updates):** When the user provides an updated card image for a DC, update **only** these four things:
 
 1. **Card image** — Copy to the correct path in `vassal_extracted/images/dc-figures/`, and update `dc-images.json` if the path or extension changes.
-2. **abilityText** — The full ability text from the card.
+2. **abilityText** — The full ability text from the card (include ability prefixes: Special Action, Double Action where the card shows arrows).
 3. **keywords** — The trait/keyword list (e.g. SMUGGLER, HUNTER).
+4. **Image upgraded tag** — Add the card name to `dc-image-upgrades.json` → `dc_figures` array so it shows the HIGH-RES IMAGE badge.
 
 **Do NOT update** cost, health, speed, figures, attack, defense, passives, surgeAbilities, subname, affiliation, elite, or any other fields.
 

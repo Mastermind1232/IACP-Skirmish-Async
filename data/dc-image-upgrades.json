@@ -1,7 +1,13 @@
 {
   "description": "Tracks which cards have had their images upgraded with better quality versions",
   "dc_figures": [
-    "ISB Infiltrator (Regular)"
+    "ISB Infiltrator (Regular)",
+    "Jabba the Hutt",
+    "Jarrod Kelvin",
+    "Jawa Scavenger (Elite)",
+    "Jawa Scavenger (Regular)",
+    "Jet Trooper (Elite)",
+    "Jet Trooper (Regular)"
   ],
   "dc_upgrades": [],
   "cc": [],
