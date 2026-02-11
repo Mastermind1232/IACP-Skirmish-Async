@@ -3430,16 +3430,67 @@
       "affiliation": "Rebel"
     },
     "Leia Organa": {
-      "abilityText": "Traits: LEADER, SPY. Attack (Range): blue, yellow, yellow. Defense: white. Surge: cancel 1. Surge: damage 2. Surge: recover 2. Surge: accuracy 3",
-      "keywords": [],
-      "attachment": false
+      "abilityText": "Special Action (Battlefield Leadership): Perform an attack, then choose another friendly figure within 3 spaces. That figure may interrupt to move up to 1 space and then perform an attack with the same target.\n\nMilitary Efficiency: After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck.",
+      "keywords": [
+        "FORCE USER",
+        "LEADER",
+        "SPY"
+      ],
+      "subname": "REBEL COMMANDER",
+      "cost": 8,
+      "health": 11,
+      "speed": 5,
+      "passives": [
+        "+1 Evade"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "yellow",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 3",
+        "recover 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Loku Kanoloa": {
       "abilityText": "Set Your Sights: At the start of the mission, place a Recon token on a unique hostile figure. While a friendly figure is attacking a figure with a Recon token, apply Pierce 1 to the attack results.\n\nPriority Target: Figures do not block line of sight for your attacks.\n\nMon Cala Special Forces: When you declare an attack targeting a figure with a Recon token, you become Focused.",
       "keywords": [
         "SPY",
         "HUNTER"
-      ]
+      ],
+      "subname": "DEADLY MARKSMAN",
+      "cost": 5,
+      "health": 8,
+      "speed": 5,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "red"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Loth-cat (Elite)": {
       "abilityText": "Special Action (Pounce): Place your figure in an empty space within 3 spaces. Then, you may perform an attack.\n\nSpecial Action (Fresh Catch): You or an adjacent CREATURE gains 1 Power Token.\n\nCurious: After you interact, suffer 1 Strain",
@@ -3472,13 +3523,17 @@
       "affiliation": "Scum"
     },
     "Loth-cat (Regular)": {
-      "abilityText": "Pierce 1. Surge: +1 Damage. Pounce: Place your figure in an empty space within 3 spaces. Then, you may perform an attack. Rat Catcher: You or an adjacent CREATURE gains 1 Block Token. Curious: After you interact, suffer 1 Strain.",
+      "abilityText": "Special Action (Pounce): Place your figure in an empty space within 3 spaces. Then, you may perform an attack. \n\nSpecial Action (Rat Catcher): You or an adjacent CREATURE gains 1 Block Token.\n\nCurious: After you interact, suffer 1 Strain.",
       "keywords": [
         "CREATURE"
       ],
       "cost": 4,
+      "subCost": 2,
       "health": 3,
       "speed": 4,
+      "passives": [
+        "Pierce 1"
+      ],
       "figures": 2,
       "attack": {
         "dice": [
@@ -3493,6 +3548,7 @@
       "surgeAbilities": [
         "damage 1"
       ],
+      "attachment": false,
       "affiliation": "Scum"
     },
     "Luke Skywalker": {
@@ -3529,7 +3585,7 @@
       "affiliation": "Rebel"
     },
     "Luke Skywalker (Jedi Knight)": {
-      "abilityText": "+1 Damage, +1 Block. Surge: +1 Damage. Surge: Pierce 3. Deflect: After a Ranged attack targeting you or an adjacent friendly figure resolves, a hostile figure of your choice in your line of sight suffers 1 Damage. Heroic: Once during your activation, you may perform an attack without spending an action.",
+      "abilityText": "Deflect: After a Ranged attack targeting you or an adjacent friendly figure resolves, a hostile figure of your choice in your line of sight suffers 1 Damage.\n\nHeroic: Once during your activation, you may perform an attack without spending an action.",
       "keywords": [
         "FORCE USER",
         "LEADER",
@@ -3537,12 +3593,12 @@
       ],
       "subname": "JEDI KNIGHT",
       "cost": 10,
-      "passives": [
-        "damage 1",
-        "Block 1"
-      ],
       "health": 16,
       "speed": 4,
+      "passives": [
+        "+1 Hit",
+        "+1 Evade"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3595,7 +3651,7 @@
       "affiliation": "Rebel"
     },
     "Mara Jade": {
-      "abilityText": "Adaptive Skills: Your affiliation matches your army's affiliation. You gain 1 of the following traits based on your army's affiliation: Imperial: Hunter | Scum: Smuggler | Rebel: Guardian.\n\nFast Learner: Once per round, you may play a Command card whose restriction matches the name of another Deployment card in your army, except \"Arcing Shot\".\n\nProfessional: While attacking, you may reroll 1 attack die.",
+      "abilityText": "Adaptive Skills: Your affiliation matches your army's affiliation. You gain 1 of the following traits based on your army's affiliation: \n- IMPERIAL: HUNTER \n- SCUM: SMUGGLER\n- REBEL: GUARDIAN\n\nFast Learner: Once per round, you may play a Command card whose restriction matches the name of another Deployment card in your army, except \"Arcing Shot\".\n\nProfessional: While attacking, you may reroll 1 attack die.",
       "keywords": [
         "FORCE USER",
         "BRAWLER"
@@ -3608,6 +3664,7 @@
       "attack": {
         "dice": [
           "blue",
+          "red",
           "red"
         ],
         "type": "melee"
@@ -3620,12 +3677,40 @@
         "pierce 3"
       ],
       "attachment": false,
-      "affiliation": "Any",
-      "elite": true
+      "elite": true,
+      "affiliation": "Any"
     },
     "Maul": {
-      "abilityText": "Traits: FORCE USER, BRAWLER. Attack (Melee): red, yellow. Defense: black. damage 1. Surge: pierce 3",
-      "keywords": []
+      "abilityText": "+1 Evade. Surge: Pierce 3. Dual-Bladed Fury: Before you declare an attack, choose one: This attack gains Reach and Cleave 2 or you become Focused. Surge (Stalk Prey): After this attack resolves, you gain 2 movement points and 1 Block Token. Sustained by Rage: You cannot recover Damage. If you have not resolved an activation this round, you cannot be defeated.",
+      "keywords": [
+        "FORCE USER",
+        "BRAWLER"
+      ],
+      "subname": "SEEKER OF VENGEANCE",
+      "cost": 6,
+      "health": 12,
+      "speed": 4,
+      "figures": 1,
+      "passives": [
+        "+1 Evade"
+      ],
+      "attack": {
+        "dice": [
+          "red",
+          "red",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "pierce 3"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "MHD-19": {
       "abilityText": "Traits: DROID. Attack (Range): blue, yellow. Defense: black. Surge: focus. Surge: damage 1. Surge: recover 2",
