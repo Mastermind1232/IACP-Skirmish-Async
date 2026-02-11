@@ -50,6 +50,7 @@
     #attackDiceList .chip[data-value="blue"] { background: #36a; color: #fff; border: 1px solid #258; }
     #attackDiceList .chip[data-value="yellow"] { background: #d9a20e; color: #1a1a1a; border: 1px solid #a67a08; }
     #attackDiceList .chip[data-value="green"] { background: #2a7a2a; color: #fff; border: 1px solid #1a5a1a; }
+    #attackDiceList .chip[data-value="special"] { background: #6a4a8a; color: #fff; border: 1px solid #4a2a6a; }
     #defenseList .chip[data-value="white"] { background: #e8e8e8; color: #222; border: 1px solid #aaa; }
     #defenseList .chip[data-value="black"] { background: #333; color: #eee; border: 1px solid #555; }
     #attackDiceList .chip[data-value="yellow"] button, #defenseList .chip[data-value="white"] button { color: #333; }
@@ -181,6 +182,7 @@
             <option value="blue">Blue</option>
             <option value="yellow">Yellow</option>
             <option value="green">Green</option>
+            <option value="special">Special</option>
           </select>
           <button type="button" id="attackDiceAdd" class="secondary-btn">Add</button>
         </div>
@@ -257,6 +259,7 @@
             </optgroup>
             <optgroup label="── Tokens / Recover / Movement ──">
               <option value="focus">Focus</option>
+              <option value="surge 1">+1 Surge</option>
               <option value="evade">Evade</option>
               <option value="hit token">Hit Token</option>
               <option value="hit token 2">2 Hit Tokens</option>
@@ -506,7 +509,7 @@
       'bleed': 'Bleed', 'stun': 'Stun', 'weaken': 'Weaken', 'hide': 'Hide',
       'stun, pierce 1': 'Stun, Pierce 1', 'stun, evade token': 'Stun, Evade Token',
       'weaken, focus': 'Weaken, Focus',
-      'focus': 'Focus', 'evade': 'Evade',
+      'focus': 'Focus', 'surge 1': '+1 Surge', 'evade': 'Evade',
       'hit token': 'Hit Token', 'hit token 2': '2 Hit Tokens',
       'block token': 'Block Token', 'Block 1': '+1 Block', 'block 2': '+2 Block',
       'evade token': 'Evade Token',
@@ -514,7 +517,7 @@
       'recover 1 block token': 'Recover 1 Block Token',
       'movement 2': '+2 Movement',
     };
-    const DICE_LABELS = { red: 'Red', blue: 'Blue', yellow: 'Yellow', green: 'Green' };
+    const DICE_LABELS = { red: 'Red', blue: 'Blue', yellow: 'Yellow', green: 'Green', special: 'Special' };
     const DEFENSE_LABELS = { white: 'White', black: 'Black' };
 
     attackDiceAddBtn.addEventListener('click', () => {
