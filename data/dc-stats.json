@@ -27,6 +27,7 @@
     "Purge Trooper (Elite)": { "health": 8, "figures": 1, "speed": 4, "cost": 4, "specials": [], "attack": { "dice": ["red"], "range": [1, 2] }, "defense": "white" },
     "Echo Base Trooper (Elite)": { "health": 6, "figures": 2, "speed": 4, "cost": 8, "specials": [], "attack": { "dice": ["red", "blue", "green"], "range": [2, 4] }, "defense": "black" },
     "Echo Base Trooper (Regular)": { "health": 5, "figures": 1, "speed": 4, "cost": 6, "specials": [], "attack": { "dice": ["red", "blue", "green"], "range": [2, 4] }, "defense": "black" },
-    "Fennec Shand": { "health": 8, "figures": 1, "speed": 5, "cost": 5, "specials": [], "attack": { "dice": ["blue", "blue", "blue"], "range": [2, 5] }, "defense": "white" }
+    "Fennec Shand": { "health": 8, "figures": 1, "speed": 5, "cost": 5, "specials": [], "attack": { "dice": ["blue", "blue", "blue"], "range": [2, 5] }, "defense": "white" },
+    "Gamorrean Guard (Elite)": { "health": 8, "figures": 1, "speed": 4, "cost": 7, "specials": [], "attack": { "dice": ["red", "red"], "range": [1, 2] }, "defense": "white" }
   }
 }
