@@ -1988,13 +1988,64 @@
       "affiliation": "Imperial"
     },
     "Echo Base Trooper (Elite)": {
-      "abilityText": "Traits: BRAWLER, WOOKIEE. Attack (Range): blue, green. Defense: black. Surge: damage 2. Surge: accuracy 3",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Front Line: While attacking, if the target is within 3 spaces of you, you may replace 1 blue die in your attack pool with 1 red die.\n\nCortosis Weave: While you are defending, you may reduce the Pierce value of the attack results by 2, to a minimum of 0.",
+      "keywords": [
+        "TROOPER"
+      ],
+      "cost": 7,
+      "subCost": 4,
+      "health": 8,
+      "speed": 4,
+      "passives": [
+        "+2 Accuracy",
+        "Efficient Travel"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 2, pierce 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Echo Base Trooper (Regular)": {
-      "abilityText": "Traits: BRAWLER, WOOKIEE. Attack (Range): blue, green. Defense: black. Surge: damage 2. Surge: accuracy 3",
-      "keywords": []
+      "abilityText": "Front Line: While attacking, if the target is within 3 spaces of you, you may replace 1 blue die in your attack pool with 1 red die.\n\nEfficient Travel: You ignore additional movement point costs for difficult terrain and hostile figures.",
+      "keywords": [
+        "TROOPER"
+      ],
+      "cost": 6,
+      "subCost": 3,
+      "health": 5,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "accuracy 2"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Emperor Palpatine": {
       "abilityText": "Emperor: Once during your activation, you may choose another figure within 4 spaces. That figure interrupts to perform an attack.\n\nTempt: At the start of your activation, a figure of your choice suffers 1 Damage and gains 1 Hit Token.\n\nSpecial Action (Force Lightning): Choose a figure within 4 spaces and line of sight. That figure suffers 3 Damage and becomes Weakened. Each figure adjacent to that figure suffers 1 Damage.",

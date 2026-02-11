@@ -24,6 +24,9 @@
     "Royal Guard Champion": { "health": 8, "figures": 1, "speed": 4, "cost": 8, "specials": [], "attack": { "dice": ["yellow"], "range": [1, 2] }, "defense": "white" },
     "Boba Fett": { "health": 12, "figures": 1, "speed": 4, "cost": 12, "specials": ["Jetpack"], "attack": { "dice": ["red", "yellow"], "range": [2, 4] }, "defense": "white" },
     "IG-88": { "health": 10, "figures": 1, "speed": 5, "cost": 10, "specials": ["Relentless"], "attack": { "dice": ["red", "blue"], "range": [2, 5] }, "defense": "white" },
-    "Purge Trooper (Elite)": { "health": 8, "figures": 1, "speed": 4, "cost": 4, "specials": [], "attack": { "dice": ["red"], "range": [1, 2] }, "defense": "white" }
+    "Purge Trooper (Elite)": { "health": 8, "figures": 1, "speed": 4, "cost": 4, "specials": [], "attack": { "dice": ["red"], "range": [1, 2] }, "defense": "white" },
+    "Echo Base Trooper (Elite)": { "health": 6, "figures": 2, "speed": 4, "cost": 8, "specials": [], "attack": { "dice": ["red", "blue", "green"], "range": [2, 4] }, "defense": "black" },
+    "Echo Base Trooper (Regular)": { "health": 5, "figures": 1, "speed": 4, "cost": 6, "specials": [], "attack": { "dice": ["red", "blue", "green"], "range": [2, 4] }, "defense": "black" },
+    "Fennec Shand": { "health": 8, "figures": 1, "speed": 5, "cost": 5, "specials": [], "attack": { "dice": ["blue", "blue", "blue"], "range": [2, 5] }, "defense": "white" }
   }
 }

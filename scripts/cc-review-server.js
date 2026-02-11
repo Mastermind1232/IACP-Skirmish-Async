@@ -226,7 +226,10 @@ const server = createServer(async (req, res) => {
   if (req.method === 'POST' && pathname === '/api/save-dc-image') {
     const q = (req.url || '').split('?')[1] || '';
     const nameParam = q.split('&').find((p) => p.startsWith('name='));
-    const cardName = nameParam ? decodeURIComponent(nameParam.replace('name=', '').trim()) : '';
+    let cardName = '';
+    if (nameParam) {
+      cardName = decodeURIComponent(nameParam.replace(/^name=/, '').trim().replace(/\+/g, ' '));
+    }
     if (!cardName) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: false, error: 'Missing name parameter' }));
@@ -270,36 +273,51 @@ const server = createServer(async (req, res) => {
         }
       }
     }
-    if (!relPath) {
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: false, error: 'Card has no image path in dc-images or companion-images' }));
-      return;
+    let dirRel;
+    let baseName;
+    let newRelPath;
+    if (relPath) {
+      const relParts = relPath.split('/');
+      dirRel = relParts.slice(0, -1).join('/');
+      const baseWithExt = relParts[relParts.length - 1];
+      baseName = baseWithExt.replace(/\.[^.]+$/, '');
+      newRelPath = dirRel + '/' + baseName + ext;
+    } else {
+      const safeFilename = (s) => (s || '').replace(/[/\\?*:|"]/g, '_').trim() || 'card';
+      if (cardName.startsWith('[') && cardName.endsWith(']')) {
+        dirRel = 'vassal_extracted/images/DC Skirmish Upgrades';
+        baseName = safeFilename(innerName);
+      } else {
+        dirRel = 'vassal_extracted/images/dc-figures';
+        baseName = safeFilename(cardName);
+      }
+      newRelPath = dirRel + '/' + baseName + ext;
     }
-    const relParts = relPath.split('/');
-    const dirRel = relParts.slice(0, -1).join('/');
-    const baseWithExt = relParts[relParts.length - 1];
-    const baseName = baseWithExt.replace(/\.[^.]+$/, '');
-    const newRelPath = dirRel + '/' + baseName + ext;
     const filePath = join(root, ...newRelPath.split('/'));
     try {
       mkdirSync(join(root, dirRel), { recursive: true });
       writeFileSync(filePath, buf);
       const dcDataPath = join(root, 'data', 'dc-images.json');
       const compPath = join(root, 'data', 'companion-images.json');
-      const keyInDc = Object.entries(dcImages).find(([, v]) => v === relPath)?.[0];
-      const keyInComp = Object.entries(companionImages).find(([, v]) => v === relPath)?.[0];
-      if (newRelPath !== relPath) {
-        if (keyInDc) {
-          const dcData = JSON.parse(readFileSync(dcDataPath, 'utf8'));
-          dcData.dcImages = dcData.dcImages || {};
-          dcData.dcImages[keyInDc] = newRelPath;
-          writeFileSync(dcDataPath, JSON.stringify(dcData, null, 2), 'utf8');
-        } else if (keyInComp) {
-          const compData = JSON.parse(readFileSync(compPath, 'utf8'));
-          compData.companionImages = compData.companionImages || {};
-          compData.companionImages[keyInComp] = newRelPath;
-          writeFileSync(compPath, JSON.stringify(compData, null, 2), 'utf8');
-        }
+      const keyInDc = relPath ? Object.entries(dcImages).find(([, v]) => v === relPath)?.[0] : null;
+      const keyInComp = relPath ? Object.entries(companionImages).find(([, v]) => v === relPath)?.[0] : null;
+      const shouldUpdateDc = keyInDc && newRelPath !== relPath;
+      const shouldAddNewCard = !relPath;
+      if (shouldUpdateDc) {
+        const dcData = JSON.parse(readFileSync(dcDataPath, 'utf8'));
+        dcData.dcImages = dcData.dcImages || {};
+        dcData.dcImages[keyInDc] = newRelPath;
+        writeFileSync(dcDataPath, JSON.stringify(dcData, null, 2), 'utf8');
+      } else if (keyInComp && newRelPath !== relPath) {
+        const compData = JSON.parse(readFileSync(compPath, 'utf8'));
+        compData.companionImages = compData.companionImages || {};
+        compData.companionImages[keyInComp] = newRelPath;
+        writeFileSync(compPath, JSON.stringify(compData, null, 2), 'utf8');
+      } else if (shouldAddNewCard) {
+        const dcData = JSON.parse(readFileSync(dcDataPath, 'utf8'));
+        dcData.dcImages = dcData.dcImages || {};
+        dcData.dcImages[cardName] = newRelPath;
+        writeFileSync(dcDataPath, JSON.stringify(dcData, null, 2), 'utf8');
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true }));
