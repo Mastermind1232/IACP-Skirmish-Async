@@ -8,6 +8,7 @@ When entering Deployment Card ability text in `dc-effects.json` (via the DC Effe
 
 - **Use full card text** — Type out passives, abilities, and trait text as printed on the card.
 - **Keywords in ALL CAPS** — Put keywords (e.g. MASSIVE, MOBILE) in all caps so they stand out and are easy to parse later.
+- **Ranged and Melee** — Always capitalize when used in ability text: "Ranged attack", "Melee attack", "during a Ranged attack", etc.
 
 ## Keywords field
 

@@ -2290,7 +2290,7 @@
       "passives": [
         "Reach"
       ],
-      "figures": 1,
+      "figures": 2,
       "attack": {
         "dice": [
           "red",
@@ -2299,7 +2299,7 @@
         "type": "melee"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "cleave 2"
@@ -2309,7 +2309,7 @@
       "affiliation": "Scum"
     },
     "Gar Saxon": {
-      "abilityText": "Airborne Commander: Friendly Mobile figures within 4 spaces can use your surge abilities.\n\nPersonal Combat Shield: Whenever you spend a Block while defending, apply +1 Block to the defense results.\n\nSpecial Action (Gar Saxon's Flamethrower): Choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain and discards 1 Power Token.",
+      "abilityText": "Airborne Commander: Friendly Mobile figures within 4 spaces can use your surge abilities.\n\nPersonal Combat Shield: Whenever you spend a Block while defending, apply +1 Evade to the defense results.\n\nSpecial Action (Gar Saxon's Flamethrower): Choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain and discards 1 Power Token.",
       "keywords": [
         "TROOPER",
         "VEHICLE",
@@ -2319,6 +2319,10 @@
       "cost": 6,
       "health": 9,
       "speed": 4,
+      "passives": [
+        "Mobile",
+        "+1 Hit"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2331,21 +2335,43 @@
       "defense": [
         "black"
       ],
-      "passives": [
-        "Mobile"
-      ],
       "surgeAbilities": [
-        "surge",
         "accuracy 2",
-        "evade token"
+        "block token",
+        "damage 1"
       ],
       "attachment": false,
       "elite": true,
       "affiliation": "Scum"
     },
     "General Sorin": {
-      "abilityText": "Traits: LEADER. Attack (Range): blue, yellow. Defense: black. Surge: pierce 1. Surge: stun. Surge: focus",
-      "keywords": []
+      "abilityText": "Special Action (Bombardment): Choose an adjacent friendly figure. That figure may interrupt to perform an attack. The attack gains Blast 1.\n\nAdvanced Firepower: Adjacent friendly DROIDS and VEHICLES can use your surge abilities.",
+      "keywords": [
+        "LEADER"
+      ],
+      "subname": "VICIOUS TACTICIAN",
+      "cost": 5,
+      "health": 7,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "focus",
+        "stun"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "General Weiss": {
       "abilityText": "General's Orders: At the start of your activation choose up to 2 other friendly figures on the map. Those figures may each interrupt to perform a move.\n\nEpic Arsenal: Your attack pool consists of any combination of 3 attack dice. You cannot roll more than 2 dice of a single color.",
@@ -2353,16 +2379,17 @@
         "VEHICLE",
         "LEADER",
         "HEAVY WEAPON",
-        "Massive"
+        "MASSIVE"
       ],
       "subname": "FIELD COMMANDER",
       "cost": 13,
       "health": 15,
       "speed": 4,
-      "figures": 1,
       "passives": [
-        "+2 Accuracy"
+        "+2 Accuracy",
+        "Massive"
       ],
+      "figures": 1,
       "attack": {
         "dice": [
           "any",
@@ -2372,16 +2399,16 @@
         "type": "range"
       },
       "defense": [
-        "white",
-        "white"
+        "black",
+        "black"
       ],
       "surgeAbilities": [
         "blast 3 (2 surges)",
         "pierce 2"
       ],
       "attachment": false,
-      "affiliation": "Imperial",
-      "elite": true
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Gideon Argus": {
       "abilityText": "Special Action (Tactical Maneuver): Choose another friendly figure in your line of sight. That figure gains 2 movement points.\n\nSpecial Action (On My Mark): Choose another friendly figure in your line of sight. That figure becomes Focused.",

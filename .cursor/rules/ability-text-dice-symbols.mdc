@@ -30,7 +30,7 @@ When editing `abilityText` or `effect` in DC/CC data, **never leave a dice resul
 
 ## When you are 100% sure (reading guidance)
 
-1. **Defense die:** White vs black are different; confirm from the card.
+1. **Defense die (CRITICAL — do not mix up):** White and black are different and affect gameplay. **Never infer defense die from faction** (e.g. do not assume Imperial = black or Rebel = white). Read the actual die icon on the card: **white** = lighter/white die symbol in the Defense stat, **black** = dark/black die symbol. If the image description explicitly says "white defense die" or "black defense die" (or "white square", "black square" for the die icon), use that literally and do not swap. When uncertain, mark "?" and ask the user — do not guess. Mixing white and black is a common error; always double-check this field.
 2. **Stat bar: passives vs surges (CRITICAL — read the prefix symbol):**
    - Items in the stat bar that have a **surge symbol (⟋) prefix** = **surge abilities** → go in `surgeAbilities`
    - Items in the stat bar with **NO prefix symbol** = **passives** → go in `passives`
@@ -68,7 +68,7 @@ CARD: [Card Name]
 - Blue/green confusion check: confirmed ___ (not ___)
 - Yellow die check: present / not present / double-checked
 - Attack type icon: melee (fist) / ranged (blaster) — confirmed
-- Defense die: white / black — confirmed
+- Defense die: white / black — confirmed (read from card; do NOT infer from faction)
 - Health: ___
 - Speed: ___
 - Cost: ___
@@ -103,3 +103,4 @@ CARD: [Card Name]
 - **Heavy Weapon** — Always two words with a space. Never "HeavyWeapon" or "HEAVYWEAPON" in text; use "HEAVY WEAPON" (or "Heavy Weapon" where title case applies).
 - **Force User** — Always two words with a space. Never "ForceUser" or "FORCEUSER"; use "FORCE USER" (or "Force User" where title case applies).
 - **Power Token** — Always capitalized (both words). Even if the card uses lowercase, in our data use "Power Token". Never "power token" or "Power token".
+- **Ranged and Melee** — When referring to attack type in ability text or display, always capitalize: **Ranged**, **Melee**. Use "Ranged attack", "Melee attack", "during a Ranged attack", etc. (The internal `attack.type` value in JSON stays lowercase `"range"` / `"melee"`.)
