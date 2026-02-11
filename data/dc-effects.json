@@ -3681,7 +3681,7 @@
       "affiliation": "Any"
     },
     "Maul": {
-      "abilityText": "+1 Evade. Surge: Pierce 3. Dual-Bladed Fury: Before you declare an attack, choose one: This attack gains Reach and Cleave 2 or you become Focused. Surge (Stalk Prey): After this attack resolves, you gain 2 movement points and 1 Block Token. Sustained by Rage: You cannot recover Damage. If you have not resolved an activation this round, you cannot be defeated.",
+      "abilityText": "Dual-Bladed Fury: Before you declare an attack, choose one:\n- This attack gains Reach and Cleave 2\n- You become Focused.\n\nSurge (Stalk Prey): After this attack resolves, you gain 2 movement points and 1 Hit Token.\n\nSustained by Rage: You cannot recover Damage. If you have not resolved an activation this round, you cannot be defeated.",
       "keywords": [
         "FORCE USER",
         "BRAWLER"
@@ -3690,20 +3690,19 @@
       "cost": 6,
       "health": 12,
       "speed": 4,
-      "figures": 1,
       "passives": [
-        "+1 Evade"
+        "+1 Hit"
       ],
+      "figures": 1,
       "attack": {
         "dice": [
-          "red",
           "red",
           "yellow"
         ],
         "type": "melee"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "pierce 3"
@@ -3713,8 +3712,10 @@
       "affiliation": "Scum"
     },
     "MHD-19": {
-      "abilityText": "Traits: DROID. Attack (Range): blue, yellow. Defense: black. Surge: focus. Surge: damage 1. Surge: recover 2",
-      "keywords": []
+      "abilityText": "Special Action (Medical Loadout): You or an adjacent friendly figure recovers 3 Damage.\n\nSpecial Action (Improper Procedure): Choose an adjacent hostile figure. That figure suffers 1 Strain and becomes Weakened.",
+      "keywords": [
+        "DROID"
+      ]
     },
     "Migs Mayfeld": {
       "abilityText": "TBD (IACP – verify from card).",

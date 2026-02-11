@@ -9,7 +9,7 @@ alwaysApply: false
 **Default (DC card updates):** When the user provides an updated card image for a DC, update **only** these four things:
 
 1. **Card image** — Copy to the correct path in `vassal_extracted/images/dc-figures/`, and update `dc-images.json` if the path or extension changes.
-2. **abilityText** — The full ability text from the card (include ability prefixes: Special Action, Double Action where the card shows arrows).
+2. **abilityText** — **Only** the named abilities from the main text box. Do NOT include stat bar content (passives, surge abilities) — those go in `passives` and `surgeAbilities`. Separate each ability with `\n\n`. Include ability prefixes (Special Action, Double Action, Surge) where the card shows them.
 3. **keywords** — The trait/keyword list (e.g. SMUGGLER, HUNTER).
 4. **Image upgraded tag** — Add the card name to `dc-image-upgrades.json` → `dc_figures` array so it shows the HIGH-RES IMAGE badge.
 
@@ -67,8 +67,12 @@ When editing `abilityText` or `effect` in DC/CC data, **never leave a dice resul
    - Common surges: "⟋: +2 Hits", "⟋: Pierce 3", "⟋: +1 Hit, Hide"
    - If no passives exist, do not add `passives` at all. If no surges exist, do not add `surgeAbilities` at all.
 3. **Recover: Damage vs tokens:** Recover Damage (heart) = `recover 1`. Recover Block Token (shield) = `recover 1 block token`. Read the symbol.
-4. **Ability text:** Spell out dice/symbol names (Hit, Surge, Focus, etc.) as in the first section above.
-5. **Ability prefix check (mandatory per-ability — check ALL prefix types):** For **every** named ability on the card, check whether it has ANY prefix symbol. This check must happen for **each ability individually** — do not batch-skip it. **This applies to ALL cards you touch, even ones with pre-existing data — always re-verify prefixes.**
+4. **abilityText structure (CRITICAL — do not mix stat bar with abilities):**
+   - `abilityText` = **only** the named abilities from the main text box (e.g. "Dual-Bladed Fury:", "Surge (Stalk Prey):", "Sustained by Rage:"). Each ability on its own paragraph, separated by `\n\n`.
+   - **Never** put stat bar content in `abilityText`: no "+1 Evade", "Pierce 1", "Surge: Pierce 3", "Surge: +2 Damage", etc. Those belong in `passives` and `surgeAbilities` arrays.
+   - Named surge abilities (e.g. "Surge (Stalk Prey): After this attack resolves...") **do** go in `abilityText` because they have full rules text. Simple stat-bar surges (e.g. "Surge: Pierce 3") go only in `surgeAbilities`.
+5. **Ability text:** Spell out dice/symbol names (Hit, Surge, Focus, etc.) as in the first section above.
+6. **Ability prefix check (mandatory per-ability — check ALL prefix types):** For **every** named ability on the card, check whether it has ANY prefix symbol. This check must happen for **each ability individually** — do not batch-skip it. **This applies to ALL cards you touch, even ones with pre-existing data — always re-verify prefixes.**
    - **⇒ (Special Action icon)** = costs 1 action → format: **Special Action (Ability Name):**
      - Visually: a double-triangle / connected-arrow icon (◄►) — this is ONE symbol meaning ONE special action, not two separate arrows. If you see this icon before an ability name, it is ALWAYS a Special Action.
    - **⇒⇒ (2 of the above icon)** = costs 2 actions → format: **Double Action (Ability Name):**
@@ -77,10 +81,10 @@ When editing `abilityText` or `effect` in DC/CC data, **never leave a dice resul
    - **NEVER** write "Special Action Special Action" — that is always wrong.
    - **Abilities with NO prefix symbol** are passive/triggered abilities — just write **Ability Name:**
    - Movement abilities (e.g. "Lift Off", "Jump", "Fly") are especially likely to be special actions — double-check these. If you are not 100% sure, list it in uncertainties.
-6. **Tokens/symbols:** Surge (starburst) ≠ Focus (focus token) ≠ Power Token. **Question mark on a token background** = generic **Power Token** (player chooses any: Block, Hit, Surge, Evade, etc.). Write "gain 1 Power Token". Read the actual symbol.
-7. **Elite flag:** Check the **cost number color**. Red = elite → add `"elite": true`. Grey/white = not elite → do not add the field. ALL unique characters with red cost numbers are elite. ALL "(Elite)" group cards are elite.
-8. **Figure count from notches:** Below the cost number on the left edge, count the small notch marks. Red notches = elite, grey notches = regular. Number of notches = number of figures. Always check and record this.
-9. **New surge combos:** If a card has a surge combination not yet in the editor dropdown, add it to both the `<option>` list and `SURGE_LABELS` in `dc-effect-editor.html`. Use "Hit" not "Damage" in display labels.
+7. **Tokens/symbols:** Surge (starburst) ≠ Focus (focus token) ≠ Power Token. **Question mark on a token background** = generic **Power Token** (player chooses any: Block, Hit, Surge, Evade, etc.). Write "gain 1 Power Token". Read the actual symbol.
+8. **Elite flag:** Check the **cost number color**. Red = elite → add `"elite": true`. Grey/white = not elite → do not add the field. ALL unique characters with red cost numbers are elite. ALL "(Elite)" group cards are elite.
+9. **Figure count from notches:** Below the cost number on the left edge, count the small notch marks. Red notches = elite, grey notches = regular. Number of notches = number of figures. Always check and record this.
+10. **New surge combos:** If a card has a surge combination not yet in the editor dropdown, add it to both the `<option>` list and `SURGE_LABELS` in `dc-effect-editor.html`. Use "Hit" not "Damage" in display labels.
 
 ## Mandatory visible checklist (output to user for EVERY card)
 
