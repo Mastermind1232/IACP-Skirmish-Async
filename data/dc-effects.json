@@ -3715,15 +3715,22 @@
       "abilityText": "Special Action (Medical Loadout): You or an adjacent friendly figure recovers 3 Damage.\n\nSpecial Action (Improper Procedure): Choose an adjacent hostile figure. That figure suffers 1 Strain and becomes Weakened.",
       "keywords": [
         "DROID"
-      ]
+      ],
+      "attachment": false
     },
     "Migs Mayfeld": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Locked and Loaded: You may have up to 3 Power Tokens. After you resolve an attack, gain 2 Power Tokens.\n\nDroid Arm: Before you declare an attack, you may discard a Power Token to draw line of sight to the target from a space adjacent to you.\n\nReturn Fire: After an attack targeting you is resolved, you can interrupt to perform an attack targeting that attacker. Limit once per round.",
+      "keywords": [
+        "SMUGGLER",
+        "TROOPER"
+      ]
     },
     "Murne Rin": {
-      "abilityText": "Traits: SPY, LEADER. Attack (Range): blue, yellow. Defense: black. Surge: damage 2. Surge: accuracy 2",
-      "keywords": []
+      "abilityText": "Surge (False Orders): Choose a hostile figure with a figure cost of 4 or less within 4 spaces. Perform a move or attack with that figure.\n\nDouble Action (Field Report): Choose up to 2 friendly figures within 4 spaces with 2 or less attack dice in their printed attack pool. The chosen figures become Hidden.\n\nFigurehead: Before a friendly figure within 4 spaces suffers Damage, you may suffer 1 Strain to prevent 1 of that Damage.",
+      "keywords": [
+        "LEADER",
+        "SPY"
+      ]
     },
     "Nexu (Elite)": {
       "abilityText": "Traits: CREATURE, BRAWLER. Attack (Melee): red, green. Defense: white. MOBILE. bleed. cleave 2. Surge: damage 2",
