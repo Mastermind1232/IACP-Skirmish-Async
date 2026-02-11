@@ -102,6 +102,10 @@
       <div class="placeholder" id="cardImgPlaceholder">Select a card</div>
       <img id="cardImg" alt="" style="display:none">
       <div id="imgUpgradeBadge" style="display:none;width:100%;background:#0dcaf0;color:#000;font-weight:bold;text-align:center;padding:6px 0;font-size:13px;border-radius:0 0 6px 6px;letter-spacing:0.5px;">HIGH-RES IMAGE</div>
+      <div style="margin-top:8px; width:100%;">
+        <button type="button" id="pasteImageBtn" class="secondary-btn" style="width:100%;">Paste image from clipboard</button>
+        <span class="hint" style="display:block; margin-top:4px; font-size:11px;">Copy a card image (e.g. screenshot), select the card above, then click to save as this card&apos;s image.</span>
+      </div>
     </div>
     <div class="form-wrap">
   <div class="form-columns">
@@ -337,6 +341,7 @@
     <button id="verifyBtn" class="verified">VERIFIED</button>
     <button id="imgUpgradeBtn" class="export" style="background:#0dcaf0;color:#000;">IMG UPGRADED</button>
   </div>
+  <p id="pasteImageStatus" class="hint" style="margin-top:6px; min-height:18px;"></p>
     </div>
     </div>
   </div>
@@ -807,6 +812,54 @@
       badge.style.display = isImageUpgraded(name) ? 'block' : 'none';
     });
 
+    document.getElementById('pasteImageBtn').addEventListener('click', async () => {
+      const name = (cardName.value || cardSelect.value || '').trim();
+      const statusEl = document.getElementById('pasteImageStatus');
+      if (!name) {
+        statusEl.textContent = 'Select a card first.';
+        return;
+      }
+      statusEl.textContent = 'Reading clipboard…';
+      let blob = null;
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          if (item.types.includes('image/png')) {
+            blob = await item.getType('image/png');
+            break;
+          }
+          if (item.types.includes('image/jpeg')) {
+            blob = await item.getType('image/jpeg');
+            break;
+          }
+        }
+      } catch (e) {
+        statusEl.textContent = 'Clipboard access denied or no image. Copy an image first, then try again.';
+        return;
+      }
+      if (!blob) {
+        statusEl.textContent = 'No image in clipboard. Copy a card image (e.g. screenshot), then click again.';
+        return;
+      }
+      statusEl.textContent = 'Saving…';
+      try {
+        const r = await fetch('/api/save-dc-image?name=' + encodeURIComponent(name), {
+          method: 'POST',
+          body: blob,
+          headers: { 'Content-Type': blob.type },
+        });
+        const j = await r.json().catch(() => ({}));
+        if (j.ok) {
+          statusEl.textContent = 'Image updated.';
+          updateCardImage();
+          setTimeout(() => { statusEl.textContent = ''; }, 3000);
+        } else {
+          statusEl.textContent = j.error || 'Save failed (' + r.status + ').';
+        }
+      } catch (e) {
+        statusEl.textContent = 'Save failed: ' + e.message + '. Is npm run cc-review running?';
+      }
+    });
 
     function render() {
       updateCardSelect();

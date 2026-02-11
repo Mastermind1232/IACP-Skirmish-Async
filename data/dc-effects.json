@@ -1948,7 +1948,7 @@
         "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "damage 2",
@@ -1965,10 +1965,10 @@
       "cost": 6,
       "health": 5,
       "speed": 2,
-      "figures": 1,
       "passives": [
         "+3 Accuracy"
       ],
+      "figures": 1,
       "attack": {
         "dice": [
           "blue",
@@ -1978,7 +1978,7 @@
         "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "recover 2",

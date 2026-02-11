@@ -222,6 +222,94 @@ const server = createServer(async (req, res) => {
     }
     return;
   }
+
+  if (req.method === 'POST' && pathname === '/api/save-dc-image') {
+    const q = (req.url || '').split('?')[1] || '';
+    const nameParam = q.split('&').find((p) => p.startsWith('name='));
+    const cardName = nameParam ? decodeURIComponent(nameParam.replace('name=', '').trim()) : '';
+    if (!cardName) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'Missing name parameter' }));
+      return;
+    }
+    let body = [];
+    for await (const chunk of req) body.push(chunk);
+    const buf = Buffer.concat(body);
+    if (buf.length === 0) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'No image data' }));
+      return;
+    }
+    const contentType = (req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+    const ext = contentType === 'image/png' ? '.png' : '.jpg';
+    let dcImages = {};
+    try {
+      const dcData = JSON.parse(readFileSync(join(root, 'data', 'dc-images.json'), 'utf8'));
+      dcImages = dcData.dcImages || {};
+    } catch (_) {}
+    let companionImages = {};
+    try {
+      const ci = JSON.parse(readFileSync(join(root, 'data', 'companion-images.json'), 'utf8'));
+      companionImages = ci.companionImages || {};
+    } catch (_) {}
+    const innerName = cardName.replace(/^\[|\]$/g, '').trim();
+    let relPath = dcImages[cardName] || companionImages[cardName] || dcImages[innerName] || companionImages[innerName];
+    if (!relPath && innerName) {
+      for (const [k, v] of Object.entries(dcImages)) {
+        if (v && (k.replace(/^\[|\]$/g, '').trim() === innerName)) {
+          relPath = v;
+          break;
+        }
+      }
+    }
+    if (!relPath) {
+      for (const [k, v] of Object.entries(companionImages)) {
+        if (v && (k === cardName || k.replace(/\s+/g, ' ').trim() === cardName || k === innerName)) {
+          relPath = v;
+          break;
+        }
+      }
+    }
+    if (!relPath) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'Card has no image path in dc-images or companion-images' }));
+      return;
+    }
+    const relParts = relPath.split('/');
+    const dirRel = relParts.slice(0, -1).join('/');
+    const baseWithExt = relParts[relParts.length - 1];
+    const baseName = baseWithExt.replace(/\.[^.]+$/, '');
+    const newRelPath = dirRel + '/' + baseName + ext;
+    const filePath = join(root, ...newRelPath.split('/'));
+    try {
+      mkdirSync(join(root, dirRel), { recursive: true });
+      writeFileSync(filePath, buf);
+      const dcDataPath = join(root, 'data', 'dc-images.json');
+      const compPath = join(root, 'data', 'companion-images.json');
+      const keyInDc = Object.entries(dcImages).find(([, v]) => v === relPath)?.[0];
+      const keyInComp = Object.entries(companionImages).find(([, v]) => v === relPath)?.[0];
+      if (newRelPath !== relPath) {
+        if (keyInDc) {
+          const dcData = JSON.parse(readFileSync(dcDataPath, 'utf8'));
+          dcData.dcImages = dcData.dcImages || {};
+          dcData.dcImages[keyInDc] = newRelPath;
+          writeFileSync(dcDataPath, JSON.stringify(dcData, null, 2), 'utf8');
+        } else if (keyInComp) {
+          const compData = JSON.parse(readFileSync(compPath, 'utf8'));
+          compData.companionImages = compData.companionImages || {};
+          compData.companionImages[keyInComp] = newRelPath;
+          writeFileSync(compPath, JSON.stringify(compData, null, 2), 'utf8');
+        }
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+    return;
+  }
+
   if (req.method === 'POST' && pathname === '/api/save-dc-effects') {
     let body = '';
     for await (const chunk of req) body += chunk;
