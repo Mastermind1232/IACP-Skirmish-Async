@@ -55,6 +55,7 @@
     #attackDiceList .chip[data-value="yellow"] button, #defenseList .chip[data-value="white"] button { color: #333; }
     #attackDiceList .chip[data-value="yellow"] button:hover, #defenseList .chip[data-value="white"] button:hover { color: #000; }
     #surgeList .chip { border-left: 3px solid #9a5; background: rgba(140,140,60,0.2); }
+    #doubleSurgeList .chip { border-left: 3px solid #7a7; background: rgba(80,120,80,0.25); }
     #passivesList .chip { border-left: 3px solid #a67; background: rgba(140,90,120,0.2); }
     /* List: zebra striping and accent for unverified (needs review) */
     .entries .entry { border-left: 4px solid #e85; }
@@ -274,6 +275,57 @@
         </div>
         <div id="surgeList" class="chip-list"></div>
       </div>
+      <div class="field field-double-surge">
+        <label>Double surge abilities (2 surges)</label>
+        <div class="add-row">
+          <select id="doubleSurgeSelect">
+            <option value="">Add double surge…</option>
+            <optgroup label="── Hits ──">
+              <option value="damage 1">+1 Hit</option>
+              <option value="damage 2">+2 Hits</option>
+              <option value="damage 1, accuracy 1">+1 Hit, +1 Accuracy</option>
+              <option value="damage 1, accuracy 2">+1 Hit, +2 Accuracy</option>
+              <option value="damage 2, accuracy 1">+2 Hits, +1 Accuracy</option>
+              <option value="damage 2, hide">+2 Hits, Hide</option>
+            </optgroup>
+            <optgroup label="── Accuracy ──">
+              <option value="accuracy 1">+1 Accuracy</option>
+              <option value="accuracy 2">+2 Accuracy</option>
+              <option value="accuracy 3">+3 Accuracy</option>
+              <option value="accuracy 2, damage 1">+2 Accuracy, +1 Hit</option>
+              <option value="accuracy 2, damage 2">+2 Accuracy, +2 Hits</option>
+            </optgroup>
+            <optgroup label="── Pierce / Blast / Cleave ──">
+              <option value="pierce 1">Pierce 1</option>
+              <option value="pierce 2">Pierce 2</option>
+              <option value="pierce 3">Pierce 3</option>
+              <option value="blast 1">Blast 1</option>
+              <option value="blast 2">Blast 2</option>
+              <option value="blast 3 (2 surges)">Blast 3 (2 surges)</option>
+              <option value="cleave 1">Cleave 1</option>
+              <option value="cleave 2">Cleave 2</option>
+            </optgroup>
+            <optgroup label="── Conditions ──">
+              <option value="bleed">Bleed</option>
+              <option value="stun">Stun</option>
+              <option value="weaken">Weaken</option>
+              <option value="hide">Hide</option>
+            </optgroup>
+            <optgroup label="── Tokens / Recover ──">
+              <option value="focus">Focus</option>
+              <option value="evade">Evade</option>
+              <option value="block token">Block Token</option>
+              <option value="Block 1">+1 Block</option>
+              <option value="block 2">+2 Block</option>
+              <option value="recover 1">Recover 1</option>
+              <option value="recover 2">Recover 2</option>
+              <option value="recover 3">Recover 3</option>
+            </optgroup>
+          </select>
+          <button type="button" id="doubleSurgeAdd" class="secondary-btn">Add</button>
+        </div>
+        <div id="doubleSurgeList" class="chip-list"></div>
+      </div>
       <div id="passivesField" class="field field-passives">
         <label>Passives</label>
         <div class="add-row">
@@ -387,6 +439,9 @@
     const surgeSelect = document.getElementById('surgeSelect');
     const surgeAddBtn = document.getElementById('surgeAdd');
     const surgeListEl = document.getElementById('surgeList');
+    const doubleSurgeSelect = document.getElementById('doubleSurgeSelect');
+    const doubleSurgeAddBtn = document.getElementById('doubleSurgeAdd');
+    const doubleSurgeListEl = document.getElementById('doubleSurgeList');
     const attachmentCheckbox = document.getElementById('attachment');
     const companionCheckbox = document.getElementById('companion');
     const companionNameInput = document.getElementById('companionName');
@@ -477,6 +532,12 @@
       if (!v) return;
       addChip(surgeListEl, v, SURGE_LABELS[v] || v);
       surgeSelect.value = '';
+    });
+    doubleSurgeAddBtn.addEventListener('click', () => {
+      const v = doubleSurgeSelect.value;
+      if (!v) return;
+      addChip(doubleSurgeListEl, v, SURGE_LABELS[v] || v);
+      doubleSurgeSelect.value = '';
     });
     passivesAddBtn.addEventListener('click', () => {
       let v = passivesSelect.value;
@@ -662,6 +723,8 @@
         setChipList(defenseListEl, defenseArr, DEFENSE_LABELS);
         const surgeArr = card.surgeAbilities || statsFallback?.surgeAbilities || [];
         setChipList(surgeListEl, surgeArr, SURGE_LABELS);
+        const doubleSurgeArr = card.doubleSurgeAbilities || statsFallback?.doubleSurgeAbilities || [];
+        setChipList(doubleSurgeListEl, doubleSurgeArr, SURGE_LABELS);
         attachmentCheckbox.checked = !!(card.attachment);
         companionCheckbox.checked = !!(card.companion);
         companionNameInput.value = typeof card.companion === 'string' ? card.companion : '';
@@ -685,6 +748,7 @@
         const def = statsFallback?.defense;
         setChipList(defenseListEl, def == null ? [] : (Array.isArray(def) ? def : [def]), DEFENSE_LABELS);
         setChipList(surgeListEl, statsFallback?.surgeAbilities || [], SURGE_LABELS);
+        setChipList(doubleSurgeListEl, statsFallback?.doubleSurgeAbilities || [], SURGE_LABELS);
         attachmentCheckbox.checked = false;
         companionCheckbox.checked = false;
         companionNameInput.value = '';
@@ -722,7 +786,16 @@
       const defenseArr = getChipValues(defenseListEl);
       const defense = defenseArr.length ? defenseArr : undefined;
       const surgeAbilities = getChipValues(surgeListEl);
-      return { speed: speedNum, passives, figures: figuresNum, attack, defense, surgeAbilities: surgeAbilities.length ? surgeAbilities : undefined };
+      const doubleSurgeAbilities = getChipValues(doubleSurgeListEl);
+      return {
+        speed: speedNum,
+        passives,
+        figures: figuresNum,
+        attack,
+        defense,
+        surgeAbilities: surgeAbilities.length ? surgeAbilities : undefined,
+        doubleSurgeAbilities: doubleSurgeAbilities.length ? doubleSurgeAbilities : undefined,
+      };
     }
 
     addBtn.addEventListener('click', () => {
@@ -750,6 +823,7 @@
         attack: fig.attack,
         defense: fig.defense,
         surgeAbilities: fig.surgeAbilities,
+        doubleSurgeAbilities: fig.doubleSurgeAbilities,
         attachment: attachmentCheckbox.checked,
         companion: companionCheckbox.checked ? (companionNameInput.value.trim() || true) : undefined,
         elite: eliteCheckbox.checked || undefined,
@@ -785,6 +859,7 @@
         attack: fig.attack,
         defense: fig.defense,
         surgeAbilities: fig.surgeAbilities,
+        doubleSurgeAbilities: fig.doubleSurgeAbilities,
         attachment: attachmentCheckbox.checked,
         companion: companionCheckbox.checked ? (companionNameInput.value.trim() || true) : undefined,
         elite: eliteCheckbox.checked || undefined,

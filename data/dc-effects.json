@@ -2422,8 +2422,7 @@
       "attack": {
         "dice": [
           "blue",
-          "green",
-          "blue"
+          "green"
         ],
         "type": "range"
       },
@@ -2435,15 +2434,44 @@
         "damage 2"
       ],
       "attachment": false,
-      "elite": true,
       "affiliation": "Rebel"
     },
     "Greedo": {
-      "abilityText": "Traits: HUNTER, SMUGGLER. Attack (Range): green, green. Defense: white. accuracy 1; damage 1. Surge: bleed. Surge: damage 2. Surge: accuracy 3",
-      "keywords": []
+      "abilityText": "Slow on the Draw: When you declare an attack, the defender may interrupt to perform an attack targeting you.\n\nParting Shot: When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated.",
+      "keywords": [
+        "HUNTER",
+        "SMUGGLER"
+      ],
+      "subname": "AMBITIOUS MERCENARY",
+      "cost": 4,
+      "health": 7,
+      "speed": 5,
+      "passives": [
+        "+1 Hit",
+        "+1 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "bleed",
+        "damage 2",
+        "accuracy 3"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Han Solo": {
-      "abilityText": "Return Fire: After an attack targeting you is resolved, if you did not suffer any Damage, you may interrupt to perform an attack targeting that attacker. Limit once per round.\n\nDistracting: While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Block to the defense results.\n\nCunning: While defending, apply +1 Evade to the defense results for each Block result.",
+      "abilityText": "Return Fire: After an attack targeting you is resolved, if you did not suffer any Damage, you may interrupt to perform an attack targeting that attacker. Limit once per round.\n\nDistracting: While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Evade to the defense results.\n\nCunning: While defending, apply +1 Block to the defense results for each Evade result.",
       "keywords": [
         "SMUGGLER",
         "LEADER"
@@ -2457,7 +2485,7 @@
         "dice": [
           "green",
           "blue",
-          "yellow"
+          "green"
         ],
         "type": "range"
       },
@@ -2469,8 +2497,8 @@
         "damage 2"
       ],
       "attachment": false,
-      "affiliation": "Rebel",
-      "elite": true
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Heavy Stormtrooper (Elite)": {
       "abilityText": "Modular: You may include an attachment card in your army and decrease its cost by 1, to a minimum of 0. During setup, you must attach that card to this group.\n\nSpray Fire: While attacking, you may apply -3 Accuracy and +1 Surge to the attack results.",
@@ -2494,7 +2522,7 @@
         "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "damage 2",
@@ -2505,11 +2533,38 @@
       "affiliation": "Imperial"
     },
     "Heavy Stormtrooper (Regular)": {
-      "abilityText": "Traits: TROOPER, HEAVY WEAPON. Attack (Range): blue, green. Defense: black. accuracy 2. Surge: damage 1. Surge: blast 1",
-      "keywords": []
+      "abilityText": "Composite Plating: While defending, if the attacker is 4 or more spaces away, apply +1 Block to the defense results.",
+      "keywords": [
+        "TROOPER",
+        "HEAVY WEAPON"
+      ],
+      "cost": 6,
+      "subCost": 3,
+      "health": 6,
+      "speed": 3,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "red"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "blast 1"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Hera Syndulla": {
-      "abilityText": "Call the Shots: While another friendly figure within 3 spaces is attacking, you may apply +2 Accuracy, +1 Damage, or +1 Block to the attack results. Limit once per round.\n\nSmooth Landing: After Deployment, you and each adjacent friendly figure gains 1 movement point.",
+      "abilityText": "Call the Shots: While another friendly figure within 3 spaces is attacking, you may apply +2 Accuracy, +1 Hit, or +1 Surge to the attack results. Limit once per round.\n\nSmooth Landing: After Deployment, you and each adjacent friendly figure gains 1 movement point.",
       "keywords": [
         "LEADER",
         "SMUGGLER"
@@ -2535,8 +2590,8 @@
         "pierce 2"
       ],
       "attachment": false,
-      "affiliation": "Rebel",
-      "elite": true
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Hired Gun (Elite)": {
       "abilityText": "Traits: SMUGGLER. Attack (Range): green, yellow. Defense: white. Surge: cancel 1. accuracy 1. Surge: damage 1. Surge: damage 1",
