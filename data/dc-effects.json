@@ -3083,11 +3083,33 @@
       "affiliation": "Scum"
     },
     "Jet Trooper (Elite)": {
-      "abilityText": "Traits: TROOPER, VEHICLE. Attack (Range): blue, green. Defense: black. MOBILE. Surge: damage 2. Surge: accuracy 3",
+      "abilityText": "Agile: While defending, you may convert 1 Block to 1 Evade\n\nFly-By: When you declare an attack, if the target space is within 2 spaces, add 1 blue die to your attack pool. After the attack resolves, gain 2 movement points.",
       "keywords": [
-        "Mobile"
+        "TROOPER",
+        "VEHICLE"
       ],
-      "elite": true
+      "cost": 7,
+      "subCost": 4,
+      "health": 7,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "accuracy 3",
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Jet Trooper (Regular)": {
       "abilityText": "Agile: While defending, you may convert 1 Block to 1 Evade.\n\nJets: After you resolve an attack, if the target space is within 2 spaces, gain 1 movement point.",
@@ -3095,17 +3117,40 @@
         "TROOPER",
         "VEHICLE",
         "MOBILE"
-      ]
+      ],
+      "cost": 4,
+      "subCost": 2,
+      "health": 3,
+      "speed": 4,
+      "passives": [
+        "Mobile"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "accuracy 2"
+      ],
+      "attachment": false
     },
     "Jyn Erso": {
-      "abilityText": "Trust Goes Both Ways: At the start or end of your activation, choose an adjacent friendly figure. If you do, you and that figure Recover 1 Damage and gain 1 Power Token. Limit once per round.\n\nSpecial Action (Tonfa Strike): Move up to 2 spaces, then you may perform a Melee attack using 1 red and 1 green die. Then you may perform an attack.",
+      "abilityText": "Trust Goes Both Ways: At the start or end of your activation, choose an adjacent friendly figure. If you do, you and that figure Recover 1 Damage and gain 1 Surge Token. Limit once per round.\n\nSpecial Action (Tonfa Strike): Move up to 2 spaces, then you may perform a Melee attack using 1 red and 1 green die. Then you may perform an attack.",
       "keywords": [
         "LEADER",
         "BRAWLER"
       ],
       "subname": "STARDUST",
-      "cost": 6,
-      "health": 12,
+      "cost": 7,
+      "health": 13,
       "speed": 4,
       "passives": [
         "Pierce 1"
@@ -3113,7 +3158,6 @@
       "figures": 1,
       "attack": {
         "dice": [
-          "blue",
           "blue",
           "green"
         ],
@@ -3127,11 +3171,11 @@
         "damage 1"
       ],
       "attachment": false,
-      "affiliation": "Rebel",
-      "elite": true
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Jyn Odan": {
-      "abilityText": "Hair Trigger: At the start of a hostile figure's activation, you may interrupt to perform an attack that targets that figure. Limit once per round.\n\nSidewinder: After you resolve an attack, you may suffer 1 Damage to move up to 2 spaces. Limit once per round.\n\nCunning: While defending, apply +1 Block to the defense results for each Evade result.",
+      "abilityText": "Hair Trigger: At the start of a hostile figure's activation, you may interrupt to perform an attack that targets that figure. Limit once per round.\n\nSidewinder: After you resolve an attack, you may suffer 1 Strain to move up to 2 spaces. Limit once per round.\n\nCunning: While defending, apply +1 Block to the defense results for each Evade result.",
       "keywords": [
         "SMUGGLER"
       ],
@@ -3152,35 +3196,177 @@
         "type": "range"
       },
       "defense": [
-        "black"
+        "white"
       ],
       "surgeAbilities": [
         "stun, pierce 1",
         "accuracy 2, damage 2"
       ],
       "attachment": false,
-      "affiliation": "Rebel",
-      "elite": true
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "K-2S0": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Vague and Unconvincing: While defending, your player and your opponent cannot spend power tokens or play Command cards.\n\nCassian Said I Had To: Once per round, when a friendly LEADER enters an adjacent space, gain up to 1 Hit Token.\n\nSpecial Action (Continually Unexpected): If you have any combination of 2 Hit Tokens or 2 Surge Tokens, perform a Ranged attack using your attack pool.",
+      "keywords": [
+        "DROID",
+        "BRAWLER",
+        "SPY"
+      ],
+      "subname": "ROGUE SECURITY DROID",
+      "cost": 5,
+      "health": 9,
+      "speed": 4,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 1, pierce 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Kanan Jarrus": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Force Vision: At the start of you activation, your opponent chooses one of their ready groups and must activate it next if possible.\n\nSoresu Form: While a friendly figure within 3 spaces is defending, it may reroll 1 die. If it does, convert each Dodge result to 2 Block and 1 Evade and, if that figure is not FORCE USER, you suffer 1 Strain.",
+      "keywords": [
+        "FORCE USER",
+        "LEADER"
+      ],
+      "subname": "SPECTRE-1",
+      "cost": 7,
+      "health": 14,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "green",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 3"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Kayn Somos": {
-      "abilityText": "Traits: TROOPER, LEADER. Attack (Range): blue, blue, green. Defense: black. Surge: damage 1. Surge: pierce 1",
-      "keywords": []
+      "abilityText": "Special Action (Firing Squad): Choose up to 2 adjacent friendly TROOPERS. Each of those figures may interrupt to perform an attack targeting the same figure.\n\nSurge (Squad Command): Choose an adjacent friendly TROOPER. That figure becomes Focused.",
+      "keywords": [
+        "TROOPER",
+        "LEADER"
+      ],
+      "subname": "TROOPER COMMANDER",
+      "cost": 7,
+      "health": 12,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "pierce 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Ko-Tun Feralo": {
-      "abilityText": "Traits: LEADER, TROOPER. Attack (Range): blue, blue, green. Defense: black. Surge: damage 2. Surge: accuracy 1",
-      "keywords": []
+      "abilityText": "Arms Distribution: At the beginning of your activation, distribute 2 Power Tokens among up to 2 friendly figures within 3 spaces.\n\nDead Precise: When a friendly figure within 3 spaces spends a Power Token while attacking, apply Pierce 1 and -1 Evade to the attack results.\n\nSquad Cohesion: When a friendly REBEL figure within 3 spaces declares an attack, it may spend a tower token from a friendly REBEL figure within 3 spaces of itself for its effect.",
+      "keywords": [
+        "TROOPER",
+        "LEADER"
+      ],
+      "subname": "REBEL QUARTERMASTER",
+      "cost": 7,
+      "health": 11,
+      "speed": 4,
+      "passives": [
+        "Professional"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 3"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Krrsantan": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Full of Rage: Before you declare an attack, if you have suffered 3 or more Damage, become Focused.\n\nElectrified Knuckledusters: Choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Hit results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.",
+      "keywords": [
+        "WOOKIEE",
+        "BRAWLER",
+        "HUNTER"
+      ],
+      "subname": "UNDEFEATED, UNBOWED",
+      "cost": 8,
+      "health": 15,
+      "speed": 4,
+      "passives": [
+        "Bleed",
+        "Pierce 1"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "accuracy 2, pierce 1",
+        "damage 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Kuiil": {
       "abilityText": "Mounted: At the start of your activation, gain 3 movement points.\n\nSpecial Action (Hop On!): Choose a SMALL friendly figure with a figure cost of 8 or less. When you enter that figure's space during this activation, you may interrupt to push that figure 1 space.",
@@ -3193,6 +3379,9 @@
       "cost": 3,
       "health": 8,
       "speed": 2,
+      "passives": [
+        "Efficient Travel"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3207,38 +3396,117 @@
         "stun"
       ],
       "attachment": false,
-      "affiliation": "Scum",
-      "elite": true
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Lando Calrissian": {
-      "abilityText": "Traits: LEADER, SMUGGLER. Attack (Range): green, yellow. Defense: black. accuracy 2. Surge: hide 2; Surge: stun. Surge: damage 2",
-      "keywords": []
+      "abilityText": "Resourceful: While attacking or defending, you may reroll 1 of your attack or defense dice.\n\nGambit: Before you reroll a die, you may replace it with another die of the same type. After rolling, the new die is considered rerolled.\n\nShrewd Scoundrel: While attacking or defending, before you reroll a die with \"Resourceful\", you may guess aloud a number from 0-2. After rerolls, if the number of Hits or Block symbols on that die matches the number you guessed, double that die's results. Limit once per activation.",
+      "keywords": [
+        "LEADER",
+        "SMUGGLER"
+      ],
+      "subname": "CHARMING GAMBLER",
+      "cost": 6,
+      "health": 8,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "accuracy 2",
+        "damage 2",
+        "pierce 1, hide"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Leia Organa": {
       "abilityText": "Traits: LEADER, SPY. Attack (Range): blue, yellow, yellow. Defense: white. Surge: cancel 1. Surge: damage 2. Surge: recover 2. Surge: accuracy 3",
-      "keywords": []
+      "keywords": [],
+      "attachment": false
     },
     "Loku Kanoloa": {
-      "abilityText": "Traits: SPY. Attack (Range): blue, red. Defense: white. accuracy 2. Surge: damage 1. Surge: pierce 1",
-      "keywords": []
+      "abilityText": "Set Your Sights: At the start of the mission, place a Recon token on a unique hostile figure. While a friendly figure is attacking a figure with a Recon token, apply Pierce 1 to the attack results.\n\nPriority Target: Figures do not block line of sight for your attacks.\n\nMon Cala Special Forces: When you declare an attack targeting a figure with a Recon token, you become Focused.",
+      "keywords": [
+        "SPY",
+        "HUNTER"
+      ]
     },
     "Loth-cat (Elite)": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Special Action (Pounce): Place your figure in an empty space within 3 spaces. Then, you may perform an attack.\n\nSpecial Action (Fresh Catch): You or an adjacent CREATURE gains 1 Power Token.\n\nCurious: After you interact, suffer 1 Strain",
+      "keywords": [
+        "CREATURE"
+      ],
+      "cost": 6,
+      "subCost": 3,
+      "health": 5,
+      "speed": 5,
+      "passives": [
+        "Pierce 1"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Loth-cat (Regular)": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Pierce 1. Surge: +1 Damage. Pounce: Place your figure in an empty space within 3 spaces. Then, you may perform an attack. Rat Catcher: You or an adjacent CREATURE gains 1 Block Token. Curious: After you interact, suffer 1 Strain.",
+      "keywords": [
+        "CREATURE"
+      ],
+      "cost": 4,
+      "health": 3,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1"
+      ],
+      "affiliation": "Scum"
     },
     "Luke Skywalker": {
       "abilityText": "Special Action (Saber Strike): Perform a melee attack using 1 red and 1 yellow die. This attack gains Pierce 3.\n\nInspiring: While another friendly figure within 3 spaces is attacking, it may reroll 1 die.",
       "keywords": [
         "FORCE USER"
       ],
+      "subname": "HERO OF THE REBELLION",
       "cost": 7,
       "health": 10,
       "speed": 5,
+      "passives": [
+        "Block 1"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3251,9 +3519,6 @@
       "defense": [
         "white"
       ],
-      "passives": [
-        "Block 1"
-      ],
       "surgeAbilities": [
         "damage 2",
         "recover 2",
@@ -3264,8 +3529,39 @@
       "affiliation": "Rebel"
     },
     "Luke Skywalker (Jedi Knight)": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "+1 Damage, +1 Block. Surge: +1 Damage. Surge: Pierce 3. Deflect: After a Ranged attack targeting you or an adjacent friendly figure resolves, a hostile figure of your choice in your line of sight suffers 1 Damage. Heroic: Once during your activation, you may perform an attack without spending an action.",
+      "keywords": [
+        "FORCE USER",
+        "LEADER",
+        "BRAWLER"
+      ],
+      "subname": "JEDI KNIGHT",
+      "cost": 10,
+      "passives": [
+        "damage 1",
+        "Block 1"
+      ],
+      "health": 16,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "pierce 3"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Mak Eshka'rey": {
       "abilityText": "Surge (Critical Hit): This attack gains Pierce 2. If the target figure suffered 1 or more Damage during this attack, the target figure may not play command cards during this round.\n\nCamouflage: Hostile figures 4 or more spaces away cannot draw line of sight to you. You do not block line of sight for those figures.",
@@ -3273,9 +3569,14 @@
         "SPY",
         "TECHNICIAN"
       ],
+      "subname": "BOLD RENEGADE",
       "cost": 3,
       "health": 4,
       "speed": 4,
+      "passives": [
+        "Priority Target",
+        "+1 Accuracy"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3287,16 +3588,10 @@
       "defense": [
         "white"
       ],
-      "passives": [
-        "Priority Target",
-        "+1 Accuracy"
-      ],
       "surgeAbilities": [
-        "block 1",
         "pierce 2"
       ],
       "attachment": false,
-      "elite": true,
       "affiliation": "Rebel"
     },
     "Mara Jade": {
@@ -3912,8 +4207,33 @@
       "keywords": []
     },
     "Tress Hacnua": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Surge: Cleave X (X = Surge results). Surge: Recover X Damage (X = Surge results). Surge: Stun. Surge: Weaken. Krayt Dragon Fury: While attacking, X equals the number of Surge rolled. Fyrnock Style: While attacking or defending, choose 1 attack die. The player that rolled that die must reroll that die. Leg Hydraulics: After you resolve an attack, move up to 1 space.",
+      "keywords": [
+        "BRAWLER"
+      ],
+      "subname": "CYBERNETIC BRAWLER",
+      "cost": 5,
+      "health": 10,
+      "speed": 5,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "yellow",
+          "red"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "stun",
+        "weaken"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Tusken Raider (Elite)": {
       "abilityText": "Traits: BRAWLER. Attack (Melee): red, green. Defense: black. damage 1. Surge: weaken. Surge: cleave 1. desert",
@@ -4044,6 +4364,22 @@
       "keywords": [],
       "attachment": false,
       "companion": true
+    },
+    "Pit Droid": {
+      "abilityText": "Useful: You can retrieve crates. Adjacent heroes can interact with crates you are carrying.\n\nShiny: If you are on the map at the end of the mission, heroes gain 50 credits.",
+      "keywords": [
+        "DROID"
+      ],
+      "cost": 0,
+      "health": 3,
+      "speed": 4,
+      "figures": 1,
+      "defense": [
+        "white"
+      ],
+      "attachment": false,
+      "companion": true,
+      "affiliation": "Any"
     }
   }
 }

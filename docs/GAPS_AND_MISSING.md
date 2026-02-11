@@ -60,10 +60,18 @@
 
 ## To-Do / Planned work
 
-- [ ] **Create UI tool to determine interior vs exterior spaces.** Many cards reference interior/exterior (e.g. MASSIVE cannot enter interior spaces). The backend needs to know which map cells are interior vs exterior so card effects and movement rules can be enforced correctly.
+### DCs/CCs effects
+- [ ] **Logic/tooling so that all card effects exist as things the bot can execute.** Add or verify that every DC and CC effect is represented as an executable action the bot can perform (may already be partially in place). Includes passives, surge abilities, special actions, keywords, and triggered effects.
 
+### Implementation (Discord / UX)
+- [ ] **Buttons in Discord and UX for card-effect logic.** Implement the above DC/CC effects in a playable way: Discord buttons, menus, and flow so players can trigger and resolve card effects through the bot without manual workarounds.
+
+### Detailed mapping of all maps
+- [ ] **Complete map data for every map.** Terrain (blocking, difficult, etc.), interior vs exterior per space, doors, crates, and mission-specific objects (e.g. Launch Panels, interactibles). Required for card effects (MASSIVE, interior/exterior), movement rules, and mission objectives.
+- [ ] **UI tool to determine interior vs exterior spaces.** Many cards reference interior/exterior (e.g. MASSIVE cannot enter interior spaces). The backend needs to know which map cells are interior vs exterior so card effects and movement rules can be enforced correctly.
+
+### Existing effect work
 - [ ] **Wire up all CCs so they have actual effects.** Command cards currently show effect text as a reminder; implement real game-state effects for each CC (or document which are manual).
-
 - [ ] **Wire up all DCs so they have actual effects.** Deployment card abilities (passives, surge, keywords, etc.) should affect game state where applicable; implement or document manual resolution. *(Card effects are already **visible** in play—each DC shows its card image in the Play Area—but the bot does not automate applying those effects to game state.)*
 
 ### Stat tracking to the database
