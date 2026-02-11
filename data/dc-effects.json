@@ -2028,10 +2028,12 @@
       "subCost": 3,
       "health": 5,
       "speed": 4,
-      "figures": 1,
+      "passives": [
+        "Efficient Travel"
+      ],
+      "figures": 2,
       "attack": {
         "dice": [
-          "red",
           "blue",
           "green"
         ],
@@ -2079,7 +2081,7 @@
       "affiliation": "Imperial"
     },
     "Ewok Warrior (Elite)": {
-      "abilityText": "Ambush: After you are deployed, you become Hidden.\n\nForest Fighters: While performing a melee attack, apply +1 Damage to the attack results if you are Hidden.\n\nSpecial Action (Sling Barrage): Perform a melee attack using your printed attack pool. During this attack, you may reroll up to 1 attack die for each other figure in your group with line of sight to the defender.",
+      "abilityText": "Ambush: After you are deployed, you become Hidden.\n\nForest Fighters: While performing a Melee attack, apply +1 Hit to the attack results if you are Hidden.\n\nSpecial Action (Sling Barrage): Perform a Ranged attack using your printed attack pool. During this attack, you may reroll up to 1 attack die for each other figure in your group with line of sight to the defender.",
       "keywords": [
         "BRAWLER"
       ],
@@ -2091,13 +2093,23 @@
         "+2 Accuracy"
       ],
       "figures": 3,
+      "attack": {
+        "dice": [
+          "yellow",
+          "blue"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
       "surgeAbilities": [
         "damage 1",
         "pierce 1, hide"
       ],
       "attachment": false,
-      "affiliation": "Rebel",
-      "elite": true
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Ezra Bridger": {
       "abilityText": "Brush: At the start of each round, move up to 4 spaces.\n\nMuch to Learn: While attacking, if there is another friendly unique figure within 3 spaces, you may reroll 1 attack die. If that figure is a FORCE USER, you may turn that attack die to any side instead.",
@@ -2110,17 +2122,49 @@
       "health": 10,
       "speed": 4,
       "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "yellow",
+          "yellow"
+        ]
+      },
+      "defense": [
+        "white"
+      ],
       "surgeAbilities": [
         "pierce 3",
-        "recover 2"
+        "recover 2",
+        "damage 2"
       ],
       "attachment": false,
-      "affiliation": "Rebel",
-      "elite": true
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Fenn Signis": {
       "abilityText": "Traits: TROOPER, LEADER. Attack (Range): blue, red, green. Defense: black. Surge: blast 1. Surge: damage 1. Surge: accuracy 1",
-      "keywords": []
+      "keywords": [
+        "TROOPER",
+        "LEADER"
+      ],
+      "subname": "SPEC-OPS COMMANDO",
+      "passives": [
+        "+1 Accuracy",
+        "Pierce 1"
+      ],
+      "attack": {
+        "dice": [
+          "red",
+          "blue",
+          "green"
+        ]
+      },
+      "defense": [
+        "black"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Fennec Shand": {
       "abilityText": "Bounty: When you are defeated, your opponent gains 2 VPs.\n\nSharpshooter: When you declare an attack, if the target is 5 or more spaces away, you become Focused.",
