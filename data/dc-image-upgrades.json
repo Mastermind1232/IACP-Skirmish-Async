@@ -1,1 +1,9 @@
-{"description":"Tracks which cards have had their images upgraded with better quality versions","dc_figures":[],"dc_upgrades":[],"cc":[],"companions":[]}
+{
+  "description": "Tracks which cards have had their images upgraded with better quality versions",
+  "dc_figures": [
+    "ISB Infiltrator (Regular)"
+  ],
+  "dc_upgrades": [],
+  "cc": [],
+  "companions": []
+}

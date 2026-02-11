@@ -2934,8 +2934,32 @@
       "affiliation": "Imperial"
     },
     "ISB Infiltrator (Regular)": {
-      "abilityText": "Traits: SPY. Attack (Range): blue, green. Defense: white. Surge: hide. Surge: damage 1. Surge: accuracy 2",
-      "keywords": []
+      "abilityText": "Special Action (Coordinated Raid): Another figure in your group may interrupt to perform an attack targeting a hostile figure in your line of sight. Limit once per group per round.",
+      "keywords": [
+        "SPY"
+      ],
+      "cost": 5,
+      "subCost": 3,
+      "health": 4,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "hide",
+        "accuracy 2",
+        "damage 1"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Jabba the Hutt": {
       "abilityText": "Traits: LEADER, SMUGGLER, HUNTER. Attack (Melee): red, green. Defense: black.",

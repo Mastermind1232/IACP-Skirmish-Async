@@ -4,13 +4,27 @@ globs: data/dc-effects.json, data/cc-effects.json
 alwaysApply: false
 ---
 
-# Updated card images: full read and update
+# Updated card images: standard scope
 
-**Unless the user says otherwise**, whenever they provide an updated card image for a DC (or CC), you must:
+**Default (DC card updates):** When the user provides an updated card image for a DC, update **only** these three things:
+
+1. **Card image** — Copy to the correct path in `vassal_extracted/images/dc-figures/`, and update `dc-images.json` if the path or extension changes.
+2. **abilityText** — The full ability text from the card.
+3. **keywords** — The trait/keyword list (e.g. SMUGGLER, HUNTER).
+
+**Do NOT update** cost, health, speed, figures, attack, defense, passives, surgeAbilities, subname, affiliation, elite, or any other fields.
+
+If the user explicitly asks for a full update (e.g. "full read and update"), then use the full-read rules below. Otherwise, stick to image + abilityText + keywords only.
+
+---
+
+# Full read (only when user explicitly requests)
+
+If the user says "full update" or "update everything from the card" or similar, then:
 
 1. **Fully read the card** from the image/description: cost, sub-cost, health, speed, figures, attack (dice colors and type: Ranged/Melee), defense (white or black — read from the card, do not infer from faction), passives, surge abilities, ability text, keywords, subname, affiliation, elite.
-2. **Update all relevant fields**: copy the image to the correct path, update `dc-images.json` if the path or extension changes, and update `data/dc-effects.json` with complete data (abilityText, keywords, cost, health, speed, figures, attack, defense, passives, surgeAbilities, subname, affiliation, elite, etc.). Add or update `dc-stats.json` if the project uses it for that figure.
-3. **Do not do a partial update** (e.g. image only or one field). Treat every updated card image as a request to sync the full card data from the image.
+2. **Update all relevant fields**: copy the image, update `dc-images.json` if needed, and update `data/dc-effects.json` with complete data.
+3. **Notch count** = figures. **Defense die** = the white or black square under "Defense" in the bottom corner.
 
 If anything on the card is unclear, say what is uncertain and leave that field blank or unchanged rather than guessing.
 
