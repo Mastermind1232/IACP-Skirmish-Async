@@ -2586,7 +2586,9 @@
         "black"
       ],
       "surgeAbilities": [
-        "damage 1",
+        "damage 1"
+      ],
+      "doubleSurgeAbilities": [
         "pierce 2"
       ],
       "attachment": false,
@@ -2594,38 +2596,128 @@
       "affiliation": "Rebel"
     },
     "Hired Gun (Elite)": {
-      "abilityText": "Traits: SMUGGLER. Attack (Range): green, yellow. Defense: white. Surge: cancel 1. accuracy 1. Surge: damage 1. Surge: damage 1",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Self-Preservation: When you suffer Damage, you become Focused.\n\nParting Shot: When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated.",
+      "keywords": [
+        "SMUGGLER"
+      ],
+      "cost": 5,
+      "subCost": 3,
+      "health": 4,
+      "speed": 5,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "damage 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Hired Gun (Regular)": {
-      "abilityText": "Traits: SMUGGLER. Attack (Range): green, yellow. Defense: white. Surge: damage 1. Surge: pierce 1. Surge: accuracy 1",
-      "keywords": []
+      "abilityText": "Parting Shot: When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated.\n\nDisposable: While defending, apply -1 Evade to your defense results.",
+      "keywords": [
+        "SMUGGLER"
+      ],
+      "cost": 4,
+      "subCost": 2,
+      "health": 3,
+      "speed": 5,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "pierce 1",
+        "accuracy 1"
+      ],
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "HK Assassin Droid (Elite)": {
-      "abilityText": "Traits: DROID, HUNTER. Attack (Range): blue, blue, yellow. Defense: black. Surge: weaken. Surge: damage 1. Surge: damage 1. Surge: pierce 1",
-      "keywords": [],
-      "elite": true
-    },
-    "HK Assassin Droid (Regular)": {
-      "abilityText": "Traits: DROID, HUNTER. Attack (Range): blue, blue, yellow. Defense: black. Surge: weaken. Surge: damage 1. Surge: pierce 1",
-      "keywords": []
-    },
-    "HK-47": {
-      "abilityText": "{Query}: When you declare an attack, apply +1 Damage to the attack results unless the defender becomes Bleeding.\n\n{Conclusion}: While attacking, apply -1 Evade to the defense results.\n\n{Mockery}: Once during your activation, you may choose a hostile figure in your line of sight. That figure suffers 1 Strain.",
+      "abilityText": "Targeting Computer: While attacking, you may reroll 1 attack die.\n\nVersatile Weaponry: While attacking, you may force the defender to reroll 1 defense die.\n\nMerciless: When you declare an attack, if the defender has any HARMFUL conditions, it suffers 1 Damage.",
       "keywords": [
         "DROID",
         "HUNTER"
       ],
+      "cost": 8,
+      "subCost": 4,
+      "health": 7,
+      "speed": 4,
+      "passives": [
+        "Priority Target"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "damage 1",
+        "pierce 1",
+        "accuracy 2, weaken"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
+    },
+    "HK-47": {
+      "abilityText": "Query: When you declare an attack, apply +1 Hit to the attack results unless the defender becomes Bleeding.\n\nConclusion: While attacking, apply -1 Evade to the defense results.\n\nMockery: Once during your activation, you may choose a hostile figure in your line of sight. That figure suffers 1 Strain.",
+      "keywords": [
+        "DROID",
+        "HUNTER"
+      ],
+      "subname": "FAITHFUL MEATBAG EXTERMINATOR",
       "cost": 7,
       "health": 11,
       "speed": 4,
       "figures": 1,
-      "passives": [
-        "+2 Accuracy"
+      "attack": {
+        "dice": [
+          "blue",
+          "blue",
+          "red"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "accuracy 2",
+        "damage 2"
       ],
       "attachment": false,
-      "elite": true
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Hondo Ohnaka": {
       "abilityText": "Negotiate: When you declare an attack, apply +2 Damage to the attack results unless the defender pays you 2 VPs.\n\nWhat's Yours is Mine: At the end of a round, if you are in an opponent's deployment zone, that opponent loses 2 VPs and you gain 2 VPs. Limit once per mission.",
@@ -2638,14 +2730,27 @@
       "health": 9,
       "speed": 5,
       "figures": 1,
-      "passives": [
-        "+2 Accuracy"
+      "attack": {
+        "dice": [
+          "blue",
+          "red",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "accuracy 2"
       ],
       "attachment": false,
-      "elite": true
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Iden Versio": {
-      "abilityText": "Droid Kit: Once during your activation, if a friendly \"Dio\" is in your space, you may gain 1 Power Token.\n\nPulse Cannon: While attacking, if you spent a Power Token during this attack, apply an additional +4 Accuracy and +1 Damage to the attack results.\n\nID10 Seeker Droid: At the start of the game, put the \"Dio\" companion into play in your space. It activates at the start or end of your activation, and is not counted for the purposes of control.",
+      "abilityText": "Droid Kit: Once during your activation, if a friendly \"Dio\" is in your space, you may gain 1 Power Token.\n\nPulse Cannon: While attacking, if you spent a Power Token during this attack, apply an additional +4 Accuracy and +1 Hit to the attack results.\n\nID10 Seeker Droid: At the start of the game, put the \"Dio\" companion into play in your space. It activates at the start or end of your activation, and is not counted for the purposes of control.",
       "keywords": [
         "TROOPER",
         "LEADER",
@@ -2653,16 +2758,28 @@
       ],
       "subname": "INFERNO COMMANDER",
       "cost": 7,
+      "health": 11,
       "speed": 4,
       "figures": 1,
-      "companion": "Dio",
+      "attack": {
+        "dice": [
+          "blue",
+          "red",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
       "surgeAbilities": [
         "accuracy 2, damage 1",
         "pierce 1"
       ],
       "attachment": false,
-      "affiliation": "Imperial",
-      "elite": true
+      "companion": "Dio",
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "IG-11": {
       "abilityText": "Special Action (Rapid Fire): Perform 2 attacks.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.\n\nSelf-Destruct Protocol: When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.",
@@ -2670,20 +2787,66 @@
         "DROID",
         "GUARDIAN"
       ],
+      "subname": "TO NURSE AND PROTECT",
       "cost": 9,
       "health": 12,
       "speed": 5,
+      "passives": [
+        "Block 1"
+      ],
       "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "green",
+          "blue"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
       "surgeAbilities": [
         "pierce 1",
-        "accuracy 2"
+        "accuracy 2",
+        "damage 2"
       ],
       "attachment": false,
-      "elite": true
+      "elite": true,
+      "affiliation": "Scum"
     },
     "IG-88": {
-      "abilityText": "Traits: DROID, HUNTER. Attack (Range): any, any. Defense: black. Block 1. accuracy 2. Surge: recover 3. Surge: damage 2",
-      "keywords": []
+      "abilityText": "Arsenal: Your attack pool consists of any combination of 2 attack dice.\n\nRelentless: When you declare an attack targeting a figure within 3 spaces, that figure suffers 1 Damage.\n\nAssault: You can perform multiple attacks each activation.",
+      "keywords": [
+        "DROID",
+        "HUNTER"
+      ],
+      "subname": "ASSASSIN DROID",
+      "cost": 12,
+      "health": 10,
+      "speed": 5,
+      "passives": [
+        "Block 1",
+        "+2 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "blue"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "recover 3",
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Imperial Officer (Elite)": {
       "abilityText": "Traits: LEADER. Attack (Range): blue, yellow. Defense: white. Surge: focus. Surge: stun. Surge: damage 1. Surge: accuracy 3",
