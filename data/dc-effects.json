@@ -3712,58 +3712,280 @@
       "affiliation": "Scum"
     },
     "MHD-19": {
-      "abilityText": "Special Action (Medical Loadout): You or an adjacent friendly figure recovers 3 Damage.\n\nSpecial Action (Improper Procedure): Choose an adjacent hostile figure. That figure suffers 1 Strain and becomes Weakened.",
+      "abilityText": "Special Action (Medical Loadout): You or an adjacent friendly figure recovers 3 Damage.\n\nSpecial Action (Improper Procedure): Choose an adjacent hostile figure. That figure suffers 1 Damage and becomes Weakened.",
       "keywords": [
         "DROID"
       ],
-      "attachment": false
+      "cost": 5,
+      "health": 7,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "recover 2",
+        "focus"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Migs Mayfeld": {
       "abilityText": "Locked and Loaded: You may have up to 3 Power Tokens. After you resolve an attack, gain 2 Power Tokens.\n\nDroid Arm: Before you declare an attack, you may discard a Power Token to draw line of sight to the target from a space adjacent to you.\n\nReturn Fire: After an attack targeting you is resolved, you can interrupt to perform an attack targeting that attacker. Limit once per round.",
       "keywords": [
         "SMUGGLER",
         "TROOPER"
-      ]
+      ],
+      "subname": "SURVIVOR OF BURNIN KONN",
+      "cost": 7,
+      "health": 11,
+      "speed": 4,
+      "passives": [
+        "+1 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 1, damage 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Murne Rin": {
-      "abilityText": "Surge (False Orders): Choose a hostile figure with a figure cost of 4 or less within 4 spaces. Perform a move or attack with that figure.\n\nDouble Action (Field Report): Choose up to 2 friendly figures within 4 spaces with 2 or less attack dice in their printed attack pool. The chosen figures become Hidden.\n\nFigurehead: Before a friendly figure within 4 spaces suffers Damage, you may suffer 1 Strain to prevent 1 of that Damage.",
+      "abilityText": "Special Action (False Orders): Choose a hostile figure with a figure cost of 4 or less within 4 spaces. Perform a move or attack with that figure.\n\nSpecial Action (Field Report): Choose up to 2 friendly figures within 4 spaces with 2 or less attack dice in their printed attack pool. The chosen figures become Hidden.\n\nFigurehead: Before a friendly figure within 4 spaces suffers Damage or Strain, you may suffer Damage or Strain to prevent 1 of that Damage or Strain.",
       "keywords": [
         "LEADER",
         "SPY"
-      ]
+      ],
+      "subname": "Deceptive Diplomat",
+      "cost": 4,
+      "health": 9,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 2",
+        "hide"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Nexu (Elite)": {
-      "abilityText": "Traits: CREATURE, BRAWLER. Attack (Melee): red, green. Defense: white. MOBILE. bleed. cleave 2. Surge: damage 2",
+      "abilityText": "Special Action (Pounce): Place your figure in an empty space within 3 spaces. Then, you may perform an attack.\n\nCunning: While defending, apply +1 Block to the defense results for each Evade result.\n\nNon-Sentient: You cannot interact.",
       "keywords": [
-        "Mobile"
+        "CREATURE",
+        "BRAWLER"
       ],
-      "elite": true
+      "cost": 5,
+      "health": 8,
+      "speed": 6,
+      "passives": [
+        "Mobile",
+        "Bleed",
+        "Cleave 2"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "red"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Nexu (Regular)": {
-      "abilityText": "Traits: CREATURE, BRAWLER. Attack (Melee): red, green. Defense: white. MOBILE. bleed. Surge: cleave 1. Surge: pierce 2",
+      "abilityText": "Special Action (Pounce): Place your figure in an empty space within 3 spaces. Then, you may perform an attack.\n\nCunning: While defending, apply +1 Block to the defense results for each Evade result.\n\nNon-Sentient: You cannot interact.",
       "keywords": [
+        "CREATURE",
+        "BRAWLER"
+      ],
+      "cost": 4,
+      "health": 6,
+      "speed": 6,
+      "passives": [
+        "Bleed",
         "Mobile"
-      ]
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "pierce 2",
+        "cleave 1"
+      ],
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "Obi-Wan Kenobi": {
-      "abilityText": "Traits: FORCE USER. Attack (Melee): red, green, yellow. Defense: black. Surge: cancel 1. Surge: damage 2. Surge: pierce 3",
-      "keywords": []
+      "abilityText": "Alter Mind: Hostile figures with a figure cost of 9 or less within 3 spaces of you cannot interact and are not counted for the purposes of control.\n\nStrike Me Down: When an attack targeting you is declared, you may reduce your figure cost by 3. If you do, you are then defeated.\n\nInto the Force: When you are defeated, choose another friendly figure. That figure becomes Focused.",
+      "keywords": [
+        "FORCE USER",
+        "GUARDIAN"
+      ],
+      "subname": "JEDI KNIGHT",
+      "cost": 7,
+      "health": 12,
+      "speed": 4,
+      "passives": [
+        "+1 Evade"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "pierce 3"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Onar Koma": {
-      "abilityText": "Traits: GUARDIAN, HUNTER. Attack (Range): blue, red, green. Surge: damage 2; Surge: accuracy -2. Surge: damage 1; Surge: accuracy -1",
-      "keywords": []
+      "abilityText": "Special Action (Rush): Move up to 4 spaces, then you may push an adjacent, SMALL figure up to 1 space. If you do, you and that figure suffer 1 Damage.\n\nGet Down: While a small figure within 2 spaces is defending, you may apply +1 Block or +1 Evade to the defense results. Limit once per round.\n\nImmune: You cannot gain HARMFUL conditions.",
+      "keywords": [
+        "GUARDIAN",
+        "HUNTER"
+      ],
+      "cost": 6,
+      "health": 15,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "red",
+          "green"
+        ],
+        "type": "range"
+      },
+      "surgeAbilities": [
+        "accuracy 2, damage 2",
+        "damage 1, accuracy -1"
+      ],
+      "attachment": false
     },
     "Probe Droid (Elite)": {
-      "abilityText": "Traits: DROID. Attack (Range): blue, yellow, yellow. Defense: black. MOBILE. Surge: damage 2. Surge: pierce 2. Surge: recover 2",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Targeting Computer: While attacking, you may reroll 1 attack die.\n\nSelf-Destruct: At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.",
+      "keywords": [
+        "DROID",
+        "MOBILE"
+      ],
+      "passives": [
+        "Mobile"
+      ],
+      "attack": {
+        "dice": [
+          "blue",
+          "yellow",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "recover 2",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Probe Droid (Regular)": {
-      "abilityText": "Traits: DROID. Attack (Range): blue, yellow, yellow. Defense: black. MOBILE. Surge: damage 1. Surge: pierce 1. Surge: recover 1",
-      "keywords": []
+      "abilityText": "Self-Destruct: At the end of a round, you may roll 1 red die. Each adjacent figure and object suffers Damage equal to the Hit results. Then, you are defeated.",
+      "keywords": [
+        "DROID",
+        "MOBILE"
+      ],
+      "cost": 3,
+      "health": 5,
+      "speed": 3,
+      "passives": [
+        "Mobile"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "yellow",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "recover 1",
+        "pierce 1"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Purge Commander (Elite)": {
-      "abilityText": "Shock Grenade: Choose a space within 3 spaces and roll 1 green die. Each other figure on or adjacent to that space suffers Damage equal to the Hit results. If you rolled a Surge, those figures become Weakened.\n\nCoordinated Hunt: While you or a friendly Hunter in your line of sight is attacking, it may reroll 1 attack die. Limit one \"Coordinated Hunt\" per attack.",
+      "abilityText": "Special Action (Shock Grenade): Choose a space within 3 spaces and roll 1 green die. Each other figure on or adjacent to that space suffers Damage equal to the Hit results. If you rolled a Surge, those figures become Weakened.\n\nCoordinated Hunt: While you or a friendly HUNTER in your line of sight is attacking, it may reroll 1 attack die. Limit one \"Coordinated Hunt\" per attack.",
       "keywords": [
         "TROOPER",
         "HUNTER",
@@ -3776,7 +3998,6 @@
       "attack": {
         "dice": [
           "blue",
-          "yellow",
           "yellow",
           "green"
         ],
@@ -3794,14 +4015,14 @@
       "affiliation": "Imperial"
     },
     "Purge Trooper (Elite)": {
-      "abilityText": "Imperial Loadout: When you are deployed, gain 1 loadout card from the supply.\n\nCortosis Armor: While you are defending, reduce the Pierce value of the attack results by 1, to a minimum of 0.",
+      "abilityText": "Imperial Loadout: When you are deployed, gain 1 Loadout card from the supply.\n\nSpecial Action (On the Hunt): Move up to 2 spaces, then perform an attack targeting a unique hostile figure. Apply +1 Hit to the attack results.",
       "keywords": [
         "BRAWLER",
         "HUNTER",
         "TROOPER"
       ],
       "cost": 4,
-      "health": 7,
+      "health": 8,
       "speed": 4,
       "figures": 1,
       "attack": {
@@ -3819,13 +4040,18 @@
       "affiliation": "Imperial"
     },
     "R2-D2": {
-      "abilityText": "Scomp Link: If you are adjacent to a terminal, your player draws 1 Command card.\n\nService: You or an adjacent friendly DROID or VEHICLE recovers 1 Damage.\n\nLucky: While defending, if you roll a blank result, add +1 Block to the defense results.",
+      "abilityText": "Special Action (Scomp Link): If you are adjacent to a terminal, your player draws 1 Command card.\n\nSpecial Action (Service): You or an adjacent friendly DROID or VEHICLE recovers 1 Damage.\n\nLucky: While defending, if you roll a blank result, add +1 Dodge to the defense results.",
       "keywords": [
         "DROID"
       ],
+      "subname": "LOYAL ASTROMECH",
       "cost": 3,
       "health": 6,
       "speed": 3,
+      "passives": [
+        "+2 Accuracy",
+        "+1 Surge"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3835,9 +4061,6 @@
       },
       "defense": [
         "white"
-      ],
-      "passives": [
-        "+2 Accuracy"
       ],
       "surgeAbilities": [
         "pierce 2",
@@ -3849,15 +4072,69 @@
       "affiliation": "Rebel"
     },
     "Rancor": {
-      "abilityText": "Traits: CREATURE, BRAWLER. Attack (Melee): red, green, green. Defense: black. MASSIVE. Reach. Surge: damage 2. Surge: cleave 2",
+      "abilityText": "Special Action (Crippling Blow): Perform an attack. After the attack resolves, if it did not miss, the defender becomes Stunned.\n\nTrained: While attacking, you may suffer 1 Strain to reroll 1 attack die.\n\nVoracious: At the start of another figure's activation, you may defeat a friendly non-companion figure within 2 spaces to recover 2 Damage and ready your Deployment card. Limit once per round.",
       "keywords": [
-        "Massive"
-      ]
+        "BRAWLER",
+        "CREATURE",
+        "MASSIVE",
+        "REACH"
+      ],
+      "cost": 9,
+      "health": 15,
+      "speed": 4,
+      "passives": [
+        "Massive",
+        "Reach",
+        "Block 1"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "cleave 3"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Rebel Pathfinder (Elite)": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Infiltration: After deployment, you may move up to 6 spaces.\n\nLight It Up: While attacking, if the target of your attack did not have line of sight to you at the start of your activation, you may reroll up to 1 attack die.\n\nDistracting Fire: After resolving an attack, if it did not miss, you may force the defender's group to activate next if able. Limit once per group per round.",
+      "keywords": [
+        "TROOPER"
+      ],
+      "cost": 6,
+      "subCost": 3,
+      "health": 6,
+      "speed": 4,
+      "passives": [
+        "+1 Accuracy"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue"
+        ]
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "accuracy 3",
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Rebel Saboteur (Elite)": {
       "abilityText": "Overload: You can trigger the same Surge ability up to twice per attack.\n\nPriority Target: Figures do not block line of sight for this figure's attack.",
@@ -3876,7 +4153,6 @@
       "attack": {
         "dice": [
           "red",
-          "red",
           "yellow"
         ],
         "type": "range"
@@ -3890,30 +4166,154 @@
         "blast 2"
       ],
       "attachment": false,
-      "affiliation": "Rebel",
-      "elite": true
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Rebel Saboteur (Regular)": {
-      "abilityText": "Traits: SPY, HEAVY WEAPON. Attack (Range): red, yellow. Defense: white. accuracy. Surge: pierce 2. Surge: stun. Surge: blast 1",
-      "keywords": []
+      "abilityText": "Overload: You can trigger the same Surge ability up to twice per attack.",
+      "keywords": [
+        "SPY",
+        "HEAVY WEAPON"
+      ],
+      "cost": 5,
+      "subCost": 3,
+      "health": 4,
+      "speed": 4,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "red",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "blast 1",
+        "pierce 1",
+        "stun"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Rebel Trooper (Elite)": {
-      "abilityText": "Traits: TROOPER. Attack (Range): blue, yellow. Defense: white. Surge: pierce 2. Surge: accuracy 2",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Aim: If you have not exited your space during this activation, apply +1 Hit and +2 Accuracy to your attack results.\n\nDouble Action Special (Get into Position): Gain 4 movement points and become Focused.",
+      "keywords": [
+        "TROOPER"
+      ],
+      "cost": 7,
+      "subCost": 3,
+      "health": 5,
+      "speed": 4,
+      "figures": 3,
+      "attack": {
+        "dice": [
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "accuracy 2",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Rebel Trooper (Regular)": {
-      "abilityText": "Traits: TROOPER. Attack (Range): blue, yellow. Defense: white. Surge: pierce 1. Surge: accuracy 1",
-      "keywords": []
+      "abilityText": "Aim: If you have not exited your space during this activation, apply +1 Hit and +2 Accuracy to your attack results.",
+      "keywords": [
+        "TROOPER"
+      ],
+      "cost": 6,
+      "subCost": 2,
+      "health": 3,
+      "speed": 4,
+      "figures": 3,
+      "attack": {
+        "dice": [
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "pierce 1",
+        "accuracy 1"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Riot Trooper (Elite)": {
-      "abilityText": "Traits: TROOPER, BRAWLER, GUARDIAN. Attack (Range): blue, red. Defense: black. Surge: damage 1. Surge: damage 1",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Stun Batons: After you resolve an attack, if the target suffered any Damage, it also suffers 1 Strain.\n\nShield: At the end of your activation, if you have no Block Tokens, gain 1 Block Token.\n\nProfessional: While attacking, you may reroll 1 attack die.",
+      "keywords": [
+        "TROOPER",
+        "BRAWLER",
+        "GUARDIAN"
+      ],
+      "cost": 7,
+      "subCost": 3,
+      "health": 7,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "red"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Riot Trooper (Regular)": {
-      "abilityText": "Traits: TROOPER, BRAWLER, GUARDIAN. Attack (Range): blue, red. Defense: black. Surge: damage 1. Surge: damage 1",
-      "keywords": []
+      "abilityText": "Stun Batons: After you resolve an attack, if the target suffered any Hit results, it also suffers 1 Strain.\n\nShield: At the end of your activation, if you have no Block tokens, gain 1 Block token.",
+      "keywords": [
+        "TROOPER",
+        "BRAWLER",
+        "GUARDIAN"
+      ],
+      "cost": 5,
+      "subCost": 2,
+      "health": 5,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "red"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "damage 1"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Royal Guard (Elite)": {
       "abilityText": "Sentinel: While a friendly non-GUARDIAN figure is defending, and you are adjacent to the targeted space, apply +1 Block to the defense results. Limit 1 \"Sentinel\" or \"Protector\" ability used per attack.\n\nForward Vengeance: When an adjacent, friendly, non-GUARDIAN, non-companion figure is defeated, you become Focused and may move 1 space.\n\nProfessional: While attacking, you may reroll one attack die.",
@@ -3929,6 +4329,7 @@
         "Reach",
         "Pierce 1"
       ],
+      "figures": 2,
       "attack": {
         "dice": [
           "red",
@@ -3937,15 +4338,15 @@
         "type": "melee"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "stun, evade token",
         "damage 2"
       ],
       "attachment": false,
-      "affiliation": "Imperial",
-      "elite": true
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Royal Guard (Regular)": {
       "abilityText": "Sentinel: While a friendly non-GUARDIAN figure is defending, and you are adjacent to the targeted space, apply +1 Block to the defense results. Limit 1 \"Sentinel\" or \"Protector\" ability used per attack.\n\nVengeance: When an adjacent, friendly, non-GUARDIAN figure is defeated, you become Focused.",
@@ -3957,10 +4358,10 @@
       "subCost": 4,
       "health": 8,
       "speed": 5,
-      "figures": 3,
       "passives": [
         "Reach"
       ],
+      "figures": 2,
       "attack": {
         "dice": [
           "red",
@@ -3969,7 +4370,7 @@
         "type": "melee"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "stun",
@@ -3987,10 +4388,10 @@
       "cost": 10,
       "health": 13,
       "speed": 6,
-      "figures": 1,
       "passives": [
         "Reach"
       ],
+      "figures": 1,
       "attack": {
         "dice": [
           "red",
@@ -4013,8 +4414,37 @@
       "affiliation": "Imperial"
     },
     "Sabine Wren": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Special Action (Evasive Maneuver): Move up to 2 spaces, then recover 2 Damage.\n\nParting Gift: Once during your activation, you may choose a space within 3 spaces and roll 1 green die. Each other figure and object on or adjacent to that space suffers Damage equal to the Hit results.",
+      "keywords": [
+        "HUNTER",
+        "VEHICLE"
+      ],
+      "subname": "SPECTRE-5",
+      "cost": 7,
+      "health": 11,
+      "speed": 4,
+      "passives": [
+        "Mobile"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "pierce 2",
+        "damage 1, blast 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Saska Teft": {
       "abilityText": "Traits: SMUGGLER, SPY. Attack (Range): green, yellow. Defense: white. accuracy 1. Surge: accuracy 1; Surge: damage 1. Surge: pierce 1; Surge: weaken",
@@ -4025,18 +4455,19 @@
       "keywords": []
     },
     "SC2-M Repulsor Tank": {
-      "abilityText": "Double Action (Focus Fire): Perform 2 attacks targeting the same figure.\n\nDefensible: While defending, you may apply either +1 Block or +1 Evade to your defense results.",
+      "abilityText": "Double Action Special (Focus Fire): Perform 2 attacks targeting the same figure.\n\nDefensible: While defending, you may apply either +1 Block or +1 Evade to your defense results.",
       "keywords": [
         "VEHICLE",
-        "Massive"
+        "MASSIVE"
       ],
       "cost": 9,
       "health": 12,
       "speed": 4,
-      "figures": 1,
       "passives": [
-        "+2 Accuracy"
+        "+2 Accuracy",
+        "Massive"
       ],
+      "figures": 1,
       "attack": {
         "dice": [
           "blue",
@@ -4046,15 +4477,15 @@
         "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "damage 2",
         "blast 1"
       ],
       "attachment": false,
-      "affiliation": "Imperial",
-      "elite": true
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Scout Trooper (Elite)": {
       "abilityText": "Camouflage: Hostile figures 4 or more spaces away from you cannot draw line of sight to you. You do not block line of sight for those figures.\n\nFind Weakness: While attacking, apply +3 Accuracy and -1 Evade to the results.\n\nExploit Weakness: While attacking a figure with a HARMFUL condition, apply +1 Surge to the attack results.",
