@@ -63,6 +63,7 @@
 ### DCs/CCs effects
 - [ ] **Logic/tooling so that all card effects exist as things the bot can execute.** Add or verify that every DC and CC effect is represented as an executable action the bot can perform (may already be partially in place). Includes passives, surge abilities, special actions, keywords, and triggered effects.
 - [ ] **Ability database and proc logic.** Create a central database of all named abilities (e.g. Dual-Bladed Fury, Medical Loadout, False Orders, Locked and Loaded). Each ability has defined executable logic. When a card uses that ability (because it appears on the deployment card), the system looks it up and executes the ability's logic—i.e. the ability "procs." Cards reference abilities by name; the bot resolves what happens.
+- [ ] **Ability library: track action type.** When creating the Ability library, record the action type of each ability (e.g. Surge action, Special action, Double action, Double action special, Passive/triggered, etc.) so the bot can enforce timing and cost (e.g. spend 2 movement, use during attack) correctly.
 
 ### Implementation (Discord / UX)
 - [ ] **Buttons in Discord and UX for card-effect logic.** Implement the above DC/CC effects in a playable way: Discord buttons, menus, and flow so players can trigger and resolve card effects through the bot without manual workarounds.
