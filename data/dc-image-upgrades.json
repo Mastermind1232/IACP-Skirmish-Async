@@ -44,9 +44,25 @@
     "Sabine Wren",
     "Saska Teft",
     "Saw Gerrerra",
-    "Tress Hacnua"
+    "Second Sister",
+    "Sentry Droid (Regular)",
+    "Shyla Varad",
+    "Scout Trooper (Elite)",
+    "Snowtrooper (Regular)",
+    "Stormtrooper (Elite)",
+    "Stormtrooper (Regular)",
+    "Super Commando (Elite)",
+    "Taron Malicos",
+    "The Grand Inquisitor",
+    "The Mandalorian, Renegade Hunter",
+    "Trandoshan Hunter (Elite)",
+    "Tusken Raider (Elite)",
+    "Ugnaught Tinkerer (Elite)",
+    "Ugnaught Tinkerer (Regular)",
+    "Tress Hacnua",
+    "Wing Guard (Elite)"
   ],
   "dc_upgrades": [],
   "cc": [],
-  "companions": []
+  "companions": ["BD-1"]
 }

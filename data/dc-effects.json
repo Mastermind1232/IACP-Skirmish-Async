@@ -4447,12 +4447,71 @@
       "affiliation": "Rebel"
     },
     "Saska Teft": {
-      "abilityText": "Traits: SMUGGLER, SPY. Attack (Range): green, yellow. Defense: white. accuracy 1. Surge: accuracy 1; Surge: damage 1. Surge: pierce 1; Surge: weaken",
-      "keywords": []
+      "abilityText": "Shady Contacts: You may include up to 1 non-upgrade SCUM Deployment card in your army.\n\nUnstable Devices: Once during your activation, a friendly figure in your line of sight may gain 1 Device token.\n\nPower Converter: Once per round, while a friendly figure with a Device token is attacking, it may reroll 1 attack die. Before rerolling, you may replace that die with another attack die of any color. It is considered rerolled.",
+      "keywords": [
+        "TECHNICIAN",
+        "SMUGGLER",
+        "SPY"
+      ],
+      "subname": "UNDERWORLD INNOVATOR",
+      "cost": 4,
+      "health": 7,
+      "speed": 4,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 1, pierce 1",
+        "damage 2, accuracy 1",
+        "weaken, stun"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Saw Gerrerra": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Brutal Tactics: Once per round, when a hostile figure is defeated, choose a hostile figure within 3 spaces of the defeated figure's space. The chose figure becomes weakend.\n\nWanton Destruction: After a friendly resolves an attack, you may discard 1 Command card from your hand to choose up to 2 figures other than the defender within 2 spaces of the target space. Those figures suffer 1 Damage.",
+      "keywords": [
+        "LEADER"
+      ],
+      "subname": "ROGUE EXTREMIST",
+      "cost": 4,
+      "health": 7,
+      "speed": 4,
+      "passives": [
+        "+2 Accuracy",
+        "+1 Surge"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "red"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "hide",
+        "accuracy 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "SC2-M Repulsor Tank": {
       "abilityText": "Double Action Special (Focus Fire): Perform 2 attacks targeting the same figure.\n\nDefensible: While defending, you may apply either +1 Block or +1 Evade to your defense results.",
@@ -4497,10 +4556,10 @@
       "subCost": 4,
       "health": 7,
       "speed": 4,
-      "figures": 2,
       "passives": [
         "Professional"
       ],
+      "figures": 2,
       "attack": {
         "dice": [
           "blue",
@@ -4509,7 +4568,7 @@
         "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "accuracy 3",
@@ -4517,15 +4576,44 @@
         "pierce 1, weaken"
       ],
       "attachment": false,
-      "affiliation": "Imperial",
-      "elite": true
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Second Sister": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Special Action (Force Leap): Place your figure in an empty space within 6 spaces.\n\nSpecial Action (Saber Orbit): Choose up to 3 adjacent hostile figures. For each of those figures, perform a Melee attack using 1 red die targeting that figure.\n\nSurge (Mastery): Choose and re-draw a FORCE USER Command card of cost 1 or less in your discard pile. Limit once per round.",
+      "keywords": [
+        "FORCE USER",
+        "HUNTER",
+        "TECHNICIAN"
+      ],
+      "subname": "BETRAYED PRODIGY",
+      "cost": 5,
+      "health": 10,
+      "speed": 4,
+      "passives": [
+        "+1 Surge"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "pierce 3",
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Sentry Droid (Elite)": {
-      "abilityText": "Double Action (Multi-Fire): Perform 2 attacks. Each attack must have a different target. Apply -1 Damage to each attack's result.\n\nDouble Action (Charged Shot): Perform an attack. Apply +2 Accuracy to the attack results.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.",
+      "abilityText": "Special Action (Multi-Fire): Perform 2 attacks. Each attack must have a different target. Apply -1 Damage to each attack's result.\n\nSpecial Action (Charged Shot): Perform an attack. Apply +2 Accuracy to the attack results.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.",
       "keywords": [
         "TROOPER",
         "DROID",
@@ -4545,7 +4633,7 @@
         "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "damage 1",
@@ -4553,12 +4641,38 @@
         "accuracy 2"
       ],
       "attachment": false,
-      "affiliation": "Imperial",
-      "elite": true
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Sentry Droid (Regular)": {
-      "abilityText": "Traits: TROOPER, DROID, GUARDIAN. Attack (Range): green, green. Defense: black. Surge: damage 1. Surge: pierce 2. Surge: accuracy 1",
-      "keywords": []
+      "abilityText": "Special Action (Multi-Fire): Perform 2 attacks. Each attack must have a different target. Apply -1 Hit to each attack's results.\n\nSpecial Action (Charged Shot): Perform an attack. Apply +2 Accuracy to the attack results.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.",
+      "keywords": [
+        "TROOPER",
+        "DROID",
+        "GUARDIAN"
+      ],
+      "cost": 6,
+      "subCost": 3,
+      "health": 5,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "green",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "pierce 2",
+        "accuracy 1"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Shoretrooper (Elite)": {
       "abilityText": "Squad Training: While attacking, while adjacent to another friendly TROOPER, you may reroll 1 attack die.",
@@ -4566,12 +4680,16 @@
         "TROOPER"
       ],
       "cost": 6,
+      "subCost": 3,
       "health": 7,
       "speed": 5,
-      "figures": 1,
+      "passives": [
+        "Efficient Travel",
+        "+2 Accuracy"
+      ],
+      "figures": 2,
       "attack": {
         "dice": [
-          "blue",
           "red",
           "green"
         ],
@@ -4581,19 +4699,47 @@
         "black"
       ],
       "surgeAbilities": [
-        "movement 2",
-        "accuracy 2"
+        "accuracy 2",
+        "damage 2"
       ],
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial"
     },
     "Shyla Varad": {
-      "abilityText": "Traits: HUNTER, BRAWLER. Attack (Melee): green, green, yellow. Defense: black. Surge: cancel 1. Surge: damage 2. Surge: pierce 2. Surge: cleave 2",
-      "keywords": []
+      "abilityText": "Special Action (Mandalorian Whip): Choose a SMALL, hostile figure within 3 spaces and line of sight. Push that figure up to 3 spaces to a space adjacent to you. Then, perform an attack targeting that figure.\n\nResponsive: At the start of your activation, you may gain 1 movement point or recover 1 Damage.",
+      "keywords": [
+        "BRAWLER",
+        "HUNTER"
+      ],
+      "cost": 7,
+      "health": 12,
+      "speed": 4,
+      "passives": [
+        "+1 Evade"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "green",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "pierce 2",
+        "cleave 2"
+      ],
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "Snowtrooper (Elite)": {
-      "abilityText": "Special Action (Disruptor Rifle): Perform an attack. After this attack resolves, if it did not miss and the target has suffered Damage equal to its Health minus 1, the target suffers 1 Damage.\n\nSpiked Boots: You cannot be pushed out of your space except by massive figures.\n\nImmune: You cannot gain HARMFUL conditions.",
+      "abilityText": "Special Action (Disruptor Rifle): Perform an attack. After this attack resolves, if it did not miss and the target has suffered Damage equal to its Health minus 1, the target suffers 1 Damage.\n\nSpiked Boots: You cannot be pushed out of your space except by MASSIVE figures.\n\nImmune: You cannot gain HARMFUL conditions.",
       "keywords": [
         "TROOPER"
       ],
@@ -4601,10 +4747,10 @@
       "subCost": 4,
       "health": 7,
       "speed": 4,
-      "figures": 3,
       "passives": [
         "Efficient Travel"
       ],
+      "figures": 3,
       "attack": {
         "dice": [
           "blue",
@@ -4614,7 +4760,7 @@
         "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "accuracy 2, damage 1",
@@ -4622,33 +4768,163 @@
         "focus"
       ],
       "attachment": false,
-      "affiliation": "Imperial",
-      "elite": true
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Snowtrooper (Regular)": {
-      "abilityText": "Traits: TROOPER. Attack (Range): blue, green. Defense: black. Surge: weaken. Surge: pierce 1. Surge: accuracy 2",
-      "keywords": []
+      "abilityText": "Special Action (Environmental Recovery Gear): You and each adjacent friendly TROOPER may either recover 1 Damage or discard 1 HARMFUL condition.",
+      "keywords": [
+        "TROOPER"
+      ],
+      "cost": 7,
+      "subCost": 2,
+      "health": 4,
+      "speed": 4,
+      "figures": 3,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "weaken",
+        "accuracy 2",
+        "pierce 1"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Stormtrooper (Elite)": {
-      "abilityText": "Traits: TROOPER. Attack (Range): blue, green. Defense: black. Surge: damage 1. Surge: accuracy 2",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Squad Training: While adjacent to another friendly TROOPER, you may reroll 1 attack die. \n\nLast Stand: When you are defeated, choose another figure in your group. That figure becomes Focused.",
+      "keywords": [
+        "TROOPER"
+      ],
+      "cost": 7,
+      "subCost": 3,
+      "health": 5,
+      "speed": 4,
+      "figures": 3,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "accuracy 3",
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Stormtrooper (Regular)": {
-      "abilityText": "Traits: TROOPER. Attack (Range): blue, green. Defense: black. Surge: damage 1. Surge: accuracy 2",
-      "keywords": []
+      "abilityText": "Squad Training: While attacking, while adjacent to another friendly TROOPER, you may reroll 1 attack die.",
+      "keywords": [
+        "TROOPER"
+      ],
+      "cost": 6,
+      "subCost": 2,
+      "health": 3,
+      "speed": 4,
+      "figures": 3,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "accuracy 2"
+      ],
+      "attachment": false,
+      "affiliation": "Imperial"
     },
     "Super Commando (Elite)": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Jetpack Rocket: Once per figure per round, you may spend 2 movement points to choose a hostile figure within 3 spaces and line of sight. Roll 1 blue die. That figure suffers Damage equal to the Hit results.\n\nShield Gauntlets: Once during your activation, you may spend 1 movement point to gain 1 Block token.",
+      "keywords": [
+        "HUNTER",
+        "TROOPER",
+        "VEHICLE"
+      ],
+      "cost": 7,
+      "subCost": 4,
+      "health": 7,
+      "speed": 4,
+      "passives": [
+        "Mobile",
+        "Professional",
+        "+2 Accuracy",
+        "Pierce 1"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "accuracy 3",
+        "damage 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Taron Malicos": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Fallen Master: Friendly non-companion FORCE USER figures may ignore the IMPERIAL restriction when using Command cards.\n\nMadness: At the start of your activation, if you have 2 or fewer Command cards in your hand, you suffer 1 Strain and become Focused.\n\nSpecial Action (Boulder Barrage): Choose a space in your line of sight. Any figure on that space suffers 2 Damage. Then place a Rubble token in or adjacent to that space.",
+      "keywords": [
+        "FORCE USER",
+        "LEADER"
+      ],
+      "subname": "THE WANDERER",
+      "cost": 6,
+      "health": 11,
+      "speed": 4,
+      "passives": [
+        "+1 Surge"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "red"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "pierce 3",
+        "damage 2",
+        "bleed"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "The Grand Inquisitor": {
-      "abilityText": "Precision: While attacking or defending against an adjacent figure, you may choose 1 die. The player that rolled that die must reroll it.\n\nLightsaber Throw: Perform a ranged attack using your attack pool. Apply +2 Accuracy to the attack results.\n\nDeadly Spin: Apply -1 Block to the defense results. This attack gains Cleave 3.",
+      "abilityText": "Precision: While attacking or defending against an adjacent figure, you may choose 1 die. The player that rolled that die must reroll it.\n\nSpecial Action (Lightsaber Throw): Perform a Ranged attack targeting a non-adjacent figure using your attack pool. Apply +2 Accuracy to the attack results.\n\nSurge (Deadly Spin): Apply -1 Dodge to the defense results. This attack gains Cleave 3.",
       "keywords": [
         "FORCE USER",
         "LEADER",
@@ -4671,8 +4947,8 @@
         "white"
       ],
       "surgeAbilities": [
-        "accuracy 2",
-        "pierce 3"
+        "pierce 3",
+        "damage 2"
       ],
       "attachment": false,
       "elite": true,
@@ -4722,9 +4998,34 @@
       "affiliation": "Scum"
     },
     "Trandoshan Hunter (Elite)": {
-      "abilityText": "Traits: HUNTER, BRAWLER. Attack (Range): blue, green. Defense: black. Surge: focus. Surge: bleed. Surge: pierce 2",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Relentless: When you declare an attack on a target within 3 spaces, that figure suffers 1 Damage.\n\nACP Scattergun: While attacking, if you are adjacent to the target, apply +2 Damage to the attack results.\n\nHardy: At the end of each round, discard all HARMFUL conditions.",
+      "keywords": [
+        "BRAWLER",
+        "HUNTER"
+      ],
+      "cost": 8,
+      "subCost": 4,
+      "health": 8,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "focus",
+        "damage 1, bleed",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Trandoshan Hunter (Regular)": {
       "abilityText": "Traits: HUNTER, BRAWLER. Attack (Range): blue, green. Defense: black. Surge: bleed. Surge: pierce 2",
@@ -4769,13 +5070,57 @@
       "keywords": []
     },
     "Ugnaught Tinkerer (Elite)": {
-      "abilityText": "Traits: SMUGGLER. Attack (Range): blue, yellow. Defense: black. Surge: bleed. Surge: pierce 2",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Spot Weld: Place the Junk Droid companion in an adjacent space.\n\nOverclock: The Junk Droid may interrupt to perform a move or attack.\n\nScrap Battalion: The Junk Droid readies at the start of your activation. It activates as though it was part of your group and may use your surge abilities.",
+      "keywords": [
+        "SMUGGLER"
+      ],
+      "cost": 5,
+      "health": 7,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow",
+          "blue"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "bleed",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Ugnaught Tinkerer (Regular)": {
-      "abilityText": "Traits: SMUGGLER. Attack (Range): blue, yellow. Defense: black. Surge: bleed. Surge: pierce 1",
-      "keywords": []
+      "abilityText": "Spot Weld: Place the Junk Droid companion in an adjacent space.\n\nScrap Battalion: The Junk Droid readies at the start of your activation. It activates as though it was part of your group and may use your surge abilities.",
+      "keywords": [
+        "SMUGGLER"
+      ],
+      "cost": 3,
+      "health": 4,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "bleed",
+        "pierce 1"
+      ],
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "Verena Talos": {
       "abilityText": "Traits: SPY, BRAWLER. Attack (Range): blue, green. Defense: black. Surge: cancel 1. Surge: damage 2. Surge: pierce 1",
@@ -4804,9 +5149,34 @@
       "keywords": []
     },
     "Wing Guard (Elite)": {
-      "abilityText": "Traits: GUARDIAN, TROOPER. Attack (Range): blue, green. Defense: black. Surge: damage 2. Surge: recover 2",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Keep the Peace: When a hostile figure declares an attack targeting a space adjacent to you, the attacker suffers 1 Damage. Limit 1 'Keep the Peace' ability per group activation.\n\nBespin Security: You may include 'Lando Calrissian' in your army. While an adjacent friendly LEADER or TROOPER is performing an attack, it may reroll 1 attack die. Limit 1 'Bespin Security' ability per attack.",
+      "keywords": [
+        "GUARDIAN",
+        "TROOPER"
+      ],
+      "cost": 7,
+      "subCost": 3,
+      "health": 5,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2, stun",
+        "accuracy 3"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Wing Guard (Regular)": {
       "abilityText": "Traits: GUARDIAN, TROOPER. Attack (Range): blue, green. Defense: black. Surge: damage 1. Surge: recover 1",
@@ -4822,7 +5192,7 @@
       "keywords": []
     },
     "Yoda": {
-      "abilityText": "Calming Presence: At the start of a friendly Rebel figure's activation, that figure may remove one HARMFUL condition and suffer 1 Strain. Limit once per round.\n\nWisdom: At the start of your activation, you may draw 1 Command card. If you do, place 1 card from your hand on the bottom of your deck.\n\nSurge (Do or Do Not): Choose another friendly REBEL FORCE USER within 4 spaces. That figure becomes Focused.\n\nForce Deflection: After an attack targeting you or an adjacent friendly Rebel figure resolves, you may have the attacking figure suffer Damage equal to the number of attack dice rolled. Limit once per round.",
+      "abilityText": "Calming Presence: At the start of a friendly REBEL figure's activation, that figure may remove one HARMFUL condition and suffer 1 Strain. Limit once per round.\n\nWisdom: At the start of your activation, you may draw 1 Command card. If you do, place 1 card from your hand on the bottom of your deck.\n\nSpecial Action (Do or Do Not): Choose another friendly REBEL FORCE USER within 4 spaces. That figure becomes Focused.\n\nForce Deflection: After an attack targeting you or an adjacent friendly REBEL figure resolves, you may have the attacking figure suffer Damage equal to the number of attack dice rolled. Limit once per round.",
       "keywords": [
         "FORCE USER"
       ],
@@ -4834,12 +5204,9 @@
       "defense": [
         "white"
       ],
-      "surgeAbilities": [
-        "focus (friendly REBEL FORCE USER within 4)"
-      ],
       "attachment": false,
-      "affiliation": "Rebel",
-      "elite": true
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Zeb Orrelios": {
       "abilityText": "Special Action (Bo-Rifle Staff Strike): Once during your activation, you may perform a melee attack using 2 red dice without spending an action.\n\nLasat Honor Guard: While attacking, after any rerolls, you may turn 1 die showing only a single attack icon to any other side.",
@@ -4904,6 +5271,48 @@
       "attachment": false,
       "companion": true,
       "affiliation": "Any"
+    },
+    "J4X-7": {
+      "abilityText": "Supporting Fire: While another friendly figure is attacking a figure adjacent to you, apply Pierce 1 to the attack results. Limit once per activation.",
+      "keywords": [
+        "DROID"
+      ],
+      "health": 4,
+      "speed": 3,
+      "passives": [
+        "Pierce 1"
+      ],
+      "attack": {
+        "dice": [
+          "blue"
+        ],
+        "type": "range"
+      },
+      "surgeAbilities": [
+        "damage 1"
+      ],
+      "attachment": false,
+      "companion": true
+    },
+    "Cam Droid": {
+      "abilityText": "Surge (Agitate): If this attack does not miss, the defending figure's group must be the next group to activate, if able.",
+      "keywords": [
+        "DROID"
+      ],
+      "health": 3,
+      "speed": 5,
+      "passives": [
+        "+2 Accuracy",
+        "+1 Evade"
+      ],
+      "attack": {
+        "dice": [
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "attachment": false,
+      "companion": true
     }
   }
 }
