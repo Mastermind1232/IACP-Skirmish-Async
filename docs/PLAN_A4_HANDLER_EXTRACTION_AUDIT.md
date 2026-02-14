@@ -4,6 +4,38 @@
 
 ---
 
+## A1–A8 status (Phase 1 — Architecture)
+
+| ID | Item | Status | Notes |
+|----|------|--------|--------|
+| **A1** | Game state → `src/game-state.js` | ✅ Done | games, dcMessageMeta, dcExhaustedState, dcDepletedState, dcHealthState, pendingIllegalSquad; getGame, setGame, persist |
+| **A2** | Data loading → `src/data-loader.js` | ✅ Done | JSON load, reloadGameData; getDcStats, getDcEffects, getMapSpaces, getDice, getCcEffect, etc. |
+| **A3** | Interaction router | ✅ Done | `src/router.js`; prefix → handler key; create_game / join_game in BUTTON_PREFIXES |
+| **A4** | Handlers → `src/handlers/*` | 🔄 In progress | **Extracted:** lobby (2), requests (2), game-tools (5), special (1), interact (2), round (2), movement (3), combat (4), activation (5), setup (8), **DC-play-area (6)**. **Remaining in index:** deploy_modal_, CC-hand (modals, selects, buttons) |
+| **A5** | Game logic → `src/game/*` | ⏳ Not started | Movement, combat, validation; no Discord |
+| **A6** | Discord helpers → `src/discord/*` | ⏳ Not started | Embeds, buildBoardMapPayload, logGameAction; button/component helpers |
+| **A7** | Test suite for `src/game/*` | ⏳ Not started | After A5 |
+| **A8** | Error-handling pattern | ⏳ Not started | Log, user message, avoid silent catch; retry for Discord API |
+
+**A4 detail (handlers):**
+
+| Domain | File | Prefixes | Status |
+|--------|------|----------|--------|
+| Lobby | `handlers/lobby.js` | lobby_join_, lobby_start_ | ✅ |
+| Requests | `handlers/requests.js` | request_resolve_, request_reject_ | ✅ |
+| Game-tools | `handlers/game-tools.js` | refresh_map_, refresh_all_, undo_, kill_game_, default_deck_ | ✅ |
+| Special | `handlers/special.js` | special_done_ | ✅ |
+| Interact | `handlers/interact.js` | interact_cancel_, interact_choice_ | ✅ |
+| Round | `handlers/round.js` | end_end_of_round_, end_start_of_round_ | ✅ |
+| Movement | `handlers/movement.js` | move_mp_, move_adjust_mp_, move_pick_ | ✅ |
+| Combat | `handlers/combat.js` | attack_target_, combat_ready_, combat_roll_, combat_surge_ | ✅ |
+| Activation | `handlers/activation.js` | status_phase_, pass_activation_turn_, end_turn_, confirm_activate_, cancel_activate_ | ✅ |
+| Setup | `handlers/setup.js` | map_selection_, draft_random_, determine_initiative_, deployment_zone_red_/blue_, deployment_fig_, deployment_orient_, deploy_pick_, deployment_done_ | ✅ |
+| DC-play-area | `handlers/dc-play-area.js` | dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_ | ✅ |
+| CC-hand + modals | — | squad_modal_, deploy_modal_, cc_attach_to_, cc_play_select_, cc_discard_select_, deck_illegal_*, cc_*, squad_select_ | ⏳ In index |
+
+---
+
 ## 1. Handler inventory (router vs code)
 
 ### 1.1 Router prefixes (src/router.js)
@@ -195,7 +227,7 @@
 - **Combat:** `resolveCombatAfterRolls` moved to **top-level** in index.js (after `findDcMessageIdForFigure`). `src/handlers/combat.js` — `handleAttackTarget`, `handleCombatReady`, `handleCombatRoll`, `handleCombatSurge`. Context: getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, updateDcActionsMessage, ACTION_ICONS, ThreadAutoArchiveDuration, resolveCombatAfterRolls, saveGames, client, rollAttackDice, rollDefenseDice, getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect. Index dispatches all four combat prefixes with a single `combatContext` and handler calls.
 - **Activation:** `src/handlers/activation.js` — `handleStatusPhase`, `handlePassActivationTurn`, `handleEndTurn`, `handleConfirmActivate`, `handleCancelActivate`. Context: getGame, replyIfGameEnded, hasActionsRemainingInGame, GAME_PHASES, PHASE_COLOR, getInitiativePlayerZoneLabel, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, client, dcMessageMeta, dcHealthState, buildDcEmbedAndFiles, getDcPlayAreaComponents, maybeShowEndActivationPhaseButton, dcExhaustedState, updateActivationsMessage, getActionsCounterContent, getDcActionButtons, getActivationMinimapAttachment, getActivateDcButtons, DC_ACTIONS_PER_ACTIVATION, ThreadAutoArchiveDuration, ACTION_ICONS. Index dispatches all five activation prefixes with a single `activationContext`.
 
-**Still in index.js (extract in follow-up):** DC-play-area (dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_). Setup remainder (determine_initiative_, deployment_zone_*, deployment_fig_, deployment_orient_, deploy_pick_, deployment_done_, deploy_modal_). CC-hand (squad_modal_, deploy_modal_, cc_attach_to_, cc_play_select_, cc_discard_select_, deck_illegal_*, cc_shuffle_draw_, cc_play_, cc_draw_, cc_search_discard_, cc_close_discard_, cc_discard_, squad_select_). Same pattern: create handler file, register, build context in index, replace if-block.
+**Still in index.js (extract in follow-up):** DC-play-area (dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_). deploy_modal_ (modal; setup-related). CC-hand (squad_modal_, deploy_modal_, cc_attach_to_, cc_play_select_, cc_discard_select_, deck_illegal_*, cc_shuffle_draw_, cc_play_, cc_draw_, cc_search_discard_, cc_close_discard_, cc_discard_, squad_select_). Same pattern: create handler file, register, build context in index, replace if-block.
 
 ---
 
@@ -208,4 +240,4 @@
 - **Remaining:** DC-play-area, setup, cc-hand. Section 1.2 line numbers are from an earlier snapshot (shifted after extractions).
 - **Conclusion:** Extraction is consistent and on plan. Safe to continue.
 
-**Setup (partial):** `src/handlers/setup.js` — `handleMapSelection`, `handleDraftRandom`. Context: getGame, getPlayReadyMaps, postMissionCardAfterMapSelection, buildBoardMapPayload, logGameAction, getGeneralSetupButtons, createHandChannels, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, runDraftRandom, logGameErrorToBotLogs, extractGameIdFromInteraction, client, saveGames. Remaining setup still in index: determine_initiative_, deployment_zone_red_/blue_, deployment_fig_, deployment_orient_, deploy_pick_, deployment_done_.
+**Setup (full):** `src/handlers/setup.js` — `handleMapSelection`, `handleDraftRandom`, `handleDetermineInitiative`, `handleDeploymentZone` (red/blue), `handleDeploymentFig`, `handleDeploymentOrient`, `handleDeployPick`, `handleDeploymentDone`. Single `setupContext` in index includes: getGame, getPlayReadyMaps, postMissionCardAfterMapSelection, buildBoardMapPayload, logGameAction, getGeneralSetupButtons, createHandChannels, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, runDraftRandom, logGameErrorToBotLogs, extractGameIdFromInteraction, clearPreGameSetup, getDeploymentZoneButtons, getDeploymentZones, getDeployFigureLabels, getDeployButtonRows, getDeploymentMapAttachment, getFigureSize, getFootprintCells, filterValidTopLeftSpaces, getDeploySpaceGridRows, pushUndo, updateDeployPromptMessages, getInitiativePlayerZoneLabel, getCcShuffleDrawButton, client, saveGames. All setup button handlers extracted; deploy_modal_ (modal) remains in index for now.
