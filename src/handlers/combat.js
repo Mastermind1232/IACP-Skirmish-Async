@@ -1,7 +1,21 @@
 /**
- * Combat handlers: attack_target_, combat_ready_, combat_roll_, combat_surge_
+ * Combat handlers: attack_target_, combat_ready_, combat_roll_, combat_surge_, combat_resolve_ready_ (F10)
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+
+/** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after. */
+async function sendReadyToResolveRolls(thread, gameId) {
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`combat_resolve_ready_${gameId}`)
+      .setLabel('Ready to resolve rolls')
+      .setStyle(ButtonStyle.Success)
+  );
+  await thread.send({
+    content: '**Confirm** — When both players have seen the rolls (and any surge), click **Ready to resolve rolls** to apply damage.',
+    components: [row],
+  });
+}
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -288,8 +302,40 @@ export async function handleCombatRoll(interaction, ctx) {
       saveGames();
       return;
     }
-    await resolveCombatAfterRolls(game, combat, interaction.client);
+    await sendReadyToResolveRolls(thread, game.gameId);
+    saveGames();
+    return;
   }
+  saveGames();
+}
+
+/**
+ * F10: Confirm rolls then resolve. Call resolveCombatAfterRolls when user clicks "Ready to resolve rolls".
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - getGame, replyIfGameEnded, resolveCombatAfterRolls, saveGames, client
+ */
+export async function handleCombatResolveReady(interaction, ctx) {
+  const { getGame, replyIfGameEnded, resolveCombatAfterRolls, saveGames, client } = ctx;
+  const gameId = interaction.customId.replace('combat_resolve_ready_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) {
+    await interaction.reply({ content: 'No pending combat to resolve.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const isP1 = interaction.user.id === game.player1Id;
+  const isP2 = interaction.user.id === game.player2Id;
+  if (!isP1 && !isP2) {
+    await interaction.reply({ content: 'Only players in this game can confirm.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate().catch(() => {});
+  await resolveCombatAfterRolls(game, combat, client);
   saveGames();
 }
 
@@ -355,7 +401,7 @@ export async function handleCombatSurge(interaction, ctx) {
   if (combat.surgeRemaining <= 0 || choice === 'done') {
     combat.surgeRemaining = 0;
     await interaction.deferUpdate().catch(() => {});
-    await resolveCombatAfterRolls(game, combat, interaction.client);
+    await sendReadyToResolveRolls(thread, gameId);
   } else {
     await interaction.deferUpdate().catch(() => {});
     const surgeAbilities = getAttackerSurgeAbilities(combat);

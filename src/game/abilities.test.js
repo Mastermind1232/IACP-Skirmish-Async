@@ -18,6 +18,14 @@ test('getAbility returns null for unknown id', () => {
   assert.strictEqual(getAbility('unknown_key'), null);
 });
 
+test('F13: getAbility supports surgeCost > 1 (multi-surge)', () => {
+  const entry = getAbility('damage 4');
+  assert.ok(entry);
+  assert.strictEqual(entry.surgeCost, 2);
+  assert.strictEqual(entry.label, '+4 Hits');
+  assert.strictEqual(resolveSurgeAbility('damage 4').damage, 4);
+});
+
 test('resolveSurgeAbility returns same shape as parseSurgeEffect', () => {
   const r = resolveSurgeAbility('damage 2');
   assert.strictEqual(r.damage, 2);

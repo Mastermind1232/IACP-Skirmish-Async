@@ -84,6 +84,7 @@ import {
   handleMovePick,
   handleAttackTarget,
   handleCombatReady,
+  handleCombatResolveReady,
   handleCombatRoll,
   handleCombatSurge,
   handleStatusPhase,
@@ -3887,6 +3888,7 @@ client.on('interactionCreate', async (interaction) => {
       getSurgeAbilityLabel,
     };
     if (buttonKey === 'attack_target_') await handleAttackTarget(interaction, combatContext);
+    else if (buttonKey === 'combat_resolve_ready_') await handleCombatResolveReady(interaction, combatContext);
     else if (buttonKey === 'combat_ready_') await handleCombatReady(interaction, combatContext);
     else if (buttonKey === 'combat_roll_') await handleCombatRoll(interaction, combatContext);
     else if (buttonKey === 'combat_surge_') await handleCombatSurge(interaction, combatContext);

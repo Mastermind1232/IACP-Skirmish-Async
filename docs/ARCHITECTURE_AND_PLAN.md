@@ -218,7 +218,7 @@ Definition of “full game” for this plan:
 | F7 | Multi-figure defeat | ✅ **Verified.** resolveCombatAfterRolls updates dcHealthState and dcList[idx].healthState, removes defeated figure from figurePositions, then re-renders target DC embed from dcHealthState; board map is updated. isGroupDefeated uses figurePositions so activation count stays correct. |
 | F8 | Map data for all maps in use | Extend map-spaces (or equivalent) so every map has spaces, adjacency, terrain. |
 | F9 | Interior/exterior | Per-space flags stored **per map** in map data. Provide a **UI tool** (like the existing tool for difficult terrain, etc.) so the maintainer can mark which spaces are interior vs exterior on each map; tool saves to the same map data the bot uses. Required for abilities like MASSIVE. |
-| F10 | Optional: “Ready to resolve rolls” | Extra confirmation step in combat; low priority. |
+| F10 | Optional: “Ready to resolve rolls” | **Done.** Button after rolls/surge; resolve on click. |
 
 | F11 | Post-game archival | ✅ **Done.** Archive via **`/botmenu`** in Game Log → Bot Stuff → Archive → "Are you sure?" Yes/No. First confirm wins. On Yes: delete game category and channels, remove from `games` and DB. Ended games already have a row in `completed_games` (DB2). |
 | F12 | Mission B (and other IACP missions) | ✅ **Verified.** Mission B: Retrieve Contraband (interact at contraband space), end-of-round VP for figures in deployment zone with contraband (round.js); getLegalInteractOptions includes retrieve_contraband; figureContraband tracked. |
@@ -304,6 +304,14 @@ Definition of “full game” for this plan:
 
 **Phase 3 — Polish**  
 - F10 if desired; F11 (Archive via /botmenu); F14 (Undo scope); F15 (Discord limits); F16 (Kill/Archive via /botmenu); stat tracking UI when DB2 exists.
+
+**§7 Remaining work (as of last update)**  
+- **F8:** Extend map-spaces so every map in use has spaces, adjacency, terrain (data content).  
+- **F9:** Interior/exterior per-space flags in map data + UI tool (for MASSIVE etc.).  
+- **F10:** ~~Optional “Ready to resolve rolls” confirmation step in combat~~ — **Done:** button sent after rolls (and after surge step); handler `combat_resolve_ready_` calls `resolveCombatAfterRolls`.  
+- **F14:** More undo types (e.g. interact, CC play); optional full-state snapshots.  
+- **D1/D2:** Migrate DC/CC to reference ability ids.  
+- **DB3/DB5:** Optional indexes; save optimization.
 
 ---
 
