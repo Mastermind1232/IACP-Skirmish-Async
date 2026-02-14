@@ -26,6 +26,7 @@ import {
   handleDeploymentOrient,
   handleDeployPick,
   handleDeploymentDone,
+  handleSetupAttachTo,
 } from './setup.js';
 import {
   handleDcActivate,
@@ -94,6 +95,7 @@ register('deployment_fig_', handleDeploymentFig);
 register('deployment_orient_', handleDeploymentOrient);
 register('deploy_pick_', handleDeployPick);
 register('deployment_done_', handleDeploymentDone);
+register('setup_attach_to_', handleSetupAttachTo);
 register('dc_activate_', handleDcActivate);
 register('dc_unactivate_', handleDcUnactivate);
 register('dc_toggle_', handleDcToggle);

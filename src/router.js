@@ -70,6 +70,7 @@ const MODAL_PREFIXES = [
 
 /** String select menu prefixes. */
 const SELECT_PREFIXES = [
+  'setup_attach_to_',
   'cc_attach_to_',
   'cc_play_select_',
   'cc_discard_select_',

@@ -165,6 +165,15 @@ export function isCcAttachment(cardName) {
   return /attachment|on your deployment card as an attachment|place this card on your deployment card/i.test(effect);
 }
 
+/** True if this Deployment Card is a Skirmish Upgrade that attaches to a host DC (e.g. [Focused on the Kill]). */
+export function isDcAttachment(dcName) {
+  if (!dcName || typeof dcName !== 'string') return false;
+  const n = dcName.trim();
+  const effects = getDcEffects();
+  const card = effects[n] || effects[`[${n}]`] || (n.startsWith('[') ? effects[n] : null);
+  return card?.attachment === true;
+}
+
 export function getRootDir() {
   return rootDir;
 }

@@ -1,7 +1,7 @@
 /**
  * Setup handlers: map_selection_, draft_random_, determine_initiative_, deployment_zone_red_/blue_, deployment_fig_, deployment_orient_, deploy_pick_, deployment_done_
  */
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -635,7 +635,7 @@ export async function handleDeployPick(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, logGameAction, getDeployFigureLabels, getDeployButtonRows, getDeploymentMapAttachment, getInitiativePlayerZoneLabel, clearPreGameSetup, getCcShuffleDrawButton, buildBoardMapPayload, client, saveGames
+ * @param {object} ctx - getGame, logGameAction, getDeployFigureLabels, getDeployButtonRows, getDeploymentMapAttachment, getInitiativePlayerZoneLabel, clearPreGameSetup, getCcShuffleDrawButton, buildBoardMapPayload, client, saveGames, isDcAttachment, resolveDcName, isFigurelessDc
  */
 export async function handleDeploymentDone(interaction, ctx) {
   const {
@@ -650,6 +650,9 @@ export async function handleDeploymentDone(interaction, ctx) {
     buildBoardMapPayload,
     client,
     saveGames,
+    isDcAttachment,
+    resolveDcName,
+    isFigurelessDc,
   } = ctx;
   const gameId = interaction.customId.replace('deployment_done_', '');
   const game = getGame(gameId);
@@ -776,6 +779,46 @@ export async function handleDeploymentDone(interaction, ctx) {
   } catch (err) {
     console.error('Failed to update non-initiative deploy message:', err);
   }
+
+  const p1CcList = game.player1Squad?.ccList || [];
+  const p2CcList = game.player2Squad?.ccList || [];
+  // DC attachments (Skirmish Upgrades like [Focused on the Kill]) are always placed at start of game.
+  // CC attachments stay in the command deck and are played from hand during the game when drawn.
+  const p1DcListRaw = game.player1Squad?.dcList || [];
+  const p2DcListRaw = game.player2Squad?.dcList || [];
+  const p1SetupAttachments = p1DcListRaw.filter((entry) => isDcAttachment(resolveDcName(entry)));
+  const p2SetupAttachments = p2DcListRaw.filter((entry) => isDcAttachment(resolveDcName(entry)));
+  if (p1SetupAttachments.length > 0 || p2SetupAttachments.length > 0) {
+    game.setupAttachmentPhase = true;
+    game.setupAttachmentPending = { 1: p1SetupAttachments.map((e) => resolveDcName(e)), 2: p2SetupAttachments.map((e) => resolveDcName(e)) };
+    const generalChannel = await client.channels.fetch(game.generalId);
+    await generalChannel.send({
+      content: '**Both players have deployed.** Place your Skirmish Upgrade card(s) on your Deployment cards (see your Hand channel). When everyone has placed them, shuffle and draw your starting hands.',
+    });
+    for (const pn of [1, 2]) {
+      const pending = game.setupAttachmentPending[pn];
+      if (pending.length === 0) continue;
+      const handId = pn === 1 ? game.p1HandId : game.p2HandId;
+      const handChannel = await client.channels.fetch(handId);
+      const dcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const dcMsgIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const options = dcList.slice(0, 25).map((dc, i) => ({
+        label: (dc.displayName || dc.dcName || `DC ${i + 1}`).slice(0, 100),
+        value: (dcMsgIds[i] || String(i)).toString(),
+      })).filter((o) => o.value);
+      const select = new StringSelectMenuBuilder()
+        .setCustomId(`setup_attach_to_${gameId}_${pn}`)
+        .setPlaceholder('Attach to which Deployment Card?')
+        .addOptions(options);
+      await handChannel.send({
+        content: `**Setup — place Skirmish Upgrade (1 of ${pending.length}):** **${pending[0]}**. Choose which Deployment Card to attach it to:`,
+        components: [new ActionRowBuilder().addComponents(select)],
+      });
+    }
+    saveGames();
+    return;
+  }
+
   game.currentRound = 1;
   const generalChannel = await client.channels.fetch(game.generalId);
   const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
@@ -789,8 +832,6 @@ export async function handleDeploymentDone(interaction, ctx) {
   try {
     const p1HandChannel = await client.channels.fetch(game.p1HandId);
     const p2HandChannel = await client.channels.fetch(game.p2HandId);
-    const p1CcList = game.player1Squad?.ccList || [];
-    const p2CcList = game.player2Squad?.ccList || [];
     const ccDeckText = (list) => list.length ? list.join(', ') : '(no command cards)';
     await p1HandChannel.send({
       content: `**Your Command Card deck** (${p1CcList.length} cards):\n${ccDeckText(p1CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
@@ -802,6 +843,89 @@ export async function handleDeploymentDone(interaction, ctx) {
     });
   } catch (err) {
     console.error('Failed to send CC deck prompt:', err);
+  }
+  saveGames();
+}
+
+/**
+ * Handle setup attachment select: place one attachment CC on chosen DC. When all attachments placed, call finishSetupAttachments.
+ * @param {import('discord.js').StringSelectMenuInteraction} interaction
+ * @param {object} ctx - getGame, updateAttachmentMessageForDc, StringSelectMenuBuilder, ActionRowBuilder, getCcShuffleDrawButton, clearPreGameSetup, getInitiativePlayerZoneLabel, logGameAction, client, saveGames, finishSetupAttachments
+ */
+export async function handleSetupAttachTo(interaction, ctx) {
+  const {
+    getGame,
+    updateAttachmentMessageForDc,
+    getCcShuffleDrawButton,
+    clearPreGameSetup,
+    getInitiativePlayerZoneLabel,
+    logGameAction,
+    client,
+    saveGames,
+    finishSetupAttachments,
+  } = ctx;
+  const match = interaction.customId.match(/^setup_attach_to_([^_]+)_([12])$/);
+  if (!match) return;
+  const [, gameId, playerNumStr] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const game = getGame(gameId);
+  if (!game || !game.setupAttachmentPhase || !game.setupAttachmentPending) {
+    await interaction.reply({ content: 'Game or setup phase not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== ownerId) {
+    await interaction.reply({ content: 'Only the owner of this hand can place setup attachments.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const pending = game.setupAttachmentPending[playerNum];
+  if (!pending || pending.length === 0) return;
+  const card = pending[0];
+  const dcMsgId = interaction.values[0];
+  if (!dcMsgId) return;
+
+  const attachKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+  game[attachKey] = game[attachKey] || {};
+  if (!Array.isArray(game[attachKey][dcMsgId])) game[attachKey][dcMsgId] = [];
+  game[attachKey][dcMsgId].push(card);
+  pending.shift();
+
+  await interaction.deferUpdate().catch(() => {});
+  try {
+    await updateAttachmentMessageForDc(game, playerNum, dcMsgId, client);
+  } catch (err) {
+    console.error('Failed to update attachment message after setup attach:', err);
+  }
+  await logGameAction(game, client, `<@${interaction.user.id}> placed **${card}** on a Deployment Card (setup).`, { phase: 'SETUP', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+
+  const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+  const handChannel = await client.channels.fetch(handId);
+
+  if (pending.length > 0) {
+    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const options = dcList.slice(0, 25).map((dc, i) => ({
+      label: (dc.displayName || dc.dcName || `DC ${i + 1}`).slice(0, 100),
+      value: (dcMsgIds[i] || String(i)).toString(),
+    })).filter((o) => o.value);
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`setup_attach_to_${gameId}_${playerNum}`)
+      .setPlaceholder('Attach to which Deployment Card?')
+      .addOptions(options);
+    await handChannel.send({
+      content: `**Setup — place Skirmish Upgrade (next):** **${pending[0]}**. Choose which Deployment Card to attach it to:`,
+      components: [new ActionRowBuilder().addComponents(select)],
+    });
+    saveGames();
+    return;
+  }
+
+  const p1Done = (game.setupAttachmentPending[1] || []).length === 0;
+  const p2Done = (game.setupAttachmentPending[2] || []).length === 0;
+  if (p1Done && p2Done) {
+    game.setupAttachmentPhase = false;
+    game.setupAttachmentPending = null;
+    await finishSetupAttachments(game, client);
   }
   saveGames();
 }

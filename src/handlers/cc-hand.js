@@ -171,7 +171,7 @@ export async function handleCcAttachTo(interaction, ctx) {
 
 /** @param {import('discord.js').StringSelectMenuInteraction} interaction */
 export async function handleCcPlaySelect(interaction, ctx) {
-  const { getGame, getCcEffect, isCcAttachment, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames } = ctx;
+  const { getGame, getCcEffect, isCcAttachment, isCcPlayableNow, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames } = ctx;
   const gameId = interaction.customId.replace('cc_play_select_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -193,6 +193,13 @@ export async function handleCcPlaySelect(interaction, ctx) {
   const idx = hand.indexOf(card);
   if (idx < 0) {
     await interaction.reply({ content: "That card isn't in your hand.", ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (!isCcPlayableNow(game, playerNum, card)) {
+    await interaction.reply({
+      content: "That card can't be played right now (wrong timing).",
+      ephemeral: true,
+    }).catch(() => {});
     return;
   }
   if (isCcAttachment(card)) {
@@ -391,7 +398,9 @@ export async function handleCcShuffleDraw(interaction, ctx) {
     return;
   }
   await interaction.deferUpdate();
-  const deck = [...ccList];
+  const attachKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+  const placed = (game[attachKey] && Object.values(game[attachKey]).flat()) || [];
+  const deck = ccList.filter((c) => !placed.includes(c));
   shuffleArray(deck);
   const hand = deck.splice(0, 3);
   const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
@@ -418,7 +427,7 @@ export async function handleCcShuffleDraw(interaction, ctx) {
 
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleCcPlay(interaction, ctx) {
-  const { getGame } = ctx;
+  const { getGame, getPlayableCcFromHand } = ctx;
   const gameId = interaction.customId.replace('cc_play_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -438,10 +447,18 @@ export async function handleCcPlay(interaction, ctx) {
     await interaction.reply({ content: 'No cards in hand to play.', ephemeral: true }).catch(() => {});
     return;
   }
+  const playable = getPlayableCcFromHand(game, playerNum, hand);
+  if (playable.length === 0) {
+    await interaction.reply({
+      content: "No command cards can be played right now (wrong timing). Play cards during your activation, at start/end of round, or during an attack as appropriate.",
+      ephemeral: true,
+    }).catch(() => {});
+    return;
+  }
   const select = new StringSelectMenuBuilder()
     .setCustomId(`cc_play_select_${gameId}`)
     .setPlaceholder('Choose a card to play')
-    .addOptions(hand.slice(0, 25).map((c) => new StringSelectMenuOptionBuilder().setLabel(c).setValue(c)));
+    .addOptions(playable.slice(0, 25).map((c) => new StringSelectMenuOptionBuilder().setLabel(c).setValue(c)));
   await interaction.reply({
     content: '**Play CC** — Select a card:',
     components: [new ActionRowBuilder().addComponents(select)],

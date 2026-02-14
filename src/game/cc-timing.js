@@ -1,0 +1,104 @@
+/**
+ * CC timing (F5): when can a Command Card be played from hand?
+ * Uses game state to derive play context and cc-effects timing field.
+ */
+import { getCcEffect } from '../data-loader.js';
+
+/**
+ * Derive current CC play context from game state.
+ * @param {object} game - Game state
+ * @param {number} playerNum - 1 or 2
+ * @returns {{ startOfRound: boolean, duringActivation: boolean, endOfRound: boolean, duringAttack: boolean, isAttacker: boolean, isDefender: boolean }}
+ */
+export function getCcPlayContext(game, playerNum) {
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const startOfRound = !!(
+    game.currentRound &&
+    game.roundActivationMessageId &&
+    !game.roundActivationButtonShown
+  );
+  const duringActivation =
+    game.currentActivationTurnPlayerId === playerId &&
+    !game.endOfRoundWhoseTurn;
+  const endOfRound = game.endOfRoundWhoseTurn === playerId;
+  const combat = game.combat || game.pendingCombat;
+  const duringAttack = !!combat;
+  const isAttacker =
+    duringAttack && combat.attackerPlayerNum === playerNum;
+  const isDefender =
+    duringAttack && combat.defenderPlayerNum === playerNum;
+
+  return {
+    startOfRound,
+    duringActivation,
+    endOfRound,
+    duringAttack,
+    isAttacker,
+    isDefender,
+  };
+}
+
+/** Timings that are played from the DC (Special Action button), not from Hand. */
+const SPECIAL_ACTION_TIMING = new Set([
+  'specialaction',
+  'doubleactionspecial',
+]);
+
+/**
+ * True if this CC can be played from hand right now (game state + timing).
+ * specialAction cards are played from the DC button, so we return false for them here.
+ * @param {object} game - Game state
+ * @param {number} playerNum - 1 or 2
+ * @param {string} cardName - CC name
+ * @param {object} [getEffect] - Optional getCcEffect (default from data-loader)
+ * @returns {boolean}
+ */
+export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffect) {
+  const effect = getEffect(cardName);
+  if (!effect || !effect.timing) return false;
+  const timing = String(effect.timing).toLowerCase().trim();
+  if (SPECIAL_ACTION_TIMING.has(timing)) return false;
+
+  const ctx = getCcPlayContext(game, playerNum);
+
+  switch (timing) {
+    case 'startofround':
+    case 'startofstatusphase':
+      return ctx.startOfRound;
+    case 'duringactivation':
+      return ctx.duringActivation;
+    case 'startofactivation':
+    case 'endofactivation':
+      return ctx.duringActivation;
+    case 'endofround':
+      return ctx.endOfRound;
+    case 'duringattack':
+      return ctx.duringAttack;
+    case 'whiledefending':
+      return ctx.duringAttack && ctx.isDefender;
+    case 'whenattackdeclaredonyou':
+      return ctx.duringAttack && ctx.isDefender;
+    case 'beforeyoudeclareattack':
+    case 'whenyoudeclareattack':
+      return ctx.duringActivation;
+    case 'afterattack':
+    case 'afterattackdice':
+      return ctx.duringAttack;
+    case 'afterattacktargetingyouresolved':
+      return ctx.duringAttack && ctx.isDefender;
+    case 'other':
+    default:
+      return false;
+  }
+}
+
+/**
+ * Filter hand to only cards playable right now.
+ * @param {object} game - Game state
+ * @param {number} playerNum - 1 or 2
+ * @param {string[]} hand - CC names in hand
+ * @returns {string[]}
+ */
+export function getPlayableCcFromHand(game, playerNum, hand) {
+  return (hand || []).filter((card) => isCcPlayableNow(game, playerNum, card));
+}

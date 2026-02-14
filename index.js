@@ -82,6 +82,7 @@ import {
   handleDeploymentOrient,
   handleDeployPick,
   handleDeploymentDone,
+  handleSetupAttachTo,
   handleDcActivate,
   handleDcUnactivate,
   handleDcToggle,
@@ -144,6 +145,8 @@ import {
   computeCombatResult,
   resolveSurgeAbility,
   getSurgeAbilityLabel,
+  getPlayableCcFromHand,
+  isCcPlayableNow,
 } from './src/game/index.js';
 import {
   buildScorecardEmbed,
@@ -216,13 +219,14 @@ import {
   getCcEffectsData,
   getCcEffect,
   isCcAttachment,
+  isDcAttachment,
 } from './src/data-loader.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname);
 
-/** Build embeds and files for the "Attachments" message under a DC: one embed per attached CC (thumbnail = card image). */
-async function buildAttachmentEmbedsAndFiles(ccNames) {
+/** Build embeds and files for the "Attachments" message under a DC: CC attachments then DC (Skirmish Upgrade) attachments. */
+async function buildAttachmentEmbedsAndFiles(ccNames, dcNames = []) {
   const embeds = [];
   const files = [];
   for (let i = 0; i < (ccNames || []).length; i++) {
@@ -239,29 +243,46 @@ async function buildAttachmentEmbedsAndFiles(ccNames) {
     }
     embeds.push(embed);
   }
+  for (let i = 0; i < (dcNames || []).length; i++) {
+    const dcName = dcNames[i];
+    const relPath = getDcImagePath(dcName);
+    const path = relPath ? join(rootDir, relPath) : null;
+    const ext = path ? (path.toLowerCase().endsWith('.png') ? 'png' : 'jpg') : 'jpg';
+    const fileName = `dc-attach-${i}-${(dcName || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
+    const embed = new EmbedBuilder()
+      .setTitle(`📎 ${dcName || `Skirmish Upgrade ${i + 1}`}`)
+      .setColor(0x5865f2);
+    if (path && existsSync(path)) {
+      files.push(new AttachmentBuilder(path, { name: fileName }));
+      embed.setThumbnail(`attachment://${fileName}`);
+    }
+    embeds.push(embed);
+  }
   return { embeds, files };
 }
 
-/** Update the Play Area "Attachments" message for a DC (the embed under that DC). */
+/** Update the Play Area "Attachments" message for a DC (CC + DC Skirmish Upgrade attachments). */
 async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, client) {
-  const attachKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+  const ccKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+  const dcKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
   const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
   const attachMsgIds = playerNum === 1 ? (game.p1DcAttachmentMessageIds || []) : (game.p2DcAttachmentMessageIds || []);
   const idx = msgIds.indexOf(dcMsgId);
   if (idx < 0 || idx >= attachMsgIds.length) return;
   const attachMsgId = attachMsgIds[idx];
   const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
-  const list = (game[attachKey] || {})[dcMsgId] || [];
+  const ccList = (game[ccKey] || {})[dcMsgId] || [];
+  const dcList = (game[dcKey] || {})[dcMsgId] || [];
   try {
     const channel = await client.channels.fetch(channelId);
     const msg = await channel.messages.fetch(attachMsgId);
-    if (list.length === 0) {
+    if (ccList.length === 0 && dcList.length === 0) {
       await msg.edit({
         embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
         files: [],
       });
     } else {
-      const { embeds, files } = await buildAttachmentEmbedsAndFiles(list);
+      const { embeds, files } = await buildAttachmentEmbedsAndFiles(ccList, dcList);
       await msg.edit({ embeds, files });
     }
   } catch (err) {
@@ -1789,6 +1810,43 @@ async function clearPreGameSetup(game, client) {
   }
 }
 
+/** Called when all setup attachments are placed: start Round 1 and send shuffle/draw prompts. */
+async function finishSetupAttachments(game, client) {
+  game.currentRound = 1;
+  const generalChannel = await client.channels.fetch(game.generalId);
+  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in your Hand channel. Round 1 will begin when both have drawn.`;
+  await generalChannel.send({
+    content: deployContent,
+    allowedMentions: { users: [game.initiativePlayerId] },
+  });
+  game.currentActivationTurnPlayerId = game.initiativePlayerId;
+  await clearPreGameSetup(game, client);
+  const p1CcList = game.player1Squad?.ccList || [];
+  const p2CcList = game.player2Squad?.ccList || [];
+  const p1Placed = (game.p1CcAttachments && Object.values(game.p1CcAttachments).flat()) || [];
+  const p2Placed = (game.p2CcAttachments && Object.values(game.p2CcAttachments).flat()) || [];
+  const p1DeckCount = p1CcList.length - p1Placed.length;
+  const p2DeckCount = p2CcList.length - p2Placed.length;
+  const ccDeckText = (list) => list.length ? list.join(', ') : '(no command cards)';
+  try {
+    const p1HandChannel = await client.channels.fetch(game.p1HandId);
+    const p2HandChannel = await client.channels.fetch(game.p2HandId);
+    const p1DeckList = p1CcList.filter((c) => !p1Placed.includes(c));
+    const p2DeckList = p2CcList.filter((c) => !p2Placed.includes(c));
+    await p1HandChannel.send({
+      content: `**Your Command Card deck** (${p1DeckCount} cards):\n${ccDeckText(p1DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,
+      components: [getCcShuffleDrawButton(game.gameId)],
+    });
+    await p2HandChannel.send({
+      content: `**Your Command Card deck** (${p2DeckCount} cards):\n${ccDeckText(p2DeckList)}\n\nWhen ready, shuffle and draw your starting 3.`,
+      components: [getCcShuffleDrawButton(game.gameId)],
+    });
+  } catch (err) {
+    console.error('Failed to send CC deck prompt after setup attachments:', err);
+  }
+}
+
 async function runDraftRandom(game, client) {
   const generalChannel = await client.channels.fetch(game.generalId);
 
@@ -2653,8 +2711,10 @@ async function populatePlayAreas(game, client) {
     });
   };
 
-  const p1Dcs = processDcList(game.player1Squad.dcList || []);
-  const p2Dcs = processDcList(game.player2Squad.dcList || []);
+  const p1DcsRaw = processDcList(game.player1Squad.dcList || []);
+  const p2DcsRaw = processDcList(game.player2Squad.dcList || []);
+  const p1Dcs = p1DcsRaw.filter((dc) => !isDcAttachment(dc.dcName));
+  const p2Dcs = p2DcsRaw.filter((dc) => !isDcAttachment(dc.dcName));
   game.p1DcList = p1Dcs;
   game.p2DcList = p2Dcs;
   game.p1ActivatedDcIndices = game.p1ActivatedDcIndices || [];
@@ -2667,6 +2727,8 @@ async function populatePlayAreas(game, client) {
   game.p2DcCompanionMessageIds = [];
   game.p1CcAttachments = game.p1CcAttachments || {};
   game.p2CcAttachments = game.p2CcAttachments || {};
+  game.p1DcAttachments = game.p1DcAttachments || {};
+  game.p2DcAttachments = game.p2DcAttachments || {};
 
   // Tooltip embeds at top of each Play Area
   await p1PlayArea.send({ embeds: [getPlayAreaTooltipEmbed(game, 1)] });
@@ -3196,6 +3258,21 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isStringSelectMenu()) {
     const selectKey = getHandlerKey(interaction.customId, 'select');
     if (!selectKey) return;
+    if (selectKey === 'setup_attach_to_') {
+      const setupSelectContext = {
+        getGame,
+        updateAttachmentMessageForDc,
+        getCcShuffleDrawButton,
+        clearPreGameSetup,
+        getInitiativePlayerZoneLabel,
+        logGameAction,
+        client,
+        saveGames,
+        finishSetupAttachments,
+      };
+      await handleSetupAttachTo(interaction, setupSelectContext);
+      return;
+    }
     const ccHandSelectContext = {
       getGame,
       getCcEffect,
@@ -3206,6 +3283,7 @@ client.on('interactionCreate', async (interaction) => {
       logGameAction,
       saveGames,
       isCcAttachment,
+      isCcPlayableNow,
     };
     if (selectKey === 'cc_attach_to_') await handleCcAttachTo(interaction, ccHandSelectContext);
     else if (selectKey === 'cc_play_select_') await handleCcPlaySelect(interaction, ccHandSelectContext);
@@ -3241,6 +3319,7 @@ client.on('interactionCreate', async (interaction) => {
       getCcEffect,
       isCcAttachment,
       updateAttachmentMessageForDc,
+      getPlayableCcFromHand,
     };
     if (buttonKey === 'deck_illegal_play_') await handleDeckIllegalPlay(interaction, ccHandButtonContext);
     else if (buttonKey === 'deck_illegal_redo_') await handleDeckIllegalRedo(interaction, ccHandButtonContext);
@@ -3511,6 +3590,10 @@ client.on('interactionCreate', async (interaction) => {
       getCcShuffleDrawButton,
       client,
       saveGames,
+      isDcAttachment,
+      resolveDcName,
+      isFigurelessDc,
+      finishSetupAttachments,
     };
     if (buttonKey === 'map_selection_') await handleMapSelection(interaction, setupContext);
     else if (buttonKey === 'draft_random_') await handleDraftRandom(interaction, setupContext);

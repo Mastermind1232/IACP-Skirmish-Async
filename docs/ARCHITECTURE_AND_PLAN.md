@@ -213,7 +213,7 @@ Definition of “full game” for this plan:
 | F2 | Wire surge to ability library | ✅ **Done.** Combat handler uses resolveSurgeAbility and getSurgeAbilityLabel from context; labels and modifiers go through ability library. SURGE_LABELS/parseSurgeEffect kept as fallback. |
 | F3 | Wire DC specials / passives to ability library | Special actions and key passives defined in library; bot runs them when triggered. |
 | F4 | Wire CC effects to ability library | CCs reference ability ids; on play, bot runs ability. Enforce CC timing (phase/context). |
-| F5 | CC timing | Document + enforce when each CC can be played (start of round, during attack, etc.). |
+| F5 | CC timing | ✅ **Done.** Documented in `docs/CC_TIMING.md`. `src/game/cc-timing.js`: getCcPlayContext, isCcPlayableNow, getPlayableCcFromHand. Hand Play filters to playable cards only; Play Select validates timing. Supported: startOfRound, duringActivation, endOfRound, duringAttack, whileDefending, whenAttackDeclaredOnYou, etc. specialAction played only from DC button. |
 | F6 | Conditions and combat extras | Track stun/weaken/bleed on figures; apply Recover (heal attacker), Blast (splash), Cleave (multi-target) in combat where abilities require. |
 | F7 | Multi-figure defeat | Verify healthState, figurePositions, and DC embed stay in sync when one figure in a group dies; fix if not. |
 | F8 | Map data for all maps in use | Extend map-spaces (or equivalent) so every map has spaces, adjacency, terrain. |

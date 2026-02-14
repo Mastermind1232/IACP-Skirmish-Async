@@ -53,3 +53,5 @@ export {
 } from './combat.js';
 
 export { getAbility, resolveSurgeAbility, getSurgeAbilityLabel } from './abilities.js';
+
+export { getCcPlayContext, isCcPlayableNow, getPlayableCcFromHand } from './cc-timing.js';
