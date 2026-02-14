@@ -37,6 +37,16 @@ import {
 import { rotateImage90 } from './src/dc-image-utils.js';
 import { renderMap } from './src/map-renderer.js';
 import { getHandlerKey } from './src/router.js';
+import { replyOrFollowUpWithRetry } from './src/error-handling.js';
+import { MAX_ACTIVE_GAMES_PER_PLAYER, PENDING_ILLEGAL_TTL_MS } from './src/constants.js';
+import {
+  getLobby,
+  setLobby,
+  hasLobby,
+  hasLobbyEmbedSent,
+  markLobbyEmbedSent,
+  getLobbiesMap,
+} from './src/lobby-state.js';
 import {
   handleLobbyJoin,
   handleLobbyStart,
@@ -93,22 +103,107 @@ import {
   handleCcDiscard,
   handleSquadSelect,
 } from './src/handlers/index.js';
-import { validateDeckLegal, resolveDcName, DC_POINTS_LEGAL, CC_CARDS_LEGAL, CC_COST_LEGAL } from './src/game/index.js';
+import {
+  validateDeckLegal,
+  resolveDcName,
+  DC_POINTS_LEGAL,
+  CC_CARDS_LEGAL,
+  CC_COST_LEGAL,
+  parseCoord,
+  normalizeCoord,
+  colRowToCoord,
+  edgeKey,
+  toLowerSet,
+  getFootprintCells,
+  parseSizeString,
+  sizeToString,
+  rotateSizeString,
+  shiftCoord,
+  filterMapSpacesByBounds,
+  isWithinGridBounds,
+  getBoardStateForMovement,
+  getMovementProfile,
+  buildTempBoardState,
+  movementStateKey,
+  getNormalizedFootprint,
+  computeMovementCache,
+  getSpacesAtCost,
+  getMovementTarget,
+  getMovementPath,
+  ensureMovementCache,
+  getOccupiedSpacesForMovement,
+  getHostileOccupiedSpacesForMovement,
+  getMovementKeywords,
+  getReachableSpaces,
+  getPathCost,
+  rollAttackDice,
+  rollDefenseDice,
+  getAttackerSurgeAbilities,
+  parseSurgeEffect,
+  SURGE_LABELS,
+  computeCombatResult,
+  resolveSurgeAbility,
+  getSurgeAbilityLabel,
+} from './src/game/index.js';
 import {
   buildScorecardEmbed,
   getInitiativePlayerZoneLabel,
+  PHASE_COLOR,
   GAME_PHASES,
   ACTION_ICONS,
   logPhaseHeader,
   logGameAction,
   logGameErrorToBotLogs,
+  formatHealthSection,
+  CARD_BACK_CHAR,
+  getPlayAreaTooltipEmbed,
+  getHandTooltipEmbed,
+  getHandVisualEmbed,
+  getDiscardPileEmbed,
+  getLobbyRosterText,
+  getLobbyEmbed,
+  getDeployDisplayNames,
+  EMBEDS_PER_MESSAGE,
+  getDiscardPileButtons,
+  getDcToggleButton,
+  getDcPlayAreaComponents as getDcPlayAreaComponentsFromDiscord,
+  getMoveMpButtonRows,
+  getMoveSpaceGridRows,
+  getDeployFigureLabels as getDeployFigureLabelsFromDiscord,
+  getDeployButtonRows as getDeployButtonRowsFromDiscord,
+  getDeploySpaceGridRows,
+  getActivationsLine,
+  getThreadName,
+  updateThreadName,
+  DC_ACTIONS_PER_ACTIVATION,
+  getActionsCounterContent,
+  updateActivationsMessage,
+  FIGURE_LETTERS,
+  getUndoButton,
+  getBoardButtons,
+  getGeneralSetupButtons,
+  getDetermineInitiativeButtons,
+  getDeploymentZoneButtons,
+  getDeploymentDoneButton,
+  getMainMenu,
+  getLobbyJoinButton,
+  getLobbyStartButton,
+  getCcShuffleDrawButton,
+  getCcActionButtons,
+  getSelectSquadButton,
+  getHandSquadButtons,
+  getKillGameButton,
+  getRequestActionButtons,
+  getDcActionButtons as getDcActionButtonsFromDiscord,
+  getActivateDcButtons as getActivateDcButtonsFromDiscord,
 } from './src/discord/index.js';
 import {
   reloadGameData,
   getDcImages,
   getFigureImages,
   getFigureSizes,
-  getDcStats,
+  getFigureSize,
+  getDcStats as getDcStatsMap,
   getMapRegistry,
   getDeploymentZones,
   getMapSpacesData,
@@ -202,49 +297,6 @@ function isCcPlayableByDc(ccName, dcName, displayName) {
 function getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName) {
   const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
   return hand.filter((ccName) => isCcPlayableByDc(ccName, dcName, displayName));
-}
-
-/** Return true if coord is within optional gridBounds (maxCol/maxRow are 0-based inclusive). */
-function isWithinGridBounds(coord, gridBounds) {
-  if (!gridBounds || (gridBounds.maxCol == null && gridBounds.maxRow == null)) return true;
-  const { col, row } = parseCoord(coord);
-  if (col < 0 || row < 0) return false;
-  if (gridBounds.maxCol != null && col > gridBounds.maxCol) return false;
-  if (gridBounds.maxRow != null && row > gridBounds.maxRow) return false;
-  return true;
-}
-
-/** Filter map data (spaces, adjacency, etc.) to only include coords within gridBounds. */
-function filterMapSpacesByBounds(rawMapSpaces, gridBounds) {
-  if (!gridBounds || (gridBounds.maxCol == null && gridBounds.maxRow == null)) return rawMapSpaces;
-  const inBounds = (c) => isWithinGridBounds(c, gridBounds);
-  const spaces = (rawMapSpaces.spaces || []).filter(inBounds);
-  const spaceSet = new Set(spaces.map((s) => normalizeCoord(s)));
-  const adjacency = {};
-  for (const [coord, neighbors] of Object.entries(rawMapSpaces.adjacency || {})) {
-    if (!inBounds(coord)) continue;
-    adjacency[normalizeCoord(coord)] = (neighbors || []).filter((n) => spaceSet.has(normalizeCoord(n))).map((n) => normalizeCoord(n));
-  }
-  const terrain = {};
-  for (const [coord, type] of Object.entries(rawMapSpaces.terrain || {})) {
-    if (inBounds(coord)) terrain[normalizeCoord(coord)] = String(type || 'normal').toLowerCase();
-  }
-  const blocking = (rawMapSpaces.blocking || []).filter(inBounds);
-  const movementBlockingEdges = (rawMapSpaces.movementBlockingEdges || []).filter(
-    ([a, b]) => spaceSet.has(normalizeCoord(a)) && spaceSet.has(normalizeCoord(b))
-  );
-  const impassableEdges = (rawMapSpaces.impassableEdges || []).filter(
-    ([a, b]) => spaceSet.has(normalizeCoord(a)) && spaceSet.has(normalizeCoord(b))
-  );
-  return {
-    ...rawMapSpaces,
-    spaces,
-    adjacency,
-    terrain,
-    blocking,
-    movementBlockingEdges,
-    impassableEdges,
-  };
 }
 
 /** Get set of normalized coords occupied by a player's figures. */
@@ -429,152 +481,12 @@ function countTerminalsControlledByPlayer(game, playerNum, mapId) {
   return count;
 }
 
-/** Get all occupied spaces (any figure's footprint) for movement validation. */
-function getOccupiedSpacesForMovement(game, excludeFigureKey = null) {
-  const occupied = [];
-  const poses = game.figurePositions || { 1: {}, 2: {} };
-  for (const p of [1, 2]) {
-    for (const [k, coord] of Object.entries(poses[p] || {})) {
-      if (k === excludeFigureKey) continue;
-      const dcName = k.replace(/-\d+-\d+$/, '');
-      const size = game.figureOrientations?.[k] || getFigureSize(dcName);
-      occupied.push(...getFootprintCells(coord, size));
-    }
-  }
-  return occupied;
-}
-
-/** Get spaces occupied by hostile figures only (opponent's figures). Per rules: +1 MP to enter hostile; no extra cost for friendly. */
-function getHostileOccupiedSpacesForMovement(game, excludeFigureKey = null) {
-  const poses = game.figurePositions || { 1: {}, 2: {} };
-  let moverPlayer = null;
-  for (const p of [1, 2]) {
-    if (excludeFigureKey in (poses[p] || {})) {
-      moverPlayer = p;
-      break;
-    }
-  }
-  if (moverPlayer == null) return [];
-  const hostilePlayer = moverPlayer === 1 ? 2 : 1;
-  const occupied = [];
-  for (const [k, coord] of Object.entries(poses[hostilePlayer] || {})) {
-    const dcName = k.replace(/-\d+-\d+$/, '');
-    const size = game.figureOrientations?.[k] || getFigureSize(dcName);
-    occupied.push(...getFootprintCells(coord, size));
-  }
-  return occupied;
-}
-
 /** Manhattan distance in spaces between two coords. */
 function getRange(coord1, coord2) {
   const a = parseCoord(coord1);
   const b = parseCoord(coord2);
   if (a.col < 0 || a.row < 0 || b.col < 0 || b.row < 0) return 999;
   return Math.abs(a.col - b.col) + Math.abs(a.row - b.row);
-}
-
-function edgeKey(a, b) {
-  return [String(a).toLowerCase(), String(b).toLowerCase()].sort().join('|');
-}
-
-function normalizeCoord(coord) {
-  return String(coord || '').toLowerCase();
-}
-
-function toLowerSet(arr = []) {
-  return new Set(arr.map((s) => normalizeCoord(s)));
-}
-
-function parseSizeString(size) {
-  const [colsRaw, rowsRaw] = String(size || '1x1')
-    .toLowerCase()
-    .split('x')
-    .map((n) => parseInt(n, 10) || 1);
-  return { cols: colsRaw || 1, rows: rowsRaw || 1 };
-}
-
-function sizeToString(cols, rows) {
-  return `${Math.max(1, cols)}x${Math.max(1, rows)}`;
-}
-
-function rotateSizeString(size) {
-  const { cols, rows } = parseSizeString(size);
-  if (cols === rows) return sizeToString(cols, rows);
-  return sizeToString(rows, cols);
-}
-
-function shiftCoord(coord, dx, dy) {
-  const { col, row } = parseCoord(coord);
-  return normalizeCoord(colRowToCoord(col + dx, row + dy));
-}
-
-function getMovementKeywords(dcName) {
-  const raw = getDcKeywords()?.[dcName] || [];
-  return new Set(raw.map((k) => String(k).toLowerCase()));
-}
-
-function getBoardStateForMovement(game, excludeFigureKey = null) {
-  if (!game?.selectedMap?.id) return null;
-  const rawMapSpaces = getMapSpaces(game.selectedMap.id);
-  if (!rawMapSpaces) return null;
-  const mapDef = getMapRegistry().find((m) => m.id === game.selectedMap.id);
-  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
-  const occupiedSet = new Set(
-    getOccupiedSpacesForMovement(game, excludeFigureKey).map((s) => normalizeCoord(s))
-  );
-  const hostileOccupiedSet = new Set(
-    getHostileOccupiedSpacesForMovement(game, excludeFigureKey).map((s) => normalizeCoord(s))
-  );
-  const blockingSet = toLowerSet(mapSpaces.blocking || []);
-  const spacesSet = toLowerSet(mapSpaces.spaces || []);
-  const terrain = {};
-  for (const [coord, type] of Object.entries(mapSpaces.terrain || {})) {
-    terrain[normalizeCoord(coord)] = String(type || 'normal').toLowerCase();
-  }
-  const adjacency = {};
-  for (const [coord, neighbors] of Object.entries(mapSpaces.adjacency || {})) {
-    adjacency[normalizeCoord(coord)] = (neighbors || []).map((n) => normalizeCoord(n));
-  }
-  const movementBlockingSet = new Set(
-    (mapSpaces.movementBlockingEdges || []).map((edge) => edgeKey(edge[0], edge[1]))
-  );
-  // Hard walls (impassableEdges) also block movement — cannot cross them
-  for (const edge of mapSpaces.impassableEdges || []) {
-    if (edge?.length >= 2) movementBlockingSet.add(edgeKey(edge[0], edge[1]));
-  }
-  const mapData = getMapTokensData()[game.selectedMap.id];
-  const openedSet = new Set((game.openedDoors || []).map((k) => String(k).toLowerCase()));
-  for (const edge of mapData?.doors || []) {
-    if (edge?.length >= 2) {
-      const ek = edgeKey(edge[0], edge[1]);
-      if (!openedSet.has(ek)) movementBlockingSet.add(ek);
-    }
-  }
-  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, spacesSet };
-}
-
-function getMovementProfile(dcName, figureKey, game) {
-  const baseSize = getFigureSize(dcName) || '1x1';
-  const storedSize = game.figureOrientations?.[figureKey] || baseSize;
-  const { cols, rows } = parseSizeString(storedSize);
-  const keywords = getMovementKeywords(dcName);
-  const isMassive = keywords.has('massive');
-  const isMobile = keywords.has('mobile');
-  return {
-    size: storedSize,
-    cols,
-    rows,
-    isLarge: cols !== 1 || rows !== 1,
-    allowDiagonal: cols === 1 && rows === 1,
-    canRotate: cols !== rows,
-    isMassive,
-    isMobile,
-    ignoreDifficult: isMassive || isMobile,
-    ignoreBlocking: isMassive || isMobile,
-    ignoreFigureCost: isMassive || isMobile,
-    canEndOnOccupied: isMassive,
-    keywords,
-  };
 }
 
 /** Line-of-sight: true if no blocking terrain or solid walls on line. Dotted red (movementBlockingEdges) do NOT block LOS. */
@@ -606,246 +518,6 @@ function hasLineOfSight(coord1, coord2, mapSpaces) {
     prev = c;
   }
   return true;
-}
-
-/** BFS: reachable spaces from startCoord within mp movement points. 1 MP per adjacent step. Cannot end on occupied. */
-function buildTempBoardState(mapSpaces, occupiedSet, hostileOccupiedSet = null) {
-  if (!mapSpaces) return null;
-  const blockingSet = toLowerSet(mapSpaces.blocking || []);
-  const spacesSet = toLowerSet(mapSpaces.spaces || []);
-  const terrain = {};
-  for (const [coord, type] of Object.entries(mapSpaces.terrain || {})) {
-    terrain[normalizeCoord(coord)] = String(type || 'normal').toLowerCase();
-  }
-  const adjacency = {};
-  for (const [coord, neighbors] of Object.entries(mapSpaces.adjacency || {})) {
-    adjacency[normalizeCoord(coord)] = (neighbors || []).map((n) => normalizeCoord(n));
-  }
-  const movementBlockingSet = new Set(
-    (mapSpaces.movementBlockingEdges || []).map((edge) => edgeKey(edge[0], edge[1]))
-  );
-  for (const edge of mapSpaces.impassableEdges || []) {
-    if (edge?.length >= 2) movementBlockingSet.add(edgeKey(edge[0], edge[1]));
-  }
-  const board = {
-    mapSpaces,
-    adjacency,
-    terrain,
-    blockingSet,
-    occupiedSet: new Set((occupiedSet || []).map((s) => normalizeCoord(s))),
-    movementBlockingSet,
-    spacesSet,
-  };
-  if (hostileOccupiedSet != null) {
-    board.hostileOccupiedSet = new Set((hostileOccupiedSet || []).map((s) => normalizeCoord(s)));
-  }
-  return board;
-}
-
-function movementStateKey(coord, size) {
-  return `${normalizeCoord(coord)}|${size}`;
-}
-
-function getNormalizedFootprint(topLeft, size) {
-  return getFootprintCells(topLeft, size).map((c) => normalizeCoord(c));
-}
-
-function canMoveDiagonally(start, dx, dy, board) {
-  if (!dx || !dy) return true;
-  const startLower = normalizeCoord(start);
-  const { col, row } = parseCoord(startLower);
-  const intermediateA = colRowToCoord(col + dx, row);
-  const intermediateB = colRowToCoord(col, row + dy);
-  if (!board.spacesSet.has(normalizeCoord(intermediateA)) || !board.spacesSet.has(normalizeCoord(intermediateB))) {
-    return false;
-  }
-  const adj = board.adjacency[startLower] || [];
-  return adj.includes(normalizeCoord(intermediateA)) && adj.includes(normalizeCoord(intermediateB));
-}
-
-function getNeighborStates(state, board, profile) {
-  const neighbors = [];
-  const moveVectors = [
-    { dx: 1, dy: 0 },
-    { dx: -1, dy: 0 },
-    { dx: 0, dy: 1 },
-    { dx: 0, dy: -1 },
-  ];
-  if (profile.allowDiagonal) {
-    moveVectors.push(
-      { dx: 1, dy: 1 },
-      { dx: 1, dy: -1 },
-      { dx: -1, dy: 1 },
-      { dx: -1, dy: -1 }
-    );
-  }
-  for (const vec of moveVectors) {
-    if ((vec.dx && vec.dy) && profile.isLarge) continue;
-    if ((vec.dx && vec.dy) && !canMoveDiagonally(state.topLeft, vec.dx, vec.dy, board)) continue;
-    const nextTopLeft = shiftCoord(state.topLeft, vec.dx, vec.dy);
-    if (!nextTopLeft || !board.spacesSet.has(nextTopLeft)) continue;
-    neighbors.push({ type: 'move', topLeft: nextTopLeft, size: state.size, dx: vec.dx, dy: vec.dy });
-  }
-  if (profile.canRotate) {
-    const rotatedSize = rotateSizeString(state.size);
-    neighbors.push({ type: 'rotate', topLeft: state.topLeft, size: rotatedSize, dx: 0, dy: 0 });
-  }
-  return neighbors;
-}
-
-function evaluateMovementStep(current, neighbor, board, profile) {
-  const nextFootprint = getNormalizedFootprint(neighbor.topLeft, neighbor.size);
-  if (!nextFootprint.length) return null;
-  for (const cell of nextFootprint) {
-    if (!board.spacesSet.has(cell)) return null;
-  }
-  if (!profile.ignoreBlocking) {
-    for (const cell of nextFootprint) {
-      if (board.blockingSet.has(cell)) return null;
-    }
-  }
-  const prevFootprint = current.footprint;
-  const prevSet = new Set(prevFootprint);
-  if (neighbor.type === 'rotate') {
-    const overlapping = nextFootprint.some((c) => board.occupiedSet.has(c));
-    if (overlapping && !profile.canEndOnOccupied) return null;
-    return {
-      cost: 1,
-      occupied: overlapping,
-      canEnd: !overlapping || profile.canEndOnOccupied,
-      footprint: nextFootprint,
-    };
-  }
-  const entering = nextFootprint.filter((cell) => !prevSet.has(cell));
-  if (!entering.length) return null;
-  const dx = neighbor.dx;
-  const dy = neighbor.dy;
-  if (board.movementBlockingSet.size > 0) {
-    const backDx = dx ? -Math.sign(dx) : 0;
-    const backDy = dy ? -Math.sign(dy) : 0;
-    for (const cell of entering) {
-      const { col, row } = parseCoord(cell);
-      const prevCoord = colRowToCoord(col + backDx, row + backDy);
-      if (!prevSet.has(normalizeCoord(prevCoord))) continue;
-      if (board.movementBlockingSet.has(edgeKey(cell, prevCoord))) return null;
-    }
-  }
-  const enteringBlocking = !profile.ignoreBlocking && entering.some((cell) => board.blockingSet.has(cell));
-  if (enteringBlocking) return null;
-  const enteringDifficult =
-    !profile.ignoreDifficult &&
-    entering.some((cell) => (board.terrain[cell] || 'normal') === 'difficult');
-  const enteringOccupied = entering.some((cell) => board.occupiedSet.has(cell));
-  const enteringHostile = board.hostileOccupiedSet
-    ? entering.some((cell) => board.hostileOccupiedSet.has(cell))
-    : enteringOccupied;
-  const baseCost = 1;
-  let extraCost = 0;
-  if (enteringDifficult) extraCost += 1;
-  if (enteringHostile && !profile.ignoreFigureCost) extraCost += 1;
-  return {
-    cost: baseCost + extraCost,
-    occupied: enteringOccupied,
-    canEnd: !enteringOccupied || profile.canEndOnOccupied,
-    footprint: nextFootprint,
-  };
-}
-
-function computeMovementCache(startCoord, mpLimit, board, profile) {
-  const startTopLeft = normalizeCoord(startCoord);
-  if (!board?.spacesSet?.has(startTopLeft)) return { nodes: new Map(), cells: new Map(), parent: new Map(), maxMp: mpLimit };
-  const startKey = movementStateKey(startTopLeft, profile.size);
-  const queue = [
-    {
-      key: startKey,
-      topLeft: startTopLeft,
-      size: profile.size,
-      cost: 0,
-      footprint: getNormalizedFootprint(startTopLeft, profile.size),
-    },
-  ];
-  const bestCost = new Map([[startKey, 0]]);
-  const nodes = new Map();
-  const cells = new Map();
-  const parent = new Map();
-  while (queue.length > 0) {
-    queue.sort((a, b) => a.cost - b.cost);
-    const current = queue.shift();
-    if (current.cost > mpLimit) continue;
-    const isOccupied = current.footprint.some((cell) => board.occupiedSet.has(cell));
-    const canEnd = !isOccupied || profile.canEndOnOccupied;
-    nodes.set(current.key, { ...current, isOccupied, canEnd });
-    if (canEnd) {
-      for (const cell of current.footprint) {
-        if (!board.spacesSet.has(cell)) continue;
-        if (current.cost === 0 && cell === startTopLeft) continue;
-        const prev = cells.get(cell);
-        if (!prev || current.cost < prev.cost) {
-          cells.set(cell, {
-            cost: current.cost,
-            topLeft: current.topLeft,
-            size: current.size,
-          });
-        }
-      }
-    }
-    const neighbors = getNeighborStates(current, board, profile);
-    for (const neighbor of neighbors) {
-      const step = evaluateMovementStep(current, neighbor, board, profile);
-      if (!step) continue;
-      const newCost = current.cost + step.cost;
-      if (newCost > mpLimit) continue;
-      const neighborKey = movementStateKey(neighbor.topLeft, neighbor.size);
-      if (bestCost.has(neighborKey) && bestCost.get(neighborKey) <= newCost) continue;
-      bestCost.set(neighborKey, newCost);
-      parent.set(neighborKey, current.key);
-      queue.push({
-        key: neighborKey,
-        topLeft: neighbor.topLeft,
-        size: neighbor.size,
-        cost: newCost,
-        footprint: step.footprint,
-      });
-    }
-  }
-  return { nodes, cells, parent, maxMp: mpLimit };
-}
-
-function getSpacesAtCost(cache, mpCost) {
-  const matches = [];
-  for (const [cell, info] of cache.cells.entries()) {
-    if (info.cost === mpCost) matches.push(cell);
-  }
-  return matches;
-}
-
-function getMovementTarget(cache, coord) {
-  return cache.cells.get(normalizeCoord(coord)) || null;
-}
-
-/** Returns path of coords from start to dest (including both), or empty array if unreachable. */
-function getMovementPath(cache, startCoord, destTopLeft, destSize, profile) {
-  if (!cache?.parent) return [];
-  const startKey = movementStateKey(normalizeCoord(startCoord), profile.size);
-  const destKey = movementStateKey(normalizeCoord(destTopLeft), destSize || profile.size);
-  const path = [];
-  let key = destKey;
-  while (key) {
-    const node = cache.nodes.get(key);
-    if (!node) break;
-    path.unshift(node.topLeft);
-    if (key === startKey) break;
-    key = cache.parent.get(key);
-  }
-  return path;
-}
-
-function ensureMovementCache(moveState, startCoord, mpLimit, board, profile) {
-  if (!moveState.movementCache || (moveState.cacheMaxMp || 0) < mpLimit) {
-    moveState.movementCache = computeMovementCache(startCoord, mpLimit, board, profile);
-    moveState.cacheMaxMp = mpLimit;
-  }
-  return moveState.movementCache;
 }
 
 async function clearMoveGridMessages(game, moveKey, channel) {
@@ -944,49 +616,6 @@ async function resolveMassivePush(game, profile, figureKey, playerNum, newFootpr
     await logGameAction(game, client, `Massive figure pushed ${overlaps.length} figure(s) aside.`, { icon: 'move', phase: 'ROUND' });
   }
 }
-function getReachableSpaces(startCoord, mp, mapSpaces, occupiedSet) {
-  const board = buildTempBoardState(mapSpaces, occupiedSet);
-  if (!board || mp <= 0) return [];
-  const profile = {
-    size: '1x1',
-    cols: 1,
-    rows: 1,
-    isLarge: false,
-    allowDiagonal: true,
-    canRotate: false,
-    isMassive: false,
-    isMobile: false,
-    ignoreDifficult: false,
-    ignoreBlocking: false,
-    ignoreFigureCost: false,
-    canEndOnOccupied: false,
-  };
-  const cache = computeMovementCache(startCoord, mp, board, profile);
-  return [...cache.cells.keys()];
-}
-
-function getPathCost(startCoord, destCoord, mapSpaces, occupiedSet) {
-  const board = buildTempBoardState(mapSpaces, occupiedSet);
-  if (!board) return Infinity;
-  const profile = {
-    size: '1x1',
-    cols: 1,
-    rows: 1,
-    isLarge: false,
-    allowDiagonal: true,
-    canRotate: false,
-    isMassive: false,
-    isMobile: false,
-    ignoreDifficult: false,
-    ignoreBlocking: false,
-    ignoreFigureCost: false,
-    canEndOnOccupied: false,
-  };
-  const cache = computeMovementCache(startCoord, 50, board, profile);
-  const target = cache.cells.get(normalizeCoord(destCoord));
-  return target ? target.cost : Infinity;
-}
-
 /** Build 5x5 grid for movement tests. */
 function buildTestGrid5x5(overrides = {}) {
   const { blocked = [], difficult = [], movementBlockingEdges = [] } = overrides;
@@ -1198,44 +827,6 @@ function shuffleArray(arr) {
   }
 }
 
-/** Parse coord "a1" -> { col, row } (0-based). */
-function parseCoord(coord) {
-  const s = String(coord || '').toLowerCase();
-  const letter = s.match(/[a-z]+/)?.[0] || '';
-  const num = parseInt(s.match(/\d+/)?.[0] || '0', 10);
-  const col = letter
-    ? [...letter].reduce((acc, c) => acc * 26 + (c.charCodeAt(0) - 96), 0) - 1
-    : -1;
-  const row = num - 1;
-  return { col, row };
-}
-
-/** Col/row (0-based) -> coord string "a1". */
-function colRowToCoord(col, row) {
-  if (col < 0 || row < 0) return '';
-  let letter = '';
-  let c = col;
-  while (c >= 0) {
-    letter = String.fromCharCode(65 + (c % 26)) + letter;
-    c = Math.floor(c / 26) - 1;
-  }
-  return letter.toLowerCase() + (row + 1);
-}
-
-/** Get all cells a unit occupies when its top-left is at topLeftCoord. size: "1x1"|"1x2"|"2x2"|"2x3". */
-function getFootprintCells(topLeftCoord, size) {
-  const { col, row } = parseCoord(topLeftCoord);
-  if (col < 0 || row < 0) return [topLeftCoord];
-  const [cols, rows] = (size || '1x1').split('x').map(Number) || [1, 1];
-  const cells = [];
-  for (let r = 0; r < (rows || 1); r++) {
-    for (let c = 0; c < (cols || 1); c++) {
-      cells.push(colRowToCoord(col + c, row + r));
-    }
-  }
-  return cells;
-}
-
 /** Filter zone spaces to only those valid as top-left for a unit of given size (all footprint cells in zone and unoccupied). */
 function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size) {
   const zoneSet = new Set((zoneSpaces || []).map((s) => String(s).toLowerCase()));
@@ -1265,16 +856,11 @@ const client = new Client({
   ],
 });
 
-const lobbies = new Map();
-/** Thread IDs we've already sent the lobby embed for (prevents duplicate embeds from race conditions). */
-const lobbyEmbedSent = new Set();
 /** User IDs currently creating a test game (prevents duplicate creation from double-send or double-click). */
 const testGameCreationInProgress = new Set();
 /** Message IDs we've already handled for testgame (prevents duplicate from Discord firing messageCreate twice). */
 const processedTestGameMessageIds = new Set();
 let gameIdCounter = 1;
-
-const MAX_ACTIVE_GAMES_PER_PLAYER = 3;
 
 /** Count active (non-ended) games the player is in. */
 function countActiveGamesForPlayer(playerId) {
@@ -1357,69 +943,6 @@ const CHANNELS = {
   suggestions: { name: 'suggestions', parent: 'admin', type: ChannelType.GuildText },
   requestsAndSuggestions: { name: 'bot-requests-and-suggestions', parent: 'general', type: ChannelType.GuildForum },
 };
-
-function getMainMenu() {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('create_game')
-      .setLabel('Create Game')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId('join_game')
-      .setLabel('Join Game')
-      .setStyle(ButtonStyle.Secondary),
-  );
-}
-
-function getLobbyJoinButton(threadId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`lobby_join_${threadId}`)
-      .setLabel('Join Game')
-      .setStyle(ButtonStyle.Success),
-  );
-}
-
-function getLobbyStartButton(threadId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`lobby_start_${threadId}`)
-      .setLabel('Start Game')
-      .setStyle(ButtonStyle.Primary),
-  );
-}
-
-function getCcShuffleDrawButton(gameId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`cc_shuffle_draw_${gameId}`)
-      .setLabel('Shuffle deck and draw starting 3 Command Cards')
-      .setStyle(ButtonStyle.Success),
-  );
-}
-
-/** Play CC (green), Draw CC (green), Discard CC (red). Pass hand/deck to disable when empty. */
-function getCcActionButtons(gameId, hand = [], deck = []) {
-  const hasHand = hand.length > 0;
-  const hasDeck = deck.length > 0;
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`cc_play_${gameId}`)
-      .setLabel('Play CC')
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(!hasHand),
-    new ButtonBuilder()
-      .setCustomId(`cc_draw_${gameId}`)
-      .setLabel('Draw CC')
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(!hasDeck),
-    new ButtonBuilder()
-      .setCustomId(`cc_discard_${gameId}`)
-      .setLabel('Discard CC')
-      .setStyle(ButtonStyle.Danger)
-      .setDisabled(!hasHand),
-  );
-}
 
 const IMAGES_DIR = join(rootDir, 'vassal_extracted', 'images');
 const CC_DIR = join(IMAGES_DIR, 'cc');
@@ -1515,51 +1038,6 @@ function buildHandDisplayPayload(hand, deck, gameId, game = null, playerNum = 1)
     files: files.length > 0 ? files : undefined,
     components: rows,
   };
-}
-
-function getLobbyRosterText(lobby) {
-  const p1 = `1. **Player 1:** <@${lobby.creatorId}>`;
-  const p2 = lobby.joinedId
-    ? `2. **Player 2:** <@${lobby.joinedId}>`
-    : `2. **Player 2:** *(not yet joined)*`;
-  return `${p1}\n${p2}`;
-}
-
-function getLobbyEmbed(lobby) {
-  const roster = getLobbyRosterText(lobby);
-  const isReady = !!lobby.joinedId;
-  const embed = new EmbedBuilder()
-    .setTitle('Game Lobby')
-    .setDescription(`${roster}\n\n${isReady ? 'Both players ready! Click **Start Game** to begin.' : 'Click **Join Game** to play!'}`)
-    .setColor(0x2f3136);
-  return embed;
-}
-
-async function getThreadName(thread, lobby) {
-  const truncate = (s) => (s.length > 18 ? s.slice(0, 15) + '…' : s);
-  let p1Name = 'Creator';
-  let p2Name = lobby.joinedId ? 'Joiner' : '(waiting)';
-  try {
-    const p1 = await thread.client.users.fetch(lobby.creatorId);
-    p1Name = truncate(p1.username || p1.globalName || 'P1');
-    if (lobby.joinedId) {
-      const p2 = await thread.client.users.fetch(lobby.joinedId);
-      p2Name = truncate(p2.username || p2.globalName || 'P2');
-    }
-  } catch {
-    // fallback to IDs if fetch fails
-  }
-  const status = lobby.status || (lobby.joinedId ? 'Full' : 'LFG');
-  return `[${status}] ${p1Name} vs ${p2Name}`;
-}
-
-async function updateThreadName(thread, lobby) {
-  try {
-    const name = await getThreadName(thread, lobby);
-    await thread.setName(name.slice(0, 100));
-  } catch (err) {
-    console.error('Failed to update thread name:', err);
-  }
 }
 
 /** Create p1 and p2 Hand channels (called when map is selected). */
@@ -1726,81 +1204,6 @@ async function createGameChannels(guild, player1Id, player2Id, options = {}) {
   return { gameCategory, gameId, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel };
 }
 
-/** Game phases for visual organization - all use orange sidebar */
-const PHASE_COLOR = 0xf39c12;
-const GAME_PHASES = {
-  SETUP: { name: 'PRE-GAME SETUP', emoji: '⚙️', color: PHASE_COLOR },
-  INITIATIVE: { name: 'INITIATIVE', emoji: '🎲', color: PHASE_COLOR },
-  DEPLOYMENT: { name: 'DEPLOYMENT', emoji: '📍', color: PHASE_COLOR },
-  ROUND: { name: 'ROUND', emoji: '⚔️', color: PHASE_COLOR },
-};
-
-/** Action icons for game log */
-const ACTION_ICONS = {
-  squad: '📋',
-  map: '🗺️',
-  initiative: '🎲',
-  zone: '🏁',
-  deploy: '📍',
-  exhaust: '😴',
-  activate: '⚡',
-  ready: '✨',
-  move: '🚶',
-  attack: '⚔️',
-  interact: '🤝',
-  special: '✴️',
-  deployed: '✅',
-  card: '🎴',
-  deplete: '🔄',
-};
-
-/** Post a phase header to the game log (only when phase changes) */
-async function logPhaseHeader(game, client, phase, roundNum = null) {
-  const phaseKey = `currentPhase`;
-  const phaseName = roundNum ? `${phase.name} ${roundNum}` : phase.name;
-  const fullKey = roundNum ? `${phase.name}_${roundNum}` : phase.name;
-  if (game[phaseKey] === fullKey) return;
-  game[phaseKey] = fullKey;
-  try {
-    const ch = await client.channels.fetch(game.generalId);
-    const embed = new EmbedBuilder()
-      .setTitle(`${phase.emoji}  ${phaseName}`)
-      .setColor(phase.color);
-    const msg = await ch.send({ embeds: [embed] });
-    const setupPhases = ['SETUP', 'INITIATIVE', 'DEPLOYMENT'];
-    if (setupPhases.includes(phase.name)) {
-      game.setupLogMessageIds = game.setupLogMessageIds || [];
-      game.setupLogMessageIds.push(msg.id);
-    }
-  } catch (err) {
-    console.error('Phase header error:', err);
-  }
-}
-
-/** Log a game action with icon and clean formatting */
-async function logGameAction(game, client, content, options = {}) {
-  try {
-    const ch = await client.channels.fetch(game.generalId);
-    const icon = options.icon ? `${ACTION_ICONS[options.icon] || ''} ` : '';
-    const phase = options.phase;
-    if (phase) {
-      await logPhaseHeader(game, client, GAME_PHASES[phase], options.roundNum);
-    }
-    const timestamp = `<t:${Math.floor(Date.now() / 1000)}:t>`;
-    const msgContent = `${icon}${timestamp} — ${content}`;
-    const sentMsg = await ch.send({ content: msgContent, allowedMentions: options.allowedMentions });
-    const setupPhases = ['SETUP', 'INITIATIVE', 'DEPLOYMENT'];
-    if (phase && setupPhases.includes(phase)) {
-      game.setupLogMessageIds = game.setupLogMessageIds || [];
-      game.setupLogMessageIds.push(sentMsg.id);
-    }
-  } catch (err) {
-    console.error('Game log error:', err);
-  }
-}
-
-const gameErrorThreads = new Map();
-
 function extractGameIdFromInteraction(interaction) {
   const id = interaction.customId || interaction.values?.[0] || '';
   const prefixes = [
@@ -1861,57 +1264,6 @@ function extractGameIdFromMessage(message) {
   return null;
 }
 
-// Match your existing bot logs channel (name or slug)
-const BOT_LOGS_CHANNEL_NAMES = ['bot-logs', 'bot-log', 'bot logs'];
-
-async function logGameErrorToBotLogs(client, guild, gameId, error, context = '') {
-  try {
-    if (!guild) {
-      console.error('logGameErrorToBotLogs: no guild (interaction may be in DMs)');
-      return;
-    }
-    await guild.channels.fetch().catch(() => {});
-    const ch = guild.channels.cache.find((c) => {
-      if (c.type !== ChannelType.GuildText) return false;
-      const name = (c.name || '').toLowerCase().trim();
-      return BOT_LOGS_CHANNEL_NAMES.includes(name) || name.replace(/\s+/g, '-') === 'bot-logs';
-    });
-    if (!ch) {
-      console.error(
-        `Bot logs channel not found in guild "${guild.name}" (${guild.id}). Ensure your existing bot logs text channel is named one of: ${BOT_LOGS_CHANNEL_NAMES.join(', ')}.`
-      );
-      return;
-    }
-    const errMsg = error?.message || String(error);
-    const stack = error?.stack ? `\n\`\`\`\n${error.stack.slice(0, 800)}\n\`\`\`` : '';
-    const ctx = context ? ` (${context})` : '';
-    const content = `⚠️ **Game Error**${gameId ? ` — IA Game #${gameId}` : ''}${ctx}\n${errMsg}${stack}`;
-
-    if (gameId) {
-      const key = `${guild.id}_${gameId}`;
-      let threadId = gameErrorThreads.get(key);
-      if (!threadId) {
-        try {
-          const thread = await ch.threads.create({
-            name: `IA${gameId} errors`,
-            autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
-          });
-          threadId = thread.id;
-          gameErrorThreads.set(key, threadId);
-        } catch {
-          threadId = null;
-        }
-      }
-      const target = threadId ? await client.channels.fetch(threadId).catch(() => null) : ch;
-      if (target) await target.send({ content });
-    } else {
-      await ch.send({ content });
-    }
-  } catch (e) {
-    console.error('Failed to log game error to bot-logs:', e);
-  }
-}
-
 /** After map selection: randomly pick A or B mission card, post to Game Log, pin it. */
 async function postMissionCardAfterMapSelection(game, client, map) {
   const missions = getMissionCardsData()[map.id];
@@ -1943,163 +1295,14 @@ async function postMissionCardAfterMapSelection(game, client, map) {
   }
 }
 
-function getSelectSquadButton(gameId, playerNum) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`squad_select_${gameId}_${playerNum}`)
-      .setLabel('Select Squad')
-      .setStyle(ButtonStyle.Primary)
-  );
-}
-
-/** Select Squad (grey) + Default Rebels (red), Default Scum (green), Default Imperial (blurple) for testing. */
-function getHandSquadButtons(gameId, playerNum) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`squad_select_${gameId}_${playerNum}`)
-      .setLabel('Select Squad')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`default_deck_${gameId}_${playerNum}_rebel`)
-      .setLabel('Default Rebels')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(`default_deck_${gameId}_${playerNum}_scum`)
-      .setLabel('Default Scum')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`default_deck_${gameId}_${playerNum}_imperial`)
-      .setLabel('Default Imperial')
-      .setStyle(ButtonStyle.Primary)
-  );
-}
-
-function getKillGameButton(gameId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`kill_game_${gameId}`)
-      .setLabel('Kill Game (testing)')
-      .setStyle(ButtonStyle.Danger)
-  );
-}
-
-function getUndoButton(gameId) {
-  return new ButtonBuilder()
-    .setCustomId(`undo_${gameId}`)
-    .setLabel('UNDO')
-    .setStyle(ButtonStyle.Secondary);
-}
-
-function getBoardButtons(gameId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`refresh_map_${gameId}`)
-      .setLabel('Refresh Map')
-      .setStyle(ButtonStyle.Primary),
-    getUndoButton(gameId),
-    new ButtonBuilder()
-      .setCustomId(`refresh_all_${gameId}`)
-      .setLabel('Refresh All')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(`kill_game_${gameId}`)
-      .setLabel('Kill Game (testing)')
-      .setStyle(ButtonStyle.Danger)
-  );
-}
-
-/** Red Zone = Danger (red), Blue Zone = Primary (blue). Only valid before deployment zone is chosen. */
-function getDeploymentZoneButtons(gameId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`deployment_zone_red_${gameId}`)
-      .setLabel('Red Zone')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(`deployment_zone_blue_${gameId}`)
-      .setLabel('Blue Zone')
-      .setStyle(ButtonStyle.Primary)
-  );
-}
-
-function getDeploymentDoneButton(gameId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`deployment_done_${gameId}`)
-      .setLabel("Deployment Completed")
-      .setStyle(ButtonStyle.Success)
-  );
-}
-
-/** Same display names as Play Area: duplicate DCs get [DG 1], [DG 2], etc. */
-function getDeployDisplayNames(dcList) {
-  if (!dcList?.length) return [];
-  const totals = {};
-  const counts = {};
-  for (const d of dcList) totals[d] = (totals[d] || 0) + 1;
-  return dcList.map((dcName) => {
-    counts[dcName] = (counts[dcName] || 0) + 1;
-    const dgIndex = counts[dcName];
-    return totals[dcName] > 1 ? `${dcName} [DG ${dgIndex}]` : dcName;
-  });
-}
-
-const FIGURE_LETTERS = 'abcdefghij';
-
-/** Per-figure deploy labels: one entry per figure (e.g. multi-figure DCs get "1a", "1b", "2a", "2b"). Figure-less DCs excluded. */
+/** Per-figure deploy labels (delegates to discord with helpers). */
 function getDeployFigureLabels(dcList) {
-  if (!dcList?.length) return { labels: [], metadata: [] };
-  const figureDcs = dcList.map(resolveDcName).filter((n) => n && !isFigurelessDc(n));
-  const totals = {};
-  const counts = {};
-  for (const d of figureDcs) totals[d] = (totals[d] || 0) + 1;
-  const labels = [];
-  const metadata = [];
-  for (let i = 0; i < figureDcs.length; i++) {
-    const dcName = figureDcs[i];
-    counts[dcName] = (counts[dcName] || 0) + 1;
-    const dgIndex = counts[dcName];
-    const displayName = totals[dcName] > 1 ? `${dcName} [DG ${dgIndex}]` : dcName;
-    const baseName = displayName.replace(/\s*\[(?:DG|Group) \d+\]$/, '');
-    const figures = getDcStats(dcName).figures ?? 1;
-    if (figures <= 1) {
-      labels.push(`Deploy ${displayName}`);
-      metadata.push({ dcName, dgIndex, figureIndex: 0 });
-    } else {
-      for (let f = 0; f < figures; f++) {
-        labels.push(`Deploy ${baseName} ${dgIndex}${FIGURE_LETTERS[f]}`);
-        metadata.push({ dcName, dgIndex, figureIndex: f });
-      }
-    }
-  }
-  return { labels, metadata };
+  return getDeployFigureLabelsFromDiscord(dcList, { resolveDcName, isFigurelessDc, getDcStats });
 }
 
-/** One button per row. Undeployed: colored Deploy X. Deployed: grey Deploy X (Location: B1). All clear when Deployment Completed. */
+/** Deploy button rows (delegates to discord with helpers). */
 function getDeployButtonRows(gameId, playerNum, dcList, zone, figurePositions) {
-  const { labels, metadata } = getDeployFigureLabels(dcList);
-  const zoneStyle = zone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
-  const pos = figurePositions?.[playerNum] || {};
-  const deployRows = [];
-  for (let i = 0; i < labels.length; i++) {
-    const meta = metadata[i];
-    const figureKey = `${meta.dcName}-${meta.dgIndex}-${meta.figureIndex}`;
-    const space = pos[figureKey];
-    const displaySpace = space ? space.toUpperCase() : '';
-    const label = space
-      ? `${labels[i]} (Location: ${displaySpace})`.slice(0, 80)
-      : labels[i].slice(0, 80);
-    deployRows.push(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`deployment_fig_${gameId}_${playerNum}_${i}`)
-          .setLabel(label)
-          .setStyle(space ? ButtonStyle.Secondary : zoneStyle)
-      )
-    );
-  }
-  const doneRow = getDeploymentDoneButton(gameId);
-  return { deployRows, doneRow };
+  return getDeployButtonRowsFromDiscord(gameId, playerNum, dcList, zone, figurePositions, { resolveDcName, isFigurelessDc, getDcStats });
 }
 
 /** Rebuilds deploy prompt messages for a player, removing buttons for already-deployed figures. */
@@ -2150,105 +1353,6 @@ async function updateDeployPromptMessages(game, playerNum, client) {
   }
 }
 
-/** Returns action rows of space buttons grouped by map row (never mix row 17 and 18 in same line). Max 5 buttons per Discord row. */
-function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, occupiedSpaces, zone) {
-  const occupied = new Set((occupiedSpaces || []).map((s) => String(s).toLowerCase()));
-  const available = (validSpaces || [])
-    .map((s) => String(s).toLowerCase())
-    .filter((s) => !occupied.has(s));
-  const byRow = {};
-  for (const s of available) {
-    const m = s.match(/^([a-z]+)(\d+)$/i);
-    const row = m ? parseInt(m[2], 10) : 0;
-    if (!byRow[row]) byRow[row] = [];
-    byRow[row].push(s);
-  }
-  const sortedRows = Object.keys(byRow).map(Number).sort((a, b) => a - b);
-  for (const r of sortedRows) {
-    byRow[r].sort((a, b) => (a || '').localeCompare(b || ''));
-  }
-  const zoneStyle = zone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
-  const rows = [];
-  for (const rowNum of sortedRows) {
-    const tiles = byRow[rowNum];
-    for (let i = 0; i < tiles.length; i += 5) {
-      const chunk = tiles.slice(i, i + 5);
-      rows.push(
-        new ActionRowBuilder().addComponents(
-          chunk.map((space) =>
-            new ButtonBuilder()
-              .setCustomId(`deploy_pick_${gameId}_${playerNum}_${flatIndex}_${space}`)
-              .setLabel(space.toUpperCase())
-              .setStyle(zoneStyle)
-          )
-        )
-      );
-    }
-  }
-  return { rows, available };
-}
-
-/** Returns action rows for MP distance selection: buttons with move_mp_${msgId}_${figureIndex}_${mp}. */
-function getMoveMpButtonRows(msgId, figureIndex, mpRemaining) {
-  if (!mpRemaining || mpRemaining < 1) return [];
-  const btns = [];
-  for (let mp = 1; mp <= mpRemaining; mp++) {
-    btns.push(
-      new ButtonBuilder()
-        .setCustomId(`move_mp_${msgId}_${figureIndex}_${mp}`)
-        .setLabel(`${mp} MP`)
-        .setStyle(ButtonStyle.Primary)
-    );
-  }
-  const rows = [];
-  for (let r = 0; r < btns.length; r += 5) {
-    rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
-  }
-  return rows;
-}
-
-/** Returns action rows for movement: buttons with move_pick_${msgId}_${figureIndex}_${space}. */
-function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces) {
-  const available = (validSpaces || []).map((s) => normalizeCoord(s));
-  const orderMap = new Map(
-    (mapSpaces?.spaces || []).map((coord, idx) => [normalizeCoord(coord), idx])
-  );
-  available.sort((a, b) => {
-    const diff = (orderMap.get(a) ?? Infinity) - (orderMap.get(b) ?? Infinity);
-    if (diff !== 0) return diff;
-    return a.localeCompare(b);
-  });
-  const byRow = {};
-  const rowOrder = [];
-  for (const s of available) {
-    const m = s.match(/^([a-z]+)(\d+)$/i);
-    const row = m ? parseInt(m[2], 10) : 0;
-    if (!byRow[row]) {
-      byRow[row] = [];
-      rowOrder.push(row);
-    }
-    byRow[row].push(s);
-  }
-  const rows = [];
-  for (const rowNum of rowOrder) {
-    const tiles = byRow[rowNum] || [];
-    for (let i = 0; i < tiles.length; i += 5) {
-      const chunk = tiles.slice(i, i + 5);
-      rows.push(
-        new ActionRowBuilder().addComponents(
-          chunk.map((space) =>
-            new ButtonBuilder()
-              .setCustomId(`move_pick_${msgId}_${figureIndex}_${space}`)
-              .setLabel(space.toUpperCase())
-              .setStyle(ButtonStyle.Success)
-          )
-        )
-      );
-    }
-  }
-  return { rows, available };
-}
-
 /** Convert game.figurePositions to renderMap figures format. Uses circular figure images from figure-images.json. */
 function getFiguresForRender(game) {
   const pos = game.figurePositions;
@@ -2277,10 +1381,10 @@ function getFiguresForRender(game) {
       let figureCount = getDcStats(dcName).figures ?? 1;
       if (figureCount <= 1 && dcName) {
         const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-        const key = Object.keys(getDcStats() || {}).find(
+        const key = Object.keys(getDcStatsMap() || {}).find(
           (k) => k.toLowerCase().startsWith(base.toLowerCase() + ' ') || k.toLowerCase() === base.toLowerCase()
         );
-        if (key) figureCount = getDcStats()[key]?.figures ?? figureCount;
+        if (key) figureCount = getDcStatsMap()[key]?.figures ?? figureCount;
       }
       const dcCopies = totals[dcName] ?? 1;
       let label = null;
@@ -2507,12 +1611,7 @@ async function replyIfGameEnded(game, interaction) {
   return false;
 }
 
-/** Returns the current initiative player's zone label, e.g. "[RED] " or "[BLUE] ", or "" if unknown. */
-function getInitiativePlayerZoneLabel(game) {
-  return getPlayerZoneLabel(game, game.initiativePlayerId);
-}
-
-/** Returns a player's zone label, e.g. "[RED] " or "[BLUE] ", or "" if unknown. */
+/** Returns a player's zone label, e.g. "[RED] " or "[BLUE] ", or "" if unknown. Used by handlers. */
 function getPlayerZoneLabel(game, playerId) {
   if (!playerId) return '';
   let zone = playerId === game.player1Id ? game.player1DeploymentZone : game.player2DeploymentZone;
@@ -2522,41 +1621,9 @@ function getPlayerZoneLabel(game, playerId) {
   return zone ? `[${zone.toUpperCase()}] ` : '';
 }
 
-/** Build Scorecard embed with VP breakdown per player. Initiative shown via bullet row (no token image). */
-function buildScorecardEmbed(game) {
-  const vp1 = game.player1VP || { total: 0, kills: 0, objectives: 0 };
-  const vp2 = game.player2VP || { total: 0, kills: 0, objectives: 0 };
-  const p1HasInitiative = game.initiativeDetermined && game.initiativePlayerId === game.player1Id;
-  const p2HasInitiative = game.initiativeDetermined && game.initiativePlayerId === game.player2Id;
-
-  const fields = [
-    { name: 'Player 1', value: `<@${game.player1Id}>`, inline: true },
-    { name: 'Player 2', value: `<@${game.player2Id}>`, inline: true },
-    { name: '\u200b', value: '\u200b', inline: true },
-    { name: 'Total VP', value: `${vp1.total}`, inline: true },
-    { name: 'Total VP', value: `${vp2.total}`, inline: true },
-    { name: '\u200b', value: '\u200b', inline: true },
-    { name: 'Kills', value: `${vp1.kills}`, inline: true },
-    { name: 'Kills', value: `${vp2.kills}`, inline: true },
-    { name: '\u200b', value: '\u200b', inline: true },
-    { name: 'Objectives', value: `${vp1.objectives}`, inline: true },
-    { name: 'Objectives', value: `${vp2.objectives}`, inline: true },
-    { name: '\u200b', value: '\u200b', inline: true },
-  ];
-  if (game.initiativeDetermined) {
-    const zoneLabel = getInitiativePlayerZoneLabel(game);
-    const initiativeValue = p1HasInitiative
-      ? `● ${zoneLabel}P1 <@${game.player1Id}> has the initiative!`
-      : `● ${zoneLabel}P2 <@${game.player2Id}> has the initiative!`;
-    fields.push({ name: 'Initiative', value: initiativeValue, inline: false });
-  }
-
-  return new EmbedBuilder().setTitle('Scorecard').setColor(0x2f3136).addFields(fields);
-}
-
 /** Refresh all game components with latest data (DC stats, CC images, etc.). Reloads JSON data first. */
 async function refreshAllGameComponents(game, client) {
-  reloadGameData();
+  await reloadGameData();
   const gameId = game.gameId;
 
   if (game.boardId && game.selectedMap) {
@@ -2696,32 +1763,6 @@ async function buildBoardMapPayload(gameId, map, game) {
   };
 }
 
-/** Returns one row: Map Selection (if not yet selected), Kill Game. Determine Initiative appears on the Both Squads Ready message. */
-function getGeneralSetupButtons(game) {
-  const killBtn = new ButtonBuilder()
-    .setCustomId(`kill_game_${game.gameId}`)
-    .setLabel('Kill Game (testing)')
-    .setStyle(ButtonStyle.Danger);
-  const draftBtn = new ButtonBuilder()
-    .setCustomId(`draft_random_${game.gameId}`)
-    .setLabel('Draft Random')
-    .setStyle(ButtonStyle.Secondary);
-  const components = [];
-  if (!game.mapSelected) {
-    components.push(
-      new ButtonBuilder()
-        .setCustomId(`map_selection_${game.gameId}`)
-        .setLabel('MAP SELECTION')
-        .setStyle(ButtonStyle.Success)
-    );
-  }
-  if (game.isTestGame && !game.mapSelected && !game.draftRandomUsed && !game.initiativeDetermined) {
-    components.push(draftBtn);
-  }
-  components.push(killBtn);
-  return new ActionRowBuilder().addComponents(...components);
-}
-
 /** Delete setup messages from Game Log when Round 1 begins. */
 async function clearPreGameSetup(game, client) {
   const ids = [
@@ -2746,26 +1787,6 @@ async function clearPreGameSetup(game, client) {
   } catch (err) {
     console.error('Failed to clear pre-game setup:', err);
   }
-}
-
-/** Returns Determine Initiative + Kill Game for the Both Squads Ready message. */
-function getDetermineInitiativeButtons(game) {
-  const components = [];
-  if (!game.initiativeDetermined) {
-    components.push(
-      new ButtonBuilder()
-        .setCustomId(`determine_initiative_${game.gameId}`)
-        .setLabel('Determine Initiative')
-        .setStyle(ButtonStyle.Primary)
-    );
-  }
-  components.push(
-    new ButtonBuilder()
-      .setCustomId(`kill_game_${game.gameId}`)
-      .setLabel('Kill Game (testing)')
-      .setStyle(ButtonStyle.Danger)
-  );
-  return new ActionRowBuilder().addComponents(...components);
 }
 
 async function runDraftRandom(game, client) {
@@ -2997,18 +2018,6 @@ function resolveDcImagePath(relPath, dcName) {
   return relPath;
 }
 
-/** Get figure base size (1x1, 1x2, 2x2, 2x3) for map rendering. Default 1x1. */
-function getFigureSize(dcName) {
-  const exact = getFigureSizes()[dcName];
-  if (exact) return exact;
-  const lower = dcName?.toLowerCase?.() || '';
-  const key = Object.keys(getFigureSizes()).find((k) => k.toLowerCase() === lower);
-  if (key) return getFigureSizes()[key];
-  const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-  const key2 = Object.keys(getFigureSizes()).find((k) => k.toLowerCase().startsWith(base.toLowerCase()));
-  return key2 ? getFigureSizes()[key2] : '1x1';
-}
-
 /**
  * Get size trait (SMALL | LARGE | MASSIVE) for effects (command cards, abilities).
  * Rule: if a DC does not explicitly have LARGE or MASSIVE, it is SMALL.
@@ -3060,63 +2069,6 @@ function resolveAssetPath(relPath, subfolder) {
   return relPath;
 }
 
-function rollAttackDice(diceColors) {
-  let acc = 0, dmg = 0, surge = 0;
-  for (const color of diceColors || []) {
-    const faces = getDiceData().attack?.[color.toLowerCase()];
-    if (!faces?.length) continue;
-    const face = faces[Math.floor(Math.random() * faces.length)];
-    acc += face.acc ?? 0;
-    dmg += face.dmg ?? 0;
-    surge += face.surge ?? 0;
-  }
-  return { acc, dmg, surge };
-}
-
-function rollDefenseDice(defenseType) {
-  const faces = getDiceData().defense?.[(defenseType || 'white').toLowerCase()];
-  if (!faces?.length) return { block: 0, evade: 0 };
-  const face = faces[Math.floor(Math.random() * faces.length)];
-  return { block: face.block ?? 0, evade: face.evade ?? 0 };
-}
-
-/** Display labels for surge abilities (subset; raw key used if missing). */
-const SURGE_LABELS = {
-  'damage 1': '+1 Hit', 'damage 2': '+2 Hits', 'damage 3': '+3 Hits',
-  'pierce 1': 'Pierce 1', 'pierce 2': 'Pierce 2', 'pierce 3': 'Pierce 3',
-  'accuracy 1': '+1 Accuracy', 'accuracy 2': '+2 Accuracy', 'accuracy 3': '+3 Accuracy',
-  'stun': 'Stun', 'weaken': 'Weaken', 'bleed': 'Bleed', 'hide': 'Hide', 'focus': 'Focus',
-  'blast 1': 'Blast 1', 'blast 2': 'Blast 2', 'recover 1': 'Recover 1', 'recover 2': 'Recover 2', 'recover 3': 'Recover 3',
-  'cleave 1': 'Cleave 1', 'cleave 2': 'Cleave 2',
-  '+1 hit': '+1 Hit', '+2 hits': '+2 Hits', '+1 hit, stun': '+1 Hit, Stun', '+1 hit, pierce 1': '+1 Hit, Pierce 1',
-  'accuracy 2, surge 1': '+2 Accuracy, +1 Surge', 'damage 2, hide': '+2 Hits, Hide',
-};
-
-/** Get attacker's surge abilities from dc-effects (1-surge options only for now). */
-function getAttackerSurgeAbilities(combat) {
-  const card = getDcEffects()[combat.attackerDcName] || getDcEffects()[combat.attackerDcName?.replace(/\s*\[.*\]\s*$/, '')];
-  const list = card?.surgeAbilities || [];
-  return list.filter((k) => !/\(\s*2\s*surges?\s*\)/i.test(k)); // skip "X (2 surges)" for now
-}
-
-/** Parse a surge ability key into modifiers. */
-function parseSurgeEffect(key) {
-  const out = { damage: 0, pierce: 0, accuracy: 0, conditions: [] };
-  const parts = String(key || '').toLowerCase().split(/\s*,\s*/);
-  for (const p of parts) {
-    const dmg = p.match(/^damage\s+(\d+)$/); if (dmg) { out.damage += parseInt(dmg[1], 10); continue; }
-    const hit = p.match(/^\+(\d+)\s+hit(s?)$/); if (hit) { out.damage += parseInt(hit[1], 10); continue; }
-    const pierce = p.match(/^pierce\s+(\d+)$/); if (pierce) { out.pierce += parseInt(pierce[1], 10); continue; }
-    const acc = p.match(/^accuracy\s+(\d+)$/); if (acc) { out.accuracy += parseInt(acc[1], 10); continue; }
-    if (p === 'stun') out.conditions.push('Stun');
-    else if (p === 'weaken') out.conditions.push('Weaken');
-    else if (p === 'bleed') out.conditions.push('Bleed');
-    else if (p === 'hide') out.conditions.push('Hide');
-    else if (p === 'focus') out.conditions.push('Focus');
-  }
-  return out;
-}
-
 /** Find msgId for DC message containing the given figure (for dcHealthState lookup). */
 function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
   const m = figureKey.match(/^(.+)-(\d+)-(\d+)$/);
@@ -3132,26 +2084,13 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
 
 /** Resolve combat after rolls (and optional surge). Applies damage, VP, updates embeds/board, clears pendingCombat. */
 async function resolveCombatAfterRolls(game, combat, client) {
-  const roll = combat.attackRoll;
-  const defRoll = combat.defenseRoll;
-  const surgeD = combat.surgeDamage || 0;
-  const surgeP = combat.surgePierce || 0;
-  const surgeA = combat.surgeAccuracy || 0;
-  const hit = (roll.acc + surgeA) >= defRoll.evade;
-  const effectiveBlock = Math.max(0, defRoll.block - surgeP);
-  const damage = hit ? Math.max(0, roll.dmg + surgeD - effectiveBlock) : 0;
+  const { hit, damage, resultText } = computeCombatResult(combat);
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
   const ownerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
   const targetMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, combat.target.figureKey);
   const tm = combat.target.figureKey.match(/-(\d+)-(\d+)$/);
   const targetFigIndex = tm ? parseInt(tm[2], 10) : 0;
-  const conditionsText = (combat.surgeConditions?.length) ? ` (${combat.surgeConditions.join(', ')})` : '';
-
-  let resultText = `**Result:** Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
-  if (surgeD || surgeP || surgeA || conditionsText) resultText += ` | Surge: +${surgeD} dmg, +${surgeP} pierce, +${surgeA} acc${conditionsText}`;
-  if (!hit) resultText += ' → **Miss**';
-  else resultText += ` → **${damage} damage**${conditionsText}`;
 
   const thread = await client.channels.fetch(combat.combatThreadId);
   if (damage > 0 && targetMsgId) {
@@ -3260,12 +2199,13 @@ function getCompanionDescriptionForDc(dcName) {
 }
 
 function getDcStats(dcName) {
-  const exact = getDcStats()[dcName];
+  const map = getDcStatsMap();
+  const exact = map[dcName];
   if (exact) return { ...exact, figures: isFigurelessDc(dcName) ? 0 : (exact.figures ?? 1) };
   const lower = dcName?.toLowerCase?.() || '';
-  const key = Object.keys(getDcStats()).find((k) => k.toLowerCase() === lower);
+  const key = Object.keys(map).find((k) => k.toLowerCase() === lower);
   if (key) {
-    const base = getDcStats()[key];
+    const base = map[key];
     return { ...base, figures: isFigurelessDc(dcName) ? 0 : (base.figures ?? 1) };
   }
   return { health: null, figures: isFigurelessDc(dcName) ? 0 : 1, specials: [] };
@@ -3304,17 +2244,6 @@ async function sendDeckIllegalAlert(game, isP1, squad, validation, client) {
     components: [row],
     allowedMentions: { users: [playerId] },
   });
-}
-
-const DC_ACTIONS_PER_ACTIVATION = 2;
-
-/** Returns "X/2 Actions Remaining" with green/red square visual (🟩=remaining, 🟥=used). */
-function getActionsCounterContent(remaining, total = DC_ACTIONS_PER_ACTIVATION) {
-  const r = Math.max(0, Math.min(remaining, total));
-  const used = total - r;
-  const green = '🟩'.repeat(r);
-  const red = '🟥'.repeat(used);
-  return `**Actions** • ${r}/${total} ${green}${red}`;
 }
 
 /** True if any DC in this game has actions remaining to spend. */
@@ -3476,90 +2405,13 @@ async function updateDcActionsMessage(game, msgId, client) {
   }
 }
 
-/** Returns action rows: one [Move][Attack][Interact] row per figure, plus specials. Max 5 rows. Unless otherwise specified, each special can be used at most once per activation (specialsUsed). */
+/** Returns action rows for DC (delegates to discord with game-specific helpers). */
 function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRemaining = 2, game = null) {
-  const stats = getDcStats(dcName);
-  const figures = stats.figures ?? 1;
-  const specials = stats.specials || [];
-  const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-  const actionsData = typeof actionsDataOrRemaining === 'object' && actionsDataOrRemaining != null ? actionsDataOrRemaining : { remaining: actionsDataOrRemaining, specialsUsed: [] };
-  const actionsRemaining = actionsData.remaining ?? 2;
-  const specialsUsed = Array.isArray(actionsData.specialsUsed) ? actionsData.specialsUsed : [];
-  const noActions = (actionsRemaining ?? 2) <= 0;
-  const playerNum = game ? (dcMessageMeta.get(msgId)?.playerNum ?? 1) : 1;
-  const rows = [];
-  for (let f = 0; f < figures && rows.length < 5; f++) {
-    const suffix = figures <= 1 ? '' : ` ${dgIndex}${FIGURE_LETTERS[f]}`;
-    const figureKey = `${dcName}-${dgIndex}-${f}`;
-    const comps = [
-      new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${f}`).setLabel(`Move${suffix}`).setStyle(ButtonStyle.Success).setDisabled(noActions),
-      new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${f}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noActions),
-      new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${f}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noActions),
-    ];
-    rows.push(new ActionRowBuilder().addComponents(...comps));
-  }
-  if (specials.length > 0 && rows.length < 5) {
-    const specialBtns = specials.slice(0, 5).map((name, idx) => {
-      const alreadyUsed = specialsUsed.includes(idx);
-      return new ButtonBuilder()
-        .setCustomId(`dc_special_${idx}_${msgId}`)
-        .setLabel(name.slice(0, 80))
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(noActions || alreadyUsed);
-    });
-    rows.push(new ActionRowBuilder().addComponents(...specialBtns));
-  }
-  // CC Special Actions (legally playable) after DC specials, labeled "CC: card name"
-  if (game && rows.length < 5) {
-    const playableCc = getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName);
-    const ccSpecials = playableCc.slice(0, 5);
-    if (ccSpecials.length > 0) {
-      const ccBtns = ccSpecials.map((ccName, idx) =>
-        new ButtonBuilder()
-          .setCustomId(`dc_cc_special_${msgId}_${idx}`)
-          .setLabel(`CC: ${ccName}`.slice(0, 80))
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(noActions)
-      );
-      rows.push(new ActionRowBuilder().addComponents(...ccBtns));
-    }
-  }
-  return rows;
-}
-
-function formatHealthSection(dgIndex, healthState) {
-  if (!healthState?.length) return 'Health\n—/—';
-  const labels = 'abcdefghij';
-  const lines = healthState.map(([cur, max], i) => {
-    const c = cur != null ? cur : (max != null ? max : '?');
-    const m = max != null ? max : '?';
-    if (healthState.length === 1) return `${c}/${m}`;
-    return `${dgIndex}${labels[i]}: ${c}/${m}`;
+  return getDcActionButtonsFromDiscord(msgId, dcName, displayName, actionsDataOrRemaining, game, {
+    getDcStats,
+    getPlayerNumForMsgId: (id) => dcMessageMeta.get(id)?.playerNum ?? 1,
+    getPlayableCcSpecialsForDc,
   });
-  return `Health\n${lines.join('\n')}`;
-}
-
-function getDcToggleButton(msgId, exhausted, game = null) {
-  if (exhausted) {
-    return new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`dc_unactivate_${msgId}`)
-        .setLabel('Un-activate')
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`dc_toggle_${msgId}`)
-        .setLabel('Ready')
-        .setStyle(ButtonStyle.Success)
-    );
-  }
-  const bothDrawn = game && game.player1CcDrawn && game.player2CcDrawn;
-  if (!bothDrawn) return null;
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`dc_toggle_${msgId}`)
-      .setLabel('Activate')
-      .setStyle(ButtonStyle.Success)
-  );
 }
 
 /** True if this DC message was depleted and removed from the game (one-time use). */
@@ -3570,22 +2422,9 @@ function isDepletedRemovedFromGame(game, msgId) {
   return p1.includes(msgId) || p2.includes(msgId);
 }
 
-/** Returns component rows for a DC message in Play Area: Exhaust/Activate row, then optional Deplete row for Skirmish Upgrades with Deplete effect. Depleted cards are removed from game and have no components. */
+/** Returns component rows for a DC message in Play Area (delegates to discord with game-specific helpers). */
 function getDcPlayAreaComponents(msgId, exhausted, game, dcName) {
-  if (game && isDepletedRemovedFromGame(game, msgId)) return [];
-  const toggleRow = getDcToggleButton(msgId, exhausted, game);
-  const rows = toggleRow ? [toggleRow] : [];
-  if (hasDepleteEffect(dcName)) {
-    rows.push(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`dc_deplete_${msgId}`)
-          .setLabel('Deplete')
-          .setStyle(ButtonStyle.Primary)
-      )
-    );
-  }
-  return rows;
+  return getDcPlayAreaComponentsFromDiscord(msgId, exhausted, game, dcName, { isDepletedRemovedFromGame, hasDepleteEffect });
 }
 
 /** True if all figures in this deployment group are defeated (or never deployed). */
@@ -3607,44 +2446,9 @@ function isGroupDefeated(game, playerNum, dcIndex) {
   return true;
 }
 
-/** Returns ActionRow(s) for Activate buttons (DCs not yet activated). Includes Pass turn to opponent when other has more activations. */
+/** Returns ActionRow(s) for Activate buttons (delegates to discord with game-specific helpers). */
 function getActivateDcButtons(game, playerNum) {
-  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-  const activated = playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
-  const activatedSet = new Set(activated);
-  const gameId = game.gameId;
-  const btns = [];
-  for (let i = 0; i < dcList.length; i++) {
-    const dc = dcList[i];
-    const dcName = resolveDcName(dc);
-    if (isFigurelessDc(dcName)) continue;
-    if (activatedSet.has(i)) continue;
-    if (isGroupDefeated(game, playerNum, i)) continue;
-    const displayName = dc?.displayName || dcName;
-    const fullLabel = `Activate ${displayName}`;
-    const label = fullLabel.length > 80 ? fullLabel.slice(0, 77) + '…' : fullLabel;
-    btns.push(new ButtonBuilder()
-      .setCustomId(`dc_activate_${gameId}_${playerNum}_${i}`)
-      .setLabel(label)
-      .setStyle(ButtonStyle.Success));
-  }
-  const rows = [];
-  for (let r = 0; r < btns.length; r += 5) {
-    rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
-  }
-  const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
-  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
-  const myRemaining = playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
-  const otherRemaining = playerNum === 1 ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
-  if (turnPlayerId === playerId && otherRemaining > myRemaining && myRemaining > 0) {
-    rows.push(new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`pass_activation_turn_${gameId}`)
-        .setLabel('Pass turn to opponent')
-        .setStyle(ButtonStyle.Secondary)
-    ));
-  }
-  return rows;
+  return getActivateDcButtonsFromDiscord(game, playerNum, { resolveDcName, isFigurelessDc, isGroupDefeated });
 }
 
 async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState) {
@@ -3694,75 +2498,6 @@ async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState)
   }
   return { embed, files };
 }
-
-/** Card-back character (vertical rectangle) for hand visual. */
-const CARD_BACK_CHAR = '▮';
-
-/** Tooltip embed at top of Play Area: player, CC count, DC list. */
-function getPlayAreaTooltipEmbed(game, playerNum) {
-  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
-  const deckCount = (playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || [])).length;
-  const dcList = playerNum === 1 ? (game.p1DcList || game.player1Squad?.dcList || []) : (game.p2DcList || game.player2Squad?.dcList || []);
-  const dcNames = Array.isArray(dcList) ? dcList.map((d) => (typeof d === 'object' ? d.dcName || d.displayName : d)).filter(Boolean) : [];
-  const dcText = dcNames.length > 0 ? dcNames.join(', ') : '—';
-  return new EmbedBuilder()
-    .setTitle(`This is Player ${playerNum}'s Play Area`)
-    .setDescription(
-      `**Player:** <@${playerId}>\n` +
-      `**Command Cards in Deck:** ${deckCount}\n` +
-      `**Deployment Cards:** ${dcText}`
-    )
-    .setColor(0x5865f2);
-}
-
-/** Tooltip embed for Hand channel: explains the private hand. */
-function getHandTooltipEmbed(game, playerNum) {
-  return new EmbedBuilder()
-    .setTitle('Your Hand')
-    .setDescription(
-      'Your private channel for **Command Cards** and squad selection. Only you can see this channel.\n\n' +
-      '• Select your squad below (form), **upload a .vsav file**, or **copy-paste** your list from the IACP builder Share button\n' +
-      '• During the game, your hand is shown here — played cards will show up in the **Game Log**'
-    )
-    .setColor(0x5865f2);
-}
-
-/** Returns embed showing command cards in hand as card backs (e.g. ▮▮▮ for 3 cards). */
-function getHandVisualEmbed(handCount) {
-  const count = Math.max(0, handCount ?? 0);
-  const cards = CARD_BACK_CHAR.repeat(count) || '—';
-  return new EmbedBuilder()
-    .setTitle('Command Cards in Hand')
-    .setDescription(`**${count}** cards\n${cards}`)
-    .setColor(0x2f3136);
-}
-
-/** Returns embed showing discard pile count (card backs). */
-function getDiscardPileEmbed(discardCount) {
-  const count = Math.max(0, discardCount ?? 0);
-  const cards = CARD_BACK_CHAR.repeat(count) || '—';
-  return new EmbedBuilder()
-    .setTitle('Command Cards in Discard Pile')
-    .setDescription(`**${count}** cards\n${cards}`)
-    .setColor(0x2f3136);
-}
-
-/** Search (blue) and Close (red) buttons for discard pile. */
-function getDiscardPileButtons(gameId, playerNum, hasOpenThread) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`cc_search_discard_${gameId}_${playerNum}`)
-      .setLabel('Search Discard Pile')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`cc_close_discard_${gameId}_${playerNum}`)
-      .setLabel('Close Discard Pile')
-      .setStyle(ButtonStyle.Danger)
-      .setDisabled(!hasOpenThread)
-  );
-}
-
-const EMBEDS_PER_MESSAGE = 10;
 
 /** Build discard pile display for thread (embeds with card images, like hand view). Returns array of { embeds, files } for chunked sends. */
 function buildDiscardPileDisplayPayload(discard) {
@@ -3839,14 +2574,6 @@ async function updateHandVisualMessage(game, playerNum, client) {
 }
 
 /** Green = remaining, red = used. Returns e.g. "**Activations:** 🟢🟢🟢🔴 (3/4 remaining)" */
-function getActivationsLine(remaining, total) {
-  const green = '🟢';
-  const red = '🔴';
-  const used = Math.max(0, total - remaining);
-  const circles = green.repeat(remaining) + red.repeat(used);
-  return `**Activations:** ${circles} (${remaining}/${total} remaining)`;
-}
-
 /** Call after changing discard pile to refresh the Play Area discard embed and buttons. */
 async function updateDiscardPileMessage(game, playerNum, client) {
   const msgId = playerNum === 1 ? game.p1DiscardPileMessageId : game.p2DiscardPileMessageId;
@@ -3888,22 +2615,6 @@ async function updatePlayAreaDcButtons(game, client) {
     } catch (err) {
       console.error('Failed to update Play Area DC buttons:', err);
     }
-  }
-}
-
-/** Call after changing game.p1ActivationsRemaining or game.p2ActivationsRemaining to refresh the Play Area header. */
-async function updateActivationsMessage(game, playerNum, client) {
-  const msgId = playerNum === 1 ? game.p1ActivationsMessageId : game.p2ActivationsMessageId;
-  const remaining = playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
-  const total = playerNum === 1 ? game.p1ActivationsTotal : game.p2ActivationsTotal;
-  if (msgId == null || total === 0) return;
-  try {
-    const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
-    const channel = await client.channels.fetch(channelId);
-    const msg = await channel.messages.fetch(msgId);
-    await msg.edit(getActivationsLine(remaining, total));
-  } catch (err) {
-    console.error('Failed to update activations message:', err);
   }
 }
 
@@ -4166,20 +2877,6 @@ client.once('ready', async () => {
   }
 });
 
-/** Resolve/Reject buttons for bot-requests-and-suggestions forum posts. Admin-only (checked on click). */
-function getRequestActionButtons(threadId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`request_resolve_${threadId}`)
-      .setLabel('Resolve')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`request_reject_${threadId}`)
-      .setLabel('Reject')
-      .setStyle(ButtonStyle.Danger),
-  );
-}
-
 const requestsWithButtons = new Set();
 
 // Forum posts: thread isn't messageable until the author sends their first message.
@@ -4190,11 +2887,11 @@ async function maybeSetupLobbyFromFirstMessage(message) {
   const parent = thread.parent;
   if (parent?.name !== 'new-games') return false;
   // Guard against duplicates: claim synchronously before any await (prevents race when two messages fire)
-  if (lobbies.has(thread.id) || lobbyEmbedSent.has(thread.id)) return false;
-  lobbyEmbedSent.add(thread.id);
+  if (hasLobby(thread.id) || hasLobbyEmbedSent(thread.id)) return false;
+  markLobbyEmbedSent(thread.id);
   const creator = message.author.id;
   const lobby = { creatorId: creator, joinedId: null, status: 'LFG' };
-  lobbies.set(thread.id, lobby);
+  setLobby(thread.id, lobby);
   await thread.send({
     embeds: [getLobbyEmbed(lobby)],
     components: [getLobbyJoinButton(thread.id)],
@@ -4691,6 +3388,8 @@ client.on('interactionCreate', async (interaction) => {
       getAttackerSurgeAbilities,
       SURGE_LABELS,
       parseSurgeEffect,
+      resolveSurgeAbility,
+      getSurgeAbilityLabel,
     };
     if (buttonKey === 'attack_target_') await handleAttackTarget(interaction, combatContext);
     else if (buttonKey === 'combat_ready_') await handleCombatReady(interaction, combatContext);
@@ -4900,7 +3599,7 @@ client.on('interactionCreate', async (interaction) => {
     const lobbyContext = {
       getGame,
       setGame,
-      lobbies,
+      lobbies: getLobbiesMap(),
       countActiveGamesForPlayer,
       MAX_ACTIVE_GAMES_PER_PLAYER,
       getLobbyEmbed,
@@ -4914,7 +3613,7 @@ client.on('interactionCreate', async (interaction) => {
   if (buttonKey === 'lobby_start_') {
     const lobbyContext = {
       setGame,
-      lobbies,
+      lobbies: getLobbiesMap(),
       countActiveGamesForPlayer,
       MAX_ACTIVE_GAMES_PER_PLAYER,
       createGameChannels,
@@ -4949,13 +3648,10 @@ client.on('interactionCreate', async (interaction) => {
     const guild = interaction?.guild;
     const gameId = extractGameIdFromInteraction(interaction);
     await logGameErrorToBotLogs(interaction.client, guild, gameId, err, 'interactionCreate');
-    try {
-      if (interaction.deferred || interaction.replied) {
-        await interaction.followUp({ content: 'An error occurred. It has been logged to bot-logs.', ephemeral: true }).catch(() => {});
-      } else {
-        await interaction.reply({ content: 'An error occurred. It has been logged to bot-logs.', ephemeral: true }).catch(() => {});
-      }
-    } catch {}
+    await replyOrFollowUpWithRetry(interaction, {
+      content: 'An error occurred. It has been logged to bot-logs.',
+      ephemeral: true,
+    });
   }
 });
 

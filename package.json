@@ -15,7 +15,8 @@
     "organize-images": "node scripts/organize-images.js",
     "normalize-cc-images": "node scripts/normalize-cc-images.js",
     "test-db": "node scripts/test-db-connection.js",
-    "test-movement": "node index.js --test-movement"
+    "test-movement": "node index.js --test-movement",
+    "test": "node --test src/game/"
   },
   "type": "module",
   "dependencies": {

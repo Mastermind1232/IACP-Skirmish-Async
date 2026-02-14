@@ -6,6 +6,31 @@
 
 ---
 
+## 0. Progress vs monolith (this build)
+
+The **monolithic** problem (one huge file, hard to navigate/test/change — §1.5) is being addressed in this build as follows:
+
+| Done | What moved out of index.js |
+|------|----------------------------|
+| **A1** | Game state → `src/game-state.js` (games Map, dcMessageMeta, dcExhaustedState, dcDepletedState, dcHealthState, pendingIllegalSquad; getGame, setGame, saveGames). |
+| **A2** | Data loading → `src/data-loader.js` (all JSON load, reloadGameData; getDcStats, getDcEffects, getMapSpaces, getDice, getCcEffect, etc.). |
+| **A3** | Interaction router → `src/router.js` (prefix → handler key; single place to register customIds). |
+| **A4** | **All interaction handlers** → `src/handlers/*` (lobby, requests, game-tools, special, interact, round, movement, combat, activation, setup, dc-play-area, cc-hand). Index no longer has 40+ if-branches; it builds context and calls the registered handler per prefix. |
+| **A6** | Discord helpers → `src/discord/*`: embeds.js, messages.js, components.js (all tooltip/embed/button builders including lobby, deploy, move, DC/CC actions). Index keeps thin wrappers that pass game/data helpers where needed. |
+| **A5** | Game logic → `src/game/*` (coords.js, movement.js, combat.js; validation.js; getFigureSize in data-loader). |
+| **A7** | Test suite → `src/game/*.test.js`; run `npm test`. Node built-in test runner; no extra deps. |
+| **A8** | Error-handling → `src/error-handling.js` (retry for Discord API, log + user message; top-level catch uses replyOrFollowUpWithRetry). |
+
+**Still in index.js (optional later extraction):**
+
+- **Discord/orchestration:** buildBoardMapPayload, buildDcEmbedAndFiles, updateDcActionsMessage, buildHandDisplayPayload, getCommandCardImagePath, clearPreGameSetup, runDraftRandom, getFiguresForRender, getMapTokensForRender, updateDeployPromptMessages, getDeploymentMapAttachment, and other helpers that mix Discord + game state. Target for a future pass: `src/discord/*` or dedicated modules.
+
+So the monolith is being split by responsibility: **state**, **data**, **router**, **handlers**, **game logic**, **Discord helpers** (A6), **error-handling** (A8), **constants**, and **lobby state** are out; optional later pass can move remaining orchestration helpers from index.
+
+**Phase 1 (A1–A8) complete.** Next: Phase 2 — ability library (F1), surge wired to library (F2), CC timing (F5), multi-figure defeat (F7), etc. See §5 Execution order.
+
+---
+
 ## 1. Codebase assessment (current state)
 
 ### 1.1 Layout
@@ -178,14 +203,14 @@ Definition of “full game” for this plan:
 | A5 | Extract game logic into `src/game/*` | Movement, combat (resolve hit/damage/surge), validation; no Discord. |
 | A6 | Extract Discord helpers into `src/discord/*` | Embeds, buildBoardMapPayload, logGameAction; **button/component helpers** that enforce 2.5 (max 5 per row, chunking, color-by-area). All handlers use these so UI stays within Discord limits and color scheme. |
 | A7 | Add test suite and unit tests for `src/game/*` | e.g. Jest; test movement, combat, validation so refactors and ability logic are safe. Run after A5. |
-| A8 | Error-handling pattern for handlers | Log failures (gameId, customId, err); user-facing message on failure; avoid silent `.catch(() => {})` where state changed. For Discord API failures: retry with backoff (e.g. 2–3 times) on retryable errors (429, 5xx, network); then show message e.g. "Something went wrong; try again in 2–3 minutes." so users wait before retrying. |
+| A8 | Error-handling pattern for handlers | ✅ **Done.** `src/error-handling.js`: isRetryableDiscordError, withDiscordRetry, replyOrFollowUpWithRetry. Top-level catch: log via logGameErrorToBotLogs, then reply/followUp with retry (3 attempts, exponential backoff); if retryable and exhausted, user sees "Something went wrong… try again in 2–3 minutes." Handlers: log + ephemeral message; optional withDiscordRetry for critical Discord API calls after state change. |
 
 ### 4.2 Features (full game + bot enforces everything)
 
 | ID | Item | Notes |
 |----|------|-------|
-| F1 | Ability library (data + lookup) | Central list of abilities by id; type (surge/special/passive/triggered), when, effect. DC/CC reference ids. Resolution: **code-per-ability** (each ability implemented in code; data for lookup only). |
-| F2 | Wire surge to ability library | Surge abilities in library; DCs reference ids; combat uses library for buttons and resolution. (Current surge keys can map to library ids.) |
+| F1 | Ability library (data + lookup) | ✅ **Scaffold done.** `data/ability-library.json` (surge abilities by id: type, surgeCost, label). `src/game/abilities.js`: getAbility(id), resolveSurgeAbility(id), getSurgeAbilityLabel(id). Resolution: code-per-ability (surge via parseSurgeEffect). DCs still use surgeAbilities array in dc-effects; ids match keys. |
+| F2 | Wire surge to ability library | ✅ **Done.** Combat handler uses resolveSurgeAbility and getSurgeAbilityLabel from context; labels and modifiers go through ability library. SURGE_LABELS/parseSurgeEffect kept as fallback. |
 | F3 | Wire DC specials / passives to ability library | Special actions and key passives defined in library; bot runs them when triggered. |
 | F4 | Wire CC effects to ability library | CCs reference ability ids; on play, bot runs ability. Enforce CC timing (phase/context). |
 | F5 | CC timing | Document + enforce when each CC can be played (start of round, during attack, etc.). |

@@ -1,4 +1,5 @@
-import { ActionRowBuilder, ButtonStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { normalizeCoord } from '../game/coords.js';
 
 const MAX_BUTTONS_PER_ROW = 5;
 const MAX_ROWS_PER_MESSAGE = 5;
@@ -40,6 +41,537 @@ export function chunkButtonsToRows(components, maxPerRow = MAX_BUTTONS_PER_ROW) 
   for (let r = 0; r < components.length && rows.length < MAX_ROWS_PER_MESSAGE; r += capped) {
     const slice = components.slice(r, r + capped);
     rows.push(new ActionRowBuilder().addComponents(...slice));
+  }
+  return rows;
+}
+
+/** Search (blue) and Close (red) buttons for discard pile. */
+export function getDiscardPileButtons(gameId, playerNum, hasOpenThread) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`cc_search_discard_${gameId}_${playerNum}`)
+      .setLabel('Search Discard Pile')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`cc_close_discard_${gameId}_${playerNum}`)
+      .setLabel('Close Discard Pile')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!hasOpenThread)
+  );
+}
+
+/** Exhaust/Ready row for a DC message in Play Area. */
+export function getDcToggleButton(msgId, exhausted, game = null) {
+  if (exhausted) {
+    return new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`dc_unactivate_${msgId}`)
+        .setLabel('Un-activate')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`dc_toggle_${msgId}`)
+        .setLabel('Ready')
+        .setStyle(ButtonStyle.Success)
+    );
+  }
+  const bothDrawn = game && game.player1CcDrawn && game.player2CcDrawn;
+  if (!bothDrawn) return null;
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`dc_toggle_${msgId}`)
+      .setLabel('Activate')
+      .setStyle(ButtonStyle.Success)
+  );
+}
+
+/**
+ * Component rows for a DC message in Play Area: Exhaust/Activate row, then optional Deplete row.
+ * @param {string} msgId
+ * @param {boolean} exhausted
+ * @param {object} game
+ * @param {string} dcName
+ * @param {{ isDepletedRemovedFromGame: (game, msgId) => boolean, hasDepleteEffect: (dcName) => boolean }} helpers
+ */
+export function getDcPlayAreaComponents(msgId, exhausted, game, dcName, helpers = {}) {
+  const { isDepletedRemovedFromGame = () => false, hasDepleteEffect = () => false } = helpers;
+  if (game && isDepletedRemovedFromGame(game, msgId)) return [];
+  const toggleRow = getDcToggleButton(msgId, exhausted, game);
+  const rows = toggleRow ? [toggleRow] : [];
+  if (hasDepleteEffect(dcName)) {
+    rows.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`dc_deplete_${msgId}`)
+          .setLabel('Deplete')
+          .setStyle(ButtonStyle.Primary)
+      )
+    );
+  }
+  return rows;
+}
+
+/** Figure index suffix letters for multi-figure DCs (e.g. 1a, 1b). */
+export const FIGURE_LETTERS = 'abcdefghij';
+
+export function getUndoButton(gameId) {
+  return new ButtonBuilder()
+    .setCustomId(`undo_${gameId}`)
+    .setLabel('UNDO')
+    .setStyle(ButtonStyle.Secondary);
+}
+
+export function getBoardButtons(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`refresh_map_${gameId}`)
+      .setLabel('Refresh Map')
+      .setStyle(ButtonStyle.Primary),
+    getUndoButton(gameId),
+    new ButtonBuilder()
+      .setCustomId(`refresh_all_${gameId}`)
+      .setLabel('Refresh All')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`kill_game_${gameId}`)
+      .setLabel('Kill Game (testing)')
+      .setStyle(ButtonStyle.Danger)
+  );
+}
+
+/** One row: Map Selection (if not yet selected), Kill Game. Draft Random when test game. */
+export function getGeneralSetupButtons(game) {
+  const killBtn = new ButtonBuilder()
+    .setCustomId(`kill_game_${game.gameId}`)
+    .setLabel('Kill Game (testing)')
+    .setStyle(ButtonStyle.Danger);
+  const draftBtn = new ButtonBuilder()
+    .setCustomId(`draft_random_${game.gameId}`)
+    .setLabel('Draft Random')
+    .setStyle(ButtonStyle.Secondary);
+  const components = [];
+  if (!game.mapSelected) {
+    components.push(
+      new ButtonBuilder()
+        .setCustomId(`map_selection_${game.gameId}`)
+        .setLabel('MAP SELECTION')
+        .setStyle(ButtonStyle.Success)
+    );
+  }
+  if (game.isTestGame && !game.mapSelected && !game.draftRandomUsed && !game.initiativeDetermined) {
+    components.push(draftBtn);
+  }
+  components.push(killBtn);
+  return new ActionRowBuilder().addComponents(...components);
+}
+
+/** Determine Initiative + Kill Game for the Both Squads Ready message. */
+export function getDetermineInitiativeButtons(game) {
+  const components = [];
+  if (!game.initiativeDetermined) {
+    components.push(
+      new ButtonBuilder()
+        .setCustomId(`determine_initiative_${game.gameId}`)
+        .setLabel('Determine Initiative')
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
+  components.push(
+    new ButtonBuilder()
+      .setCustomId(`kill_game_${game.gameId}`)
+      .setLabel('Kill Game (testing)')
+      .setStyle(ButtonStyle.Danger)
+  );
+  return new ActionRowBuilder().addComponents(...components);
+}
+
+export function getDeploymentZoneButtons(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`deployment_zone_red_${gameId}`)
+      .setLabel('Red Zone')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`deployment_zone_blue_${gameId}`)
+      .setLabel('Blue Zone')
+      .setStyle(ButtonStyle.Primary)
+  );
+}
+
+export function getDeploymentDoneButton(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`deployment_done_${gameId}`)
+      .setLabel('Deployment Completed')
+      .setStyle(ButtonStyle.Success)
+  );
+}
+
+export function getMainMenu() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('create_game')
+      .setLabel('Create Game')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('join_game')
+      .setLabel('Join Game')
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
+export function getLobbyJoinButton(threadId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`lobby_join_${threadId}`)
+      .setLabel('Join Game')
+      .setStyle(ButtonStyle.Success),
+  );
+}
+
+export function getLobbyStartButton(threadId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`lobby_start_${threadId}`)
+      .setLabel('Start Game')
+      .setStyle(ButtonStyle.Primary),
+  );
+}
+
+export function getCcShuffleDrawButton(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`cc_shuffle_draw_${gameId}`)
+      .setLabel('Shuffle deck and draw starting 3 Command Cards')
+      .setStyle(ButtonStyle.Success),
+  );
+}
+
+/** Play CC (green), Draw CC (green), Discard CC (red). Pass hand/deck to disable when empty. */
+export function getCcActionButtons(gameId, hand = [], deck = []) {
+  const hasHand = (hand || []).length > 0;
+  const hasDeck = (deck || []).length > 0;
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`cc_play_${gameId}`)
+      .setLabel('Play CC')
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(!hasHand),
+    new ButtonBuilder()
+      .setCustomId(`cc_draw_${gameId}`)
+      .setLabel('Draw CC')
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(!hasDeck),
+    new ButtonBuilder()
+      .setCustomId(`cc_discard_${gameId}`)
+      .setLabel('Discard CC')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!hasHand),
+  );
+}
+
+export function getSelectSquadButton(gameId, playerNum) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`squad_select_${gameId}_${playerNum}`)
+      .setLabel('Select Squad')
+      .setStyle(ButtonStyle.Primary),
+  );
+}
+
+/** Select Squad + Default Rebels/Scum/Imperial for testing. */
+export function getHandSquadButtons(gameId, playerNum) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`squad_select_${gameId}_${playerNum}`)
+      .setLabel('Select Squad')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`default_deck_${gameId}_${playerNum}_rebel`)
+      .setLabel('Default Rebels')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`default_deck_${gameId}_${playerNum}_scum`)
+      .setLabel('Default Scum')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`default_deck_${gameId}_${playerNum}_imperial`)
+      .setLabel('Default Imperial')
+      .setStyle(ButtonStyle.Primary),
+  );
+}
+
+export function getKillGameButton(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`kill_game_${gameId}`)
+      .setLabel('Kill Game (testing)')
+      .setStyle(ButtonStyle.Danger),
+  );
+}
+
+/** Resolve/Reject buttons for bot-requests forum posts. */
+export function getRequestActionButtons(threadId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`request_resolve_${threadId}`)
+      .setLabel('Resolve')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`request_reject_${threadId}`)
+      .setLabel('Reject')
+      .setStyle(ButtonStyle.Danger),
+  );
+}
+
+/** Action rows for MP selection: move_mp_${msgId}_${figureIndex}_${mp}. */
+export function getMoveMpButtonRows(msgId, figureIndex, mpRemaining) {
+  if (!mpRemaining || mpRemaining < 1) return [];
+  const btns = [];
+  for (let mp = 1; mp <= mpRemaining; mp++) {
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`move_mp_${msgId}_${figureIndex}_${mp}`)
+        .setLabel(`${mp} MP`)
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
+  const rows = [];
+  for (let r = 0; r < btns.length; r += 5) {
+    rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  }
+  return rows;
+}
+
+/** Action rows for movement space selection: move_pick_${msgId}_${figureIndex}_${space}. */
+export function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces) {
+  const available = (validSpaces || []).map((s) => normalizeCoord(s));
+  const orderMap = new Map(
+    (mapSpaces?.spaces || []).map((coord, idx) => [normalizeCoord(coord), idx])
+  );
+  available.sort((a, b) => {
+    const diff = (orderMap.get(a) ?? Infinity) - (orderMap.get(b) ?? Infinity);
+    if (diff !== 0) return diff;
+    return a.localeCompare(b);
+  });
+  const byRow = {};
+  const rowOrder = [];
+  for (const s of available) {
+    const m = s.match(/^([a-z]+)(\d+)$/i);
+    const row = m ? parseInt(m[2], 10) : 0;
+    if (!byRow[row]) {
+      byRow[row] = [];
+      rowOrder.push(row);
+    }
+    byRow[row].push(s);
+  }
+  const rows = [];
+  for (const rowNum of rowOrder) {
+    const tiles = byRow[rowNum] || [];
+    for (let i = 0; i < tiles.length; i += 5) {
+      const chunk = tiles.slice(i, i + 5);
+      rows.push(
+        new ActionRowBuilder().addComponents(
+          chunk.map((space) =>
+            new ButtonBuilder()
+              .setCustomId(`move_pick_${msgId}_${figureIndex}_${space}`)
+              .setLabel(space.toUpperCase())
+              .setStyle(ButtonStyle.Success)
+          )
+        )
+      );
+    }
+  }
+  return { rows, available };
+}
+
+/** Per-figure deploy labels; helpers = { resolveDcName, isFigurelessDc, getDcStats }. */
+export function getDeployFigureLabels(dcList, helpers = {}) {
+  const { resolveDcName = (d) => (typeof d === 'object' ? d?.dcName || d?.displayName : d), isFigurelessDc = () => false, getDcStats = () => ({ figures: 1 }) } = helpers;
+  if (!dcList?.length) return { labels: [], metadata: [] };
+  const figureDcs = dcList.map(resolveDcName).filter((n) => n && !isFigurelessDc(n));
+  const totals = {};
+  const counts = {};
+  for (const d of figureDcs) totals[d] = (totals[d] || 0) + 1;
+  const labels = [];
+  const metadata = [];
+  for (let i = 0; i < figureDcs.length; i++) {
+    const dcName = figureDcs[i];
+    counts[dcName] = (counts[dcName] || 0) + 1;
+    const dgIndex = counts[dcName];
+    const displayName = totals[dcName] > 1 ? `${dcName} [DG ${dgIndex}]` : dcName;
+    const baseName = displayName.replace(/\s*\[(?:DG|Group) \d+\]$/, '');
+    const figures = getDcStats(dcName).figures ?? 1;
+    if (figures <= 1) {
+      labels.push(`Deploy ${displayName}`);
+      metadata.push({ dcName, dgIndex, figureIndex: 0 });
+    } else {
+      for (let f = 0; f < figures; f++) {
+        labels.push(`Deploy ${baseName} ${dgIndex}${FIGURE_LETTERS[f]}`);
+        metadata.push({ dcName, dgIndex, figureIndex: f });
+      }
+    }
+  }
+  return { labels, metadata };
+}
+
+/** Deploy button rows + done row; helpers = { resolveDcName, isFigurelessDc, getDcStats }. */
+export function getDeployButtonRows(gameId, playerNum, dcList, zone, figurePositions, helpers = {}) {
+  const { labels, metadata } = getDeployFigureLabels(dcList, helpers);
+  const zoneStyle = zone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
+  const pos = figurePositions?.[playerNum] || {};
+  const deployRows = [];
+  for (let i = 0; i < labels.length; i++) {
+    const meta = metadata[i];
+    const figureKey = `${meta.dcName}-${meta.dgIndex}-${meta.figureIndex}`;
+    const space = pos[figureKey];
+    const displaySpace = space ? space.toUpperCase() : '';
+    const label = space
+      ? `${labels[i]} (Location: ${displaySpace})`.slice(0, 80)
+      : labels[i].slice(0, 80);
+    deployRows.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`deployment_fig_${gameId}_${playerNum}_${i}`)
+          .setLabel(label)
+          .setStyle(space ? ButtonStyle.Secondary : zoneStyle)
+      )
+    );
+  }
+  const doneRow = getDeploymentDoneButton(gameId);
+  return { deployRows, doneRow };
+}
+
+/** Action rows of deploy space buttons (deploy_pick_...) grouped by map row. */
+export function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, occupiedSpaces, zone) {
+  const occupied = new Set((occupiedSpaces || []).map((s) => String(s).toLowerCase()));
+  const available = (validSpaces || [])
+    .map((s) => String(s).toLowerCase())
+    .filter((s) => !occupied.has(s));
+  const byRow = {};
+  for (const s of available) {
+    const m = s.match(/^([a-z]+)(\d+)$/i);
+    const row = m ? parseInt(m[2], 10) : 0;
+    if (!byRow[row]) byRow[row] = [];
+    byRow[row].push(s);
+  }
+  const sortedRows = Object.keys(byRow).map(Number).sort((a, b) => a - b);
+  for (const r of sortedRows) {
+    byRow[r].sort((a, b) => (a || '').localeCompare(b || ''));
+  }
+  const zoneStyle = zone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
+  const rows = [];
+  for (const rowNum of sortedRows) {
+    const tiles = byRow[rowNum];
+    for (let i = 0; i < tiles.length; i += 5) {
+      const chunk = tiles.slice(i, i + 5);
+      rows.push(
+        new ActionRowBuilder().addComponents(
+          chunk.map((space) =>
+            new ButtonBuilder()
+              .setCustomId(`deploy_pick_${gameId}_${playerNum}_${flatIndex}_${space}`)
+              .setLabel(space.toUpperCase())
+              .setStyle(zoneStyle)
+          )
+        )
+      );
+    }
+  }
+  return { rows, available };
+}
+
+/**
+ * Action rows for DC: [Move][Attack][Interact] per figure, then specials, then CC specials. Max 5 rows.
+ * @param {object} [helpers] - { getDcStats(dcName), getPlayerNumForMsgId(msgId), getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName) }
+ */
+export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRemaining = 2, game = null, helpers = {}) {
+  const { getDcStats = () => ({}), getPlayerNumForMsgId = () => 1, getPlayableCcSpecialsForDc = () => [] } = helpers;
+  const stats = getDcStats(dcName);
+  const figures = stats.figures ?? 1;
+  const specials = stats.specials || [];
+  const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const actionsData = typeof actionsDataOrRemaining === 'object' && actionsDataOrRemaining != null ? actionsDataOrRemaining : { remaining: actionsDataOrRemaining, specialsUsed: [] };
+  const actionsRemaining = actionsData.remaining ?? 2;
+  const specialsUsed = Array.isArray(actionsData.specialsUsed) ? actionsData.specialsUsed : [];
+  const noActions = (actionsRemaining ?? 2) <= 0;
+  const playerNum = game ? (getPlayerNumForMsgId(msgId) ?? 1) : 1;
+  const rows = [];
+  for (let f = 0; f < figures && rows.length < 5; f++) {
+    const suffix = figures <= 1 ? '' : ` ${dgIndex}${FIGURE_LETTERS[f]}`;
+    const comps = [
+      new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${f}`).setLabel(`Move${suffix}`).setStyle(ButtonStyle.Success).setDisabled(noActions),
+      new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${f}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noActions),
+      new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${f}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noActions),
+    ];
+    rows.push(new ActionRowBuilder().addComponents(...comps));
+  }
+  if (specials.length > 0 && rows.length < 5) {
+    const specialBtns = specials.slice(0, 5).map((name, idx) => {
+      const alreadyUsed = specialsUsed.includes(idx);
+      return new ButtonBuilder()
+        .setCustomId(`dc_special_${idx}_${msgId}`)
+        .setLabel(name.slice(0, 80))
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(noActions || alreadyUsed);
+    });
+    rows.push(new ActionRowBuilder().addComponents(...specialBtns));
+  }
+  if (game && rows.length < 5) {
+    const playableCc = getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName);
+    const ccSpecials = playableCc.slice(0, 5);
+    if (ccSpecials.length > 0) {
+      const ccBtns = ccSpecials.map((ccName, idx) =>
+        new ButtonBuilder()
+          .setCustomId(`dc_cc_special_${msgId}_${idx}`)
+          .setLabel(`CC: ${ccName}`.slice(0, 80))
+          .setStyle(ButtonStyle.Primary)
+          .setDisabled(noActions)
+      );
+      rows.push(new ActionRowBuilder().addComponents(...ccBtns));
+    }
+  }
+  return rows;
+}
+
+/**
+ * ActionRow(s) for Activate buttons (DCs not yet activated). Includes Pass turn to opponent when applicable.
+ * @param {object} helpers - { resolveDcName(dc), isFigurelessDc(dcName), isGroupDefeated(game, playerNum, dcIndex) }
+ */
+export function getActivateDcButtons(game, playerNum, helpers = {}) {
+  const { resolveDcName = (dc) => (typeof dc === 'object' ? dc?.dcName || dc?.displayName : dc), isFigurelessDc = () => false, isGroupDefeated = () => true } = helpers;
+  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  const activated = playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+  const activatedSet = new Set(activated);
+  const gameId = game.gameId;
+  const btns = [];
+  for (let i = 0; i < dcList.length; i++) {
+    const dc = dcList[i];
+    const dcName = resolveDcName(dc);
+    if (isFigurelessDc(dcName)) continue;
+    if (activatedSet.has(i)) continue;
+    if (isGroupDefeated(game, playerNum, i)) continue;
+    const displayName = dc?.displayName || dcName;
+    const fullLabel = `Activate ${displayName}`;
+    const label = fullLabel.length > 80 ? fullLabel.slice(0, 77) + '…' : fullLabel;
+    btns.push(new ButtonBuilder()
+      .setCustomId(`dc_activate_${gameId}_${playerNum}_${i}`)
+      .setLabel(label)
+      .setStyle(ButtonStyle.Success));
+  }
+  const rows = [];
+  for (let r = 0; r < btns.length; r += 5) {
+    rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  }
+  const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const myRemaining = playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+  const otherRemaining = playerNum === 1 ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
+  if (turnPlayerId === playerId && otherRemaining > myRemaining && myRemaining > 0) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`pass_activation_turn_${gameId}`)
+        .setLabel('Pass turn to opponent')
+        .setStyle(ButtonStyle.Secondary)
+    ));
   }
   return rows;
 }

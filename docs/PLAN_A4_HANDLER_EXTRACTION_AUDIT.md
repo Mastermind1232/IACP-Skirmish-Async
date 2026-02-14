@@ -12,10 +12,10 @@
 | **A2** | Data loading → `src/data-loader.js` | ✅ Done | JSON load, reloadGameData; getDcStats, getDcEffects, getMapSpaces, getDice, getCcEffect, etc. |
 | **A3** | Interaction router | ✅ Done | `src/router.js`; prefix → handler key; create_game / join_game in BUTTON_PREFIXES |
 | **A4** | Handlers → `src/handlers/*` | ✅ Done | **Extracted:** lobby (2), requests (2), game-tools (5), special (1), interact (2), round (2), movement (3), combat (4), activation (5), setup (8), DC-play-area (6), **CC-hand (2 modals, 3 selects, 9 buttons)**. |
-| **A5** | Game logic → `src/game/*` | ⏳ Not started | Movement, combat, validation; no Discord |
-| **A6** | Discord helpers → `src/discord/*` | ⏳ Not started | Embeds, buildBoardMapPayload, logGameAction; button/component helpers |
-| **A7** | Test suite for `src/game/*` | ⏳ Not started | After A5 |
-| **A8** | Error-handling pattern | ⏳ Not started | Log, user message, avoid silent catch; retry for Discord API |
+| **A5** | Game logic → `src/game/*` | ✅ Done | **Extracted:** `coords.js` (parseCoord, normalizeCoord, getFootprintCells, etc.), `movement.js` (getBoardStateForMovement, getMovementProfile, computeMovementCache, getReachableSpaces, getPathCost, filterMapSpacesByBounds, …), `combat.js` (rollAttackDice, rollDefenseDice, getAttackerSurgeAbilities, parseSurgeEffect, computeCombatResult). Validation already in `validation.js`. Index uses game/* and data-loader getFigureSize. |
+| **A6** | Discord helpers → `src/discord/*` | ✅ Done | **Moved:** embeds.js (formatHealthSection, CARD_BACK_CHAR, getPlayAreaTooltipEmbed, getHandTooltipEmbed, getHandVisualEmbed, getDiscardPileEmbed, getLobbyRosterText, getLobbyEmbed, getDeployDisplayNames, EMBEDS_PER_MESSAGE). messages.js (getActivationsLine, DC_ACTIONS_PER_ACTIVATION, getActionsCounterContent, updateActivationsMessage, getThreadName, updateThreadName). components.js (getDiscardPileButtons, getDcToggleButton, getDcPlayAreaComponents, FIGURE_LETTERS, getUndoButton, getBoardButtons, getGeneralSetupButtons, getDetermineInitiativeButtons, getDeploymentZoneButtons, getDeploymentDoneButton, getMainMenu, getLobbyJoinButton, getLobbyStartButton, getCcShuffleDrawButton, getCcActionButtons, getSelectSquadButton, getHandSquadButtons, getKillGameButton, getRequestActionButtons, getMoveMpButtonRows, getMoveSpaceGridRows, getDeployFigureLabels, getDeployButtonRows, getDeploySpaceGridRows, getDcActionButtons, getActivateDcButtons). Index keeps thin wrappers where helpers are needed (getDcPlayAreaComponents, getDcActionButtons, getActivateDcButtons, getDeployFigureLabels, getDeployButtonRows). **Still in index (future pass):** buildBoardMapPayload, buildDcEmbedAndFiles, updateDcActionsMessage, buildHandDisplayPayload, getCommandCardImagePath, clearPreGameSetup, runDraftRandom, getFiguresForRender, getMapTokensForRender, updateDeployPromptMessages, getDeploymentMapAttachment, and other orchestration helpers. |
+| **A7** | Test suite for `src/game/*` | ✅ Done | Node built-in test runner; `npm test` runs `src/game/*.test.js`. Coverage: coords (10), combat (9), movement (13), validation (5). data-loader uses lazy import of map-renderer so tests run without native canvas. |
+| **A8** | Error-handling pattern | ✅ Done | `src/error-handling.js`: isRetryableDiscordError, withDiscordRetry, replyOrFollowUpWithRetry. Top-level interactionCreate catch logs via logGameErrorToBotLogs and sends user message with retry (3 attempts, exponential backoff); on retryable exhaustion shows "Something went wrong… try again in 2–3 minutes." Handlers continue to log + ephemeral reply; optional use of withDiscordRetry for critical reply/edit after state change. |
 
 **A4 detail (handlers):**
 
@@ -108,7 +108,7 @@
 
 - **Router vs handlers:** Every router prefix has exactly one handler block in index. No duplicate handling of the same prefix.
 - **Order:** Router uses first-match; index uses explicit `if (buttonKey === '...')` so order of checks does not change behavior.
-- **Unregistered IDs:** `create_game` and `join_game` are **not** in `BUTTON_PREFIXES`. So when `customId` is `create_game` or `join_game`, `getHandlerKey(interaction.customId, 'button')` returns `null`, and the code does `if (!buttonKey) return` and never reaches the `create_game` / `join_game` block. **Conclusion:** That block (lines 8186–8198) is currently **dead code** unless these buttons are never sent or are handled elsewhere. **Action:** Add `create_game` and `join_game` to the router (e.g. as literal IDs or a single prefix like `main_menu_`) and ensure they are dispatched, or remove the dead block and fix the menu to use registered IDs.
+- **create_game / join_game:** Both are in `BUTTON_PREFIXES` (router.js). They are handled in index.js when `buttonKey === 'create_game'` or `'join_game'` (main menu). No longer dead code.
 
 ---
 
@@ -118,15 +118,11 @@
 |--------|----------|--------|
 | `games` | game-state.js (internal); getGame/setGame/saveGames exported | All game handlers |
 | `dcMessageMeta`, `dcExhaustedState`, `dcDepletedState`, `dcHealthState`, `pendingIllegalSquad` | game-state.js | dc-play-area, cc-hand, game-tools |
-| `lobbies` | index.js (line 1212) | lobby_join_, lobby_start_ only |
-| `MAX_ACTIVE_GAMES_PER_PLAYER` | index.js (1221) | lobby, messageCreate |
-| `PENDING_ILLEGAL_TTL_MS` | index.js (3119) | deck_illegal_play_ |
-| `DC_ACTIONS_PER_ACTIVATION` | index.js (3154) | dc_activate_, dc_toggle_, end_start_of_round_, etc. |
+| Lobby state | lobby-state.js (getLobby, setLobby, hasLobby, hasLobbyEmbedSent, markLobbyEmbedSent, getLobbiesMap) | index (messageCreate), lobby handlers via context.lobbies |
+| `MAX_ACTIVE_GAMES_PER_PLAYER`, `PENDING_ILLEGAL_TTL_MS` | constants.js | index, lobby, cc-hand (via context) |
+| `DC_ACTIONS_PER_ACTIVATION` | discord/messages.js | dc_activate_, dc_toggle_, end_start_of_round_, etc. |
 
-**Risks:**
-
-- **lobbies:** Not in game-state. Lobby handlers must receive `lobbies` via context or we move `lobbies` into game-state (or a dedicated `src/lobby-state.js`).
-- **Constants:** Should be moved to a shared config or left in index and passed in context until a later cleanup.
+**Phase 1 complete.** Lobbies and config constants moved to `src/lobby-state.js` and `src/constants.js`. **Phase 2 started:** F1 ability library scaffold (`data/ability-library.json`, `src/game/abilities.js`), F2 surge wired to library (combat uses resolveSurgeAbility, getSurgeAbilityLabel). Next: F5 CC timing, F7 multi-figure defeat, F3/F4 DC/CC abilities, etc.
 
 ---
 
@@ -176,8 +172,8 @@
 | Prefix order (first match) | Router order is fixed; handler modules don’t change which prefix matches. No change. |
 | Double dispatch | Each customId matches one prefix; one handler per prefix. No double dispatch. |
 | Shared mutable state | Handlers only use getGame/setGame/saveGames and context; no new globals. Lobbies passed via context. |
-| create_game / join_game unreachable | Add prefixes or a catch-all for these IDs so the block is reachable (see 1.3). |
-| Missing discord/messages.js | Create messages.js with logGameAction, logPhaseHeader, logGameErrorToBotLogs, GAME_PHASES, ACTION_ICONS, or fix discord/index.js to not depend on it. |
+| create_game / join_game unreachable | Resolved: both in BUTTON_PREFIXES and handled in index. |
+| Missing discord/messages.js | Resolved: created `src/discord/messages.js` with PHASE_COLOR, GAME_PHASES, ACTION_ICONS, logPhaseHeader, logGameAction, logGameErrorToBotLogs. |
 
 ---
 

@@ -5,7 +5,6 @@
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { clearMapRendererCache } from './map-renderer.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
@@ -23,6 +22,7 @@ let diceData = { attack: {}, defense: {} };
 let missionCardsData = {};
 let mapTokensData = {};
 let ccEffectsData = { cards: {} };
+let abilityLibrary = { abilities: {} };
 
 function loadAll() {
   try {
@@ -77,12 +77,17 @@ function loadAll() {
     const ccData = JSON.parse(readFileSync(join(rootDir, 'data', 'cc-effects.json'), 'utf8'));
     if (ccData?.cards) ccEffectsData = ccData;
   } catch {}
+  try {
+    const abData = JSON.parse(readFileSync(join(rootDir, 'data', 'ability-library.json'), 'utf8'));
+    abilityLibrary = abData?.abilities ? { abilities: abData.abilities } : { abilities: {} };
+  } catch {}
 }
 
 loadAll();
 
 /** Reload all game data from JSON files. Call before Refresh All so git-pulled changes apply. */
-export function reloadGameData() {
+export async function reloadGameData() {
+  const { clearMapRendererCache } = await import('./map-renderer.js');
   clearMapRendererCache();
   loadAll();
 }
@@ -96,6 +101,20 @@ export function getFigureImages() {
 export function getFigureSizes() {
   return figureSizes;
 }
+
+/** Get figure base size (1x1, 1x2, 2x2, 2x3) for movement/rendering. Default 1x1. */
+export function getFigureSize(dcName) {
+  const sizes = getFigureSizes();
+  const exact = sizes[dcName];
+  if (exact) return exact;
+  const lower = dcName?.toLowerCase?.() || '';
+  const key = Object.keys(sizes).find((k) => k.toLowerCase() === lower);
+  if (key) return sizes[key];
+  const base = (dcName || '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+  const key2 = Object.keys(sizes).find((k) => k.toLowerCase().startsWith(base.toLowerCase()));
+  return key2 ? sizes[key2] : '1x1';
+}
+
 export function getDcStats() {
   return dcStats;
 }
@@ -132,6 +151,11 @@ export function getCcEffectsData() {
 
 export function getCcEffect(cardName) {
   return ccEffectsData.cards?.[cardName] || null;
+}
+
+/** Ability library (F1): id → { type, surgeCost?, label?, ... }. Used by game/abilities.js. */
+export function getAbilityLibrary() {
+  return abilityLibrary;
 }
 
 /** True if this command card becomes an Attachment (placed on a Deployment card) when played. */

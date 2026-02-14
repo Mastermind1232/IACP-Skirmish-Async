@@ -183,7 +183,7 @@ export async function handleCombatReady(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, replyIfGameEnded, rollAttackDice, rollDefenseDice, getAttackerSurgeAbilities, SURGE_LABELS, resolveCombatAfterRolls, saveGames
+ * @param {object} ctx - getGame, replyIfGameEnded, rollAttackDice, rollDefenseDice, getAttackerSurgeAbilities, SURGE_LABELS, getSurgeAbilityLabel, resolveCombatAfterRolls, saveGames
  */
 export async function handleCombatRoll(interaction, ctx) {
   const {
@@ -257,8 +257,9 @@ export async function handleCombatRoll(interaction, ctx) {
       combat.surgeAccuracy = 0;
       combat.surgeConditions = [];
       const surgeRows = [];
+      const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS && ctx.SURGE_LABELS[id]) || id);
       for (let i = 0; i < surgeAbilities.length; i++) {
-        const label = (SURGE_LABELS[surgeAbilities[i]] || surgeAbilities[i]).slice(0, 80);
+        const label = (getSurgeLabel(surgeAbilities[i]) || surgeAbilities[i]).slice(0, 80);
         surgeRows.push(
           new ButtonBuilder()
             .setCustomId(`combat_surge_${game.gameId}_${i}`)
@@ -287,7 +288,7 @@ export async function handleCombatRoll(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, replyIfGameEnded, getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect, resolveCombatAfterRolls, saveGames
+ * @param {object} ctx - getGame, replyIfGameEnded, getAttackerSurgeAbilities, SURGE_LABELS, getSurgeAbilityLabel, resolveSurgeAbility, parseSurgeEffect, resolveCombatAfterRolls, saveGames
  */
 export async function handleCombatSurge(interaction, ctx) {
   const {
@@ -295,10 +296,14 @@ export async function handleCombatSurge(interaction, ctx) {
     replyIfGameEnded,
     getAttackerSurgeAbilities,
     SURGE_LABELS,
+    getSurgeAbilityLabel,
+    resolveSurgeAbility,
     parseSurgeEffect,
     resolveCombatAfterRolls,
     saveGames,
   } = ctx;
+  const resolveSurge = resolveSurgeAbility || parseSurgeEffect;
+  const getSurgeLabel = getSurgeAbilityLabel || ((id) => (SURGE_LABELS && SURGE_LABELS[id]) || id);
   const match = interaction.customId.match(/^combat_surge_([^_]+)_(done|\d+)$/);
   if (!match) return;
   const [, gameId, choice] = match;
@@ -325,13 +330,13 @@ export async function handleCombatSurge(interaction, ctx) {
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const key = surgeAbilities[idx];
     if (key) {
-      const mod = parseSurgeEffect(key);
+      const mod = resolveSurge(key);
       combat.surgeDamage = (combat.surgeDamage || 0) + mod.damage;
       combat.surgePierce = (combat.surgePierce || 0) + mod.pierce;
       combat.surgeAccuracy = (combat.surgeAccuracy || 0) + mod.accuracy;
       if (mod.conditions?.length) combat.surgeConditions = (combat.surgeConditions || []).concat(mod.conditions);
       combat.surgeRemaining--;
-      const label = SURGE_LABELS[key] || key;
+      const label = getSurgeLabel(key);
       await thread.send(`**Surge spent:** ${label}`).catch(() => {});
     }
   }
@@ -344,7 +349,7 @@ export async function handleCombatSurge(interaction, ctx) {
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const surgeRows = [];
     for (let i = 0; i < surgeAbilities.length; i++) {
-      const label = (SURGE_LABELS[surgeAbilities[i]] || surgeAbilities[i]).slice(0, 80);
+      const label = (getSurgeLabel(surgeAbilities[i]) || surgeAbilities[i]).slice(0, 80);
       surgeRows.push(
         new ButtonBuilder()
           .setCustomId(`combat_surge_${gameId}_${i}`)
