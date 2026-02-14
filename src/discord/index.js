@@ -1,6 +1,7 @@
 export {
   chunkButtonsToRows,
   getButtonStyle,
+  truncateLabel,
   MAX_BUTTONS_PER_ROW,
   MAX_ROWS_PER_MESSAGE,
   getDiscardPileButtons,

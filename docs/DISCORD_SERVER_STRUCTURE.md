@@ -55,6 +55,7 @@ From the [AsyncTI4 GitHub](https://github.com/AsyncTI4/TI4_map_generator_bot):
 | Channel | Purpose |
 |---------|---------|
 | `#bot-logs` | Game errors (message + game ID + optional jump link). The bot @mentions the **Bothelpers** role (by name) on each error; create a role named "Bothelpers" so the team gets notified. |
+| `#statistics` | **Stats commands only.** Use `/statcheck`, `/affiliation`, `/dcwinrate` here. Results are from the `completed_games` table (games that have ended). |
 | `#bot-requests-and-suggestions` or `#bot-feedback-and-requests` | **Forum.** Feature requests, bug reports. First message in a thread gets **IMPLEMENTED** / **REJECTED** buttons; admins use them to set the thread title to `[IMPLEMENTED]` or `[REJECTED]`. |
 
 ---

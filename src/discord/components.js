@@ -3,6 +3,14 @@ import { normalizeCoord } from '../game/coords.js';
 
 const MAX_BUTTONS_PER_ROW = 5;
 const MAX_ROWS_PER_MESSAGE = 5;
+const MAX_LABEL_LENGTH = 80;
+
+/** Discord button label limit (2.5). Truncate to max chars; default 80. */
+export function truncateLabel(s, max = MAX_LABEL_LENGTH) {
+  if (s == null) return '';
+  const str = String(s);
+  return str.length <= max ? str : str.slice(0, max - 1) + '…';
+}
 
 /**
  * Area-based button styles per plan 2.5: combat=red, confirm=green, cancel=grey, etc.
@@ -444,7 +452,7 @@ export function getMoveMpButtonRows(msgId, figureIndex, mpRemaining) {
     );
   }
   const rows = [];
-  for (let r = 0; r < btns.length; r += 5) {
+  for (let r = 0; r < btns.length && rows.length < MAX_ROWS_PER_MESSAGE; r += 5) {
     rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
   }
   return rows;
@@ -489,7 +497,7 @@ export function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces)
       );
     }
   }
-  return { rows, available };
+  return { rows: rows.slice(0, MAX_ROWS_PER_MESSAGE), available };
 }
 
 /** Per-figure deploy labels; helpers = { resolveDcName, isFigurelessDc, getDcStats }. */
@@ -584,7 +592,7 @@ export function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces
       );
     }
   }
-  return { rows, available };
+  return { rows: rows.slice(0, MAX_ROWS_PER_MESSAGE), available };
 }
 
 /**
@@ -666,14 +674,14 @@ export function getActivateDcButtons(game, playerNum, helpers = {}) {
       .setStyle(ButtonStyle.Success));
   }
   const rows = [];
-  for (let r = 0; r < btns.length; r += 5) {
+  for (let r = 0; r < btns.length && rows.length < MAX_ROWS_PER_MESSAGE; r += 5) {
     rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
   }
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
   const myRemaining = playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
   const otherRemaining = playerNum === 1 ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
-  if (turnPlayerId === playerId && otherRemaining > myRemaining && myRemaining > 0) {
+  if (turnPlayerId === playerId && otherRemaining > myRemaining && myRemaining > 0 && rows.length < MAX_ROWS_PER_MESSAGE) {
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`pass_activation_turn_${gameId}`)
@@ -684,4 +692,4 @@ export function getActivateDcButtons(game, playerNum, helpers = {}) {
   return rows;
 }
 
-export { MAX_BUTTONS_PER_ROW, MAX_ROWS_PER_MESSAGE };
+export { MAX_BUTTONS_PER_ROW, MAX_ROWS_PER_MESSAGE, MAX_LABEL_LENGTH };

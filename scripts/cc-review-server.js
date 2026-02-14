@@ -552,6 +552,73 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // D4: Tournament rotation tool — read/save data/tournament-rotation.json; playable missions from map-registry + deployment-zones + mission-cards
+  const dataDir = join(root, 'data');
+  if (req.method === 'GET' && pathname === '/api/tournament-rotation') {
+    try {
+      const rotPath = join(dataDir, 'tournament-rotation.json');
+      const raw = existsSync(rotPath) ? readFileSync(rotPath, 'utf8') : '{}';
+      const data = JSON.parse(raw);
+      const missionIds = Array.isArray(data.missionIds) ? data.missionIds : [];
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ missionIds, source: data.source || 'D4 Tournament rotation' }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+    return;
+  }
+  if (req.method === 'GET' && pathname === '/api/playable-missions') {
+    try {
+      const mapRegistry = JSON.parse(readFileSync(join(dataDir, 'map-registry.json'), 'utf8'));
+      const maps = mapRegistry.maps || [];
+      const deploymentZones = JSON.parse(readFileSync(join(dataDir, 'deployment-zones.json'), 'utf8'));
+      const dzMaps = deploymentZones.maps || {};
+      const missionCards = JSON.parse(readFileSync(join(dataDir, 'mission-cards.json'), 'utf8'));
+      const mcMaps = missionCards.maps || {};
+      const playReadyMaps = maps.filter(
+        (m) => dzMaps[m.id]?.red?.length > 0 && dzMaps[m.id]?.blue?.length > 0
+      );
+      const options = [];
+      for (const map of playReadyMaps) {
+        const variants = mcMaps[map.id];
+        if (!variants) continue;
+        for (const variant of ['a', 'b']) {
+          const mission = variants[variant];
+          if (!mission?.name) continue;
+          options.push({ value: `${map.id}:${variant}`, label: `${map.name} — ${mission.name}` });
+        }
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(options));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+  if (req.method === 'POST' && pathname === '/api/save-tournament-rotation') {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    try {
+      const data = JSON.parse(body);
+      const missionIds = Array.isArray(data.missionIds) ? data.missionIds : [];
+      const rotPath = join(dataDir, 'tournament-rotation.json');
+      const existing = existsSync(rotPath) ? JSON.parse(readFileSync(rotPath, 'utf8')) : {};
+      const toWrite = {
+        source: existing.source || 'D4 Tournament rotation; update periodically. Mission IDs: mapId:variant (e.g. mos-eisley-outskirts:a)',
+        missionIds,
+      };
+      writeFileSync(rotPath, JSON.stringify(toWrite, null, 2), 'utf8');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+    return;
+  }
+
   let decodedPath;
   try {
     decodedPath = decodeURIComponent(pathname.replace(/^\//, ''));
@@ -583,5 +650,6 @@ server.listen(PORT, () => {
   console.log(`CC Effect Editor: http://localhost:${PORT}/scripts/cc-effect-editor.html`);
   console.log(`DC Effect Editor: http://localhost:${PORT}/scripts/dc-effect-editor.html`);
   console.log(`Symbol Labeling Tool: http://localhost:${PORT}/scripts/symbol-labeling-tool.html`);
-  console.log('CC save → data/cc-effects.json | DC save → data/dc-effects.json | Symbols → data/symbol-glossary.json + data/symbol-images/');
+  console.log(`Tournament Rotation Tool: http://localhost:${PORT}/scripts/tournament-rotation-tool.html`);
+  console.log('CC save → data/cc-effects.json | DC save → data/dc-effects.json | Symbols → data/symbol-glossary.json | Rotation → data/tournament-rotation.json');
 });

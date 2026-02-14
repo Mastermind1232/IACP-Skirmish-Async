@@ -2,6 +2,7 @@
  * DC Play Area handlers: dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration } from 'discord.js';
+import { truncateLabel } from '../discord/components.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -778,7 +779,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
           chunk.map((opt) =>
             new ButtonBuilder()
               .setCustomId(`interact_choice_${game.gameId}_${msgId}_${figureIndex}_${opt.id}`)
-              .setLabel(opt.label)
+              .setLabel(truncateLabel(opt.label))
               .setStyle(opt.missionSpecific ? ButtonStyle.Primary : ButtonStyle.Secondary)
           )
         )

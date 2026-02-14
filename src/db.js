@@ -136,3 +136,89 @@ export async function deleteGameFromDb(gameId) {
     console.error('[DB] Delete failed:', err.message);
   }
 }
+
+// --- Stats (completed_games); for use in #statistics channel commands ---
+
+/** Return { totalGames, draws } from completed_games. */
+export async function getStatsSummary() {
+  if (!pool) return { totalGames: 0, draws: 0 };
+  try {
+    const count = await pool.query('SELECT COUNT(*)::int AS n FROM completed_games');
+    const draws = await pool.query("SELECT COUNT(*)::int AS n FROM completed_games WHERE winner_id IS NULL");
+    return { totalGames: count.rows[0]?.n ?? 0, draws: draws.rows[0]?.n ?? 0 };
+  } catch (err) {
+    console.error('[DB] getStatsSummary failed:', err.message);
+    return { totalGames: 0, draws: 0 };
+  }
+}
+
+/** Win rate by affiliation. Returns [{ affiliation, wins, games, winRate }] sorted by games desc. */
+export async function getAffiliationWinRates() {
+  if (!pool) return [];
+  try {
+    const res = await pool.query(`
+      SELECT
+        aff AS affiliation,
+        SUM(wins)::int AS wins,
+        SUM(games)::int AS games,
+        ROUND(100.0 * SUM(wins) / NULLIF(SUM(games), 0), 1) AS win_rate
+      FROM (
+        SELECT player1_affiliation AS aff, (winner_id = player1_id)::int AS wins, 1 AS games FROM completed_games WHERE winner_id IS NOT NULL AND player1_affiliation IS NOT NULL
+        UNION ALL
+        SELECT player2_affiliation AS aff, (winner_id = player2_id)::int AS wins, 1 AS games FROM completed_games WHERE winner_id IS NOT NULL AND player2_affiliation IS NOT NULL
+      ) t
+      GROUP BY aff
+      ORDER BY SUM(games) DESC
+    `);
+    return res.rows.map((r) => ({
+      affiliation: r.affiliation,
+      wins: Number(r.wins),
+      games: Number(r.games),
+      winRate: r.win_rate != null ? Number(r.win_rate) : 0,
+    }));
+  } catch (err) {
+    console.error('[DB] getAffiliationWinRates failed:', err.message);
+    return [];
+  }
+}
+
+/** Win rate by deployment card (from army JSON dcList). Returns top N entries [{ dcName, wins, games, winRate }] by games desc. */
+export async function getDcWinRates(limit = 20) {
+  if (!pool) return [];
+  try {
+    const res = await pool.query(
+      'SELECT player1_army_json, player2_army_json, winner_id, player1_id, player2_id FROM completed_games WHERE winner_id IS NOT NULL'
+    );
+    const byDc = {};
+    for (const row of res.rows) {
+      const p1Won = row.winner_id === row.player1_id;
+      const p2Won = row.winner_id === row.player2_id;
+      const dcList1 = (row.player1_army_json && row.player1_army_json.dcList) || [];
+      const dcList2 = (row.player2_army_json && row.player2_army_json.dcList) || [];
+      const names1 = dcList1.map((d) => (typeof d === 'string' ? d : d?.displayName || d?.name || '')).filter(Boolean);
+      const names2 = dcList2.map((d) => (typeof d === 'string' ? d : d?.displayName || d?.name || '')).filter(Boolean);
+      for (const name of names1) {
+        if (!byDc[name]) byDc[name] = { wins: 0, games: 0 };
+        byDc[name].games += 1;
+        if (p1Won) byDc[name].wins += 1;
+      }
+      for (const name of names2) {
+        if (!byDc[name]) byDc[name] = { wins: 0, games: 0 };
+        byDc[name].games += 1;
+        if (p2Won) byDc[name].wins += 1;
+      }
+    }
+    return Object.entries(byDc)
+      .map(([dcName, o]) => ({
+        dcName,
+        wins: o.wins,
+        games: o.games,
+        winRate: o.games ? Math.round((100.0 * o.wins) / o.games * 10) / 10 : 0,
+      }))
+      .sort((a, b) => b.games - a.games)
+      .slice(0, limit);
+  } catch (err) {
+    console.error('[DB] getDcWinRates failed:', err.message);
+    return [];
+  }
+}

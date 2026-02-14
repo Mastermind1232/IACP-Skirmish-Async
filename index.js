@@ -23,7 +23,14 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
 import { parseVsav, parseIacpListPaste } from './src/vsav-parser.js';
-import { isDbConfigured, deleteGameFromDb, insertCompletedGame } from './src/db.js';
+import {
+  isDbConfigured,
+  deleteGameFromDb,
+  insertCompletedGame,
+  getStatsSummary,
+  getAffiliationWinRates,
+  getDcWinRates,
+} from './src/db.js';
 import {
   getGame,
   setGame,
@@ -3087,13 +3094,25 @@ client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}`);
   try {
     const rest = new REST().setToken(process.env.DISCORD_TOKEN);
-    const cmd = new SlashCommandBuilder()
+    const botmenu = new SlashCommandBuilder()
       .setName('botmenu')
       .setDescription('Open Bot Stuff menu (Archive, Kill Game). Use in the Game Log channel of a game.');
-    await rest.put(Routes.applicationCommands(client.user.id), { body: [cmd.toJSON()] });
-    console.log('Slash command /botmenu registered.');
+    const statcheck = new SlashCommandBuilder()
+      .setName('statcheck')
+      .setDescription('Show completed games summary (total, draws). Use in #statistics.');
+    const affiliation = new SlashCommandBuilder()
+      .setName('affiliation')
+      .setDescription('Win rate by affiliation (Imperial, Rebel, Scum). Use in #statistics.');
+    const dcwinrate = new SlashCommandBuilder()
+      .setName('dcwinrate')
+      .setDescription('Win rate by Deployment Card (top N by games played). Use in #statistics.')
+      .addIntegerOption((o) => o.setName('limit').setDescription('Max number of DCs to show (default 20)').setMinValue(5).setMaxValue(50));
+    await rest.put(Routes.applicationCommands(client.user.id), {
+      body: [botmenu.toJSON(), statcheck.toJSON(), affiliation.toJSON(), dcwinrate.toJSON()],
+    });
+    console.log('Slash commands registered: /botmenu, /statcheck, /affiliation, /dcwinrate');
   } catch (err) {
-    console.error('Failed to register /botmenu:', err.message);
+    console.error('Failed to register slash commands:', err.message);
   }
   for (const guild of client.guilds.cache.values()) {
     try {
@@ -3164,11 +3183,12 @@ async function maybeAddRequestButtons(message) {
   const thread = message.channel;
   if (!thread?.isThread?.()) return false;
   const parent = thread.parent;
-  if (!parent?.name || !REQUEST_FORUM_NAMES.includes(parent.name)) return false;
+  const parentName = (parent?.name || '').toLowerCase().replace(/\s+/g, '-');
+  if (!parentName || !REQUEST_FORUM_NAMES.some((n) => parentName === n)) return false;
   if (requestsWithButtons.has(thread.id)) return false;
   requestsWithButtons.add(thread.id);
   await thread.send({
-    content: 'Admins: mark this request as resolved or rejected.',
+    content: 'Admins: mark this request as **IMPLEMENTED** or **REJECTED**.',
     components: [getRequestActionButtons(thread.id)],
   });
   return true;
@@ -3423,28 +3443,79 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
   try {
-  if (interaction.isChatInputCommand() && interaction.commandName === 'botmenu') {
-    const channelId = interaction.channelId;
-    let gameByChannel = null;
-    for (const [gid, g] of getGamesMap()) {
-      if (g.generalId === channelId) {
-        gameByChannel = g;
-        break;
+  if (interaction.isChatInputCommand()) {
+    const cmd = interaction.commandName;
+    if (cmd === 'botmenu') {
+      const channelId = interaction.channelId;
+      let gameByChannel = null;
+      for (const [gid, g] of getGamesMap()) {
+        if (g.generalId === channelId) {
+          gameByChannel = g;
+          break;
+        }
       }
-    }
-    if (!gameByChannel) {
+      if (!gameByChannel) {
+        await interaction.reply({
+          content: 'Use /botmenu in the **Game Log** channel of the game you want to manage.',
+          ephemeral: true,
+        }).catch(() => {});
+        return;
+      }
       await interaction.reply({
-        content: 'Use /botmenu in the **Game Log** channel of the game you want to manage.',
-        ephemeral: true,
+        content: '**Bot Stuff** — Choose an action:',
+        components: [getBotmenuButtons(gameByChannel.gameId)],
+        ephemeral: false,
       }).catch(() => {});
       return;
     }
-    await interaction.reply({
-      content: '**Bot Stuff** — Choose an action:',
-      components: [getBotmenuButtons(gameByChannel.gameId)],
-      ephemeral: false,
-    }).catch(() => {});
-    return;
+    // Stats commands: only in #statistics channel; require DB
+    const statsChannelName = (interaction.channel?.name || '').toLowerCase();
+    if (['statcheck', 'affiliation', 'dcwinrate'].includes(cmd)) {
+      if (statsChannelName !== 'statistics') {
+        await interaction.reply({
+          content: 'Use this command in the **#statistics** channel.',
+          ephemeral: true,
+        }).catch(() => {});
+        return;
+      }
+      if (!isDbConfigured()) {
+        await interaction.reply({
+          content: 'Stats require a database (DATABASE_URL). No data available.',
+          ephemeral: true,
+        }).catch(() => {});
+        return;
+      }
+      await interaction.deferReply({ ephemeral: false }).catch(() => {});
+      try {
+        if (cmd === 'statcheck') {
+          const { totalGames, draws } = await getStatsSummary();
+          await interaction.editReply({
+            content: `**Completed games:** ${totalGames}\n**Draws:** ${draws}`,
+          }).catch(() => {});
+        } else if (cmd === 'affiliation') {
+          const rows = await getAffiliationWinRates();
+          const lines = rows.length
+            ? rows.map((r) => `${r.affiliation}: **${r.wins}** / **${r.games}** (${r.winRate}% win rate)`).join('\n')
+            : 'No completed games with affiliation data yet.';
+          await interaction.editReply({ content: `**Win rate by affiliation**\n${lines}` }).catch(() => {});
+        } else if (cmd === 'dcwinrate') {
+          const limit = interaction.options.getInteger('limit') ?? 20;
+          const rows = await getDcWinRates(limit);
+          const lines = rows.length
+            ? rows.map((r) => `${r.dcName}: **${r.wins}** / **${r.games}** (${r.winRate}%)`).join('\n')
+            : 'No completed games with army data yet.';
+          await interaction.editReply({
+            content: `**Win rate by Deployment Card** (top ${limit} by games played)\n${lines}`,
+          }).catch(() => {});
+        }
+      } catch (err) {
+        console.error(`Stats command /${cmd} failed:`, err);
+        await interaction.editReply({
+          content: `Something went wrong: ${err.message}`,
+        }).catch(() => {});
+      }
+      return;
+    }
   }
 
   if (interaction.isButton()) {

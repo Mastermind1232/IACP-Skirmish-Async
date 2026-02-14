@@ -97,13 +97,30 @@ function validateCriticalData() {
   }
   if (!dcStats || typeof dcStats !== 'object') {
     warnings.push('dc-stats (dcStats): expected object');
+  } else {
+    const firstKey = Object.keys(dcStats)[0];
+    if (firstKey && (typeof dcStats[firstKey] !== 'object' || dcStats[firstKey] === null)) {
+      warnings.push('dc-stats: each entry should be an object (e.g. cost, figures, attack)');
+    }
   }
   if (!mapSpacesData || typeof mapSpacesData !== 'object') {
     warnings.push('map-spaces (mapSpacesData): expected object');
+  } else {
+    const firstMapId = Object.keys(mapSpacesData)[0];
+    const firstMap = firstMapId ? mapSpacesData[firstMapId] : null;
+    if (firstMap && typeof firstMap === 'object' && firstMap.spaces == null && firstMap.adjacency == null) {
+      warnings.push('map-spaces: each map should have "spaces" and/or "adjacency"');
+    }
   }
   const ab = abilityLibrary?.abilities;
   if (!ab || typeof ab !== 'object') {
     warnings.push('ability-library (abilityLibrary.abilities): expected object');
+  } else {
+    const firstAbId = Object.keys(ab)[0];
+    const firstAb = firstAbId ? ab[firstAbId] : null;
+    if (firstAb && (typeof firstAb !== 'object' || firstAb === null || (firstAb.type == null && firstAb.surgeCost == null))) {
+      warnings.push('ability-library: each entry should be object with type/surgeCost');
+    }
   }
   if (!ccEffectsData?.cards || typeof ccEffectsData.cards !== 'object') {
     warnings.push('cc-effects (ccEffectsData.cards): expected object');

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tournament Rotation — IA Skirmish</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; padding: 16px; background: #1e1e1e; color: #eee; max-width: 800px; }
+    h1 { font-size: 1.2rem; margin-bottom: 8px; }
+    .hint { font-size: 12px; color: #999; margin-bottom: 12px; }
+    .server-warning { background: #3d2a1a; border: 1px solid #8b5a00; color: #ffc; padding: 12px 16px; margin-bottom: 16px; border-radius: 6px; font-size: 13px; }
+    .server-warning code { background: #2d2d2d; padding: 2px 6px; border-radius: 4px; }
+    .server-warning a { color: #8cf; }
+    section { margin-bottom: 24px; }
+    section h2 { font-size: 1rem; margin-bottom: 8px; color: #ccc; }
+    .playable-list { max-height: 200px; overflow-y: auto; background: #2d2d2d; border-radius: 6px; padding: 8px; font-size: 13px; }
+    .playable-list div { padding: 4px 0; color: #aaa; }
+    .rotation-list { list-style: none; padding: 0; margin: 0; }
+    .rotation-list li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 4px; background: #2d2d2d; border-radius: 4px; font-size: 13px; }
+    .rotation-list li .label { flex: 1; min-width: 0; }
+    .rotation-list li button { padding: 4px 10px; font-size: 12px; background: #444; color: #ccc; border: 1px solid #555; border-radius: 4px; cursor: pointer; }
+    .rotation-list li button:hover { background: #555; color: #fff; }
+    .rotation-list li button.del { color: #f88; }
+    .rotation-list li button.del:hover { background: #5a2a2a; color: #faa; }
+    .add-row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .add-row select { padding: 8px 12px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; min-width: 280px; font-size: 13px; }
+    .add-row button { padding: 8px 16px; background: #0d6efd; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .add-row button:hover { background: #0b5ed7; }
+    .save-row { margin-top: 16px; }
+    .save-row button { padding: 10px 20px; background: #198754; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    .save-row button:hover { background: #157347; }
+    .save-row button:disabled { background: #444; color: #888; cursor: not-allowed; }
+    .status { font-size: 12px; margin-left: 12px; }
+    .status.ok { color: #198754; }
+    .status.err { color: #dc3545; }
+  </style>
+</head>
+<body>
+  <div id="serverWarning" class="server-warning" style="display: none;">
+    <strong>Save won’t work.</strong> Use the <strong>cc-review</strong> server. In the project folder run: <code>npm run cc-review</code>, then open:
+    <a href="http://localhost:3456/scripts/tournament-rotation-tool.html" target="_blank" rel="noopener">http://localhost:3456/scripts/tournament-rotation-tool.html</a>
+  </div>
+  <h1>Tournament Rotation (D4)</h1>
+  <p class="hint">Mission IDs are <code>mapId:variant</code> (e.g. mos-eisley-outskirts:a). The bot uses this list for <strong>Competitive</strong> map selection. Edit the rotation below and click <strong>Save</strong> to write <code>data/tournament-rotation.json</code>.</p>
+
+  <section>
+    <h2>Playable missions (from map-registry + deployment-zones + mission-cards)</h2>
+    <div id="playableList" class="playable-list">Loading…</div>
+  </section>
+
+  <section>
+    <h2>Tournament rotation (order = draw pool for Competitive)</h2>
+    <div class="add-row">
+      <select id="addSelect">
+        <option value="">— Add a mission —</option>
+      </select>
+      <button type="button" id="addBtn">Add to rotation</button>
+    </div>
+    <ul id="rotationList" class="rotation-list"></ul>
+    <div class="save-row">
+      <button type="button" id="saveBtn">Save to data/tournament-rotation.json</button>
+      <span id="saveStatus" class="status"></span>
+    </div>
+  </section>
+
+  <script>
+    (function () {
+      const serverWarning = document.getElementById('serverWarning');
+      const playableList = document.getElementById('playableList');
+      const addSelect = document.getElementById('addSelect');
+      const addBtn = document.getElementById('addBtn');
+      const rotationList = document.getElementById('rotationList');
+      const saveBtn = document.getElementById('saveBtn');
+      const saveStatus = document.getElementById('saveStatus');
+
+      let playableOptions = [];
+      let missionIds = [];
+
+      function setStatus(msg, ok) {
+        saveStatus.textContent = msg;
+        saveStatus.className = 'status ' + (ok ? 'ok' : 'err');
+      }
+
+      async function checkServer() {
+        try {
+          const r = await fetch('/api/cc-review-server');
+          const data = await r.json();
+          if (data.ok && data.server === 'cc-review-server') {
+            serverWarning.style.display = 'none';
+            return true;
+          }
+        } catch (_) {}
+        serverWarning.style.display = 'block';
+        return false;
+      }
+
+      async function loadPlayable() {
+        try {
+          const r = await fetch('/api/playable-missions');
+          if (!r.ok) throw new Error(r.statusText);
+          playableOptions = await r.json();
+          if (!Array.isArray(playableOptions)) playableOptions = [];
+          playableList.innerHTML = playableOptions.length
+            ? playableOptions.map((o) => '<div>' + escapeHtml(o.label) + ' <code>' + escapeHtml(o.value) + '</code></div>').join('')
+            : '<div>No playable missions (add deployment zones and mission cards for at least one map).</div>';
+          refreshAddSelect();
+        } catch (e) {
+          playableList.textContent = 'Failed to load: ' + e.message;
+        }
+      }
+
+      function escapeHtml(s) {
+        const div = document.createElement('div');
+        div.textContent = s;
+        return div.innerHTML;
+      }
+
+      async function loadRotation() {
+        try {
+          const r = await fetch('/api/tournament-rotation');
+          const data = await r.json();
+          missionIds = Array.isArray(data.missionIds) ? data.missionIds : [];
+          renderRotation();
+          refreshAddSelect();
+        } catch (e) {
+          setStatus('Failed to load rotation: ' + e.message, false);
+        }
+      }
+
+      function labelForValue(value) {
+        const o = playableOptions.find((p) => p.value === value);
+        return o ? o.label : value;
+      }
+
+      function refreshAddSelect() {
+        const inRotation = new Set(missionIds);
+        const opts = playableOptions.filter((o) => !inRotation.has(o.value));
+        addSelect.innerHTML = '<option value="">— Add a mission —</option>' +
+          opts.map((o) => '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.label) + '</option>').join('');
+      }
+
+      function renderRotation() {
+        rotationList.innerHTML = missionIds.length === 0
+          ? '<li style="color:#888;">Rotation is empty. Add missions above.</li>'
+          : missionIds.map((value, i) => {
+              const label = labelForValue(value);
+              return '<li data-index="' + i + '">' +
+                '<span class="label">' + escapeHtml(label) + ' <code>' + escapeHtml(value) + '</code></span>' +
+                '<button type="button" class="move-up" title="Move up">↑</button>' +
+                '<button type="button" class="move-down" title="Move down">↓</button>' +
+                '<button type="button" class="del" title="Remove">Remove</button>' +
+                '</li>';
+            }).join('');
+        rotationList.querySelectorAll('.move-up').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const i = parseInt(btn.closest('li').dataset.index, 10);
+            if (i <= 0) return;
+            [missionIds[i - 1], missionIds[i]] = [missionIds[i], missionIds[i - 1]];
+            renderRotation();
+            refreshAddSelect();
+          });
+        });
+        rotationList.querySelectorAll('.move-down').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const i = parseInt(btn.closest('li').dataset.index, 10);
+            if (i >= missionIds.length - 1) return;
+            [missionIds[i], missionIds[i + 1]] = [missionIds[i + 1], missionIds[i]];
+            renderRotation();
+            refreshAddSelect();
+          });
+        });
+        rotationList.querySelectorAll('.del').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const i = parseInt(btn.closest('li').dataset.index, 10);
+            missionIds.splice(i, 1);
+            renderRotation();
+            refreshAddSelect();
+          });
+        });
+      }
+
+      addBtn.addEventListener('click', () => {
+        const value = addSelect.value;
+        if (!value) return;
+        missionIds.push(value);
+        renderRotation();
+        refreshAddSelect();
+      });
+
+      saveBtn.addEventListener('click', async () => {
+        saveBtn.disabled = true;
+        setStatus('Saving…', true);
+        try {
+          const r = await fetch('/api/save-tournament-rotation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ missionIds }),
+          });
+          const data = await r.json();
+          if (data.ok) {
+            setStatus('Saved.', true);
+          } else {
+            setStatus(data.error || 'Save failed', false);
+          }
+        } catch (e) {
+          setStatus('Save failed: ' + e.message, false);
+        }
+        saveBtn.disabled = false;
+      });
+
+      async function init() {
+        const ok = await checkServer();
+        await loadPlayable();
+        await loadRotation();
+        if (!ok) setStatus('Use npm run cc-review to save.', false);
+      }
+      init();
+    })();
+  </script>
+</body>
+</html>
