@@ -65,11 +65,16 @@
     "Wampa (Elite)",
     "Wing Guard (Elite)",
     "Wing Guard (Regular)",
+    "Wookiee Warrior (Regular)",
+    "Zeb Orrelios",
     "Zuckuss"
   ],
   "dc_upgrades": [],
   "cc": [],
   "companions": [
-    "BD-1"
+    "BD-1",
+    "Dio",
+    "Junk Droid",
+    "Salacious B. Crumb"
   ]
 }

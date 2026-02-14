@@ -5507,8 +5507,33 @@
       "affiliation": "Rebel"
     },
     "Wookiee Warrior (Regular)": {
-      "abilityText": "Traits: BRAWLER, WOOKIEE. Attack (Melee): red, green. Defense: black. Surge: damage 1. Surge: bleed; Surge: cleave 2",
-      "keywords": []
+      "abilityText": "Fury: While attacking, if you have suffered 5 or more Damage, apply +1 Surge to the attack results.",
+      "keywords": [
+        "BRAWLER",
+        "WOOKIEE"
+      ],
+      "cost": 8,
+      "subCost": 4,
+      "health": 11,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "red",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "+1 hit",
+        "bleed",
+        "cleave 2"
+      ],
+      "attachment": false,
+      "affiliation": "Rebel"
     },
     "Yoda": {
       "abilityText": "Calming Presence: At the start of a friendly REBEL figure's activation, that figure may remove one HARMFUL condition and suffer 1 Strain. Limit once per round.\n\nWisdom: At the start of your activation, you may draw 1 Command card. If you do, place 1 card from your hand on the bottom of your deck.\n\nSpecial Action (Do or Do Not): Choose another friendly REBEL FORCE USER within 4 spaces. That figure becomes Focused.\n\nForce Deflection: After an attack targeting you or an adjacent friendly REBEL figure resolves, you may have the attacking figure suffer Damage equal to the number of attack dice rolled. Limit once per round.",
@@ -5528,18 +5553,21 @@
       "affiliation": "Rebel"
     },
     "Zeb Orrelios": {
-      "abilityText": "Special Action (Bo-Rifle Staff Strike): Once during your activation, you may perform a melee attack using 2 red dice without spending an action.\n\nLasat Honor Guard: While attacking, after any rerolls, you may turn 1 die showing only a single attack icon to any other side.",
+      "abilityText": "Bo-Rifle Staff Strike: Once during your activation, you may perform a Melee attack using 2 red dice without spending an action.\n\nLasat-Honor Guard: While attacking, after any rerolls, you may turn 1 die showing only a single attack icon to any other side.",
       "keywords": [
         "BRAWLER",
         "GUARDIAN"
       ],
+      "subname": "SPECTRE-4",
       "cost": 8,
       "health": 15,
       "speed": 4,
+      "passives": [
+        "+3 Accuracy"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
-          "red",
           "red",
           "green"
         ],
@@ -5547,9 +5575,6 @@
       },
       "defense": [
         "black"
-      ],
-      "passives": [
-        "+3 Accuracy"
       ],
       "surgeAbilities": [
         "damage 2",
@@ -5691,6 +5716,89 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Scum"
+    },
+    "BD-1": {
+      "abilityText": "Damaged Scomplink: You are not counted for the purpose of control.\n\nSpecial Action (Stim Canister): An adjacent friendly figure recovers 2 Health.\n\nDouble Action Special (Terminal Slicing): Discard an adjacent terminal to draw 1 Command card.",
+      "keywords": [
+        "DROID",
+        "TECHNICIAN"
+      ],
+      "health": 4,
+      "speed": 4,
+      "defense": [
+        "black"
+      ],
+      "attachment": false
+    },
+    "Junk Droid": {
+      "abilityText": "",
+      "keywords": [
+        "DROID"
+      ],
+      "health": 1,
+      "speed": 4,
+      "passives": [
+        "+1 Hit"
+      ],
+      "attack": {
+        "dice": [
+          "green"
+        ],
+        "type": "melee"
+      },
+      "attachment": false,
+      "companion": true
+    },
+    "Salacious B. Crumb": {
+      "abilityText": "Swipe: When you activate in or enter a space containing a hostile figure, it suffers 1 Damage. Limit once per figure per round.\n\nSpecial Action (Scratch): Choose an adjacent hostile figure. That figure suffers 1 Damage.",
+      "keywords": [
+        "BRAWLER"
+      ],
+      "health": 6,
+      "speed": 3,
+      "attachment": false,
+      "companion": true
+    },
+    "The Child": {
+      "abilityText": "Special Action (Force Heal): An adjacent friendly figure recovers 1 Damage and discards a HARMFUL condition.\n\nForce Exhaustion: When an attack is declared targeting you or a friendly figure with \"Clan of Two\", you may become Incapacitated. If you do, the attacker removes 1 attack die from the attack pool and becomes Weakened.",
+      "keywords": [
+        "FORCE USER"
+      ],
+      "health": 2,
+      "speed": 3,
+      "defense": [
+        "white"
+      ],
+      "attachment": false,
+      "companion": true,
+      "affiliation": "Any"
+    },
+    "Dio": {
+      "abilityText": "Attached: When a friendly \"Iden Versio\" exits your space, interrupt to move up to 1 space.\n\nInsignificant: You cannot be the target of an attack while in the same space as a friendly figure.",
+      "keywords": [
+        "DROID"
+      ],
+      "health": 4,
+      "speed": 3,
+      "passives": [
+        "Mobile"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "+1 hit, stun",
+        "damage 1, accuracy 2"
+      ],
+      "attachment": false,
+      "companion": true
     }
   }
 }
