@@ -15,6 +15,9 @@ import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
 import { handleEndEndOfRound, handleEndStartOfRound } from './round.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick } from './movement.js';
+import { handleAttackTarget, handleCombatReady, handleCombatRoll, handleCombatSurge } from './combat.js';
+import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleConfirmActivate, handleCancelActivate } from './activation.js';
+import { handleMapSelection, handleDraftRandom } from './setup.js';
 
 const HANDLERS = new Map();
 
@@ -40,6 +43,17 @@ register('end_start_of_round_', handleEndStartOfRound);
 register('move_mp_', handleMoveMp);
 register('move_adjust_mp_', handleMoveAdjustMp);
 register('move_pick_', handleMovePick);
+register('attack_target_', handleAttackTarget);
+register('combat_ready_', handleCombatReady);
+register('combat_roll_', handleCombatRoll);
+register('combat_surge_', handleCombatSurge);
+register('status_phase_', handleStatusPhase);
+register('pass_activation_turn_', handlePassActivationTurn);
+register('end_turn_', handleEndTurn);
+register('confirm_activate_', handleConfirmActivate);
+register('cancel_activate_', handleCancelActivate);
+register('map_selection_', handleMapSelection);
+register('draft_random_', handleDraftRandom);
 
 /**
  * Return the handler for the given key (prefix), or null if none.
@@ -63,3 +77,6 @@ export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
 export { handleEndEndOfRound, handleEndStartOfRound } from './round.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick } from './movement.js';
+export { handleAttackTarget, handleCombatReady, handleCombatRoll, handleCombatSurge } from './combat.js';
+export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleConfirmActivate, handleCancelActivate } from './activation.js';
+export { handleMapSelection, handleDraftRandom } from './setup.js';
