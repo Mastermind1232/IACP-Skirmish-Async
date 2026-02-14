@@ -54,8 +54,8 @@ From the [AsyncTI4 GitHub](https://github.com/AsyncTI4/TI4_map_generator_bot):
 ### Category: 🛠️ Bot / Admin (optional)
 | Channel | Purpose |
 |---------|---------|
-| `#bot-logs` | Game errors (message + game ID + optional jump link). Set `BOT_LOGS_MENTION_ID` (your user or role ID) in `.env` to be @mentioned on each error. |
-| `#suggestions` | Feature requests, bug reports |
+| `#bot-logs` | Game errors (message + game ID + optional jump link). The bot @mentions the **Bothelpers** role (by name) on each error; create a role named "Bothelpers" so the team gets notified. |
+| `#bot-requests-and-suggestions` or `#bot-feedback-and-requests` | **Forum.** Feature requests, bug reports. First message in a thread gets **IMPLEMENTED** / **REJECTED** buttons; admins use them to set the thread title to `[IMPLEMENTED]` or `[REJECTED]`. |
 
 ---
 

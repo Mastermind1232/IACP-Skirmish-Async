@@ -29,6 +29,7 @@ export {
   getHandSquadButtons,
   getKillGameButton,
   getRequestActionButtons,
+  getCleaveTargetButtons,
   getMoveMpButtonRows,
   getMoveSpaceGridRows,
   getDeployFigureLabels as getDeployFigureLabelsFromDiscord,

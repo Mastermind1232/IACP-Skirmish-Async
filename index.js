@@ -220,6 +220,7 @@ import {
   getHandSquadButtons,
   getKillGameButton,
   getRequestActionButtons,
+  getCleaveTargetButtons,
   getDcActionButtons as getDcActionButtonsFromDiscord,
   getActivateDcButtons as getActivateDcButtonsFromDiscord,
 } from './src/discord/index.js';
@@ -2299,14 +2300,6 @@ async function resolveCombatAfterRolls(game, combat, client) {
   } else if (damage > 0) {
     await logGameAction(game, client, `<@${ownerId}> dealt **${damage}** damage to **${combat.target.label}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
   }
-  await thread.send(resultText);
-  delete game.pendingCombat;
-  if (combat.rollMessageId) {
-    try {
-      const rollMsg = await thread.messages.fetch(combat.rollMessageId);
-      await rollMsg.edit({ components: [] }).catch(() => {});
-    } catch {}
-  }
   const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
   if (combat.surgeBlast > 0 && hit && game.selectedMap?.id) {
@@ -2315,6 +2308,61 @@ async function resolveCombatAfterRolls(game, combat, client) {
       const mid = findDcMessageIdForFigure(game.gameId, bp, bk);
       if (mid) embedRefreshMsgIds.add(mid);
     }
+  }
+  // F6 Cleave: attacker may choose one other figure in melee (adjacent to attacker) to apply cleave damage
+  if (hit && (combat.surgeCleave || 0) > 0 && game.selectedMap?.id) {
+    const attMeta = combat.attackerMsgId ? dcMessageMeta.get(combat.attackerMsgId) : null;
+    const attDg = (attMeta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const attackerFigureKey = attMeta ? `${attMeta.dcName}-${attDg}-${combat.attackerFigureIndex ?? 0}` : null;
+    if (attackerFigureKey) {
+      const adjacentToAttacker = getFiguresAdjacentToTarget(game, attackerFigureKey, game.selectedMap.id);
+      const cleaveTargets = adjacentToAttacker.filter(
+        (c) => c.playerNum === defenderPlayerNum && c.figureKey !== combat.target.figureKey
+      );
+      if (cleaveTargets.length > 0) {
+        const targetsWithLabels = cleaveTargets.map((c) => {
+          const msgId = findDcMessageIdForFigure(game.gameId, c.playerNum, c.figureKey);
+          const dcIds = c.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcList = c.playerNum === 1 ? game.p1DcList : game.p2DcList;
+          const idx = (dcIds || []).indexOf(msgId);
+          const label = (idx >= 0 && dcList?.[idx]?.displayName) ? dcList[idx].displayName : c.figureKey;
+          return { figureKey: c.figureKey, playerNum: c.playerNum, label: String(label).slice(0, 80) };
+        });
+        game.pendingCleave = {
+          gameId: game.gameId,
+          combatThreadId: combat.combatThreadId,
+          surgeCleave: combat.surgeCleave || 0,
+          attackerPlayerNum,
+          ownerId,
+          targets: targetsWithLabels,
+          resultText,
+          combat,
+          initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
+        };
+        const cleaveRows = getCleaveTargetButtons(game.gameId, targetsWithLabels);
+        await thread.send({
+          content: `**Cleave (${combat.surgeCleave} damage):** <@${ownerId}> — Choose one target in melee to apply cleave damage:`,
+          allowedMentions: { users: [ownerId] },
+          components: cleaveRows,
+        });
+        return;
+      }
+    }
+  }
+  await finishCombatResolution(game, combat, resultText, embedRefreshMsgIds, client);
+}
+
+/** Send result to thread, clear combat/roll UI, refresh DC embeds and board. */
+async function finishCombatResolution(game, combat, resultText, embedRefreshMsgIds, client) {
+  const thread = await client.channels.fetch(combat.combatThreadId);
+  await thread.send(resultText);
+  delete game.pendingCombat;
+  delete game.pendingCleave;
+  if (combat.rollMessageId) {
+    try {
+      const rollMsg = await thread.messages.fetch(combat.rollMessageId);
+      await rollMsg.edit({ components: [] }).catch(() => {});
+    } catch {}
   }
   for (const msgId of embedRefreshMsgIds) {
     try {
@@ -3071,7 +3119,7 @@ client.once('ready', async () => {
           (c) => c.type === ChannelType.GuildCategory && c.name === CATEGORIES.general
         );
         const hasRequestsForum = guild.channels.cache.some(
-          (c) => c.type === ChannelType.GuildForum && c.name === 'bot-requests-and-suggestions'
+          (c) => c.type === ChannelType.GuildForum && REQUEST_FORUM_NAMES.includes(c.name)
         );
         if (generalCat && !hasRequestsForum) {
           await guild.channels.create({
@@ -3110,11 +3158,13 @@ async function maybeSetupLobbyFromFirstMessage(message) {
   return true;
 }
 
+const REQUEST_FORUM_NAMES = ['bot-requests-and-suggestions', 'bot-feedback-and-requests'];
+
 async function maybeAddRequestButtons(message) {
   const thread = message.channel;
   if (!thread?.isThread?.()) return false;
   const parent = thread.parent;
-  if (parent?.name !== 'bot-requests-and-suggestions') return false;
+  if (!parent?.name || !REQUEST_FORUM_NAMES.includes(parent.name)) return false;
   if (requestsWithButtons.has(thread.id)) return false;
   requestsWithButtons.add(thread.id);
   await thread.send({
@@ -3654,6 +3704,88 @@ client.on('interactionCreate', async (interaction) => {
       client,
     };
     await handleMovePick(interaction, movePickContext);
+    return;
+  }
+
+  if (buttonKey === 'cleave_target_') {
+    const match = interaction.customId.match(/^cleave_target_([^_]+)_(\d+)$/);
+    if (!match) return;
+    const [, gameId, indexStr] = match;
+    const game = getGame(gameId);
+    if (!game) {
+      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (await replyIfGameEnded(game, interaction)) return;
+    const pending = game.pendingCleave;
+    if (!pending || pending.gameId !== gameId) {
+      await interaction.reply({ content: 'No cleave target selection in progress.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (interaction.user.id !== pending.ownerId) {
+      await interaction.reply({ content: 'Only the attacker may choose the cleave target.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const targetIndex = parseInt(indexStr, 10);
+    const target = pending.targets[targetIndex];
+    if (!target) {
+      await interaction.reply({ content: 'Invalid target.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate().catch(() => {});
+    const { figureKey: cleaveFigureKey, playerNum: cleavePlayerNum } = target;
+    const defenderPlayerNum = cleavePlayerNum;
+    const attackerPlayerNum = pending.attackerPlayerNum;
+    const ownerId = pending.ownerId;
+    const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+    const cleaveMsgId = findDcMessageIdForFigure(game.gameId, cleavePlayerNum, cleaveFigureKey);
+    if (cleaveMsgId) {
+      const cleaveM = cleaveFigureKey.match(/-(\d+)-(\d+)$/);
+      const cleaveFigIndex = cleaveM ? parseInt(cleaveM[2], 10) : 0;
+      const cleaveHS = dcHealthState.get(cleaveMsgId) || [];
+      const cleaveEntry = cleaveHS[cleaveFigIndex];
+      if (cleaveEntry) {
+        const [cCur, cMax] = cleaveEntry;
+        const cleaveDmg = pending.surgeCleave || 0;
+        const newCCur = Math.max(0, (cCur ?? cMax) - cleaveDmg);
+        cleaveHS[cleaveFigIndex] = [newCCur, cMax ?? newCCur];
+        dcHealthState.set(cleaveMsgId, cleaveHS);
+        const cleaveDcIds = cleavePlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const cleaveDcList = cleavePlayerNum === 1 ? game.p1DcList : game.p2DcList;
+        const cleaveIdx = (cleaveDcIds || []).indexOf(cleaveMsgId);
+        if (cleaveIdx >= 0 && cleaveDcList?.[cleaveIdx]) cleaveDcList[cleaveIdx].healthState = [...cleaveHS];
+        const cleaveLabel = target.label || cleaveDcList?.[cleaveIdx]?.displayName || cleaveFigureKey;
+        await logGameAction(game, client, `Cleave: <@${ownerId}> dealt **${pending.surgeCleave}** damage to **${cleaveLabel}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+        if (newCCur <= 0) {
+          if (game.figurePositions?.[cleavePlayerNum]) delete game.figurePositions[cleavePlayerNum][cleaveFigureKey];
+          const cleaveStats = getDcStats(cleaveDcList[cleaveIdx]?.dcName);
+          const cost = cleaveStats?.cost ?? 5;
+          const figures = cleaveStats?.figures ?? 1;
+          const subCost = getDcEffects()[cleaveDcList[cleaveIdx]?.dcName]?.subCost;
+          const vp = (figures > 1 && subCost != null) ? subCost : cost;
+          game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+          game[vpKey].kills += vp;
+          game[vpKey].total += vp;
+          await logGameAction(game, client, `Cleave: <@${ownerId}> defeated **${cleaveLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+          if (cleaveIdx >= 0 && isGroupDefeated(game, cleavePlayerNum, cleaveIdx)) {
+            const activatedIndices = cleavePlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+            if (!activatedIndices.includes(cleaveIdx)) {
+              if (cleavePlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
+              else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+              await updateActivationsMessage(game, cleavePlayerNum, client);
+            }
+          }
+          await checkWinConditions(game, client);
+        }
+      }
+    }
+    try {
+      await interaction.message.edit({ components: [] }).catch(() => {});
+    } catch {}
+    const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
+    if (cleaveMsgId) embedRefreshMsgIds.add(cleaveMsgId);
+    await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
+    saveGames();
     return;
   }
 

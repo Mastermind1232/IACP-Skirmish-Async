@@ -396,18 +396,39 @@ export function getKillGameButton(gameId) {
   );
 }
 
-/** Resolve/Reject buttons for bot-requests forum posts. */
+/** IMPLEMENTED / REJECTED buttons for bot-requests or bot-feedback-and-requests forum posts. */
 export function getRequestActionButtons(threadId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`request_resolve_${threadId}`)
-      .setLabel('Resolve')
+      .setLabel('IMPLEMENTED')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId(`request_reject_${threadId}`)
-      .setLabel('Reject')
+      .setLabel('REJECTED')
       .setStyle(ButtonStyle.Danger),
   );
+}
+
+/** F6 Cleave: one row per 5 targets, buttons labeled by target. customId: cleave_target_${gameId}_${index}. */
+export function getCleaveTargetButtons(gameId, targets) {
+  if (!targets?.length) return [];
+  const rows = [];
+  for (let i = 0; i < targets.length; i += MAX_BUTTONS_PER_ROW) {
+    const slice = targets.slice(i, i + MAX_BUTTONS_PER_ROW);
+    rows.push(
+      new ActionRowBuilder().addComponents(
+        slice.map((t, j) => {
+          const idx = i + j;
+          return new ButtonBuilder()
+            .setCustomId(`cleave_target_${gameId}_${idx}`)
+            .setLabel((t.label || t.figureKey || `Target ${idx + 1}`).slice(0, 80))
+            .setStyle(ButtonStyle.Danger);
+        })
+      )
+    );
+  }
+  return rows.slice(0, MAX_ROWS_PER_MESSAGE);
 }
 
 /** Action rows for MP selection: move_mp_${msgId}_${figureIndex}_${mp}. */

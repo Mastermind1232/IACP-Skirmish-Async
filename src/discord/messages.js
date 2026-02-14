@@ -81,9 +81,11 @@ export async function logGameAction(game, client, content, options = {}) {
   }
 }
 
+const BOTHELPERS_ROLE_NAME = 'bothelpers';
+
 /**
  * Log a game error to the guild's bot-logs channel (optionally in a per-game thread).
- * Optionally @mention a user/role (set env BOT_LOGS_MENTION_ID) and include a jump link to the message that triggered the error.
+ * @mentions the **Bothelpers** role (by name) so the team is notified. Optionally include a jump link to the message that triggered the error.
  * @param {import('discord.js').Client} client
  * @param {import('discord.js').Guild|null} guild
  * @param {string|null} gameId - IA game id (e.g. "123"); included in message and used for per-game thread
@@ -98,6 +100,7 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
       return;
     }
     await guild.channels.fetch().catch(() => {});
+    await guild.roles.fetch().catch(() => {});
     const ch = guild.channels.cache.find((c) => {
       if (c.type !== ChannelType.GuildText) return false;
       const name = (c.name || '').toLowerCase().trim();
@@ -112,19 +115,17 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
     const errMsg = error?.message || String(error);
     const stack = error?.stack ? `\n\`\`\`\n${error.stack.slice(0, 800)}\n\`\`\`` : '';
     const ctx = context ? ` (${context})` : '';
-    const mentionId = typeof process.env.BOT_LOGS_MENTION_ID === 'string' && process.env.BOT_LOGS_MENTION_ID.trim()
-      ? process.env.BOT_LOGS_MENTION_ID.trim()
-      : null;
+    const bothelpersRole = guild.roles.cache.find((r) => (r.name || '').toLowerCase() === BOTHELPERS_ROLE_NAME.toLowerCase());
     const link = options.messageLink?.guildId && options.messageLink?.channelId && options.messageLink?.messageId
       ? `https://discord.com/channels/${options.messageLink.guildId}/${options.messageLink.channelId}/${options.messageLink.messageId}`
       : null;
     let content = '';
-    if (mentionId) content += `<@${mentionId}> `;
+    if (bothelpersRole) content += `<@&${bothelpersRole.id}> `;
     content += `⚠️ **Game Error**${gameId ? ` — IA Game #${gameId}` : ''}${ctx}\n${errMsg}${stack}`;
     if (link) content += `\n\n**Jump to message:** ${link}`;
 
     const sendPayload = { content };
-    if (mentionId) sendPayload.allowedMentions = { parse: ['users', 'roles'] };
+    if (bothelpersRole) sendPayload.allowedMentions = { roles: [bothelpersRole.id] };
 
     if (gameId) {
       const key = `${guild.id}_${gameId}`;
