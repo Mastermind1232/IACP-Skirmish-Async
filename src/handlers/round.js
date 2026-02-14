@@ -20,6 +20,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     dcHealthState,
     isDepletedRemovedFromGame,
     buildDcEmbedAndFiles,
+    getConditionsForDcMessage,
     getDcPlayAreaComponents,
     countTerminalsControlledByPlayer,
     isFigureInDeploymentZone,
@@ -74,7 +75,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
       const ch = await client.channels.fetch(chId);
       const msg = await ch.messages.fetch(msgId);
       const healthState = dcHealthState.get(msgId) || [];
-      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState);
+      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta));
       const components = getDcPlayAreaComponents(msgId, false, game, meta.dcName);
       await msg.edit({ embeds: [embed], files, components }).catch(() => {});
     } catch (err) {

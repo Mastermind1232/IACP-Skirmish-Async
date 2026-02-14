@@ -1721,7 +1721,7 @@ async function refreshAllGameComponents(game, client) {
       const channelId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
       const channel = await client.channels.fetch(channelId);
       const msg = await channel.messages.fetch(msgId);
-      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState);
+      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState, getConditionsForDcMessage(game, meta));
       const components = getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
       await msg.edit({ embeds: [embed], files: files?.length ? files : [], components });
     } catch (err) {
@@ -2325,7 +2325,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
         const dcMsg = await channel.messages.fetch(msgId);
         const exhausted = dcExhaustedState.get(msgId) ?? false;
         const healthState = dcHealthState.get(msgId) || [];
-        const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, healthState);
+        const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage(game, meta));
         await dcMsg.edit({ embeds: [embed], files }).catch(() => {});
       }
     } catch (err) {
@@ -2385,8 +2385,6 @@ function getDcStats(dcName) {
   }
   return { health: null, figures: isFigurelessDc(dcName) ? 0 : 1, specials: [] };
 }
-
-const PENDING_ILLEGAL_TTL_MS = 60 * 60 * 1000;
 
 function getDeckIllegalPlayCustomId(gameId, playerNum) {
   return `deck_illegal_play_${gameId}_${playerNum}`;
@@ -2626,7 +2624,30 @@ function getActivateDcButtons(game, playerNum) {
   return getActivateDcButtonsFromDiscord(game, playerNum, { resolveDcName, isFigurelessDc, isGroupDefeated });
 }
 
-async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState) {
+/**
+ * Per-figure conditions for a DC message (for embed display).
+ * @param {object} game
+ * @param {{ dcName: string, displayName: string }} meta
+ * @returns {string[][]|undefined} conditionsByFigure, or undefined if none
+ */
+function getConditionsForDcMessage(game, meta) {
+  if (!game?.figureConditions || !meta?.dcName) return undefined;
+  const stats = getDcStats(meta.dcName);
+  const figures = stats.figures ?? 1;
+  const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const out = [];
+  let hasAny = false;
+  for (let i = 0; i < figures; i++) {
+    const fk = `${meta.dcName}-${dgIndex}-${i}`;
+    const list = game.figureConditions[fk] || [];
+    out.push(Array.isArray(list) ? list : [list]);
+    if (out[out.length - 1].length) hasAny = true;
+  }
+  return hasAny ? out : undefined;
+}
+
+async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, conditionsByFigure) {
   const status = exhausted ? 'EXHAUSTED' : 'READIED';
   const color = exhausted ? 0xed4245 : 0x57f287; // red : green
   const figureless = isFigurelessDc(dcName);
@@ -2634,7 +2655,7 @@ async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState)
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   const variant = dcName?.includes('(Elite)') ? 'Elite' : dcName?.includes('(Regular)') ? 'Regular' : null;
-  const healthSection = figureless ? null : formatHealthSection(Number(dgIndex), healthState);
+  const healthSection = figureless ? null : formatHealthSection(Number(dgIndex), healthState, conditionsByFigure);
   const lines = figureless
     ? [variant ? `**Variant:** ${variant}` : null].filter(Boolean)
     : [
@@ -3529,6 +3550,7 @@ client.on('interactionCreate', async (interaction) => {
       dcDepletedState,
       dcHealthState,
       buildDcEmbedAndFiles,
+      getConditionsForDcMessage,
       getDcPlayAreaComponents,
       getDcActionButtons,
       getActionsCounterContent,
@@ -3680,6 +3702,7 @@ client.on('interactionCreate', async (interaction) => {
       dcMessageMeta,
       dcHealthState,
       buildDcEmbedAndFiles,
+      getConditionsForDcMessage,
       getDcPlayAreaComponents,
       maybeShowEndActivationPhaseButton,
       dcExhaustedState,
@@ -3713,6 +3736,7 @@ client.on('interactionCreate', async (interaction) => {
       dcHealthState,
       isDepletedRemovedFromGame,
       buildDcEmbedAndFiles,
+      getConditionsForDcMessage,
       getDcPlayAreaComponents,
       countTerminalsControlledByPlayer,
       isFigureInDeploymentZone,
@@ -3942,7 +3966,10 @@ client.on('interactionCreate', async (interaction) => {
     console.error('Interaction error:', err);
     const guild = interaction?.guild;
     const gameId = extractGameIdFromInteraction(interaction);
-    await logGameErrorToBotLogs(interaction.client, guild, gameId, err, 'interactionCreate');
+    const messageLink = guild?.id && interaction?.channelId && interaction?.message?.id
+      ? { guildId: guild.id, channelId: interaction.channelId, messageId: interaction.message.id }
+      : undefined;
+    await logGameErrorToBotLogs(interaction.client, guild, gameId, err, 'interactionCreate', { messageLink });
     await replyOrFollowUpWithRetry(interaction, {
       content: 'An error occurred. It has been logged to bot-logs.',
       ephemeral: true,

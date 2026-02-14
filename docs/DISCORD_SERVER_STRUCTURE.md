@@ -54,7 +54,7 @@ From the [AsyncTI4 GitHub](https://github.com/AsyncTI4/TI4_map_generator_bot):
 ### Category: 🛠️ Bot / Admin (optional)
 | Channel | Purpose |
 |---------|---------|
-| `#bot-logs` | Errors, debug output (private to admins) |
+| `#bot-logs` | Game errors (message + game ID + optional jump link). Set `BOT_LOGS_MENTION_ID` (your user or role ID) in `.env` to be @mentioned on each error. |
 | `#suggestions` | Feature requests, bug reports |
 
 ---

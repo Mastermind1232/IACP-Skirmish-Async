@@ -47,8 +47,13 @@ export function buildScorecardEmbed(game) {
   return new EmbedBuilder().setTitle('Scorecard').setColor(0x2f3136).addFields(fields);
 }
 
-/** Format health block for DC embed (single or multi-figure). */
-export function formatHealthSection(dgIndex, healthState) {
+/**
+ * Format health block for DC embed (single or multi-figure).
+ * @param {number} dgIndex - Deployment group index (e.g. 1)
+ * @param {[number, number][]} healthState - Per-figure [cur, max]
+ * @param {string[][]} [conditionsByFigure] - Optional per-figure condition names (e.g. [['Stun'], ['Weaken']])
+ */
+export function formatHealthSection(dgIndex, healthState, conditionsByFigure) {
   if (!healthState?.length) return 'Health\n—/—';
   const labels = 'abcdefghij';
   const lines = healthState.map(([cur, max], i) => {
@@ -57,7 +62,18 @@ export function formatHealthSection(dgIndex, healthState) {
     if (healthState.length === 1) return `${c}/${m}`;
     return `${dgIndex}${labels[i]}: ${c}/${m}`;
   });
-  return `Health\n${lines.join('\n')}`;
+  let out = `Health\n${lines.join('\n')}`;
+  if (conditionsByFigure?.length) {
+    const condLines = conditionsByFigure
+      .map((list, i) => {
+        if (!list?.length) return null;
+        const label = healthState.length === 1 ? 'Conditions' : `Conditions (${dgIndex}${labels[i]})`;
+        return `${label}: ${list.join(', ')}`;
+      })
+      .filter(Boolean);
+    if (condLines.length) out += '\n\n' + condLines.join('\n');
+  }
+  return out;
 }
 
 /** Card-back character for hand/discard visual. */

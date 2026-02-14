@@ -81,8 +81,17 @@ export async function logGameAction(game, client, content, options = {}) {
   }
 }
 
-/** Log a game error to the guild's bot-logs channel (optionally in a per-game thread). */
-export async function logGameErrorToBotLogs(client, guild, gameId, error, context = '') {
+/**
+ * Log a game error to the guild's bot-logs channel (optionally in a per-game thread).
+ * Optionally @mention a user/role (set env BOT_LOGS_MENTION_ID) and include a jump link to the message that triggered the error.
+ * @param {import('discord.js').Client} client
+ * @param {import('discord.js').Guild|null} guild
+ * @param {string|null} gameId - IA game id (e.g. "123"); included in message and used for per-game thread
+ * @param {Error|unknown} error
+ * @param {string} [context] - e.g. 'interactionCreate', 'dc_activate'
+ * @param {{ messageLink?: { guildId: string, channelId: string, messageId: string } }} [options] - when provided, adds "Jump to message" link
+ */
+export async function logGameErrorToBotLogs(client, guild, gameId, error, context = '', options = {}) {
   try {
     if (!guild) {
       console.error('logGameErrorToBotLogs: no guild (interaction may be in DMs)');
@@ -103,7 +112,19 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
     const errMsg = error?.message || String(error);
     const stack = error?.stack ? `\n\`\`\`\n${error.stack.slice(0, 800)}\n\`\`\`` : '';
     const ctx = context ? ` (${context})` : '';
-    const content = `⚠️ **Game Error**${gameId ? ` — IA Game #${gameId}` : ''}${ctx}\n${errMsg}${stack}`;
+    const mentionId = typeof process.env.BOT_LOGS_MENTION_ID === 'string' && process.env.BOT_LOGS_MENTION_ID.trim()
+      ? process.env.BOT_LOGS_MENTION_ID.trim()
+      : null;
+    const link = options.messageLink?.guildId && options.messageLink?.channelId && options.messageLink?.messageId
+      ? `https://discord.com/channels/${options.messageLink.guildId}/${options.messageLink.channelId}/${options.messageLink.messageId}`
+      : null;
+    let content = '';
+    if (mentionId) content += `<@${mentionId}> `;
+    content += `⚠️ **Game Error**${gameId ? ` — IA Game #${gameId}` : ''}${ctx}\n${errMsg}${stack}`;
+    if (link) content += `\n\n**Jump to message:** ${link}`;
+
+    const sendPayload = { content };
+    if (mentionId) sendPayload.allowedMentions = { parse: ['users', 'roles'] };
 
     if (gameId) {
       const key = `${guild.id}_${gameId}`;
@@ -121,9 +142,9 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
         }
       }
       const target = threadId ? await client.channels.fetch(threadId).catch(() => null) : ch;
-      if (target) await target.send({ content });
+      if (target) await target.send(sendPayload);
     } else {
-      await ch.send({ content });
+      await ch.send(sendPayload);
     }
   } catch (e) {
     console.error('Failed to log game error to bot-logs:', e);
