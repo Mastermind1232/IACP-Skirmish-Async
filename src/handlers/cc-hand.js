@@ -1,0 +1,684 @@
+/**
+ * CC-hand + modals: squad_modal_, deploy_modal_, cc_attach_to_, cc_play_select_, cc_discard_select_,
+ * deck_illegal_play_, deck_illegal_redo_, cc_shuffle_draw_, cc_play_, cc_draw_, cc_search_discard_,
+ * cc_close_discard_, cc_discard_, squad_select_
+ */
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  EmbedBuilder,
+  ThreadAutoArchiveDuration,
+} from 'discord.js';
+
+/** @param {import('discord.js').ModalSubmitInteraction} interaction */
+export async function handleSquadModal(interaction, ctx) {
+  const { getGame, validateDeckLegal, sendDeckIllegalAlert, applySquadSubmission } = ctx;
+  const [, , gameId, playerNum] = interaction.customId.split('_');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'This game no longer exists.', ephemeral: true });
+    return;
+  }
+  if (!game.mapSelected) {
+    await interaction.reply({ content: 'Map selection must be completed before you can submit your squad.', ephemeral: true });
+    return;
+  }
+  const isP1 = playerNum === '1';
+  const userId = isP1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== userId) {
+    await interaction.reply({ content: 'Only the player for this hand can submit.', ephemeral: true });
+    return;
+  }
+  const name = interaction.fields.getTextInputValue('squad_name').trim() || 'Unnamed Squad';
+  const dcText = interaction.fields.getTextInputValue('squad_dc').trim();
+  const ccText = interaction.fields.getTextInputValue('squad_cc').trim();
+  const dcList = dcText ? dcText.split('\n').map((s) => s.trim()).filter(Boolean) : [];
+  const ccList = ccText ? ccText.split('\n').map((s) => s.trim()).filter(Boolean) : [];
+  const squad = { name, dcList, ccList, dcCount: dcList.length, ccCount: ccList.length };
+  const validation = validateDeckLegal(squad);
+  if (!validation.legal) {
+    await sendDeckIllegalAlert(game, isP1, squad, validation, interaction.client);
+    await interaction.reply({ content: 'Your deck did not pass validation. Check your Hand channel for details and choose **PLAY IT ANYWAY** or **REDO**.', ephemeral: true });
+    return;
+  }
+  await applySquadSubmission(game, isP1, squad, interaction.client);
+  await interaction.reply({ content: `Squad **${name}** submitted. (${dcList.length} DCs, ${ccList.length} CCs)`, ephemeral: true });
+}
+
+/** @param {import('discord.js').ModalSubmitInteraction} interaction */
+export async function handleDeployModal(interaction, ctx) {
+  const { getGame, getDeploymentZones, updateDeployPromptMessages, logGameAction, saveGames } = ctx;
+  const parts = interaction.customId.split('_');
+  if (parts.length < 5) {
+    await interaction.reply({ content: 'Invalid modal.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const gameId = parts[2];
+  const playerNum = parseInt(parts[3], 10);
+  const flatIndex = parseInt(parts[4], 10);
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== ownerId) {
+    await interaction.reply({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const deployMeta = playerNum === 1 ? game.player1DeployMetadata : game.player2DeployMetadata;
+  const deployLabels = playerNum === 1 ? game.player1DeployLabels : game.player2DeployLabels;
+  const figMeta = deployMeta?.[flatIndex];
+  const figLabel = deployLabels?.[flatIndex];
+  if (!figMeta || !figLabel) {
+    await interaction.reply({ content: 'Figure not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const space = (interaction.fields.getTextInputValue('deploy_space') || '').trim().toLowerCase();
+  if (!space) {
+    await interaction.reply({ content: 'Please enter a space (e.g. A1).', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const mapId = game.selectedMap?.id;
+  const zones = mapId ? getDeploymentZones()[mapId] : null;
+  if (zones) {
+    const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+    const validSpaces = (zones[playerZone] || []).map((s) => String(s).toLowerCase());
+    if (validSpaces.length > 0 && !validSpaces.includes(space)) {
+      await interaction.reply({ content: `**${space.toUpperCase()}** is not in your deployment zone. Check the map for valid cells (e.g. A1, B2).`, ephemeral: true }).catch(() => {});
+      return;
+    }
+  }
+  const figureKey = `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}`;
+  if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
+  if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
+  game.figurePositions[playerNum][figureKey] = space;
+  saveGames();
+  await logGameAction(game, interaction.client, `<@${interaction.user.id}> deployed **${figLabel.replace(/^Deploy /, '')}** at **${space.toUpperCase()}**`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deploy' });
+  await updateDeployPromptMessages(game, playerNum, interaction.client);
+  await interaction.reply({ content: `Deployed **${figLabel.replace(/^Deploy /, '')}** at **${space.toUpperCase()}**.`, ephemeral: true }).catch(() => {});
+}
+
+/** @param {import('discord.js').StringSelectMenuInteraction} interaction */
+export async function handleCcAttachTo(interaction, ctx) {
+  const { getGame, getCcEffect, buildHandDisplayPayload, updateAttachmentMessageForDc, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames } = ctx;
+  const gameId = interaction.customId.replace('cc_attach_to_', '');
+  const game = getGame(gameId);
+  const pending = game?.pendingCcAttachment;
+  if (!game || !pending) {
+    await interaction.reply({ content: 'No attachment pending or game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const { playerNum, card } = pending;
+  const channelId = interaction.channel?.id;
+  const isP1Hand = channelId === game.p1HandId;
+  const isP2Hand = channelId === game.p2HandId;
+  if ((isP1Hand && playerNum !== 1) || (isP2Hand && playerNum !== 2)) {
+    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const dcMsgId = interaction.values[0];
+  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const hand = game[handKey] || [];
+  const idx = hand.indexOf(card);
+  if (idx < 0) {
+    delete game.pendingCcAttachment;
+    await interaction.reply({ content: "That card is no longer in your hand.", ephemeral: true }).catch(() => {});
+    saveGames();
+    return;
+  }
+  await interaction.deferUpdate();
+  hand.splice(idx, 1);
+  game[handKey] = hand;
+  game[discardKey] = game[discardKey] || [];
+  game[discardKey].push(card);
+  const attachKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+  game[attachKey] = game[attachKey] || {};
+  if (!Array.isArray(game[attachKey][dcMsgId])) game[attachKey][dcMsgId] = [];
+  game[attachKey][dcMsgId].push(card);
+  delete game.pendingCcAttachment;
+  await updateAttachmentMessageForDc(game, playerNum, dcMsgId, interaction.client);
+  const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+  const handMessages = await handChannel.messages.fetch({ limit: 20 });
+  const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
+  const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+  if (handMsg) {
+    const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
+    const effectData = getCcEffect(card);
+    const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
+    handPayload.content = `**Command Cards** — Played **${card}** (Attachment).${effectReminder}\n\n` + handPayload.content;
+    await handMsg.edit({
+      content: handPayload.content,
+      embeds: handPayload.embeds,
+      files: handPayload.files || [],
+      components: handPayload.components,
+    }).catch(() => {});
+  }
+  await interaction.message.delete().catch(() => {});
+  await updateHandVisualMessage(game, playerNum, interaction.client);
+  await updateDiscardPileMessage(game, playerNum, interaction.client);
+  await logGameAction(game, interaction.client, `<@${interaction.user.id}> played **${card}** as an attachment.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  saveGames();
+}
+
+/** @param {import('discord.js').StringSelectMenuInteraction} interaction */
+export async function handleCcPlaySelect(interaction, ctx) {
+  const { getGame, getCcEffect, isCcAttachment, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames } = ctx;
+  const gameId = interaction.customId.replace('cc_play_select_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const channelId = interaction.channel?.id;
+  const isP1Hand = channelId === game.p1HandId;
+  const isP2Hand = channelId === game.p2HandId;
+  if (!isP1Hand && channelId !== game.p2HandId) {
+    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const playerNum = isP1Hand ? 1 : 2;
+  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const hand = game[handKey] || [];
+  const card = interaction.values[0];
+  const idx = hand.indexOf(card);
+  if (idx < 0) {
+    await interaction.reply({ content: "That card isn't in your hand.", ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (isCcAttachment(card)) {
+    const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    if (dcMsgIds.length === 0 || dcList.length === 0) {
+      await interaction.reply({ content: 'No Deployment cards to attach to.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    game.pendingCcAttachment = { playerNum, card };
+    const options = dcList.slice(0, 25).map((d, i) => ({
+      label: (d.displayName || d.dcName || `DC ${i + 1}`).slice(0, 100),
+      value: dcMsgIds[i] || String(i),
+    })).filter((o) => o.value);
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`cc_attach_to_${gameId}`)
+      .setPlaceholder('Attach to which Deployment Card?')
+      .addOptions(options);
+    await interaction.reply({
+      content: `**${card}** is an Attachment. Choose which Deployment Card to attach it to:`,
+      components: [new ActionRowBuilder().addComponents(select)],
+      ephemeral: false,
+    });
+    return;
+  }
+  await interaction.deferUpdate();
+  hand.splice(idx, 1);
+  game[handKey] = hand;
+  game[discardKey] = game[discardKey] || [];
+  game[discardKey].push(card);
+  const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+  const handMessages = await handChannel.messages.fetch({ limit: 20 });
+  const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
+  const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+  if (handMsg) {
+    const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
+    const effectData = getCcEffect(card);
+    const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
+    handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
+    await handMsg.edit({
+      content: handPayload.content,
+      embeds: handPayload.embeds,
+      files: handPayload.files || [],
+      components: handPayload.components,
+    }).catch(() => {});
+  }
+  await interaction.message.delete().catch(() => {});
+  await updateHandVisualMessage(game, playerNum, interaction.client);
+  await updateDiscardPileMessage(game, playerNum, interaction.client);
+  await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  saveGames();
+}
+
+/** @param {import('discord.js').StringSelectMenuInteraction} interaction */
+export async function handleCcDiscardSelect(interaction, ctx) {
+  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames } = ctx;
+  const gameId = interaction.customId.replace('cc_discard_select_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const channelId = interaction.channel?.id;
+  const isP1Hand = channelId === game.p1HandId;
+  const isP2Hand = channelId === game.p2HandId;
+  if (!isP1Hand && channelId !== game.p2HandId) {
+    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const playerNum = isP1Hand ? 1 : 2;
+  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const hand = game[handKey] || [];
+  const card = interaction.values[0];
+  const idx = hand.indexOf(card);
+  if (idx < 0) {
+    await interaction.reply({ content: "That card isn't in your hand.", ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  hand.splice(idx, 1);
+  game[handKey] = hand;
+  game[discardKey] = game[discardKey] || [];
+  game[discardKey].push(card);
+  const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+  const handMessages = await handChannel.messages.fetch({ limit: 20 });
+  const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')));
+  const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+  if (handMsg) {
+    const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
+    handPayload.content = `**Discard CC** — Discarded **${card}**.\n\n` + handPayload.content;
+    await handMsg.edit({
+      content: handPayload.content,
+      embeds: handPayload.embeds,
+      files: handPayload.files || [],
+      components: handPayload.components,
+    }).catch(() => {});
+  }
+  await interaction.message.delete().catch(() => {});
+  await updateHandVisualMessage(game, playerNum, interaction.client);
+  await updateDiscardPileMessage(game, playerNum, interaction.client);
+  await logGameAction(game, interaction.client, `<@${interaction.user.id}> discarded **${card}**`, { allowedMentions: { users: [interaction.user.id] }, icon: 'card' });
+  saveGames();
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction */
+export async function handleDeckIllegalPlay(interaction, ctx) {
+  const { getGame, pendingIllegalSquad, PENDING_ILLEGAL_TTL_MS, applySquadSubmission } = ctx;
+  const parts = interaction.customId.replace('deck_illegal_play_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const isP1 = playerNum === 1;
+  const ownerId = isP1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== ownerId) {
+    await interaction.reply({ content: 'Only the owner of this hand can choose Play It Anyway.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const key = `${gameId}_${playerNum}`;
+  const pending = pendingIllegalSquad.get(key);
+  if (!pending || (Date.now() - pending.timestamp > PENDING_ILLEGAL_TTL_MS)) {
+    pendingIllegalSquad.delete(key);
+    await interaction.reply({ content: 'This deck choice has expired. Please submit your squad again.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  pendingIllegalSquad.delete(key);
+  await interaction.deferUpdate();
+  await applySquadSubmission(game, isP1, pending.squad, interaction.client);
+  await interaction.followUp({ content: `Squad **${pending.squad.name || 'Unnamed'}** accepted (Play It Anyway).`, ephemeral: true }).catch(() => {});
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction */
+export async function handleDeckIllegalRedo(interaction, ctx) {
+  const { getGame, pendingIllegalSquad, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, saveGames } = ctx;
+  const parts = interaction.customId.replace('deck_illegal_redo_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const isP1 = playerNum === 1;
+  const ownerId = isP1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== ownerId) {
+    await interaction.reply({ content: 'Only the owner of this hand can choose Redo.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const key = `${gameId}_${playerNum}`;
+  pendingIllegalSquad.delete(key);
+  if (isP1) game.player1Squad = null;
+  else game.player2Squad = null;
+  if (game.bothReadyPosted) game.bothReadyPosted = false;
+  const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
+  const handChannel = await interaction.client.channels.fetch(handChannelId);
+  const handMessages = await handChannel.messages.fetch({ limit: 15 });
+  const botMsg = handMessages.find((m) => m.author.bot && m.embeds?.some((e) => e.title?.includes('Deck Selection')));
+  if (botMsg) {
+    await botMsg.edit({
+      embeds: [getHandTooltipEmbed(game, playerNum), getSquadSelectEmbed(playerNum, null)],
+      components: [getHandSquadButtons(game.gameId, playerNum)],
+    }).catch(() => {});
+  }
+  saveGames();
+  await interaction.deferUpdate();
+  await interaction.message.edit({ content: 'Squad cleared. Please submit again using Select Squad, .vsav upload, or pasted list.', components: [] }).catch(() => {});
+  await interaction.followUp({ content: 'Your squad has been cleared. Submit a new squad using **Select Squad**, upload a .vsav file, or paste your list.', ephemeral: true }).catch(() => {});
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction */
+export async function handleCcShuffleDraw(interaction, ctx) {
+  const { getGame, shuffleArray, buildHandDisplayPayload, updateHandVisualMessage, updatePlayAreaDcButtons, sendRoundActivationPhaseMessage, logGameAction, saveGames, client } = ctx;
+  const gameId = interaction.customId.replace('cc_shuffle_draw_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const channelId = interaction.channel?.id;
+  const isP1Hand = channelId === game.p1HandId;
+  const isP2Hand = channelId === game.p2HandId;
+  if (!isP1Hand && !isP2Hand) {
+    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const playerNum = isP1Hand ? 1 : 2;
+  const squad = playerNum === 1 ? game.player1Squad : game.player2Squad;
+  const ccList = squad?.ccList || [];
+  const drawnKey = playerNum === 1 ? 'player1CcDrawn' : 'player2CcDrawn';
+  if (game[drawnKey]) {
+    await interaction.reply({ content: "You've already drawn your starting hand.", ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  const deck = [...ccList];
+  shuffleArray(deck);
+  const hand = deck.splice(0, 3);
+  const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  game[deckKey] = deck;
+  game[handKey] = hand;
+  game[drawnKey] = true;
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  await logGameAction(game, client, `<@${playerId}> shuffled and drew 3 Command Cards.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
+  const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
+  await interaction.message.edit({
+    content: handPayload.content,
+    embeds: handPayload.embeds,
+    files: handPayload.files || [],
+    components: handPayload.components,
+  }).catch(() => {});
+  await updateHandVisualMessage(game, playerNum, client);
+  if (game.player1CcDrawn && game.player2CcDrawn) {
+    await updatePlayAreaDcButtons(game, client);
+    await sendRoundActivationPhaseMessage(game, client);
+  }
+  saveGames();
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction */
+export async function handleCcPlay(interaction, ctx) {
+  const { getGame } = ctx;
+  const gameId = interaction.customId.replace('cc_play_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const channelId = interaction.channel?.id;
+  const isP1Hand = channelId === game.p1HandId;
+  const isP2Hand = channelId === game.p2HandId;
+  if (!isP1Hand && !isP2Hand) {
+    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const playerNum = isP1Hand ? 1 : 2;
+  const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+  if (hand.length === 0) {
+    await interaction.reply({ content: 'No cards in hand to play.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`cc_play_select_${gameId}`)
+    .setPlaceholder('Choose a card to play')
+    .addOptions(hand.slice(0, 25).map((c) => new StringSelectMenuOptionBuilder().setLabel(c).setValue(c)));
+  await interaction.reply({
+    content: '**Play CC** — Select a card:',
+    components: [new ActionRowBuilder().addComponents(select)],
+    ephemeral: false,
+  });
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction */
+export async function handleCcDraw(interaction, ctx) {
+  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, logGameAction, saveGames, client } = ctx;
+  const gameId = interaction.customId.replace('cc_draw_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const channelId = interaction.channel?.id;
+  const isP1Hand = channelId === game.p1HandId;
+  const isP2Hand = channelId === game.p2HandId;
+  if (!isP1Hand && !isP2Hand) {
+    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const playerNum = isP1Hand ? 1 : 2;
+  const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  let deck = (game[deckKey] || []).slice();
+  const hand = (game[handKey] || []).slice();
+  if (deck.length === 0) {
+    await interaction.reply({ content: 'No cards in deck to draw.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  const card = deck.shift();
+  hand.push(card);
+  game[deckKey] = deck;
+  game[handKey] = hand;
+  const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
+  handPayload.content = `**Draw CC** — Drew **${card}**.\n\n` + handPayload.content;
+  await interaction.message.edit({
+    content: handPayload.content,
+    embeds: handPayload.embeds,
+    files: handPayload.files || [],
+    components: handPayload.components,
+  }).catch(() => {});
+  await updateHandVisualMessage(game, playerNum, client);
+  await logGameAction(game, client, `<@${interaction.user.id}> drew **${card}**`, { allowedMentions: { users: [interaction.user.id] }, icon: 'card' });
+  saveGames();
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction */
+export async function handleCcSearchDiscard(interaction, ctx) {
+  const { getGame, buildDiscardPileDisplayPayload, updateDiscardPileMessage, saveGames, client } = ctx;
+  const match = interaction.customId.match(/^cc_search_discard_([^_]+)_(\d+)$/);
+  if (!match) return;
+  const [, gameId, playerNumStr] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const channelId = interaction.channel?.id;
+  const isP1Area = channelId === game.p1PlayAreaId;
+  const isP2Area = channelId === game.p2PlayAreaId;
+  if ((!isP1Area && !isP2Area) || (isP1Area && playerNum !== 1) || (isP2Area && playerNum !== 2)) {
+    await interaction.reply({ content: 'Use this in your Play Area.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== playerId) {
+    await interaction.reply({ content: 'Only the owner of this Play Area can search their discard pile.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const existingThreadId = playerNum === 1 ? game.p1DiscardThreadId : game.p2DiscardThreadId;
+  if (existingThreadId) {
+    try {
+      const existing = await client.channels.fetch(existingThreadId);
+      if (existing) {
+        await interaction.reply({ content: 'Discard pile thread is already open. Close it first.', ephemeral: true }).catch(() => {});
+        return;
+      }
+    } catch { /* thread was deleted */ }
+    if (playerNum === 1) delete game.p1DiscardThreadId;
+    else delete game.p2DiscardThreadId;
+  }
+  await interaction.deferUpdate();
+  const discard = playerNum === 1 ? (game.player1CcDiscard || []) : (game.player2CcDiscard || []);
+  const threadName = `Discard Pile (${discard.length} cards)`;
+  const thread = await interaction.message.startThread({
+    name: threadName.slice(0, 100),
+    autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+  });
+  if (playerNum === 1) game.p1DiscardThreadId = thread.id;
+  else game.p2DiscardThreadId = thread.id;
+  const chunks = buildDiscardPileDisplayPayload(discard);
+  const closeRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`cc_close_discard_${gameId}_${playerNum}`)
+      .setLabel('Close Discard Pile')
+      .setStyle(ButtonStyle.Danger)
+  );
+  if (chunks.length === 0) {
+    await thread.send({
+      content: 'Discard pile is empty.',
+      embeds: [new EmbedBuilder().setTitle('Command Cards in Discard Pile').setDescription('*Empty*').setColor(0x2f3136)],
+      components: [closeRow],
+    });
+  } else {
+    for (let i = 0; i < chunks.length; i++) {
+      const isLast = i === chunks.length - 1;
+      await thread.send({
+        embeds: chunks[i].embeds,
+        files: chunks[i].files,
+        components: isLast ? [closeRow] : [],
+      });
+    }
+  }
+  await updateDiscardPileMessage(game, playerNum, client);
+  saveGames();
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction */
+export async function handleCcCloseDiscard(interaction, ctx) {
+  const { getGame, updateDiscardPileMessage, saveGames, client } = ctx;
+  const match = interaction.customId.match(/^cc_close_discard_([^_]+)_(\d+)$/);
+  if (!match) return;
+  const [, gameId, playerNumStr] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const threadId = playerNum === 1 ? game.p1DiscardThreadId : game.p2DiscardThreadId;
+  if (!threadId) {
+    await interaction.reply({ content: 'No discard pile thread is open.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== playerId) {
+    await interaction.reply({ content: 'Only the owner can close the discard pile thread.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  try {
+    const thread = await client.channels.fetch(threadId);
+    await thread.delete();
+  } catch (err) {
+    console.error('Failed to delete discard pile thread:', err);
+  }
+  if (playerNum === 1) delete game.p1DiscardThreadId;
+  else delete game.p2DiscardThreadId;
+  await updateDiscardPileMessage(game, playerNum, client);
+  saveGames();
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction */
+export async function handleCcDiscard(interaction, ctx) {
+  const { getGame } = ctx;
+  const gameId = interaction.customId.replace('cc_discard_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const channelId = interaction.channel?.id;
+  const isP1Hand = channelId === game.p1HandId;
+  const isP2Hand = channelId === game.p2HandId;
+  if (!isP1Hand && !isP2Hand) {
+    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const playerNum = isP1Hand ? 1 : 2;
+  const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+  if (hand.length === 0) {
+    await interaction.reply({ content: 'No cards in hand to discard.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`cc_discard_select_${gameId}`)
+    .setPlaceholder('Choose a card to discard')
+    .addOptions(hand.slice(0, 25).map((c) => new StringSelectMenuOptionBuilder().setLabel(c).setValue(c)));
+  await interaction.reply({
+    content: '**Discard CC** — Select a card to discard:',
+    components: [new ActionRowBuilder().addComponents(select)],
+    ephemeral: false,
+  });
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction */
+export async function handleSquadSelect(interaction, ctx) {
+  const { getGame } = ctx;
+  const [, , gameId, playerNum] = interaction.customId.split('_');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'This game no longer exists.', ephemeral: true });
+    return;
+  }
+  if (!game.mapSelected) {
+    await interaction.reply({ content: 'Map selection must be completed before you can select your squad.', ephemeral: true });
+    return;
+  }
+  const isP1 = playerNum === '1';
+  const userId = isP1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== userId) {
+    await interaction.reply({ content: 'Only the owner of this hand can select a squad.', ephemeral: true });
+    return;
+  }
+  const modal = new ModalBuilder()
+    .setCustomId(`squad_modal_${gameId}_${playerNum}`)
+    .setTitle('Submit Squad');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('squad_name')
+        .setLabel('Squad name')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder("e.g. Vader's Fist")
+        .setRequired(false)
+    ),
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('squad_dc')
+        .setLabel('Deployment Cards (one per line, max 40 pts)')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Darth Vader\nStormtrooper\nStormtrooper\n...')
+        .setRequired(true)
+    ),
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('squad_cc')
+        .setLabel('Command Cards (one per line, exactly 15)')
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder('Force Lightning\nBurst Fire\n...')
+        .setRequired(true)
+    )
+  );
+  await interaction.showModal(modal);
+}

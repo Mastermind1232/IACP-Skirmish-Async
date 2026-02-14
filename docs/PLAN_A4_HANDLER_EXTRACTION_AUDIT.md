@@ -11,7 +11,7 @@
 | **A1** | Game state → `src/game-state.js` | ✅ Done | games, dcMessageMeta, dcExhaustedState, dcDepletedState, dcHealthState, pendingIllegalSquad; getGame, setGame, persist |
 | **A2** | Data loading → `src/data-loader.js` | ✅ Done | JSON load, reloadGameData; getDcStats, getDcEffects, getMapSpaces, getDice, getCcEffect, etc. |
 | **A3** | Interaction router | ✅ Done | `src/router.js`; prefix → handler key; create_game / join_game in BUTTON_PREFIXES |
-| **A4** | Handlers → `src/handlers/*` | 🔄 In progress | **Extracted:** lobby (2), requests (2), game-tools (5), special (1), interact (2), round (2), movement (3), combat (4), activation (5), setup (8), **DC-play-area (6)**. **Remaining in index:** deploy_modal_, CC-hand (modals, selects, buttons) |
+| **A4** | Handlers → `src/handlers/*` | ✅ Done | **Extracted:** lobby (2), requests (2), game-tools (5), special (1), interact (2), round (2), movement (3), combat (4), activation (5), setup (8), DC-play-area (6), **CC-hand (2 modals, 3 selects, 9 buttons)**. |
 | **A5** | Game logic → `src/game/*` | ⏳ Not started | Movement, combat, validation; no Discord |
 | **A6** | Discord helpers → `src/discord/*` | ⏳ Not started | Embeds, buildBoardMapPayload, logGameAction; button/component helpers |
 | **A7** | Test suite for `src/game/*` | ⏳ Not started | After A5 |
@@ -32,7 +32,7 @@
 | Activation | `handlers/activation.js` | status_phase_, pass_activation_turn_, end_turn_, confirm_activate_, cancel_activate_ | ✅ |
 | Setup | `handlers/setup.js` | map_selection_, draft_random_, determine_initiative_, deployment_zone_red_/blue_, deployment_fig_, deployment_orient_, deploy_pick_, deployment_done_ | ✅ |
 | DC-play-area | `handlers/dc-play-area.js` | dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_ | ✅ |
-| CC-hand + modals | — | squad_modal_, deploy_modal_, cc_attach_to_, cc_play_select_, cc_discard_select_, deck_illegal_*, cc_*, squad_select_ | ⏳ In index |
+| CC-hand + modals | `handlers/cc-hand.js` | squad_modal_, deploy_modal_, cc_attach_to_, cc_play_select_, cc_discard_select_, deck_illegal_play_/redo_, cc_shuffle_draw_, cc_play_, cc_draw_, cc_search_discard_, cc_close_discard_, cc_discard_, squad_select_ | ✅ |
 
 ---
 

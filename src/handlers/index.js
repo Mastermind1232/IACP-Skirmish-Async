@@ -35,6 +35,22 @@ import {
   handleDcCcSpecial,
   handleDcAction,
 } from './dc-play-area.js';
+import {
+  handleSquadModal,
+  handleDeployModal,
+  handleCcAttachTo,
+  handleCcPlaySelect,
+  handleCcDiscardSelect,
+  handleDeckIllegalPlay,
+  handleDeckIllegalRedo,
+  handleCcShuffleDraw,
+  handleCcPlay,
+  handleCcDraw,
+  handleCcSearchDiscard,
+  handleCcCloseDiscard,
+  handleCcDiscard,
+  handleSquadSelect,
+} from './cc-hand.js';
 
 const HANDLERS = new Map();
 
@@ -87,6 +103,15 @@ register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'));
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'));
 register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'));
 register('dc_special_', (i, ctx) => handleDcAction(i, ctx, 'dc_special_'));
+register('deck_illegal_play_', handleDeckIllegalPlay);
+register('deck_illegal_redo_', handleDeckIllegalRedo);
+register('cc_shuffle_draw_', handleCcShuffleDraw);
+register('cc_play_', handleCcPlay);
+register('cc_draw_', handleCcDraw);
+register('cc_search_discard_', handleCcSearchDiscard);
+register('cc_close_discard_', handleCcCloseDiscard);
+register('cc_discard_', handleCcDiscard);
+register('squad_select_', handleSquadSelect);
 
 /**
  * Return the handler for the given key (prefix), or null if none.
@@ -130,3 +155,19 @@ export {
   handleDcCcSpecial,
   handleDcAction,
 } from './dc-play-area.js';
+export {
+  handleSquadModal,
+  handleDeployModal,
+  handleCcAttachTo,
+  handleCcPlaySelect,
+  handleCcDiscardSelect,
+  handleDeckIllegalPlay,
+  handleDeckIllegalRedo,
+  handleCcShuffleDraw,
+  handleCcPlay,
+  handleCcDraw,
+  handleCcSearchDiscard,
+  handleCcCloseDiscard,
+  handleCcDiscard,
+  handleSquadSelect,
+} from './cc-hand.js';
