@@ -129,7 +129,13 @@ export async function handleMapSelectionChoice(interaction, ctx) {
       await interaction.reply({ content: 'No tournament rotation configured. Use **Random** or add missions to `data/tournament-rotation.json`.', ephemeral: true }).catch(() => {});
       return;
     }
-    const missionId = missionIds[Math.floor(Math.random() * missionIds.length)];
+    const playReadyMapIds = new Set((getPlayReadyMaps?.() ?? []).map((m) => m.id));
+    const playableFromRotation = missionIds.filter((id) => playReadyMapIds.has(String(id).split(':')[0]));
+    if (playableFromRotation.length === 0) {
+      await interaction.reply({ content: 'No playable missions in tournament rotation (maps need deployment zones and map-spaces). Use **Random**.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const missionId = playableFromRotation[Math.floor(Math.random() * playableFromRotation.length)];
     const [mapId, variant] = String(missionId).split(':');
     const mapDef = getMapRegistry?.().find((m) => m.id === mapId);
     const missionData = getMissionCardsData?.()[mapId]?.[variant || 'a'];
