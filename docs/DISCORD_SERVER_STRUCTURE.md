@@ -43,6 +43,7 @@ From the [AsyncTI4 GitHub](https://github.com/AsyncTI4/TI4_map_generator_bot):
 
 | Channel | Purpose | Visibility |
 |---------|---------|------------|
+| `IA00001 Game Log` | Bot posts game actions, setup messages, round updates | Both |
 | `IA00001 General chat` | Discussion, questions | Both |
 | `IA00001 Board` | Map + figures, regenerated after each action (like TI4 map tool) | Both |
 | `IA00001 Player 1 Hand` | Command cards | Private (P1 only) |
