@@ -37,7 +37,25 @@ import {
 import { rotateImage90 } from './src/dc-image-utils.js';
 import { renderMap } from './src/map-renderer.js';
 import { getHandlerKey } from './src/router.js';
-import { handleLobbyJoin, handleLobbyStart } from './src/handlers/index.js';
+import {
+  handleLobbyJoin,
+  handleLobbyStart,
+  handleRequestResolve,
+  handleRequestReject,
+  handleRefreshMap,
+  handleRefreshAll,
+  handleUndo,
+  handleKillGame,
+  handleDefaultDeck,
+  handleSpecialDone,
+  handleInteractCancel,
+  handleInteractChoice,
+  handleEndEndOfRound,
+  handleEndStartOfRound,
+  handleMoveMp,
+  handleMoveAdjustMp,
+  handleMovePick,
+} from './src/handlers/index.js';
 import { validateDeckLegal, resolveDcName, DC_POINTS_LEGAL, CC_CARDS_LEGAL, CC_COST_LEGAL } from './src/game/index.js';
 import {
   buildScorecardEmbed,
@@ -4315,51 +4333,11 @@ client.on('interactionCreate', async (interaction) => {
     const buttonKey = getHandlerKey(interaction.customId, 'button');
     if (!buttonKey) return;
     if (buttonKey === 'request_resolve_') {
-      const threadId = interaction.customId.replace('request_resolve_', '');
-      if (!interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)) {
-        await interaction.reply({ content: 'Only admins can resolve requests.', ephemeral: true }).catch(() => {});
-        return;
-      }
-      try {
-        const thread = await interaction.client.channels.fetch(threadId);
-        if (!thread?.isThread?.()) {
-          await interaction.reply({ content: 'Thread not found.', ephemeral: true }).catch(() => {});
-          return;
-        }
-        const name = thread.name;
-        const prefix = '[IMPLEMENTED] ';
-        const newName = name.startsWith(prefix) ? name : prefix + name.replace(/^\[REJECTED\] /, '');
-        await thread.setName(newName);
-        await interaction.deferUpdate();
-        await interaction.message.edit({ content: '✓ Marked as resolved.', components: [] }).catch(() => {});
-      } catch (err) {
-        await logGameErrorToBotLogs(interaction.client, interaction.guild, null, err, 'request_resolve');
-        await interaction.reply({ content: `Failed: ${err.message}`, ephemeral: true }).catch(() => {});
-      }
+      await handleRequestResolve(interaction, { logGameErrorToBotLogs });
       return;
     }
     if (buttonKey === 'request_reject_') {
-      const threadId = interaction.customId.replace('request_reject_', '');
-      if (!interaction.member?.permissions?.has(PermissionFlagsBits.Administrator)) {
-        await interaction.reply({ content: 'Only admins can reject requests.', ephemeral: true }).catch(() => {});
-        return;
-      }
-      try {
-        const thread = await interaction.client.channels.fetch(threadId);
-        if (!thread?.isThread?.()) {
-          await interaction.reply({ content: 'Thread not found.', ephemeral: true }).catch(() => {});
-          return;
-        }
-        const name = thread.name;
-        const prefix = '[REJECTED] ';
-        const newName = name.startsWith(prefix) ? name : prefix + name.replace(/^\[IMPLEMENTED\] /, '');
-        await thread.setName(newName);
-        await interaction.deferUpdate();
-        await interaction.message.edit({ content: '✓ Marked as rejected.', components: [] }).catch(() => {});
-      } catch (err) {
-        await logGameErrorToBotLogs(interaction.client, interaction.guild, null, err, 'request_reject');
-        await interaction.reply({ content: `Failed: ${err.message}`, ephemeral: true }).catch(() => {});
-      }
+      await handleRequestReject(interaction, { logGameErrorToBotLogs });
       return;
     }
   }
@@ -5410,296 +5388,63 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (buttonKey === 'special_done_') {
-    const match = interaction.customId.match(/^special_done_(.+)_(.+)$/);
-    if (match) {
-      await interaction.deferUpdate();
-      await interaction.message.edit({
-        content: (interaction.message.content || '').replace('Click **Done** when finished.', '✓ Resolved.'),
-        components: [],
-      }).catch(() => {});
-    }
+    await handleSpecialDone(interaction);
     return;
   }
 
   if (buttonKey === 'move_mp_') {
-    const m = interaction.customId.match(/^move_mp_(.+)_(\d+)_(\d+)$/);
-    if (!m) {
-      await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const [, msgId, figureIndexStr, mpStr] = m;
-    const figureIndex = parseInt(figureIndexStr, 10);
-    const mp = parseInt(mpStr, 10);
-    const meta = dcMessageMeta.get(msgId);
-    if (!meta) {
-      await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const game = getGame(meta.gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const moveKey = `${msgId}_${figureIndex}`;
-    const moveState = game.moveInProgress?.[moveKey];
-    if (!moveState) {
-      await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const { figureKey, playerNum, mpRemaining, displayName } = moveState;
-    const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
-    if (interaction.user.id !== ownerId) {
-      await interaction.reply({ content: 'Only the owner can move.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (mp < 1 || mp > mpRemaining) {
-      await interaction.reply({ content: `Choose 1–${mpRemaining} MP.`, ephemeral: true }).catch(() => {});
-      return;
-    }
-    await interaction.deferUpdate();
-    const boardState = moveState.boardState || getBoardStateForMovement(game, figureKey);
-    if (!boardState) {
-      delete game.moveInProgress[moveKey];
-      await interaction.followUp({ content: 'Map data missing. Movement cancelled.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const profile = moveState.movementProfile || getMovementProfile(meta.dcName, figureKey, game);
-    moveState.boardState = boardState;
-    moveState.movementProfile = profile;
-    const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
-    if (!startCoord) {
-      delete game.moveInProgress[moveKey];
-      await interaction.followUp({ content: 'Figure position missing. Movement cancelled.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const cache = ensureMovementCache(moveState, startCoord, mpRemaining, boardState, profile);
-    const spaces = getSpacesAtCost(cache, mp);
-    if (spaces.length === 0) {
-      await interaction.followUp({ content: `No spaces exactly **${mp}** MP away.`, ephemeral: true }).catch(() => {});
-      return;
-    }
-    moveState.pendingMp = mp;
-    await clearMoveGridMessages(game, moveKey, interaction.channel);
-    game.moveGridMessageIds = game.moveGridMessageIds || {};
-    delete game.moveGridMessageIds[moveKey];
-    if (moveState.distanceMessageId && interaction.message?.id === moveState.distanceMessageId) {
-      await interaction.message.edit({
-        content: `**Move** — Pick a destination (**${mp}** MP) — see map and buttons below.`,
-        components: [],
-      }).catch(() => {});
-    }
-    const { rows } = getMoveSpaceGridRows(msgId, figureIndex, spaces, boardState.mapSpaces);
-    const gridIds = [];
-    const BTM_PER_MSG = 5;
-    const SPACE_ROWS_ON_FIRST = 4;
-    const firstSpaceRows = rows.slice(0, SPACE_ROWS_ON_FIRST);
-    const adjustRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
-        .setLabel('Adjust movement points spent')
-        .setStyle(ButtonStyle.Secondary)
-    );
-    const firstRows = [...firstSpaceRows, adjustRow];
-    const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, spaces);
-    const gridPayload = {
-      content: `**Move** — Pick destination (**${mp}** MP):`,
-      components: firstRows,
-      fetchReply: true,
+    const moveContext = {
+      getGame,
+      dcMessageMeta,
+      getBoardStateForMovement,
+      getMovementProfile,
+      ensureMovementCache,
+      getSpacesAtCost,
+      clearMoveGridMessages,
+      getMoveSpaceGridRows,
+      getMovementMinimapAttachment,
+      client,
     };
-    if (moveMinimap) gridPayload.files = [moveMinimap];
-    const gridMsg = await interaction.followUp(gridPayload).catch(() => null);
-    if (gridMsg?.id) gridIds.push(gridMsg.id);
-    for (let i = SPACE_ROWS_ON_FIRST; i < rows.length; i += BTM_PER_MSG) {
-      const more = rows.slice(i, i + BTM_PER_MSG);
-      if (more.length > 0) {
-        const follow = await interaction.channel.send({ content: null, components: more }).catch(() => null);
-        if (follow?.id) gridIds.push(follow.id);
-      }
-    }
-    game.moveGridMessageIds = game.moveGridMessageIds || {};
-    game.moveGridMessageIds[moveKey] = gridIds;
+    await handleMoveMp(interaction, moveContext);
     return;
   }
-
   if (buttonKey === 'move_adjust_mp_') {
-    const m = interaction.customId.match(/^move_adjust_mp_(.+)_(\d+)$/);
-    if (!m) {
-      await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const [, msgId, figureIndexStr] = m;
-    const figureIndex = parseInt(figureIndexStr, 10);
-    const meta = dcMessageMeta.get(msgId);
-    if (!meta) {
-      await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const game = getGame(meta.gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const moveKey = `${msgId}_${figureIndex}`;
-    const moveState = game.moveInProgress?.[moveKey];
-    if (!moveState) {
-      await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const { playerNum, mpRemaining } = moveState;
-    const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
-    if (interaction.user.id !== ownerId) {
-      await interaction.reply({ content: 'Only the owner can adjust.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    await interaction.deferUpdate();
-    moveState.pendingMp = null;
-    await clearMoveGridMessages(game, moveKey, interaction.channel);
-    game.moveGridMessageIds = game.moveGridMessageIds || {};
-    delete game.moveGridMessageIds[moveKey];
-    const mpRows = getMoveMpButtonRows(msgId, figureIndex, mpRemaining);
-    await editDistanceMessage(moveState, interaction.channel, `**Move** — Pick distance (**${mpRemaining}** MP remaining):`, mpRows);
+    const moveAdjustContext = {
+      getGame,
+      dcMessageMeta,
+      clearMoveGridMessages,
+      getMoveMpButtonRows,
+      editDistanceMessage,
+    };
+    await handleMoveAdjustMp(interaction, moveAdjustContext);
     return;
   }
-
   if (buttonKey === 'move_pick_') {
-    const m = interaction.customId.match(/^move_pick_(.+)_(\d+)_(.+)$/);
-    if (!m) {
-      await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const [, msgId, figureIndexStr, space] = m;
-    const figureIndex = parseInt(figureIndexStr, 10);
-    const meta = dcMessageMeta.get(msgId);
-    if (!meta) {
-      await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const game = getGame(meta.gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const moveKey = `${msgId}_${figureIndex}`;
-    const moveState = game.moveInProgress?.[moveKey];
-    if (!moveState) {
-      await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const { figureKey, playerNum, mpRemaining, displayName } = moveState;
-    const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
-    if (interaction.user.id !== ownerId) {
-      await interaction.reply({ content: 'Only the owner can move.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    await interaction.deferUpdate();
-    await clearMoveGridMessages(game, moveKey, interaction.channel);
-    const boardState = getBoardStateForMovement(game, figureKey);
-    if (!boardState) {
-      delete game.moveInProgress[moveKey];
-      await interaction.followUp({ content: 'Map data missing. Movement cancelled.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const profile = getMovementProfile(meta.dcName, figureKey, game);
-    const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
-    if (!startCoord) {
-      delete game.moveInProgress[moveKey];
-      await interaction.followUp({ content: 'Figure position missing. Movement cancelled.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const cache = ensureMovementCache(moveState, startCoord, mpRemaining, boardState, profile);
-    const targetLower = normalizeCoord(space);
-    const targetInfo = getMovementTarget(cache, targetLower);
-    if (!targetInfo) {
-      await interaction.followUp({ content: 'Destination not valid for the selected MP.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (moveState.pendingMp && targetInfo.cost !== moveState.pendingMp) {
-      await interaction.followUp({ content: 'Select a destination from the most recent distance choice.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const cost = targetInfo.cost;
-    if (cost > mpRemaining) {
-      await interaction.followUp({ content: 'Not enough movement points.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    moveState.pendingMp = null;
-    const mapId = game.selectedMap?.id;
-    const terminalsBefore = mapId ? countTerminalsControlledByPlayer(game, playerNum, mapId) : 0;
-    if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
-    if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
-    const newTopLeft = targetInfo.topLeft;
-    game.figurePositions[playerNum][figureKey] = newTopLeft;
-    const newSize = targetInfo.size;
-    const storedSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
-    if (newSize !== storedSize) {
-      game.figureOrientations = game.figureOrientations || {};
-      game.figureOrientations[figureKey] = newSize;
-    }
-    const footprintSet = new Set(getNormalizedFootprint(newTopLeft, newSize));
-    const updatedProfile = getMovementProfile(meta.dcName, figureKey, game);
-    await resolveMassivePush(game, updatedProfile, figureKey, playerNum, footprintSet, client);
-    const newMp = mpRemaining - cost;
-    moveState.mpRemaining = newMp;
-    moveState.startCoord = targetInfo.topLeft;
-    moveState.boardState = null;
-    moveState.movementCache = null;
-    moveState.cacheMaxMp = 0;
-    if (game.movementBank?.[msgId]) {
-      game.movementBank[msgId].remaining = Math.max(0, newMp);
-      await updateMovementBankMessage(game, msgId, client);
-    }
-    const destDisplay = space.toUpperCase();
-    const shortName = (displayName || meta.displayName || '').replace(/\s*\[(?:DG|Group) \d+\]$/, '') || displayName;
-    const pLabel = `P${playerNum}`;
-    const path = getMovementPath(cache, startCoord, newTopLeft, newSize, profile);
-    const pathStr = path.length > 1
-      ? ` (path: ${path.map((c) => String(c).toUpperCase()).join(' → ')})`
-      : '';
-    pushUndo(game, {
-      type: 'move',
-      gameId: game.gameId,
-      playerNum,
-      figureKey,
-      msgId,
-      figureIndex,
-      previousTopLeft: startCoord,
-      previousSize: storedSize,
-      mpRemainingBefore: mpRemaining,
-      displayName: (displayName || meta.displayName || '').replace(/\s*\[(?:DG|Group) \d+\]$/, '') || meta.dcName || figureKey,
-    });
-    await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** to **${destDisplay}**${pathStr}`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
-    const terminalsAfter = mapId ? countTerminalsControlledByPlayer(game, playerNum, mapId) : 0;
-    if (terminalsAfter > terminalsBefore) {
-      await logGameAction(game, client, `**${pLabel}: ${shortName}** has taken control of a terminal!`, { phase: 'ROUND', icon: 'deploy' });
-    }
-    if (newMp <= 0) {
-      await editDistanceMessage(moveState, interaction.channel, `✓ Moved **${displayName}** to **${destDisplay}**.`, []);
-      delete game.moveInProgress[moveKey];
-    } else {
-      const nextBoard = getBoardStateForMovement(game, figureKey);
-      if (nextBoard) {
-        const nextProfile = getMovementProfile(meta.dcName, figureKey, game);
-        const nextCache = computeMovementCache(newTopLeft, newMp, nextBoard, nextProfile);
-        moveState.boardState = nextBoard;
-        moveState.movementProfile = nextProfile;
-        moveState.movementCache = nextCache;
-        moveState.cacheMaxMp = newMp;
-      }
-      const mpRows = getMoveMpButtonRows(msgId, figureIndex, newMp);
-      await editDistanceMessage(moveState, interaction.channel, `**Move** — Pick distance (**${newMp}** MP remaining):`, mpRows);
-      game.moveGridMessageIds = game.moveGridMessageIds || {};
-      game.moveGridMessageIds[moveKey] = [];
-    }
-    if (game.boardId && game.selectedMap) {
-      try {
-        const boardChannel = await client.channels.fetch(game.boardId);
-        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-        await boardChannel.send(payload);
-      } catch (err) {
-        console.error('Failed to update map after move:', err);
-      }
-    }
-    saveGames();
+    const movePickContext = {
+      getGame,
+      dcMessageMeta,
+      clearMoveGridMessages,
+      getBoardStateForMovement,
+      getMovementProfile,
+      ensureMovementCache,
+      computeMovementCache,
+      normalizeCoord,
+      getMovementTarget,
+      getFigureSize,
+      getNormalizedFootprint,
+      resolveMassivePush,
+      updateMovementBankMessage,
+      getMovementPath,
+      pushUndo,
+      logGameAction,
+      countTerminalsControlledByPlayer,
+      editDistanceMessage,
+      getMoveMpButtonRows,
+      buildBoardMapPayload,
+      saveGames,
+      client,
+    };
+    await handleMovePick(interaction, movePickContext);
     return;
   }
 
@@ -6203,259 +5948,48 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (buttonKey === 'end_end_of_round_') {
-    const gameId = interaction.customId.replace('end_end_of_round_', '');
-    const game = getGame(gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (await replyIfGameEnded(game, interaction)) return;
-    if (!game.endOfRoundWhoseTurn) {
-      await interaction.reply({ content: 'Not in End of Round window.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (interaction.user.id !== game.endOfRoundWhoseTurn) {
-      await interaction.reply({ content: "It's not your turn in the End of Round window.", ephemeral: true }).catch(() => {});
-      return;
-    }
-    const initiativeId = game.initiativePlayerId;
-    const otherId = initiativeId === game.player1Id ? game.player2Id : game.player1Id;
-    if (interaction.user.id === initiativeId) {
-      game.endOfRoundWhoseTurn = otherId;
-      const initNum = initiativeId === game.player1Id ? 1 : 2;
-      const otherNum = 3 - initNum;
-      const otherZone = getPlayerZoneLabel(game, otherId);
-      await logGameAction(game, client, `**End of Round** — 2. Initiative done ✓. 3. <@${otherId}> (${otherZone}Player ${otherNum}) — your turn for end-of-round effects. Click **End 'End of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
-      await updateHandChannelMessages(game, client);
-      saveGames();
-      return;
-    }
-    game.endOfRoundWhoseTurn = null;
-    await interaction.deferUpdate();
-    game.dcFinishedPinged = {};
-    game.pendingEndTurn = {};
-    for (const [msgId, meta] of dcMessageMeta) {
-      if (meta.gameId !== gameId) continue;
-      if (isDepletedRemovedFromGame(game, msgId)) continue;
-      dcExhaustedState.set(msgId, false);
-      if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
-      if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
-      try {
-        const chId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
-        const ch = await client.channels.fetch(chId);
-        const msg = await ch.messages.fetch(msgId);
-        const healthState = dcHealthState.get(msgId) || [];
-        const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState);
-        const components = getDcPlayAreaComponents(msgId, false, game, meta.dcName);
-        await msg.edit({ embeds: [embed], files, components }).catch(() => {});
-      } catch (err) {
-        console.error('Failed to ready DC embed:', err);
-      }
-    }
-    game.p1ActivationsRemaining = game.p1ActivationsTotal ?? 0;
-    game.p2ActivationsRemaining = game.p2ActivationsTotal ?? 0;
-    const mapId = game.selectedMap?.id;
-    const p1Terminals = mapId ? countTerminalsControlledByPlayer(game, 1, mapId) : 0;
-    const p2Terminals = mapId ? countTerminalsControlledByPlayer(game, 2, mapId) : 0;
-    const p1DrawCount = 1 + p1Terminals;
-    const p2DrawCount = 1 + p2Terminals;
-    const p1Deck = game.player1CcDeck || [];
-    const p2Deck = game.player2CcDeck || [];
-    const p1Drawn = [];
-    const p2Drawn = [];
-    for (let i = 0; i < p1DrawCount && p1Deck.length > 0; i++) {
-      const drawn = p1Deck.shift();
-      p1Drawn.push(drawn);
-    }
-    game.player1CcHand = [...(game.player1CcHand || []), ...p1Drawn];
-    game.player1CcDeck = p1Deck;
-    for (let i = 0; i < p2DrawCount && p2Deck.length > 0; i++) {
-      const drawn = p2Deck.shift();
-      p2Drawn.push(drawn);
-    }
-    game.player2CcHand = [...(game.player2CcHand || []), ...p2Drawn];
-    game.player2CcDeck = p2Deck;
-    if (game.selectedMission?.variant === 'b' && mapId && game.figureContraband) {
-      for (const pn of [1, 2]) {
-        let scored = 0;
-        for (const [figureKey, carrying] of Object.entries(game.figureContraband)) {
-          if (!carrying) continue;
-          const poses = game.figurePositions?.[pn] || {};
-          if (!(figureKey in poses)) continue;
-          if (!isFigureInDeploymentZone(game, pn, figureKey, mapId)) continue;
-          const vp = game[`player${pn}VP`] || { total: 0, kills: 0, objectives: 0 };
-          vp.total = (vp.total || 0) + 15;
-          vp.objectives = (vp.objectives || 0) + 15;
-          game[`player${pn}VP`] = vp;
-          delete game.figureContraband[figureKey];
-          scored++;
-        }
-        if (scored > 0) {
-          const pid = pn === 1 ? game.player1Id : game.player2Id;
-          await logGameAction(game, client, `<@${pid}> gained **${15 * scored} VP** for ${scored} figure(s) delivering contraband to deployment zone.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
-          await checkWinConditions(game, client);
-          if (game.ended) {
-            await interaction.message.edit({ components: [] }).catch(() => {});
-            saveGames();
-            return;
-          }
-        }
-      }
-    }
-    if (game.selectedMission?.variant === 'a' && mapId) {
-      const launchPanels = getMapTokensData()[mapId]?.missionA?.launchPanels || [];
-      const state = game.launchPanelState || {};
-      let p1Vp = 0, p2Vp = 0;
-      for (const coord of launchPanels) {
-        const c = String(coord).toLowerCase();
-        const side = state[c];
-        if (!side) continue;
-        const controller = getSpaceController(game, mapId, coord);
-        if (!controller) continue;
-        const vp = side === 'colored' ? 5 : 2;
-        if (controller === 1) p1Vp += vp;
-        else p2Vp += vp;
-      }
-      if (p1Vp > 0 || p2Vp > 0) {
-        if (p1Vp > 0) {
-          game.player1VP = game.player1VP || { total: 0, kills: 0, objectives: 0 };
-          game.player1VP.total += p1Vp;
-          game.player1VP.objectives += p1Vp;
-          await logGameAction(game, client, `<@${game.player1Id}> gained **${p1Vp} VP** for launch panels controlled.`, { allowedMentions: { users: [game.player1Id] }, phase: 'ROUND', icon: 'round' });
-          await checkWinConditions(game, client);
-          if (game.ended) {
-            await interaction.message.edit({ components: [] }).catch(() => {});
-            saveGames();
-            return;
-          }
-        }
-        if (p2Vp > 0) {
-          game.player2VP = game.player2VP || { total: 0, kills: 0, objectives: 0 };
-          game.player2VP.total += p2Vp;
-          game.player2VP.objectives += p2Vp;
-          await logGameAction(game, client, `<@${game.player2Id}> gained **${p2Vp} VP** for launch panels controlled.`, { allowedMentions: { users: [game.player2Id] }, phase: 'ROUND', icon: 'round' });
-          await checkWinConditions(game, client);
-          if (game.ended) {
-            await interaction.message.edit({ components: [] }).catch(() => {});
-            saveGames();
-            return;
-          }
-        }
-      }
-    }
-    game.p1LaunchPanelFlippedThisRound = false;
-    game.p2LaunchPanelFlippedThisRound = false;
-    const prevInitiative = game.initiativePlayerId;
-    game.initiativePlayerId = prevInitiative === game.player1Id ? game.player2Id : game.player1Id;
-    game.currentRound = (game.currentRound || 1) + 1;
-    await updateHandVisualMessage(game, 1, client);
-    await updateHandVisualMessage(game, 2, client);
-    for (const pn of [1, 2]) {
-      const hand = pn === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
-      const deck = pn === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
-      const handId = pn === 1 ? game.p1HandId : game.p2HandId;
-      if (!handId) continue;
-      try {
-        const handCh = await client.channels.fetch(handId);
-        const msgs = await handCh.messages.fetch({ limit: 20 });
-        const handMsg = msgs.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
-        if (handMsg) {
-          const payload = buildHandDisplayPayload(hand, deck, game.gameId, game, pn);
-          await handMsg.edit({ content: payload.content, embeds: payload.embeds, files: payload.files || [], components: payload.components }).catch(() => {});
-        }
-      } catch (err) {
-        console.error('Failed to update hand message:', err);
-      }
-    }
-    const generalChannel = await client.channels.fetch(game.generalId);
-    const drawDesc = p1Terminals > 0 || p2Terminals > 0
-      ? `Draw 1 CC each (P1 +${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''}, P2 +${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''}).`
-      : 'Draw 1 command card each.';
-    const initZone = getInitiativePlayerZoneLabel(game);
-    const initNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-    await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
-    await sendRoundActivationPhaseMessage(game, client);
-    await interaction.message.edit({ components: [] }).catch(() => {});
-    saveGames();
+    const roundContext = {
+      getGame,
+      replyIfGameEnded,
+      getPlayerZoneLabel,
+      logGameAction,
+      updateHandChannelMessages,
+      saveGames,
+      dcMessageMeta,
+      dcExhaustedState,
+      dcHealthState,
+      isDepletedRemovedFromGame,
+      buildDcEmbedAndFiles,
+      getDcPlayAreaComponents,
+      countTerminalsControlledByPlayer,
+      isFigureInDeploymentZone,
+      checkWinConditions,
+      getMapTokensData,
+      getSpaceController,
+      getInitiativePlayerZoneLabel,
+      updateHandVisualMessage,
+      buildHandDisplayPayload,
+      sendRoundActivationPhaseMessage,
+      client,
+    };
+    await handleEndEndOfRound(interaction, roundContext);
     return;
   }
-
   if (buttonKey === 'end_start_of_round_') {
-    const gameId = interaction.customId.replace('end_start_of_round_', '');
-    const game = getGame(gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (await replyIfGameEnded(game, interaction)) return;
-    if (!game.startOfRoundWhoseTurn) {
-      await interaction.reply({ content: 'Not in Start of Round window.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (interaction.user.id !== game.startOfRoundWhoseTurn) {
-      await interaction.reply({ content: "It's not your turn in the Start of Round window.", ephemeral: true }).catch(() => {});
-      return;
-    }
-    const initiativeId = game.initiativePlayerId;
-    const otherId = initiativeId === game.player1Id ? game.player2Id : game.player1Id;
-    if (interaction.user.id === initiativeId) {
-      game.startOfRoundWhoseTurn = otherId;
-      const initNum = initiativeId === game.player1Id ? 1 : 2;
-      const otherNum = 3 - initNum;
-      const otherZone = getPlayerZoneLabel(game, otherId);
-      await logGameAction(game, client, `**Start of Round** — 2. Initiative done ✓. 3. <@${otherId}> (${otherZone}Player ${otherNum}) — your turn for start-of-round effects. Click **End 'Start of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
-      await updateHandChannelMessages(game, client);
-      saveGames();
-      return;
-    }
-    game.startOfRoundWhoseTurn = null;
-    await interaction.deferUpdate();
-    const generalChannel = await client.channels.fetch(game.generalId);
-    const roundEmbed = new EmbedBuilder()
-      .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound} - Start of Round`)
-      .setColor(PHASE_COLOR);
-    const showBtn = shouldShowEndActivationPhaseButton(game, gameId);
-    const components = [];
-    if (showBtn) {
-      components.push(new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`status_phase_${gameId}`)
-          .setLabel(`End R${game.currentRound} Activation Phase`)
-          .setStyle(ButtonStyle.Secondary)
-      ));
-    }
-    const initRem = game.initiativePlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
-    const otherRem = game.initiativePlayerId === game.player1Id ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
-    if (otherRem > initRem && initRem > 0) {
-      components.push(new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`pass_activation_turn_${gameId}`)
-          .setLabel('Pass turn to opponent')
-          .setStyle(ButtonStyle.Secondary)
-      ));
-    }
-    const p1Terminals = game.selectedMap?.id ? countTerminalsControlledByPlayer(game, 1, game.selectedMap.id) : 0;
-    const p2Terminals = game.selectedMap?.id ? countTerminalsControlledByPlayer(game, 2, game.selectedMap.id) : 0;
-    const drawRule = (p1Terminals > 0 || p2Terminals > 0)
-      ? 'Draw 1 CC (+1 per controlled terminal). '
-      : 'Draw 1 CC. ';
-    const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-    const passHint = otherRem > initRem && initRem > 0 ? ' You may pass back (opponent has more activations).' : '';
-    const content = showBtn
-      ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Both players: click **End R${game.currentRound} Activation Phase** when you've used all activations and any end-of-activation effects.${passHint}`
-      : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Use all activations and actions. The **End R${game.currentRound} Activation Phase** button will appear when both players have done so.${passHint}`;
-    const sent = await generalChannel.send({
-      content,
-      embeds: [roundEmbed],
-      components,
-      allowedMentions: { users: [game.initiativePlayerId] },
-    });
-    game.roundActivationMessageId = sent.id;
-    game.roundActivationButtonShown = showBtn;
-    game.currentActivationTurnPlayerId = game.initiativePlayerId;
-    await updateHandChannelMessages(game, client);
-    await interaction.message.edit({ components: [] }).catch(() => {});
-    saveGames();
+    const startOfRoundContext = {
+      getGame,
+      replyIfGameEnded,
+      getPlayerZoneLabel,
+      logGameAction,
+      updateHandChannelMessages,
+      saveGames,
+      shouldShowEndActivationPhaseButton,
+      countTerminalsControlledByPlayer,
+      GAME_PHASES,
+      PHASE_COLOR,
+      client,
+    };
+    await handleEndStartOfRound(interaction, startOfRoundContext);
     return;
   }
 
@@ -6818,219 +6352,45 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (buttonKey === 'interact_cancel_') {
-    const match = interaction.customId.match(/^interact_cancel_([^_]+)_(.+)_(\d+)$/);
-    if (!match) return;
-    const [, gameId, msgId, figureIdxStr] = match;
-    const game = getGame(gameId);
-    if (!game) return;
-    const meta = dcMessageMeta.get(msgId);
-    if (!meta || meta.gameId !== gameId) return;
-    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
-    if (interaction.user.id !== ownerId) return;
-    await interaction.deferUpdate();
-    await interaction.message.edit({ components: [] }).catch(() => {});
+    await handleInteractCancel(interaction, { getGame, dcMessageMeta });
     return;
   }
-
   if (buttonKey === 'interact_choice_') {
-    const match = interaction.customId.match(/^interact_choice_([^_]+)_(.+)_(\d+)_(.+)$/);
-    if (!match) return;
-    const [, gameId, msgId, figureIdxStr, optionId] = match;
-    const figureIndex = parseInt(figureIdxStr, 10);
-    const game = getGame(gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const meta = dcMessageMeta.get(msgId);
-    if (!meta || meta.gameId !== gameId) {
-      await interaction.reply({ content: 'Invalid.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
-    if (interaction.user.id !== ownerId) {
-      await interaction.reply({ content: 'Only the owner can perform this action.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const actionsData = game.dcActionsData?.[msgId];
-    if ((actionsData?.remaining ?? 2) <= 0) {
-      await interaction.reply({ content: 'No actions remaining this activation.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-    const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
-    const playerNum = meta.playerNum;
-    const mapId = game.selectedMap?.id;
-    const options = mapId ? getLegalInteractOptions(game, playerNum, figureKey, mapId) : [];
-    const opt = options.find((o) => o.id === optionId);
-    if (!opt) {
-      await interaction.reply({ content: 'That interact is no longer valid.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    await interaction.deferUpdate();
-    await interaction.message.edit({ components: [] }).catch(() => {});
-
-    actionsData.remaining = Math.max(0, (actionsData?.remaining ?? 2) - 1);
-    await updateDcActionsMessage(game, msgId, interaction.client);
-
-    const stats = getDcStats(meta.dcName);
-    const displayName = meta.displayName || meta.dcName;
-    const shortName = (displayName || meta.dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/, '') || displayName;
-    const figLabel = (stats.figures ?? 1) > 1 ? `${shortName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : shortName;
-    const pLabel = `P${playerNum}`;
-
-    if (optionId === 'retrieve_contraband') {
-      game.figureContraband = game.figureContraband || {};
-      game.figureContraband[figureKey] = true;
-      await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** retrieved contraband!`, { phase: 'ROUND', icon: 'deploy' });
-    } else if (optionId.startsWith('launch_panel_')) {
-      const parts = optionId.replace('launch_panel_', '').split('_');
-      const coord = parts[0];
-      const side = parts[1];
-      game.launchPanelState = game.launchPanelState || {};
-      game.launchPanelState[coord.toLowerCase()] = side;
-      if (playerNum === 1) game.p1LaunchPanelFlippedThisRound = true;
-      else game.p2LaunchPanelFlippedThisRound = true;
-      const upper = String(coord).toUpperCase();
-      await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** flipped Launch Panel (${upper}) to **${side}**.`, { phase: 'ROUND', icon: 'deploy' });
-    } else if (optionId === 'use_terminal') {
-      await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** used terminal.`, { phase: 'ROUND', icon: 'deploy' });
-    } else if (optionId.startsWith('open_door_')) {
-      const edgeKey = optionId.replace('open_door_', '');
-      game.openedDoors = game.openedDoors || [];
-      if (!game.openedDoors.includes(edgeKey)) game.openedDoors.push(edgeKey);
-      const doorLabel = edgeKey.split('|').map((s) => s.toUpperCase()).join('–');
-      await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** opened door (${doorLabel}).`, { phase: 'ROUND', icon: 'deploy' });
-    } else {
-      await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** — ${opt.label}.`, { phase: 'ROUND', icon: 'deploy' });
-    }
-    saveGames();
+    const interactContext = {
+      getGame,
+      dcMessageMeta,
+      getLegalInteractOptions,
+      getDcStats,
+      updateDcActionsMessage,
+      logGameAction,
+      saveGames,
+    };
+    await handleInteractChoice(interaction, interactContext);
     return;
   }
 
   if (buttonKey === 'refresh_map_') {
-    const gameId = interaction.customId.replace('refresh_map_', '');
-    const game = getGame(gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-      await interaction.reply({ content: 'Only players in this game can refresh the map.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (!game.selectedMap) {
-      await interaction.reply({ content: 'No map selected yet.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    await interaction.deferUpdate();
-    try {
-      const boardChannel = await client.channels.fetch(game.boardId);
-      const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
-      await boardChannel.send(payload);
-    } catch (err) {
-      console.error('Failed to refresh map:', err);
-      await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'refresh_map');
-      await interaction.followUp({ content: 'Failed to refresh map.', ephemeral: true }).catch(() => {});
-    }
+    const gameToolsContext = { getGame, buildBoardMapPayload, logGameErrorToBotLogs, client };
+    await handleRefreshMap(interaction, gameToolsContext);
     return;
   }
-
   if (buttonKey === 'refresh_all_') {
-    const gameId = interaction.customId.replace('refresh_all_', '');
-    const game = getGame(gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-      await interaction.reply({ content: 'Only players in this game can refresh.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    await interaction.deferUpdate();
-    try {
-      await refreshAllGameComponents(game, client);
-      await interaction.followUp({ content: '✓ Full refresh complete. Reloaded all JSON data, map renderer cache, map, DCs, hands, discard piles.', ephemeral: true }).catch(() => {});
-    } catch (err) {
-      console.error('Failed to refresh all:', err);
-      await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'refresh_all');
-      await interaction.followUp({ content: 'Failed to refresh: ' + (err?.message || String(err)), ephemeral: true }).catch(() => {});
-    }
+    const gameToolsContext = { getGame, refreshAllGameComponents, logGameErrorToBotLogs, client };
+    await handleRefreshAll(interaction, gameToolsContext);
     return;
   }
 
   if (buttonKey === 'undo_') {
-    const gameId = interaction.customId.replace('undo_', '');
-    const game = getGame(gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-      await interaction.reply({ content: 'Only players in this game can use Undo.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const last = game.undoStack?.pop();
-    if (!last) {
-      await interaction.reply({ content: 'Nothing to undo yet.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (last.type === 'move') {
-      if (game.figurePositions?.[last.playerNum]) {
-        game.figurePositions[last.playerNum][last.figureKey] = last.previousTopLeft;
-      }
-      if (last.previousSize && game.figureOrientations) {
-        game.figureOrientations[last.figureKey] = last.previousSize;
-      }
-      const moveKey = `${last.msgId}_${last.figureIndex}`;
-      delete game.moveInProgress?.[moveKey];
-      if (game.movementBank?.[last.msgId] != null && last.mpRemainingBefore != null) {
-        game.movementBank[last.msgId].remaining = last.mpRemainingBefore;
-        try {
-          await updateMovementBankMessage(game, last.msgId, client);
-        } catch (e) { /* ignore */ }
-      }
-      if (game.boardId && game.selectedMap) {
-        try {
-          const boardChannel = await client.channels.fetch(game.boardId);
-          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-          await boardChannel.send(payload);
-        } catch (err) {
-          console.error('Failed to update map after undo move:', err);
-        }
-      }
-      await logGameAction(game, client, `<@${interaction.user.id}> undid movement of **${last.displayName}** (back to **${String(last.previousTopLeft).toUpperCase()}**)`, { allowedMentions: { users: [interaction.user.id] }, phase: 'ROUND', icon: 'move' });
-      saveGames();
-      await interaction.reply({ content: 'Movement undone.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (game.currentRound) {
-      await interaction.reply({ content: 'Undo is only available during deployment for that action.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (last.type === 'deploy_pick') {
-      if (game.figurePositions?.[last.playerNum]) {
-        delete game.figurePositions[last.playerNum][last.figureKey];
-      }
-      if (game.figureOrientations?.[last.figureKey]) {
-        delete game.figureOrientations[last.figureKey];
-      }
-      await updateDeployPromptMessages(game, last.playerNum, client);
-      if (game.boardId && game.selectedMap) {
-        try {
-          const boardChannel = await client.channels.fetch(game.boardId);
-          const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
-          await boardChannel.send(payload);
-        } catch (err) {
-          console.error('Failed to update map after undo:', err);
-        }
-      }
-      await logGameAction(game, client, `<@${interaction.user.id}> undid deployment of **${last.figLabel}** at **${last.space}**`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deploy' });
-      saveGames();
-      await interaction.reply({ content: 'Last deployment undone.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    await interaction.reply({ content: 'That action cannot be undone yet.', ephemeral: true }).catch(() => {});
+    const gameToolsContext = {
+      getGame,
+      saveGames,
+      updateMovementBankMessage,
+      buildBoardMapPayload,
+      logGameAction,
+      updateDeployPromptMessages,
+      client,
+    };
+    await handleUndo(interaction, gameToolsContext);
     return;
   }
 
@@ -7897,100 +7257,31 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (buttonKey === 'kill_game_') {
-    const gameId = interaction.customId.replace('kill_game_', '');
-    const game = getGame(gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found or already deleted.', ephemeral: true });
-      return;
-    }
-    if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-      await interaction.reply({ content: 'Only players in this game can kill it.', ephemeral: true });
-      return;
-    }
-    await interaction.deferReply({ ephemeral: true });
-    try {
-      let categoryId = game.gameCategoryId;
-      if (!categoryId) {
-        const generalCh = await client.channels.fetch(game.generalId).catch(() => null);
-        categoryId = generalCh?.parentId;
-      }
-      if (!categoryId) {
-        await interaction.editReply({ content: 'Could not find game category.' });
-        return;
-      }
-      const guild = interaction.guild;
-      const category = await guild.channels.fetch(categoryId);
-      const children = guild.channels.cache.filter((c) => c.parentId === categoryId);
-      for (const ch of children.values()) {
-        await ch.delete().catch(() => {});
-      }
-      await category.delete();
-      deleteGame(gameId);
-      saveGames();
-      for (const [msgId, meta] of dcMessageMeta) {
-        if (meta.gameId === gameId) {
-          dcMessageMeta.delete(msgId);
-          dcExhaustedState.delete(msgId);
-          dcDepletedState.delete(msgId);
-          dcHealthState.delete(msgId);
-        }
-      }
-      try {
-        await interaction.editReply({ content: `Game **IA Game #${gameId}** deleted. All channels removed.` });
-      } catch {
-        // Channel was deleted, reply fails - ignore
-      }
-    } catch (err) {
-      console.error('Kill game error:', err);
-      await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'kill_game');
-      try {
-        await interaction.editReply({ content: `Failed to delete: ${err.message}` }).catch(() => {});
-      } catch {
-        // ignore
-      }
-    }
+    const gameToolsContext = {
+      getGame,
+      deleteGame,
+      saveGames,
+      dcMessageMeta,
+      dcExhaustedState,
+      dcDepletedState,
+      dcHealthState,
+      logGameErrorToBotLogs,
+      client,
+    };
+    await handleKillGame(interaction, gameToolsContext);
     return;
   }
-
   if (buttonKey === 'default_deck_') {
-    const parts = interaction.customId.split('_');
-    if (parts.length < 5) {
-      await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const gameId = parts[2];
-    const playerNum = parts[3];
-    const faction = parts[4];
-    const game = getGame(gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (!game.mapSelected) {
-      await interaction.reply({ content: 'Map selection must be completed before you can load a squad.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const isP1 = playerNum === '1';
-    const userId = isP1 ? game.player1Id : game.player2Id;
-    if (interaction.user.id !== userId) {
-      await interaction.reply({ content: 'Only the owner of this hand can load a default deck.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const squadMap = { rebel: DEFAULT_DECK_REBELS, scum: DEFAULT_DECK_SCUM, imperial: DEFAULT_DECK_IMPERIAL };
-    const squad = squadMap[faction];
-    if (!squad) {
-      await interaction.reply({ content: 'Unknown faction.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    await interaction.deferReply({ ephemeral: true });
-    try {
-      await applySquadSubmission(game, isP1, { ...squad }, client);
-      await interaction.editReply({ content: `Loaded **${squad.name}** (${squad.dcCount} DCs, ${squad.ccCount} CCs).` }).catch(() => {});
-    } catch (err) {
-      console.error('Failed to apply default deck:', err);
-      await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'default_deck');
-      await interaction.editReply({ content: `Failed to load deck: ${err.message}` }).catch(() => {});
-    }
+    const gameToolsContext = {
+      getGame,
+      applySquadSubmission,
+      logGameErrorToBotLogs,
+      DEFAULT_DECK_REBELS,
+      DEFAULT_DECK_SCUM,
+      DEFAULT_DECK_IMPERIAL,
+      client,
+    };
+    await handleDefaultDeck(interaction, gameToolsContext);
     return;
   }
 
