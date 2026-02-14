@@ -24,7 +24,7 @@ export async function handleInteractCancel(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, dcMessageMeta, getLegalInteractOptions, getDcStats, updateDcActionsMessage, logGameAction, saveGames
+ * @param {object} ctx - getGame, dcMessageMeta, getLegalInteractOptions, getDcStats, updateDcActionsMessage, logGameAction, saveGames, pushUndo
  */
 export async function handleInteractChoice(interaction, ctx) {
   const {
@@ -35,6 +35,7 @@ export async function handleInteractChoice(interaction, ctx) {
     updateDcActionsMessage,
     logGameAction,
     saveGames,
+    pushUndo,
   } = ctx;
   const match = interaction.customId.match(/^interact_choice_([^_]+)_(.+)_(\d+)_(.+)$/);
   if (!match) return;
@@ -56,7 +57,8 @@ export async function handleInteractChoice(interaction, ctx) {
     return;
   }
   const actionsData = game.dcActionsData?.[msgId];
-  if ((actionsData?.remaining ?? 2) <= 0) {
+  const previousRemaining = actionsData?.remaining ?? 2;
+  if (previousRemaining <= 0) {
     await interaction.reply({ content: 'No actions remaining this activation.', ephemeral: true }).catch(() => {});
     return;
   }
@@ -70,10 +72,26 @@ export async function handleInteractChoice(interaction, ctx) {
     await interaction.reply({ content: 'That interact is no longer valid.', ephemeral: true }).catch(() => {});
     return;
   }
+  // F14: Snapshot state before mutate for undo
+  const previousContraband = optionId === 'retrieve_contraband' ? game.figureContraband?.[figureKey] : undefined;
+  let previousLaunchPanelState;
+  let previousOpenedDoors;
+  let previousP1LaunchFlipped;
+  let previousP2LaunchFlipped;
+  if (optionId.startsWith('launch_panel_')) {
+    const coord = optionId.replace('launch_panel_', '').split('_')[0]?.toLowerCase();
+    previousLaunchPanelState = coord != null && game.launchPanelState ? game.launchPanelState[coord] : undefined;
+    previousP1LaunchFlipped = game.p1LaunchPanelFlippedThisRound;
+    previousP2LaunchFlipped = game.p2LaunchPanelFlippedThisRound;
+  }
+  if (optionId.startsWith('open_door_')) {
+    previousOpenedDoors = game.openedDoors ? game.openedDoors.slice() : [];
+  }
+
   await interaction.deferUpdate();
   await interaction.message.edit({ components: [] }).catch(() => {});
 
-  actionsData.remaining = Math.max(0, (actionsData?.remaining ?? 2) - 1);
+  actionsData.remaining = Math.max(0, previousRemaining - 1);
   await updateDcActionsMessage(game, msgId, interaction.client);
 
   const stats = getDcStats(meta.dcName);
@@ -82,10 +100,11 @@ export async function handleInteractChoice(interaction, ctx) {
   const figLabel = (stats.figures ?? 1) > 1 ? `${shortName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : shortName;
   const pLabel = `P${playerNum}`;
 
+  let logMsg = null;
   if (optionId === 'retrieve_contraband') {
     game.figureContraband = game.figureContraband || {};
     game.figureContraband[figureKey] = true;
-    await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** retrieved contraband!`, { phase: 'ROUND', icon: 'deploy' });
+    logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** retrieved contraband!`, { phase: 'ROUND', icon: 'deploy' });
   } else if (optionId.startsWith('launch_panel_')) {
     const parts = optionId.replace('launch_panel_', '').split('_');
     const coord = parts[0];
@@ -95,17 +114,37 @@ export async function handleInteractChoice(interaction, ctx) {
     if (playerNum === 1) game.p1LaunchPanelFlippedThisRound = true;
     else game.p2LaunchPanelFlippedThisRound = true;
     const upper = String(coord).toUpperCase();
-    await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** flipped Launch Panel (${upper}) to **${side}**.`, { phase: 'ROUND', icon: 'deploy' });
+    logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** flipped Launch Panel (${upper}) to **${side}**.`, { phase: 'ROUND', icon: 'deploy' });
   } else if (optionId === 'use_terminal') {
-    await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** used terminal.`, { phase: 'ROUND', icon: 'deploy' });
+    logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** used terminal.`, { phase: 'ROUND', icon: 'deploy' });
   } else if (optionId.startsWith('open_door_')) {
     const edgeKey = optionId.replace('open_door_', '');
     game.openedDoors = game.openedDoors || [];
     if (!game.openedDoors.includes(edgeKey)) game.openedDoors.push(edgeKey);
     const doorLabel = edgeKey.split('|').map((s) => s.toUpperCase()).join('–');
-    await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** opened door (${doorLabel}).`, { phase: 'ROUND', icon: 'deploy' });
+    logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** opened door (${doorLabel}).`, { phase: 'ROUND', icon: 'deploy' });
   } else {
-    await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** — ${opt.label}.`, { phase: 'ROUND', icon: 'deploy' });
+    logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** — ${opt.label}.`, { phase: 'ROUND', icon: 'deploy' });
+  }
+
+  if (pushUndo) {
+    pushUndo(game, {
+      type: 'interact',
+      gameId: game.gameId,
+      msgId,
+      figureIndex,
+      optionId,
+      figureKey,
+      previousRemaining,
+      previousContraband,
+      previousLaunchPanelState,
+      previousOpenedDoors,
+      previousP1LaunchFlipped,
+      previousP2LaunchFlipped,
+      launchPanelCoord: optionId.startsWith('launch_panel_') ? optionId.replace('launch_panel_', '').split('_')[0]?.toLowerCase() : undefined,
+      openDoorEdgeKey: optionId.startsWith('open_door_') ? optionId.replace('open_door_', '') : undefined,
+      gameLogMessageId: logMsg?.id,
+    });
   }
   saveGames();
 }

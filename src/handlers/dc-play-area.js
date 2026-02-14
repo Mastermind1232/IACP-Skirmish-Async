@@ -473,13 +473,18 @@ export async function handleDcCcSpecial(interaction, ctx) {
     await interaction.reply({ content: "That card isn't in your hand or isn't playable for this figure.", ephemeral: true }).catch(() => {});
     return;
   }
+  // F14: Snapshot for undo before mutating
+  const previousHand = (game[handKey] || []).slice();
+  const previousDiscard = (game[discardKey] || []).slice();
+  const attachKey = meta.playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+  const previousAttachments = isCcAttachment(card) && game[attachKey]?.[msgId] ? game[attachKey][msgId].slice() : undefined;
+
   await interaction.deferUpdate();
   hand.splice(hand.indexOf(card), 1);
   game[handKey] = hand;
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push(card);
   if (isCcAttachment(card)) {
-    const attachKey = meta.playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
     game[attachKey] = game[attachKey] || {};
     if (!Array.isArray(game[attachKey][msgId])) game[attachKey][msgId] = [];
     game[attachKey][msgId].push(card);
@@ -505,7 +510,20 @@ export async function handleDcCcSpecial(interaction, ctx) {
   await updateHandVisualMessage(game, meta.playerNum, interaction.client);
   await updateDiscardPileMessage(game, meta.playerNum, interaction.client);
   await updateDcActionsMessage(game, msgId, interaction.client);
-  await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}** (Special Action).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}** (Special Action).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  if (ctx.pushUndo) {
+    ctx.pushUndo(game, {
+      type: 'cc_play_dc',
+      gameId: game.gameId,
+      msgId,
+      playerNum: meta.playerNum,
+      card,
+      previousHand,
+      previousDiscard,
+      previousAttachments,
+      gameLogMessageId: logMsg?.id,
+    });
+  }
   saveGames();
 }
 

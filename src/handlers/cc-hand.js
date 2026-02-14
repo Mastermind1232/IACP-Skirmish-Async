@@ -264,12 +264,15 @@ export async function handleCcPlaySelect(interaction, ctx) {
   await interaction.message.delete().catch(() => {});
   await updateHandVisualMessage(game, playerNum, interaction.client);
   await updateDiscardPileMessage(game, playerNum, interaction.client);
-  await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   if (ctx.resolveAbility) {
     const result = ctx.resolveAbility(card, { game, playerNum, cardName: card });
     if (!result.applied && result.manualMessage) {
       await ctx.logGameAction(game, interaction.client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
     }
+  }
+  if (ctx.pushUndo) {
+    ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
   }
   saveGames();
 }

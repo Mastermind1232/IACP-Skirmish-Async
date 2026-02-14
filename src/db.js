@@ -46,6 +46,9 @@ export async function initDb() {
         round_count INT
       )
     `);
+    // DB3: optional indexes for active games / recent updates
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_games_updated_at ON games (updated_at)').catch(() => {});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_games_ended ON games ((game_data->>'ended'))`).catch(() => {});
     console.log('[DB] PostgreSQL connected, games and completed_games tables ready.');
   } catch (err) {
     console.error('[DB] Failed to connect:', err.message);
@@ -94,18 +97,23 @@ export async function loadGamesFromDb() {
   }
 }
 
-/** Save all games to the database. Serializes the games Map. */
+/** Save all games to the database. Serializes the games Map. DB5: only delete rows for games no longer in the in-memory map; upsert the rest. */
 let savePromise = Promise.resolve();
 
 export async function saveGamesToDb(gamesMap) {
   if (!pool) return;
   const data = Object.fromEntries(gamesMap);
+  const currentIds = Object.keys(data);
   savePromise = savePromise.then(async () => {
     try {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        await client.query('DELETE FROM games');
+        if (currentIds.length === 0) {
+          await client.query('DELETE FROM games');
+        } else {
+          await client.query('DELETE FROM games WHERE NOT (game_id = ANY($1::text[]))', [currentIds]);
+        }
         for (const [gameId, game] of Object.entries(data)) {
           await client.query(
             `INSERT INTO games (game_id, game_data) VALUES ($1, $2)

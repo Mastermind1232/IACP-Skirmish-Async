@@ -3628,6 +3628,7 @@ client.on('interactionCreate', async (interaction) => {
     const ccHandButtonContext = {
       getGame,
       saveGames,
+      pushUndo,
       client,
       pendingIllegalSquad,
       PENDING_ILLEGAL_TTL_MS,
@@ -3670,6 +3671,7 @@ client.on('interactionCreate', async (interaction) => {
       getGame,
       replyIfGameEnded,
       saveGames,
+      pushUndo,
       client,
       dcMessageMeta,
       dcExhaustedState,
@@ -4042,6 +4044,7 @@ client.on('interactionCreate', async (interaction) => {
       updateDcActionsMessage,
       logGameAction,
       saveGames,
+      pushUndo,
     };
     await handleInteractChoice(interaction, interactContext);
     return;
@@ -4066,6 +4069,10 @@ client.on('interactionCreate', async (interaction) => {
       buildBoardMapPayload,
       logGameAction,
       updateDeployPromptMessages,
+      updateDcActionsMessage,
+      updateHandVisualMessage,
+      updateDiscardPileMessage,
+      updateAttachmentMessageForDc,
       client,
     };
     await handleUndo(interaction, gameToolsContext);

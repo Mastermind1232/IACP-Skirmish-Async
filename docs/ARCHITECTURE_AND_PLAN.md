@@ -223,7 +223,7 @@ Definition of “full game” for this plan:
 | F11 | Post-game archival | ✅ **Done.** Archive via **`/botmenu`** in Game Log → Bot Stuff → Archive → "Are you sure?" Yes/No. First confirm wins. On Yes: delete game category and channels, remove from `games` and DB. Ended games already have a row in `completed_games` (DB2). |
 | F12 | Mission B (and other IACP missions) | ✅ **Verified.** Mission B: Retrieve Contraband (interact at contraband space), end-of-round VP for figures in deployment zone with contraband (round.js); getLegalInteractOptions includes retrieve_contraband; figureContraband tracked. |
 | F13 | Multi-surge abilities | ✅ **Done.** Combat filters by `surgeCost`, deducts N when chosen, shows "Spend N surge" when cost > 1. Example: `damage 4` (surgeCost: 2) in ability-library.json; parseSurgeEffect supports it. |
-| F14 | Undo scope | **Partial.** No cap on undo stack; undo disabled when game ended (handler + board button). **Undoable:** move, deploy_pick, pass_turn (restore activation turn + round message content). Time-travel UX: delete original game log message on undo. **Remaining:** more action types (e.g. interact, CC play); optional full-state snapshots. |
+| F14 | Undo scope | **Done.** No cap on stack; undo disabled when game ended. **Undoable:** move, deploy_pick, pass_turn, interact, CC play (hand), CC play from DC (Special). Time-travel: delete game log message on undo. Optional full-state snapshots not implemented. |
 | F15 | Discord limits and UI | ✅ **Done.** Section 2.5 enforced: `truncateLabel(s, 80)` in `src/discord/components.js`; `getMoveMpButtonRows`, `getMoveSpaceGridRows`, `getDeploySpaceGridRows`, `getActivateDcButtons` cap at 5 rows; interact choice labels use `truncateLabel`; Cleave/surge/deploy/DC actions already slice labels and rows. Centralized discord/* helpers and color-by-area scheme in use. |
 | F16 | Permissions and flow for destructive actions | ✅ **Done.** **Kill Game** and **Archive** only via **`/botmenu`** in Game Log. Menu shows Archive and Kill Game; each has "Are you sure?" Yes/No (first confirm wins). Kill Game restricted to game participants or Discord roles **Admin** or **Bothelpers**. Visible Kill Game button removed from setup and Determine Initiative; `kill_game_` handler kept for legacy buttons. |
 | F17 | Map Selection menu | ✅ **Done.** Map Selection button shows a select menu: **Random** (random map + A/B), **Competitive** (random from `data/tournament-rotation.json` missionIds), **Select Draw** (multi-select ≥2 missions, then random draw), **Selection** (single-select one mission). Mission options from buildPlayableMissionOptions (play-ready maps × variants). D4 rotation file committed; getTournamentRotation() in data-loader. |
@@ -242,9 +242,9 @@ Definition of “full game” for this plan:
 | ID | Item | Notes |
 |----|------|-------|
 | DB2 | Stats-ready schema | Write a row to `completed_games` **in the same code path** that sets `game.ended` (synchronous insert when the game ends), so stats are captured immediately and even if the player never clicks Archive. Archive then only deletes Discord and removes the game from the `games` table. **Schema (minimum):** winner_id (nullable for draw when both eliminated), player1_id, player2_id (Discord IDs), player1_affiliation, player2_affiliation, player1_army_json, player2_army_json, map_id, mission_id (mapId:variant), deployment_zone_winner (who won zone pick), ended_at (timestamp), round_count (for average game length). Archiving a game that has **not** ended does not write to completed_games. **Stats we support (from this data):** win rate by affiliation, by DC, by deployment zone, by mission, by matchup (e.g. Imp vs Reb), first-pick impact (win rate when you won vs lost zone choice), mission popularity, games per period (from ended_at), average game length (from round_count), per-player win rate and games played (from player1_id / player2_id / winner_id). Stat UI/aggregation is later (out of scope); DB2 gives us the data. |
-| DB3 | Optional indexes | e.g. on `games(updated_at)` or `(game_data->>'ended')` for "active games" queries if needed. |
+| DB3 | Optional indexes | **Done.** `idx_games_updated_at`, `idx_games_ended` in initDb. |
 | DB4 | Game state versioning | ✅ **Done.** `game.version` set on create (lobby + testgame use `CURRENT_GAME_VERSION`); `migrateGame(g)` in `loadGames()` (DB + file); bump version in `src/game-state.js` when adding migrations. |
-| DB5 | Save optimization (optional) | Current db.js does `DELETE FROM games` then INSERT all. Prefer: only delete rows for games no longer in the in-memory map; optional dirty-only saves for large deployments. |
+| DB5 | Save optimization (optional) | **Done.** Only delete rows for games not in memory; upsert the rest. Dirty-only saves not implemented. |
 
 ### 4.5 Plan clarifications (no new work, just lock in)
 
@@ -309,9 +309,10 @@ Definition of “full game” for this plan:
 - **F8:** Extend map-spaces so every map in use has spaces, adjacency, terrain (data content).  
 - **F9:** Interior/exterior per-space flags in map data + UI tool (for MASSIVE etc.).  
 - **F10:** ~~Optional “Ready to resolve rolls” confirmation step in combat~~ — **Done:** button sent after rolls (and after surge step); handler `combat_resolve_ready_` calls `resolveCombatAfterRolls`.  
-- **F14:** More undo types (e.g. interact, CC play); optional full-state snapshots.  
+- **F14:** ~~More undo types (e.g. interact, CC play)~~ — **Done:** undo for interact (restore actions remaining + contraband/launch panel/doors), CC play from hand, CC play from DC (Special). Optional full-state snapshots still not implemented.  
 - **D1/D2:** Migrate DC/CC to reference ability ids.  
-- **DB3/DB5:** Optional indexes; save optimization.
+- **DB3:** Optional indexes — **Done:** `idx_games_updated_at`, `idx_games_ended` (expression on `game_data->>'ended'`) created in initDb.
+- **DB5:** Save optimization — **Done:** save only deletes rows for games no longer in the in-memory map; upserts the rest (no full table wipe).
 
 ---
 

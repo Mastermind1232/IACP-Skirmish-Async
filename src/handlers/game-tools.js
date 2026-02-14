@@ -66,7 +66,7 @@ export async function handleRefreshAll(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, saveGames, updateMovementBankMessage, buildBoardMapPayload, updateDeployPromptMessages, client
+ * @param {object} ctx - getGame, saveGames, updateMovementBankMessage, buildBoardMapPayload, updateDeployPromptMessages, updateDcActionsMessage, updateHandVisualMessage, updateDiscardPileMessage, updateAttachmentMessageForDc, client
  */
 export async function handleUndo(interaction, ctx) {
   const {
@@ -75,6 +75,10 @@ export async function handleUndo(interaction, ctx) {
     updateMovementBankMessage,
     buildBoardMapPayload,
     updateDeployPromptMessages,
+    updateDcActionsMessage,
+    updateHandVisualMessage,
+    updateDiscardPileMessage,
+    updateAttachmentMessageForDc,
     client,
   } = ctx;
   const gameId = interaction.customId.replace('undo_', '');
@@ -186,6 +190,62 @@ export async function handleUndo(interaction, ctx) {
     }
     saveGames();
     await interaction.reply({ content: 'Last deployment undone.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (last.type === 'interact') {
+    const actionsData = game.dcActionsData?.[last.msgId];
+    if (actionsData != null) actionsData.remaining = last.previousRemaining ?? (actionsData.remaining + 1);
+    if (last.optionId === 'retrieve_contraband' && last.figureKey != null) {
+      if (game.figureContraband) delete game.figureContraband[last.figureKey];
+    }
+    if (last.optionId?.startsWith('launch_panel_') && last.launchPanelCoord != null) {
+      if (last.previousLaunchPanelState !== undefined) {
+        game.launchPanelState = game.launchPanelState || {};
+        game.launchPanelState[last.launchPanelCoord] = last.previousLaunchPanelState;
+      } else if (game.launchPanelState) delete game.launchPanelState[last.launchPanelCoord];
+      if (last.previousP1LaunchFlipped !== undefined) game.p1LaunchPanelFlippedThisRound = last.previousP1LaunchFlipped;
+      if (last.previousP2LaunchFlipped !== undefined) game.p2LaunchPanelFlippedThisRound = last.previousP2LaunchFlipped;
+    }
+    if (last.optionId?.startsWith('open_door_') && last.openDoorEdgeKey != null && Array.isArray(last.previousOpenedDoors)) {
+      game.openedDoors = last.previousOpenedDoors.slice();
+    }
+    if (updateDcActionsMessage && last.msgId) await updateDcActionsMessage(game, last.msgId, client).catch(() => {});
+    saveGames();
+    await interaction.reply({ content: 'Interact undone.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (last.type === 'cc_play') {
+    const handKey = last.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const discardKey = last.playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const hand = (game[handKey] || []).slice();
+    hand.push(last.card);
+    game[handKey] = hand;
+    const discard = (game[discardKey] || []).slice();
+    const idx = discard.lastIndexOf(last.card);
+    if (idx >= 0) discard.splice(idx, 1);
+    game[discardKey] = discard;
+    if (updateHandVisualMessage) await updateHandVisualMessage(game, last.playerNum, client).catch(() => {});
+    if (updateDiscardPileMessage) await updateDiscardPileMessage(game, last.playerNum, client).catch(() => {});
+    saveGames();
+    await interaction.reply({ content: 'Command card play undone.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (last.type === 'cc_play_dc') {
+    const handKey = last.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const discardKey = last.playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    if (last.previousHand) game[handKey] = last.previousHand.slice();
+    if (last.previousDiscard) game[discardKey] = last.previousDiscard.slice();
+    if (last.previousAttachments != null && last.msgId != null) {
+      const attachKey = last.playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+      game[attachKey] = game[attachKey] || {};
+      game[attachKey][last.msgId] = last.previousAttachments.slice();
+      if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, last.playerNum, last.msgId, client).catch(() => {});
+    }
+    if (updateHandVisualMessage) await updateHandVisualMessage(game, last.playerNum, client).catch(() => {});
+    if (updateDiscardPileMessage) await updateDiscardPileMessage(game, last.playerNum, client).catch(() => {});
+    if (updateDcActionsMessage && last.msgId) await updateDcActionsMessage(game, last.msgId, client).catch(() => {});
+    saveGames();
+    await interaction.reply({ content: 'Command card (Special) play undone.', ephemeral: true }).catch(() => {});
     return;
   }
   await interaction.reply({ content: 'That action cannot be undone yet.', ephemeral: true }).catch(() => {});
