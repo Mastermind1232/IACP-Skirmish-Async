@@ -4956,15 +4956,44 @@
     },
     "The Mandalorian, Renegade Hunter": {
       "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
-    },
-    "The Mandalorian, Rising Phoenix": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "keywords": [],
+      "subname": "RENEGADE HUNTER",
+      "attachment": false
     },
     "Thrawn": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Long-Laid Plans: At the start of your activation, distribute among friendly figures different Power tokens equal to the current round number.\n\nStrategize: At the start of your activation, look at the top Command card of each player's deck. You may discard one of those cards.",
+      "keywords": [
+        "LEADER"
+      ],
+      "subname": "GRAND ADMIRAL",
+      "cost": 6,
+      "health": 9,
+      "speed": 4,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "+1 hit, bleed",
+        "pierce 1"
+      ],
+      "doubleSurgeAbilities": [
+        "+3 hits"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "The Armorer": {
       "abilityText": "Beskar Armor: After deployment, you gain 2 Block Tokens.\n\nThis is the Way: When another friendly figure resolves an attack, if the defender was defeated, that figure gains 1 Block Token.\n\nSurvival is Strength: While a friendly figure within 3 spaces is defending, if it spent a Block symbol during this attack, it may reroll 1 attack die.",
@@ -4998,7 +5027,7 @@
       "affiliation": "Scum"
     },
     "Trandoshan Hunter (Elite)": {
-      "abilityText": "Relentless: When you declare an attack on a target within 3 spaces, that figure suffers 1 Damage.\n\nACP Scattergun: While attacking, if you are adjacent to the target, apply +2 Damage to the attack results.\n\nHardy: At the end of each round, discard all HARMFUL conditions.",
+      "abilityText": "Relentless: When you declare an attack on a target within 3 spaces, that figure suffers 1 Strain.\n\nACP Scattergun: While attacking, if you are adjacent to the target, apply +2 Hits to the attack results.\n\nHardy: At the end of each round, discard all HARMFUL conditions.",
       "keywords": [
         "BRAWLER",
         "HUNTER"
@@ -5020,19 +5049,42 @@
       ],
       "surgeAbilities": [
         "focus",
-        "damage 1, bleed",
-        "pierce 2"
+        "pierce 2",
+        "+1 hit, bleed"
       ],
       "attachment": false,
       "elite": true,
       "affiliation": "Scum"
     },
     "Trandoshan Hunter (Regular)": {
-      "abilityText": "Traits: HUNTER, BRAWLER. Attack (Range): blue, green. Defense: black. Surge: bleed. Surge: pierce 2",
-      "keywords": []
+      "abilityText": "Relentless: When you declare an attack targeting a figure within 3 spaces, that figure suffers 1 Strain.\n\nScattergun: While attacking, if you are adjacent to the target, apply +1 Hit to the attack results.",
+      "keywords": [
+        "HUNTER",
+        "BRAWLER"
+      ],
+      "cost": 7,
+      "health": 6,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "bleed",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "Tress Hacnua": {
-      "abilityText": "Surge: Cleave X (X = Surge results). Surge: Recover X Damage (X = Surge results). Surge: Stun. Surge: Weaken. Krayt Dragon Fury: While attacking, X equals the number of Surge rolled. Fyrnock Style: While attacking or defending, choose 1 attack die. The player that rolled that die must reroll that die. Leg Hydraulics: After you resolve an attack, move up to 1 space.",
+      "abilityText": "Krayt Dragon Fury: While attacking, X equals the number of Surge rolled.\n\nFyrnock Style: While attacking or defending, choose 1 attack die. The player that rolled that die must reroll that die. \n\nLeg Hydraulics: After you resolve an attack, move up to 1 space.",
       "keywords": [
         "BRAWLER"
       ],
@@ -5053,24 +5105,78 @@
         "white"
       ],
       "surgeAbilities": [
-        "stun",
-        "weaken"
+        "damage 1, weaken",
+        "cleave X",
+        "recover X",
+        "+1 hit, stun"
       ],
       "attachment": false,
       "elite": true,
       "affiliation": "Scum"
     },
     "Tusken Raider (Elite)": {
-      "abilityText": "Traits: BRAWLER. Attack (Melee): red, green. Defense: black. damage 1. Surge: weaken. Surge: cleave 1. desert",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Special Action (Tusken Cycler): Perform a Ranged attack using 1 blue and 1 red die. Apply +2 Accuracy to the attack results.",
+      "keywords": [
+        "BRAWLER"
+      ],
+      "cost": 7,
+      "subCost": 3,
+      "health": 7,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "red",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "pierce 1",
+        "weaken"
+      ],
+      "doubleSurgeAbilities": [
+        "+1 hit"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Tusken Raider (Regular)": {
-      "abilityText": "Traits: BRAWLER. Attack (Melee): red, green. Defense: black. Surge: weaken. Surge: cleave 1. desert",
-      "keywords": []
+      "abilityText": "Special Action (Tusken Cycler): Perform a Ranged attack using 1 blue and 1 red die. You cannot use abilities during this attack.",
+      "keywords": [
+        "BRAWLER"
+      ],
+      "cost": 5,
+      "subCost": 2,
+      "health": 4,
+      "speed": 4,
+      "passives": [
+        "Habitat: Desert"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "red",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "weaken",
+        "cleave 1"
+      ],
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "Ugnaught Tinkerer (Elite)": {
-      "abilityText": "Spot Weld: Place the Junk Droid companion in an adjacent space.\n\nOverclock: The Junk Droid may interrupt to perform a move or attack.\n\nScrap Battalion: The Junk Droid readies at the start of your activation. It activates as though it was part of your group and may use your surge abilities.",
+      "abilityText": "Special Action (Spot Weld): Place the Junk Droid companion in an adjacent space.\n\nSpecial Action (Overclock): The Junk Droid may interrupt to perform a move or attack.\n\nScrap Battalion: The Junk Droid readies at the start of your activation. It activates as though it was part of your group and may use your surge abilities.",
       "keywords": [
         "SMUGGLER"
       ],
@@ -5097,7 +5203,7 @@
       "affiliation": "Scum"
     },
     "Ugnaught Tinkerer (Regular)": {
-      "abilityText": "Spot Weld: Place the Junk Droid companion in an adjacent space.\n\nScrap Battalion: The Junk Droid readies at the start of your activation. It activates as though it was part of your group and may use your surge abilities.",
+      "abilityText": "Special Action (Spot Weld): Place the Junk Droid companion in an adjacent space.\n\nScrap Battalion: The Junk Droid readies at the start of your activation. It activates as though it was part of your group and may use your surge abilities.",
       "keywords": [
         "SMUGGLER"
       ],
@@ -5123,33 +5229,198 @@
       "affiliation": "Scum"
     },
     "Verena Talos": {
-      "abilityText": "Traits: SPY, BRAWLER. Attack (Range): blue, green. Defense: black. Surge: cancel 1. Surge: damage 2. Surge: pierce 1",
-      "keywords": []
+      "abilityText": "Special Action (Close Quarters): Move up to 1 space, then perform an attack using an adjacent hostile figure's attack type and attack pool. Remove 1 die from the target's defense pool and apply +1 Accuracy to the attack results.\n\nSurge (Fighting Knife): After this attack resolves, choose an adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results.\n\nImprovised Cover: While defending, if you are adjacent to an object or non-friendly figure other than the attacker, apply +1 Block to the defense results.",
+      "keywords": [
+        "BRAWLER",
+        "SPY"
+      ],
+      "subname": "STUDENT OF BATTLE",
+      "cost": 7,
+      "health": 11,
+      "speed": 4,
+      "passives": [
+        "+1 Evade"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "pierce 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Vinto Hreeda": {
-      "abilityText": "Traits: HUNTER, SMUGGLER. Attack (Range): blue, green. Defense: white. Surge: weaken; Surge: damage 1. Surge: pierce 1; Surge: accuracy 2; Surge: hide",
-      "keywords": []
+      "abilityText": "Special Action (Rapid Fire): Perform 2 attacks.\n\nBoltslinger: After you resolve an attack during your activation, you may choose a hostile figure other than the defender in your line of sight and within 3 spaces of you. That figure suffers 1 Damage.",
+      "keywords": [
+        "HUNTER",
+        "SMUGGLER"
+      ],
+      "cost": 5,
+      "health": 8,
+      "speed": 5,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "+1 hit, weaken",
+        "pierce 2, bleed",
+        "accuracy 2, hide"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Wampa (Elite)": {
-      "abilityText": "Traits: CREATURE, BRAWLER. Attack (Melee): red, red. Defense: black. damage 2. Surge: bleed; Surge: stun. Surge: cleave 3. snow",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Efficient Travel: You ignore additional movement point costs for difficult terrain and hostile figures.\n\nHunger: At the start of your activation, if there are no hostile figures within 2 spaces, gain 3 movement points and gain 1 Block Token or 1 Evade Token.\n\nNon-Sentient: You cannot interact.",
+      "keywords": [
+        "CREATURE",
+        "BRAWLER",
+        "REACH"
+      ],
+      "cost": 6,
+      "health": 12,
+      "speed": 3,
+      "passives": [
+        "+2 Hit",
+        "Reach"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "red"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "+2 hits",
+        "cleave 3",
+        "weaken, stun"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Wampa (Regular)": {
-      "abilityText": "Traits: CREATURE, BRAWLER. Attack (Melee): red, red. Defense: black. damage 1. Surge: stun. Surge: cleave 2. snow",
-      "keywords": []
+      "abilityText": "Efficient Travel: You ignore additional movement point costs for difficult terrain and hostile figures.\n\nHunger: At the start of your activation, if there are no hostile figures within 3 spaces, gain 2 movement points.\n\nNon-Sentient: You cannot interact.\n\nHabitat: Snow.",
+      "keywords": [
+        "CREATURE",
+        "BRAWLER"
+      ],
+      "cost": 5,
+      "health": 9,
+      "speed": 3,
+      "passives": [
+        "+1 Hit",
+        "Habitat: Snow"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "red"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "stun",
+        "cleave 2"
+      ],
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "Weequay Pirate (Elite)": {
-      "abilityText": "Traits: SMUGGLER, HUNTER. Attack (Range): green, green. Defense: black. accuracy 2. Surge: damage 2. Surge: pierce 1. Surge: accuracy 2",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Special Action (Prowl): You become Hidden.\n\nRaider: While attacking, you may choose 1 die. The player that rolled that die must reroll that die.",
+      "keywords": [
+        "HUNTER",
+        "SMUGGLER"
+      ],
+      "cost": 7,
+      "subCost": 4,
+      "health": 6,
+      "speed": 4,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "green",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "+2 hits",
+        "pierce 1",
+        "accuracy 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "Weequay Pirate (Regular)": {
-      "abilityText": "Traits: HUNTER, SMUGGLER. Attack (Melee): green, green. Defense: black. accuracy 1. Surge: damage 1. Surge: accuracy 1",
-      "keywords": []
+      "abilityText": "Raider: While attacking, you may choose 1 die. The player that rolled that die must reroll that die.",
+      "keywords": [
+        "HUNTER",
+        "SMUGGLER"
+      ],
+      "cost": 5,
+      "subCost": 3,
+      "health": 4,
+      "speed": 4,
+      "passives": [
+        "+1 Accuracy"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "green",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "+1 hit",
+        "accuracy 1"
+      ],
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "Wing Guard (Elite)": {
-      "abilityText": "Keep the Peace: When a hostile figure declares an attack targeting a space adjacent to you, the attacker suffers 1 Damage. Limit 1 'Keep the Peace' ability per group activation.\n\nBespin Security: You may include 'Lando Calrissian' in your army. While an adjacent friendly LEADER or TROOPER is performing an attack, it may reroll 1 attack die. Limit 1 'Bespin Security' ability per attack.",
+      "abilityText": "Keep the Peace: When a hostile figure declares an attack targeting a space adjacent to you, the attacker suffers 1 Strain. Limit 1 'Keep the Peace' ability per group activation.\n\nBespin Security: You may include 'Lando Calrissian' in your army. While an adjacent friendly LEADER or SCUM TROOPER is performing an attack, it may reroll 1 attack die. Limit 1 'Bespin Security' ability per attack.",
       "keywords": [
         "GUARDIAN",
         "TROOPER"
@@ -5158,10 +5429,9 @@
       "subCost": 3,
       "health": 5,
       "speed": 4,
-      "figures": 1,
+      "figures": 3,
       "attack": {
         "dice": [
-          "blue",
           "blue",
           "green"
         ],
@@ -5171,21 +5441,70 @@
         "black"
       ],
       "surgeAbilities": [
-        "damage 2, stun",
-        "accuracy 3"
+        "accuracy 3",
+        "+2 hits"
       ],
       "attachment": false,
       "elite": true,
       "affiliation": "Scum"
     },
     "Wing Guard (Regular)": {
-      "abilityText": "Traits: GUARDIAN, TROOPER. Attack (Range): blue, green. Defense: black. Surge: damage 1. Surge: recover 1",
-      "keywords": []
+      "abilityText": "Keep the Peace: When a hostile figure declares an attack targeting a space adjacent to you, if that space does not contain a friendly GUARDIAN, you may suffer 1 Strain. If you do, the attacker suffers 1 Strain. Limit 1 \"Keep the Peace\" ability used per attack.",
+      "keywords": [
+        "GUARDIAN",
+        "TROOPER"
+      ],
+      "cost": 6,
+      "subCost": 2,
+      "health": 3,
+      "speed": 4,
+      "figures": 3,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "+1 hit",
+        "recover 1"
+      ],
+      "attachment": false,
+      "affiliation": "Scum"
     },
     "Wookiee Warrior (Elite)": {
-      "abilityText": "Traits: BRAWLER, WOOKIEE. Attack (Melee): red, green. Defense: black. Surge: damage 2. Surge: bleed. Surge: cleave 2",
-      "keywords": [],
-      "elite": true
+      "abilityText": "Fury: While attacking, if you have suffered 5 or Damage, apply +1 Surge to the attack results.",
+      "keywords": [
+        "BRAWLER",
+        "WOOKIEE"
+      ],
+      "cost": 9,
+      "subCost": 5,
+      "health": 13,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "red",
+          "green"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "+2 hits",
+        "bleed",
+        "cleave 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Wookiee Warrior (Regular)": {
       "abilityText": "Traits: BRAWLER, WOOKIEE. Attack (Melee): red, green. Defense: black. Surge: damage 1. Surge: bleed; Surge: cleave 2",
@@ -5241,8 +5560,36 @@
       "affiliation": "Rebel"
     },
     "Zuckuss": {
-      "abilityText": "TBD (IACP – verify from card).",
-      "keywords": []
+      "abilityText": "Mystic Hunter: When you declare an attack, you become Focused.\n\nSurge (Stun Net): After this attack resolves, if it did not miss, the target becomes Stunned.\n\nShared Calculations: While attacking, if a friendly DROID within 3 spaces has line of sight to the target space, you may force the defender to reroll 1 defense die.",
+      "keywords": [
+        "HUNTER"
+      ],
+      "subname": "GAND FINDSMAN",
+      "cost": 6,
+      "health": 10,
+      "speed": 4,
+      "passives": [
+        "+2 Accuracy"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "accuracy 3",
+        "+2 hits",
+        "pierce 2"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     },
     "[Nemik's Manifesto]": {
       "abilityText": "Your command deck may include up to 3 additional Command cards. Exhaust this card during a friendly figure's activation to have that figure suffer 2 Strain and gain 1 movement point.",
@@ -5313,6 +5660,37 @@
       },
       "attachment": false,
       "companion": true
+    },
+    "The Mandalorian": {
+      "abilityText": "Beskar Armor: After deployment, you gain 2 Block Tokens\n\nSpecial Action (Disruptor Rifle): Perform an attack. After this attack resolves, if it did not miss and the target has suffered Damage equal to its Health minus 1, the target suffers 1 Damage.\n\nSpecial Action (Din's Wrist Flamethrower): Move up to 2 spaces, then choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain.",
+      "keywords": [
+        "HUNTER",
+        "GUARDIAN"
+      ],
+      "subname": "RENEGADE HUNTER",
+      "cost": 8,
+      "health": 12,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "red",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "block token",
+        "accuracy 2, pierce 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Scum"
     }
   }
 }
