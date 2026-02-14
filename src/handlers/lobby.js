@@ -2,6 +2,7 @@
  * Lobby handlers: lobby_join_, lobby_start_.
  * Dependencies passed via context from index (no import from index).
  */
+import { CURRENT_GAME_VERSION } from '../game-state.js';
 
 /**
  * Handle Join Game button in a lobby post.
@@ -120,7 +121,7 @@ export async function handleLobbyStart(interaction, ctx) {
     gameId = gid;
     const game = {
       gameId,
-      version: 1,
+      version: CURRENT_GAME_VERSION,
       gameCategoryId: generalChannel.parentId,
       player1Id: lobby.creatorId,
       player2Id: lobby.joinedId,

@@ -291,6 +291,7 @@ export async function handleMovePick(interaction, ctx) {
   const pathStr = path.length > 1
     ? ` (path: ${path.map((c) => String(c).toUpperCase()).join(' → ')})`
     : '';
+  const moveLogMsg = await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** to **${destDisplay}**${pathStr}`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
   pushUndo(game, {
     type: 'move',
     gameId: game.gameId,
@@ -302,8 +303,8 @@ export async function handleMovePick(interaction, ctx) {
     previousSize: storedSize,
     mpRemainingBefore: mpRemaining,
     displayName: (displayName || meta.displayName || '').replace(/\s*\[(?:DG|Group) \d+\]$/, '') || meta.dcName || figureKey,
+    gameLogMessageId: moveLogMsg?.id,
   });
-  await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** to **${destDisplay}**${pathStr}`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
   const terminalsAfter = mapId ? countTerminalsControlledByPlayer(game, playerNum, mapId) : 0;
   if (terminalsAfter > terminalsBefore) {
     await logGameAction(game, client, `**${pLabel}: ${shortName}** has taken control of a terminal!`, { phase: 'ROUND', icon: 'deploy' });

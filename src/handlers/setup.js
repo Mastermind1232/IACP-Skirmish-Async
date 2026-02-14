@@ -823,13 +823,14 @@ export async function handleDeployPick(interaction, ctx) {
     game[confirmIdsKey] = game[confirmIdsKey] || [];
     game[confirmIdsKey].push(clickedMsgId);
   }
-  await logGameAction(game, client, `<@${interaction.user.id}> deployed **${figLabel.replace(/^Deploy /, '')}** at **${spaceUpper}**`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deploy' });
+  const deployLogMsg = await logGameAction(game, client, `<@${interaction.user.id}> deployed **${figLabel.replace(/^Deploy /, '')}** at **${spaceUpper}**`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deploy' });
   pushUndo(game, {
     type: 'deploy_pick',
     playerNum,
     figureKey,
     space: spaceUpper,
     figLabel: figLabel.replace(/^Deploy /, ''),
+    gameLogMessageId: deployLogMsg?.id,
   });
   await updateDeployPromptMessages(game, playerNum, client);
   if (game.boardId && game.selectedMap) {

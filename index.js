@@ -38,6 +38,7 @@ import {
   loadGames,
   getGamesMap,
   deleteGame,
+  CURRENT_GAME_VERSION,
   dcMessageMeta,
   dcExhaustedState,
   dcDepletedState,
@@ -1778,7 +1779,7 @@ async function refreshAllGameComponents(game, client) {
 
 /** Returns { content, files?, embeds?, components } for posting the game map. Includes Scorecard embed. */
 async function buildBoardMapPayload(gameId, map, game) {
-  const components = [getBoardButtons(gameId)];
+  const components = [getBoardButtons(gameId, { game })];
   const embeds = game ? [buildScorecardEmbed(game)] : [];
   const figures = game ? getFiguresForRender(game) : [];
   const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors);
@@ -2060,10 +2061,10 @@ async function runDraftRandom(game, client) {
   saveGames();
 }
 
+/** F14: Push one undo step. No cap on stack size so undo works after bot restart. */
 function pushUndo(game, entry) {
   game.undoStack = game.undoStack || [];
   game.undoStack.push({ ...entry, ts: Date.now() });
-  if (game.undoStack.length > 50) game.undoStack.shift();
 }
 
 function getSquadSelectEmbed(playerNum, squad) {
@@ -3236,7 +3237,7 @@ client.on('messageCreate', async (message) => {
         await createGameChannels(guild, userId, userId, { createPlayAreas: false, createHandChannels: false });
       const game = {
         gameId,
-        version: 1,
+        version: CURRENT_GAME_VERSION,
         gameCategoryId: generalChannel.parentId,
         player1Id: userId,
         player2Id: userId,
@@ -3899,6 +3900,7 @@ client.on('interactionCreate', async (interaction) => {
       getInitiativePlayerZoneLabel,
       getPlayerZoneLabel,
       logGameAction,
+      pushUndo,
       updateHandChannelMessages,
       saveGames,
       client,

@@ -121,20 +121,24 @@ export function getDcPlayAreaComponents(msgId, exhausted, game, dcName, helpers 
 /** Figure index suffix letters for multi-figure DCs (e.g. 1a, 1b). */
 export const FIGURE_LETTERS = 'abcdefghij';
 
-export function getUndoButton(gameId) {
+export function getUndoButton(gameId, disabled = false) {
   return new ButtonBuilder()
     .setCustomId(`undo_${gameId}`)
     .setLabel('UNDO')
-    .setStyle(ButtonStyle.Secondary);
+    .setStyle(ButtonStyle.Secondary)
+    .setDisabled(disabled);
 }
 
-export function getBoardButtons(gameId) {
+/** @param {string} gameId - @param {{ game?: { ended?: boolean } }} [opts] - when game.ended, Undo is disabled (F14). */
+export function getBoardButtons(gameId, opts = {}) {
+  const game = opts.game;
+  const undoDisabled = !!game?.ended;
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`refresh_map_${gameId}`)
       .setLabel('Refresh Map')
       .setStyle(ButtonStyle.Primary),
-    getUndoButton(gameId),
+    getUndoButton(gameId, undoDisabled),
     new ButtonBuilder()
       .setCustomId(`refresh_all_${gameId}`)
       .setLabel('Refresh All')

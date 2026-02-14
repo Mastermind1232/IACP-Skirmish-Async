@@ -2,6 +2,7 @@
  * Game tools handlers: refresh_map_, refresh_all_, undo_, kill_game_, default_deck_.
  * Participants-only; require getGame and various helpers via context.
  */
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { deleteGameChannelsAndGame } from './botmenu.js';
 
 /**
@@ -65,7 +66,7 @@ export async function handleRefreshAll(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, saveGames, updateMovementBankMessage, buildBoardMapPayload, logGameAction, updateDeployPromptMessages, client
+ * @param {object} ctx - getGame, saveGames, updateMovementBankMessage, buildBoardMapPayload, updateDeployPromptMessages, client
  */
 export async function handleUndo(interaction, ctx) {
   const {
@@ -73,7 +74,6 @@ export async function handleUndo(interaction, ctx) {
     saveGames,
     updateMovementBankMessage,
     buildBoardMapPayload,
-    logGameAction,
     updateDeployPromptMessages,
     client,
   } = ctx;
@@ -83,6 +83,10 @@ export async function handleUndo(interaction, ctx) {
     await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
     return;
   }
+  if (game.ended) {
+    await interaction.reply({ content: 'Undo is disabled once the game has ended.', ephemeral: true }).catch(() => {});
+    return;
+  }
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
     await interaction.reply({ content: 'Only players in this game can use Undo.', ephemeral: true }).catch(() => {});
     return;
@@ -90,6 +94,45 @@ export async function handleUndo(interaction, ctx) {
   const last = game.undoStack?.pop();
   if (!last) {
     await interaction.reply({ content: 'Nothing to undo yet.', ephemeral: true }).catch(() => {});
+    return;
+  }
+
+  /** F14 time-travel: remove the original action message from Game Log so it looks exactly as before. */
+  if (last.gameLogMessageId && game.generalId) {
+    try {
+      const ch = await client.channels.fetch(game.generalId);
+      const msg = await ch.messages.fetch(last.gameLogMessageId).catch(() => null);
+      if (msg) await msg.delete().catch(() => {});
+    } catch {
+      // ignore
+    }
+  }
+
+  if (last.type === 'pass_turn') {
+    game.currentActivationTurnPlayerId = last.previousTurnPlayerId;
+    if (last.roundMessageId && last.roundContentBefore != null && game.generalId) {
+      try {
+        const ch = await client.channels.fetch(game.generalId);
+        const msg = await ch.messages.fetch(last.roundMessageId).catch(() => null);
+        if (msg) {
+          const passRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`pass_activation_turn_${last.gameId || gameId}`)
+              .setLabel('Pass turn to opponent')
+              .setStyle(ButtonStyle.Secondary)
+          );
+          await msg.edit({
+            content: last.roundContentBefore,
+            components: [passRow],
+            allowedMentions: { users: [last.previousTurnPlayerId] },
+          }).catch(() => {});
+        }
+      } catch {
+        // ignore
+      }
+    }
+    saveGames();
+    await interaction.reply({ content: 'Pass turn undone.', ephemeral: true }).catch(() => {});
     return;
   }
   if (last.type === 'move') {
@@ -116,7 +159,6 @@ export async function handleUndo(interaction, ctx) {
         console.error('Failed to update map after undo move:', err);
       }
     }
-    await logGameAction(game, client, `<@${interaction.user.id}> undid movement of **${last.displayName}** (back to **${String(last.previousTopLeft).toUpperCase()}**)`, { allowedMentions: { users: [interaction.user.id] }, phase: 'ROUND', icon: 'move' });
     saveGames();
     await interaction.reply({ content: 'Movement undone.', ephemeral: true }).catch(() => {});
     return;
@@ -142,7 +184,6 @@ export async function handleUndo(interaction, ctx) {
         console.error('Failed to update map after undo:', err);
       }
     }
-    await logGameAction(game, client, `<@${interaction.user.id}> undid deployment of **${last.figLabel}** at **${last.space}**`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deploy' });
     saveGames();
     await interaction.reply({ content: 'Last deployment undone.', ephemeral: true }).catch(() => {});
     return;

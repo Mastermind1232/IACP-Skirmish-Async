@@ -59,7 +59,7 @@ export async function logPhaseHeader(game, client, phase, roundNum = null) {
   }
 }
 
-/** Log a game action with icon and clean formatting */
+/** Log a game action with icon and clean formatting. Returns the sent message (or null) so callers can store gameLogMessageId for undo (F14). */
 export async function logGameAction(game, client, content, options = {}) {
   try {
     const ch = await client.channels.fetch(game.generalId);
@@ -76,8 +76,10 @@ export async function logGameAction(game, client, content, options = {}) {
       game.setupLogMessageIds = game.setupLogMessageIds || [];
       game.setupLogMessageIds.push(sentMsg.id);
     }
+    return sentMsg;
   } catch (err) {
     console.error('Game log error:', err);
+    return null;
   }
 }
 

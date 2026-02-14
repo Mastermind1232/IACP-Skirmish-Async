@@ -12,7 +12,7 @@ const rootDir = join(__dirname, '..');
 const GAMES_STATE_PATH = join(rootDir, 'data', 'games-state.json');
 
 /** Current game state schema version (DB4). Bump when adding migrations. */
-const CURRENT_GAME_VERSION = 1;
+export const CURRENT_GAME_VERSION = 1;
 
 /** gameId -> game object */
 const games = new Map();

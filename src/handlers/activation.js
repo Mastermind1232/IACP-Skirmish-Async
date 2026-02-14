@@ -100,10 +100,10 @@ export async function handleStatusPhase(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, client, saveGames
+ * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, pushUndo, client, saveGames
  */
 export async function handlePassActivationTurn(interaction, ctx) {
-  const { getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, client, saveGames } = ctx;
+  const { getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, pushUndo, client, saveGames } = ctx;
   const gameId = interaction.customId.replace('pass_activation_turn_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -124,14 +124,25 @@ export async function handlePassActivationTurn(interaction, ctx) {
   }
   const otherPlayerId = turnPlayerId === game.player1Id ? game.player2Id : game.player1Id;
   const otherPlayerNum = otherPlayerId === game.player1Id ? 1 : 2;
+  const round = game.currentRound || 1;
+  const turnNum = turnPlayerId === game.player1Id ? 1 : 2;
+  const turnZone = getPlayerZoneLabel(game, turnPlayerId);
+  const roundContentBefore = `<@${turnPlayerId}> (${turnZone}**Player ${turnNum}**) **Round ${round}** — Your turn to activate! You may pass back if the other player has more activations.`;
   game.currentActivationTurnPlayerId = otherPlayerId;
   await interaction.deferUpdate();
-  await logGameAction(game, client, `<@${turnPlayerId}> passed the turn to <@${otherPlayerId}> (Player ${otherPlayerNum} has more activations remaining).`, { phase: 'ROUND', icon: 'activate', allowedMentions: { users: [otherPlayerId] } });
+  const passLogMsg = await logGameAction(game, client, `<@${turnPlayerId}> passed the turn to <@${otherPlayerId}> (Player ${otherPlayerNum} has more activations remaining).`, { phase: 'ROUND', icon: 'activate', allowedMentions: { users: [otherPlayerId] } });
+  pushUndo(game, {
+    type: 'pass_turn',
+    previousTurnPlayerId: turnPlayerId,
+    gameLogMessageId: passLogMsg?.id,
+    roundMessageId: game.roundActivationMessageId,
+    roundContentBefore,
+    gameId,
+  });
   if (game.roundActivationMessageId && game.generalId) {
     try {
       const ch = await client.channels.fetch(game.generalId);
       const msg = await ch.messages.fetch(game.roundActivationMessageId);
-      const round = game.currentRound || 1;
       const initNum = otherPlayerId === game.player1Id ? 1 : 2;
       const newCurrentRem = otherPlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
       const justPassedRem = turnPlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
