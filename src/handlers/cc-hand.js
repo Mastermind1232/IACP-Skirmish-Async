@@ -171,7 +171,7 @@ export async function handleCcAttachTo(interaction, ctx) {
 
 /** @param {import('discord.js').StringSelectMenuInteraction} interaction */
 export async function handleCcPlaySelect(interaction, ctx) {
-  const { getGame, getCcEffect, isCcAttachment, isCcPlayableNow, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames } = ctx;
+  const { getGame, getCcEffect, isCcAttachment, isCcPlayableNow, isCcPlayLegalByRestriction, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames, getIllegalCcPlayButtons, client } = ctx;
   const gameId = interaction.customId.replace('cc_play_select_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -200,6 +200,21 @@ export async function handleCcPlaySelect(interaction, ctx) {
       content: "That card can't be played right now (wrong timing).",
       ephemeral: true,
     }).catch(() => {});
+    return;
+  }
+  const restriction = isCcPlayLegalByRestriction(game, playerNum, card);
+  if (!restriction.legal) {
+    game.pendingIllegalCcPlay = { playerNum, card, reason: restriction.reason };
+    const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+    const handChannel = await client.channels.fetch(handId);
+    const msg = await handChannel.send({
+      content: `⚠️ The bot thinks playing **${card}** is illegal: ${restriction.reason}\n\nChoose **Ignore and play** to play it anyway, or **Unplay card** to cancel.`,
+      components: [getIllegalCcPlayButtons(gameId)],
+    });
+    game.pendingIllegalCcPlay.messageId = msg.id;
+    await interaction.deferUpdate().catch(() => {});
+    await interaction.message.delete().catch(() => {});
+    saveGames();
     return;
   }
   if (isCcAttachment(card)) {
@@ -250,6 +265,110 @@ export async function handleCcPlaySelect(interaction, ctx) {
   await updateHandVisualMessage(game, playerNum, interaction.client);
   await updateDiscardPileMessage(game, playerNum, interaction.client);
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  if (ctx.resolveAbility) {
+    const result = ctx.resolveAbility(card, { game, playerNum, cardName: card });
+    if (!result.applied && result.manualMessage) {
+      await ctx.logGameAction(game, interaction.client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
+    }
+  }
+  saveGames();
+}
+
+/**
+ * Resolve a CC play: remove from hand, add to discard, update messages, log. Used by normal play and illegal_cc_ignore.
+ * @param {object} game - Game state
+ * @param {number} playerNum - 1 or 2
+ * @param {string} card - CC name
+ * @param {object} ctx - buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client
+ */
+async function resolveCcPlay(game, playerNum, card, ctx) {
+  const { buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, resolveAbility } = ctx;
+  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const hand = (game[handKey] || []).slice();
+  const idx = hand.indexOf(card);
+  if (idx >= 0) hand.splice(idx, 1);
+  game[handKey] = hand;
+  game[discardKey] = game[discardKey] || [];
+  game[discardKey].push(card);
+  const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+  const handChannel = await client.channels.fetch(handId);
+  const handMessages = await handChannel.messages.fetch({ limit: 20 });
+  const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
+  const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+  if (handMsg) {
+    const handPayload = buildHandDisplayPayload(hand, deck, game.gameId, game, playerNum);
+    const effectData = getCcEffect(card);
+    const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
+    handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
+    await handMsg.edit({
+      content: handPayload.content,
+      embeds: handPayload.embeds,
+      files: handPayload.files || [],
+      components: handPayload.components,
+    }).catch(() => {});
+  }
+  await updateHandVisualMessage(game, playerNum, client);
+  await updateDiscardPileMessage(game, playerNum, client);
+  await logGameAction(game, client, `Played command card **${card}**.`, { phase: 'ACTION', icon: 'card' });
+  if (resolveAbility) {
+    const result = resolveAbility(card, { game, playerNum, cardName: card });
+    if (!result.applied && result.manualMessage) {
+      await logGameAction(game, client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
+    }
+  }
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction — "Ignore and play" for pending illegal CC. */
+export async function handleIllegalCcIgnore(interaction, ctx) {
+  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, saveGames } = ctx;
+  const gameId = interaction.customId.replace('illegal_cc_ignore_', '');
+  const game = getGame(gameId);
+  if (!game || !game.pendingIllegalCcPlay) {
+    await interaction.reply({ content: 'No pending play to resolve.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const { playerNum, card, messageId } = game.pendingIllegalCcPlay;
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== playerId) {
+    await interaction.reply({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  await resolveCcPlay(game, playerNum, card, ctx);
+  delete game.pendingIllegalCcPlay;
+  if (messageId && interaction.channel?.id) {
+    try {
+      const msg = await interaction.channel.messages.fetch(messageId);
+      await msg.edit({ content: 'Play resolved.', components: [] }).catch(() => {});
+    } catch {}
+  }
+  saveGames();
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction — "Unplay card" for pending illegal CC. */
+export async function handleIllegalCcUnplay(interaction, ctx) {
+  const { getGame, client, saveGames } = ctx;
+  const gameId = interaction.customId.replace('illegal_cc_unplay_', '');
+  const game = getGame(gameId);
+  if (!game || !game.pendingIllegalCcPlay) {
+    await interaction.reply({ content: 'No pending play to cancel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const { playerNum, messageId } = game.pendingIllegalCcPlay;
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== playerId) {
+    await interaction.reply({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  delete game.pendingIllegalCcPlay;
+  if (messageId && interaction.channel?.id) {
+    try {
+      const msg = await interaction.channel.messages.fetch(messageId);
+      await msg.edit({ content: 'Cancelled — card not played.', components: [] }).catch(() => {});
+    } catch {}
+  }
   saveGames();
 }
 

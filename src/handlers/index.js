@@ -51,7 +51,17 @@ import {
   handleCcCloseDiscard,
   handleCcDiscard,
   handleSquadSelect,
+  handleIllegalCcIgnore,
+  handleIllegalCcUnplay,
 } from './cc-hand.js';
+import {
+  handleBotmenuArchive,
+  handleBotmenuKill,
+  handleBotmenuArchiveYes,
+  handleBotmenuArchiveNo,
+  handleBotmenuKillYes,
+  handleBotmenuKillNo,
+} from './botmenu.js';
 
 const HANDLERS = new Map();
 
@@ -114,6 +124,14 @@ register('cc_search_discard_', handleCcSearchDiscard);
 register('cc_close_discard_', handleCcCloseDiscard);
 register('cc_discard_', handleCcDiscard);
 register('squad_select_', handleSquadSelect);
+register('illegal_cc_ignore_', handleIllegalCcIgnore);
+register('illegal_cc_unplay_', handleIllegalCcUnplay);
+register('botmenu_archive_', handleBotmenuArchive);
+register('botmenu_kill_', handleBotmenuKill);
+register('botmenu_archive_yes_', handleBotmenuArchiveYes);
+register('botmenu_archive_no_', handleBotmenuArchiveNo);
+register('botmenu_kill_yes_', handleBotmenuKillYes);
+register('botmenu_kill_no_', handleBotmenuKillNo);
 
 /**
  * Return the handler for the given key (prefix), or null if none.
@@ -141,6 +159,9 @@ export { handleAttackTarget, handleCombatReady, handleCombatRoll, handleCombatSu
 export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleConfirmActivate, handleCancelActivate } from './activation.js';
 export {
   handleMapSelection,
+  handleMapSelectionChoice,
+  handleMapSelectionDraw,
+  handleMapSelectionPick,
   handleDraftRandom,
   handleDetermineInitiative,
   handleDeploymentZone,
@@ -172,4 +193,14 @@ export {
   handleCcCloseDiscard,
   handleCcDiscard,
   handleSquadSelect,
+  handleIllegalCcIgnore,
+  handleIllegalCcUnplay,
 } from './cc-hand.js';
+export {
+  handleBotmenuArchive,
+  handleBotmenuKill,
+  handleBotmenuArchiveYes,
+  handleBotmenuArchiveNo,
+  handleBotmenuKillYes,
+  handleBotmenuKillNo,
+} from './botmenu.js';

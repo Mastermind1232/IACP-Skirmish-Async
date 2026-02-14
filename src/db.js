@@ -14,7 +14,7 @@ export function isDbConfigured() {
   return !!process.env.DATABASE_URL;
 }
 
-/** Connect and create the games table if it doesn't exist. */
+/** Connect and create the games and completed_games tables if they don't exist (DB2). */
 export async function initDb() {
   if (!isDbConfigured()) return;
   try {
@@ -29,10 +29,50 @@ export async function initDb() {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
-    console.log('[DB] PostgreSQL connected, games table ready.');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS completed_games (
+        id SERIAL PRIMARY KEY,
+        winner_id TEXT,
+        player1_id TEXT NOT NULL,
+        player2_id TEXT NOT NULL,
+        player1_affiliation TEXT,
+        player2_affiliation TEXT,
+        player1_army_json JSONB,
+        player2_army_json JSONB,
+        map_id TEXT,
+        mission_id TEXT,
+        deployment_zone_winner TEXT,
+        ended_at TIMESTAMPTZ DEFAULT NOW(),
+        round_count INT
+      )
+    `);
+    console.log('[DB] PostgreSQL connected, games and completed_games tables ready.');
   } catch (err) {
     console.error('[DB] Failed to connect:', err.message);
     pool = null;
+  }
+}
+
+/** Write a row to completed_games when a game ends (DB2). Call in the same path that sets game.ended. */
+export async function insertCompletedGame(game) {
+  if (!pool || !game?.ended) return;
+  try {
+    const winnerId = game.winnerId ?? null;
+    const player1Id = game.player1Id ?? '';
+    const player2Id = game.player2Id ?? '';
+    const p1Squad = game.player1Squad || {};
+    const p2Squad = game.player2Squad || {};
+    const mapId = game.selectedMap?.id ?? null;
+    const missionId = game.selectedMission ? `${game.selectedMap?.id || ''}:${game.selectedMission.variant || 'a'}` : null;
+    const deploymentZoneWinner = game.deploymentZoneChosen ? (game.initiativePlayerId === game.player1Id ? game.player1Id : game.player2Id) : null;
+    const roundCount = game.currentRound ?? null;
+    await pool.query(
+      `INSERT INTO completed_games (winner_id, player1_id, player2_id, player1_affiliation, player2_affiliation, player1_army_json, player2_army_json, map_id, mission_id, deployment_zone_winner, round_count)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [winnerId, player1Id, player2Id, p1Squad.affiliation ?? null, p2Squad.affiliation ?? null, JSON.stringify(p1Squad), JSON.stringify(p2Squad), mapId, missionId, deploymentZoneWinner, roundCount]
+    );
+  } catch (err) {
+    console.error('[DB] insertCompletedGame failed:', err.message);
   }
 }
 

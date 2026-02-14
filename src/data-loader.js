@@ -23,6 +23,7 @@ let missionCardsData = {};
 let mapTokensData = {};
 let ccEffectsData = { cards: {} };
 let abilityLibrary = { abilities: {} };
+let tournamentRotation = { missionIds: [] };
 
 function loadAll() {
   try {
@@ -81,6 +82,38 @@ function loadAll() {
     const abData = JSON.parse(readFileSync(join(rootDir, 'data', 'ability-library.json'), 'utf8'));
     abilityLibrary = abData?.abilities ? { abilities: abData.abilities } : { abilities: {} };
   } catch {}
+  try {
+    const rotData = JSON.parse(readFileSync(join(rootDir, 'data', 'tournament-rotation.json'), 'utf8'));
+    tournamentRotation = Array.isArray(rotData?.missionIds) ? { missionIds: rotData.missionIds } : { missionIds: [] };
+  } catch {}
+  validateCriticalData();
+}
+
+/** D3: Validate critical JSON shape on load; log warnings and fail fast in dev. */
+function validateCriticalData() {
+  const warnings = [];
+  if (!dcEffects || typeof dcEffects !== 'object') {
+    warnings.push('dc-effects (dcEffects): expected object');
+  }
+  if (!dcStats || typeof dcStats !== 'object') {
+    warnings.push('dc-stats (dcStats): expected object');
+  }
+  if (!mapSpacesData || typeof mapSpacesData !== 'object') {
+    warnings.push('map-spaces (mapSpacesData): expected object');
+  }
+  const ab = abilityLibrary?.abilities;
+  if (!ab || typeof ab !== 'object') {
+    warnings.push('ability-library (abilityLibrary.abilities): expected object');
+  }
+  if (!ccEffectsData?.cards || typeof ccEffectsData.cards !== 'object') {
+    warnings.push('cc-effects (ccEffectsData.cards): expected object');
+  }
+  if (warnings.length) {
+    console.warn('[Data] Validation warnings:', warnings.join('; '));
+    if (process.env.NODE_ENV === 'development') {
+      throw new Error(`[Data] Critical data validation failed: ${warnings.join('; ')}`);
+    }
+  }
 }
 
 loadAll();
@@ -141,6 +174,11 @@ export function getDiceData() {
 }
 export function getMissionCardsData() {
   return missionCardsData;
+}
+
+/** D4: Tournament rotation mission IDs (mapId:variant). Empty if not configured. */
+export function getTournamentRotation() {
+  return tournamentRotation;
 }
 export function getMapTokensData() {
   return mapTokensData;

@@ -249,7 +249,11 @@ export async function handleCombatRoll(interaction, ctx) {
     const roll = combat.attackRoll;
     const defRoll = combat.defenseRoll;
     const surgeAbilities = getAttackerSurgeAbilities(combat);
-    const hasSurgeStep = roll.surge > 0 && surgeAbilities.length > 0;
+    const getAbility = ctx.getAbility || (() => null);
+    const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS && ctx.SURGE_LABELS[id]) || id);
+    const remaining = roll.surge;
+    const affordable = surgeAbilities.filter((key) => (getAbility(key)?.surgeCost ?? 1) <= remaining);
+    const hasSurgeStep = roll.surge > 0 && affordable.length > 0;
     if (hasSurgeStep) {
       combat.surgeRemaining = roll.surge;
       combat.surgeDamage = 0;
@@ -257,13 +261,16 @@ export async function handleCombatRoll(interaction, ctx) {
       combat.surgeAccuracy = 0;
       combat.surgeConditions = [];
       const surgeRows = [];
-      const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS && ctx.SURGE_LABELS[id]) || id);
       for (let i = 0; i < surgeAbilities.length; i++) {
-        const label = (getSurgeLabel(surgeAbilities[i]) || surgeAbilities[i]).slice(0, 80);
+        const key = surgeAbilities[i];
+        const cost = getAbility(key)?.surgeCost ?? 1;
+        if (cost > remaining) continue;
+        const label = (getSurgeLabel(key) || key).slice(0, 80);
+        const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
         surgeRows.push(
           new ButtonBuilder()
             .setCustomId(`combat_surge_${game.gameId}_${i}`)
-            .setLabel(`Spend 1 surge: ${label}`)
+            .setLabel(btnLabel.slice(0, 80))
             .setStyle(ButtonStyle.Secondary)
         );
       }
@@ -302,6 +309,7 @@ export async function handleCombatSurge(interaction, ctx) {
     resolveCombatAfterRolls,
     saveGames,
   } = ctx;
+  const getAbility = ctx.getAbility || (() => null);
   const resolveSurge = resolveSurgeAbility || parseSurgeEffect;
   const getSurgeLabel = getSurgeAbilityLabel || ((id) => (SURGE_LABELS && SURGE_LABELS[id]) || id);
   const match = interaction.customId.match(/^combat_surge_([^_]+)_(done|\d+)$/);
@@ -330,14 +338,18 @@ export async function handleCombatSurge(interaction, ctx) {
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const key = surgeAbilities[idx];
     if (key) {
+      const cost = getAbility(key)?.surgeCost ?? 1;
       const mod = resolveSurge(key);
-      combat.surgeDamage = (combat.surgeDamage || 0) + mod.damage;
-      combat.surgePierce = (combat.surgePierce || 0) + mod.pierce;
-      combat.surgeAccuracy = (combat.surgeAccuracy || 0) + mod.accuracy;
+      combat.surgeDamage = (combat.surgeDamage || 0) + (mod.damage ?? 0);
+      combat.surgePierce = (combat.surgePierce || 0) + (mod.pierce ?? 0);
+      combat.surgeAccuracy = (combat.surgeAccuracy || 0) + (mod.accuracy ?? 0);
       if (mod.conditions?.length) combat.surgeConditions = (combat.surgeConditions || []).concat(mod.conditions);
-      combat.surgeRemaining--;
+      combat.surgeBlast = (combat.surgeBlast || 0) + (mod.blast ?? 0);
+      combat.surgeRecover = (combat.surgeRecover || 0) + (mod.recover ?? 0);
+      combat.surgeCleave = (combat.surgeCleave || 0) + (mod.cleave ?? 0);
+      combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - cost);
       const label = getSurgeLabel(key);
-      await thread.send(`**Surge spent:** ${label}`).catch(() => {});
+      await thread.send(`**Surge spent (${cost}):** ${label}`).catch(() => {});
     }
   }
   if (combat.surgeRemaining <= 0 || choice === 'done') {
@@ -347,15 +359,21 @@ export async function handleCombatSurge(interaction, ctx) {
   } else {
     await interaction.deferUpdate().catch(() => {});
     const surgeAbilities = getAttackerSurgeAbilities(combat);
+    const remaining = combat.surgeRemaining || 0;
     const surgeRows = [];
     for (let i = 0; i < surgeAbilities.length; i++) {
-      const label = (getSurgeLabel(surgeAbilities[i]) || surgeAbilities[i]).slice(0, 80);
+      const key = surgeAbilities[i];
+      const cost = getAbility(key)?.surgeCost ?? 1;
+      if (cost > remaining) continue;
+      const label = (getSurgeLabel(key) || key).slice(0, 80);
+      const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
       surgeRows.push(
         new ButtonBuilder()
           .setCustomId(`combat_surge_${gameId}_${i}`)
-          .setLabel(`Spend 1 surge: ${label}`)
+          .setLabel(btnLabel.slice(0, 80))
           .setStyle(ButtonStyle.Secondary)
       );
+      rowIndex++;
     }
     surgeRows.push(
       new ButtonBuilder()

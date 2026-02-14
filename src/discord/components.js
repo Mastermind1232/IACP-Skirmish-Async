@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
 import { normalizeCoord } from '../game/coords.js';
 
 const MAX_BUTTONS_PER_ROW = 5;
@@ -131,19 +131,99 @@ export function getBoardButtons(gameId) {
       .setCustomId(`refresh_all_${gameId}`)
       .setLabel('Refresh All')
       .setStyle(ButtonStyle.Secondary),
+  );
+}
+
+/** F17: One row with Map Selection menu (Random / Competitive / Select Draw / Selection). */
+export function getMapSelectionMenu(gameId) {
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`map_selection_menu_${gameId}`)
+    .setPlaceholder('Choose how to select the map')
+    .addOptions(
+      { label: 'Random', value: 'random', description: 'Random map and mission (A or B)' },
+      { label: 'Competitive', value: 'competitive', description: 'Random from tournament rotation' },
+      { label: 'Select Draw', value: 'select_draw', description: 'Pick several, then random draw' },
+      { label: 'Selection', value: 'selection', description: 'Pick one mission' },
+    );
+  return new ActionRowBuilder().addComponents(select);
+}
+
+const MISSION_SELECT_MAX_OPTIONS = 25;
+
+/**
+ * F17 Select Draw: multi-select menu of missions (min 2, then random draw).
+ * @param {string} gameId
+ * @param {{ value: string, label: string }[]} options - from buildPlayableMissionOptions
+ */
+export function getMissionSelectDrawMenu(gameId, options) {
+  const opts = options.slice(0, MISSION_SELECT_MAX_OPTIONS);
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`map_selection_draw_${gameId}`)
+    .setPlaceholder('Choose at least 2 missions (we\'ll pick one at random)')
+    .setMinValues(2)
+    .setMaxValues(Math.max(2, opts.length))
+    .addOptions(opts.map((o) => ({ label: o.label, value: o.value })));
+  return new ActionRowBuilder().addComponents(select);
+}
+
+/**
+ * F17 Selection: single-select menu of missions.
+ * @param {string} gameId
+ * @param {{ value: string, label: string }[]} options - from buildPlayableMissionOptions
+ */
+export function getMissionSelectionPickMenu(gameId, options) {
+  const opts = options.slice(0, MISSION_SELECT_MAX_OPTIONS);
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`map_selection_pick_${gameId}`)
+    .setPlaceholder('Choose one mission')
+    .addOptions(opts.map((o) => ({ label: o.label, value: o.value })));
+  return new ActionRowBuilder().addComponents(select);
+}
+
+/** F16/F11: Bot Stuff menu — Archive and Kill Game (shown via /botmenu in Game Log). */
+export function getBotmenuButtons(gameId) {
+  return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`kill_game_${gameId}`)
-      .setLabel('Kill Game (testing)')
+      .setCustomId(`botmenu_archive_${gameId}`)
+      .setLabel('Archive')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`botmenu_kill_${gameId}`)
+      .setLabel('Kill Game')
       .setStyle(ButtonStyle.Danger)
   );
 }
 
-/** One row: Map Selection (if not yet selected), Kill Game. Draft Random when test game. */
+/** Confirm Archive: first confirm wins. */
+export function getBotmenuArchiveConfirmButtons(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`botmenu_archive_yes_${gameId}`)
+      .setLabel('Yes, archive')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`botmenu_archive_no_${gameId}`)
+      .setLabel('No')
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
+/** Confirm Kill Game: first confirm wins. */
+export function getBotmenuKillConfirmButtons(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`botmenu_kill_yes_${gameId}`)
+      .setLabel('Yes, kill game')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`botmenu_kill_no_${gameId}`)
+      .setLabel('No')
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
+/** One row: Map Selection (if not yet selected). Draft Random when test game. Kill Game removed (F16: only via /botmenu). */
 export function getGeneralSetupButtons(game) {
-  const killBtn = new ButtonBuilder()
-    .setCustomId(`kill_game_${game.gameId}`)
-    .setLabel('Kill Game (testing)')
-    .setStyle(ButtonStyle.Danger);
   const draftBtn = new ButtonBuilder()
     .setCustomId(`draft_random_${game.gameId}`)
     .setLabel('Draft Random')
@@ -160,11 +240,10 @@ export function getGeneralSetupButtons(game) {
   if (game.isTestGame && !game.mapSelected && !game.draftRandomUsed && !game.initiativeDetermined) {
     components.push(draftBtn);
   }
-  components.push(killBtn);
   return new ActionRowBuilder().addComponents(...components);
 }
 
-/** Determine Initiative + Kill Game for the Both Squads Ready message. */
+/** Determine Initiative for the Both Squads Ready message. Kill Game removed (F16: only via /botmenu). */
 export function getDetermineInitiativeButtons(game) {
   const components = [];
   if (!game.initiativeDetermined) {
@@ -175,12 +254,6 @@ export function getDetermineInitiativeButtons(game) {
         .setStyle(ButtonStyle.Primary)
     );
   }
-  components.push(
-    new ButtonBuilder()
-      .setCustomId(`kill_game_${game.gameId}`)
-      .setLabel('Kill Game (testing)')
-      .setStyle(ButtonStyle.Danger)
-  );
   return new ActionRowBuilder().addComponents(...components);
 }
 
@@ -266,6 +339,20 @@ export function getCcActionButtons(gameId, hand = [], deck = []) {
       .setLabel('Discard CC')
       .setStyle(ButtonStyle.Danger)
       .setDisabled(!hasHand),
+  );
+}
+
+/** Buttons for "bot thinks this CC play is illegal" prompt: Ignore and play / Unplay card. */
+export function getIllegalCcPlayButtons(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`illegal_cc_ignore_${gameId}`)
+      .setLabel('Ignore and play')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`illegal_cc_unplay_${gameId}`)
+      .setLabel('Unplay card')
+      .setStyle(ButtonStyle.Danger),
   );
 }
 

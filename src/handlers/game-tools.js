@@ -2,6 +2,7 @@
  * Game tools handlers: refresh_map_, refresh_all_, undo_, kill_game_, default_deck_.
  * Participants-only; require getGame and various helpers via context.
  */
+import { deleteGameChannelsAndGame } from './botmenu.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -151,20 +152,10 @@ export async function handleUndo(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcDepletedState, dcHealthState, logGameErrorToBotLogs, client
+ * @param {object} ctx - getGame, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcDepletedState, dcHealthState, logGameErrorToBotLogs, client, deleteGameFromDb
  */
 export async function handleKillGame(interaction, ctx) {
-  const {
-    getGame,
-    deleteGame,
-    saveGames,
-    dcMessageMeta,
-    dcExhaustedState,
-    dcDepletedState,
-    dcHealthState,
-    logGameErrorToBotLogs,
-    client,
-  } = ctx;
+  const { getGame, logGameErrorToBotLogs } = ctx;
   const gameId = interaction.customId.replace('kill_game_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -177,32 +168,7 @@ export async function handleKillGame(interaction, ctx) {
   }
   await interaction.deferReply({ ephemeral: true });
   try {
-    let categoryId = game.gameCategoryId;
-    if (!categoryId) {
-      const generalCh = await client.channels.fetch(game.generalId).catch(() => null);
-      categoryId = generalCh?.parentId;
-    }
-    if (!categoryId) {
-      await interaction.editReply({ content: 'Could not find game category.' });
-      return;
-    }
-    const guild = interaction.guild;
-    const category = await guild.channels.fetch(categoryId);
-    const children = guild.channels.cache.filter((c) => c.parentId === categoryId);
-    for (const ch of children.values()) {
-      await ch.delete().catch(() => {});
-    }
-    await category.delete();
-    deleteGame(gameId);
-    saveGames();
-    for (const [msgId, meta] of dcMessageMeta) {
-      if (meta.gameId === gameId) {
-        dcMessageMeta.delete(msgId);
-        dcExhaustedState.delete(msgId);
-        dcDepletedState.delete(msgId);
-        dcHealthState.delete(msgId);
-      }
-    }
+    await deleteGameChannelsAndGame(game, gameId, ctx);
     try {
       await interaction.editReply({ content: `Game **IA Game #${gameId}** deleted. All channels removed.` });
     } catch {

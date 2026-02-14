@@ -2,7 +2,7 @@
  * CC timing (F5): when can a Command Card be played from hand?
  * Uses game state to derive play context and cc-effects timing field.
  */
-import { getCcEffect } from '../data-loader.js';
+import { getCcEffect, getDcKeywords } from '../data-loader.js';
 
 /**
  * Derive current CC play context from game state.
@@ -101,4 +101,40 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
  */
 export function getPlayableCcFromHand(game, playerNum, hand) {
   return (hand || []).filter((card) => isCcPlayableNow(game, playerNum, card));
+}
+
+/**
+ * Check if a CC is legal to play by playableBy (figure/trait) in current context.
+ * Returns { legal: true } or { legal: false, reason: string }.
+ * @param {object} game - Game state
+ * @param {number} playerNum - 1 or 2
+ * @param {string} cardName - CC name
+ * @param {object} [getEffect] - Optional getCcEffect
+ * @returns {{ legal: boolean, reason?: string }}
+ */
+export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect = getCcEffect) {
+  const effect = getEffect(cardName);
+  const playableBy = (effect?.playableBy || '').trim();
+  if (!playableBy || playableBy.toLowerCase() === 'any figure') return { legal: true };
+
+  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  const keywords = getDcKeywords();
+  const p = playableBy.toLowerCase();
+
+  for (const dc of dcList) {
+    const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+    if (!dcName) continue;
+    const dcBase = String(dcName)
+      .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
+      .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
+      .trim();
+    const disp = (typeof dc === 'object' ? dc.displayName : dcName) || dcBase;
+    const d = dcBase.toLowerCase();
+    const dispLower = String(disp).toLowerCase();
+    if (d.includes(p) || p.includes(d) || dispLower.includes(p) || p.includes(dispLower))
+      return { legal: true };
+    const kw = keywords[dcName] || keywords[dcBase];
+    if (Array.isArray(kw) && kw.some((k) => String(k).toLowerCase() === p)) return { legal: true };
+  }
+  return { legal: false, reason: `No figure matches "playable by: ${playableBy}" in your army.` };
 }

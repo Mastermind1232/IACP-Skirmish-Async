@@ -31,3 +31,18 @@ export function getSurgeAbilityLabel(abilityId) {
   if (entry?.label) return entry.label;
   return abilityId || '';
 }
+
+/**
+ * F3/F4: Resolve a non-surge ability by id (DC special or CC effect). Code-per-ability; most return manual.
+ * @param {string|null|undefined} abilityId - Library id or synthetic key (e.g. dc_special:DCName:0 or CC card name).
+ * @param {object} context - { game, ... } plus optional msgId, meta, playerNum, cardName, specialLabel.
+ * @returns {{ applied: boolean, manualMessage?: string }}
+ */
+export function resolveAbility(abilityId, context) {
+  const entry = abilityId ? getAbility(abilityId) : null;
+  if (!entry || entry.type === 'surge') {
+    return { applied: false, manualMessage: 'Resolve manually (see rules).' };
+  }
+  // Future: switch on entry.type (specialAction, passive, triggered, ccEffect) and run implemented handlers.
+  return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
+}

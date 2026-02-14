@@ -1,27 +1,41 @@
 /**
  * Setup handlers: map_selection_, draft_random_, determine_initiative_, deployment_zone_red_/blue_, deployment_fig_, deployment_orient_, deploy_pick_, deployment_done_
+ * F17: map_selection_menu_ (Random/Competitive/Select Draw/Selection), map_selection_draw_, map_selection_pick_
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 
 /**
+ * Build options for mission select menus (Select Draw / Selection). Value format: "mapId:variant".
+ * @param {() => { id: string, name: string, imagePath?: string }[]} getPlayReadyMaps
+ * @param {() => Record<string, Record<string, { name: string }>>} getMissionCardsData
+ * @returns {{ value: string, label: string }[]}
+ */
+export function buildPlayableMissionOptions(getPlayReadyMaps, getMissionCardsData) {
+  const playReadyMaps = getPlayReadyMaps?.() ?? [];
+  const missionCards = getMissionCardsData?.() ?? {};
+  const options = [];
+  for (const map of playReadyMaps) {
+    const variants = missionCards[map.id];
+    if (!variants) continue;
+    for (const variant of ['a', 'b']) {
+      const mission = variants[variant];
+      if (!mission?.name) continue;
+      options.push({
+        value: `${map.id}:${variant}`,
+        label: `${map.name} — ${mission.name}`,
+      });
+    }
+  }
+  return options;
+}
+
+/**
+ * F17: Show Map Selection menu (Random / Competitive / Select Draw / Selection). Choice is handled by handleMapSelectionChoice.
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, getPlayReadyMaps, postMissionCardAfterMapSelection, buildBoardMapPayload, logGameAction, getGeneralSetupButtons, createHandChannels, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, client, saveGames
+ * @param {object} ctx - getGame, getMapSelectionMenu, ...
  */
 export async function handleMapSelection(interaction, ctx) {
-  const {
-    getGame,
-    getPlayReadyMaps,
-    postMissionCardAfterMapSelection,
-    buildBoardMapPayload,
-    logGameAction,
-    getGeneralSetupButtons,
-    createHandChannels,
-    getHandTooltipEmbed,
-    getSquadSelectEmbed,
-    getHandSquadButtons,
-    client,
-    saveGames,
-  } = ctx;
+  const { getGame, getMapSelectionMenu } = ctx;
   const gameId = interaction.customId.replace('map_selection_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -36,7 +50,7 @@ export async function handleMapSelection(interaction, ctx) {
     await interaction.reply({ content: `Map already selected: **${game.selectedMap?.name ?? 'Unknown'}**.`, ephemeral: true }).catch(() => {});
     return;
   }
-  const playReadyMaps = getPlayReadyMaps();
+  const playReadyMaps = ctx.getPlayReadyMaps?.() ?? [];
   if (playReadyMaps.length === 0) {
     await interaction.reply({
       content: 'No maps have deployment zones configured yet. Add zone data to `data/deployment-zones.json` for at least one map.',
@@ -44,12 +58,125 @@ export async function handleMapSelection(interaction, ctx) {
     }).catch(() => {});
     return;
   }
-  const map = playReadyMaps[Math.floor(Math.random() * playReadyMaps.length)];
-  game.selectedMap = { id: map.id, name: map.name, imagePath: map.imagePath };
-  game.mapSelected = true;
-  await interaction.deferUpdate();
-  await postMissionCardAfterMapSelection(game, client, map);
-  if (game.boardId) {
+  await interaction.reply({
+    content: 'Choose how to select the map:',
+    components: [getMapSelectionMenu(gameId)],
+    ephemeral: false,
+  }).catch(() => {});
+}
+
+/**
+ * F17: Apply map/mission choice (Random, Competitive, or "Not yet implemented" for Select Draw / Selection).
+ * @param {import('discord.js').StringSelectMenuInteraction} interaction
+ * @param {object} ctx - getGame, getPlayReadyMaps, getTournamentRotation, getMissionCardsData, getMapRegistry, getMissionSelectDrawMenu, getMissionSelectionPickMenu, postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState, buildBoardMapPayload, logGameAction, getGeneralSetupButtons, createHandChannels, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, client, saveGames
+ */
+export async function handleMapSelectionChoice(interaction, ctx) {
+  const {
+    getGame,
+    getPlayReadyMaps,
+    getTournamentRotation,
+    getMissionCardsData,
+    getMapRegistry,
+    getMissionSelectDrawMenu,
+    getMissionSelectionPickMenu,
+    postMissionCardAfterMapSelection,
+    postPinnedMissionCardFromGameState,
+    buildBoardMapPayload,
+    logGameAction,
+    getGeneralSetupButtons,
+    createHandChannels,
+    getHandTooltipEmbed,
+    getSquadSelectEmbed,
+    getHandSquadButtons,
+    client,
+    saveGames,
+  } = ctx;
+  const gameId = interaction.customId.replace('map_selection_menu_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (game.mapSelected) {
+    await interaction.reply({ content: 'Map already selected.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const value = interaction.values?.[0];
+  if (value === 'select_draw' || value === 'selection') {
+    const options = buildPlayableMissionOptions(getPlayReadyMaps, getMissionCardsData);
+    if (value === 'select_draw' && options.length < 2) {
+      await interaction.reply({ content: 'Need at least 2 playable missions for Select Draw. Use **Random** or **Selection**.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    if (options.length === 0) {
+      await interaction.reply({ content: 'No playable missions. Add mission data and deployment zones for at least one map.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const content = value === 'select_draw'
+      ? 'Choose at least 2 missions (we\'ll pick one at random):'
+      : 'Choose one mission:';
+    const components = value === 'select_draw'
+      ? [getMissionSelectDrawMenu(gameId, options)]
+      : [getMissionSelectionPickMenu(gameId, options)];
+    await interaction.update({ content, components }).catch(() => {});
+    return;
+  }
+  let map = null;
+  if (value === 'competitive') {
+    const rotation = getTournamentRotation?.();
+    const missionIds = rotation?.missionIds ?? [];
+    if (missionIds.length === 0) {
+      await interaction.reply({ content: 'No tournament rotation configured. Use **Random** or add missions to `data/tournament-rotation.json`.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const missionId = missionIds[Math.floor(Math.random() * missionIds.length)];
+    const [mapId, variant] = String(missionId).split(':');
+    const mapDef = getMapRegistry?.().find((m) => m.id === mapId);
+    const missionData = getMissionCardsData?.()[mapId]?.[variant || 'a'];
+    if (!mapDef || !missionData) {
+      await interaction.reply({ content: 'Invalid mission in rotation. Use **Random**.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    map = { id: mapDef.id, name: mapDef.name, imagePath: mapDef.imagePath };
+    game.selectedMap = map;
+    game.selectedMission = { variant: variant || 'a', name: missionData.name, fullName: `${map.name} — ${missionData.name}` };
+    game.mapSelected = true;
+    await interaction.deferUpdate();
+    await postPinnedMissionCardFromGameState(game, client);
+  } else {
+    const playReadyMaps = getPlayReadyMaps();
+    if (playReadyMaps.length === 0) {
+      await interaction.reply({ content: 'No play-ready maps.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    map = playReadyMaps[Math.floor(Math.random() * playReadyMaps.length)];
+    game.selectedMap = { id: map.id, name: map.name, imagePath: map.imagePath };
+    game.mapSelected = true;
+    await interaction.deferUpdate();
+    await postMissionCardAfterMapSelection(game, client, map);
+  }
+  await finishMapSelectionAfterChoice(game, client, ctx);
+}
+
+/**
+ * Shared post-map-selection: post to board, log, update setup message, create/populate hand channels.
+ * @param {object} game
+ * @param {import('discord.js').Client} client
+ * @param {object} ctx - buildBoardMapPayload, logGameAction, getGeneralSetupButtons, createHandChannels, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, saveGames
+ */
+async function finishMapSelectionAfterChoice(game, client, ctx) {
+  const {
+    buildBoardMapPayload,
+    logGameAction,
+    getGeneralSetupButtons,
+    createHandChannels,
+    getHandTooltipEmbed,
+    getSquadSelectEmbed,
+    getHandSquadButtons,
+    saveGames,
+  } = ctx;
+  const map = game.selectedMap;
+  if (game.boardId && map) {
     try {
       const boardChannel = await client.channels.fetch(game.boardId);
       const payload = await buildBoardMapPayload(game.gameId, map, game);
@@ -58,7 +185,8 @@ export async function handleMapSelection(interaction, ctx) {
       console.error('Failed to post map to Board channel:', err);
     }
   }
-  await logGameAction(game, client, `Map selected: **${map.name}** — View in Board channel.`, { phase: 'SETUP', icon: 'map' });
+  const mapName = map?.name ?? 'Map';
+  await logGameAction(game, client, `Map selected: **${mapName}** — View in Board channel.`, { phase: 'SETUP', icon: 'map' });
   if (game.generalSetupMessageId) {
     try {
       const generalChannel = await client.channels.fetch(game.generalId);
@@ -101,6 +229,93 @@ export async function handleMapSelection(interaction, ctx) {
     console.error('Failed to create/populate Hand channels:', err);
   }
   saveGames();
+}
+
+/**
+ * Resolve a missionId ("mapId:variant") to map + mission and set game.selectedMap / selectedMission.
+ * @param {object} game
+ * @param {string} missionId - e.g. "mos-eisley-outskirts:a"
+ * @param {() => { id: string, name: string, imagePath?: string }[]} getMapRegistry
+ * @param {() => Record<string, Record<string, { name: string }>>} getMissionCardsData
+ * @returns {boolean} true if resolved
+ */
+function applyMissionToGame(game, missionId, getMapRegistry, getMissionCardsData) {
+  const [mapId, variant] = String(missionId).split(':');
+  const v = variant || 'a';
+  const mapDef = getMapRegistry?.().find((m) => m.id === mapId);
+  const missionData = getMissionCardsData?.()[mapId]?.[v];
+  if (!mapDef || !missionData) return false;
+  game.selectedMap = { id: mapDef.id, name: mapDef.name, imagePath: mapDef.imagePath };
+  game.selectedMission = { variant: v, name: missionData.name, fullName: `${mapDef.name} — ${missionData.name}` };
+  game.mapSelected = true;
+  return true;
+}
+
+/**
+ * F17 Select Draw: user chose multiple missions; pick one at random and finish map selection.
+ * @param {import('discord.js').StringSelectMenuInteraction} interaction
+ * @param {object} ctx - same as handleMapSelectionChoice
+ */
+export async function handleMapSelectionDraw(interaction, ctx) {
+  const {
+    getGame,
+    getMapRegistry,
+    getMissionCardsData,
+    postPinnedMissionCardFromGameState,
+    client,
+  } = ctx;
+  const gameId = interaction.customId.replace('map_selection_draw_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (game.mapSelected) {
+    await interaction.reply({ content: 'Map already selected.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const values = interaction.values ?? [];
+  const missionId = values[Math.floor(Math.random() * values.length)];
+  if (!applyMissionToGame(game, missionId, getMapRegistry, getMissionCardsData)) {
+    await interaction.reply({ content: 'Invalid mission. Try again or use Random.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  await postPinnedMissionCardFromGameState(game, client);
+  await finishMapSelectionAfterChoice(game, client, ctx);
+}
+
+/**
+ * F17 Selection: user chose one mission; apply and finish map selection.
+ * @param {import('discord.js').StringSelectMenuInteraction} interaction
+ * @param {object} ctx - same as handleMapSelectionChoice
+ */
+export async function handleMapSelectionPick(interaction, ctx) {
+  const {
+    getGame,
+    getMapRegistry,
+    getMissionCardsData,
+    postPinnedMissionCardFromGameState,
+    client,
+  } = ctx;
+  const gameId = interaction.customId.replace('map_selection_pick_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (game.mapSelected) {
+    await interaction.reply({ content: 'Map already selected.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const missionId = interaction.values?.[0];
+  if (!missionId || !applyMissionToGame(game, missionId, getMapRegistry, getMissionCardsData)) {
+    await interaction.reply({ content: 'Invalid mission. Try again or use Random.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  await postPinnedMissionCardFromGameState(game, client);
+  await finishMapSelectionAfterChoice(game, client, ctx);
 }
 
 /**

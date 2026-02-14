@@ -11,18 +11,23 @@ import {
   rollDefenseDice,
 } from './combat.js';
 
+const emptyMod = { damage: 0, pierce: 0, accuracy: 0, conditions: [], blast: 0, recover: 0, cleave: 0 };
+
 test('parseSurgeEffect', () => {
-  assert.deepStrictEqual(parseSurgeEffect('damage 1'), { damage: 1, pierce: 0, accuracy: 0, conditions: [] });
-  assert.deepStrictEqual(parseSurgeEffect('damage 2'), { damage: 2, pierce: 0, accuracy: 0, conditions: [] });
-  assert.deepStrictEqual(parseSurgeEffect('pierce 1'), { damage: 0, pierce: 1, accuracy: 0, conditions: [] });
-  assert.deepStrictEqual(parseSurgeEffect('accuracy 2'), { damage: 0, pierce: 0, accuracy: 2, conditions: [] });
-  assert.deepStrictEqual(parseSurgeEffect('stun'), { damage: 0, pierce: 0, accuracy: 0, conditions: ['Stun'] });
-  assert.deepStrictEqual(parseSurgeEffect('weaken'), { damage: 0, pierce: 0, accuracy: 0, conditions: ['Weaken'] });
-  assert.deepStrictEqual(parseSurgeEffect('damage 1, stun'), { damage: 1, pierce: 0, accuracy: 0, conditions: ['Stun'] });
-  assert.deepStrictEqual(parseSurgeEffect('+1 hit'), { damage: 1, pierce: 0, accuracy: 0, conditions: [] });
-  assert.deepStrictEqual(parseSurgeEffect('+2 hits'), { damage: 2, pierce: 0, accuracy: 0, conditions: [] });
-  assert.deepStrictEqual(parseSurgeEffect(''), { damage: 0, pierce: 0, accuracy: 0, conditions: [] });
-  assert.deepStrictEqual(parseSurgeEffect(null), { damage: 0, pierce: 0, accuracy: 0, conditions: [] });
+  assert.deepStrictEqual(parseSurgeEffect('damage 1'), { ...emptyMod, damage: 1 });
+  assert.deepStrictEqual(parseSurgeEffect('damage 2'), { ...emptyMod, damage: 2 });
+  assert.deepStrictEqual(parseSurgeEffect('pierce 1'), { ...emptyMod, pierce: 1 });
+  assert.deepStrictEqual(parseSurgeEffect('accuracy 2'), { ...emptyMod, accuracy: 2 });
+  assert.deepStrictEqual(parseSurgeEffect('stun'), { ...emptyMod, conditions: ['Stun'] });
+  assert.deepStrictEqual(parseSurgeEffect('weaken'), { ...emptyMod, conditions: ['Weaken'] });
+  assert.deepStrictEqual(parseSurgeEffect('damage 1, stun'), { ...emptyMod, damage: 1, conditions: ['Stun'] });
+  assert.deepStrictEqual(parseSurgeEffect('+1 hit'), { ...emptyMod, damage: 1 });
+  assert.deepStrictEqual(parseSurgeEffect('+2 hits'), { ...emptyMod, damage: 2 });
+  assert.deepStrictEqual(parseSurgeEffect(''), emptyMod);
+  assert.deepStrictEqual(parseSurgeEffect(null), emptyMod);
+  assert.deepStrictEqual(parseSurgeEffect('blast 1'), { ...emptyMod, blast: 1 });
+  assert.deepStrictEqual(parseSurgeEffect('recover 2'), { ...emptyMod, recover: 2 });
+  assert.deepStrictEqual(parseSurgeEffect('cleave 1'), { ...emptyMod, cleave: 1 });
 });
 
 test('computeCombatResult hit and damage', () => {

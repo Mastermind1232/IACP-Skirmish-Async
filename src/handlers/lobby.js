@@ -120,6 +120,7 @@ export async function handleLobbyStart(interaction, ctx) {
     gameId = gid;
     const game = {
       gameId,
+      version: 1,
       gameCategoryId: generalChannel.parentId,
       player1Id: lobby.creatorId,
       player2Id: lobby.joinedId,

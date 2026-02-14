@@ -35,22 +35,24 @@ export const SURGE_LABELS = {
   'accuracy 2, surge 1': '+2 Accuracy, +1 Surge', 'damage 2, hide': '+2 Hits, Hide',
 };
 
-/** Get attacker's surge abilities from dc-effects (1-surge options only for now). */
+/** Get attacker's surge abilities from dc-effects. Includes all listed; cost filtering is done in UI (F13). */
 export function getAttackerSurgeAbilities(combat) {
   const card = getDcEffects()[combat.attackerDcName] || getDcEffects()[combat.attackerDcName?.replace(/\s*\[.*\]\s*$/, '')];
-  const list = card?.surgeAbilities || [];
-  return list.filter((k) => !/\(\s*2\s*surges?\s*\)/i.test(k));
+  return card?.surgeAbilities || [];
 }
 
-/** Parse a surge ability key into modifiers. */
+/** Parse a surge ability key into modifiers. F6: blast, recover, cleave. */
 export function parseSurgeEffect(key) {
-  const out = { damage: 0, pierce: 0, accuracy: 0, conditions: [] };
-  const parts = String(key || '').toLowerCase().split(/\s*,\s*/);
+  const out = { damage: 0, pierce: 0, accuracy: 0, conditions: [], blast: 0, recover: 0, cleave: 0 };
+  const parts = String(key || '').toLowerCase().trim().split(/\s*,\s*/);
   for (const p of parts) {
     const dmg = p.match(/^damage\s+(\d+)$/); if (dmg) { out.damage += parseInt(dmg[1], 10); continue; }
     const hit = p.match(/^\+(\d+)\s+hit(s?)$/); if (hit) { out.damage += parseInt(hit[1], 10); continue; }
     const pierce = p.match(/^pierce\s+(\d+)$/); if (pierce) { out.pierce += parseInt(pierce[1], 10); continue; }
     const acc = p.match(/^accuracy\s+(\d+)$/); if (acc) { out.accuracy += parseInt(acc[1], 10); continue; }
+    const blast = p.match(/^blast\s+(\d+)$/); if (blast) { out.blast += parseInt(blast[1], 10); continue; }
+    const recover = p.match(/^recover\s+(\d+)$/); if (recover) { out.recover += parseInt(recover[1], 10); continue; }
+    const cleave = p.match(/^cleave\s+(\d+)$/); if (cleave) { out.cleave += parseInt(cleave[1], 10); continue; }
     if (p === 'stun') out.conditions.push('Stun');
     else if (p === 'weaken') out.conditions.push('Weaken');
     else if (p === 'bleed') out.conditions.push('Bleed');
@@ -75,9 +77,14 @@ export function computeCombatResult(combat) {
   const effectiveBlock = Math.max(0, defRoll.block - surgeP);
   const damage = hit ? Math.max(0, roll.dmg + surgeD - effectiveBlock) : 0;
   const conditionsText = (combat.surgeConditions?.length) ? ` (${combat.surgeConditions.join(', ')})` : '';
+  const blastText = combat.surgeBlast ? ` Blast ${combat.surgeBlast}` : '';
+  const recoverText = combat.surgeRecover ? ` Recover ${combat.surgeRecover}` : '';
+  const cleaveText = combat.surgeCleave ? ` Cleave ${combat.surgeCleave}` : '';
 
   let resultText = `**Result:** Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
-  if (surgeD || surgeP || surgeA || conditionsText) resultText += ` | Surge: +${surgeD} dmg, +${surgeP} pierce, +${surgeA} acc${conditionsText}`;
+  if (surgeD || surgeP || surgeA || conditionsText || blastText || recoverText || cleaveText) {
+    resultText += ` | Surge: +${surgeD} dmg, +${surgeP} pierce, +${surgeA} acc${conditionsText}${blastText}${recoverText}${cleaveText}`;
+  }
   if (!hit) resultText += ' → **Miss**';
   else resultText += ` → **${damage} damage**${conditionsText}`;
 

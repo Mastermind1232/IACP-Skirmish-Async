@@ -11,8 +11,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 const GAMES_STATE_PATH = join(rootDir, 'data', 'games-state.json');
 
+/** Current game state schema version (DB4). Bump when adding migrations. */
+const CURRENT_GAME_VERSION = 1;
+
 /** gameId -> game object */
 const games = new Map();
+
+/** Run migrations on a loaded game so old saves keep working (DB4). */
+function migrateGame(g) {
+  if (!g || typeof g !== 'object') return;
+  const v = g.version ?? 0;
+  if (v < 1) {
+    g.version = 1;
+  }
+  if (g.version < CURRENT_GAME_VERSION) {
+    g.version = CURRENT_GAME_VERSION;
+  }
+}
 
 /** messageId -> { gameId, playerNum, dcName, displayName } */
 const dcMessageMeta = new Map();
@@ -61,7 +76,10 @@ export async function loadGames() {
       await initDb();
       const data = await loadGamesFromDb();
       for (const [id, g] of Object.entries(data)) {
-        if (g && typeof g === 'object') delete g.pendingAttack;
+        if (g && typeof g === 'object') {
+          delete g.pendingAttack;
+          migrateGame(g);
+        }
         games.set(id, g);
       }
       console.log(`[Games] Loaded ${games.size} game(s) from PostgreSQL.`);
@@ -77,7 +95,10 @@ export async function loadGames() {
     const data = JSON.parse(raw);
     if (data && typeof data === 'object') {
       for (const [id, g] of Object.entries(data)) {
-        if (g && typeof g === 'object') delete g.pendingAttack;
+        if (g && typeof g === 'object') {
+          delete g.pendingAttack;
+          migrateGame(g);
+        }
         games.set(id, g);
       }
     }

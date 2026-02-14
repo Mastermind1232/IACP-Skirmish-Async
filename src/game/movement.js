@@ -92,6 +92,44 @@ export function getHostileOccupiedSpacesForMovement(game, excludeFigureKey = nul
   return hostile;
 }
 
+/** F6 Blast: Figures with at least one space adjacent to the target figure. Returns [{ figureKey, playerNum }, ...]. */
+export function getFiguresAdjacentToTarget(game, targetFigureKey, mapId) {
+  const poses = game?.figurePositions || { 1: {}, 2: {} };
+  let targetCoord = null;
+  let targetPlayerNum = null;
+  for (const p of [1, 2]) {
+    if (poses[p]?.[targetFigureKey]) {
+      targetCoord = poses[p][targetFigureKey];
+      targetPlayerNum = p;
+      break;
+    }
+  }
+  if (!targetCoord || !mapId) return [];
+  const rawMapSpaces = getMapSpaces(mapId);
+  if (!rawMapSpaces?.adjacency) return [];
+  const mapDef = getMapRegistry().find((m) => m.id === mapId);
+  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+  const adjacency = mapSpaces.adjacency || {};
+  const targetDcName = targetFigureKey.replace(/-\d+-\d+$/, '');
+  const targetSize = game.figureOrientations?.[targetFigureKey] || getFigureSize(targetDcName);
+  const targetCells = getFootprintCells(targetCoord, targetSize).map((c) => normalizeCoord(c));
+  const adjacentSet = new Set();
+  for (const c of targetCells) {
+    for (const n of adjacency[c] || []) adjacentSet.add(normalizeCoord(n));
+  }
+  const out = [];
+  for (const p of [1, 2]) {
+    for (const [figureKey, coord] of Object.entries(poses[p] || {})) {
+      if (figureKey === targetFigureKey) continue;
+      const dcName = figureKey.replace(/-\d+-\d+$/, '');
+      const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName);
+      const cells = getFootprintCells(coord, size).map((c) => normalizeCoord(c));
+      if (cells.some((cell) => adjacentSet.has(cell))) out.push({ figureKey, playerNum: p });
+    }
+  }
+  return out;
+}
+
 export function getMovementKeywords(dcName) {
   const raw = getDcKeywords()?.[dcName] || [];
   return new Set(raw.map((k) => String(k).toLowerCase()));

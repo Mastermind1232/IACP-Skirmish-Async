@@ -41,6 +41,7 @@ export {
   ensureMovementCache,
   getReachableSpaces,
   getPathCost,
+  getFiguresAdjacentToTarget,
 } from './movement.js';
 
 export {
@@ -52,6 +53,6 @@ export {
   computeCombatResult,
 } from './combat.js';
 
-export { getAbility, resolveSurgeAbility, getSurgeAbilityLabel } from './abilities.js';
+export { getAbility, resolveSurgeAbility, getSurgeAbilityLabel, resolveAbility } from './abilities.js';
 
-export { getCcPlayContext, isCcPlayableNow, getPlayableCcFromHand } from './cc-timing.js';
+export { getCcPlayContext, isCcPlayableNow, getPlayableCcFromHand, isCcPlayLegalByRestriction } from './cc-timing.js';

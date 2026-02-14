@@ -14,13 +14,16 @@ import {
   AttachmentBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
+  SlashCommandBuilder,
+  REST,
+  Routes,
 } from 'discord.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
 import { parseVsav, parseIacpListPaste } from './src/vsav-parser.js';
-import { isDbConfigured, deleteGameFromDb } from './src/db.js';
+import { isDbConfigured, deleteGameFromDb, insertCompletedGame } from './src/db.js';
 import {
   getGame,
   setGame,
@@ -56,6 +59,12 @@ import {
   handleRefreshAll,
   handleUndo,
   handleKillGame,
+  handleBotmenuArchive,
+  handleBotmenuKill,
+  handleBotmenuArchiveYes,
+  handleBotmenuArchiveNo,
+  handleBotmenuKillYes,
+  handleBotmenuKillNo,
   handleDefaultDeck,
   handleSpecialDone,
   handleInteractCancel,
@@ -75,6 +84,9 @@ import {
   handleConfirmActivate,
   handleCancelActivate,
   handleMapSelection,
+  handleMapSelectionChoice,
+  handleMapSelectionDraw,
+  handleMapSelectionPick,
   handleDraftRandom,
   handleDetermineInitiative,
   handleDeploymentZone,
@@ -103,6 +115,8 @@ import {
   handleCcCloseDiscard,
   handleCcDiscard,
   handleSquadSelect,
+  handleIllegalCcIgnore,
+  handleIllegalCcUnplay,
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
@@ -137,16 +151,20 @@ import {
   getMovementKeywords,
   getReachableSpaces,
   getPathCost,
+  getFiguresAdjacentToTarget,
   rollAttackDice,
   rollDefenseDice,
   getAttackerSurgeAbilities,
   parseSurgeEffect,
   SURGE_LABELS,
   computeCombatResult,
+  getAbility,
   resolveSurgeAbility,
   getSurgeAbilityLabel,
+  resolveAbility,
   getPlayableCcFromHand,
   isCcPlayableNow,
+  isCcPlayLegalByRestriction,
 } from './src/game/index.js';
 import {
   buildScorecardEmbed,
@@ -185,6 +203,10 @@ import {
   getUndoButton,
   getBoardButtons,
   getGeneralSetupButtons,
+  getMapSelectionMenu,
+  getMissionSelectDrawMenu,
+  getMissionSelectionPickMenu,
+  getBotmenuButtons,
   getDetermineInitiativeButtons,
   getDeploymentZoneButtons,
   getDeploymentDoneButton,
@@ -193,6 +215,7 @@ import {
   getLobbyStartButton,
   getCcShuffleDrawButton,
   getCcActionButtons,
+  getIllegalCcPlayButtons,
   getSelectSquadButton,
   getHandSquadButtons,
   getKillGameButton,
@@ -220,6 +243,7 @@ import {
   getCcEffect,
   isCcAttachment,
   isDcAttachment,
+  getTournamentRotation,
 } from './src/data-loader.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1230,6 +1254,7 @@ function extractGameIdFromInteraction(interaction) {
   const prefixes = [
     'status_phase_', 'end_end_of_round_', 'end_start_of_round_', 'map_selection_', 'draft_random_',
     'pass_activation_turn_', 'combat_ready_', 'combat_roll_', 'cc_play_select_', 'cc_discard_select_', 'cc_attach_to_',
+    'botmenu_archive_yes_', 'botmenu_archive_no_', 'botmenu_kill_yes_', 'botmenu_kill_no_', 'botmenu_archive_', 'botmenu_kill_',
     'kill_game_', 'refresh_map_', 'refresh_all_', 'undo_', 'deployment_zone_red_', 'deployment_zone_blue_',
   ];
   for (const p of prefixes) {
@@ -1294,17 +1319,28 @@ async function postMissionCardAfterMapSelection(game, client, map) {
   const mapName = map.name || map.id;
   const fullName = `${mapName} — ${mission.name}`;
   game.selectedMission = { variant, name: mission.name, fullName };
+  await postPinnedMissionCardFromGameState(game, client);
+}
+
+/** Post mission card when game.selectedMission and game.selectedMap are already set (e.g. Competitive). */
+async function postPinnedMissionCardFromGameState(game, client) {
+  const mission = game.selectedMission;
+  const map = game.selectedMap;
+  if (!mission || !map) return;
+  const fullName = mission.fullName || `${map.name || map.id} — ${mission.name}`;
+  const missionData = getMissionCardsData()[map.id]?.[mission.variant];
   try {
     const ch = await client.channels.fetch(game.generalId);
-    const resolvedPath = resolveAssetPath(mission.imagePath, 'mission-cards');
-    const imagePath = join(rootDir, resolvedPath);
     let sentMsg;
-    if (existsSync(imagePath)) {
-      const attachment = new AttachmentBuilder(imagePath, { name: 'mission-card.jpg' });
-      sentMsg = await ch.send({
-        content: `🎯 **Mission:** ${fullName}`,
-        files: [attachment],
-      });
+    if (missionData?.imagePath) {
+      const resolvedPath = resolveAssetPath(missionData.imagePath, 'mission-cards');
+      const imagePath = join(rootDir, resolvedPath);
+      if (existsSync(imagePath)) {
+        const attachment = new AttachmentBuilder(imagePath, { name: 'mission-card.jpg' });
+        sentMsg = await ch.send({ content: `🎯 **Mission:** ${fullName}`, files: [attachment] });
+      } else {
+        sentMsg = await ch.send({ content: `🎯 **Mission:** ${fullName}` });
+      }
     } else {
       sentMsg = await ch.send({ content: `🎯 **Mission:** ${fullName}` });
     }
@@ -1606,6 +1642,7 @@ async function checkWinConditions(game, client) {
 
 async function postGameOver(game, client, winnerId, reason) {
   game.ended = true;
+  game.winnerId = winnerId ?? game.winnerId ?? null;
   const embed = buildScorecardEmbed(game);
   const content = winnerId
     ? `\uD83C\uDFC1 **GAME OVER** — <@${winnerId}> wins by ${reason}!`
@@ -1619,6 +1656,9 @@ async function postGameOver(game, client, winnerId, reason) {
     });
   } catch (err) {
     console.error('Failed to post game over:', err);
+  }
+  if (isDbConfigured()) {
+    insertCompletedGame(game).catch((err) => console.error('[DB] insertCompletedGame:', err));
   }
   saveGames();
 }
@@ -2163,7 +2203,13 @@ async function resolveCombatAfterRolls(game, combat, client) {
       const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
       const idx = (dcMessageIds || []).indexOf(targetMsgId);
       if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+      if (combat.surgeConditions?.length) {
+        game.figureConditions = game.figureConditions || {};
+        const existing = game.figureConditions[combat.target.figureKey] || [];
+        game.figureConditions[combat.target.figureKey] = [...new Set([...existing, ...(combat.surgeConditions || [])])];
+      }
       if (newCur <= 0) {
+        // F7: Keep healthState, figurePositions, and DC embed in sync when one figure in a group dies.
         if (game.figurePositions?.[defenderPlayerNum]) delete game.figurePositions[defenderPlayerNum][combat.target.figureKey];
         const { cost, subCost, figures } = combat.targetStats;
         const vp = (figures > 1 && subCost != null) ? subCost : (cost ?? 5);
@@ -2184,6 +2230,68 @@ async function resolveCombatAfterRolls(game, combat, client) {
         await checkWinConditions(game, client);
       }
     }
+    if (combat.surgeRecover > 0 && combat.attackerMsgId != null) {
+      const attMsgId = combat.attackerMsgId;
+      const attIdx = combat.attackerFigureIndex ?? 0;
+      const attHS = dcHealthState.get(attMsgId) || [];
+      const attEntry = attHS[attIdx];
+      if (attEntry) {
+        const [c, m] = attEntry;
+        const maxVal = m ?? c ?? 99;
+        const newCur = Math.min((c ?? maxVal) + (combat.surgeRecover || 0), maxVal);
+        attHS[attIdx] = [newCur, maxVal];
+        dcHealthState.set(attMsgId, attHS);
+        const attP = combat.attackerPlayerNum;
+        const dcIds = attP === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcL = attP === 1 ? game.p1DcList : game.p2DcList;
+        const i = (dcIds || []).indexOf(attMsgId);
+        if (i >= 0 && dcL?.[i]) dcL[i].healthState = [...attHS];
+      }
+    }
+    if (combat.surgeBlast > 0 && hit && game.selectedMap?.id) {
+      const adjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
+      const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+      for (const { figureKey: blastFigureKey, playerNum: blastPlayerNum } of adjacent) {
+        const blastMsgId = findDcMessageIdForFigure(game.gameId, blastPlayerNum, blastFigureKey);
+        if (!blastMsgId) continue;
+        const blastM = blastFigureKey.match(/-(\d+)-(\d+)$/);
+        const blastFigIndex = blastM ? parseInt(blastM[2], 10) : 0;
+        const blastHS = dcHealthState.get(blastMsgId) || [];
+        const blastEntry = blastHS[blastFigIndex];
+        if (!blastEntry) continue;
+        const [bCur, bMax] = blastEntry;
+        const blastDmg = combat.surgeBlast || 0;
+        const newBCur = Math.max(0, (bCur ?? bMax) - blastDmg);
+        blastHS[blastFigIndex] = [newBCur, bMax ?? newBCur];
+        dcHealthState.set(blastMsgId, blastHS);
+        const blastDcIds = blastPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const blastDcList = blastPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+        const blastIdx = (blastDcIds || []).indexOf(blastMsgId);
+        if (blastIdx >= 0 && blastDcList?.[blastIdx]) blastDcList[blastIdx].healthState = [...blastHS];
+        if (newBCur <= 0) {
+          if (game.figurePositions?.[blastPlayerNum]) delete game.figurePositions[blastPlayerNum][blastFigureKey];
+          const blastStats = getDcStats(blastDcList[blastIdx]?.dcName);
+          const cost = blastStats?.cost ?? 5;
+          const figures = blastStats?.figures ?? 1;
+          const subCost = getDcEffects()[blastDcList[blastIdx]?.dcName]?.subCost;
+          const vp = (figures > 1 && subCost != null) ? subCost : cost;
+          game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+          game[vpKey].kills += vp;
+          game[vpKey].total += vp;
+          const blastLabel = blastDcList[blastIdx]?.displayName || blastFigureKey;
+          await logGameAction(game, client, `Blast: <@${ownerId}> defeated **${blastLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+          if (blastIdx >= 0 && isGroupDefeated(game, blastPlayerNum, blastIdx)) {
+            const activatedIndices = blastPlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+            if (!activatedIndices.includes(blastIdx)) {
+              if (blastPlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
+              else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+              await updateActivationsMessage(game, blastPlayerNum, client);
+            }
+          }
+          await checkWinConditions(game, client);
+        }
+      }
+    }
   } else if (hit && damage === 0) {
     await logGameAction(game, client, `<@${ownerId}> attacked **${combat.target.label}** — blocked`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
   } else if (!hit) {
@@ -2199,20 +2307,29 @@ async function resolveCombatAfterRolls(game, combat, client) {
       await rollMsg.edit({ components: [] }).catch(() => {});
     } catch {}
   }
-  if (damage > 0 && targetMsgId) {
+  const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
+  if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
+  if (combat.surgeBlast > 0 && hit && game.selectedMap?.id) {
+    const blastAdjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
+    for (const { figureKey: bk, playerNum: bp } of blastAdjacent) {
+      const mid = findDcMessageIdForFigure(game.gameId, bp, bk);
+      if (mid) embedRefreshMsgIds.add(mid);
+    }
+  }
+  for (const msgId of embedRefreshMsgIds) {
     try {
-      const targetMeta = dcMessageMeta.get(targetMsgId);
-      if (targetMeta) {
-        const channelId = targetMeta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+      const meta = dcMessageMeta.get(msgId);
+      if (meta) {
+        const channelId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
         const channel = await client.channels.fetch(channelId);
-        const dcMsg = await channel.messages.fetch(targetMsgId);
-        const exhausted = dcExhaustedState.get(targetMsgId) ?? false;
-        const healthState = dcHealthState.get(targetMsgId) || [];
-        const { embed, files } = await buildDcEmbedAndFiles(targetMeta.dcName, exhausted, targetMeta.displayName, healthState);
+        const dcMsg = await channel.messages.fetch(msgId);
+        const exhausted = dcExhaustedState.get(msgId) ?? false;
+        const healthState = dcHealthState.get(msgId) || [];
+        const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, healthState);
         await dcMsg.edit({ embeds: [embed], files }).catch(() => {});
       }
     } catch (err) {
-      console.error('Failed to update target DC embed:', err);
+      console.error('Failed to update DC embed:', err);
     }
   }
   if (game.boardId && game.selectedMap) {
@@ -2899,6 +3016,16 @@ async function setupServer(guild) {
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}`);
+  try {
+    const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+    const cmd = new SlashCommandBuilder()
+      .setName('botmenu')
+      .setDescription('Open Bot Stuff menu (Archive, Kill Game). Use in the Game Log channel of a game.');
+    await rest.put(Routes.applicationCommands(client.user.id), { body: [cmd.toJSON()] });
+    console.log('Slash command /botmenu registered.');
+  } catch (err) {
+    console.error('Failed to register /botmenu:', err.message);
+  }
   for (const guild of client.guilds.cache.values()) {
     try {
       await guild.channels.fetch();
@@ -3018,6 +3145,7 @@ client.on('messageCreate', async (message) => {
         await createGameChannels(guild, userId, userId, { createPlayAreas: false, createHandChannels: false });
       const game = {
         gameId,
+        version: 1,
         gameCategoryId: generalChannel.parentId,
         player1Id: userId,
         player2Id: userId,
@@ -3224,6 +3352,30 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
   try {
+  if (interaction.isChatInputCommand() && interaction.commandName === 'botmenu') {
+    const channelId = interaction.channelId;
+    let gameByChannel = null;
+    for (const [gid, g] of getGamesMap()) {
+      if (g.generalId === channelId) {
+        gameByChannel = g;
+        break;
+      }
+    }
+    if (!gameByChannel) {
+      await interaction.reply({
+        content: 'Use /botmenu in the **Game Log** channel of the game you want to manage.',
+        ephemeral: true,
+      }).catch(() => {});
+      return;
+    }
+    await interaction.reply({
+      content: '**Bot Stuff** — Choose an action:',
+      components: [getBotmenuButtons(gameByChannel.gameId)],
+      ephemeral: false,
+    }).catch(() => {});
+    return;
+  }
+
   if (interaction.isButton()) {
     const buttonKey = getHandlerKey(interaction.customId, 'button');
     if (!buttonKey) return;
@@ -3258,6 +3410,32 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isStringSelectMenu()) {
     const selectKey = getHandlerKey(interaction.customId, 'select');
     if (!selectKey) return;
+    if (selectKey === 'map_selection_menu_' || selectKey === 'map_selection_draw_' || selectKey === 'map_selection_pick_') {
+      const setupChoiceContext = {
+        getGame,
+        getPlayReadyMaps,
+        getTournamentRotation,
+        getMissionCardsData,
+        getMapRegistry,
+        getMissionSelectDrawMenu,
+        getMissionSelectionPickMenu,
+        postMissionCardAfterMapSelection,
+        postPinnedMissionCardFromGameState,
+        buildBoardMapPayload,
+        logGameAction,
+        getGeneralSetupButtons,
+        createHandChannels,
+        getHandTooltipEmbed,
+        getSquadSelectEmbed,
+        getHandSquadButtons,
+        client,
+        saveGames,
+      };
+      if (selectKey === 'map_selection_menu_') await handleMapSelectionChoice(interaction, setupChoiceContext);
+      else if (selectKey === 'map_selection_draw_') await handleMapSelectionDraw(interaction, setupChoiceContext);
+      else if (selectKey === 'map_selection_pick_') await handleMapSelectionPick(interaction, setupChoiceContext);
+      return;
+    }
     if (selectKey === 'setup_attach_to_') {
       const setupSelectContext = {
         getGame,
@@ -3284,6 +3462,10 @@ client.on('interactionCreate', async (interaction) => {
       saveGames,
       isCcAttachment,
       isCcPlayableNow,
+      isCcPlayLegalByRestriction,
+      getIllegalCcPlayButtons,
+      client,
+      resolveAbility,
     };
     if (selectKey === 'cc_attach_to_') await handleCcAttachTo(interaction, ccHandSelectContext);
     else if (selectKey === 'cc_play_select_') await handleCcPlaySelect(interaction, ccHandSelectContext);
@@ -3295,7 +3477,7 @@ client.on('interactionCreate', async (interaction) => {
   const buttonKey = getHandlerKey(interaction.customId, 'button');
   if (!buttonKey) return;
 
-  if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'squad_select_') {
+  if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'squad_select_' || buttonKey === 'illegal_cc_ignore_' || buttonKey === 'illegal_cc_unplay_') {
     const ccHandButtonContext = {
       getGame,
       saveGames,
@@ -3320,6 +3502,7 @@ client.on('interactionCreate', async (interaction) => {
       isCcAttachment,
       updateAttachmentMessageForDc,
       getPlayableCcFromHand,
+      resolveAbility,
     };
     if (buttonKey === 'deck_illegal_play_') await handleDeckIllegalPlay(interaction, ccHandButtonContext);
     else if (buttonKey === 'deck_illegal_redo_') await handleDeckIllegalRedo(interaction, ccHandButtonContext);
@@ -3330,6 +3513,8 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'cc_close_discard_') await handleCcCloseDiscard(interaction, ccHandButtonContext);
     else if (buttonKey === 'cc_discard_') await handleCcDiscard(interaction, ccHandButtonContext);
     else if (buttonKey === 'squad_select_') await handleSquadSelect(interaction, ccHandButtonContext);
+    else if (buttonKey === 'illegal_cc_ignore_') await handleIllegalCcIgnore(interaction, ccHandButtonContext);
+    else if (buttonKey === 'illegal_cc_unplay_') await handleIllegalCcUnplay(interaction, ccHandButtonContext);
     return;
   }
 
@@ -3378,6 +3563,7 @@ client.on('interactionCreate', async (interaction) => {
       getMoveMpButtonRows,
       getLegalInteractOptions,
       FIGURE_LETTERS,
+      resolveAbility,
     };
     if (buttonKey === 'dc_activate_') await handleDcActivate(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_unactivate_') await handleDcUnactivate(interaction, dcPlayAreaContext);
@@ -3467,6 +3653,7 @@ client.on('interactionCreate', async (interaction) => {
       getAttackerSurgeAbilities,
       SURGE_LABELS,
       parseSurgeEffect,
+      getAbility,
       resolveSurgeAbility,
       getSurgeAbilityLabel,
     };
@@ -3563,7 +3750,9 @@ client.on('interactionCreate', async (interaction) => {
     const setupContext = {
       getGame,
       getPlayReadyMaps,
+      getMapSelectionMenu,
       postMissionCardAfterMapSelection,
+      postPinnedMissionCardFromGameState,
       buildBoardMapPayload,
       logGameAction,
       getGeneralSetupButtons,
@@ -3649,6 +3838,28 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  if (buttonKey.startsWith('botmenu_')) {
+    const botmenuContext = {
+      getGame,
+      deleteGame,
+      saveGames,
+      dcMessageMeta,
+      dcExhaustedState,
+      dcDepletedState,
+      dcHealthState,
+      logGameErrorToBotLogs,
+      client,
+      deleteGameFromDb,
+    };
+    if (buttonKey === 'botmenu_archive_') await handleBotmenuArchive(interaction, botmenuContext);
+    else if (buttonKey === 'botmenu_kill_') await handleBotmenuKill(interaction, botmenuContext);
+    else if (buttonKey === 'botmenu_archive_yes_') await handleBotmenuArchiveYes(interaction, botmenuContext);
+    else if (buttonKey === 'botmenu_archive_no_') await handleBotmenuArchiveNo(interaction, botmenuContext);
+    else if (buttonKey === 'botmenu_kill_yes_') await handleBotmenuKillYes(interaction, botmenuContext);
+    else if (buttonKey === 'botmenu_kill_no_') await handleBotmenuKillNo(interaction, botmenuContext);
+    return;
+  }
+
   if (buttonKey === 'kill_game_') {
     const gameToolsContext = {
       getGame,
@@ -3660,6 +3871,7 @@ client.on('interactionCreate', async (interaction) => {
       dcHealthState,
       logGameErrorToBotLogs,
       client,
+      deleteGameFromDb,
     };
     await handleKillGame(interaction, gameToolsContext);
     return;

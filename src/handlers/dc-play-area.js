@@ -536,9 +536,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     client,
     logGameErrorToBotLogs,
     extractGameIdFromInteraction,
+    resolveAbility,
   } = ctx;
 
-  let msgId, action, figureIndex = 0;
+  let msgId, action, figureIndex = 0, specialIdx = -1;
   if (buttonKey === 'dc_move_') {
     const m = interaction.customId.match(/^dc_move_(.+)_f(\d+)$/);
     msgId = m ? m[1] : interaction.customId.replace('dc_move_', '');
@@ -556,7 +557,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     action = 'Interact';
   } else {
     const parts = interaction.customId.replace('dc_special_', '').split('_');
-    const specialIdx = parseInt(parts[0], 10);
+    specialIdx = parseInt(parts[0], 10);
     msgId = parts.slice(1).join('_');
     const metaForAction = dcMessageMeta.get(msgId);
     const stats = metaForAction ? getDcStats(metaForAction.dcName) : { specials: [] };
@@ -804,6 +805,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   const displayName = meta.displayName || meta.dcName;
   const pLabel = `P${meta.playerNum}`;
   await logGameAction(game, client, `**${pLabel}:** <@${ownerId}> used **${action}**.`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'activate' });
+  const abilityId = buttonKey === 'dc_special_' && specialIdx >= 0 ? `dc_special:${meta.dcName}:${specialIdx}` : null;
+  const resolveResult = resolveAbility ? resolveAbility(abilityId, { game, msgId, meta, specialLabel: action }) : { applied: false, manualMessage: 'Resolve manually (see rules).' };
+  const manualMsg = resolveResult.manualMessage || 'Resolve manually (see rules).';
   const doneRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`special_done_${game.gameId}_${msgId}`)
@@ -811,7 +815,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       .setStyle(ButtonStyle.Success)
   );
   await interaction.reply({
-    content: `**${action}** — Resolve manually (see rules). Click **Done** when finished.`,
+    content: `**${action}** — ${resolveResult.applied ? 'Resolved.' : manualMsg} Click **Done** when finished.`,
     components: [doneRow],
     ephemeral: false,
   }).catch(() => {});
