@@ -28,12 +28,15 @@ const MAP_SPACES_HTML = 'vassal_extracted/images/extract-map-spaces.html';
 const MAP_SPACES_JSON = join(root, 'data', 'map-spaces.json');
 const MAP_REGISTRY_JSON = join(root, 'data', 'map-registry.json');
 const TOURNAMENT_ROTATION_JSON = join(root, 'data', 'tournament-rotation.json');
+const DEPLOYMENT_ZONES_JSON = join(root, 'data', 'deployment-zones.json');
 const PLACEHOLDER = '<!-- INJECT_MAP_SPACES -->';
 const PLACEHOLDER_IMAGE_PATHS = '<!-- INJECT_MAP_IMAGE_PATHS -->';
 const PLACEHOLDER_TOURNAMENT_ROTATION = '<!-- INJECT_TOURNAMENT_ROTATION -->';
+const PLACEHOLDER_DEPLOYMENT_ZONES = '<!-- INJECT_DEPLOYMENT_ZONES -->';
 const MAPS_SUBFOLDER = 'vassal_extracted/images/maps/';
 
 const SAVE_PATH = '/save-map-spaces';
+const SAVE_DEPLOYMENT_ZONES_PATH = '/save-deployment-zones';
 
 createServer((req, res) => {
   const requestPath = (req.url || '/').split('?')[0];
@@ -57,6 +60,33 @@ createServer((req, res) => {
           return;
         }
         writeFileSync(MAP_SPACES_JSON, JSON.stringify(data, null, 2), 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Error: ' + (err.message || 'failed to save'));
+      }
+    });
+    req.on('error', () => {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Error: request failed');
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && (pathForSave === SAVE_DEPLOYMENT_ZONES_PATH || decodedPath === 'save-deployment-zones')) {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      try {
+        const body = Buffer.concat(chunks).toString('utf8');
+        const data = JSON.parse(body);
+        if (!data || typeof data !== 'object' || !data.maps || typeof data.maps !== 'object') {
+          res.writeHead(400, { 'Content-Type': 'text/plain' });
+          res.end('Invalid JSON: expected { "maps": { ... } }');
+          return;
+        }
+        writeFileSync(DEPLOYMENT_ZONES_JSON, JSON.stringify(data, null, 2), 'utf8');
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
       } catch (err) {
@@ -98,6 +128,12 @@ createServer((req, res) => {
         html = html.replace(PLACEHOLDER_TOURNAMENT_ROTATION, `<script type="application/json" id="tournament-rotation">${rotJson}</script>`);
       } else {
         html = html.replace(PLACEHOLDER_TOURNAMENT_ROTATION, '<script type="application/json" id="tournament-rotation">[]</script>');
+      }
+      if (existsSync(DEPLOYMENT_ZONES_JSON)) {
+        const dzJson = readFileSync(DEPLOYMENT_ZONES_JSON, 'utf8').replace(/<\/script>/gi, '<\\/script>');
+        html = html.replace(PLACEHOLDER_DEPLOYMENT_ZONES, `<script type="application/json" id="deployment-zones-data">${dzJson}</script>`);
+      } else {
+        html = html.replace(PLACEHOLDER_DEPLOYMENT_ZONES, '<script type="application/json" id="deployment-zones-data">{"maps":{}}</script>');
       }
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(html);

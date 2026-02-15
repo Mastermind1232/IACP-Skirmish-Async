@@ -13,12 +13,25 @@
     #status { margin: 8px 0; color: #9f9; }
     .mode { margin-right: 12px; }
     label { cursor: pointer; }
+    #colorKey { margin: 8px 0 12px 0; font-size: 0.85em; color: #bbb; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+    #colorKey span { display: inline-flex; align-items: center; gap: 4px; }
+    #colorKey .swatch { width: 14px; height: 14px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.3); }
   </style>
 </head>
 <body>
   <h1>Map Spaces — Terrain & Walls</h1>
   <p id="status">Load map-spaces.json. Off-map: click or drag to exclude/restore cells. Terrain: click to cycle. Edges: click for walls.</p>
-  <p style="margin:4px 0 12px 0; font-size:0.9em; color:#999;">Run <code>npm run map-tool</code> then open the URL it prints. To see the map picture under the grid, add the map .gif files to <code>vassal_extracted/images/</code> (e.g. from a Vassal module extract).</p>
+  <p style="margin:4px 0 8px 0; font-size:0.9em; color:#999;">Run <code>npm run map-tool</code> then open the URL it prints. To see the map picture under the grid, add the map .gif files to <code>vassal_extracted/images/</code> (e.g. from a Vassal module extract).</p>
+  <div id="colorKey" title="Grid overlay legend">
+    <span><span class="swatch" style="background:#505050;"></span> Off-map</span>
+    <span><span class="swatch" style="background:rgba(100,149,237,0.65);"></span> Difficult terrain</span>
+    <span><span class="swatch" style="background:rgba(220,53,69,0.7);"></span> Blocking</span>
+    <span><span class="swatch" style="background:rgba(50,205,50,0.6);"></span> Exterior</span>
+    <span><span class="swatch" style="background:rgba(220,53,69,0.6);"></span> Red deployment zone</span>
+    <span><span class="swatch" style="background:rgba(13,110,253,0.6);"></span> Blue deployment zone</span>
+    <span><span class="swatch" style="background:rgba(255,255,0,0.9);"></span> Solid wall</span>
+    <span><span class="swatch" style="background:rgba(255,100,100,0.8);"></span> Movement-blocking edge</span>
+  </div>
   <div class="toolbar">
     <label>Map: <select id="mapSelect" title="Select which map to configure"></select></label>
     <span class="mode" style="margin-left:8px"><label title="Read-only: at least one mission variant of this map is in data/tournament-rotation.json"><input type="checkbox" id="inRotationCheckbox" disabled> In competitive rotation</label></span>
@@ -26,7 +39,9 @@
     <span class="mode"><label><input type="radio" name="mode" value="terrain"> Terrain (normal → difficult → blocking)</label></span>
     <span class="mode"><label><input type="radio" name="mode" value="edge"> Edge (solid wall → dotted → clear)</label></span>
     <span class="mode"><label><input type="radio" name="mode" value="exterior"> Exterior (green = exterior; click or drag to paint/clear)</label></span>
+    <span class="mode" id="deploymentZoneWrap"><label><input type="radio" name="mode" value="deploymentzone"> Deployment zone</label> <span id="zonePaintWrap"><button type="button" id="zonePaintRed" title="Paint red zone">Red</button> <button type="button" id="zonePaintBlue" title="Paint blue zone">Blue</button> <button type="button" id="zonePaintClear" title="Clear zone">Clear</button></span></span>
     <button id="saveBtn" style="background:#0a0;color:#fff;font-weight:bold">Save</button>
+    <button id="saveZonesBtn" style="background:#06c;color:#fff">Save zones</button>
   </div>
   <div class="container">
     <img id="mapImg" src="maps/Map_Mos Eisley Outskirts.gif" alt="Map">
@@ -35,6 +50,7 @@
   <!-- INJECT_MAP_SPACES -->
   <!-- INJECT_MAP_IMAGE_PATHS -->
   <!-- INJECT_TOURNAMENT_ROTATION -->
+  <!-- INJECT_DEPLOYMENT_ZONES -->
   <script>
     const img = document.getElementById('mapImg');
     // If default src is old path without maps/ (e.g. cached HTML), fix it so image loads from images/maps/
@@ -65,6 +81,16 @@
       if (el && el.textContent) try { return JSON.parse(el.textContent); } catch (e) {}
       return [];
     })();
+    /** Full deployment zones { source, maps: { mapId: { red: [], blue: [] } } }. Injected by map-tool server. */
+    let fullDeploymentZonesData = (function () {
+      const el = document.getElementById('deployment-zones-data');
+      if (el && el.textContent) try { return JSON.parse(el.textContent); } catch (e) {}
+      return { source: 'extract-map-spaces.html', maps: {} };
+    })();
+    /** Current map's deployment zone coords (editable). Synced from fullDeploymentZonesData on map switch. */
+    let deploymentZoneState = { red: [], blue: [] };
+    /** Which zone to paint in Deployment zone mode: 'red' | 'blue' | 'clear'. */
+    let deploymentZonePaint = 'red';
     /** Ensure path points to images/maps/ so map images load from the maps subfolder. */
     function mapImagePathForUrl(path) {
       if (!path) return path;
@@ -89,8 +115,15 @@
       return [col, row];
     }
 
+    function syncDeploymentZoneState(mapId) {
+      const z = fullDeploymentZonesData?.maps?.[mapId];
+      deploymentZoneState.red = (z?.red || []).map(s => String(s).toLowerCase());
+      deploymentZoneState.blue = (z?.blue || []).map(s => String(s).toLowerCase());
+    }
+
     /** Switch to editing the given map id: load its data from fullMapData if present, else empty. */
     function switchToMap(id) {
+      syncDeploymentZoneState(id);
       const mapData = fullMapData?.maps?.[id];
       const name = ALL_MAPS.find(m => m.id === id)?.name || id;
       if (mapData) {
@@ -189,16 +222,20 @@
       for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) {
         const k = coordKey(c, r), x = sx0 + c * sdx, y = sy0 + r * sdy;
         if (offSet.has(k)) {
-          ctx.fillStyle = 'rgba(80,80,80,0.7)';
+          ctx.fillStyle = 'rgba(80,80,80,0.75)';
           ctx.fillRect(x, y, sdx, sdy);
+          if (deploymentZoneState.red.includes(k)) { ctx.fillStyle = 'rgba(220,53,69,0.55)'; ctx.fillRect(x, y, sdx, sdy); }
+          else if (deploymentZoneState.blue.includes(k)) { ctx.fillStyle = 'rgba(13,110,253,0.55)'; ctx.fillRect(x, y, sdx, sdy); }
           ctx.strokeStyle = 'rgba(255,100,100,0.5)';
           ctx.strokeRect(x, y, sdx, sdy);
         } else {
           const ter = state.terrain[k] || 'normal';
-          if (ter === 'difficult') { ctx.fillStyle = 'rgba(100,149,237,0.4)'; ctx.fillRect(x, y, sdx, sdy); }
-          else if (ter === 'blocking') { ctx.fillStyle = 'rgba(255,0,0,0.5)'; ctx.fillRect(x, y, sdx, sdy); }
-          if (state.exterior && state.exterior[k]) { ctx.fillStyle = 'rgba(50,205,50,0.35)'; ctx.fillRect(x, y, sdx, sdy); }
-          ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.strokeRect(x, y, sdx, sdy);
+          if (ter === 'difficult') { ctx.fillStyle = 'rgba(100,149,237,0.55)'; ctx.fillRect(x, y, sdx, sdy); }
+          else if (ter === 'blocking') { ctx.fillStyle = 'rgba(220,53,69,0.65)'; ctx.fillRect(x, y, sdx, sdy); }
+          if (state.exterior && state.exterior[k]) { ctx.fillStyle = 'rgba(50,205,50,0.5)'; ctx.fillRect(x, y, sdx, sdy); }
+          if (deploymentZoneState.red.includes(k)) { ctx.fillStyle = 'rgba(220,53,69,0.5)'; ctx.fillRect(x, y, sdx, sdy); }
+          else if (deploymentZoneState.blue.includes(k)) { ctx.fillStyle = 'rgba(13,110,253,0.5)'; ctx.fillRect(x, y, sdx, sdy); }
+          ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.strokeRect(x, y, sdx, sdy);
         }
         for (const [dc, dr, dir] of [[0,-1,'n'],[1,0,'e'],[0,1,'s'],[-1,0,'w']]) {
           const nk = coordKey(c+dc, r+dr);
@@ -247,6 +284,14 @@
       state.exterior[info.coord] = !!paintExterior;
     }
 
+    function applyDeploymentZone(info, paint) {
+      const k = String(info.coord).toLowerCase();
+      deploymentZoneState.red = deploymentZoneState.red.filter(c => c !== k);
+      deploymentZoneState.blue = deploymentZoneState.blue.filter(c => c !== k);
+      if (paint === 'red') deploymentZoneState.red.push(k);
+      else if (paint === 'blue') deploymentZoneState.blue.push(k);
+    }
+
     function applyCellAction(info, mode, paintOffMap) {
       if (mode === 'offmap') {
         applyOffMap(info, paintOffMap);
@@ -261,6 +306,8 @@
         if (new Set((state.offMap || []).map(s => String(s).toLowerCase())).has(info.coord)) return;
         state.exterior = state.exterior || {};
         state.exterior[info.coord] = !state.exterior[info.coord];
+      } else if (mode === 'deploymentzone' && typeof paintOffMap === 'string') {
+        applyDeploymentZone(info, paintOffMap);
       } else if (mode === 'edge' && info.edge) {
         const nc = info.edge === 'e' ? info.col + 1 : info.edge === 'w' ? info.col - 1 : info.col;
         const nr = info.edge === 's' ? info.row + 1 : info.edge === 'n' ? info.row - 1 : info.row;
@@ -309,6 +356,10 @@
         const paintExterior = !(state.exterior && state.exterior[info.coord]);
         applyExterior(info, paintExterior);
         dragState = { mode, paintOffMap: paintExterior, lastCoord: info.coord };
+        draw();
+      } else if (mode === 'deploymentzone') {
+        applyDeploymentZone(info, deploymentZonePaint);
+        dragState = { mode, paintOffMap: deploymentZonePaint, lastCoord: info.coord };
         draw();
       } else {
         applyCellAction(info, mode, null);
@@ -433,6 +484,30 @@
     }
 
     document.getElementById('saveBtn').onclick = () => doSave();
+
+    function doSaveZones() {
+      const selectedId = document.getElementById('mapSelect').value || 'mos-eisley-outskirts';
+      const maps = { ...(fullDeploymentZonesData?.maps || {}), [selectedId]: { red: [...deploymentZoneState.red], blue: [...deploymentZoneState.blue] } };
+      const data = { source: fullDeploymentZonesData?.source || 'extract-map-spaces.html', maps };
+      const saveUrl = (typeof location !== 'undefined' && location.origin) ? (location.origin + '/save-deployment-zones') : '/save-deployment-zones';
+      fetch(saveUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).then((r) => {
+        if (r.ok) {
+          fullDeploymentZonesData = data;
+          document.getElementById('status').textContent = 'Saved to data/deployment-zones.json (' + deploymentZoneState.red.length + ' red, ' + deploymentZoneState.blue.length + ' blue for ' + selectedId + ').';
+        } else return r.text().then((t) => Promise.reject(new Error(t || r.status)));
+      }).catch((err) => {
+        document.getElementById('status').textContent = 'Save zones failed (run map-tool server?): ' + (err.message || 'unknown');
+      });
+    }
+    document.getElementById('saveZonesBtn').onclick = () => doSaveZones();
+
+    document.getElementById('zonePaintRed').onclick = () => { deploymentZonePaint = 'red'; };
+    document.getElementById('zonePaintBlue').onclick = () => { deploymentZonePaint = 'blue'; };
+    document.getElementById('zonePaintClear').onclick = () => { deploymentZonePaint = 'clear'; };
 
     img.onload = init;
     img.onerror = () => {
