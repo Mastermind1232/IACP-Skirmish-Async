@@ -306,11 +306,13 @@ Definition of “full game” for this plan:
 - F10 if desired; F11 (Archive via /botmenu); F14 (Undo scope); F15 (Discord limits); F16 (Kill/Archive via /botmenu); stat tracking UI when DB2 exists.
 
 **§7 Remaining work (as of last update)**  
-- **F8:** Extend map-spaces so every map in use has spaces, adjacency, terrain (data content).  
+- **F8:** Extend map-spaces so every map in use has spaces, adjacency, terrain (data content). Content work: add/export map-spaces per map via extract-map-spaces tool; code already supports any map with data.  
 - **F9:** ~~Interior/exterior per-space flags in map data + UI tool~~ — **Done:** optional `exterior: { coord: true }` per map in map-spaces; `isExteriorSpace(mapSpaces, coord)` in data-loader; extract-map-spaces.html has Exterior mode (toggle, load, export). Game logic that applies exterior effects (e.g. CC “exterior spaces”) can wire to this getter next.  
 - **F10:** ~~Optional “Ready to resolve rolls” confirmation step in combat~~ — **Done:** button sent after rolls (and after surge step); handler `combat_resolve_ready_` calls `resolveCombatAfterRolls`.  
 - **F14:** ~~More undo types (e.g. interact, CC play)~~ — **Done:** undo for interact (restore actions remaining + contraband/launch panel/doors), CC play from hand, CC play from DC (Special). Optional full-state snapshots still not implemented.  
 - **D1/D2:** Migrate DC/CC to reference ability ids.  
+- **D3:** ~~Validate critical JSON on load~~ — **Done:** `validateCriticalData()` in data-loader runs after loadAll(); validates dc-effects, dc-stats, map-spaces, ability-library, cc-effects, map-registry, deployment-zones, dice; logs warnings and throws in `NODE_ENV=development`.  
+- **DB2:** ~~Stats-ready schema (completed_games)~~ — **Done:** `insertCompletedGame(game)` in db.js; called from `postGameOver()` when DB configured; row written when game ends.  
 - **DB3:** Optional indexes — **Done:** `idx_games_updated_at`, `idx_games_ended` (expression on `game_data->>'ended'`) created in initDb.
 - **DB5:** Save optimization — **Done:** save only deletes rows for games no longer in the in-memory map; upserts the rest (no full table wipe).
 

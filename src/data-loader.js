@@ -125,6 +125,30 @@ function validateCriticalData() {
   if (!ccEffectsData?.cards || typeof ccEffectsData.cards !== 'object') {
     warnings.push('cc-effects (ccEffectsData.cards): expected object');
   }
+  if (!Array.isArray(mapRegistry)) {
+    warnings.push('map-registry (mapRegistry): expected array');
+  } else if (mapRegistry.length && typeof mapRegistry[0] !== 'object') {
+    warnings.push('map-registry: each entry should be an object (id, name, grid, imagePath)');
+  }
+  if (!deploymentZones || typeof deploymentZones !== 'object') {
+    warnings.push('deployment-zones (deploymentZones): expected object');
+  } else {
+    const firstDz = Object.keys(deploymentZones)[0];
+    const dz = firstDz ? deploymentZones[firstDz] : null;
+    if (dz && typeof dz === 'object' && !Array.isArray(dz.red) && !Array.isArray(dz.blue)) {
+      warnings.push('deployment-zones: each map should have "red" and/or "blue" arrays');
+    }
+  }
+  if (!diceData || typeof diceData !== 'object') {
+    warnings.push('dice (diceData): expected object');
+  } else {
+    if (typeof diceData.attack !== 'object' || diceData.attack === null) {
+      warnings.push('dice: expected "attack" object (e.g. red, yellow, green, blue)');
+    }
+    if (typeof diceData.defense !== 'object' || diceData.defense === null) {
+      warnings.push('dice: expected "defense" object (e.g. white, black)');
+    }
+  }
   if (warnings.length) {
     console.warn('[Data] Validation warnings:', warnings.join('; '));
     if (process.env.NODE_ENV === 'development') {

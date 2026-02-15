@@ -18,35 +18,60 @@
 <body>
   <h1>Map Spaces — Terrain & Walls</h1>
   <p id="status">Load map-spaces.json. Off-map: click or drag to exclude/restore cells. Terrain: click to cycle. Edges: click for walls.</p>
-  <p style="margin:4px 0 12px 0; font-size:0.9em; color:#999;">To auto-load data: run <code>npm run map-tool</code> in the project folder, then open <code>http://localhost:3457/vassal_extracted/images/extract-map-spaces.html</code></p>
+  <p style="margin:4px 0 12px 0; font-size:0.9em; color:#999;">Run <code>npm run map-tool</code> then open the URL it prints. To see the map picture under the grid, add the map .gif files to <code>vassal_extracted/images/</code> (e.g. from a Vassal module extract).</p>
   <div class="toolbar">
     <label>Map: <select id="mapSelect" title="Select which map to configure"></select></label>
+    <span class="mode" style="margin-left:8px"><label title="Read-only: at least one mission variant of this map is in data/tournament-rotation.json"><input type="checkbox" id="inRotationCheckbox" disabled> In competitive rotation</label></span>
     <span class="mode"><label><input type="radio" name="mode" value="offmap" checked> Off-map (click to exclude)</label></span>
     <span class="mode"><label><input type="radio" name="mode" value="terrain"> Terrain (normal → difficult → blocking)</label></span>
     <span class="mode"><label><input type="radio" name="mode" value="edge"> Edge (solid wall → dotted → clear)</label></span>
-    <span class="mode"><label><input type="radio" name="mode" value="exterior"> Exterior (click to toggle)</label></span>
-    <button id="loadBtn">Load map-spaces.json</button>
-    <input type="file" id="fileInput" accept=".json" style="display:none">
-    <button id="loadImgBtn">Load map image</button>
-    <input type="file" id="imgInput" accept="image/*" style="display:none">
-    <button id="invertBtn">Invert (swap on/off-map)</button>
+    <span class="mode"><label><input type="radio" name="mode" value="exterior"> Exterior (green = exterior; click or drag to paint/clear)</label></span>
     <button id="saveBtn" style="background:#0a0;color:#fff;font-weight:bold">Save</button>
-    <button id="exportBtn">Export JSON</button>
   </div>
   <div class="container">
-    <img id="mapImg" src="Map_Mos Eisley Outskirts.gif" alt="Map">
+    <img id="mapImg" src="maps/Map_Mos Eisley Outskirts.gif" alt="Map">
     <canvas id="overlay"></canvas>
   </div>
-
+  <!-- INJECT_MAP_SPACES -->
+  <!-- INJECT_MAP_IMAGE_PATHS -->
+  <!-- INJECT_TOURNAMENT_ROTATION -->
   <script>
     const img = document.getElementById('mapImg');
+    // If default src is old path without maps/ (e.g. cached HTML), fix it so image loads from images/maps/
+    (function () {
+      const s = img.getAttribute('src') || '';
+      if (s && s.includes('Map_') && !s.includes('maps/') && !s.startsWith('http')) img.setAttribute('src', 'maps/' + s.replace(/^.*[/\\]/, ''));
+    })();
     const overlay = document.getElementById('overlay');
     const ctx = overlay.getContext('2d');
     const dx = 50, dy = 50, x0 = 25, y0 = 25;
     let scale = 1, numCols = 0, numRows = 0;
     let state = { spaces: [], adjacency: {}, terrain: {}, blocking: [], impassableEdges: [], movementBlockingEdges: [], offMap: [], exterior: {} };
-    /** Full file data from last Load; used to preserve other maps on Export. */
-    let fullMapData = null;
+    /** Full file data from last Load (or injected by map-tool server); used to preserve other maps on Export. */
+    let fullMapData = (function () {
+      const el = document.getElementById('map-spaces-data');
+      if (el && el.textContent) try { return JSON.parse(el.textContent); } catch (e) {}
+      return null;
+    })();
+    /** Map id -> image path (from map-registry, injected by server). Used to show map image when selecting from dropdown. */
+    let mapImagePaths = (function () {
+      const el = document.getElementById('map-image-paths');
+      if (el && el.textContent) try { return JSON.parse(el.textContent); } catch (e) {}
+      return {};
+    })();
+    /** Mission IDs in IACP competitive rotation (mapId:variant). Injected by map-tool server from data/tournament-rotation.json. */
+    const tournamentRotationMissionIds = (function () {
+      const el = document.getElementById('tournament-rotation');
+      if (el && el.textContent) try { return JSON.parse(el.textContent); } catch (e) {}
+      return [];
+    })();
+    /** Ensure path points to images/maps/ so map images load from the maps subfolder. */
+    function mapImagePathForUrl(path) {
+      if (!path) return path;
+      if (path.includes('vassal_extracted/images/') && !path.includes('/maps/'))
+        return path.replace('vassal_extracted/images/', 'vassal_extracted/images/maps/');
+      return path;
+    }
     /** All maps from map-registry (id + name) so dropdown is always populated. */
     const ALL_MAPS = [{"id":"30th-floor-plaza","name":"30th Floor Plaza"},{"id":"anchorhead-cantina-bar","name":"Anchorhead Cantina/Bar"},{"id":"bespin-tibanna-facility","name":"Bespin Tibanna Facility"},{"id":"chopper-base-atollon","name":"Chopper Base, Atollon"},{"id":"climate-research-camp","name":"Climate Research Camp"},{"id":"corellian-underground","name":"Corellian Underground"},{"id":"coruscant-back-alleys","name":"Coruscant Back Alleys"},{"id":"coruscant-landfill","name":"Coruscant Landfill"},{"id":"coruscant-senate-office","name":"Coruscant Senate Office"},{"id":"devaron-garrison","name":"Devaron Garrison"},{"id":"development-facility","name":"Development Facility"},{"id":"the-dune-sea","name":"The Dune Sea"},{"id":"echo-base","name":"Echo Base"},{"id":"endor-defense-station","name":"Endor Defense Station"},{"id":"endor-wilderness","name":"Endor Wilderness"},{"id":"geonosis-foundry","name":"Geonosis Foundry"},{"id":"hangar-bay","name":"Hangar Bay"},{"id":"hoth-battle-station","name":"Hoth Battle Station"},{"id":"hoth-weather-shelter","name":"Hoth Weather Shelter"},{"id":"imperial-command-hub","name":"Imperial Command Hub"},{"id":"imperial-labor-camp","name":"Imperial Labor Camp"},{"id":"imperial-research-lab","name":"Imperial Research Lab"},{"id":"imperial-space-station","name":"Imperial Space Station"},{"id":"imperial-tower","name":"Imperial Tower"},{"id":"isb-headquarters","name":"ISB Headquarters"},{"id":"isb-training-grounds","name":"ISB Training Grounds"},{"id":"jabba-s-palace","name":"Jabba's Palace"},{"id":"kashyyyk-station","name":"Kashyyyk Station"},{"id":"kuat-space-station","name":"Kuat Space Station"},{"id":"lothal-battlefront","name":"Lothal Battlefront"},{"id":"lothal-safehouse","name":"Lothal Safehouse"},{"id":"lothal-spaceport","name":"Lothal Spaceport"},{"id":"lothal-wastes","name":"Lothal Wastes"},{"id":"massassi-ruins","name":"Massassi Ruins"},{"id":"moisture-farm","name":"Moisture Farm"},{"id":"mos-eisley-back-alleys","name":"Mos Eisley Back Alleys"},{"id":"mos-eisley-cantina","name":"Mos Eisley Cantina"},{"id":"mos-eisley-outskirts","name":"Mos Eisley Outskirts"},{"id":"nal-hutta-swamps","name":"Nal Hutta Swamps"},{"id":"nelvaanian-war-zone","name":"Nelvaanian War Zone"},{"id":"ord-mantell-junkyard","name":"Ord Mantell Junkyard"},{"id":"the-pit-of-carkoon","name":"The Pit of Carkoon"},{"id":"sewers-of-nar-shaddaa","name":"Sewers of Nar Shaddaa"},{"id":"tarkin-initiative-labs","name":"Tarkin Initiative Labs"},{"id":"training-ground","name":"Training Ground"},{"id":"tython-meditation-field","name":"Tython Meditation Field"},{"id":"uscru-entertainment-district","name":"Uscru Entertainment District"},{"id":"wasskah-hunting-ground","name":"Wasskah Hunting Ground"},{"id":"wasteland-outpost","name":"Wasteland Outpost"},{"id":"b-omarr-subterranean-passageways-3-player","name":"* B'Omarr Subterranean Passageways (3-player)"},{"id":"scarif-imperial-hotel-3-player","name":"* Scarif Imperial Hotel (3-player)"},{"id":"hoth-battlefield-4-player","name":"* Hoth Battlefield (4-player)"},{"id":"nal-hutta-borderlands-4-player","name":"* Nal Hutta Borderlands (4-player)"},{"id":"temple-gardens-4-player","name":"* Temple Gardens (4-player)"}];
 
@@ -216,9 +241,17 @@
       state.offMap = [...off];
     }
 
+    function applyExterior(info, paintExterior) {
+      if (new Set((state.offMap || []).map(s => String(s).toLowerCase())).has(info.coord)) return;
+      state.exterior = state.exterior || {};
+      state.exterior[info.coord] = !!paintExterior;
+    }
+
     function applyCellAction(info, mode, paintOffMap) {
       if (mode === 'offmap') {
         applyOffMap(info, paintOffMap);
+      } else if (mode === 'exterior' && typeof paintOffMap === 'boolean') {
+        applyExterior(info, paintOffMap);
       } else if (mode === 'terrain') {
         if (new Set((state.offMap || []).map(s => String(s).toLowerCase())).has(info.coord)) return;
         const next = { normal: 'difficult', difficult: 'blocking', blocking: 'normal' };
@@ -272,6 +305,11 @@
         applyOffMap(info, paintOffMap);
         dragState = { mode, paintOffMap, lastCoord: info.coord };
         draw();
+      } else if (mode === 'exterior') {
+        const paintExterior = !(state.exterior && state.exterior[info.coord]);
+        applyExterior(info, paintExterior);
+        dragState = { mode, paintOffMap: paintExterior, lastCoord: info.coord };
+        draw();
       } else {
         applyCellAction(info, mode, null);
         draw();
@@ -293,13 +331,41 @@
 
     document.addEventListener('mouseup', () => { if (dragState) dragState = null; });
 
+    function updateInRotationCheckbox() {
+      const select = document.getElementById('mapSelect');
+      const cb = document.getElementById('inRotationCheckbox');
+      if (!select || !cb) return;
+      const mapId = select.value || '';
+      const inRotation = Array.isArray(tournamentRotationMissionIds) && tournamentRotationMissionIds.some(m => String(m).startsWith(mapId + ':'));
+      cb.checked = !!inRotation;
+    }
+
     // Populate map dropdown with every map on load
     (function initMapSelect() {
       const select = document.getElementById('mapSelect');
       ALL_MAPS.forEach(m => select.appendChild(new Option(m.name, m.id)));
       select.value = 'mos-eisley-outskirts';
-      select.onchange = () => { const id = select.value; if (id) switchToMap(id); };
-      switchToMap('mos-eisley-outskirts');
+      select.onchange = () => {
+        const id = select.value;
+        if (id) {
+          const path = mapImagePathForUrl(mapImagePaths[id]);
+          if (path) img.src = '/' + path;
+          switchToMap(id);
+          updateInRotationCheckbox();
+        }
+      };
+      if (fullMapData && fullMapData.maps && Object.keys(fullMapData.maps).length) {
+        const idToShow = fullMapData.maps[select.value] ? select.value : Object.keys(fullMapData.maps)[0];
+        select.value = idToShow;
+        const pathToShow = mapImagePathForUrl(mapImagePaths[idToShow]);
+        if (pathToShow) img.src = '/' + pathToShow;
+        switchToMap(idToShow);
+      } else {
+        const defaultPath = mapImagePathForUrl(mapImagePaths['mos-eisley-outskirts']);
+        if (defaultPath) img.src = '/' + defaultPath;
+        switchToMap('mos-eisley-outskirts');
+      }
+      updateInRotationCheckbox();
     })();
 
     function applyLoadedData(data) {
@@ -319,30 +385,10 @@
       }
     }
 
-    document.getElementById('loadBtn').onclick = () => document.getElementById('fileInput').click();
-    document.getElementById('fileInput').onchange = (e) => {
-      const f = e.target.files[0];
-      if (!f) return;
-      const r = new FileReader();
-      r.onload = () => {
-        try {
-          applyLoadedData(JSON.parse(r.result));
-        } catch (err) { document.getElementById('status').textContent = 'Load error: ' + err.message; }
-      };
-      r.readAsText(f);
-    };
-
-    // Auto-load data/map-spaces.json when opened from a local server (e.g. npm run serve from project root)
-    fetch('../../data/map-spaces.json').then(r => r.ok ? r.json() : Promise.reject()).then(applyLoadedData).catch(() => {});
-
-    document.getElementById('invertBtn').onclick = () => {
-      const fullGrid = [];
-      for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) fullGrid.push(coordKey(c, r));
-      const offSet = new Set((state.offMap || []).map(s => String(s).toLowerCase()));
-      state.offMap = fullGrid.filter(k => !offSet.has(k));
-      draw();
-      document.getElementById('status').textContent = 'Inverted. ' + state.offMap.length + ' cells now off-map.';
-    };
+    // Auto-load data/map-spaces.json when opened from a static server (if not already injected)
+    if (!fullMapData || !fullMapData.maps) {
+      fetch('../../data/map-spaces.json').then(r => r.ok ? r.json() : Promise.reject()).then(applyLoadedData).catch(() => {});
+    }
 
     function doSave() {
       const offSet = new Set((state.offMap || []).map(s => String(s).toLowerCase()));
@@ -371,31 +417,26 @@
       const data = fullMapData && fullMapData.maps
         ? { ...fullMapData, maps: { ...fullMapData.maps, [selectedId]: exportState } }
         : { source: 'extract-map-spaces.html', maps: { [selectedId]: exportState } };
-      const a = document.createElement('a');
-      a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(data, null, 2));
-      a.download = 'map-spaces.json';
-      a.click();
-      document.getElementById('status').textContent = 'Saved ' + onMapSpaces.length + ' spaces for ' + selectedId + '.';
+      const saveUrl = (typeof location !== 'undefined' && location.origin) ? (location.origin + '/save-map-spaces') : '/save-map-spaces';
+      fetch(saveUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).then((r) => {
+        if (r.ok) {
+          document.getElementById('status').textContent = 'Saved to data/map-spaces.json (' + onMapSpaces.length + ' spaces for ' + selectedId + ').';
+          if (typeof fullMapData === 'object') fullMapData = data;
+        } else return r.text().then((t) => Promise.reject(new Error(t || r.status)));
+      }).catch((err) => {
+        document.getElementById('status').textContent = 'Save failed (run map-tool server?): ' + (err.message || 'unknown');
+      });
     }
 
     document.getElementById('saveBtn').onclick = () => doSave();
-    document.getElementById('exportBtn').onclick = () => doSave();
 
     img.onload = init;
     img.onerror = () => {
-      document.getElementById('status').textContent = 'Select a map above, then click Load map-spaces.json to edit (grid appears from data), or Load map image to use a picture as background.';
-    };
-    document.getElementById('loadImgBtn').onclick = () => document.getElementById('imgInput').click();
-    document.getElementById('imgInput').onchange = (e) => {
-      const f = e.target.files[0];
-      if (!f) return;
-      const url = URL.createObjectURL(f);
-      img.onerror = () => {
-        document.getElementById('status').textContent = 'Image failed to load.';
-        URL.revokeObjectURL(url);
-      };
-      img.onload = () => { URL.revokeObjectURL(url); init(); };
-      img.src = url;
+      document.getElementById('status').textContent = 'Select a map above; grid appears when data is loaded.';
     };
     if (img.complete) init();
   </script>
