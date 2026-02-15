@@ -130,7 +130,7 @@
   <!-- INJECT_TOURNAMENT_ROTATION -->
   <!-- INJECT_DEPLOYMENT_ZONES -->
   <!-- INJECT_MAP_TOKENS -->
-  <!-- INJECT_TOKEN_IMAGES --><script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal Blue.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>
+  <!-- INJECT_TOKEN_IMAGES --><script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal GRAY.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>
   <!-- INJECT_MISSION_CARDS --><script type="application/json" id="mission-cards-data">{"source":"extract-map-spaces.html","maps":{}}</script>
   <script>
     const img = document.getElementById('mapImg');
@@ -239,7 +239,7 @@
     const tokenImagesConfig = (function () {
       const el = document.getElementById('token-images-data');
       if (el && el.textContent) try { return JSON.parse(el.textContent); } catch (e) {}
-      return { terminals: 'Counter--Terminal Blue.gif', missionA: 'Mission Token--Neutral GRAY.gif', missionB: 'Counter--Crate Blue.gif', doors: 'Token--Door.png' };
+      return { terminals: 'Counter--Terminal GRAY.gif', missionA: 'Mission Token--Neutral GRAY.gif', missionB: 'Counter--Crate Blue.gif', doors: 'Token--Door.png' };
     })();
     /** Preloaded token images (same filenames as game map renderer). Try tokens/, then maps/, then filename. Draw these on the overlay when loaded; otherwise colored shapes. */
     const tokenImgTerminals = new Image();

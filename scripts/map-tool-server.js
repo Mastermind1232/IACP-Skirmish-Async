@@ -38,7 +38,7 @@ const PLACEHOLDER_IMAGE_PATHS = '<!-- INJECT_MAP_IMAGE_PATHS -->';
 const PLACEHOLDER_TOURNAMENT_ROTATION = '<!-- INJECT_TOURNAMENT_ROTATION -->';
 const PLACEHOLDER_DEPLOYMENT_ZONES = '<!-- INJECT_DEPLOYMENT_ZONES -->';
 const PLACEHOLDER_MAP_TOKENS = '<!-- INJECT_MAP_TOKENS -->';
-const PLACEHOLDER_TOKEN_IMAGES = '<!-- INJECT_TOKEN_IMAGES --><script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal Blue.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>';
+const PLACEHOLDER_TOKEN_IMAGES = '<!-- INJECT_TOKEN_IMAGES --><script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal GRAY.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>';
 const PLACEHOLDER_MISSION_CARDS = '<!-- INJECT_MISSION_CARDS --><script type="application/json" id="mission-cards-data">{"source":"extract-map-spaces.html","maps":{}}</script>';
 const MAPS_SUBFOLDER = 'vassal_extracted/images/maps/';
 
@@ -192,7 +192,7 @@ createServer((req, res) => {
         const tokenImgRaw = readFileSync(TOKEN_IMAGES_JSON, 'utf8').replace(/<\/script>/gi, '<\\/script>');
         html = html.replace(PLACEHOLDER_TOKEN_IMAGES, `<script type="application/json" id="token-images-data">${tokenImgRaw}</script>`);
       } else {
-        html = html.replace(PLACEHOLDER_TOKEN_IMAGES, '<script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal Blue.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>');
+        html = html.replace(PLACEHOLDER_TOKEN_IMAGES, '<script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal GRAY.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>');
       }
       if (existsSync(MISSION_CARDS_JSON)) {
         const mcJson = readFileSync(MISSION_CARDS_JSON, 'utf8').replace(/<\/script>/gi, '<\\/script>');
