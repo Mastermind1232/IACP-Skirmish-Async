@@ -6,17 +6,17 @@
         "name": "A. Get to the Ship",
         "tokenLabel": "Panel",
         "imagePath": "vassal_extracted/images/mission-cards/Mos Eisley Outskirts-A-Get to the Ship.png",
-        "setup": "",
+        "setup": "A figure can interact with a launch panel to flip the token Green side up or gray side up. Each player can flip a maximum of 1 token per round.",
         "startOfRound": "",
-        "endOfRound": ""
+        "endOfRound": "Each player gains 5 VPs for each green launch panel they control and 2 VPs for each gray launch panel they control."
       },
       "b": {
         "name": "B. Smuggled Goods",
         "tokenLabel": "Contraband",
         "imagePath": "vassal_extracted/images/mission-cards/Mos Eisley Outskirts-B-Smuggled Goods.png",
-        "setup": "",
+        "setup": "A figure can retrieve contraband as a free action. Apply -2 Speed to each figure carrying contraband.",
         "startOfRound": "",
-        "endOfRound": ""
+        "endOfRound": "Each player gains 15 VPs for each of their figures carrying contraband in their deployment zone. Then discard those tokens."
       }
     },
     "corellian-underground": {

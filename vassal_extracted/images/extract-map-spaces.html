@@ -1533,10 +1533,20 @@
         ? { ...fullMapData, maps: { ...fullMapData.maps, [selectedId]: exportState } }
         : { source: 'extract-map-spaces.html', maps: { [selectedId]: exportState } };
       const zonesData = { source: fullDeploymentZonesData?.source || 'extract-map-spaces.html', maps: { ...(fullDeploymentZonesData?.maps || {}), [selectedId]: { red: [...deploymentZoneState.red], blue: [...deploymentZoneState.blue] } } };
+      const ma = missionTokenState.missionA;
+      const mb = missionTokenState.missionB;
       const tokensPayload = {
         terminals: [...missionTokenState.terminals].sort(),
-        missionA: { launchPanels: [...getMissionTokenCells(missionTokenState.missionA)].sort() },
-        missionB: { contraband: [...getMissionTokenCells(missionTokenState.missionB)].sort() },
+        missionA: {
+          tokenTypes: (ma.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label || 'Token', image: tt.image || 'Mission Token--Neutral GRAY.gif' })),
+          positions: Object.fromEntries(Object.entries(ma.positions || {}).map(([id, arr]) => [id, [...(Array.isArray(arr) ? arr : [])].map(s => String(s).toLowerCase()).sort()])),
+          launchPanels: [...getMissionTokenCells(missionTokenState.missionA)].sort()
+        },
+        missionB: {
+          tokenTypes: (mb.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label || '', image: tt.image || 'Mission Token--Neutral GRAY.gif' })),
+          positions: Object.fromEntries(Object.entries(mb.positions || {}).map(([id, arr]) => [id, [...(Array.isArray(arr) ? arr : [])].map(s => String(s).toLowerCase()).sort()])),
+          contraband: [...getMissionTokenCells(missionTokenState.missionB)].sort()
+        },
         doors: missionTokenState.doors.map(([a, b]) => [a, b]),
         namedAreas: missionTokenState.namedAreas.map((a) => ({ name: a.name, cells: [...(a.cells || [])].sort() }))
       };
@@ -1643,7 +1653,23 @@
       const selectedId = document.getElementById('mapSelect').value || 'mos-eisley-outskirts';
       const data = fullMapData && fullMapData.maps ? { ...fullMapData, maps: { ...fullMapData.maps, [selectedId]: exportState } } : { source: 'extract-map-spaces.html', maps: { [selectedId]: exportState } };
       const zonesData = { source: fullDeploymentZonesData?.source || 'extract-map-spaces.html', maps: { ...(fullDeploymentZonesData?.maps || {}), [selectedId]: { red: [...deploymentZoneState.red], blue: [...deploymentZoneState.blue] } } };
-      const tokensPayload = { terminals: [...missionTokenState.terminals].sort(), missionA: { launchPanels: [...getMissionTokenCells(missionTokenState.missionA)].sort() }, missionB: { contraband: [...getMissionTokenCells(missionTokenState.missionB)].sort() }, doors: missionTokenState.doors.map(([a, b]) => [a, b]), namedAreas: missionTokenState.namedAreas.map((a) => ({ name: a.name, cells: [...(a.cells || [])].sort() })) };
+      const ma = missionTokenState.missionA;
+      const mb = missionTokenState.missionB;
+      const tokensPayload = {
+        terminals: [...missionTokenState.terminals].sort(),
+        missionA: {
+          tokenTypes: (ma.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label || 'Token', image: tt.image || 'Mission Token--Neutral GRAY.gif' })),
+          positions: Object.fromEntries(Object.entries(ma.positions || {}).map(([id, arr]) => [id, [...(Array.isArray(arr) ? arr : [])].map(s => String(s).toLowerCase()).sort()])),
+          launchPanels: [...getMissionTokenCells(missionTokenState.missionA)].sort()
+        },
+        missionB: {
+          tokenTypes: (mb.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label || '', image: tt.image || 'Mission Token--Neutral GRAY.gif' })),
+          positions: Object.fromEntries(Object.entries(mb.positions || {}).map(([id, arr]) => [id, [...(Array.isArray(arr) ? arr : [])].map(s => String(s).toLowerCase()).sort()])),
+          contraband: [...getMissionTokenCells(missionTokenState.missionB)].sort()
+        },
+        doors: missionTokenState.doors.map(([a, b]) => [a, b]),
+        namedAreas: missionTokenState.namedAreas.map((a) => ({ name: a.name, cells: [...(a.cells || [])].sort() }))
+      };
       const tokensData = { source: fullMapTokensData?.source || 'extract-map-spaces.html', maps: { ...(fullMapTokensData?.maps || {}), [selectedId]: tokensPayload } };
       return { mapSpaces: data, tournamentRotation: fullTournamentRotationData, deploymentZones: zonesData, mapTokens: tokensData };
     }

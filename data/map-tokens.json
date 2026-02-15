@@ -7,6 +7,21 @@
         "t9"
       ],
       "missionA": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "Panel",
+            "image": "Mission Token--Neutral GRAY.gif"
+          }
+        ],
+        "positions": {
+          "0": [
+            "m14",
+            "m15",
+            "n14",
+            "n15"
+          ]
+        },
         "launchPanels": [
           "m14",
           "m15",
@@ -15,6 +30,20 @@
         ]
       },
       "missionB": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "Contraband",
+            "image": "Counter--Crate Blue.gif"
+          }
+        ],
+        "positions": {
+          "0": [
+            "f21",
+            "n13",
+            "t11"
+          ]
+        },
         "contraband": [
           "f21",
           "n13",
@@ -52,6 +81,26 @@
         ]
       },
       "missionB": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "Sabacc Table",
+            "image": "Mission Token--Neutral GRAY.gif"
+          },
+          {
+            "id": "1",
+            "label": "Sabacc VPs",
+            "image": "Mission Token--Neutral Green.gif"
+          }
+        ],
+        "positions": {
+          "0": [
+            "m14"
+          ],
+          "1": [
+            "j13"
+          ]
+        },
         "contraband": [
           "j13",
           "m14"
