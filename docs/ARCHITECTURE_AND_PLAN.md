@@ -50,6 +50,7 @@ So the monolith is being split by responsibility: **state**, **data**, **router*
 - **data/** — 24 JSON files: DC/CC effects, images, stats, maps, dice, missions, tokens, deployment zones, etc.
 - **dc-effects.json** — Per-card ability text, surge keys, passives. No shared ability library; cards are self-contained.
 - **Map data** — Only `mos-eisley-outskirts` has full space/terrain/adjacency in `map-spaces.json`; other maps have images only.
+- **Image paths** — All asset paths use `vassal_extracted/images/<subfolder>/` (e.g. `maps/`, `mission-cards/`, `figures/`, `dc-figures/`, `companions/`). See **docs/ASSETS_CATALOG.md** for the full list and which data files reference each subfolder.
 
 ### 1.3 What works (feature-wise)
 

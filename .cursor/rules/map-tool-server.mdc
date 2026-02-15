@@ -1,0 +1,12 @@
+---
+description: Map tool server (npm run map-tool) — never ask user to restart; do it for them
+globs: scripts/map-tool-server.js, vassal_extracted/images/extract-map-spaces.html
+alwaysApply: false
+---
+
+# Map-tool server
+
+- **Never tell the user to restart the server.** When the server needs to be restarted (after changes, or when the user says "reload/restart the server"), run it yourself:
+  1. Kill whatever is on port 3457 (e.g. `npx kill-port 3457` or equivalent on the OS).
+  2. Start the server in the background: `npm run map-tool` from the project root.
+- Map tool URL: `http://localhost:3457/vassal_extracted/images/extract-map-spaces.html` (or `http://127.0.0.1:3457/...`).

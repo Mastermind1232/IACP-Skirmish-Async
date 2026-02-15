@@ -38,8 +38,8 @@ while ((m = boardRe.exec(mapSection)) !== null) {
       x0: parseFloat(x0),
       y0: parseFloat(y0),
     },
-    // Image path: try vassal_extracted/images first
-    imagePath: `vassal_extracted/images/${image}`,
+    // Image path: maps live in vassal_extracted/images/maps/
+    imagePath: `vassal_extracted/images/maps/${image}`,
   });
 }
 

@@ -896,13 +896,14 @@ function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size) {
   });
 }
 
-/** Maps that are play-ready: have deployment zones and map-spaces (spaces/adjacency) so the bot can run a game (plan: filter by both). */
+/** Maps that are play-ready: have deployment zones, map-spaces (spaces/adjacency), and Play ready? checked so the bot can draw from the pool. */
 function getPlayReadyMaps() {
   const dz = getDeploymentZones();
   return getMapRegistry().filter((m) => {
     if (!dz[m.id]?.red?.length || !dz[m.id]?.blue?.length) return false;
     const ms = getMapSpaces(m.id);
-    return ms && ((Array.isArray(ms.spaces) && ms.spaces.length > 0) || (ms.adjacency && typeof ms.adjacency === 'object' && Object.keys(ms.adjacency).length > 0));
+    if (!ms || ms.playReady === false) return false;
+    return (Array.isArray(ms.spaces) && ms.spaces.length > 0) || (ms.adjacency && typeof ms.adjacency === 'object' && Object.keys(ms.adjacency).length > 0);
   });
 }
 

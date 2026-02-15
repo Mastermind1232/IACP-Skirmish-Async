@@ -22,8 +22,59 @@
         ]
       },
       "doors": [
-        ["r11", "r12"],
-        ["s11", "s12"]
+        [
+          "r11",
+          "r12"
+        ],
+        [
+          "s11",
+          "s12"
+        ]
+      ]
+    },
+    "corellian-underground": {
+      "terminals": [
+        "w12",
+        "z13"
+      ],
+      "missionA": {
+        "launchPanels": [
+          "o12",
+          "o16",
+          "w13",
+          "x12"
+        ]
+      },
+      "missionB": {
+        "contraband": []
+      },
+      "doors": [],
+      "namedAreas": [
+        {
+          "name": "Cantina",
+          "cells": [
+            "l12",
+            "l13",
+            "l14",
+            "l15",
+            "l16",
+            "m12",
+            "m13",
+            "m14",
+            "m15",
+            "m16",
+            "n12",
+            "n13",
+            "n14",
+            "n15",
+            "n16",
+            "o12",
+            "o13",
+            "o14",
+            "o15",
+            "o16"
+          ]
+        }
       ]
     }
   }

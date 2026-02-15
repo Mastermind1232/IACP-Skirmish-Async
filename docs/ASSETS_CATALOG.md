@@ -18,22 +18,24 @@ Tournament-legal maps rotate per IACP season (see FFG support docs).
 
 Images are organized into subfolders. Run `npm run organize-images` to sort existing files.
 
-| Subfolder | Contents |
-|-----------|----------|
-| `cc/` | Command cards (C card--, IACP_C card--, etc.) |
-| `dc-figures/` | Deployment cards with figures |
-| `DC Skirmish Upgrades/` | Deployment cards without figures (Skirmish upgrades like [Zillo Technique]) |
-| `figures/` | Circular figure tokens for map (Figure-Imperial--, etc.) |
-| `tokens/` | Counters, mission tokens (Counter--Terminal, Mission Token--, etc.) |
-| `maps/` | Map backgrounds (Map_*.gif) |
-| `mission-cards/` | Mission cards (SkMission Card--*.jpg) |
-| `conditions/` | Condition cards and markers (Condition card--*, Condition Marker--*) |
-| `companions/` | Companion cards and tokens (Companion Card--*, Companion Token--*) |
-| `cardbacks/` | All cardbacks (Command, Deployment, Companion, Mission, Shape, etc.) |
-| `dice/` | Dice box, Dice Clear button, Dice Icon colors, Dice faces (Black/Blue/Green/Red/White/Yellow) |
-| `dc-supplemental/` | Attachments, IACP Shape Cards, IACP Loadout Cards |
+**All image paths in data files and the build use these subfolders.** Do not store paths under `vassal_extracted/images/` without the correct subfolder (e.g. use `vassal_extracted/images/maps/Map_X.gif`, not `vassal_extracted/images/Map_X.gif`).
 
-The bot checks subfolders first, then root, for backward compatibility.
+| Subfolder | Contents | Data that references it |
+|-----------|----------|---------------------------|
+| `cc/` | Command cards (C card--, IACP_C card--, etc.) | Command card effects / images |
+| `dc-figures/` | Deployment cards with figures | `data/dc-images.json` |
+| `DC Skirmish Upgrades/` | Deployment cards without figures (Skirmish upgrades) | `data/dc-images.json` |
+| `figures/` | Circular figure tokens for map (Figure-Imperial--, etc.) | `data/figure-images.json` |
+| `tokens/` | Counters, mission tokens (Counter--Terminal, Mission Token--, etc.) | `data/token-images.json` (filenames; resolver uses tokens/) |
+| `maps/` | Map backgrounds (Map_*.gif) | `data/map-registry.json` |
+| `mission-cards/` | Mission cards (SkMission Card--*.jpg) | `data/mission-cards.json` |
+| `conditions/` | Condition cards and markers | — |
+| `companions/` | Companion cards and tokens | `data/companion-images.json` |
+| `cardbacks/` | All cardbacks | — |
+| `dice/` | Dice box, Dice Clear button, Dice Icon colors, Dice faces | — |
+| `dc-supplemental/` | Attachments, IACP Shape Cards, IACP Loadout Cards | — |
+
+Runtime resolution (`resolveAssetPath`, `resolveImagePath` in index.js and map-renderer) still tries the correct subfolder first, then the path as stored, so old data without subfolders continues to work until data is re-extracted or updated.
 
 ## Game Structure (from buildFile.xml)
 - **Player Hands** — 4 players (green, red, blue, yellow)

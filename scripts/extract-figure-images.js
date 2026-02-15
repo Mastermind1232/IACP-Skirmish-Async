@@ -36,13 +36,15 @@ while ((m = figureRe.exec(xml)) !== null) {
   }
 }
 
-// Resolve images to paths that actually exist
+// Resolve images to paths that actually exist (figures/ subfolder per organize-images.js)
+const figuresSub = 'figures';
 const resolved = {};
 const resolvedSizes = {};
 for (const [name, imageFile] of Object.entries(imageMap)) {
-  const basePath = join(imagesDir, imageFile);
-  if (existsSync(basePath)) {
-    resolved[name] = `vassal_extracted/images/${imageFile}`;
+  const inSub = join(imagesDir, figuresSub, imageFile);
+  const inRoot = join(imagesDir, imageFile);
+  if (existsSync(inSub) || existsSync(inRoot)) {
+    resolved[name] = `vassal_extracted/images/${figuresSub}/${imageFile}`;
     resolvedSizes[name] = sizeMap[name];
   }
 }

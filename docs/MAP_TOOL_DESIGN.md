@@ -71,6 +71,6 @@ Vassal-generated map images already include the grid and coordinate labels on th
 2. **Renderer** – `src/map-renderer.js` loads map image, draws coordinate overlay (a1, b2…), optional figure markers. Uses Node `canvas`.
 3. **Test** – `npm run test-map` outputs `test-map-output.png`
 
-**Map images:** Vassal map images (e.g. `Map_Training Ground.gif`) may live inside the .vmod; extraction may not have placed them in `vassal_extracted/images/`. Fallback: use IA Skirmish Map Project images (https://github.com/nickv2002/Imperial-Assault-Skirmish-Map-Project) and map names to registry.
+**Map images:** Stored under `vassal_extracted/images/maps/` (see ASSETS_CATALOG.md). Vassal map images (e.g. `Map_Training Ground.gif`) may live inside the .vmod; run `npm run organize-images` to sort into subfolders. Fallback: use IA Skirmish Map Project images and map names to registry.
 
 **Next:** Wire bot "Refresh Map" button → renderMap() → post to Board channel.
