@@ -88,13 +88,24 @@
         <span class="mode-label"><label><input type="radio" name="missionVariant" value="a" checked> Mission A</label></span>
         <span class="mode-label"><label><input type="radio" name="missionVariant" value="b"> Mission B</label></span>
       </div>
+      <div class="mission-field mission-card-image-wrap" style="margin-top:8px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid #444;">
+        <label>Mission card</label>
+        <img id="missionCardImage" src="" alt="Mission card" title="Card for selected variant (A or B)" style="max-width:100%; max-height:200px; margin-top:4px; border:1px solid #555; border-radius:4px;">
+        <p id="missionCardImageFallback" style="display:none; margin:6px 0 0 0; font-size:0.85em; color:#999;">Card image not found. Add PNG to <code>vassal_extracted/images/mission-cards/</code> (filename from mission card data).</p>
+      </div>
       <div class="mission-field">
         <label for="missionNameInput">Mission name</label>
         <input type="text" id="missionNameInput" size="24" placeholder="e.g. A. Get to the Ship" title="Display name for selected mission variant">
       </div>
       <div class="mission-field">
-        <label for="missionTokenLabelInput">Token label</label>
-        <input type="text" id="missionTokenLabelInput" size="24" placeholder="e.g. Launch panels, Contraband" title="Label for this mission's tokens (shown in mode and saved with mission card)">
+        <label>Mission token types</label>
+        <p style="margin:2px 0 4px 0; font-size:0.8em; color:#999;">Each type has its own label and color/image. Use "Add token type" for more colors.</p>
+        <div id="missionTokenTypesList" style="margin-bottom:6px;"></div>
+        <button type="button" id="missionAddTokenTypeBtn" title="Add another token color/type for this variant">Add token type</button>
+      </div>
+      <div id="missionTokenPlaceWrap" class="mission-field" style="display:none;">
+        <label for="missionTokenTypeSelect">Placing</label>
+        <select id="missionTokenTypeSelect" title="Which token type to place or remove when using Mission tokens mode"></select>
       </div>
       <div class="mission-text-section">
         <label>Mission timing effects</label>
@@ -129,11 +140,6 @@
         <button type="button" id="addNamedAreaBtn" title="Add a new named area">+ Area</button>
       </div>
       <div id="namedAreaList" class="named-area-list" title="Named areas (each has a distinct color on the map)"></div>
-      <div class="mission-field mission-card-image-wrap" style="margin-top:14px; padding-top:12px; border-top:1px solid #444;">
-        <label>Mission card</label>
-        <img id="missionCardImage" src="" alt="Mission card" title="Card for selected variant (A or B)" style="max-width:100%; max-height:200px; margin-top:4px; border:1px solid #555; border-radius:4px;">
-        <p id="missionCardImageFallback" style="display:none; margin:6px 0 0 0; font-size:0.85em; color:#999;">Card image not found. Add PNG to <code>vassal_extracted/images/mission-cards/</code> (filename from mission card data).</p>
-      </div>
     </aside>
   </div>
   <!-- INJECT_MAP_SPACES -->
@@ -228,14 +234,38 @@
       }
       return data;
     })();
-    /** Current map's mission tokens (terminals, mission A/B, doors, named areas). Synced on map switch. */
+    /** Current map's mission tokens. missionA/missionB: { tokenTypes: [{ id, label, image }], positions: { [id]: [cells] } }. Backward compat: launchPanels/contraband used when loading old data. */
     let missionTokenState = {
       terminals: [],
-      missionA: { launchPanels: [] },
-      missionB: { contraband: [] },
+      missionA: { tokenTypes: [{ id: '0', label: 'Panel', image: 'Mission Token--Neutral GRAY.gif' }], positions: { '0': [] } },
+      missionB: { tokenTypes: [{ id: '0', label: 'Contraband', image: 'Counter--Crate Blue.gif' }], positions: { '0': [] } },
       doors: [],
       namedAreas: [{ id: 0, name: 'Area 1', cells: [] }]
     };
+    /** Cache of token image filename -> HTMLImageElement for mission token types */
+    const tokenImageCache = new Map();
+    function getTokenImage(filename) {
+      if (!filename) return null;
+      let img = tokenImageCache.get(filename);
+      if (!img) {
+        img = new Image();
+        tokenImageCache.set(filename, img);
+        const base = (tokenImageBaseUrl || '') + 'tokens/';
+        img.onload = function () { draw(); };
+        img.onerror = function () {
+          const base2 = (tokenImageBaseUrl || '') + 'maps/';
+          img.src = base2 + encodeURIComponent(filename);
+        };
+        img.src = base + encodeURIComponent(filename);
+      }
+      return img;
+    }
+    function nextMissionTokenTypeId(variant) {
+      const types = missionTokenState[variant === 'b' ? 'missionB' : 'missionA'].tokenTypes;
+      let max = -1;
+      types.forEach((t) => { const n = parseInt(t.id, 10); if (!isNaN(n)) max = Math.max(max, n); });
+      return String(max + 1);
+    }
     /** Distinct colors for named areas (consecutive list); cycle if more areas than colors. */
     const AREA_COLORS = [
       'rgba(160,100,255,0.45)', 'rgba(79,195,247,0.45)', 'rgba(129,199,132,0.5)', 'rgba(255,183,77,0.5)',
@@ -381,16 +411,40 @@
       deploymentZoneState.blue = (z?.blue || []).map(s => String(s).toLowerCase());
     }
 
+    function normalizeMissionTokenVariant(ma) {
+      if (!ma) return { tokenTypes: [{ id: '0', label: 'Panel', image: (tokenImagesConfig && tokenImagesConfig.missionA) || 'Mission Token--Neutral GRAY.gif' }], positions: { '0': [] } };
+      if (ma.tokenTypes && Array.isArray(ma.tokenTypes) && ma.positions && typeof ma.positions === 'object') {
+        const positions = {};
+        ma.tokenTypes.forEach((tt) => { positions[tt.id] = (ma.positions[tt.id] || []).map(s => String(s).toLowerCase()); });
+        return { tokenTypes: ma.tokenTypes.map((tt) => ({ id: String(tt.id), label: tt.label || 'Token', image: tt.image || 'Mission Token--Neutral GRAY.gif' })), positions };
+      }
+      const cells = (ma.launchPanels || []).map(s => String(s).toLowerCase());
+      const defLabel = 'Panel';
+      const defImage = (tokenImagesConfig && tokenImagesConfig.missionA) || 'Mission Token--Neutral GRAY.gif';
+      return { tokenTypes: [{ id: '0', label: defLabel, image: defImage }], positions: { '0': cells } };
+    }
+    function normalizeMissionTokenVariantB(mb) {
+      if (!mb) return { tokenTypes: [{ id: '0', label: 'Contraband', image: (tokenImagesConfig && tokenImagesConfig.missionB) || 'Counter--Crate Blue.gif' }], positions: { '0': [] } };
+      if (mb.tokenTypes && Array.isArray(mb.tokenTypes) && mb.positions && typeof mb.positions === 'object') {
+        const positions = {};
+        mb.tokenTypes.forEach((tt) => { positions[tt.id] = (mb.positions[tt.id] || []).map(s => String(s).toLowerCase()); });
+        return { tokenTypes: mb.tokenTypes.map((tt) => ({ id: String(tt.id), label: tt.label || 'Token', image: tt.image || 'Counter--Crate Blue.gif' })), positions };
+      }
+      const cells = (mb.contraband || mb.crates || []).map(s => String(s).toLowerCase());
+      return { tokenTypes: [{ id: '0', label: 'Contraband', image: (tokenImagesConfig && tokenImagesConfig.missionB) || 'Counter--Crate Blue.gif' }], positions: { '0': cells } };
+    }
     function syncMissionTokenState(mapId) {
       const t = fullMapTokensData?.maps?.[mapId];
       missionTokenState.terminals = (t?.terminals || []).map(s => String(s).toLowerCase());
-      missionTokenState.missionA = { launchPanels: (t?.missionA?.launchPanels || []).map(s => String(s).toLowerCase()) };
-      missionTokenState.missionB = { contraband: (t?.missionB?.contraband || t?.missionB?.crates || []).map(s => String(s).toLowerCase()) };
+      missionTokenState.missionA = normalizeMissionTokenVariant(t?.missionA);
+      missionTokenState.missionB = normalizeMissionTokenVariantB(t?.missionB);
       missionTokenState.doors = (t?.doors || []).map((pair) => [String(pair[0]).toLowerCase(), String(pair[1]).toLowerCase()]);
       missionTokenState.namedAreas = Array.isArray(t?.namedAreas) && t.namedAreas.length
         ? t.namedAreas.map((a, i) => ({ id: i, name: a.name || 'Area ' + (i + 1), cells: (a.cells || []).map(s => String(s).toLowerCase()) }))
         : [{ id: 0, name: 'Area 1', cells: [] }];
       updateNamedAreaSelect();
+      renderMissionTokenTypesList();
+      updateMissionTokenTypeSelect();
     }
 
     function getMissionVariant() { return (document.querySelector('input[name="missionVariant"]:checked') || {}).value || 'a'; }
@@ -401,20 +455,39 @@
       if (!imgEl) return;
       const mapId = (document.getElementById('mapSelect') && document.getElementById('mapSelect').value) || '';
       const variant = getMissionVariant();
-      const imagePath = fullMissionCardsData?.maps?.[mapId]?.[variant]?.imagePath;
-      const filename = (imagePath && typeof imagePath === 'string') ? imagePath.replace(/^.*[/\\]/, '') : '';
+      const variantData = fullMissionCardsData?.maps?.[mapId]?.[variant];
+      const customPath = (variantData?.customImagePath && typeof variantData.customImagePath === 'string') ? variantData.customImagePath : null;
+      const defaultPath = (variantData?.imagePath && typeof variantData.imagePath === 'string') ? variantData.imagePath : null;
+      const pathToTry = customPath || defaultPath;
+      const filenameFromPath = (p) => (p && typeof p === 'string') ? p.replace(/^.*[/\\]/, '') : '';
       if (fallbackEl) fallbackEl.style.display = 'none';
-      if (filename && tokenImageBaseUrl) {
-        imgEl.alt = 'Mission card';
-        imgEl.style.display = 'block';
-        imgEl.onload = function () { if (fallbackEl) fallbackEl.style.display = 'none'; };
-        imgEl.onerror = function () { if (fallbackEl) fallbackEl.style.display = 'block'; };
-        imgEl.src = tokenImageBaseUrl + 'mission-cards/' + encodeURIComponent(filename);
-      } else {
+      if (!pathToTry) {
         imgEl.src = '';
         imgEl.style.display = 'none';
         imgEl.alt = 'No mission card image';
+        return;
       }
+      imgEl.alt = 'Mission card';
+      imgEl.style.display = 'block';
+      imgEl.onload = function () { if (fallbackEl) fallbackEl.style.display = 'none'; };
+      imgEl.onerror = function () {
+        if (customPath && defaultPath && pathToTry === customPath) {
+          imgEl.onerror = function () { if (fallbackEl) fallbackEl.style.display = 'block'; };
+          imgEl.src = missionCardBaseUrl() + 'mission-cards/' + encodeURIComponent(filenameFromPath(defaultPath));
+        } else {
+          if (fallbackEl) fallbackEl.style.display = 'block';
+        }
+      };
+      imgEl.src = missionCardBaseUrl() + 'mission-cards/' + encodeURIComponent(filenameFromPath(pathToTry));
+    }
+    function missionCardBaseUrl() {
+      if (typeof tokenImageBaseUrl !== 'undefined' && tokenImageBaseUrl && tokenImageBaseUrl.indexOf('mission-cards') === -1)
+        return tokenImageBaseUrl;
+      if (typeof location !== 'undefined' && location.pathname && location.pathname !== '/' && location.pathname.indexOf('images') !== -1) {
+        var lastSlash = location.pathname.lastIndexOf('/');
+        if (lastSlash >= 0) return location.pathname.slice(0, lastSlash + 1);
+      }
+      return '/vassal_extracted/images/';
     }
 
     function updateMissionNameInputs(mapId) {
@@ -561,6 +634,8 @@
       }
       if (nameInput) nameInput.value = newVariant === 'b' ? missionBNameValue : missionANameValue;
       if (tokenLabelEl) tokenLabelEl.value = newVariant === 'b' ? missionBTokenLabel : missionATokenLabel;
+      renderMissionTokenTypesList();
+      updateMissionTokenTypeSelect();
       updateMissionCardImage();
       renderMissionEffectsList();
       draw();
@@ -578,6 +653,86 @@
       const nameEl = document.getElementById('namedAreaName');
       if (nameEl && area) nameEl.value = area.name || '';
       updateNamedAreaList();
+    }
+
+    function getMissionTokenVariantData() {
+      const variant = getMissionVariant();
+      return variant === 'b' ? missionTokenState.missionB : missionTokenState.missionA;
+    }
+
+    /** All mission token cell coords for a variant (from positions). Used for draw, save, and counts. */
+    function getMissionTokenCells(variantData) {
+      if (!variantData || typeof variantData.positions !== 'object') return [];
+      return Object.values(variantData.positions || {}).flat();
+    }
+
+    /** Current "Placing" token type's positions array (for mission tokens mode). */
+    function getCurrentMissionTokenPositionsArray() {
+      const ma = getMissionTokenVariantData();
+      const typeId = (document.getElementById('missionTokenTypeSelect') && document.getElementById('missionTokenTypeSelect').value) || ma.tokenTypes[0]?.id;
+      if (!ma.positions) ma.positions = {};
+      if (!Array.isArray(ma.positions[typeId])) ma.positions[typeId] = [];
+      return ma.positions[typeId];
+    }
+
+    function renderMissionTokenTypesList() {
+      const listEl = document.getElementById('missionTokenTypesList');
+      if (!listEl) return;
+      const ma = getMissionTokenVariantData();
+      const options = (tokenImagesConfig && tokenImagesConfig.missionTokenOptions) || [
+        { value: 'Mission Token--Neutral GRAY.gif', label: 'Mission token (Grey)' },
+        { value: 'Counter--Crate Blue.gif', label: 'Crate (Blue)' }
+      ];
+      const canRemove = ma.tokenTypes.length > 1;
+      listEl.innerHTML = ma.tokenTypes.map((tt) => {
+        const opts = options.map((o) => '<option value="' + escapeHtml(o.value) + '"' + (tt.image === o.value ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>').join('');
+        const removeBtn = canRemove ? '<button type="button" class="mission-token-type-remove" data-type-id="' + escapeHtml(tt.id) + '" title="Remove this token type">×</button>' : '';
+        return '<div class="mission-token-type-row" data-type-id="' + escapeHtml(tt.id) + '"><input type="text" class="mission-token-type-label" data-type-id="' + escapeHtml(tt.id) + '" value="' + escapeHtml(tt.label || '') + '" placeholder="Label" size="10"><select class="mission-token-type-image" data-type-id="' + escapeHtml(tt.id) + '">' + opts + '</select>' + removeBtn + '</div>';
+      }).join('');
+      listEl.querySelectorAll('.mission-token-type-label').forEach((input) => {
+        input.oninput = input.onchange = input.onblur = function () {
+          const id = this.getAttribute('data-type-id');
+          const ma = getMissionTokenVariantData();
+          const tt = ma.tokenTypes.find((t) => t.id === id);
+          if (tt) { tt.label = (this.value || '').trim() || tt.label; updateMissionTokenTypeSelect(); draw(); }
+        };
+      });
+      listEl.querySelectorAll('.mission-token-type-image').forEach((sel) => {
+        sel.onchange = function () {
+          const id = this.getAttribute('data-type-id');
+          const ma = getMissionTokenVariantData();
+          const tt = ma.tokenTypes.find((t) => t.id === id);
+          if (tt) { tt.image = this.value || tt.image; updateMissionTokenTypeSelect(); draw(); }
+        };
+      });
+      listEl.querySelectorAll('.mission-token-type-remove').forEach((btn) => {
+        btn.onclick = function () {
+          const id = this.getAttribute('data-type-id');
+          const ma = getMissionTokenVariantData();
+          if (ma.tokenTypes.length <= 1) return;
+          const idx = ma.tokenTypes.findIndex((t) => t.id === id);
+          if (idx < 0) return;
+          ma.tokenTypes.splice(idx, 1);
+          delete ma.positions[id];
+          renderMissionTokenTypesList();
+          updateMissionTokenTypeSelect();
+          draw();
+        };
+      });
+    }
+
+    function updateMissionTokenTypeSelect() {
+      const wrap = document.getElementById('missionTokenPlaceWrap');
+      const sel = document.getElementById('missionTokenTypeSelect');
+      if (!sel) return;
+      const mode = getMode();
+      const show = mode === 'missionTokens';
+      if (wrap) wrap.style.display = show ? 'block' : 'none';
+      const ma = getMissionTokenVariantData();
+      const current = sel.value;
+      sel.innerHTML = ma.tokenTypes.map((tt) => '<option value="' + escapeHtml(tt.id) + '">' + escapeHtml(tt.label || 'Token') + '</option>').join('');
+      if (ma.tokenTypes.some((t) => t.id === current)) sel.value = current;
+      else if (ma.tokenTypes.length) sel.value = ma.tokenTypes[0].id;
     }
 
     function updateNamedAreaList() {
@@ -761,15 +916,35 @@
       const variant = getMissionVariant();
       const onMapSet = new Set((state.spaces || []).filter(s => !(new Set((state.offMap || []).map(x => String(x).toLowerCase()))).has(String(s).toLowerCase())).map(s => String(s).toLowerCase()));
       const termSet = new Set(missionTokenState.terminals.map(s => String(s).toLowerCase()));
-      const aSet = new Set(missionTokenState.missionA.launchPanels.map(s => String(s).toLowerCase()));
-      const bSet = new Set(missionTokenState.missionB.contraband.map(s => String(s).toLowerCase()));
+      const kLower = (key) => String(key).toLowerCase();
       for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) {
         const k = coordKey(c, r), x = sx0 + c * sdx, y = sy0 + r * sdy;
-        if (!onMapSet.has(k)) continue;
+        // Draw terminals and mission tokens on any cell (on-map or off-map)
         if (termSet.has(k)) drawTokenAt(ctx, tokenImgTerminals, 'square', 'rgba(79,195,247,0.65)', x, y, sdx, sdy);
-        if (variant === 'a' && aSet.has(k)) drawTokenAt(ctx, tokenImgMissionA, 'circle', 'rgba(129,199,132,0.65)', x, y, sdx, sdy, (missionATokenLabel || '').trim() || 'Panel');
-        if (variant === 'b' && bSet.has(k)) drawTokenAt(ctx, tokenImgMissionB, 'square', 'rgba(255,183,77,0.7)', x, y, sdx, sdy, (missionBTokenLabel || '').trim() || 'Contraband');
+        if (variant === 'a') {
+          const ma = missionTokenState.missionA;
+          for (const tt of ma.tokenTypes || []) {
+            const cells = (ma.positions || {})[tt.id] || [];
+            if (cells.some((cell) => kLower(cell) === kLower(k))) {
+              const img = getTokenImage(tt.image);
+              drawTokenAt(ctx, img, 'circle', 'rgba(129,199,132,0.65)', x, y, sdx, sdy, (tt.label || '').trim() || 'Panel');
+              break;
+            }
+          }
+        }
+        if (variant === 'b') {
+          const mb = missionTokenState.missionB;
+          for (const tt of mb.tokenTypes || []) {
+            const cells = (mb.positions || {})[tt.id] || [];
+            if (cells.some((cell) => kLower(cell) === kLower(k))) {
+              const img = getTokenImage(tt.image);
+              drawTokenAt(ctx, img, 'square', 'rgba(255,183,77,0.7)', x, y, sdx, sdy, (tt.label || '').trim() || 'Contraband');
+              break;
+            }
+          }
+        }
         missionTokenState.namedAreas.forEach((area, areaIdx) => {
+          if (!onMapSet.has(k)) return;
           const areaSet = new Set((area.cells || []).map(s => String(s).toLowerCase()));
           if (areaSet.has(k)) {
             ctx.fillStyle = AREA_COLORS[areaIdx % AREA_COLORS.length];
@@ -946,7 +1121,10 @@
     function getMode() { return (document.querySelector('input[name="mode"]:checked') || {}).value || 'offmap'; }
 
     document.querySelectorAll('input[name="missionVariant"]').forEach((el) => {
-      el.onchange = () => applyMissionVariantSwitch();
+      el.onchange = () => {
+        if (typeof localStorage !== 'undefined') localStorage.setItem('map-tool-last-mission-variant', getMissionVariant());
+        applyMissionVariantSwitch();
+      };
     });
     const missionNameInput = document.getElementById('missionNameInput');
     if (missionNameInput) {
@@ -987,6 +1165,24 @@
       missionEffectAddCancelBtn.onclick = function () {
         if (missionEffectAddPanel) missionEffectAddPanel.style.display = 'none';
         if (missionEffectTextInput) missionEffectTextInput.value = '';
+      };
+    }
+
+    const missionAddTokenTypeBtn = document.getElementById('missionAddTokenTypeBtn');
+    if (missionAddTokenTypeBtn) {
+      missionAddTokenTypeBtn.onclick = function () {
+        const variant = getMissionVariant();
+        const ma = variant === 'b' ? missionTokenState.missionB : missionTokenState.missionA;
+        const options = (tokenImagesConfig && tokenImagesConfig.missionTokenOptions) || [];
+        const firstImage = options.length ? options[0].value : 'Mission Token--Neutral GRAY.gif';
+        const newId = nextMissionTokenTypeId(variant);
+        ma.tokenTypes.push({ id: newId, label: 'New type', image: firstImage });
+        ma.positions[newId] = [];
+        renderMissionTokenTypesList();
+        updateMissionTokenTypeSelect();
+        const sel = document.getElementById('missionTokenTypeSelect');
+        if (sel) sel.value = newId;
+        draw();
       };
     }
 
@@ -1038,16 +1234,15 @@
       if (isMissionTool) {
         const offSet = new Set((state.offMap || []).map(s => String(s).toLowerCase()));
         const onMap = new Set((state.spaces || []).map(s => String(s).toLowerCase()).filter(k => !offSet.has(k)));
-        if (mode === 'terminal' && onMap.has(info.coord)) {
+        if (mode === 'terminal') {
           const k = String(info.coord).toLowerCase();
           const idx = missionTokenState.terminals.indexOf(k);
           if (idx >= 0) missionTokenState.terminals.splice(idx, 1);
           else missionTokenState.terminals.push(k);
           dragState = { missionMode: mode, paintAdd: missionTokenState.terminals.includes(k), lastCoord: info.coord };
-        } else if (mode === 'missionTokens' && onMap.has(info.coord)) {
+        } else if (mode === 'missionTokens') {
           const k = String(info.coord).toLowerCase();
-          const variant = getMissionVariant();
-          const arr = variant === 'b' ? missionTokenState.missionB.contraband : missionTokenState.missionA.launchPanels;
+          const arr = getCurrentMissionTokenPositionsArray();
           const idx = arr.indexOf(k);
           if (idx >= 0) arr.splice(idx, 1);
           else arr.push(k);
@@ -1107,7 +1302,7 @@
       if (dragState.missionMode) {
         const offSet = new Set((state.offMap || []).map(s => String(s).toLowerCase()));
         const onMap = new Set((state.spaces || []).map(s => String(s).toLowerCase()).filter(k => !offSet.has(k)));
-        if (!onMap.has(info.coord)) return;
+        if (dragState.missionMode === 'namedarea' && !onMap.has(info.coord)) return;
         const k = String(info.coord).toLowerCase();
         if (dragState.missionMode === 'terminal') {
           const has = missionTokenState.terminals.includes(k);
@@ -1116,8 +1311,7 @@
             else missionTokenState.terminals.push(k);
           }
         } else if (dragState.missionMode === 'missionTokens') {
-          const variant = getMissionVariant();
-          const arr = variant === 'b' ? missionTokenState.missionB.contraband : missionTokenState.missionA.launchPanels;
+          const arr = getCurrentMissionTokenPositionsArray();
           const has = arr.includes(k);
           if ((dragState.paintAdd && !has) || (!dragState.paintAdd && has)) {
             if (has) arr.splice(arr.indexOf(k), 1);
@@ -1176,6 +1370,7 @@
 
     const LAST_MAP_KEY = 'map-tool-last-map';
     const LAST_MODE_KEY = 'map-tool-last-mode';
+    const LAST_MISSION_VARIANT_KEY = 'map-tool-last-mission-variant';
     const VALID_MODES = ['offmap', 'terrain', 'edge', 'exterior', 'deploymentzone', 'terminal', 'missionTokens', 'doors', 'namedarea'];
 
     // Populate map dropdown with every map on load
@@ -1190,9 +1385,16 @@
         const radio = document.querySelector('input[name="mode"][value="' + savedMode + '"]');
         if (radio) radio.checked = true;
       }
+      const savedVariant = (typeof localStorage !== 'undefined' && localStorage.getItem(LAST_MISSION_VARIANT_KEY)) || '';
+      if (savedVariant === 'a' || savedVariant === 'b') {
+        const variantRadio = document.querySelector('input[name="missionVariant"][value="' + savedVariant + '"]');
+        if (variantRadio) variantRadio.checked = true;
+      }
+      updateMissionTokenTypeSelect();
       document.querySelectorAll('input[name="mode"]').forEach(function (el) {
         el.addEventListener('change', function () {
           if (typeof localStorage !== 'undefined') localStorage.setItem(LAST_MODE_KEY, getMode());
+          updateMissionTokenTypeSelect();
         });
       });
       select.onchange = () => {
@@ -1276,8 +1478,8 @@
       const zonesData = { source: fullDeploymentZonesData?.source || 'extract-map-spaces.html', maps: { ...(fullDeploymentZonesData?.maps || {}), [selectedId]: { red: [...deploymentZoneState.red], blue: [...deploymentZoneState.blue] } } };
       const tokensPayload = {
         terminals: [...missionTokenState.terminals].sort(),
-        missionA: { launchPanels: [...missionTokenState.missionA.launchPanels].sort() },
-        missionB: { contraband: [...missionTokenState.missionB.contraband].sort() },
+        missionA: { launchPanels: [...getMissionTokenCells(missionTokenState.missionA)].sort() },
+        missionB: { contraband: [...getMissionTokenCells(missionTokenState.missionB)].sort() },
         doors: missionTokenState.doors.map(([a, b]) => [a, b]),
         namedAreas: missionTokenState.namedAreas.map((a) => ({ name: a.name, cells: [...(a.cells || [])].sort() }))
       };
@@ -1293,6 +1495,7 @@
             name: (missionANameValue || '').trim() || (existingMc.a?.name || ''),
             tokenLabel: (missionATokenLabel || '').trim() || (existingMc.a?.tokenLabel || ''),
             imagePath: missionCardImagePath(existingMc.a?.imagePath || ''),
+            customImagePath: (existingMc.a?.customImagePath && typeof existingMc.a.customImagePath === 'string') ? missionCardImagePath(existingMc.a.customImagePath) : undefined,
             setup: (missionASetup || '').trim(),
             startOfRound: (missionAStartOfRound || '').trim(),
             endOfRound: (missionAEndOfRound || '').trim()
@@ -1301,6 +1504,7 @@
             name: (missionBNameValue || '').trim() || (existingMc.b?.name || ''),
             tokenLabel: (missionBTokenLabel || '').trim() || (existingMc.b?.tokenLabel || ''),
             imagePath: missionCardImagePath(existingMc.b?.imagePath || ''),
+            customImagePath: (existingMc.b?.customImagePath && typeof existingMc.b.customImagePath === 'string') ? missionCardImagePath(existingMc.b.customImagePath) : undefined,
             setup: (missionBSetup || '').trim(),
             startOfRound: (missionBStartOfRound || '').trim(),
             endOfRound: (missionBEndOfRound || '').trim()
@@ -1342,7 +1546,7 @@
             'Terrain: ' + difficultCount + ' difficult, ' + blockingCount + ' blocking, ' + exteriorCount + ' exterior · ' + solidWalls + ' solid walls, ' + movBlockEdges + ' movement-blocking edges',
             'Tournament rotation: ' + (fullTournamentRotationData.missionIds && fullTournamentRotationData.missionIds.length ? fullTournamentRotationData.missionIds.join(', ') : 'none'),
             'Deployment zones: ' + deploymentZoneState.red.length + ' red, ' + deploymentZoneState.blue.length + ' blue',
-            'Mission tokens: ' + missionTokenState.terminals.length + ' terminals, ' + (missionTokenState.missionA.launchPanels || []).length + ' A, ' + (missionTokenState.missionB.contraband || []).length + ' B, ' + (missionTokenState.doors || []).length + ' doors',
+            'Mission tokens: ' + missionTokenState.terminals.length + ' terminals, ' + getMissionTokenCells(missionTokenState.missionA).length + ' A, ' + getMissionTokenCells(missionTokenState.missionB).length + ' B, ' + (missionTokenState.doors || []).length + ' doors',
             'Mission names: A «' + (missionANameValue || '').trim() + '» B «' + (missionBNameValue || '').trim() + '»',
             'Token labels: A «' + (missionATokenLabel || '').trim() + '» B «' + (missionBTokenLabel || '').trim() + '»',
             'Reload this page via the map-tool server to see saved mission names next time.'
@@ -1381,7 +1585,7 @@
       const selectedId = document.getElementById('mapSelect').value || 'mos-eisley-outskirts';
       const data = fullMapData && fullMapData.maps ? { ...fullMapData, maps: { ...fullMapData.maps, [selectedId]: exportState } } : { source: 'extract-map-spaces.html', maps: { [selectedId]: exportState } };
       const zonesData = { source: fullDeploymentZonesData?.source || 'extract-map-spaces.html', maps: { ...(fullDeploymentZonesData?.maps || {}), [selectedId]: { red: [...deploymentZoneState.red], blue: [...deploymentZoneState.blue] } } };
-      const tokensPayload = { terminals: [...missionTokenState.terminals].sort(), missionA: { launchPanels: [...missionTokenState.missionA.launchPanels].sort() }, missionB: { contraband: [...missionTokenState.missionB.contraband].sort() }, doors: missionTokenState.doors.map(([a, b]) => [a, b]), namedAreas: missionTokenState.namedAreas.map((a) => ({ name: a.name, cells: [...(a.cells || [])].sort() })) };
+      const tokensPayload = { terminals: [...missionTokenState.terminals].sort(), missionA: { launchPanels: [...getMissionTokenCells(missionTokenState.missionA)].sort() }, missionB: { contraband: [...getMissionTokenCells(missionTokenState.missionB)].sort() }, doors: missionTokenState.doors.map(([a, b]) => [a, b]), namedAreas: missionTokenState.namedAreas.map((a) => ({ name: a.name, cells: [...(a.cells || [])].sort() })) };
       const tokensData = { source: fullMapTokensData?.source || 'extract-map-spaces.html', maps: { ...(fullMapTokensData?.maps || {}), [selectedId]: tokensPayload } };
       return { mapSpaces: data, tournamentRotation: fullTournamentRotationData, deploymentZones: zonesData, mapTokens: tokensData };
     }
@@ -1400,6 +1604,7 @@
             name: (missionANameValue || '').trim() || (existingMc.a?.name || ''),
             tokenLabel: (missionATokenLabel || '').trim() || (existingMc.a?.tokenLabel || ''),
             imagePath: missionCardImagePath(existingMc.a?.imagePath || ''),
+            customImagePath: (existingMc.a?.customImagePath && typeof existingMc.a.customImagePath === 'string') ? missionCardImagePath(existingMc.a.customImagePath) : undefined,
             setup: (missionASetup || '').trim(),
             startOfRound: (missionAStartOfRound || '').trim(),
             endOfRound: (missionAEndOfRound || '').trim()
@@ -1408,6 +1613,7 @@
             name: (missionBNameValue || '').trim() || (existingMc.b?.name || ''),
             tokenLabel: (missionBTokenLabel || '').trim() || (existingMc.b?.tokenLabel || ''),
             imagePath: missionCardImagePath(existingMc.b?.imagePath || ''),
+            customImagePath: (existingMc.b?.customImagePath && typeof existingMc.b.customImagePath === 'string') ? missionCardImagePath(existingMc.b.customImagePath) : undefined,
             setup: (missionBSetup || '').trim(),
             startOfRound: (missionBStartOfRound || '').trim(),
             endOfRound: (missionBEndOfRound || '').trim()

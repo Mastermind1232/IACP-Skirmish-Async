@@ -1346,8 +1346,9 @@ async function postPinnedMissionCardFromGameState(game, client) {
   try {
     const ch = await client.channels.fetch(game.generalId);
     let sentMsg;
-    if (missionData?.imagePath) {
-      const resolvedPath = resolveAssetPath(missionData.imagePath, 'mission-cards');
+    const cardImagePath = missionData?.customImagePath || missionData?.imagePath;
+    if (cardImagePath) {
+      const resolvedPath = resolveAssetPath(cardImagePath, 'mission-cards');
       const imagePath = join(rootDir, resolvedPath);
       if (existsSync(imagePath)) {
         const attachment = new AttachmentBuilder(imagePath, { name: 'mission-card.jpg' });

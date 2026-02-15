@@ -23,15 +23,17 @@
       "a": {
         "name": "Local Trouble",
         "tokenLabel": "Thug",
-        "imagePath": "vassal_extracted/images/mission-cards/Corellian Underground-A-Local Trouble.jpg",
+        "imagePath": "vassal_extracted/images/mission-cards/Corellian Underground -A- Local Trouble  [custom].png",
+        "customImagePath": "vassal_extracted/images/mission-cards/Corellian Underground -A- Local Trouble  [custom].png",
         "setup": "Thugs are hostile to all figures except other thugs.\nA figure can attack a thug (Health: 4, Defense: 1 black die)",
         "startOfRound": "",
         "endOfRound": "Move each thug 2 spaces to the closest hostile figure. Then, each hostile figure adjacent to a thug suffers 2 Damage. (If multiple hostile figures are tied for closest to the thug, then the player with Initiative decides which figure is targeted.)\nThe player who controls the Cantina gains 6 VPs."
       },
       "b": {
-        "name": "B. Sabacc Standoff",
-        "tokenLabel": "Contraband",
-        "imagePath": "vassal_extracted/images/mission-cards/Corellian Underground-B-Sabacc Standoff.jpg",
+        "name": "Sabacc Standoff",
+        "tokenLabel": "Sabacc Table",
+        "imagePath": "vassal_extracted/images/mission-cards/Corellian Underground -B- Sabacc Standoff [custom].png",
+        "customImagePath": "vassal_extracted/images/mission-cards/Corellian Underground -B- Sabacc Standoff [custom].png",
         "setup": "",
         "startOfRound": "",
         "endOfRound": ""
