@@ -26,7 +26,7 @@ Images are organized into subfolders. Run `npm run organize-images` to sort exis
 | `dc-figures/` | Deployment cards with figures | `data/dc-images.json` |
 | `DC Skirmish Upgrades/` | Deployment cards without figures (Skirmish upgrades) | `data/dc-images.json` |
 | `figures/` | Circular figure tokens for map (Figure-Imperial--, etc.) | `data/figure-images.json` |
-| `tokens/` | Counters, mission tokens (Counter--Terminal, Mission Token--, etc.) | `data/token-images.json` (filenames; resolver uses tokens/) |
+| `tokens/` | Counters, mission tokens (Counter--Terminal, Mission Token--, etc.) | `data/token-images.json` (filenames; optional `tokenImageBasePath` = folder path to serve from) |
 | `maps/` | Map backgrounds (Map_*.gif) | `data/map-registry.json` |
 | `mission-cards/` | Mission cards (SkMission Card--*.jpg) | `data/mission-cards.json` |
 | `conditions/` | Condition cards and markers | — |

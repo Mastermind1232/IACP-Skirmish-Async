@@ -5,7 +5,7 @@
  */
 import { createServer } from 'http';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join, dirname, extname } from 'path';
+import { join, dirname, extname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 
@@ -38,6 +38,8 @@ const PLACEHOLDER_IMAGE_PATHS = '<!-- INJECT_MAP_IMAGE_PATHS -->';
 const PLACEHOLDER_TOURNAMENT_ROTATION = '<!-- INJECT_TOURNAMENT_ROTATION -->';
 const PLACEHOLDER_DEPLOYMENT_ZONES = '<!-- INJECT_DEPLOYMENT_ZONES -->';
 const PLACEHOLDER_MAP_TOKENS = '<!-- INJECT_MAP_TOKENS -->';
+const TOKEN_IMAGE_BASE_PATH = '/vassal_extracted/images/';
+const PLACEHOLDER_TOKEN_IMAGE_BASE = '<!-- INJECT_TOKEN_IMAGE_BASE -->';
 const PLACEHOLDER_TOKEN_IMAGES = '<!-- INJECT_TOKEN_IMAGES --><script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal GRAY.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>';
 const PLACEHOLDER_MISSION_CARDS = '<!-- INJECT_MISSION_CARDS --><script type="application/json" id="mission-cards-data">{"source":"extract-map-spaces.html","maps":{}}</script>';
 const MAPS_SUBFOLDER = 'vassal_extracted/images/maps/';
@@ -188,6 +190,7 @@ createServer((req, res) => {
       } else {
         html = html.replace(PLACEHOLDER_MAP_TOKENS, '<script type="application/json" id="map-tokens-data">{"source":"extract-map-spaces.html","maps":{}}</script>');
       }
+      html = html.replace(PLACEHOLDER_TOKEN_IMAGE_BASE, `<script>window.MAP_TOOL_TOKEN_IMAGE_BASE=${JSON.stringify(TOKEN_IMAGE_BASE_PATH)};</script>`);
       if (existsSync(TOKEN_IMAGES_JSON)) {
         const tokenImgRaw = readFileSync(TOKEN_IMAGES_JSON, 'utf8').replace(/<\/script>/gi, '<\\/script>');
         html = html.replace(PLACEHOLDER_TOKEN_IMAGES, `<script type="application/json" id="token-images-data">${tokenImgRaw}</script>`);
@@ -214,21 +217,56 @@ createServer((req, res) => {
   }
 
   let pathToServe = filePath;
+  let servedFromTokenBase = false;
   if (!existsSync(pathToServe) && decodedPath.replace(/\\/g, '/').startsWith('vassal_extracted/images/tokens/')) {
     const filename = decodedPath.replace(/^.*[/\\]/, '');
-    const fallback = join(root, 'vassal_extracted', 'images', 'maps', filename);
-    if (existsSync(fallback)) pathToServe = fallback;
+    const fallbackMaps = join(root, 'vassal_extracted', 'images', 'maps', filename);
+    if (existsSync(fallbackMaps)) {
+      pathToServe = fallbackMaps;
+    } else {
+      try {
+        const tokenConfig = JSON.parse(readFileSync(TOKEN_IMAGES_JSON, 'utf8'));
+        const basePath = tokenConfig && tokenConfig.tokenImageBasePath;
+        if (basePath && typeof basePath === 'string') {
+          const customPath = join(basePath.trim(), filename);
+          if (existsSync(customPath)) {
+            pathToServe = customPath;
+            servedFromTokenBase = true;
+          }
+        }
+      } catch (_) {}
+    }
   }
-  if (!existsSync(pathToServe) || !pathToServe.startsWith(root)) {
+  if (!existsSync(pathToServe)) {
     res.writeHead(404);
     res.end('Not found');
     return;
   }
+  const realServe = resolve(pathToServe);
+  const realRoot = resolve(root);
+  const pathWithin = (a, b) => a.toLowerCase().startsWith(b.toLowerCase());
+  if (!servedFromTokenBase && !pathWithin(realServe, realRoot)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+  if (servedFromTokenBase) {
+    const tokenConfig = JSON.parse(readFileSync(TOKEN_IMAGES_JSON, 'utf8'));
+    const basePath = (tokenConfig && tokenConfig.tokenImageBasePath || '').trim();
+    if (basePath && !pathWithin(realServe, resolve(basePath))) {
+      res.writeHead(403);
+      res.end('Forbidden');
+      return;
+    }
+  }
   const ext = extname(pathToServe);
   const mime = MIME[ext] || 'application/octet-stream';
+  const isTokenImage = decodedPath.replace(/\\/g, '/').includes('/tokens/');
+  const headers = { 'Content-Type': mime };
+  if (isTokenImage) headers['Cache-Control'] = 'no-store, no-cache';
   try {
     const content = readFileSync(pathToServe);
-    res.writeHead(200, { 'Content-Type': mime });
+    res.writeHead(200, headers);
     res.end(content);
   } catch {
     res.writeHead(404);

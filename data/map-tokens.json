@@ -54,7 +54,24 @@
       "missionB": {
         "contraband": []
       },
-      "doors": [],
+      "doors": [
+        [
+          "m17",
+          "m16"
+        ],
+        [
+          "l16",
+          "l17"
+        ],
+        [
+          "p13",
+          "o13"
+        ],
+        [
+          "p14",
+          "o14"
+        ]
+      ],
       "namedAreas": [
         {
           "name": "Cantina",

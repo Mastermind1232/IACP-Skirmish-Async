@@ -14,6 +14,7 @@
     "apply-map-tool": "node scripts/apply-map-tool-payload.js",
     "generate-map-spaces": "node scripts/generate-map-spaces.js",
     "organize-images": "node scripts/organize-images.js",
+    "copy-token-images": "node scripts/copy-token-images.js",
     "normalize-cc-images": "node scripts/normalize-cc-images.js",
     "test-db": "node scripts/test-db-connection.js",
     "test-movement": "node index.js --test-movement",

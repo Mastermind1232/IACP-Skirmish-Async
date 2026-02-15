@@ -49,7 +49,8 @@
 <body>
   <h1>Map Spaces — Terrain & Walls</h1>
   <p id="status">Load map-spaces.json. Off-map: click or drag to exclude/restore cells. Terrain: click to cycle. Edges: click for walls.</p>
-  <p style="margin:4px 0 8px 0; font-size:0.9em; color:#999;">Run <code>npm run map-tool</code> in the project folder — the map tool opens in your browser. Use the single <strong>Save</strong> button to save everything (map spaces, rotation, deployment zones, mission tokens) to the project <code>data/</code> folder. Token images (terminals, panels, contraband) show on the map when present in <code>vassal_extracted/images/tokens/</code> or <code>maps/</code> — see <code>data/token-images.json</code> for filenames; otherwise colored shapes are used.</p>
+  <p style="margin:4px 0 8px 0; font-size:0.9em; color:#999;">Run <code>npm run map-tool</code> in the project folder — the map tool opens in your browser. Use the single <strong>Save</strong> button to save everything (map spaces, rotation, deployment zones, mission tokens) to the project <code>data/</code> folder.</p>
+  <p id="tokenImagesNotice" style="display:none; margin:6px 0; padding:8px 12px; background:rgba(255,200,80,0.2); border:1px solid rgba(255,180,0,0.6); border-radius:6px; font-size:0.9em; color:#ddd;">Token images not loaded — you see colored shapes. Set <code>tokenImageBasePath</code> in <code>data/token-images.json</code> to the <strong>folder path</strong> where your token images live (e.g. <code>C:\\Vassal\\IA\\images</code> or <code>D:\\Games\\Imperial Assault\\vmod_images</code>). Restart the map tool server (<code>npm run map-tool</code>), then refresh this page. Files must be named as in that JSON (e.g. Counter--Terminal GRAY.gif).</p>
   <div class="main-layout">
     <div class="left-column">
       <div id="colorKey" title="Grid overlay legend">
@@ -96,18 +97,23 @@
         <input type="text" id="missionTokenLabelInput" size="24" placeholder="e.g. Launch panels, Contraband" title="Label for this mission's tokens (shown in mode and saved with mission card)">
       </div>
       <div class="mission-text-section">
-        <div class="mission-text-field">
-          <label for="missionSetupInput">Setup</label>
-          <textarea id="missionSetupInput" rows="2" placeholder="Mission setup text" title="Setup instructions for this mission variant"></textarea>
+        <label>Mission timing effects</label>
+        <p style="margin:4px 0 0 0; font-size:0.8em; color:#999;">Persistent (Setup) effects are permanent unless the effect text says otherwise.</p>
+        <div style="display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap;">
+          <select id="missionTimingSelect" title="Which timing to add or edit effects for">
+            <option value="setup">Persistent (Setup)</option>
+            <option value="startOfRound">Start of round</option>
+            <option value="endOfRound">End of round</option>
+          </select>
+          <button type="button" id="missionAddEffectBtn" title="Add an effect to the selected timing">Add effect</button>
         </div>
-        <div class="mission-text-field">
-          <label for="missionStartOfRoundInput">Start of round</label>
-          <textarea id="missionStartOfRoundInput" rows="2" placeholder="Start of round effects" title="Effects that happen at the start of each round"></textarea>
+        <div id="missionEffectAddPanel" style="display:none; margin-top:8px; padding:8px; background:rgba(0,0,0,0.25); border-radius:4px; border:1px solid #555;">
+          <label for="missionEffectTextInput" style="display:block; margin-bottom:4px;">Effect text</label>
+          <textarea id="missionEffectTextInput" rows="2" placeholder="e.g. Place 2 terminals on the map" style="width:100%; box-sizing:border-box; margin-bottom:6px;"></textarea>
+          <button type="button" id="missionEffectAddConfirmBtn">Add to list</button>
+          <button type="button" id="missionEffectAddCancelBtn" style="margin-left:6px;">Cancel</button>
         </div>
-        <div class="mission-text-field">
-          <label for="missionEndOfRoundInput">End of round</label>
-          <textarea id="missionEndOfRoundInput" rows="2" placeholder="End of round effects" title="Effects that happen at the end of each round"></textarea>
-        </div>
+        <div id="missionEffectsList" class="mission-effects-list" style="margin-top:8px; font-size:0.9em;" title="Effects for the selected timing (click × to remove)"></div>
       </div>
       <div class="mission-modes">
         <span class="mode-label"><label><input type="radio" name="mode" value="terminal"> Terminals</label></span>
@@ -123,6 +129,11 @@
         <button type="button" id="addNamedAreaBtn" title="Add a new named area">+ Area</button>
       </div>
       <div id="namedAreaList" class="named-area-list" title="Named areas (each has a distinct color on the map)"></div>
+      <div class="mission-field mission-card-image-wrap" style="margin-top:14px; padding-top:12px; border-top:1px solid #444;">
+        <label>Mission card</label>
+        <img id="missionCardImage" src="" alt="Mission card" title="Card for selected variant (A or B)" style="max-width:100%; max-height:200px; margin-top:4px; border:1px solid #555; border-radius:4px;">
+        <p id="missionCardImageFallback" style="display:none; margin:6px 0 0 0; font-size:0.85em; color:#999;">Card image not found. Add PNG to <code>vassal_extracted/images/mission-cards/</code> (filename from mission card data).</p>
+      </div>
     </aside>
   </div>
   <!-- INJECT_MAP_SPACES -->
@@ -130,6 +141,7 @@
   <!-- INJECT_TOURNAMENT_ROTATION -->
   <!-- INJECT_DEPLOYMENT_ZONES -->
   <!-- INJECT_MAP_TOKENS -->
+  <!-- INJECT_TOKEN_IMAGE_BASE -->
   <!-- INJECT_TOKEN_IMAGES --><script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal GRAY.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>
   <!-- INJECT_MISSION_CARDS --><script type="application/json" id="mission-cards-data">{"source":"extract-map-spaces.html","maps":{}}</script>
   <script>
@@ -241,15 +253,21 @@
       if (el && el.textContent) try { return JSON.parse(el.textContent); } catch (e) {}
       return { terminals: 'Counter--Terminal GRAY.gif', missionA: 'Mission Token--Neutral GRAY.gif', missionB: 'Counter--Crate Blue.gif', doors: 'Token--Door.png' };
     })();
-    /** Preloaded token images (same filenames as game map renderer). Try tokens/, then maps/, then filename. Draw these on the overlay when loaded; otherwise colored shapes. */
+    /** Preloaded token images (same filenames as game map renderer). Use absolute path so requests always hit map-tool server. Try tokens/, then maps/. */
     const tokenImgTerminals = new Image();
     const tokenImgMissionA = new Image();
     const tokenImgMissionB = new Image();
-    const TOKEN_BASE_PATHS = ['tokens/', 'maps/', ''];
+    /** Server injects MAP_TOOL_TOKEN_IMAGE_BASE so token URLs work when page is opened from / or from .../extract-map-spaces.html */
+    const tokenImageBaseUrl = window.MAP_TOOL_TOKEN_IMAGE_BASE || (function () {
+      var p = window.location.pathname || '';
+      var i = p.lastIndexOf('/');
+      return (i >= 0 ? p.slice(0, i + 1) : '') || '/vassal_extracted/images/';
+    })();
+    const TOKEN_BASE_PATHS = ['tokens/', 'maps/'];
     function tryLoadTokenImg(imgEl, filename, pathIndex) {
       if (!filename) return;
-      const base = TOKEN_BASE_PATHS[pathIndex || 0];
-      const src = base + encodeURIComponent(filename);
+      const base = TOKEN_BASE_PATHS[pathIndex || 0] || '';
+      const src = tokenImageBaseUrl + base + encodeURIComponent(filename);
       imgEl.onload = function () { draw(); };
       imgEl.onerror = function () {
         const next = (pathIndex || 0) + 1;
@@ -259,9 +277,24 @@
       imgEl.src = src;
     }
     (function preloadTokenImages() {
-      tryLoadTokenImg(tokenImgTerminals, tokenImagesConfig.terminals, 0);
-      tryLoadTokenImg(tokenImgMissionA, tokenImagesConfig.missionA, 0);
-      tryLoadTokenImg(tokenImgMissionB, tokenImagesConfig.missionB, 0);
+      var pending = 3;
+      function maybeShowTokenNotice() {
+        pending--;
+        if (pending > 0) return;
+        var anyLoaded = (tokenImgTerminals.complete && tokenImgTerminals.naturalWidth) || (tokenImgMissionA.complete && tokenImgMissionA.naturalWidth) || (tokenImgMissionB.complete && tokenImgMissionB.naturalWidth);
+        if (!anyLoaded) {
+          var el = document.getElementById('tokenImagesNotice');
+          if (el) el.style.display = 'block';
+        }
+      }
+      function tryLoadTokenImgWithNotify(imgEl, list, idx, done) {
+        tryLoadTokenImg(imgEl, list, idx);
+        if (imgEl.complete) done();
+        else { imgEl.onload = done; imgEl.onerror = done; }
+      }
+      tryLoadTokenImgWithNotify(tokenImgTerminals, tokenImagesConfig.terminals, 0, maybeShowTokenNotice);
+      tryLoadTokenImgWithNotify(tokenImgMissionA, tokenImagesConfig.missionA, 0, maybeShowTokenNotice);
+      tryLoadTokenImgWithNotify(tokenImgMissionB, tokenImagesConfig.missionB, 0, maybeShowTokenNotice);
     })();
     /** Draw a token at cell center: use image if loaded, else fallback colored shape. If label is provided, draw it on top with base at bottom of cell. */
     function drawTokenAt(ctx, img, fallbackShape, fallbackStyle, x, y, sdx, sdy, label) {
@@ -362,6 +395,28 @@
 
     function getMissionVariant() { return (document.querySelector('input[name="missionVariant"]:checked') || {}).value || 'a'; }
 
+    function updateMissionCardImage() {
+      const imgEl = document.getElementById('missionCardImage');
+      const fallbackEl = document.getElementById('missionCardImageFallback');
+      if (!imgEl) return;
+      const mapId = (document.getElementById('mapSelect') && document.getElementById('mapSelect').value) || '';
+      const variant = getMissionVariant();
+      const imagePath = fullMissionCardsData?.maps?.[mapId]?.[variant]?.imagePath;
+      const filename = (imagePath && typeof imagePath === 'string') ? imagePath.replace(/^.*[/\\]/, '') : '';
+      if (fallbackEl) fallbackEl.style.display = 'none';
+      if (filename && tokenImageBaseUrl) {
+        imgEl.alt = 'Mission card';
+        imgEl.style.display = 'block';
+        imgEl.onload = function () { if (fallbackEl) fallbackEl.style.display = 'none'; };
+        imgEl.onerror = function () { if (fallbackEl) fallbackEl.style.display = 'block'; };
+        imgEl.src = tokenImageBaseUrl + 'mission-cards/' + encodeURIComponent(filename);
+      } else {
+        imgEl.src = '';
+        imgEl.style.display = 'none';
+        imgEl.alt = 'No mission card image';
+      }
+    }
+
     function updateMissionNameInputs(mapId) {
       const mc = fullMissionCardsData?.maps?.[mapId];
       missionANameValue = (mc?.a?.name != null ? mc.a.name : '') || '';
@@ -379,12 +434,8 @@
       if (input) input.value = variant === 'b' ? missionBNameValue : missionANameValue;
       const tokenLabelEl = document.getElementById('missionTokenLabelInput');
       if (tokenLabelEl) tokenLabelEl.value = variant === 'b' ? missionBTokenLabel : missionATokenLabel;
-      const setupEl = document.getElementById('missionSetupInput');
-      const startEl = document.getElementById('missionStartOfRoundInput');
-      const endEl = document.getElementById('missionEndOfRoundInput');
-      if (setupEl) setupEl.value = variant === 'b' ? missionBSetup : missionASetup;
-      if (startEl) startEl.value = variant === 'b' ? missionBStartOfRound : missionAStartOfRound;
-      if (endEl) endEl.value = variant === 'b' ? missionBEndOfRound : missionAEndOfRound;
+      updateMissionCardImage();
+      renderMissionEffectsList();
     }
 
     function syncMissionNameFromInput() {
@@ -400,23 +451,99 @@
       if (variant === 'b') missionBTokenLabel = v; else missionATokenLabel = v;
     }
 
-    function syncMissionTextFromInputs() {
+    function getMissionTimingKey() {
+      const sel = document.getElementById('missionTimingSelect');
+      return (sel && sel.value) || 'setup';
+    }
+
+    const MISSION_TIMING_LABELS = { setup: 'Persistent', startOfRound: 'Start of round', endOfRound: 'End of round' };
+
+    function getMissionEffectListForKey(key) {
       const variant = getMissionVariant();
-      const setupEl = document.getElementById('missionSetupInput');
-      const startEl = document.getElementById('missionStartOfRoundInput');
-      const endEl = document.getElementById('missionEndOfRoundInput');
-      const setup = (setupEl && setupEl.value != null ? setupEl.value : '').trim();
-      const start = (startEl && startEl.value != null ? startEl.value : '').trim();
-      const end = (endEl && endEl.value != null ? endEl.value : '').trim();
-      if (variant === 'b') {
-        missionBSetup = setup;
-        missionBStartOfRound = start;
-        missionBEndOfRound = end;
+      const str = key === 'setup' ? (variant === 'b' ? missionBSetup : missionASetup)
+        : key === 'startOfRound' ? (variant === 'b' ? missionBStartOfRound : missionAStartOfRound)
+        : (variant === 'b' ? missionBEndOfRound : missionAEndOfRound);
+      return (str || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    }
+
+    function getMissionEffectList() {
+      return getMissionEffectListForKey(getMissionTimingKey());
+    }
+
+    function setMissionEffectList(arr) {
+      const variant = getMissionVariant();
+      const key = getMissionTimingKey();
+      const s = Array.isArray(arr) ? arr.join('\n') : '';
+      if (key === 'setup') {
+        if (variant === 'b') missionBSetup = s; else missionASetup = s;
+      } else if (key === 'startOfRound') {
+        if (variant === 'b') missionBStartOfRound = s; else missionAStartOfRound = s;
       } else {
-        missionASetup = setup;
-        missionAStartOfRound = start;
-        missionAEndOfRound = end;
+        if (variant === 'b') missionBEndOfRound = s; else missionAEndOfRound = s;
       }
+    }
+
+    function removeMissionEffectAt(timingKey, index) {
+      const arr = getMissionEffectListForKey(timingKey);
+      arr.splice(index, 1);
+      const variant = getMissionVariant();
+      const s = arr.join('\n');
+      if (timingKey === 'setup') {
+        if (variant === 'b') missionBSetup = s; else missionASetup = s;
+      } else if (timingKey === 'startOfRound') {
+        if (variant === 'b') missionBStartOfRound = s; else missionAStartOfRound = s;
+      } else {
+        if (variant === 'b') missionBEndOfRound = s; else missionAEndOfRound = s;
+      }
+      renderMissionEffectsList();
+    }
+
+    function renderMissionEffectsList() {
+      const listEl = document.getElementById('missionEffectsList');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      const keys = ['setup', 'startOfRound', 'endOfRound'];
+      let hasAny = false;
+      keys.forEach((key) => {
+        const list = getMissionEffectListForKey(key);
+        const label = MISSION_TIMING_LABELS[key] || key;
+        list.forEach((text, i) => {
+          hasAny = true;
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex; align-items:flex-start; gap:8px; margin-bottom:6px;';
+          const badge = document.createElement('span');
+          badge.textContent = label;
+          badge.title = label;
+          badge.style.cssText = 'flex-shrink:0; font-size:0.75em; padding:2px 6px; border-radius:3px; background:rgba(100,100,120,0.5); color:#ccc;';
+          const textSpan = document.createElement('span');
+          textSpan.textContent = text;
+          textSpan.style.flex = '1';
+          const rmBtn = document.createElement('button');
+          rmBtn.type = 'button';
+          rmBtn.textContent = '×';
+          rmBtn.title = 'Remove this effect';
+          rmBtn.style.cssText = 'flex-shrink:0; padding:0 6px; cursor:pointer;';
+          rmBtn.setAttribute('data-timing', key);
+          rmBtn.setAttribute('data-index', String(i));
+          rmBtn.onclick = function () {
+            removeMissionEffectAt(this.getAttribute('data-timing'), parseInt(this.getAttribute('data-index'), 10));
+          };
+          row.appendChild(badge);
+          row.appendChild(textSpan);
+          row.appendChild(rmBtn);
+          listEl.appendChild(row);
+        });
+      });
+      if (!hasAny) {
+        listEl.textContent = 'No effects. Select a timing above and click "Add effect" to add one.';
+        listEl.style.color = '#888';
+      } else {
+        listEl.style.color = '';
+      }
+    }
+
+    function syncMissionTextFromInputs() {
+      /* Effect strings are updated by add/remove; no textareas to sync from. */
     }
 
     function applyMissionVariantSwitch() {
@@ -425,27 +552,17 @@
       const leavingVariant = newVariant === 'b' ? 'a' : 'b';
       const nameInput = document.getElementById('missionNameInput');
       const tokenLabelEl = document.getElementById('missionTokenLabelInput');
-      const setupEl = document.getElementById('missionSetupInput');
-      const startEl = document.getElementById('missionStartOfRoundInput');
-      const endEl = document.getElementById('missionEndOfRoundInput');
       if (leavingVariant === 'a') {
         missionANameValue = (nameInput && nameInput.value != null ? nameInput.value : '').trim();
         missionATokenLabel = (tokenLabelEl && tokenLabelEl.value != null ? tokenLabelEl.value : '').trim();
-        missionASetup = (setupEl && setupEl.value != null ? setupEl.value : '').trim();
-        missionAStartOfRound = (startEl && startEl.value != null ? startEl.value : '').trim();
-        missionAEndOfRound = (endEl && endEl.value != null ? endEl.value : '').trim();
       } else {
         missionBNameValue = (nameInput && nameInput.value != null ? nameInput.value : '').trim();
         missionBTokenLabel = (tokenLabelEl && tokenLabelEl.value != null ? tokenLabelEl.value : '').trim();
-        missionBSetup = (setupEl && setupEl.value != null ? setupEl.value : '').trim();
-        missionBStartOfRound = (startEl && startEl.value != null ? startEl.value : '').trim();
-        missionBEndOfRound = (endEl && endEl.value != null ? endEl.value : '').trim();
       }
       if (nameInput) nameInput.value = newVariant === 'b' ? missionBNameValue : missionANameValue;
       if (tokenLabelEl) tokenLabelEl.value = newVariant === 'b' ? missionBTokenLabel : missionATokenLabel;
-      if (setupEl) setupEl.value = newVariant === 'b' ? missionBSetup : missionASetup;
-      if (startEl) startEl.value = newVariant === 'b' ? missionBStartOfRound : missionAStartOfRound;
-      if (endEl) endEl.value = newVariant === 'b' ? missionBEndOfRound : missionAEndOfRound;
+      updateMissionCardImage();
+      renderMissionEffectsList();
       draw();
     }
 
@@ -839,10 +956,39 @@
     if (missionTokenLabelInput) {
       missionTokenLabelInput.oninput = missionTokenLabelInput.onchange = missionTokenLabelInput.onblur = () => syncMissionTokenLabelFromInput();
     }
-    ['missionSetupInput', 'missionStartOfRoundInput', 'missionEndOfRoundInput'].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) el.oninput = el.onchange = el.onblur = () => syncMissionTextFromInputs();
-    });
+    const missionTimingSelect = document.getElementById('missionTimingSelect');
+    if (missionTimingSelect) missionTimingSelect.onchange = () => renderMissionEffectsList();
+
+    const missionAddEffectBtn = document.getElementById('missionAddEffectBtn');
+    const missionEffectAddPanel = document.getElementById('missionEffectAddPanel');
+    const missionEffectTextInput = document.getElementById('missionEffectTextInput');
+    const missionEffectAddConfirmBtn = document.getElementById('missionEffectAddConfirmBtn');
+    const missionEffectAddCancelBtn = document.getElementById('missionEffectAddCancelBtn');
+    if (missionAddEffectBtn) {
+      missionAddEffectBtn.onclick = function () {
+        if (missionEffectAddPanel) missionEffectAddPanel.style.display = 'block';
+        if (missionEffectTextInput) { missionEffectTextInput.value = ''; missionEffectTextInput.focus(); }
+      };
+    }
+    if (missionEffectAddConfirmBtn && missionEffectTextInput) {
+      missionEffectAddConfirmBtn.onclick = function () {
+        const text = (missionEffectTextInput.value || '').trim();
+        if (text) {
+          const arr = getMissionEffectList();
+          arr.push(text);
+          setMissionEffectList(arr);
+          renderMissionEffectsList();
+          missionEffectTextInput.value = '';
+        }
+        if (missionEffectAddPanel) missionEffectAddPanel.style.display = 'none';
+      };
+    }
+    if (missionEffectAddCancelBtn) {
+      missionEffectAddCancelBtn.onclick = function () {
+        if (missionEffectAddPanel) missionEffectAddPanel.style.display = 'none';
+        if (missionEffectTextInput) missionEffectTextInput.value = '';
+      };
+    }
 
     document.getElementById('addNamedAreaBtn').onclick = () => {
       const n = missionTokenState.namedAreas.length;
@@ -1029,6 +1175,8 @@
     }
 
     const LAST_MAP_KEY = 'map-tool-last-map';
+    const LAST_MODE_KEY = 'map-tool-last-mode';
+    const VALID_MODES = ['offmap', 'terrain', 'edge', 'exterior', 'deploymentzone', 'terminal', 'missionTokens', 'doors', 'namedarea'];
 
     // Populate map dropdown with every map on load
     (function initMapSelect() {
@@ -1037,6 +1185,16 @@
       const savedId = (typeof localStorage !== 'undefined' && localStorage.getItem(LAST_MAP_KEY)) || '';
       const validId = ALL_MAPS.some(m => m.id === savedId) ? savedId : 'mos-eisley-outskirts';
       select.value = validId;
+      const savedMode = (typeof localStorage !== 'undefined' && localStorage.getItem(LAST_MODE_KEY)) || '';
+      if (savedMode && VALID_MODES.includes(savedMode)) {
+        const radio = document.querySelector('input[name="mode"][value="' + savedMode + '"]');
+        if (radio) radio.checked = true;
+      }
+      document.querySelectorAll('input[name="mode"]').forEach(function (el) {
+        el.addEventListener('change', function () {
+          if (typeof localStorage !== 'undefined') localStorage.setItem(LAST_MODE_KEY, getMode());
+        });
+      });
       select.onchange = () => {
         const id = select.value;
         if (id) {
