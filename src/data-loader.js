@@ -180,6 +180,14 @@ export function getMapSpacesData() {
 export function getMapSpaces(mapId) {
   return mapSpacesData[mapId] || null;
 }
+
+/** F9: True if the space is marked exterior in map data (for abilities/CC that care about exterior vs interior). */
+export function isExteriorSpace(mapSpaces, coord) {
+  if (!mapSpaces || coord == null) return false;
+  const key = String(coord).toLowerCase();
+  return !!mapSpaces.exterior?.[key];
+}
+
 export function getDcEffects() {
   return dcEffects;
 }

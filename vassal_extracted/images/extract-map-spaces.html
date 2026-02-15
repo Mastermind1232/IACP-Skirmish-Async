@@ -7,9 +7,9 @@
     body { font-family: sans-serif; padding: 16px; background: #222; color: #eee; }
     .toolbar { margin: 12px 0; }
     button { padding: 8px 16px; margin-right: 8px; cursor: pointer; }
-    .container { position: relative; display: inline-block; }
+    .container { position: relative; display: inline-block; min-height: 200px; }
     #mapImg { display: block; max-width: 1200px; }
-    #overlay { position: absolute; left: 0; top: 0; cursor: crosshair; user-select: none; }
+    #overlay { position: absolute; left: 0; top: 0; cursor: crosshair; user-select: none; z-index: 1; }
     #status { margin: 8px 0; color: #9f9; }
     .mode { margin-right: 12px; }
     label { cursor: pointer; }
@@ -18,14 +18,20 @@
 <body>
   <h1>Map Spaces — Terrain & Walls</h1>
   <p id="status">Load map-spaces.json. Off-map: click or drag to exclude/restore cells. Terrain: click to cycle. Edges: click for walls.</p>
+  <p style="margin:4px 0 12px 0; font-size:0.9em; color:#999;">To auto-load data: run <code>npm run map-tool</code> in the project folder, then open <code>http://localhost:3457/vassal_extracted/images/extract-map-spaces.html</code></p>
   <div class="toolbar">
+    <label>Map: <select id="mapSelect" title="Select which map to configure"></select></label>
     <span class="mode"><label><input type="radio" name="mode" value="offmap" checked> Off-map (click to exclude)</label></span>
     <span class="mode"><label><input type="radio" name="mode" value="terrain"> Terrain (normal → difficult → blocking)</label></span>
     <span class="mode"><label><input type="radio" name="mode" value="edge"> Edge (solid wall → dotted → clear)</label></span>
+    <span class="mode"><label><input type="radio" name="mode" value="exterior"> Exterior (click to toggle)</label></span>
     <button id="loadBtn">Load map-spaces.json</button>
     <input type="file" id="fileInput" accept=".json" style="display:none">
+    <button id="loadImgBtn">Load map image</button>
+    <input type="file" id="imgInput" accept="image/*" style="display:none">
     <button id="invertBtn">Invert (swap on/off-map)</button>
-    <button id="exportBtn" style="background:#0a0;color:#fff">Export JSON</button>
+    <button id="saveBtn" style="background:#0a0;color:#fff;font-weight:bold">Save</button>
+    <button id="exportBtn">Export JSON</button>
   </div>
   <div class="container">
     <img id="mapImg" src="Map_Mos Eisley Outskirts.gif" alt="Map">
@@ -38,15 +44,92 @@
     const ctx = overlay.getContext('2d');
     const dx = 50, dy = 50, x0 = 25, y0 = 25;
     let scale = 1, numCols = 0, numRows = 0;
-    let state = { spaces: [], adjacency: {}, terrain: {}, blocking: [], impassableEdges: [], movementBlockingEdges: [], offMap: [] };
+    let state = { spaces: [], adjacency: {}, terrain: {}, blocking: [], impassableEdges: [], movementBlockingEdges: [], offMap: [], exterior: {} };
+    /** Full file data from last Load; used to preserve other maps on Export. */
+    let fullMapData = null;
+    /** All maps from map-registry (id + name) so dropdown is always populated. */
+    const ALL_MAPS = [{"id":"30th-floor-plaza","name":"30th Floor Plaza"},{"id":"anchorhead-cantina-bar","name":"Anchorhead Cantina/Bar"},{"id":"bespin-tibanna-facility","name":"Bespin Tibanna Facility"},{"id":"chopper-base-atollon","name":"Chopper Base, Atollon"},{"id":"climate-research-camp","name":"Climate Research Camp"},{"id":"corellian-underground","name":"Corellian Underground"},{"id":"coruscant-back-alleys","name":"Coruscant Back Alleys"},{"id":"coruscant-landfill","name":"Coruscant Landfill"},{"id":"coruscant-senate-office","name":"Coruscant Senate Office"},{"id":"devaron-garrison","name":"Devaron Garrison"},{"id":"development-facility","name":"Development Facility"},{"id":"the-dune-sea","name":"The Dune Sea"},{"id":"echo-base","name":"Echo Base"},{"id":"endor-defense-station","name":"Endor Defense Station"},{"id":"endor-wilderness","name":"Endor Wilderness"},{"id":"geonosis-foundry","name":"Geonosis Foundry"},{"id":"hangar-bay","name":"Hangar Bay"},{"id":"hoth-battle-station","name":"Hoth Battle Station"},{"id":"hoth-weather-shelter","name":"Hoth Weather Shelter"},{"id":"imperial-command-hub","name":"Imperial Command Hub"},{"id":"imperial-labor-camp","name":"Imperial Labor Camp"},{"id":"imperial-research-lab","name":"Imperial Research Lab"},{"id":"imperial-space-station","name":"Imperial Space Station"},{"id":"imperial-tower","name":"Imperial Tower"},{"id":"isb-headquarters","name":"ISB Headquarters"},{"id":"isb-training-grounds","name":"ISB Training Grounds"},{"id":"jabba-s-palace","name":"Jabba's Palace"},{"id":"kashyyyk-station","name":"Kashyyyk Station"},{"id":"kuat-space-station","name":"Kuat Space Station"},{"id":"lothal-battlefront","name":"Lothal Battlefront"},{"id":"lothal-safehouse","name":"Lothal Safehouse"},{"id":"lothal-spaceport","name":"Lothal Spaceport"},{"id":"lothal-wastes","name":"Lothal Wastes"},{"id":"massassi-ruins","name":"Massassi Ruins"},{"id":"moisture-farm","name":"Moisture Farm"},{"id":"mos-eisley-back-alleys","name":"Mos Eisley Back Alleys"},{"id":"mos-eisley-cantina","name":"Mos Eisley Cantina"},{"id":"mos-eisley-outskirts","name":"Mos Eisley Outskirts"},{"id":"nal-hutta-swamps","name":"Nal Hutta Swamps"},{"id":"nelvaanian-war-zone","name":"Nelvaanian War Zone"},{"id":"ord-mantell-junkyard","name":"Ord Mantell Junkyard"},{"id":"the-pit-of-carkoon","name":"The Pit of Carkoon"},{"id":"sewers-of-nar-shaddaa","name":"Sewers of Nar Shaddaa"},{"id":"tarkin-initiative-labs","name":"Tarkin Initiative Labs"},{"id":"training-ground","name":"Training Ground"},{"id":"tython-meditation-field","name":"Tython Meditation Field"},{"id":"uscru-entertainment-district","name":"Uscru Entertainment District"},{"id":"wasskah-hunting-ground","name":"Wasskah Hunting Ground"},{"id":"wasteland-outpost","name":"Wasteland Outpost"},{"id":"b-omarr-subterranean-passageways-3-player","name":"* B'Omarr Subterranean Passageways (3-player)"},{"id":"scarif-imperial-hotel-3-player","name":"* Scarif Imperial Hotel (3-player)"},{"id":"hoth-battlefield-4-player","name":"* Hoth Battlefield (4-player)"},{"id":"nal-hutta-borderlands-4-player","name":"* Nal Hutta Borderlands (4-player)"},{"id":"temple-gardens-4-player","name":"* Temple Gardens (4-player)"}];
 
     function colToLetter(c) { return c < 26 ? String.fromCharCode(65 + c) : colToLetter(Math.floor(c/26)-1) + colToLetter(c%26); }
     function coordKey(col, row) { return colToLetter(col).toLowerCase() + (row + 1); }
     function edgeKey(a, b) { return [a, b].sort().join('|'); }
+    /** Parse "a1", "t22" etc. to [col, row]. */
+    function coordToColRow(coord) {
+      const s = String(coord).toLowerCase();
+      const match = s.match(/^([a-z]+)(\d+)$/);
+      if (!match) return null;
+      let col = 0;
+      for (let i = 0; i < match[1].length; i++) col = 26 * col + (match[1].charCodeAt(i) - 97);
+      const row = parseInt(match[2], 10) - 1;
+      return [col, row];
+    }
+
+    /** Switch to editing the given map id: load its data from fullMapData if present, else empty. */
+    function switchToMap(id) {
+      const mapData = fullMapData?.maps?.[id];
+      const name = ALL_MAPS.find(m => m.id === id)?.name || id;
+      if (mapData) {
+        loadMapIntoState(mapData);
+        if (numCols === 0 && numRows === 0) initGridFromSpaces();
+        document.getElementById('status').textContent = 'Editing: ' + name + ' (' + (mapData.spaces || []).length + ' spaces).';
+      } else {
+        state = { spaces: [], adjacency: {}, terrain: {}, blocking: [], impassableEdges: [], movementBlockingEdges: [], offMap: [], exterior: {} };
+        numCols = 0;
+        numRows = 0;
+        overlay.width = 0;
+        overlay.height = 0;
+        overlay.style.width = '0px';
+        overlay.style.height = '0px';
+        document.getElementById('status').textContent = name + ' — Load map-spaces.json or Load map image to start.';
+      }
+    }
+
+    function loadMapIntoState(mapData) {
+      const loadedSpaces = new Set((mapData.spaces || []).map(s => String(s).toLowerCase()));
+      state = {
+        spaces: mapData.spaces || [],
+        adjacency: mapData.adjacency || {},
+        terrain: mapData.terrain || {},
+        blocking: mapData.blocking || [],
+        impassableEdges: mapData.impassableEdges || [],
+        movementBlockingEdges: mapData.movementBlockingEdges || [],
+        offMap: [],
+        exterior: mapData.exterior || {}
+      };
+      if (numCols > 0 && numRows > 0) {
+        const fullGrid = [];
+        for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) fullGrid.push(coordKey(c, r));
+        state.offMap = fullGrid.filter(k => !loadedSpaces.has(k));
+      }
+      draw();
+    }
+
+    /** Build grid size and overlay from state.spaces when no image is loaded. */
+    function initGridFromSpaces() {
+      const positions = (state.spaces || []).map(c => coordToColRow(c)).filter(Boolean);
+      if (positions.length === 0) return;
+      const maxCol = Math.max(...positions.map(p => p[0]));
+      const maxRow = Math.max(...positions.map(p => p[1]));
+      numCols = maxCol + 1;
+      numRows = maxRow + 1;
+      const loadedSet = new Set((state.spaces || []).map(s => String(s).toLowerCase()));
+      const fullGrid = [];
+      for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) fullGrid.push(coordKey(c, r));
+      state.offMap = fullGrid.filter(k => !loadedSet.has(k));
+      const totalW = x0 * 2 + numCols * dx;
+      const totalH = y0 * 2 + numRows * dy;
+      scale = Math.min(1, 1200 / totalW, 700 / totalH);
+      const sw = Math.round(totalW * scale), sh = Math.round(totalH * scale);
+      overlay.width = sw;
+      overlay.height = sh;
+      overlay.style.width = sw + 'px';
+      overlay.style.height = sh + 'px';
+      draw();
+    }
 
     function init() {
       const w = img.naturalWidth, h = img.naturalHeight;
-      if (!w || !h) { document.getElementById('status').textContent = 'Map failed to load.'; return; }
+      if (!w || !h) { document.getElementById('status').textContent = 'Map image empty.'; return; }
       scale = Math.min(1, 1200 / w);
       const sw = Math.round(w * scale), sh = Math.round(h * scale);
       overlay.width = sw; overlay.height = sh;
@@ -89,6 +172,7 @@
           const ter = state.terrain[k] || 'normal';
           if (ter === 'difficult') { ctx.fillStyle = 'rgba(100,149,237,0.4)'; ctx.fillRect(x, y, sdx, sdy); }
           else if (ter === 'blocking') { ctx.fillStyle = 'rgba(255,0,0,0.5)'; ctx.fillRect(x, y, sdx, sdy); }
+          if (state.exterior && state.exterior[k]) { ctx.fillStyle = 'rgba(50,205,50,0.35)'; ctx.fillRect(x, y, sdx, sdy); }
           ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.strokeRect(x, y, sdx, sdy);
         }
         for (const [dc, dr, dir] of [[0,-1,'n'],[1,0,'e'],[0,1,'s'],[-1,0,'w']]) {
@@ -140,6 +224,10 @@
         const next = { normal: 'difficult', difficult: 'blocking', blocking: 'normal' };
         state.terrain[info.coord] = next[state.terrain[info.coord] || 'normal'];
         state.blocking = state.spaces.filter(s => state.terrain[s] === 'blocking' && !(state.offMap || []).includes(s));
+      } else if (mode === 'exterior') {
+        if (new Set((state.offMap || []).map(s => String(s).toLowerCase())).has(info.coord)) return;
+        state.exterior = state.exterior || {};
+        state.exterior[info.coord] = !state.exterior[info.coord];
       } else if (mode === 'edge' && info.edge) {
         const nc = info.edge === 'e' ? info.col + 1 : info.edge === 'w' ? info.col - 1 : info.col;
         const nr = info.edge === 's' ? info.row + 1 : info.edge === 'n' ? info.row - 1 : info.row;
@@ -205,6 +293,32 @@
 
     document.addEventListener('mouseup', () => { if (dragState) dragState = null; });
 
+    // Populate map dropdown with every map on load
+    (function initMapSelect() {
+      const select = document.getElementById('mapSelect');
+      ALL_MAPS.forEach(m => select.appendChild(new Option(m.name, m.id)));
+      select.value = 'mos-eisley-outskirts';
+      select.onchange = () => { const id = select.value; if (id) switchToMap(id); };
+      switchToMap('mos-eisley-outskirts');
+    })();
+
+    function applyLoadedData(data) {
+      fullMapData = data;
+      const maps = data.maps || {};
+      const mapIdsInFile = Object.keys(maps);
+      const select = document.getElementById('mapSelect');
+      const currentId = select.value;
+      const idToShow = maps[currentId] ? currentId : (mapIdsInFile[0] || null);
+      if (idToShow) {
+        select.value = idToShow;
+        switchToMap(idToShow);
+        const n = mapIdsInFile.length;
+        document.getElementById('status').textContent = 'Loaded ' + n + ' map(s). Editing: ' + (ALL_MAPS.find(m => m.id === idToShow)?.name || idToShow) + '.';
+      } else {
+        document.getElementById('status').textContent = 'File has no map data. Expected { "maps": { "map-id": { "spaces": [...] } } }.';
+      }
+    }
+
     document.getElementById('loadBtn').onclick = () => document.getElementById('fileInput').click();
     document.getElementById('fileInput').onchange = (e) => {
       const f = e.target.files[0];
@@ -212,21 +326,14 @@
       const r = new FileReader();
       r.onload = () => {
         try {
-          const data = JSON.parse(r.result);
-          const mapData = data.maps?.['mos-eisley-outskirts'] || data;
-          const loadedSpaces = new Set((mapData.spaces || []).map(s => String(s).toLowerCase()));
-          state = { spaces: mapData.spaces || [], adjacency: mapData.adjacency || {}, terrain: mapData.terrain || {}, blocking: mapData.blocking || [], impassableEdges: mapData.impassableEdges || [], movementBlockingEdges: mapData.movementBlockingEdges || [], offMap: [] };
-          if (numCols > 0 && numRows > 0) {
-            const fullGrid = [];
-            for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) fullGrid.push(coordKey(c, r));
-            state.offMap = fullGrid.filter(k => !loadedSpaces.has(k));
-          }
-          document.getElementById('status').textContent = 'Loaded ' + loadedSpaces.size + ' on-map spaces. Click to edit.';
-          draw();
+          applyLoadedData(JSON.parse(r.result));
         } catch (err) { document.getElementById('status').textContent = 'Load error: ' + err.message; }
       };
       r.readAsText(f);
     };
+
+    // Auto-load data/map-spaces.json when opened from a local server (e.g. npm run serve from project root)
+    fetch('../../data/map-spaces.json').then(r => r.ok ? r.json() : Promise.reject()).then(applyLoadedData).catch(() => {});
 
     document.getElementById('invertBtn').onclick = () => {
       const fullGrid = [];
@@ -237,7 +344,7 @@
       document.getElementById('status').textContent = 'Inverted. ' + state.offMap.length + ' cells now off-map.';
     };
 
-    document.getElementById('exportBtn').onclick = () => {
+    function doSave() {
       const offSet = new Set((state.offMap || []).map(s => String(s).toLowerCase()));
       const onMapSpaces = state.spaces.filter(s => !offSet.has(String(s).toLowerCase()));
       const onMapSet = new Set(onMapSpaces.map(s => String(s).toLowerCase()));
@@ -254,17 +361,42 @@
       const blocking = onMapSpaces.filter(s => state.terrain[String(s).toLowerCase()] === 'blocking');
       const impEdges = (state.impassableEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) && onMapSet.has(String(b).toLowerCase()));
       const movEdges = (state.movementBlockingEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) && onMapSet.has(String(b).toLowerCase()));
-      const exportState = { spaces: onMapSpaces, adjacency: adj, terrain, blocking, impassableEdges: impEdges, movementBlockingEdges: movEdges };
-      const data = { source: 'extract-map-spaces.html', maps: { 'mos-eisley-outskirts': exportState } };
+      const exterior = {};
+      for (const k of onMapSpaces) {
+        const key = String(k).toLowerCase();
+        if (state.exterior && state.exterior[key]) exterior[key] = true;
+      }
+      const exportState = { spaces: onMapSpaces, adjacency: adj, terrain, blocking, impassableEdges: impEdges, movementBlockingEdges: movEdges, exterior: Object.keys(exterior).length ? exterior : undefined };
+      const selectedId = document.getElementById('mapSelect').value || 'mos-eisley-outskirts';
+      const data = fullMapData && fullMapData.maps
+        ? { ...fullMapData, maps: { ...fullMapData.maps, [selectedId]: exportState } }
+        : { source: 'extract-map-spaces.html', maps: { [selectedId]: exportState } };
       const a = document.createElement('a');
       a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(data, null, 2));
       a.download = 'map-spaces.json';
       a.click();
-      document.getElementById('status').textContent = 'Exported ' + onMapSpaces.length + ' legal spaces.';
-    };
+      document.getElementById('status').textContent = 'Saved ' + onMapSpaces.length + ' spaces for ' + selectedId + '.';
+    }
+
+    document.getElementById('saveBtn').onclick = () => doSave();
+    document.getElementById('exportBtn').onclick = () => doSave();
 
     img.onload = init;
-    img.onerror = () => { document.getElementById('status').textContent = 'Could not load map.'; };
+    img.onerror = () => {
+      document.getElementById('status').textContent = 'Select a map above, then click Load map-spaces.json to edit (grid appears from data), or Load map image to use a picture as background.';
+    };
+    document.getElementById('loadImgBtn').onclick = () => document.getElementById('imgInput').click();
+    document.getElementById('imgInput').onchange = (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const url = URL.createObjectURL(f);
+      img.onerror = () => {
+        document.getElementById('status').textContent = 'Image failed to load.';
+        URL.revokeObjectURL(url);
+      };
+      img.onload = () => { URL.revokeObjectURL(url); init(); };
+      img.src = url;
+    };
     if (img.complete) init();
   </script>
 </body>

@@ -11,6 +11,7 @@
     "extract-dc-images": "node scripts/extract-dc-images.js",
     "test-map": "node scripts/test-map-render.js",
     "extract-zones": "npx --yes serve . -p 3456",
+    "map-tool": "npx --yes serve . -p 3457",
     "generate-map-spaces": "node scripts/generate-map-spaces.js",
     "organize-images": "node scripts/organize-images.js",
     "normalize-cc-images": "node scripts/normalize-cc-images.js",

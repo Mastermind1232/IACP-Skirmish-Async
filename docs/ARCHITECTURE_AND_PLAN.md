@@ -217,7 +217,7 @@ Definition of “full game” for this plan:
 | F6 | Conditions and combat extras | ✅ **Done (core).** Conditions: stun/weaken/bleed applied to defender and stored in `game.figureConditions[figureKey]`. **Conditions displayed** in DC embed health section. Recover: parsed and applied (heal attacker). Blast: parsed and applied (figures adjacent to target). **Cleave:** parsed (surgeCleave) and **applied**: after hit, if surgeCleave > 0, attacker chooses one other figure **in melee** (adjacent to attacker, enemy only, excluding primary target); cleave target takes surgeCleave damage (VP, defeat, embed refresh). Discord: "Cleave (N damage): Choose one target in melee" + buttons in combat thread; `cleave_target_` handler applies damage and finishes combat. |
 | F7 | Multi-figure defeat | ✅ **Verified.** resolveCombatAfterRolls updates dcHealthState and dcList[idx].healthState, removes defeated figure from figurePositions, then re-renders target DC embed from dcHealthState; board map is updated. isGroupDefeated uses figurePositions so activation count stays correct. |
 | F8 | Map data for all maps in use | Extend map-spaces (or equivalent) so every map has spaces, adjacency, terrain. |
-| F9 | Interior/exterior | Per-space flags stored **per map** in map data. Provide a **UI tool** (like the existing tool for difficult terrain, etc.) so the maintainer can mark which spaces are interior vs exterior on each map; tool saves to the same map data the bot uses. Required for abilities like MASSIVE. |
+| F9 | Interior/exterior | **Done.** Per-map `exterior: { coord: true }` in map-spaces; `isExteriorSpace()` in data-loader; extract-map-spaces.html Exterior mode (toggle, load, export). |
 | F10 | Optional: “Ready to resolve rolls” | **Done.** Button after rolls/surge; resolve on click. |
 
 | F11 | Post-game archival | ✅ **Done.** Archive via **`/botmenu`** in Game Log → Bot Stuff → Archive → "Are you sure?" Yes/No. First confirm wins. On Yes: delete game category and channels, remove from `games` and DB. Ended games already have a row in `completed_games` (DB2). |
@@ -307,7 +307,7 @@ Definition of “full game” for this plan:
 
 **§7 Remaining work (as of last update)**  
 - **F8:** Extend map-spaces so every map in use has spaces, adjacency, terrain (data content).  
-- **F9:** Interior/exterior per-space flags in map data + UI tool (for MASSIVE etc.).  
+- **F9:** ~~Interior/exterior per-space flags in map data + UI tool~~ — **Done:** optional `exterior: { coord: true }` per map in map-spaces; `isExteriorSpace(mapSpaces, coord)` in data-loader; extract-map-spaces.html has Exterior mode (toggle, load, export). Game logic that applies exterior effects (e.g. CC “exterior spaces”) can wire to this getter next.  
 - **F10:** ~~Optional “Ready to resolve rolls” confirmation step in combat~~ — **Done:** button sent after rolls (and after surge step); handler `combat_resolve_ready_` calls `resolveCombatAfterRolls`.  
 - **F14:** ~~More undo types (e.g. interact, CC play)~~ — **Done:** undo for interact (restore actions remaining + contraband/launch panel/doors), CC play from hand, CC play from DC (Special). Optional full-state snapshots still not implemented.  
 - **D1/D2:** Migrate DC/CC to reference ability ids.  
