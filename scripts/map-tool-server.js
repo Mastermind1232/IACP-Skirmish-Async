@@ -4,7 +4,7 @@
  * Open: http://localhost:3457/vassal_extracted/images/extract-map-spaces.html
  */
 import { createServer } from 'http';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
 import { join, dirname, extname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
@@ -33,7 +33,9 @@ const DEPLOYMENT_ZONES_JSON = join(root, 'data', 'deployment-zones.json');
 const MAP_TOKENS_JSON = join(root, 'data', 'map-tokens.json');
 const TOKEN_IMAGES_JSON = join(root, 'data', 'token-images.json');
 const MISSION_CARDS_JSON = join(root, 'data', 'mission-cards.json');
+const MISSION_CARDS_DIR = join(root, 'vassal_extracted', 'images', 'mission-cards');
 const PLACEHOLDER = '<!-- INJECT_MAP_SPACES -->';
+const PLACEHOLDER_MISSION_CARD_FILENAMES = '<!-- INJECT_MISSION_CARD_FILENAMES --><script type="application/json" id="mission-card-filenames">[]</script>';
 const PLACEHOLDER_IMAGE_PATHS = '<!-- INJECT_MAP_IMAGE_PATHS -->';
 const PLACEHOLDER_TOURNAMENT_ROTATION = '<!-- INJECT_TOURNAMENT_ROTATION -->';
 const PLACEHOLDER_DEPLOYMENT_ZONES = '<!-- INJECT_DEPLOYMENT_ZONES -->';
@@ -203,6 +205,15 @@ createServer((req, res) => {
       } else {
         html = html.replace(PLACEHOLDER_MISSION_CARDS, '<script type="application/json" id="mission-cards-data">{"source":"extract-map-spaces.html","maps":{}}</script>');
       }
+      let missionCardFilenames = [];
+      try {
+        if (existsSync(MISSION_CARDS_DIR)) {
+          const exts = new Set(['.png', '.jpg', '.jpeg', '.gif']);
+          missionCardFilenames = readdirSync(MISSION_CARDS_DIR).filter((f) => exts.has(extname(f).toLowerCase()));
+        }
+      } catch (_) {}
+      const filenamesJson = JSON.stringify(missionCardFilenames).replace(/<\/script>/gi, '<\\/script>');
+      html = html.replace(PLACEHOLDER_MISSION_CARD_FILENAMES, `<script type="application/json" id="mission-card-filenames">${filenamesJson}</script>`);
       res.writeHead(200, {
         'Content-Type': 'text/html',
         'Cache-Control': 'no-store, no-cache, must-revalidate',

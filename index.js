@@ -254,7 +254,9 @@ import {
   isCcAttachment,
   isDcAttachment,
   getTournamentRotation,
+  getMissionRules,
 } from './src/data-loader.js';
+import { runEndOfRoundRules, runStartOfRoundRules } from './src/game/mission-rules.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname);
@@ -1348,9 +1350,9 @@ async function postPinnedMissionCardFromGameState(game, client) {
     let sentMsg;
     const cardImagePath = missionData?.customImagePath || missionData?.imagePath;
     if (cardImagePath) {
-      const resolvedPath = resolveAssetPath(cardImagePath, 'mission-cards');
-      const imagePath = join(rootDir, resolvedPath);
-      if (existsSync(imagePath)) {
+      const resolvedPath = resolveMissionCardImagePath(cardImagePath);
+      const imagePath = resolvedPath ? join(rootDir, resolvedPath) : null;
+      if (imagePath && existsSync(imagePath)) {
         const attachment = new AttachmentBuilder(imagePath, { name: 'mission-card.jpg' });
         sentMsg = await ch.send({ content: `🎯 **Mission:** ${fullName}`, files: [attachment] });
       } else {
@@ -2180,6 +2182,24 @@ function resolveAssetPath(relPath, subfolder) {
   if (existsSync(join(rootDir, inSub))) return inSub;
   if (existsSync(join(rootDir, relPath))) return relPath;
   return relPath;
+}
+
+/** Resolve mission card image path; tries .png, .jpg, .jpeg so data can say .png while files are .jpg. */
+function resolveMissionCardImagePath(relPath) {
+  if (!relPath || typeof relPath !== 'string') return null;
+  const subfolder = 'mission-cards';
+  const filename = relPath.split(/[/\\]/).pop() || relPath;
+  const base = filename.replace(/\.[^.]+$/i, '') || filename;
+  const exts = ['.png', '.jpg', '.jpeg'];
+  const tried = new Set();
+  for (const ext of exts) {
+    const name = base + ext;
+    if (tried.has(name.toLowerCase())) continue;
+    tried.add(name.toLowerCase());
+    const inSub = `vassal_extracted/images/${subfolder}/${name}`;
+    if (existsSync(join(rootDir, inSub))) return inSub;
+  }
+  return resolveAssetPath(relPath, subfolder);
 }
 
 /** Find msgId for DC message containing the given figure (for dcHealthState lookup). */
@@ -4011,6 +4031,9 @@ client.on('interactionCreate', async (interaction) => {
       checkWinConditions,
       getMapTokensData,
       getSpaceController,
+      getMissionRules,
+      runEndOfRoundRules,
+      runStartOfRoundRules,
       getInitiativePlayerZoneLabel,
       updateHandVisualMessage,
       buildHandDisplayPayload,

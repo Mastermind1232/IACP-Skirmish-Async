@@ -225,6 +225,13 @@ export function getMissionCardsData() {
   return missionCardsData;
 }
 
+/** Mission rules (VP, effects) for a map variant. From mission-cards.json per-variant "rules" block. */
+export function getMissionRules(mapId, variant) {
+  const v = variant === 'b' ? 'b' : 'a';
+  const rules = missionCardsData?.[mapId]?.[v]?.rules;
+  return rules && typeof rules === 'object' ? rules : {};
+}
+
 /** D4: Tournament rotation mission IDs (mapId:variant). Empty if not configured. */
 export function getTournamentRotation() {
   return tournamentRotation;

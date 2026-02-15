@@ -1,6 +1,8 @@
 {
   "source": "D4 Tournament rotation; update periodically. Mission IDs: mapId:variant (e.g. mos-eisley-outskirts:a)",
   "missionIds": [
-    "corellian-underground:a"
+    "corellian-underground:a",
+    "chopper-base-atollon:a",
+    "lothal-wastes:a"
   ]
 }

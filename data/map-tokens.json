@@ -151,6 +151,105 @@
           ]
         }
       ]
+    },
+    "chopper-base-atollon": {
+      "terminals": [],
+      "missionA": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "Panel",
+            "image": "Mission Token--Neutral GRAY.gif"
+          }
+        ],
+        "positions": {
+          "0": []
+        },
+        "launchPanels": []
+      },
+      "missionB": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "Token",
+            "image": "Mission Token--Neutral GRAY.gif"
+          }
+        ],
+        "positions": {
+          "0": []
+        },
+        "contraband": []
+      },
+      "doors": [],
+      "namedAreas": [
+        {
+          "name": "Area 1",
+          "cells": []
+        }
+      ]
+    },
+    "lothal-wastes": {
+      "terminals": [
+        "j19",
+        "r19"
+      ],
+      "missionA": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "Critical Position",
+            "image": "Mission Token--Neutral Green.gif"
+          },
+          {
+            "id": "1",
+            "label": "New type",
+            "image": "Mission Token--Neutral GRAY.gif"
+          }
+        ],
+        "positions": {
+          "0": [
+            "h21",
+            "i16",
+            "j10",
+            "l7",
+            "o7",
+            "q16",
+            "s10",
+            "t21"
+          ],
+          "1": []
+        },
+        "launchPanels": [
+          "h21",
+          "i16",
+          "j10",
+          "l7",
+          "o7",
+          "q16",
+          "s10",
+          "t21"
+        ]
+      },
+      "missionB": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "Token",
+            "image": "Mission Token--Neutral GRAY.gif"
+          }
+        ],
+        "positions": {
+          "0": []
+        },
+        "contraband": []
+      },
+      "doors": [],
+      "namedAreas": [
+        {
+          "name": "Area 1",
+          "cells": []
+        }
+      ]
     }
   }
 }

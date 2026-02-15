@@ -5,7 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, client
+ * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, client
  */
 export async function handleEndEndOfRound(interaction, ctx) {
   const {
@@ -27,6 +27,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
     checkWinConditions,
     getMapTokensData,
     getSpaceController,
+    getMissionRules,
+    runEndOfRoundRules,
+    runStartOfRoundRules,
     getInitiativePlayerZoneLabel,
     updateHandVisualMessage,
     buildHandDisplayPayload,
@@ -105,72 +108,16 @@ export async function handleEndEndOfRound(interaction, ctx) {
   }
   game.player2CcHand = [...(game.player2CcHand || []), ...p2Drawn];
   game.player2CcDeck = p2Deck;
-  if (game.selectedMission?.variant === 'b' && mapId && game.figureContraband) {
-    for (const pn of [1, 2]) {
-      let scored = 0;
-      for (const [figureKey, carrying] of Object.entries(game.figureContraband)) {
-        if (!carrying) continue;
-        const poses = game.figurePositions?.[pn] || {};
-        if (!(figureKey in poses)) continue;
-        if (!isFigureInDeploymentZone(game, pn, figureKey, mapId)) continue;
-        const vp = game[`player${pn}VP`] || { total: 0, kills: 0, objectives: 0 };
-        vp.total = (vp.total || 0) + 15;
-        vp.objectives = (vp.objectives || 0) + 15;
-        game[`player${pn}VP`] = vp;
-        delete game.figureContraband[figureKey];
-        scored++;
-      }
-      if (scored > 0) {
-        const pid = pn === 1 ? game.player1Id : game.player2Id;
-        await logGameAction(game, client, `<@${pid}> gained **${15 * scored} VP** for ${scored} figure(s) delivering contraband to deployment zone.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
-        await checkWinConditions(game, client);
-        if (game.ended) {
-          await interaction.message.edit({ components: [] }).catch(() => {});
-          saveGames();
-          return;
-        }
-      }
-    }
-  }
-  if (game.selectedMission?.variant === 'a' && mapId) {
-    const launchPanels = getMapTokensData()[mapId]?.missionA?.launchPanels || [];
-    const state = game.launchPanelState || {};
-    let p1Vp = 0, p2Vp = 0;
-    for (const coord of launchPanels) {
-      const c = String(coord).toLowerCase();
-      const side = state[c];
-      if (!side) continue;
-      const controller = getSpaceController(game, mapId, coord);
-      if (!controller) continue;
-      const vp = side === 'colored' ? 5 : 2;
-      if (controller === 1) p1Vp += vp;
-      else p2Vp += vp;
-    }
-    if (p1Vp > 0 || p2Vp > 0) {
-      if (p1Vp > 0) {
-        game.player1VP = game.player1VP || { total: 0, kills: 0, objectives: 0 };
-        game.player1VP.total += p1Vp;
-        game.player1VP.objectives += p1Vp;
-        await logGameAction(game, client, `<@${game.player1Id}> gained **${p1Vp} VP** for launch panels controlled.`, { allowedMentions: { users: [game.player1Id] }, phase: 'ROUND', icon: 'round' });
-        await checkWinConditions(game, client);
-        if (game.ended) {
-          await interaction.message.edit({ components: [] }).catch(() => {});
-          saveGames();
-          return;
-        }
-      }
-      if (p2Vp > 0) {
-        game.player2VP = game.player2VP || { total: 0, kills: 0, objectives: 0 };
-        game.player2VP.total += p2Vp;
-        game.player2VP.objectives += p2Vp;
-        await logGameAction(game, client, `<@${game.player2Id}> gained **${p2Vp} VP** for launch panels controlled.`, { allowedMentions: { users: [game.player2Id] }, phase: 'ROUND', icon: 'round' });
-        await checkWinConditions(game, client);
-        if (game.ended) {
-          await interaction.message.edit({ components: [] }).catch(() => {});
-          saveGames();
-          return;
-        }
-      }
+  const variant = game.selectedMission?.variant;
+  const missionRules = getMissionRules?.(mapId, variant) ?? {};
+  const endOfRoundRules = missionRules.endOfRound;
+  if (endOfRoundRules && runEndOfRoundRules) {
+    const ruleCtx = { logGameAction, checkWinConditions, getMapTokensData, getSpaceController, isFigureInDeploymentZone, client };
+    const { gameEnded } = await runEndOfRoundRules(game, mapId, variant, endOfRoundRules, ruleCtx);
+    if (gameEnded) {
+      await interaction.message.edit({ components: [] }).catch(() => {});
+      saveGames();
+      return;
     }
   }
   game.p1LaunchPanelFlippedThisRound = false;
@@ -178,6 +125,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
   const prevInitiative = game.initiativePlayerId;
   game.initiativePlayerId = prevInitiative === game.player1Id ? game.player2Id : game.player1Id;
   game.currentRound = (game.currentRound || 1) + 1;
+  if (runStartOfRoundRules && missionRules?.startOfRound) {
+    runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client });
+  }
   await updateHandVisualMessage(game, 1, client);
   await updateHandVisualMessage(game, 2, client);
   for (const pn of [1, 2]) {

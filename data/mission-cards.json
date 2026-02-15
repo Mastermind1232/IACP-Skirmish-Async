@@ -27,7 +27,8 @@
         "customImagePath": "vassal_extracted/images/mission-cards/Corellian Underground -A- Local Trouble  [custom].png",
         "setup": "Thugs are hostile to all figures except other thugs.\nA figure can attack a thug (Health: 4, Defense: 1 black die)",
         "startOfRound": "",
-        "endOfRound": "Move each thug 2 spaces to the closest hostile figure. Then, each hostile figure adjacent to a thug suffers 2 Damage. (If multiple hostile figures are tied for closest to the thug, then the player with Initiative decides which figure is targeted.)\nThe player who controls the Cantina gains 6 VPs."
+        "endOfRound": "Move each thug 2 spaces to the closest hostile figure. Then, each hostile figure adjacent to a thug suffers 2 Damage. (If multiple hostile figures are tied for closest to the thug, then the player with Initiative decides which figure is targeted.)\nThe player who controls the Cantina gains 6 VPs.",
+        "rules": {}
       },
       "b": {
         "name": "Sabacc Standoff",
@@ -36,7 +37,46 @@
         "customImagePath": "vassal_extracted/images/mission-cards/Corellian Underground -B- Sabacc Standoff [custom].png",
         "setup": "",
         "startOfRound": "The player with the Initiative places 1 token next to the Cantina for each Command card in their hand.",
-        "endOfRound": "Until the end of the next round, the player who controls the Sabacc table is considered to have 1 additional VP for each token next to the Cantina."
+        "endOfRound": "Until the end of the next round, the player who controls the Sabacc table is considered to have 1 additional VP for each token next to the Cantina.",
+        "rules": {}
+      }
+    },
+    "chopper-base-atollon": {
+      "a": {
+        "name": "",
+        "tokenLabel": "",
+        "imagePath": "",
+        "setup": "",
+        "startOfRound": "",
+        "endOfRound": ""
+      },
+      "b": {
+        "name": "",
+        "tokenLabel": "",
+        "imagePath": "",
+        "setup": "",
+        "startOfRound": "",
+        "endOfRound": ""
+      }
+    },
+    "lothal-wastes": {
+      "a": {
+        "name": "Blitz",
+        "tokenLabel": "",
+        "imagePath": "",
+        "setup": "Players do not deploy normally. instead, players alternate deploying groups, following the rules for passing. When a figure is deployed, it may move up to 8 spaces.",
+        "persistent": "",
+        "startOfRound": "",
+        "endOfRound": "Each player gains 2 VPs for each critical position that player controls."
+      },
+      "b": {
+        "name": "Fluctuations",
+        "tokenLabel": "",
+        "imagePath": "",
+        "setup": "",
+        "persistent": "",
+        "startOfRound": "",
+        "endOfRound": ""
       }
     }
   }

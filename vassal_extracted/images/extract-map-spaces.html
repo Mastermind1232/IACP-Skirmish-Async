@@ -91,7 +91,8 @@
       <div class="mission-field mission-card-image-wrap" style="margin-top:8px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid #444;">
         <label>Mission card</label>
         <img id="missionCardImage" src="" alt="Mission card" title="Card for selected variant (A or B)" style="max-width:100%; max-height:200px; margin-top:4px; border:1px solid #555; border-radius:4px;">
-        <p id="missionCardImageFallback" style="display:none; margin:6px 0 0 0; font-size:0.85em; color:#999;">Card image not found. Add PNG to <code>vassal_extracted/images/mission-cards/</code> (filename from mission card data).</p>
+        <p id="missionCardImageFallback" style="display:none; margin:6px 0 0 0; font-size:0.85em; color:#999;"></p>
+        <p id="missionCardImageNoPath" style="display:none; margin:6px 0 0 0; font-size:0.85em; color:#666;">No mission card image set. Add a PNG to <code>vassal_extracted/images/mission-cards/</code> and set its path in mission card data (or use the map tool to set mission name/image).</p>
       </div>
       <div class="mission-field">
         <label for="missionNameInput">Mission name</label>
@@ -109,10 +110,11 @@
       </div>
       <div class="mission-text-section">
         <label>Mission timing effects</label>
-        <p style="margin:4px 0 0 0; font-size:0.8em; color:#999;">Persistent (Setup) effects are permanent unless the effect text says otherwise.</p>
+        <p style="margin:4px 0 0 0; font-size:0.8em; color:#999;">Setup = one-time at game start. Persistent = ongoing for the whole game unless the effect says otherwise.</p>
         <div style="display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap;">
           <select id="missionTimingSelect" title="Which timing to add or edit effects for">
-            <option value="setup">Persistent (Setup)</option>
+            <option value="setup">Setup</option>
+            <option value="persistent">Persistent</option>
             <option value="startOfRound">Start of round</option>
             <option value="endOfRound">End of round</option>
           </select>
@@ -150,6 +152,7 @@
   <!-- INJECT_TOKEN_IMAGE_BASE -->
   <!-- INJECT_TOKEN_IMAGES --><script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal GRAY.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>
   <!-- INJECT_MISSION_CARDS --><script type="application/json" id="mission-cards-data">{"source":"extract-map-spaces.html","maps":{}}</script>
+  <!-- INJECT_MISSION_CARD_FILENAMES --><script type="application/json" id="mission-card-filenames">[]</script>
   <script>
     const img = document.getElementById('mapImg');
     // If default src is old path without maps/ (e.g. cached HTML), fix it so image loads from images/maps/
@@ -233,6 +236,12 @@
         }
       }
       return data;
+    })();
+    /** List of mission-card filenames in vassal_extracted/images/mission-cards/ (injected by map-tool server). Used when imagePath is empty. */
+    let availableMissionCardFilenames = (function () {
+      const el = document.getElementById('mission-card-filenames');
+      if (el && el.textContent) try { return JSON.parse(el.textContent); } catch (e) {}
+      return [];
     })();
     /** Current map's mission tokens. missionA/missionB: { tokenTypes: [{ id, label, image }], positions: { [id]: [cells] } }. Backward compat: launchPanels/contraband used when loading old data. */
     let missionTokenState = {
@@ -373,6 +382,7 @@
     let missionATokenLabel = '';
     let missionBTokenLabel = '';
     let missionASetup = '', missionBSetup = '';
+    let missionAPersistent = '', missionBPersistent = '';
     let missionAStartOfRound = '', missionBStartOfRound = '';
     let missionAEndOfRound = '', missionBEndOfRound = '';
 
@@ -452,6 +462,7 @@
     function updateMissionCardImage() {
       const imgEl = document.getElementById('missionCardImage');
       const fallbackEl = document.getElementById('missionCardImageFallback');
+      const noPathEl = document.getElementById('missionCardImageNoPath');
       if (!imgEl) return;
       const mapId = (document.getElementById('mapSelect') && document.getElementById('mapSelect').value) || '';
       const variant = getMissionVariant();
@@ -459,26 +470,66 @@
       const customPath = (variantData?.customImagePath && typeof variantData.customImagePath === 'string') ? variantData.customImagePath : null;
       const defaultPath = (variantData?.imagePath && typeof variantData.imagePath === 'string') ? variantData.imagePath : null;
       const pathToTry = customPath || defaultPath;
-      const filenameFromPath = (p) => (p && typeof p === 'string') ? p.replace(/^.*[/\\]/, '') : '';
+      const filenameFromPath = (p) => (p && typeof p === 'string') ? p.replace(/^.*[/\\]/, '').trim() : '';
+      const baseName = (f) => (f && f.lastIndexOf('.') > 0) ? f.slice(0, f.lastIndexOf('.')) : f;
+      const extsToTry = ['.png', '.jpg', '.jpeg'];
       if (fallbackEl) fallbackEl.style.display = 'none';
+      if (noPathEl) noPathEl.style.display = 'none';
       if (!pathToTry) {
-        imgEl.src = '';
-        imgEl.style.display = 'none';
-        imgEl.alt = 'No mission card image';
+        const mapName = (ALL_MAPS.find(m => m.id === mapId) || {}).name;
+        const prefix = (mapName ? mapName + '-' + (variant === 'b' ? 'B' : 'A') + '-' : '').toLowerCase();
+        const candidates = (availableMissionCardFilenames || []).filter(function (f) {
+          return typeof f === 'string' && prefix && f.toLowerCase().indexOf(prefix) !== -1;
+        });
+        if (candidates.length === 0) {
+          imgEl.src = '';
+          imgEl.style.display = 'none';
+          imgEl.alt = 'No mission card image';
+          if (noPathEl) noPathEl.style.display = 'block';
+          return;
+        }
+        imgEl.alt = 'Mission card';
+        imgEl.style.display = 'block';
+        imgEl.onload = function () { if (fallbackEl) fallbackEl.style.display = 'none'; };
+        var candidateIndex = 0;
+        function tryNextCandidate() {
+          candidateIndex++;
+          if (candidateIndex < candidates.length) {
+            imgEl.onerror = tryNextCandidate;
+            imgEl.src = missionCardBaseUrl() + 'mission-cards/' + encodeURIComponent(candidates[candidateIndex]);
+          } else {
+            if (fallbackEl) {
+              fallbackEl.textContent = 'Card image not found. Add a PNG or JPG to vassal_extracted/images/mission-cards/ (e.g. ' + (candidates[0] || '') + ').';
+              fallbackEl.style.display = 'block';
+            }
+            imgEl.style.display = 'none';
+          }
+        }
+        imgEl.onerror = tryNextCandidate;
+        imgEl.src = missionCardBaseUrl() + 'mission-cards/' + encodeURIComponent(candidates[0]);
         return;
       }
+      var currentExtIndex = 0;
+      var primaryFilename = filenameFromPath(pathToTry);
+      var tryNextExtension = function () {
+        currentExtIndex++;
+        if (currentExtIndex < extsToTry.length) {
+          var altFilename = baseName(primaryFilename) + extsToTry[currentExtIndex];
+          imgEl.onerror = tryNextExtension;
+          imgEl.src = missionCardBaseUrl() + 'mission-cards/' + encodeURIComponent(altFilename);
+        } else {
+          if (fallbackEl) {
+            fallbackEl.textContent = 'Card image not found. Add a PNG or JPG to vassal_extracted/images/mission-cards/ (e.g. ' + primaryFilename + ' or same name with .jpg).';
+            fallbackEl.style.display = 'block';
+          }
+          imgEl.style.display = 'none';
+        }
+      };
       imgEl.alt = 'Mission card';
       imgEl.style.display = 'block';
       imgEl.onload = function () { if (fallbackEl) fallbackEl.style.display = 'none'; };
-      imgEl.onerror = function () {
-        if (customPath && defaultPath && pathToTry === customPath) {
-          imgEl.onerror = function () { if (fallbackEl) fallbackEl.style.display = 'block'; };
-          imgEl.src = missionCardBaseUrl() + 'mission-cards/' + encodeURIComponent(filenameFromPath(defaultPath));
-        } else {
-          if (fallbackEl) fallbackEl.style.display = 'block';
-        }
-      };
-      imgEl.src = missionCardBaseUrl() + 'mission-cards/' + encodeURIComponent(filenameFromPath(pathToTry));
+      imgEl.onerror = tryNextExtension;
+      imgEl.src = missionCardBaseUrl() + 'mission-cards/' + encodeURIComponent(primaryFilename);
     }
     function missionCardBaseUrl() {
       if (typeof tokenImageBaseUrl !== 'undefined' && tokenImageBaseUrl && tokenImageBaseUrl.indexOf('mission-cards') === -1)
@@ -498,6 +549,8 @@
       missionBTokenLabel = (mc?.b?.tokenLabel != null ? mc.b.tokenLabel : '') || '';
       missionASetup = (mc?.a?.setup != null ? mc.a.setup : '') || '';
       missionBSetup = (mc?.b?.setup != null ? mc.b.setup : '') || '';
+      missionAPersistent = (mc?.a?.persistent != null ? mc.a.persistent : (mc?.a?.setup != null ? mc.a.setup : '')) || '';
+      missionBPersistent = (mc?.b?.persistent != null ? mc.b.persistent : (mc?.b?.setup != null ? mc.b.setup : '')) || '';
       missionAStartOfRound = (mc?.a?.startOfRound != null ? mc.a.startOfRound : '') || '';
       missionBStartOfRound = (mc?.b?.startOfRound != null ? mc.b.startOfRound : '') || '';
       missionAEndOfRound = (mc?.a?.endOfRound != null ? mc.a.endOfRound : '') || '';
@@ -529,11 +582,12 @@
       return (sel && sel.value) || 'setup';
     }
 
-    const MISSION_TIMING_LABELS = { setup: 'Persistent', startOfRound: 'Start of round', endOfRound: 'End of round' };
+    const MISSION_TIMING_LABELS = { setup: 'Setup', persistent: 'Persistent', startOfRound: 'Start of round', endOfRound: 'End of round' };
 
     function getMissionEffectListForKey(key) {
       const variant = getMissionVariant();
       const str = key === 'setup' ? (variant === 'b' ? missionBSetup : missionASetup)
+        : key === 'persistent' ? (variant === 'b' ? missionBPersistent : missionAPersistent)
         : key === 'startOfRound' ? (variant === 'b' ? missionBStartOfRound : missionAStartOfRound)
         : (variant === 'b' ? missionBEndOfRound : missionAEndOfRound);
       return (str || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
@@ -549,6 +603,8 @@
       const s = Array.isArray(arr) ? arr.join('\n') : '';
       if (key === 'setup') {
         if (variant === 'b') missionBSetup = s; else missionASetup = s;
+      } else if (key === 'persistent') {
+        if (variant === 'b') missionBPersistent = s; else missionAPersistent = s;
       } else if (key === 'startOfRound') {
         if (variant === 'b') missionBStartOfRound = s; else missionAStartOfRound = s;
       } else {
@@ -563,6 +619,8 @@
       const s = arr.join('\n');
       if (timingKey === 'setup') {
         if (variant === 'b') missionBSetup = s; else missionASetup = s;
+      } else if (timingKey === 'persistent') {
+        if (variant === 'b') missionBPersistent = s; else missionAPersistent = s;
       } else if (timingKey === 'startOfRound') {
         if (variant === 'b') missionBStartOfRound = s; else missionAStartOfRound = s;
       } else {
@@ -575,7 +633,7 @@
       const listEl = document.getElementById('missionEffectsList');
       if (!listEl) return;
       listEl.innerHTML = '';
-      const keys = ['setup', 'startOfRound', 'endOfRound'];
+      const keys = ['setup', 'persistent', 'startOfRound', 'endOfRound'];
       let hasAny = false;
       keys.forEach((key) => {
         const list = getMissionEffectListForKey(key);
@@ -1052,8 +1110,18 @@
 
     function applyOffMap(info, paintOffMap) {
       const off = new Set((state.offMap || []).map(s => String(s).toLowerCase()));
-      if (paintOffMap) off.add(info.coord);
-      else off.delete(info.coord);
+      const c = String(info.coord).toLowerCase();
+      if (paintOffMap) {
+        off.add(c);
+        // Wipe terrain/blocking/exterior/edges on this cell so off-map acts as cleanup
+        if (state.terrain && state.terrain[c] !== undefined) delete state.terrain[c];
+        if (state.blocking) state.blocking = state.blocking.filter(s => String(s).toLowerCase() !== c);
+        if (state.exterior && state.exterior[c] !== undefined) delete state.exterior[c];
+        if (state.impassableEdges) state.impassableEdges = state.impassableEdges.filter(([a, b]) => String(a).toLowerCase() !== c && String(b).toLowerCase() !== c);
+        if (state.movementBlockingEdges) state.movementBlockingEdges = state.movementBlockingEdges.filter(([a, b]) => String(a).toLowerCase() !== c && String(b).toLowerCase() !== c);
+      } else {
+        off.delete(c);
+      }
       state.offMap = [...off];
     }
 
@@ -1564,6 +1632,7 @@
             imagePath: missionCardImagePath(existingMc.a?.imagePath || ''),
             customImagePath: (existingMc.a?.customImagePath && typeof existingMc.a.customImagePath === 'string') ? missionCardImagePath(existingMc.a.customImagePath) : undefined,
             setup: (missionASetup || '').trim(),
+            persistent: (missionAPersistent || '').trim(),
             startOfRound: (missionAStartOfRound || '').trim(),
             endOfRound: (missionAEndOfRound || '').trim()
           },
@@ -1573,6 +1642,7 @@
             imagePath: missionCardImagePath(existingMc.b?.imagePath || ''),
             customImagePath: (existingMc.b?.customImagePath && typeof existingMc.b.customImagePath === 'string') ? missionCardImagePath(existingMc.b.customImagePath) : undefined,
             setup: (missionBSetup || '').trim(),
+            persistent: (missionBPersistent || '').trim(),
             startOfRound: (missionBStartOfRound || '').trim(),
             endOfRound: (missionBEndOfRound || '').trim()
           }
@@ -1690,6 +1760,7 @@
             imagePath: missionCardImagePath(existingMc.a?.imagePath || ''),
             customImagePath: (existingMc.a?.customImagePath && typeof existingMc.a.customImagePath === 'string') ? missionCardImagePath(existingMc.a.customImagePath) : undefined,
             setup: (missionASetup || '').trim(),
+            persistent: (missionAPersistent || '').trim(),
             startOfRound: (missionAStartOfRound || '').trim(),
             endOfRound: (missionAEndOfRound || '').trim()
           },
@@ -1699,6 +1770,7 @@
             imagePath: missionCardImagePath(existingMc.b?.imagePath || ''),
             customImagePath: (existingMc.b?.customImagePath && typeof existingMc.b.customImagePath === 'string') ? missionCardImagePath(existingMc.b.customImagePath) : undefined,
             setup: (missionBSetup || '').trim(),
+            persistent: (missionBPersistent || '').trim(),
             startOfRound: (missionBStartOfRound || '').trim(),
             endOfRound: (missionBEndOfRound || '').trim()
           }
