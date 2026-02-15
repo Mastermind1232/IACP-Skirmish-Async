@@ -6,15 +6,15 @@
   "missionB": "Counter--Crate Blue.gif",
   "doors": "Token--Door.png",
   "missionTokenOptions": [
-    {"value": "Mission Token--Neutral GRAY.gif", "label": "Mission token (Grey)"},
-    {"value": "Mission Token--Neutral Blue.gif", "label": "Mission token (Blue)"},
-    {"value": "Mission Token--Neutral Green.gif", "label": "Mission token (Green)"},
-    {"value": "Mission Token--Neutral Red.gif", "label": "Mission token (Red)"},
-    {"value": "Mission Token--Neutral Yellow.gif", "label": "Mission token (Yellow)"},
-    {"value": "Counter--Crate Blue.gif", "label": "Crate (Blue)"},
-    {"value": "Counter--Crate GRAY.gif", "label": "Crate (Grey)"},
-    {"value": "Counter--Crate Green.gif", "label": "Crate (Green)"},
-    {"value": "Counter--Crate Red.gif", "label": "Crate (Red)"},
-    {"value": "Counter--Crate Yellow.gif", "label": "Crate (Yellow)"}
+    { "value": "Mission Token--Neutral GRAY.gif", "label": "Mission Token (Gray)" },
+    { "value": "Mission Token--Neutral Blue.gif", "label": "Mission Token (Blue)" },
+    { "value": "Mission Token--Neutral Green.gif", "label": "Mission Token (Green)" },
+    { "value": "Mission Token--Neutral Red.gif", "label": "Mission Token (Red)" },
+    { "value": "Mission Token--Neutral Yellow.gif", "label": "Mission Token (Yellow)" },
+    { "value": "Counter--Crate Blue.gif", "label": "Crate (Blue)" },
+    { "value": "Counter--Crate GRAY.gif", "label": "Crate (Grey)" },
+    { "value": "Counter--Crate Green.gif", "label": "Crate (Green)" },
+    { "value": "Counter--Crate Red.gif", "label": "Crate (Red)" },
+    { "value": "Counter--Crate Yellow.gif", "label": "Crate (Yellow)" }
   ]
 }

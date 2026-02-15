@@ -238,7 +238,7 @@
     let missionTokenState = {
       terminals: [],
       missionA: { tokenTypes: [{ id: '0', label: 'Panel', image: 'Mission Token--Neutral GRAY.gif' }], positions: { '0': [] } },
-      missionB: { tokenTypes: [{ id: '0', label: 'Contraband', image: 'Counter--Crate Blue.gif' }], positions: { '0': [] } },
+      missionB: { tokenTypes: [{ id: '0', label: '', image: 'Mission Token--Neutral GRAY.gif' }], positions: { '0': [] } },
       doors: [],
       namedAreas: [{ id: 0, name: 'Area 1', cells: [] }]
     };
@@ -424,14 +424,14 @@
       return { tokenTypes: [{ id: '0', label: defLabel, image: defImage }], positions: { '0': cells } };
     }
     function normalizeMissionTokenVariantB(mb) {
-      if (!mb) return { tokenTypes: [{ id: '0', label: 'Contraband', image: (tokenImagesConfig && tokenImagesConfig.missionB) || 'Counter--Crate Blue.gif' }], positions: { '0': [] } };
+      if (!mb) return { tokenTypes: [{ id: '0', label: '', image: 'Mission Token--Neutral GRAY.gif' }], positions: { '0': [] } };
       if (mb.tokenTypes && Array.isArray(mb.tokenTypes) && mb.positions && typeof mb.positions === 'object') {
         const positions = {};
         mb.tokenTypes.forEach((tt) => { positions[tt.id] = (mb.positions[tt.id] || []).map(s => String(s).toLowerCase()); });
-        return { tokenTypes: mb.tokenTypes.map((tt) => ({ id: String(tt.id), label: tt.label || 'Token', image: tt.image || 'Counter--Crate Blue.gif' })), positions };
+        return { tokenTypes: mb.tokenTypes.map((tt) => ({ id: String(tt.id), label: tt.label || 'Token', image: tt.image || 'Mission Token--Neutral GRAY.gif' })), positions };
       }
       const cells = (mb.contraband || mb.crates || []).map(s => String(s).toLowerCase());
-      return { tokenTypes: [{ id: '0', label: 'Contraband', image: (tokenImagesConfig && tokenImagesConfig.missionB) || 'Counter--Crate Blue.gif' }], positions: { '0': cells } };
+      return { tokenTypes: [{ id: '0', label: '', image: 'Mission Token--Neutral GRAY.gif' }], positions: { '0': cells } };
     }
     function syncMissionTokenState(mapId) {
       const t = fullMapTokensData?.maps?.[mapId];
@@ -680,7 +680,7 @@
       if (!listEl) return;
       const ma = getMissionTokenVariantData();
       const options = (tokenImagesConfig && tokenImagesConfig.missionTokenOptions) || [
-        { value: 'Mission Token--Neutral GRAY.gif', label: 'Mission token (Grey)' },
+        { value: 'Mission Token--Neutral GRAY.gif', label: 'Mission Token (Gray)' },
         { value: 'Counter--Crate Blue.gif', label: 'Crate (Blue)' }
       ];
       const canRemove = ma.tokenTypes.length > 1;
@@ -730,9 +730,18 @@
       if (wrap) wrap.style.display = show ? 'block' : 'none';
       const ma = getMissionTokenVariantData();
       const current = sel.value;
-      sel.innerHTML = ma.tokenTypes.map((tt) => '<option value="' + escapeHtml(tt.id) + '">' + escapeHtml(tt.label || 'Token') + '</option>').join('');
+      const missionTokenGray = 'Mission Token--Neutral GRAY.gif';
+      const sorted = ma.tokenTypes.slice().sort((a, b) => {
+        const aFirst = (a.image === missionTokenGray) ? 1 : 0;
+        const bFirst = (b.image === missionTokenGray) ? 1 : 0;
+        if (aFirst !== bFirst) return bFirst - aFirst;
+        const aCrate = (a.image || '').indexOf('Crate') !== -1 ? 1 : 0;
+        const bCrate = (b.image || '').indexOf('Crate') !== -1 ? 1 : 0;
+        return aCrate - bCrate;
+      });
+      sel.innerHTML = sorted.map((tt) => '<option value="' + escapeHtml(tt.id) + '">' + escapeHtml(tt.label || 'Token') + '</option>').join('');
       if (ma.tokenTypes.some((t) => t.id === current)) sel.value = current;
-      else if (ma.tokenTypes.length) sel.value = ma.tokenTypes[0].id;
+      else if (sorted.length) sel.value = sorted[0].id;
     }
 
     function updateNamedAreaList() {
@@ -938,7 +947,7 @@
             const cells = (mb.positions || {})[tt.id] || [];
             if (cells.some((cell) => kLower(cell) === kLower(k))) {
               const img = getTokenImage(tt.image);
-              drawTokenAt(ctx, img, 'square', 'rgba(255,183,77,0.7)', x, y, sdx, sdy, (tt.label || '').trim() || 'Contraband');
+              drawTokenAt(ctx, img, 'square', 'rgba(255,183,77,0.7)', x, y, sdx, sdy, (tt.label || '').trim());
               break;
             }
           }
@@ -1373,10 +1382,57 @@
     const LAST_MISSION_VARIANT_KEY = 'map-tool-last-mission-variant';
     const VALID_MODES = ['offmap', 'terrain', 'edge', 'exterior', 'deploymentzone', 'terminal', 'missionTokens', 'doors', 'namedarea'];
 
+    function refreshMapSelectOptions() {
+      const select = document.getElementById('mapSelect');
+      if (!select) return;
+      const currentValue = select.value;
+      const missionIds = fullTournamentRotationData && fullTournamentRotationData.missionIds ? fullTournamentRotationData.missionIds : [];
+      const notReadyNotComp = [];
+      const notReadyComp = [];
+      const readyNotComp = [];
+      const readyComp = [];
+      ALL_MAPS.forEach(function (m) {
+        const mapData = fullMapData && fullMapData.maps && fullMapData.maps[m.id];
+        const ready = mapData && mapData.playReady !== false;
+        const inRotation = missionIds.some(function (mid) { return String(mid).startsWith(m.id + ':'); });
+        if (ready) {
+          if (inRotation) readyComp.push(m); else readyNotComp.push(m);
+        } else {
+          if (inRotation) notReadyComp.push(m); else notReadyNotComp.push(m);
+        }
+      });
+      select.innerHTML = '';
+      if (notReadyNotComp.length > 0) {
+        const g = document.createElement('optgroup');
+        g.label = 'Not play ready · Not in competitive rotation';
+        notReadyNotComp.forEach(function (m) { g.appendChild(new Option(m.name, m.id)); });
+        select.appendChild(g);
+      }
+      if (notReadyComp.length > 0) {
+        const g = document.createElement('optgroup');
+        g.label = 'Not play ready · In competitive rotation';
+        notReadyComp.forEach(function (m) { g.appendChild(new Option(m.name, m.id)); });
+        select.appendChild(g);
+      }
+      if (readyNotComp.length > 0) {
+        const g = document.createElement('optgroup');
+        g.label = 'Play ready · Not in competitive rotation';
+        readyNotComp.forEach(function (m) { g.appendChild(new Option(m.name, m.id)); });
+        select.appendChild(g);
+      }
+      if (readyComp.length > 0) {
+        const g = document.createElement('optgroup');
+        g.label = 'Play ready · In competitive rotation';
+        readyComp.forEach(function (m) { g.appendChild(new Option(m.name, m.id)); });
+        select.appendChild(g);
+      }
+      if (currentValue && ALL_MAPS.some(function (m) { return m.id === currentValue; })) select.value = currentValue;
+    }
+
     // Populate map dropdown with every map on load
     (function initMapSelect() {
       const select = document.getElementById('mapSelect');
-      ALL_MAPS.forEach(m => select.appendChild(new Option(m.name, m.id)));
+      refreshMapSelectOptions();
       const savedId = (typeof localStorage !== 'undefined' && localStorage.getItem(LAST_MAP_KEY)) || '';
       const validId = ALL_MAPS.some(m => m.id === savedId) ? savedId : 'mos-eisley-outskirts';
       select.value = validId;
@@ -1426,6 +1482,7 @@
 
     function applyLoadedData(data) {
       fullMapData = data;
+      refreshMapSelectOptions();
       const maps = data.maps || {};
       const mapIdsInFile = Object.keys(maps);
       const select = document.getElementById('mapSelect');
@@ -1526,6 +1583,7 @@
         trySave(urls[i]).then((r) => {
           if (!r.ok) return r.text().then((t) => Promise.reject(new Error(t || String(r.status))));
           if (typeof fullMapData === 'object') fullMapData = data;
+          refreshMapSelectOptions();
           fullDeploymentZonesData = zonesData;
           fullMapTokensData = tokensData;
           fullMissionCardsData = missionCardsData;

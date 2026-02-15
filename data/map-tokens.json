@@ -52,7 +52,10 @@
         ]
       },
       "missionB": {
-        "contraband": []
+        "contraband": [
+          "j13",
+          "m14"
+        ]
       },
       "doors": [
         [
