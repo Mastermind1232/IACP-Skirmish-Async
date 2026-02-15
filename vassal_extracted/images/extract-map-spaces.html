@@ -91,6 +91,10 @@
         <label for="missionNameInput">Mission name</label>
         <input type="text" id="missionNameInput" size="24" placeholder="e.g. A. Get to the Ship" title="Display name for selected mission variant">
       </div>
+      <div class="mission-field">
+        <label for="missionTokenLabelInput">Token label</label>
+        <input type="text" id="missionTokenLabelInput" size="24" placeholder="e.g. Launch panels, Contraband" title="Label for this mission's tokens (shown in mode and saved with mission card)">
+      </div>
       <div class="mission-text-section">
         <div class="mission-text-field">
           <label for="missionSetupInput">Setup</label>
@@ -107,8 +111,7 @@
       </div>
       <div class="mission-modes">
         <span class="mode-label"><label><input type="radio" name="missionMode" value="terminal" checked> Terminals</label></span>
-        <span class="mode-label"><label><input type="radio" name="missionMode" value="missionA"> Mission A tokens</label></span>
-        <span class="mode-label"><label><input type="radio" name="missionMode" value="missionB"> Mission B tokens</label></span>
+        <span class="mode-label"><label><input type="radio" name="missionMode" value="missionTokens"> Mission tokens</label></span>
         <span class="mode-label"><label title="One edge = one door between 2 cells. In game, connected colinear edges share one door image. Opening: figure must be on or orthogonally adjacent to one of the 2 cells (no diagonal)."><input type="radio" name="missionMode" value="doors"> Doors (click edge)</label></span>
         <span class="mode-label"><label><input type="radio" name="missionMode" value="namedarea"> Named area (paint cells)</label></span>
       </div>
@@ -241,6 +244,8 @@
     /** In-memory mission data for current map (synced when switching variant or map). Used for save payload. */
     let missionANameValue = '';
     let missionBNameValue = '';
+    let missionATokenLabel = '';
+    let missionBTokenLabel = '';
     let missionASetup = '', missionBSetup = '';
     let missionAStartOfRound = '', missionBStartOfRound = '';
     let missionAEndOfRound = '', missionBEndOfRound = '';
@@ -298,6 +303,8 @@
       const mc = fullMissionCardsData?.maps?.[mapId];
       missionANameValue = (mc?.a?.name != null ? mc.a.name : '') || '';
       missionBNameValue = (mc?.b?.name != null ? mc.b.name : '') || '';
+      missionATokenLabel = (mc?.a?.tokenLabel != null ? mc.a.tokenLabel : '') || '';
+      missionBTokenLabel = (mc?.b?.tokenLabel != null ? mc.b.tokenLabel : '') || '';
       missionASetup = (mc?.a?.setup != null ? mc.a.setup : '') || '';
       missionBSetup = (mc?.b?.setup != null ? mc.b.setup : '') || '';
       missionAStartOfRound = (mc?.a?.startOfRound != null ? mc.a.startOfRound : '') || '';
@@ -307,6 +314,8 @@
       const variant = getMissionVariant();
       const input = document.getElementById('missionNameInput');
       if (input) input.value = variant === 'b' ? missionBNameValue : missionANameValue;
+      const tokenLabelEl = document.getElementById('missionTokenLabelInput');
+      if (tokenLabelEl) tokenLabelEl.value = variant === 'b' ? missionBTokenLabel : missionATokenLabel;
       const setupEl = document.getElementById('missionSetupInput');
       const startEl = document.getElementById('missionStartOfRoundInput');
       const endEl = document.getElementById('missionEndOfRoundInput');
@@ -320,6 +329,12 @@
       const input = document.getElementById('missionNameInput');
       const v = (input && input.value != null ? input.value : '').trim();
       if (variant === 'b') missionBNameValue = v; else missionANameValue = v;
+    }
+    function syncMissionTokenLabelFromInput() {
+      const variant = getMissionVariant();
+      const input = document.getElementById('missionTokenLabelInput');
+      const v = (input && input.value != null ? input.value : '').trim();
+      if (variant === 'b') missionBTokenLabel = v; else missionATokenLabel = v;
     }
 
     function syncMissionTextFromInputs() {
@@ -342,17 +357,33 @@
     }
 
     function applyMissionVariantSwitch() {
-      syncMissionNameFromInput();
-      syncMissionTextFromInputs();
-      const variant = getMissionVariant();
-      const input = document.getElementById('missionNameInput');
-      if (input) input.value = variant === 'b' ? missionBNameValue : missionANameValue;
+      // Radio has already changed to the new variant; current field values belong to the variant we're leaving.
+      const newVariant = getMissionVariant();
+      const leavingVariant = newVariant === 'b' ? 'a' : 'b';
+      const nameInput = document.getElementById('missionNameInput');
+      const tokenLabelEl = document.getElementById('missionTokenLabelInput');
       const setupEl = document.getElementById('missionSetupInput');
       const startEl = document.getElementById('missionStartOfRoundInput');
       const endEl = document.getElementById('missionEndOfRoundInput');
-      if (setupEl) setupEl.value = variant === 'b' ? missionBSetup : missionASetup;
-      if (startEl) startEl.value = variant === 'b' ? missionBStartOfRound : missionAStartOfRound;
-      if (endEl) endEl.value = variant === 'b' ? missionBEndOfRound : missionAEndOfRound;
+      if (leavingVariant === 'a') {
+        missionANameValue = (nameInput && nameInput.value != null ? nameInput.value : '').trim();
+        missionATokenLabel = (tokenLabelEl && tokenLabelEl.value != null ? tokenLabelEl.value : '').trim();
+        missionASetup = (setupEl && setupEl.value != null ? setupEl.value : '').trim();
+        missionAStartOfRound = (startEl && startEl.value != null ? startEl.value : '').trim();
+        missionAEndOfRound = (endEl && endEl.value != null ? endEl.value : '').trim();
+      } else {
+        missionBNameValue = (nameInput && nameInput.value != null ? nameInput.value : '').trim();
+        missionBTokenLabel = (tokenLabelEl && tokenLabelEl.value != null ? tokenLabelEl.value : '').trim();
+        missionBSetup = (setupEl && setupEl.value != null ? setupEl.value : '').trim();
+        missionBStartOfRound = (startEl && startEl.value != null ? startEl.value : '').trim();
+        missionBEndOfRound = (endEl && endEl.value != null ? endEl.value : '').trim();
+      }
+      if (nameInput) nameInput.value = newVariant === 'b' ? missionBNameValue : missionANameValue;
+      if (tokenLabelEl) tokenLabelEl.value = newVariant === 'b' ? missionBTokenLabel : missionATokenLabel;
+      if (setupEl) setupEl.value = newVariant === 'b' ? missionBSetup : missionASetup;
+      if (startEl) startEl.value = newVariant === 'b' ? missionBStartOfRound : missionAStartOfRound;
+      if (endEl) endEl.value = newVariant === 'b' ? missionBEndOfRound : missionAEndOfRound;
+      draw();
     }
 
     function updateNamedAreaSelect() {
@@ -545,7 +576,8 @@
           }
         }
       }
-      // Mission overlay: terminals, mission A/B tokens, doors, named areas (always shown)
+      // Mission overlay: show only the selected mission's tokens (Mission A or B); terminals, doors, named areas shown for both
+      const variant = getMissionVariant();
       const onMapSet = new Set((state.spaces || []).filter(s => !(new Set((state.offMap || []).map(x => String(x).toLowerCase()))).has(String(s).toLowerCase())).map(s => String(s).toLowerCase()));
       const termSet = new Set(missionTokenState.terminals.map(s => String(s).toLowerCase()));
       const aSet = new Set(missionTokenState.missionA.launchPanels.map(s => String(s).toLowerCase()));
@@ -554,8 +586,8 @@
         const k = coordKey(c, r), x = sx0 + c * sdx, y = sy0 + r * sdy;
         if (!onMapSet.has(k)) continue;
         if (termSet.has(k)) { ctx.fillStyle = 'rgba(79,195,247,0.65)'; ctx.fillRect(x + 4, y + 4, sdx - 8, sdy - 8); }
-        if (aSet.has(k)) { ctx.fillStyle = 'rgba(129,199,132,0.65)'; ctx.beginPath(); ctx.arc(x + sdx/2, y + sdy/2, Math.min(sdx,sdy)/2 - 4, 0, Math.PI * 2); ctx.fill(); }
-        if (bSet.has(k)) { ctx.fillStyle = 'rgba(255,183,77,0.7)'; ctx.fillRect(x + 6, y + 6, sdx - 12, sdy - 12); }
+        if (variant === 'a' && aSet.has(k)) { ctx.fillStyle = 'rgba(129,199,132,0.65)'; ctx.beginPath(); ctx.arc(x + sdx/2, y + sdy/2, Math.min(sdx,sdy)/2 - 4, 0, Math.PI * 2); ctx.fill(); }
+        if (variant === 'b' && bSet.has(k)) { ctx.fillStyle = 'rgba(255,183,77,0.7)'; ctx.fillRect(x + 6, y + 6, sdx - 12, sdy - 12); }
         missionTokenState.namedAreas.forEach((area, areaIdx) => {
           const areaSet = new Set((area.cells || []).map(s => String(s).toLowerCase()));
           if (areaSet.has(k)) {
@@ -738,6 +770,10 @@
     if (missionNameInput) {
       missionNameInput.oninput = missionNameInput.onchange = missionNameInput.onblur = () => syncMissionNameFromInput();
     }
+    const missionTokenLabelInput = document.getElementById('missionTokenLabelInput');
+    if (missionTokenLabelInput) {
+      missionTokenLabelInput.oninput = missionTokenLabelInput.onchange = missionTokenLabelInput.onblur = () => syncMissionTokenLabelFromInput();
+    }
     ['missionSetupInput', 'missionStartOfRoundInput', 'missionEndOfRoundInput'].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.oninput = el.onchange = el.onblur = () => syncMissionTextFromInputs();
@@ -787,7 +823,7 @@
       const info = getCellInfo(e);
       if (!info) return;
       const missionMode = getMissionMode();
-      const isMissionTool = missionMode === 'terminal' || missionMode === 'missionA' || missionMode === 'missionB' || missionMode === 'doors' || missionMode === 'namedarea';
+      const isMissionTool = missionMode === 'terminal' || missionMode === 'missionTokens' || missionMode === 'doors' || missionMode === 'namedarea';
       if (isMissionTool) {
         const offSet = new Set((state.offMap || []).map(s => String(s).toLowerCase()));
         const onMap = new Set((state.spaces || []).map(s => String(s).toLowerCase()).filter(k => !offSet.has(k)));
@@ -797,16 +833,10 @@
           if (idx >= 0) missionTokenState.terminals.splice(idx, 1);
           else missionTokenState.terminals.push(k);
           dragState = { missionMode, paintAdd: missionTokenState.terminals.includes(k), lastCoord: info.coord };
-        } else if (missionMode === 'missionA' && onMap.has(info.coord)) {
+        } else if (missionMode === 'missionTokens' && onMap.has(info.coord)) {
           const k = String(info.coord).toLowerCase();
-          const arr = missionTokenState.missionA.launchPanels;
-          const idx = arr.indexOf(k);
-          if (idx >= 0) arr.splice(idx, 1);
-          else arr.push(k);
-          dragState = { missionMode, paintAdd: arr.includes(k), lastCoord: info.coord };
-        } else if (missionMode === 'missionB' && onMap.has(info.coord)) {
-          const k = String(info.coord).toLowerCase();
-          const arr = missionTokenState.missionB.contraband;
+          const variant = getMissionVariant();
+          const arr = variant === 'b' ? missionTokenState.missionB.contraband : missionTokenState.missionA.launchPanels;
           const idx = arr.indexOf(k);
           if (idx >= 0) arr.splice(idx, 1);
           else arr.push(k);
@@ -875,15 +905,9 @@
             if (has) missionTokenState.terminals.splice(missionTokenState.terminals.indexOf(k), 1);
             else missionTokenState.terminals.push(k);
           }
-        } else if (dragState.missionMode === 'missionA') {
-          const arr = missionTokenState.missionA.launchPanels;
-          const has = arr.includes(k);
-          if ((dragState.paintAdd && !has) || (!dragState.paintAdd && has)) {
-            if (has) arr.splice(arr.indexOf(k), 1);
-            else arr.push(k);
-          }
-        } else if (dragState.missionMode === 'missionB') {
-          const arr = missionTokenState.missionB.contraband;
+        } else if (dragState.missionMode === 'missionTokens') {
+          const variant = getMissionVariant();
+          const arr = variant === 'b' ? missionTokenState.missionB.contraband : missionTokenState.missionA.launchPanels;
           const has = arr.includes(k);
           if ((dragState.paintAdd && !has) || (!dragState.paintAdd && has)) {
             if (has) arr.splice(arr.indexOf(k), 1);
@@ -1037,6 +1061,7 @@
       };
       const tokensData = { source: fullMapTokensData?.source || 'extract-map-spaces.html', maps: { ...(fullMapTokensData?.maps || {}), [selectedId]: tokensPayload } };
       syncMissionNameFromInput();
+      syncMissionTokenLabelFromInput();
       syncMissionTextFromInputs();
       const existingMc = fullMissionCardsData?.maps?.[selectedId] || {};
       const missionCardsData = {
@@ -1044,6 +1069,7 @@
         maps: { ...(fullMissionCardsData?.maps || {}), [selectedId]: {
           a: {
             name: (missionANameValue || '').trim() || (existingMc.a?.name || ''),
+            tokenLabel: (missionATokenLabel || '').trim() || (existingMc.a?.tokenLabel || ''),
             imagePath: missionCardImagePath(existingMc.a?.imagePath || ''),
             setup: (missionASetup || '').trim(),
             startOfRound: (missionAStartOfRound || '').trim(),
@@ -1051,6 +1077,7 @@
           },
           b: {
             name: (missionBNameValue || '').trim() || (existingMc.b?.name || ''),
+            tokenLabel: (missionBTokenLabel || '').trim() || (existingMc.b?.tokenLabel || ''),
             imagePath: missionCardImagePath(existingMc.b?.imagePath || ''),
             setup: (missionBSetup || '').trim(),
             startOfRound: (missionBStartOfRound || '').trim(),
@@ -1093,8 +1120,9 @@
             'Terrain: ' + difficultCount + ' difficult, ' + blockingCount + ' blocking, ' + exteriorCount + ' exterior · ' + solidWalls + ' solid walls, ' + movBlockEdges + ' movement-blocking edges',
             'Tournament rotation: ' + (fullTournamentRotationData.missionIds && fullTournamentRotationData.missionIds.length ? fullTournamentRotationData.missionIds.join(', ') : 'none'),
             'Deployment zones: ' + deploymentZoneState.red.length + ' red, ' + deploymentZoneState.blue.length + ' blue',
-            'Mission tokens: ' + missionTokenState.terminals.length + ' terminals, ' + (missionTokenState.missionA.launchPanels || []).length + ' mission A, ' + (missionTokenState.missionB.contraband || []).length + ' mission B, ' + (missionTokenState.doors || []).length + ' doors',
+            'Mission tokens: ' + missionTokenState.terminals.length + ' terminals, ' + (missionTokenState.missionA.launchPanels || []).length + ' A, ' + (missionTokenState.missionB.contraband || []).length + ' B, ' + (missionTokenState.doors || []).length + ' doors',
             'Mission names: A «' + (missionANameValue || '').trim() + '» B «' + (missionBNameValue || '').trim() + '»',
+            'Token labels: A «' + (missionATokenLabel || '').trim() + '» B «' + (missionBTokenLabel || '').trim() + '»',
             'Reload this page via the map-tool server to see saved mission names next time.'
           ];
           const statusEl = document.getElementById('status');
@@ -1139,6 +1167,7 @@
     function doSaveToFile() {
       const payload = buildSavePayload();
       syncMissionNameFromInput();
+      syncMissionTokenLabelFromInput();
       syncMissionTextFromInputs();
       const selectedId = document.getElementById('mapSelect').value || 'mos-eisley-outskirts';
       const existingMc = fullMissionCardsData?.maps?.[selectedId] || {};
@@ -1147,6 +1176,7 @@
         maps: { ...(fullMissionCardsData?.maps || {}), [selectedId]: {
           a: {
             name: (missionANameValue || '').trim() || (existingMc.a?.name || ''),
+            tokenLabel: (missionATokenLabel || '').trim() || (existingMc.a?.tokenLabel || ''),
             imagePath: missionCardImagePath(existingMc.a?.imagePath || ''),
             setup: (missionASetup || '').trim(),
             startOfRound: (missionAStartOfRound || '').trim(),
@@ -1154,6 +1184,7 @@
           },
           b: {
             name: (missionBNameValue || '').trim() || (existingMc.b?.name || ''),
+            tokenLabel: (missionBTokenLabel || '').trim() || (existingMc.b?.tokenLabel || ''),
             imagePath: missionCardImagePath(existingMc.b?.imagePath || ''),
             setup: (missionBSetup || '').trim(),
             startOfRound: (missionBStartOfRound || '').trim(),

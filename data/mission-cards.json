@@ -10,6 +10,22 @@
         "name": "B. Smuggled Goods",
         "imagePath": "vassal_extracted/images/mission-cards/SkMission Card--Mos Eisley Outskirts-B-Smuggled Goods.png"
       }
+    },
+    "corellian-underground": {
+      "a": {
+        "name": "Local Trouble",
+        "imagePath": "",
+        "setup": "",
+        "startOfRound": "",
+        "endOfRound": ""
+      },
+      "b": {
+        "name": "",
+        "imagePath": "",
+        "setup": "",
+        "startOfRound": "",
+        "endOfRound": ""
+      }
     }
   }
 }

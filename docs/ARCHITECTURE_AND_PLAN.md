@@ -58,6 +58,7 @@ So the monolith is being split by responsibility: **state**, **data**, **router*
 - Round/activation flow: activations remaining, start/end of round windows.
 - Per activation: Move (MP, valid spaces from map data), Attack (declare target, roll attack, roll defense, **surge spending**, resolve damage, VP, defeat), Interact (e.g. Launch Panel), Special (manual “resolve manually” + Done).
 - Win/loss: 40 VP and elimination; `game.ended` set, winner announced.
+- **Manual VP:** `/editvp +N` or `/editvp -N` in Game Log or General chat adjusts the typing player’s VP (e.g. if something didn’t register); Board scorecard and win check updated.
 - Mission A: Launch panels, VP per panel.
 - LOS: soft check (warning in game log if bot thinks no LOS; attack not blocked).
 - Dice: rolled by bot; attack (acc/dmg/surge) and defense (block/evade) applied.

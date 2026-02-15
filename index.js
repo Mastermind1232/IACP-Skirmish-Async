@@ -3358,6 +3358,60 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
+  // /editvp +N or /editvp -N in Game Log or General chat — manual VP adjustment (author's side only)
+  const editVpMatch = content.match(/^\/editvp\s*([+-]\d+)$/i);
+  if (editVpMatch) {
+    const chId = message.channel?.id;
+    for (const [gameId, game] of getGamesMap()) {
+      if (game.generalId !== chId && game.chatId !== chId) continue;
+      if (game.ended) {
+        await message.reply('This game has ended. VP cannot be changed.').catch(() => {});
+        return;
+      }
+      const authorId = message.author.id;
+      const isP1 = authorId === game.player1Id;
+      const isP2 = authorId === game.player2Id;
+      if (!isP1 && !isP2) {
+        await message.reply('Only players in this game can use /editvp.').catch(() => {});
+        return;
+      }
+      const raw = editVpMatch[1];
+      const delta = raw.startsWith('+') ? parseInt(raw.slice(1), 10) : -parseInt(raw.slice(1), 10);
+      const vpKey = isP1 ? 'player1VP' : 'player2VP';
+      const vp = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+      game[vpKey] = vp;
+      const before = vp.total;
+      vp.total = Math.max(0, before + delta);
+      const actualDelta = vp.total - before;
+      setGame(gameId, game);
+      saveGames();
+      const newTotal = vp.total;
+      const side = isP1 ? 'Player 1' : 'Player 2';
+      await message.reply(`✓ **${side}** VP adjusted ${actualDelta >= 0 ? '+' : ''}${actualDelta}. Total is now **${newTotal}** VP.`).catch(() => {});
+      // Update scorecard embed in Board channel if present
+      if (game.boardId && game.selectedMap) {
+        try {
+          const boardChannel = await message.client.channels.fetch(game.boardId);
+          const messages = await boardChannel.messages.fetch({ limit: 15 });
+          const withScorecard = messages.find((m) => m.embeds?.[0]?.title === 'Scorecard');
+          if (withScorecard) {
+            const embed = buildScorecardEmbed(game);
+            await withScorecard.edit({ embeds: [embed] }).catch(() => {});
+          }
+        } catch (err) {
+          // ignore
+        }
+      }
+      const winCheck = await checkWinConditions(game, message.client);
+      if (winCheck.ended) {
+        // Game over already posted by checkWinConditions
+      }
+      return;
+    }
+    // No game channel matched — ignore so we don't reply in unrelated channels
+    return;
+  }
+
   // .vsav file upload in Player Hand channel
   const vsavAttach = message.attachments?.find((a) => a.name?.toLowerCase().endsWith('.vsav'));
   if (vsavAttach) {
