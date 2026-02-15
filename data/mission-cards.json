@@ -4,16 +4,25 @@
     "mos-eisley-outskirts": {
       "a": {
         "name": "A. Get to the Ship",
-        "imagePath": "vassal_extracted/images/mission-cards/SkMission Card--Mos Eisley Outskirts-A-Get to the Ship.png"
+        "tokenLabel": "Panel",
+        "imagePath": "vassal_extracted/images/mission-cards/SkMission Card--Mos Eisley Outskirts-A-Get to the Ship.png",
+        "setup": "",
+        "startOfRound": "",
+        "endOfRound": ""
       },
       "b": {
         "name": "B. Smuggled Goods",
-        "imagePath": "vassal_extracted/images/mission-cards/SkMission Card--Mos Eisley Outskirts-B-Smuggled Goods.png"
+        "tokenLabel": "Contraband",
+        "imagePath": "vassal_extracted/images/mission-cards/SkMission Card--Mos Eisley Outskirts-B-Smuggled Goods.png",
+        "setup": "",
+        "startOfRound": "",
+        "endOfRound": ""
       }
     },
     "corellian-underground": {
       "a": {
         "name": "Local Trouble",
+        "tokenLabel": "Thug",
         "imagePath": "",
         "setup": "",
         "startOfRound": "",
@@ -21,6 +30,7 @@
       },
       "b": {
         "name": "",
+        "tokenLabel": "",
         "imagePath": "",
         "setup": "",
         "startOfRound": "",

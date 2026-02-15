@@ -30,6 +30,12 @@
           "s11",
           "s12"
         ]
+      ],
+      "namedAreas": [
+        {
+          "name": "Area 1",
+          "cells": []
+        }
       ]
     },
     "corellian-underground": {

@@ -31,12 +31,14 @@ const MAP_REGISTRY_JSON = join(root, 'data', 'map-registry.json');
 const TOURNAMENT_ROTATION_JSON = join(root, 'data', 'tournament-rotation.json');
 const DEPLOYMENT_ZONES_JSON = join(root, 'data', 'deployment-zones.json');
 const MAP_TOKENS_JSON = join(root, 'data', 'map-tokens.json');
+const TOKEN_IMAGES_JSON = join(root, 'data', 'token-images.json');
 const MISSION_CARDS_JSON = join(root, 'data', 'mission-cards.json');
 const PLACEHOLDER = '<!-- INJECT_MAP_SPACES -->';
 const PLACEHOLDER_IMAGE_PATHS = '<!-- INJECT_MAP_IMAGE_PATHS -->';
 const PLACEHOLDER_TOURNAMENT_ROTATION = '<!-- INJECT_TOURNAMENT_ROTATION -->';
 const PLACEHOLDER_DEPLOYMENT_ZONES = '<!-- INJECT_DEPLOYMENT_ZONES -->';
 const PLACEHOLDER_MAP_TOKENS = '<!-- INJECT_MAP_TOKENS -->';
+const PLACEHOLDER_TOKEN_IMAGES = '<!-- INJECT_TOKEN_IMAGES --><script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal Blue.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>';
 const PLACEHOLDER_MISSION_CARDS = '<!-- INJECT_MISSION_CARDS --><script type="application/json" id="mission-cards-data">{"source":"extract-map-spaces.html","maps":{}}</script>';
 const MAPS_SUBFOLDER = 'vassal_extracted/images/maps/';
 
@@ -186,6 +188,12 @@ createServer((req, res) => {
       } else {
         html = html.replace(PLACEHOLDER_MAP_TOKENS, '<script type="application/json" id="map-tokens-data">{"source":"extract-map-spaces.html","maps":{}}</script>');
       }
+      if (existsSync(TOKEN_IMAGES_JSON)) {
+        const tokenImgRaw = readFileSync(TOKEN_IMAGES_JSON, 'utf8').replace(/<\/script>/gi, '<\\/script>');
+        html = html.replace(PLACEHOLDER_TOKEN_IMAGES, `<script type="application/json" id="token-images-data">${tokenImgRaw}</script>`);
+      } else {
+        html = html.replace(PLACEHOLDER_TOKEN_IMAGES, '<script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal Blue.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>');
+      }
       if (existsSync(MISSION_CARDS_JSON)) {
         const mcJson = readFileSync(MISSION_CARDS_JSON, 'utf8').replace(/<\/script>/gi, '<\\/script>');
         html = html.replace(PLACEHOLDER_MISSION_CARDS, `<script type="application/json" id="mission-cards-data">${mcJson}</script>`);
@@ -205,15 +213,21 @@ createServer((req, res) => {
     return;
   }
 
-  if (!existsSync(filePath) || !filePath.startsWith(root)) {
+  let pathToServe = filePath;
+  if (!existsSync(pathToServe) && decodedPath.replace(/\\/g, '/').startsWith('vassal_extracted/images/tokens/')) {
+    const filename = decodedPath.replace(/^.*[/\\]/, '');
+    const fallback = join(root, 'vassal_extracted', 'images', 'maps', filename);
+    if (existsSync(fallback)) pathToServe = fallback;
+  }
+  if (!existsSync(pathToServe) || !pathToServe.startsWith(root)) {
     res.writeHead(404);
     res.end('Not found');
     return;
   }
-  const ext = extname(filePath);
+  const ext = extname(pathToServe);
   const mime = MIME[ext] || 'application/octet-stream';
   try {
-    const content = readFileSync(filePath);
+    const content = readFileSync(pathToServe);
     res.writeHead(200, { 'Content-Type': mime });
     res.end(content);
   } catch {

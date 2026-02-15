@@ -49,7 +49,7 @@
 <body>
   <h1>Map Spaces — Terrain & Walls</h1>
   <p id="status">Load map-spaces.json. Off-map: click or drag to exclude/restore cells. Terrain: click to cycle. Edges: click for walls.</p>
-  <p style="margin:4px 0 8px 0; font-size:0.9em; color:#999;">Run <code>npm run map-tool</code> in the project folder — the map tool opens in your browser. Use the single <strong>Save</strong> button to save everything (map spaces, rotation, deployment zones, mission tokens) to the project <code>data/</code> folder.</p>
+  <p style="margin:4px 0 8px 0; font-size:0.9em; color:#999;">Run <code>npm run map-tool</code> in the project folder — the map tool opens in your browser. Use the single <strong>Save</strong> button to save everything (map spaces, rotation, deployment zones, mission tokens) to the project <code>data/</code> folder. Token images (terminals, panels, contraband) show on the map when present in <code>vassal_extracted/images/tokens/</code> or <code>maps/</code> — see <code>data/token-images.json</code> for filenames; otherwise colored shapes are used.</p>
   <div class="main-layout">
     <div class="left-column">
       <div id="colorKey" title="Grid overlay legend">
@@ -110,10 +110,10 @@
         </div>
       </div>
       <div class="mission-modes">
-        <span class="mode-label"><label><input type="radio" name="missionMode" value="terminal" checked> Terminals</label></span>
-        <span class="mode-label"><label><input type="radio" name="missionMode" value="missionTokens"> Mission tokens</label></span>
-        <span class="mode-label"><label title="One edge = one door between 2 cells. In game, connected colinear edges share one door image. Opening: figure must be on or orthogonally adjacent to one of the 2 cells (no diagonal)."><input type="radio" name="missionMode" value="doors"> Doors (click edge)</label></span>
-        <span class="mode-label"><label><input type="radio" name="missionMode" value="namedarea"> Named area (paint cells)</label></span>
+        <span class="mode-label"><label><input type="radio" name="mode" value="terminal"> Terminals</label></span>
+        <span class="mode-label"><label><input type="radio" name="mode" value="missionTokens"> Mission tokens</label></span>
+        <span class="mode-label"><label title="One edge = one door between 2 cells. In game, connected colinear edges share one door image. Opening: figure must be on or orthogonally adjacent to one of the 2 cells (no diagonal)."><input type="radio" name="mode" value="doors"> Doors (click edge)</label></span>
+        <span class="mode-label"><label><input type="radio" name="mode" value="namedarea"> Named area (paint cells)</label></span>
       </div>
       <div class="named-area-row">
         <label for="namedAreaSelect">Area</label>
@@ -130,6 +130,7 @@
   <!-- INJECT_TOURNAMENT_ROTATION -->
   <!-- INJECT_DEPLOYMENT_ZONES -->
   <!-- INJECT_MAP_TOKENS -->
+  <!-- INJECT_TOKEN_IMAGES --><script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal Blue.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>
   <!-- INJECT_MISSION_CARDS --><script type="application/json" id="mission-cards-data">{"source":"extract-map-spaces.html","maps":{}}</script>
   <script>
     const img = document.getElementById('mapImg');
@@ -234,6 +235,68 @@
       'rgba(255,160,200,0.95)', 'rgba(130,200,255,0.95)', 'rgba(180,230,180,0.95)', 'rgba(255,220,150,0.95)',
       'rgba(220,180,230,0.95)', 'rgba(100,230,255,0.95)', 'rgba(240,245,140,0.95)', 'rgba(255,180,180,0.95)'
     ];
+    /** Token image config from data/token-images.json (injected by map-tool server). */
+    const tokenImagesConfig = (function () {
+      const el = document.getElementById('token-images-data');
+      if (el && el.textContent) try { return JSON.parse(el.textContent); } catch (e) {}
+      return { terminals: 'Counter--Terminal Blue.gif', missionA: 'Mission Token--Neutral GRAY.gif', missionB: 'Counter--Crate Blue.gif', doors: 'Token--Door.png' };
+    })();
+    /** Preloaded token images (same filenames as game map renderer). Try tokens/, then maps/, then filename. Draw these on the overlay when loaded; otherwise colored shapes. */
+    const tokenImgTerminals = new Image();
+    const tokenImgMissionA = new Image();
+    const tokenImgMissionB = new Image();
+    const TOKEN_BASE_PATHS = ['tokens/', 'maps/', ''];
+    function tryLoadTokenImg(imgEl, filename, pathIndex) {
+      if (!filename) return;
+      const base = TOKEN_BASE_PATHS[pathIndex || 0];
+      const src = base + encodeURIComponent(filename);
+      imgEl.onload = function () { draw(); };
+      imgEl.onerror = function () {
+        const next = (pathIndex || 0) + 1;
+        if (next < TOKEN_BASE_PATHS.length) tryLoadTokenImg(imgEl, filename, next);
+        else draw();
+      };
+      imgEl.src = src;
+    }
+    (function preloadTokenImages() {
+      tryLoadTokenImg(tokenImgTerminals, tokenImagesConfig.terminals, 0);
+      tryLoadTokenImg(tokenImgMissionA, tokenImagesConfig.missionA, 0);
+      tryLoadTokenImg(tokenImgMissionB, tokenImagesConfig.missionB, 0);
+    })();
+    /** Draw a token at cell center: use image if loaded, else fallback colored shape. If label is provided, draw it on top with base at bottom of cell. */
+    function drawTokenAt(ctx, img, fallbackShape, fallbackStyle, x, y, sdx, sdy, label) {
+      const cx = x + sdx / 2, cy = y + sdy / 2;
+      const tokenSize = Math.min(sdx, sdy) * 0.9;
+      if (img && img.complete && img.naturalWidth) {
+        const tw = img.naturalWidth, th = img.naturalHeight;
+        const tScale = Math.min(tokenSize / tw, tokenSize / th);
+        const dw = tw * tScale, dh = th * tScale;
+        ctx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
+      } else {
+        ctx.fillStyle = fallbackStyle;
+        if (fallbackShape === 'circle') {
+          ctx.beginPath();
+          ctx.arc(cx, cy, tokenSize / 2 - 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
+        }
+      }
+      if (label && String(label).trim()) {
+        const fontSize = Math.max(8, Math.min(14, Math.round(11 * scale)));
+        const cellBottom = y + sdy;
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        const labelY = cellBottom - 2;
+        ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+        ctx.lineWidth = 2;
+        ctx.strokeText(label.trim(), cx, labelY);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(label.trim(), cx, labelY);
+        ctx.lineWidth = 1;
+      }
+    }
     /** Ensure path points to images/maps/ so map images load from the maps subfolder. */
     function mapImagePathForUrl(path) {
       if (!path) return path;
@@ -267,7 +330,7 @@
 
     function colToLetter(c) { return c < 26 ? String.fromCharCode(65 + c) : colToLetter(Math.floor(c/26)-1) + colToLetter(c%26); }
     function coordKey(col, row) { return colToLetter(col).toLowerCase() + (row + 1); }
-    function edgeKey(a, b) { return [a, b].sort().join('|'); }
+    function edgeKey(a, b) { const x = String(a).toLowerCase(), y = String(b).toLowerCase(); return [x, y].sort().join('|'); }
     /** Parse "a1", "t22" etc. to [col, row]. */
     function coordToColRow(coord) {
       const s = String(coord).toLowerCase();
@@ -464,13 +527,14 @@
 
     function loadMapIntoState(mapData) {
       const loadedSpaces = new Set((mapData.spaces || []).map(s => String(s).toLowerCase()));
+      const normEdge = (e) => (Array.isArray(e) && e.length >= 2 ? [String(e[0]).toLowerCase(), String(e[1]).toLowerCase()] : e);
       state = {
         spaces: mapData.spaces || [],
         adjacency: mapData.adjacency || {},
         terrain: mapData.terrain || {},
         blocking: mapData.blocking || [],
-        impassableEdges: mapData.impassableEdges || [],
-        movementBlockingEdges: mapData.movementBlockingEdges || [],
+        impassableEdges: (mapData.impassableEdges || []).map(normEdge),
+        movementBlockingEdges: (mapData.movementBlockingEdges || []).map(normEdge),
         offMap: [],
         exterior: mapData.exterior || {},
         playReady: mapData.playReady !== false
@@ -537,7 +601,7 @@
     function draw() {
       ctx.clearRect(0, 0, overlay.width, overlay.height);
       const sdx = dx * scale, sdy = dy * scale, sx0 = x0 * scale, sy0 = y0 * scale;
-      const impSet = new Set(state.impassableEdges.map(e => edgeKey(e[0], e[1])));
+      const impSet = new Set((state.impassableEdges || []).map(e => edgeKey(e[0], e[1])));
       const dotSet = new Set((state.movementBlockingEdges || []).map(e => edgeKey(e[0], e[1])));
       const offSet = new Set((state.offMap || []).map(s => String(s).toLowerCase()));
       for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) {
@@ -585,9 +649,9 @@
       for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) {
         const k = coordKey(c, r), x = sx0 + c * sdx, y = sy0 + r * sdy;
         if (!onMapSet.has(k)) continue;
-        if (termSet.has(k)) { ctx.fillStyle = 'rgba(79,195,247,0.65)'; ctx.fillRect(x + 4, y + 4, sdx - 8, sdy - 8); }
-        if (variant === 'a' && aSet.has(k)) { ctx.fillStyle = 'rgba(129,199,132,0.65)'; ctx.beginPath(); ctx.arc(x + sdx/2, y + sdy/2, Math.min(sdx,sdy)/2 - 4, 0, Math.PI * 2); ctx.fill(); }
-        if (variant === 'b' && bSet.has(k)) { ctx.fillStyle = 'rgba(255,183,77,0.7)'; ctx.fillRect(x + 6, y + 6, sdx - 12, sdy - 12); }
+        if (termSet.has(k)) drawTokenAt(ctx, tokenImgTerminals, 'square', 'rgba(79,195,247,0.65)', x, y, sdx, sdy);
+        if (variant === 'a' && aSet.has(k)) drawTokenAt(ctx, tokenImgMissionA, 'circle', 'rgba(129,199,132,0.65)', x, y, sdx, sdy, (missionATokenLabel || '').trim() || 'Panel');
+        if (variant === 'b' && bSet.has(k)) drawTokenAt(ctx, tokenImgMissionB, 'square', 'rgba(255,183,77,0.7)', x, y, sdx, sdy, (missionBTokenLabel || '').trim() || 'Contraband');
         missionTokenState.namedAreas.forEach((area, areaIdx) => {
           const areaSet = new Set((area.cells || []).map(s => String(s).toLowerCase()));
           if (areaSet.has(k)) {
@@ -761,7 +825,8 @@
       }
     }
 
-    function getMissionMode() { return (document.querySelector('input[name="missionMode"]:checked') || {}).value; }
+    /** Single tool mode: map tools (offmap, terrain, edge, exterior, deploymentzone) or mission tools (terminal, missionTokens, doors, namedarea). Only one can be selected. */
+    function getMode() { return (document.querySelector('input[name="mode"]:checked') || {}).value || 'offmap'; }
 
     document.querySelectorAll('input[name="missionVariant"]').forEach((el) => {
       el.onchange = () => applyMissionVariantSwitch();
@@ -822,26 +887,26 @@
       e.preventDefault();
       const info = getCellInfo(e);
       if (!info) return;
-      const missionMode = getMissionMode();
-      const isMissionTool = missionMode === 'terminal' || missionMode === 'missionTokens' || missionMode === 'doors' || missionMode === 'namedarea';
+      const mode = getMode();
+      const isMissionTool = mode === 'terminal' || mode === 'missionTokens' || mode === 'doors' || mode === 'namedarea';
       if (isMissionTool) {
         const offSet = new Set((state.offMap || []).map(s => String(s).toLowerCase()));
         const onMap = new Set((state.spaces || []).map(s => String(s).toLowerCase()).filter(k => !offSet.has(k)));
-        if (missionMode === 'terminal' && onMap.has(info.coord)) {
+        if (mode === 'terminal' && onMap.has(info.coord)) {
           const k = String(info.coord).toLowerCase();
           const idx = missionTokenState.terminals.indexOf(k);
           if (idx >= 0) missionTokenState.terminals.splice(idx, 1);
           else missionTokenState.terminals.push(k);
-          dragState = { missionMode, paintAdd: missionTokenState.terminals.includes(k), lastCoord: info.coord };
-        } else if (missionMode === 'missionTokens' && onMap.has(info.coord)) {
+          dragState = { missionMode: mode, paintAdd: missionTokenState.terminals.includes(k), lastCoord: info.coord };
+        } else if (mode === 'missionTokens' && onMap.has(info.coord)) {
           const k = String(info.coord).toLowerCase();
           const variant = getMissionVariant();
           const arr = variant === 'b' ? missionTokenState.missionB.contraband : missionTokenState.missionA.launchPanels;
           const idx = arr.indexOf(k);
           if (idx >= 0) arr.splice(idx, 1);
           else arr.push(k);
-          dragState = { missionMode, paintAdd: arr.includes(k), lastCoord: info.coord };
-        } else if (missionMode === 'doors' && info.edge) {
+          dragState = { missionMode: mode, paintAdd: arr.includes(k), lastCoord: info.coord };
+        } else if (mode === 'doors' && info.edge) {
           const nc = info.edge === 'e' ? info.col + 1 : info.edge === 'w' ? info.col - 1 : info.col;
           const nr = info.edge === 's' ? info.row + 1 : info.edge === 'n' ? info.row - 1 : info.row;
           if (nc >= 0 && nc < numCols && nr >= 0 && nr < numRows) {
@@ -852,7 +917,7 @@
             else missionTokenState.doors.push([String(info.coord).toLowerCase(), String(nk).toLowerCase()]);
           }
           dragState = null;
-        } else if (missionMode === 'namedarea' && onMap.has(info.coord)) {
+        } else if (mode === 'namedarea' && onMap.has(info.coord)) {
           const k = String(info.coord).toLowerCase();
           const idx = parseInt(document.getElementById('namedAreaSelect').value, 10);
           const area = missionTokenState.namedAreas[idx];
@@ -861,13 +926,12 @@
             const paintAdd = ci < 0;
             if (ci >= 0) area.cells.splice(ci, 1);
             else area.cells.push(k);
-            dragState = { missionMode, paintAdd, lastCoord: info.coord, areaIndex: idx };
+            dragState = { missionMode: mode, paintAdd, lastCoord: info.coord, areaIndex: idx };
           }
         }
         draw();
         return;
       }
-      const mode = document.querySelector('input[name="mode"]:checked').value;
       if (mode === 'offmap') {
         const off = new Set((state.offMap || []).map(s => String(s).toLowerCase()));
         const paintOffMap = !off.has(info.coord);
@@ -1039,8 +1103,8 @@
         if (t && t !== 'normal') terrain[String(k).toLowerCase()] = t;
       }
       const blocking = onMapSpaces.filter(s => state.terrain[String(s).toLowerCase()] === 'blocking');
-      const impEdges = (state.impassableEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) && onMapSet.has(String(b).toLowerCase()));
-      const movEdges = (state.movementBlockingEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) && onMapSet.has(String(b).toLowerCase()));
+      const impEdges = (state.impassableEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) || onMapSet.has(String(b).toLowerCase()));
+      const movEdges = (state.movementBlockingEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) || onMapSet.has(String(b).toLowerCase()));
       const exterior = {};
       for (const k of onMapSpaces) {
         const key = String(k).toLowerCase();
@@ -1148,8 +1212,8 @@
         if (t && t !== 'normal') terrain[String(k).toLowerCase()] = t;
       }
       const blocking = onMapSpaces.filter(s => state.terrain[String(s).toLowerCase()] === 'blocking');
-      const impEdges = (state.impassableEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) && onMapSet.has(String(b).toLowerCase()));
-      const movEdges = (state.movementBlockingEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) && onMapSet.has(String(b).toLowerCase()));
+      const impEdges = (state.impassableEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) || onMapSet.has(String(b).toLowerCase()));
+      const movEdges = (state.movementBlockingEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) || onMapSet.has(String(b).toLowerCase()));
       const exterior = {};
       for (const k of onMapSpaces) {
         const key = String(k).toLowerCase();
@@ -1207,11 +1271,14 @@
 
     document.getElementById('saveBtn').onclick = () => doSave();
 
-    img.onload = init;
+    img.onload = function () {
+      init();
+      draw();
+    };
     img.onerror = () => {
       document.getElementById('status').textContent = 'Select a map above; grid appears when data is loaded.';
     };
-    if (img.complete) init();
+    if (img.complete) { init(); draw(); }
   </script>
 </body>
 </html>
