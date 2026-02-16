@@ -240,6 +240,105 @@ export async function handleCcPlaySelect(interaction, ctx) {
     });
     return;
   }
+  const effectData = getCcEffect(card);
+  const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
+  const abilityId = effectData?.abilityId ?? card;
+
+  // For cost > 0 with an ability: try to resolve before moving the card. If we can't apply (timing/context),
+  // prompt "We don't think you can do this right now" with [Play anyway] / [Unplay] so the card isn't consumed.
+  if (cost !== 0 && ctx.resolveAbility) {
+    const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, combat: game.combat || game.pendingCombat });
+    if (result.requiresChoice && result.choiceOptions?.length > 0) {
+      // Choice required: we must commit the play first, then send choice buttons.
+      await interaction.deferUpdate();
+      hand.splice(idx, 1);
+      game[handKey] = hand;
+      game[discardKey] = game[discardKey] || [];
+      game[discardKey].push(card);
+      const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+      const handMessages = await handChannel.messages.fetch({ limit: 20 });
+      const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
+      const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+      if (handMsg) {
+        const handPayload = buildHandDisplayPayload(game[handKey], deck, gameId, game, playerNum);
+        const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
+        handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
+        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(() => {});
+      }
+      await interaction.message.delete().catch(() => {});
+      await updateHandVisualMessage(game, playerNum, interaction.client);
+      await updateDiscardPileMessage(game, playerNum, interaction.client);
+      await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+      if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
+      game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId, playerNum };
+      const rows = [];
+      const maxPerRow = 5;
+      for (let i = 0; i < result.choiceOptions.length; i++) {
+        if (i % maxPerRow === 0) rows.push(new ActionRowBuilder());
+        const label = String(result.choiceOptions[i]).slice(0, 80);
+        rows[rows.length - 1].addComponents(
+          new ButtonBuilder().setCustomId(`cc_choice_${gameId}_${i}`).setLabel(label).setStyle(ButtonStyle.Secondary)
+        );
+      }
+      await handChannel.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(() => {});
+      saveGames();
+      return;
+    }
+    if (result.applied) {
+      // Effect applied: resolveAbility already mutated game (e.g. drew cards); remove played card from current hand and add to discard.
+      await interaction.deferUpdate();
+      const handNow = (game[handKey] || []).slice();
+      const idxNow = handNow.indexOf(card);
+      if (idxNow >= 0) handNow.splice(idxNow, 1);
+      game[handKey] = handNow;
+      game[discardKey] = (game[discardKey] || []).concat(card);
+      const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+      const handMessages = await handChannel.messages.fetch({ limit: 20 });
+      const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
+      const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+      if (handMsg) {
+        const handPayload = buildHandDisplayPayload(game[handKey], deck, gameId, game, playerNum);
+        const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
+        handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
+        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(() => {});
+      }
+      await interaction.message.delete().catch(() => {});
+      await updateHandVisualMessage(game, playerNum, interaction.client);
+      await updateDiscardPileMessage(game, playerNum, interaction.client);
+      const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+      if (result.drewCards?.length) {
+        await updateHandVisualMessage(game, playerNum, interaction.client);
+        const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
+        await ctx.logGameAction(game, interaction.client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
+      } else if (result.logMessage) {
+        await ctx.logGameAction(game, interaction.client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
+      }
+      if (result.refreshHand || result.refreshDiscard) {
+        if (result.refreshHand) await updateHandVisualMessage(game, playerNum, interaction.client);
+        if (result.refreshDiscard) await updateDiscardPileMessage(game, playerNum, interaction.client);
+      }
+      if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
+      saveGames();
+      return;
+    }
+    if (!result.applied && result.manualMessage) {
+      // Timing/context mismatch: don't move the card; ping in hand with Play anyway / Unplay (same as illegal-CC flow).
+      game.pendingIllegalCcPlay = { playerNum, card, reason: result.manualMessage, fromContext: true };
+      const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+      const handChannel = await client.channels.fetch(handId);
+      const msg = await handChannel.send({
+        content: `We don't think you can do this right now: ${result.manualMessage}\n\nChoose **Ignore and play** to play it anyway (resolve manually), or **Unplay** to cancel.`,
+        components: [getIllegalCcPlayButtons(gameId)],
+      });
+      game.pendingIllegalCcPlay.messageId = msg.id;
+      await interaction.deferUpdate().catch(() => {});
+      await interaction.message.delete().catch(() => {});
+      saveGames();
+      return;
+    }
+  }
+
+  // Cost 0 (negation flow) or no resolveAbility / effect didn't need pre-check: move card first, then resolve/log as before.
   await interaction.deferUpdate();
   hand.splice(idx, 1);
   game[handKey] = hand;
@@ -251,7 +350,6 @@ export async function handleCcPlaySelect(interaction, ctx) {
   const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
   if (handMsg) {
     const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
-    const effectData = getCcEffect(card);
     const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
     handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
     await handMsg.edit({
@@ -265,8 +363,6 @@ export async function handleCcPlaySelect(interaction, ctx) {
   await updateHandVisualMessage(game, playerNum, interaction.client);
   await updateDiscardPileMessage(game, playerNum, interaction.client);
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-  const effectData = getCcEffect(card);
-  const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
   if (cost === 0 && ctx.getNegationResponseButtons) {
     game.pendingNegation = { playedBy: playerNum, card, fromDc: false };
     const oppNum = playerNum === 1 ? 2 : 1;
@@ -285,27 +381,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
     return;
   }
   if (ctx.resolveAbility) {
-    const abilityId = effectData?.abilityId ?? card;
     const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, combat: game.combat || game.pendingCombat });
-    if (result.requiresChoice && result.choiceOptions?.length > 0) {
-      game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId, playerNum };
-      const rows = [];
-      const maxPerRow = 5;
-      for (let i = 0; i < result.choiceOptions.length; i++) {
-        if (i % maxPerRow === 0) rows.push(new ActionRowBuilder());
-        const label = String(result.choiceOptions[i]).slice(0, 80);
-        rows[rows.length - 1].addComponents(
-          new ButtonBuilder().setCustomId(`cc_choice_${gameId}_${i}`).setLabel(label).setStyle(ButtonStyle.Secondary)
-        );
-      }
-      const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
-      await handChannel.send({
-        content: `**Choose one** (for **${card}**):`,
-        components: rows,
-      }).catch(() => {});
-      saveGames();
-      return;
-    }
     if (result.applied && result.drewCards?.length) {
       await updateHandVisualMessage(game, playerNum, interaction.client);
       const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');

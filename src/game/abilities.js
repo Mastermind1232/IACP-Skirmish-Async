@@ -1058,12 +1058,10 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Became Hidden.' };
   }
 
-  // ccEffect: roundDefenseBonusBlock / roundDefenseBonusEvade (Take Position, Survival Instincts) — until end of round
+  // ccEffect: roundDefenseBonusBlock / roundDefenseBonusEvade (Take Position, Survival Instincts, Cavalry Charge) — until end of round
   if (entry.type === 'ccEffect' && ((typeof entry.roundDefenseBonusBlock === 'number' && entry.roundDefenseBonusBlock > 0) || (typeof entry.roundDefenseBonusEvade === 'number' && entry.roundDefenseBonusEvade > 0))) {
-    const { game, playerNum, dcMessageMeta } = context;
-    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.roundDefenseBonusBlock = game.roundDefenseBonusBlock || {};
     game.roundDefenseBonusEvade = game.roundDefenseBonusEvade || {};
     const block = entry.roundDefenseBonusBlock || 0;
@@ -1081,10 +1079,8 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: roundAttackSurgeBonus (e.g. Smuggled Supplies) — until end of round, +N Surge when attacking
   if (entry.type === 'ccEffect' && typeof entry.roundAttackSurgeBonus === 'number' && entry.roundAttackSurgeBonus > 0) {
-    const { game, playerNum, dcMessageMeta } = context;
-    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.roundAttackSurgeBonus = game.roundAttackSurgeBonus || {};
     const n = entry.roundAttackSurgeBonus;
     game.roundAttackSurgeBonus[playerNum] = (game.roundAttackSurgeBonus[playerNum] || 0) + n;

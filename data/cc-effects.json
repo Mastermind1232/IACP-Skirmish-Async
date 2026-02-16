@@ -228,7 +228,8 @@
       "playableBy": "Captain Terro",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. During this round, you gain +1 Block, and while a friendly TROOPER within 3 spaces is attacking, apply +1 Hit to the attack results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Cavalry Charge"
     },
     "Celebration": {
       "cost": 0,
@@ -1180,7 +1181,8 @@
       "playableBy": "SCUM",
       "timing": "afterHostileFigureSuffersDamage",
       "effect": "Use after a hostile figure suffers Damage. You gain 3 movement points.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Opportunistic"
     },
     "Shoot the Messenger": {
       "cost": 0,
@@ -1575,7 +1577,8 @@
       "playableBy": "Mara Jade",
       "timing": "afterAttackTargetingYouResolved",
       "effect": "Use after an attack targeting you resolves. Perform 1 of the following based on your affiliation: \n\n- IMPERIAL: The attacker suffers 3 Damage\n- SCUM: You gain 3 VPs\n- REBEL:  You recover 3 Damage",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Reactive Loyalties"
     },
     "Rebel Graffiti": {
       "cost": 0,
