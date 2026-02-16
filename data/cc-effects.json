@@ -6,21 +6,24 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. During this round, apply +5 Health to each of your WOOKIES.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "cc:adrenaline"
     },
     "Advance Warning": {
       "cost": 0,
       "playableBy": "LEADER",
       "timing": "duringActivation",
       "effect": "Use during your activation. You and an adjacent friendly figure each gain 1 movement point.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "cc:advance_warning"
     },
     "Against the Odds": {
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "endOfRound",
       "effect": "Use at the end of a round. If your opponent has at least 8 more VPs than you, choose up to 3 of your figures. Those figures become Focused.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "cc:against_the_odds"
     },
     "All in a Day's Work": {
       "cost": 3,
@@ -111,7 +114,8 @@
       "playableBy": "SMUGGLER",
       "timing": "specialAction",
       "effect": "Special Action: Draw 2 Command cards. Then discard 1 card from your hand. You gain VPs equal to the cost of the discarded card.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Black Market Prices"
     },
     "Bladestorm": {
       "cost": 1,
@@ -741,7 +745,8 @@
       "playableBy": "Taron Malicos",
       "timing": "startOfActivation",
       "effect": "Use at the start of your activation to draw 1 Command card, then discard 1 or more Command cards from your hand. You recover 1 Damage, gain 1 movement point, and discard 1 HARMFUL condition for each card discarded.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Forbidden Knowledge"
     },
     "Force Drain": {
       "cost": 1,
@@ -1441,7 +1446,8 @@
       "playableBy": "Any Figure",
       "timing": "specialAction",
       "effect": "Special Action: Draw 2 Command cards. Then, if you are not a LEADER, discard 1 of those cards.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Planning"
     },
     "Positioning Advantage": {
       "cost": 0,
@@ -1924,7 +1930,8 @@
       "playableBy": "Leia Organa",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Draw 1 Command card. During this round, you may play Command cards whose restriction matches the name of another FORCE USER Deployment card in your army.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "There is Another"
     },
     "There Is No Try": {
       "cost": 2,
