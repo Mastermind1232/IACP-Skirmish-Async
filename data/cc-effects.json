@@ -665,7 +665,8 @@
       "playableBy": "BRAWLER",
       "timing": "specialAction",
       "effect": "Special Action: Move up to 2 spaces, then perform an attack targeting an adjacent figure or object.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Face to Face"
     },
     "Fatal Deception": {
       "cost": 1,
@@ -943,7 +944,8 @@
       "playableBy": "HUNTER",
       "timing": "duringAttack",
       "effect": "Use while attacking a figure to choose 1 defense die and remove its results from the defense results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Heightened Reflexes"
     },
     "Hidden Trap": {
       "cost": 2,
@@ -2030,7 +2032,8 @@
       "playableBy": "HUNTER or SMUGGLER",
       "timing": "duringActivation",
       "effect": "Use during your activation. A hostile figure within 3 spaces and in line of sight suffers 1 Strain and becomes Weakened.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Toxic Dart"
     },
     "Trandoshan Terror": {
       "cost": 1,
