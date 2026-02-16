@@ -811,6 +811,24 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Became Focused.' };
   }
 
+  // ccEffect: applyHide only (Hide in Plain Sight, Guerilla Warfare) — apply Hide to activating figures during activation
+  if (entry.type === 'ccEffect' && entry.applyHide && !entry.applyFocus) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found for activation.' };
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of figureKeys) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Hide')) game.figureConditions[fk] = [...existing, 'Hide'];
+    }
+    return { applied: true, logMessage: 'Became Hidden.' };
+  }
+
   // ccEffect: nextAttackBonusSurgeAbilities (Cruel Strike) — next attack gains surge options; consumed when combat starts
   if (entry.type === 'ccEffect' && Array.isArray(entry.nextAttackBonusSurgeAbilities) && entry.nextAttackBonusSurgeAbilities.length > 0) {
     const { game, playerNum, dcMessageMeta } = context;

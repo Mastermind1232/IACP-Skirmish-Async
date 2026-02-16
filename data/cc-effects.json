@@ -906,7 +906,8 @@
       "playableBy": "Saw Gerrera",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Each friendly figure with no other friendly figures within 2 spaces gains 1 Block token and becomes Hidden.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Guerilla Warfare"
     },
     "Guild Programming": {
       "cost": 2,
@@ -971,7 +972,8 @@
       "playableBy": "SPY",
       "timing": "specialAction",
       "effect": "Special Action: Until the end of the round, you cannot be the target of an attack.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Hide in Plain Sight"
     },
     "Hit and Run": {
       "cost": 1,
@@ -1153,7 +1155,8 @@
       "playableBy": "TROOPER or TECHNICIAN",
       "timing": "specialAction",
       "effect": "Special Action: Choose a space within 2 spaces. Place 1 energy shield in that space, then a friendly figure within 2 spaces of the chosen space gains 2 movement points. Discard that energy shield at the end of the next round.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Smoke Grenade"
     },
     "Take Cover": {
       "cost": 0,
