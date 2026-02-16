@@ -372,6 +372,57 @@ test('resolveAbility Heart of Freedom applies discard 1 HARMFUL, recover 2, gain
   assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
 });
 
+test('resolveAbility Price of Glory applies discard 1 HARMFUL and gain 2 MP', () => {
+  const msgId = 'msg-pog';
+  const game = {
+    gameId: 'g-pog',
+    dcActionsData: { [msgId]: {} },
+    figurePositions: { 1: { 'Stormtroopers-1-0': 'a1' } },
+    figureConditions: { 'Stormtroopers-1-0': ['Weaken'] },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-pog', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 1]' }]]);
+  const result = resolveAbility('Price of Glory', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('HARMFUL'));
+  assert.ok(result.logMessage?.includes('MP'));
+  assert.deepStrictEqual(game.figureConditions['Stormtroopers-1-0'], []);
+  assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
+});
+
+test('resolveAbility Worth Every Credit applies discard 1 HARMFUL and gain 2 MP', () => {
+  const msgId = 'msg-wec';
+  const game = {
+    gameId: 'g-wec',
+    dcActionsData: { [msgId]: {} },
+    figurePositions: { 1: { 'Bossk-1-0': 'a1' } },
+    figureConditions: { 'Bossk-1-0': ['Bleed'] },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-wec', playerNum: 1, dcName: 'Bossk', displayName: 'Bossk [DG 1]' }]]);
+  const result = resolveAbility('Worth Every Credit', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('HARMFUL'));
+  assert.ok(result.logMessage?.includes('MP'));
+  assert.deepStrictEqual(game.figureConditions['Bossk-1-0'], []);
+  assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
+});
+
+test('resolveAbility Camouflage applies Hide to defender when attack declared on them', () => {
+  const combat = {
+    attackerPlayerNum: 1,
+    defenderPlayerNum: 2,
+    target: { figureKey: 'Stormtroopers-2-0', label: 'Stormtroopers [DG 1]' },
+  };
+  const game = {
+    gameId: 'g-cam',
+    pendingCombat: combat,
+    figureConditions: {},
+  };
+  const result = resolveAbility('Camouflage', { game, playerNum: 2, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(result.logMessage, 'Became Hidden.');
+  assert.strictEqual(game.figureConditions['Stormtroopers-2-0']?.includes('Hide'), true);
+});
+
 test('resolveAbility Rally with no harmful conditions returns applied', () => {
   const msgId = 'msg-rally2';
   const game = {

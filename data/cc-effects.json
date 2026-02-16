@@ -206,7 +206,8 @@
       "playableBy": "Any Figure",
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when an attack targeting you is declared. You become Hidden.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Camouflage"
     },
     "Capitalize": {
       "cost": 1,

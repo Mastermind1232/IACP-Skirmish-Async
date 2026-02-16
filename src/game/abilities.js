@@ -121,8 +121,8 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: msg };
   }
 
-  // ccEffect: Heart of Freedom combo — discard up to N HARMFUL + recover + MP (must run before mpBonus)
-  if (entry.type === 'ccEffect' && typeof entry.discardUpToNHarmful === 'number' && typeof entry.recoverDamage === 'number' && typeof entry.mpBonus === 'number') {
+  // ccEffect: discardUpToNHarmful + mpBonus combo (optionally + recoverDamage) — Heart of Freedom, Price of Glory
+  if (entry.type === 'ccEffect' && typeof entry.discardUpToNHarmful === 'number' && typeof entry.mpBonus === 'number') {
     const { game, playerNum, dcMessageMeta, dcHealthState } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play at start of your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
@@ -151,7 +151,7 @@ export function resolveAbility(abilityId, context) {
       }
     }
     let recovered = 0;
-    if (dcHealthState && entry.recoverDamage > 0) {
+    if (dcHealthState && typeof entry.recoverDamage === 'number' && entry.recoverDamage > 0) {
       const healthState = dcHealthState.get(msgId) || [];
       for (let i = 0; i < healthState.length && recovered < entry.recoverDamage; i++) {
         const entry_ = healthState[i];
@@ -499,6 +499,23 @@ export function resolveAbility(abilityId, context) {
       applied: true,
       logMessage: `+${n} Surge added to this attack.`,
     };
+  }
+
+  // ccEffect: applyHideWhenDefending (Camouflage) — apply Hide to defender when attack declared on you
+  if (entry.type === 'ccEffect' && entry.applyHideWhenDefending) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    const defenderPlayerNum = cbt?.attackerPlayerNum ? (cbt.attackerPlayerNum === 1 ? 2 : 1) : null;
+    if (!game || !playerNum || !cbt?.target?.figureKey || defenderPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play when an attack targeting you is declared (as the defender).' };
+    }
+    const figureKey = cbt.target.figureKey;
+    game.figureConditions = game.figureConditions || {};
+    const existing = game.figureConditions[figureKey] || [];
+    if (!existing.includes('Hide')) {
+      game.figureConditions[figureKey] = [...existing, 'Hide'];
+    }
+    return { applied: true, logMessage: 'Became Hidden.' };
   }
 
   // ccEffect: mpAfterAttack (Hit and Run) — set pending; MP added when combat resolves

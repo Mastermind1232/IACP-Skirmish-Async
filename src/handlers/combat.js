@@ -109,6 +109,7 @@ export async function handleAttackTarget(interaction, ctx) {
   game.pendingCombat = {
     gameId: game.gameId,
     attackerPlayerNum,
+    defenderPlayerNum: attackerPlayerNum === 1 ? 2 : 1,
     attackerMsgId: msgId,
     attackerDcName: meta.dcName,
     attackerDisplayName,
