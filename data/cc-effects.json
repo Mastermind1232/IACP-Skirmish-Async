@@ -319,7 +319,7 @@
       "playableBy": "Any Figure",
       "timing": "whenAnotherFriendlyTrooperDeclaresAttackTargetingInYourLineOfSight",
       "effect": "Use when another friendly TROOPER declares an attack targeting a target in your line of sight. If you have the Ranged attack type, add 1 red die to the attack pool. You become Stunned.",
-      "effectType": "manual"
+      "abilityId": "Concentrated Fire"
     },
     "Coordinated Attack": {
       "cost": 2,

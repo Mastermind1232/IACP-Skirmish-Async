@@ -733,6 +733,15 @@ test('resolveAbility Trandoshan Terror adds 1 yellow attack die', () => {
   assert.deepStrictEqual(combat.attackBonusDiceColors, ['yellow']);
 });
 
+test('resolveAbility Concentrated Fire adds 1 red attack die', () => {
+  const combat = { attackerPlayerNum: 1, attackerDcName: 'Stormtroopers' };
+  const game = { gameId: 'g-cf', pendingCombat: combat };
+  const result = resolveAbility('Concentrated Fire', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(combat.attackBonusDice, 1);
+  assert.deepStrictEqual(combat.attackBonusDiceColors, ['red']);
+});
+
 test('resolveAbility Stroke of Brilliance adds +2 Block and +1 Evade', () => {
   const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, target: { figureKey: 'Greedo-2-0' } };
   const game = { gameId: 'g-sb', pendingCombat: combat };
