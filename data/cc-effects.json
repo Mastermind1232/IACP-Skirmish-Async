@@ -564,7 +564,8 @@
       "playableBy": "Any Figure",
       "timing": "whenYouDeclareAttack",
       "effect": "Use when you declare an attack. If the target figure did not have line of sight to you at the start of your activation, remove 1 die from its defense pool.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Element of Surprise"
     },
     "Elusive": {
       "cost": 1,
@@ -1221,7 +1222,8 @@
       "playableBy": "LEADER",
       "timing": "specialAction",
       "effect": "Special Action: Choose up to 2 friendly figures adjacent to you. Those figures become Focused.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Inspiring Speech"
     },
     "Intelligence Leak": {
       "cost": 1,
@@ -1865,7 +1867,8 @@
       "playableBy": "Greedo",
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when an attack targeting you is declared. Apply +2 Block and +1 Evade to the defense results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Stroke of Brilliance"
     },
     "Supercharge": {
       "cost": 1,
@@ -1985,7 +1988,8 @@
       "playableBy": "Bossk",
       "timing": "whenYouDeclareIndiscriminateFire",
       "effect": "Use when you declare \"Indiscriminate Fire\". Add 1 yellow die to the dice pool.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Trandoshan Terror"
     },
     "Transmit the Plans": {
       "cost": 0,

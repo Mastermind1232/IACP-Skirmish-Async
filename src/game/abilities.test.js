@@ -715,3 +715,29 @@ test('resolveAbility Cruel Strike sets nextAttackBonusSurgeAbilities', () => {
   assert.deepStrictEqual(game.nextAttackBonusSurgeAbilities[1], ['pierce 1, weaken']);
   assert.ok(result.logMessage?.toLowerCase().includes('pierce') && result.logMessage?.toLowerCase().includes('weaken'));
 });
+
+test('resolveAbility Element of Surprise adds defensePoolRemoveMax', () => {
+  const combat = { attackerPlayerNum: 1, attackerDcName: 'Nexu', target: { figureKey: 'Stormtroopers-2-0' } };
+  const game = { gameId: 'g-eos', pendingCombat: combat };
+  const result = resolveAbility('Element of Surprise', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(combat.defensePoolRemoveMax, 1);
+});
+
+test('resolveAbility Trandoshan Terror adds 1 yellow attack die', () => {
+  const combat = { attackerPlayerNum: 1, attackerDcName: 'Bossk', attackInfo: { dice: ['green'], range: [1, 3] } };
+  const game = { gameId: 'g-tt', pendingCombat: combat };
+  const result = resolveAbility('Trandoshan Terror', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(combat.attackBonusDice, 1);
+  assert.deepStrictEqual(combat.attackBonusDiceColors, ['yellow']);
+});
+
+test('resolveAbility Stroke of Brilliance adds +2 Block and +1 Evade', () => {
+  const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, target: { figureKey: 'Greedo-2-0' } };
+  const game = { gameId: 'g-sb', pendingCombat: combat };
+  const result = resolveAbility('Stroke of Brilliance', { game, playerNum: 2, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(combat.bonusBlock, 2);
+  assert.strictEqual(combat.bonusEvade, 1);
+});

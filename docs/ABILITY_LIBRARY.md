@@ -53,6 +53,10 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 - Add `"focusGainToUpToNFigures": 3` with `vpCondition: { opponentHasAtLeastMore: 8 }` — end of round; if opponent has ≥8 more VPs, apply Focus to up to N of your figures. Auto when you have ≤N figures; manual when >N (choose which).
 - Example: **Against the Odds**.
 
+**Focus to adjacent figures (focusGainToAdjacentUpToN)**
+
+- Add `"focusGainToAdjacentUpToN": 2` — during activation, apply Focus to up to N friendly figures adjacent to the activating figure(s). Auto when adjacent count ≤N; manual when >N. Uses map adjacency. Example: **Inspiring Speech** (up to 2 adjacent friendlies become Focused).
+
 **MP after attack (mpAfterAttack)**
 
 - Add `"mpAfterAttack": N` — Special Action: perform an attack; after it resolves, gain N movement points. Sets `game.hitAndRunPendingMp`; `finishCombatResolution` in index.js adds MP when the attacker's combat resolves.
@@ -91,12 +95,13 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 **Attack bonus dice (attackBonusDice)**
 
 - Add `"attackBonusDice": N` — when declaring attack, as the attacker, add N attack dice to the attack pool. Uses primary die color unless `attackBonusDiceColor` is set.
-- Optional `"attackBonusDiceColor": "red"` (or "blue", "yellow", etc.) — use this color for the bonus dice. Example: **Tools for the Job** (add 1 attack die), **Wild Attack** (add 1 red die).
+- Optional `"attackBonusDiceColor": "red"` (or "blue", "yellow", etc.) — use this color for the bonus dice. Example: **Tools for the Job** (add 1 attack die), **Wild Attack** (add 1 red die), **Trandoshan Terror** (add 1 yellow die when declaring Indiscriminate Fire).
 
-**Defense bonus block (applyDefenseBonusBlock)**
+**Defense bonus block / evade (applyDefenseBonusBlock, applyDefenseBonusEvade)**
 
 - Add `"applyDefenseBonusBlock": N` — when defending, add +N Block to defense results. Stored in `combat.bonusBlock`.
-- Optional `"defenseBonusOnlyWhenNotAttackerActivation": true` — only apply when the attack is NOT during the attacker's activation (e.g. Overwatch). Example: **Brace Yourself** (+2 Block).
+- Optional `"applyDefenseBonusEvade": N` — add +N Evade to defense (hit check). Stored in `combat.bonusEvade`. Can be combined with Block.
+- Optional `"defenseBonusOnlyWhenNotAttackerActivation": true` — only apply when the attack is NOT during the attacker's activation (e.g. Overwatch). Example: **Brace Yourself** (+2 Block), **Stroke of Brilliance** (+2 Block, +1 Evade).
 
 **Defense bonus dice (defenseBonusDice)**
 
@@ -108,7 +113,7 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 
 **Defense pool remove (defensePoolRemoveMax)**
 
-- Add `"defensePoolRemoveMax": N` — when declaring attack, the attacker removes up to N dice from the defender's defense pool. Stored in `combat.defensePoolRemoveMax`. Example: **Wild Fire** (remove up to 2 dice).
+- Add `"defensePoolRemoveMax": N` — when declaring attack, the attacker removes up to N dice from the defender's defense pool. Stored in `combat.defensePoolRemoveMax`. Example: **Wild Fire** (remove up to 2 dice), **Element of Surprise** (remove 1 die; LOS condition: target had no LOS at start of activation — confirm manually).
 
 **Defense pool remove all (defensePoolRemoveAll)**
 
@@ -151,7 +156,7 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 - Add `"discardUpToNHarmful": N`, `"recoverDamage": M`, `"mpBonus": K` — at start of activation: discard up to N HARMFUL conditions, recover M damage, gain K MP. Requires dcMessageMeta, dcHealthState (from cc-hand or dc-play-area).
 - Example: **Heart of Freedom** (discard 1, recover 2, gain 2 MP).
 
-- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fool Me Once** (clear opponent discard; draw 1 if SPY), **Fleet Footed** (+1 MP), **Advance Warning** (+2 MP to you and adjacent), **Force Rush** (+2 MP), **Heart of Freedom** (discard 1 HARMFUL, recover 2, +2 MP), **Price of Glory** (discard 1 HARMFUL, +2 MP; Power Tokens manual), **Worth Every Credit** (discard 1 HARMFUL, +2 MP; VP on defeat manual), **Apex Predator** (+2 MP), **Rank and File** (+1 MP; adjacent TROOPERS manual), **Urgency** (Speed+2 MP), **Focus** (become Focused), **Battle Scars** (Power Token gain), **Rally** (discard HARMFUL conditions), **Against the Odds** (Focus up to 3 if VP condition met), **Hit and Run** (3 MP after attack), **Beatdown** (+1 Hit to next 2 attacks), **Blitz** (+1 Surge during attack), **Positioning Advantage** (+1 Hit), **Deadeye** (+2 Accuracy), **Heavy Ordnance** (+1 Hit vs figure), **Assassinate** (+3 Hits), **Deathblow** (+1 Hit), **Bladestorm** (+1 Surge; blast manual), **Lock On** (+3 Accuracy; -1 Dodge/Evade manual), **Explosive Weaponry** (Blast 1), **Maximum Firepower** (+4 Hit to next attack via nextAttacksBonusHits), **Tools for the Job** (add 1 attack die), **Wild Attack** (+1 red attack die, +1 white defense die), **Wild Fire** (defensePoolRemoveMax), **One in a Million** (defensePoolRemoveAll when not attacker's activation), **Parry** (+1 Block or +1 Evade; automated as +1 Block), **Spinning Kick** (attackBonusSurgeAbilities: Cleave 1, Cleave 2), **Brace Yourself** (+2 Block when not attacker's activation), **Cruel Strike** (next attack gains Surge: Pierce 1, Weaken).
+- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fool Me Once** (clear opponent discard; draw 1 if SPY), **Fleet Footed** (+1 MP), **Advance Warning** (+2 MP to you and adjacent), **Force Rush** (+2 MP), **Heart of Freedom** (discard 1 HARMFUL, recover 2, +2 MP), **Price of Glory** (discard 1 HARMFUL, +2 MP; Power Tokens manual), **Worth Every Credit** (discard 1 HARMFUL, +2 MP; VP on defeat manual), **Apex Predator** (+2 MP), **Rank and File** (+1 MP; adjacent TROOPERS manual), **Urgency** (Speed+2 MP), **Focus** (become Focused), **Battle Scars** (Power Token gain), **Rally** (discard HARMFUL conditions), **Against the Odds** (Focus up to 3 if VP condition met), **Hit and Run** (3 MP after attack), **Beatdown** (+1 Hit to next 2 attacks), **Blitz** (+1 Surge during attack), **Positioning Advantage** (+1 Hit), **Deadeye** (+2 Accuracy), **Heavy Ordnance** (+1 Hit vs figure), **Assassinate** (+3 Hits), **Deathblow** (+1 Hit), **Bladestorm** (+1 Surge; blast manual), **Lock On** (+3 Accuracy; -1 Dodge/Evade manual), **Explosive Weaponry** (Blast 1), **Maximum Firepower** (+4 Hit to next attack via nextAttacksBonusHits), **Tools for the Job** (add 1 attack die), **Wild Attack** (+1 red attack die, +1 white defense die), **Wild Fire** (defensePoolRemoveMax), **One in a Million** (defensePoolRemoveAll when not attacker's activation), **Parry** (+1 Block or +1 Evade; automated as +1 Block), **Spinning Kick** (attackBonusSurgeAbilities: Cleave 1, Cleave 2), **Brace Yourself** (+2 Block when not attacker's activation), **Cruel Strike** (next attack gains Surge: Pierce 1, Weaken), **Element of Surprise** (defensePoolRemoveMax 1), **Inspiring Speech** (Focus up to 2 adjacent), **Trandoshan Terror** (add 1 yellow die), **Stroke of Brilliance** (+2 Block, +1 Evade).
 
 ### Adding a non-surge ability
 
@@ -198,7 +203,7 @@ From **docs/RULES_REFERENCE.md** and **docs/consolidated-rules-raw.txt**:
 ## Progress (~7% of CCs auto; ~90% of those with abilityId)
 
 - **Surge:** 100% — all surge abilities resolved.
-- **CC effects:** 298 total; 49 have abilityId; ~49 fully or partially automated.
+- **CC effects:** 298 total; 53 have abilityId; ~53 fully or partially automated.
 - **CCs with automation:** Draw (6 incl. Planning, Black Market Prices), conditional draw (2), MP bonus (9 incl. Advance Warning), Focus (2 incl. Meditation), Power Token gain (1), Rally (discardHarmfulConditions), Recovery (recoverDamage), Heart of Freedom, Price of Glory, Worth Every Credit (discardUpToNHarmful + mpBonus combo), Apex Predator (Focus + Hide + 2 Power Tokens + 2 MP; recovery on defeat manual), Against the Odds (1), Hit and Run (mpAfterAttack), Beatdown (nextAttacksBonusHits), Maximum Firepower (nextAttacksBonusHits), Size Advantage (nextAttacksBonusHits + nextAttacksBonusConditions; target SMALL manual), Blitz (attackSurgeBonus), Master Operative (applyFocus + attackSurgeBonus), Primary Target (applyFocus + attackBonusHits; highest-cost target manual), Bladestorm (attackSurgeBonus; blast manual), Camouflage (applyHideWhenDefending), Positioning Advantage (attackBonusHits), Assassinate (attackBonusHits), Deathblow (attackBonusHits; +2 vs Ranged manual), Deadeye (attackAccuracyBonus), Lock On (attackAccuracyBonus; -1 Dodge/Evade manual), Heavy Ordnance (attackBonusHits vs figure), Explosive Weaponry (attackBonusBlast), Tools for the Job (attackBonusDice), Wild Attack (attackBonusDice + defenseBonusDiceFromAttacker), Wild Fire (defensePoolRemoveMax), One in a Million (defensePoolRemoveAll when not attacker activation), Parry (applyDefenseBonusBlock; +1 Block default), Spinning Kick (attackBonusSurgeAbilities), Cruel Strike (nextAttackBonusSurgeAbilities), Brace Yourself (applyDefenseBonusBlock; when not attacker's activation), Brace for Impact (defenseBonusDice), Stealth Tactics (defenseBonusDice white), Knowledge and Defense (defenseBonusDice black), Fool Me Once (clearOpponentDiscard; draw 1 if SPY), Honoring the Fallen (attackBonusHitsFromDefeatedFriendly), Black Market Prices (draw 2, discard 1, gain VP = cost), Stealth Tactics (defenseBonusDice white), Knowledge and Defense (defenseBonusDice black).
 
 Phase 2 next: add more `type` values and branches in `resolveAbility` (e.g. more CC “draw N” effects, DC specials by name) so more effects run automatically instead of showing "Resolve manually".

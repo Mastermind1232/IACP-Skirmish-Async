@@ -116,6 +116,22 @@ test('computeCombatResult bonusBlock (Brace Yourself)', () => {
   assert.ok(r.resultText.includes('CC bonus: +2 Block'));
 });
 
+test('computeCombatResult bonusEvade (Stroke of Brilliance)', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 1, dmg: 3, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    bonusEvade: 1,
+  });
+  assert.strictEqual(r.hit, true); // 1 acc >= 0 + 1 evade
+  const r2 = computeCombatResult({
+    attackRoll: { acc: 0, dmg: 3, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    bonusEvade: 1,
+  });
+  assert.strictEqual(r2.hit, false); // 0 acc < 1 evade
+  assert.ok(r.resultText.includes('CC bonus: +1 Evade'));
+});
+
 test('computeCombatResult surge conditions in text', () => {
   const r = computeCombatResult({
     attackRoll: { acc: 2, dmg: 1, surge: 1 },

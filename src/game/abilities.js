@@ -14,6 +14,7 @@ function getStatsForDc(dcName) {
   })();
 }
 import { parseSurgeEffect } from './combat.js';
+import { getFiguresAdjacentToTarget } from './movement.js';
 
 /** Get ability metadata by id. Returns { type, surgeCost?, label?, ... } or null. */
 export function getAbility(id) {
@@ -375,6 +376,39 @@ export function resolveAbility(abilityId, context) {
     for (let i = 0; i < toAdd; i++) game.figurePowerTokens[fk].push('Wild');
     const msg = toAdd === 1 ? 'Gained 1 Power Token.' : `Gained ${toAdd} Power Tokens.`;
     return { applied: true, logMessage: msg };
+  }
+
+  // ccEffect: focusGainToAdjacentUpToN (Inspiring Speech) — Focus up to N friendly figures adjacent to activating figure(s)
+  if (entry.type === 'ccEffect' && typeof entry.focusGainToAdjacentUpToN === 'number' && entry.focusGainToAdjacentUpToN > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (activatingKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const mapId = game.selectedMap?.id;
+    if (!mapId) return { applied: false, manualMessage: 'Resolve manually: no map selected.' };
+    const adjacentSet = new Set();
+    for (const fk of activatingKeys) {
+      const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+      for (const { figureKey, playerNum: p } of adj) {
+        if (p === playerNum && !activatingKeys.includes(figureKey)) adjacentSet.add(figureKey);
+      }
+    }
+    const adjacent = [...adjacentSet];
+    const n = Math.min(entry.focusGainToAdjacentUpToN, adjacent.length);
+    if (adjacent.length === 0) return { applied: true, logMessage: 'No adjacent friendly figures.' };
+    if (adjacent.length > entry.focusGainToAdjacentUpToN) {
+      return { applied: false, manualMessage: `Resolve manually: choose up to ${entry.focusGainToAdjacentUpToN} of ${adjacent.length} adjacent friendly figures to become Focused.` };
+    }
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of adjacent) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+    }
+    return { applied: true, logMessage: `${adjacent.length} adjacent figure(s) became Focused.` };
   }
 
   // ccEffect: Against the Odds — end of round, VP condition, Focus up to 3 figures
@@ -779,8 +813,8 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: applyDefenseBonusBlock (Brace Yourself) — +N Block when defending, only if not attacker's activation
-  if (entry.type === 'ccEffect' && typeof entry.applyDefenseBonusBlock === 'number' && entry.applyDefenseBonusBlock > 0) {
+  // ccEffect: applyDefenseBonusBlock and/or applyDefenseBonusEvade (Brace Yourself, Stroke of Brilliance)
+  if (entry.type === 'ccEffect' && ((typeof entry.applyDefenseBonusBlock === 'number' && entry.applyDefenseBonusBlock > 0) || (typeof entry.applyDefenseBonusEvade === 'number' && entry.applyDefenseBonusEvade > 0))) {
     const { game, playerNum, combat } = context;
     const cbt = combat || game?.pendingCombat || game?.combat;
     const defenderPlayerNum = cbt?.attackerPlayerNum ? (cbt.attackerPlayerNum === 1 ? 2 : 1) : null;
@@ -793,10 +827,16 @@ export function resolveAbility(abilityId, context) {
         return { applied: false, manualMessage: "Resolve manually: +2 Block applies only when it is NOT the attacker's activation (e.g. Overwatch)." };
       }
     }
-    cbt.bonusBlock = (cbt.bonusBlock || 0) + entry.applyDefenseBonusBlock;
+    const block = entry.applyDefenseBonusBlock || 0;
+    const evade = entry.applyDefenseBonusEvade || 0;
+    if (block) cbt.bonusBlock = (cbt.bonusBlock || 0) + block;
+    if (evade) cbt.bonusEvade = (cbt.bonusEvade || 0) + evade;
+    const parts = [];
+    if (block) parts.push(`+${block} Block`);
+    if (evade) parts.push(`+${evade} Evade`);
     return {
       applied: true,
-      logMessage: `+${entry.applyDefenseBonusBlock} Block added to defense results.`,
+      logMessage: `${parts.join(' and ')} added to defense results.`,
     };
   }
 
