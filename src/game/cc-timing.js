@@ -113,6 +113,12 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'whenyoudeclarelightsaberthrow':
       // Hunt Them Down: playable during your activation (honor system: play when declaring Lightsaber Throw)
       return ctx.duringActivation;
+    case 'afterdamage':
+      // Disorient: playable during your activation (honor system: play after hostile with BENEFICIAL suffered damage)
+      return ctx.duringActivation;
+    case 'whenattackdeclaredtargetingfriendlysmallfigurecost10orlesswithin3spaces':
+      // Get Behind Me!: playable during your activation (honor system: play when attack declared on friendly small figure cost ≤10 within 3)
+      return ctx.duringActivation;
     case 'other':
       // Disarm, Dying Lunge: playable during your activation (honor system: play at actual trigger)
       return ctx.duringActivation;
