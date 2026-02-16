@@ -2236,10 +2236,14 @@ async function resolveCombatAfterRolls(game, combat, client) {
     condPending.count -= 1;
     if (condPending.count <= 0) delete game.nextAttacksBonusConditions[combat.attackerPlayerNum];
   }
+  const defenderPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+  const roundBlock = game.roundDefenseBonusBlock?.[defenderPlayerNum] || 0;
+  const roundEvade = game.roundDefenseBonusEvade?.[defenderPlayerNum] || 0;
+  if (roundBlock) combat.bonusBlock = (combat.bonusBlock || 0) + roundBlock;
+  if (roundEvade) combat.bonusEvade = (combat.bonusEvade || 0) + roundEvade;
   const { hit, damage, resultText } = computeCombatResult(combat);
   const totalBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
   const attackerPlayerNum = combat.attackerPlayerNum;
-  const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
   const ownerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
   const targetMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, combat.target.figureKey);
   const tm = combat.target.figureKey.match(/-(\d+)-(\d+)$/);

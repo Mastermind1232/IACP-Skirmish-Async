@@ -1586,7 +1586,8 @@
       "playableBy": "LEADER",
       "timing": "specialAction",
       "effect": "Special Action: Discard all HARMFUL conditions from adjacent friendly figures.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Regroup"
     },
     "Reinforcements": {
       "cost": 2,
@@ -1889,7 +1890,8 @@
       "playableBy": "CREATURE",
       "timing": "startOfActivation",
       "effect": "Use at the start of your activation. Until the end of the round, apply +1 Block and +1 Evade to your defense results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Survival Instincts"
     },
     "Take it Down": {
       "cost": 3,
@@ -1903,7 +1905,8 @@
       "playableBy": "Non-Massive GUARDIAN or VEHICLE",
       "timing": "duringActivation",
       "effect": "Use during your activation. During this round, apply +1 Block to your defense results and you cannot be pushed, except by MASSIVE figures.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Take Position"
     },
     "Targeting Network": {
       "cost": 0,

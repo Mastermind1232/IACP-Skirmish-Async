@@ -468,6 +468,44 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'No damage to recover.' };
   }
 
+  // ccEffect: discardHarmfulFromAdjacentFigures (Regroup) — discard Stun, Weaken, Bleed from adjacent friendly figures
+  if (entry.type === 'ccEffect' && entry.discardHarmfulFromAdjacentFigures) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (activatingKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const mapId = game.selectedMap?.id;
+    if (!mapId) return { applied: false, manualMessage: 'Resolve manually: no map selected.' };
+    const adjacentSet = new Set();
+    for (const fk of activatingKeys) {
+      const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+      for (const { figureKey, playerNum: p } of adj) {
+        if (p === playerNum && !activatingKeys.includes(figureKey)) adjacentSet.add(figureKey);
+      }
+    }
+    const adjacent = [...adjacentSet];
+    if (adjacent.length === 0) return { applied: true, logMessage: 'No adjacent friendly figures.' };
+    const HARMFUL = ['Stun', 'Weaken', 'Bleed'];
+    game.figureConditions = game.figureConditions || {};
+    let discarded = 0;
+    for (const fk of adjacent) {
+      const existing = game.figureConditions[fk] || [];
+      const kept = existing.filter((c) => !HARMFUL.includes(c));
+      if (kept.length < existing.length) {
+        game.figureConditions[fk] = kept.length ? kept : [];
+        discarded += existing.length - kept.length;
+      }
+    }
+    return {
+      applied: true,
+      logMessage: discarded > 0 ? `Discarded ${discarded} HARMFUL condition(s) from ${adjacent.length} adjacent figure(s).` : 'No HARMFUL conditions on adjacent figures.',
+    };
+  }
+
   // ccEffect: discardHarmfulConditions (Rally) — discard Stun, Weaken, Bleed from activating figures
   if (entry.type === 'ccEffect' && entry.discardHarmfulConditions) {
     const { game, playerNum, dcMessageMeta } = context;
@@ -855,6 +893,27 @@ export function resolveAbility(abilityId, context) {
       game.figureConditions[figureKey] = [...existing, 'Hide'];
     }
     return { applied: true, logMessage: 'Became Hidden.' };
+  }
+
+  // ccEffect: roundDefenseBonusBlock / roundDefenseBonusEvade (Take Position, Survival Instincts) — until end of round
+  if (entry.type === 'ccEffect' && ((typeof entry.roundDefenseBonusBlock === 'number' && entry.roundDefenseBonusBlock > 0) || (typeof entry.roundDefenseBonusEvade === 'number' && entry.roundDefenseBonusEvade > 0))) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.roundDefenseBonusBlock = game.roundDefenseBonusBlock || {};
+    game.roundDefenseBonusEvade = game.roundDefenseBonusEvade || {};
+    const block = entry.roundDefenseBonusBlock || 0;
+    const evade = entry.roundDefenseBonusEvade || 0;
+    if (block) game.roundDefenseBonusBlock[playerNum] = (game.roundDefenseBonusBlock[playerNum] || 0) + block;
+    if (evade) game.roundDefenseBonusEvade[playerNum] = (game.roundDefenseBonusEvade[playerNum] || 0) + evade;
+    const parts = [];
+    if (block) parts.push(`+${block} Block`);
+    if (evade) parts.push(`+${evade} Evade`);
+    return {
+      applied: true,
+      logMessage: `Until end of round, apply ${parts.join(' and ')} when defending.`,
+    };
   }
 
   // ccEffect: mpAfterAttack (Hit and Run) — set pending; MP added when combat resolves

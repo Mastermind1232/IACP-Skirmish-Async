@@ -125,6 +125,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
   const prevInitiative = game.initiativePlayerId;
   game.initiativePlayerId = prevInitiative === game.player1Id ? game.player2Id : game.player1Id;
   game.currentRound = (game.currentRound || 1) + 1;
+  game.roundDefenseBonusBlock = {};
+  game.roundDefenseBonusEvade = {};
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client });
   }

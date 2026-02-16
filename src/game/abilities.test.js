@@ -741,3 +741,37 @@ test('resolveAbility Stroke of Brilliance adds +2 Block and +1 Evade', () => {
   assert.strictEqual(combat.bonusBlock, 2);
   assert.strictEqual(combat.bonusEvade, 1);
 });
+
+test('resolveAbility Regroup discards HARMFUL from adjacent figures', () => {
+  const msgId = 'msg-r';
+  const game = {
+    gameId: 'g-r',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: { 'Leader-1-0': 'o8', 'Trooper-1-0': 'p8' }, 2: {} },
+    figureConditions: { 'Trooper-1-0': ['Stun'] },
+    dcActionsData: { [msgId]: {} },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-r', playerNum: 1, dcName: 'Leader', displayName: 'Leader [DG 1]' }]]);
+  const result = resolveAbility('Regroup', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(game.figureConditions['Trooper-1-0'], []);
+});
+
+test('resolveAbility Take Position sets roundDefenseBonusBlock', () => {
+  const msgId = 'msg-tp';
+  const game = { gameId: 'g-tp', dcActionsData: { [msgId]: {} } };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-tp', playerNum: 1, dcName: 'Guardian', displayName: 'Guard [DG 1]' }]]);
+  const result = resolveAbility('Take Position', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.roundDefenseBonusBlock?.[1], 1);
+});
+
+test('resolveAbility Survival Instincts sets roundDefenseBonusBlock and Evade', () => {
+  const msgId = 'msg-si';
+  const game = { gameId: 'g-si', dcActionsData: { [msgId]: {} } };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-si', playerNum: 2, dcName: 'Nexu', displayName: 'Nexu [DG 1]' }]]);
+  const result = resolveAbility('Survival Instincts', { game, playerNum: 2, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.roundDefenseBonusBlock?.[2], 1);
+  assert.strictEqual(game.roundDefenseBonusEvade?.[2], 1);
+});
