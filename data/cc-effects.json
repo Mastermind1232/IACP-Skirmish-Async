@@ -490,9 +490,10 @@
     "Dirty Trick": {
       "cost": 2,
       "playableBy": "SMUGGLER or HUNTER",
-      "timing": "other",
+      "timing": "whenHostileFigureEntersAdjacentSpace",
       "effect": "Use when a hostile figure enters an adjacent space. That figure must choose to either suffer 3 Strain or become Stunned.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Dirty Trick"
     },
     "Disable": {
       "cost": 2,
@@ -643,7 +644,8 @@
       "playableBy": "Onar Koma",
       "timing": "whenFriendlyFigureWithin2SpacesSuffers3PlusDamage",
       "effect": "Use when another friendly figure within 2 spaces suffers 3 or more Damage. Move up to 2 spaces, then perform an attack.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Extra Protection"
     },
     "Face Me!": {
       "cost": 1,
@@ -781,7 +783,8 @@
       "playableBy": "FORCE USER",
       "timing": "specialAction",
       "effect": "Special Action: Move up to 5 spaces. During this movement, you gain MOBILE. You cannot end your movement in a space that contains blocking or impassable terrain.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Force Jump"
     },
     "Force Lightning": {
       "cost": 3,
