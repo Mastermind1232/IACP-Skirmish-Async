@@ -814,7 +814,8 @@
       "playableBy": "Thrawn",
       "timing": "duringActivation",
       "effect": "Use during your activation to look at the top 2 Command cards of your opponent's deck and discard 1 of those cards. If its cost is 1 or less, draw 1 Command card.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Foresee"
     },
     "Forward March": {
       "cost": 1,
@@ -1158,7 +1159,8 @@
       "playableBy": "Boba Fett",
       "timing": "duringActivation",
       "effect": "Use during your activation to choose 1 of the following:\n- Gain 4 movement points\n- Perform an attack without spending an action",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Mandalorian Tactics"
     },
     "Maximum Firepower": {
       "cost": 3,
@@ -1498,7 +1500,8 @@
       "playableBy": "4-LOM",
       "timing": "whenYouHaveSufferedDamageEqualToYourHealth",
       "effect": "Use when you have suffered Damage equal to your Health. Instead of being defeated, recover 1 Damage. Until the end of the game, you lose 'Programming Override' and 'Shared Intuition'.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Preservation Protocol"
     },
     "Price of Glory": {
       "cost": 2,

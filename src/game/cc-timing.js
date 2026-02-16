@@ -86,6 +86,9 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
       return ctx.duringAttack;
     case 'afterattacktargetingyouresolved':
       return ctx.duringAttack && ctx.isDefender;
+    case 'whenyouhavesuffereddamageequaltoyourhealth':
+      // Preservation Protocol: playable during your activation (honor system: only when at 0 health)
+      return ctx.duringActivation;
     case 'other':
     default:
       return false;
