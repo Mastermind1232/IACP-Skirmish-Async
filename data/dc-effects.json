@@ -617,8 +617,9 @@
         "damage 1, accuracy 1"
       ],
       "attachment": false,
-      "affiliation": "Scum",
-      "elite": true
+      "elite": true,
+      "unique": true,
+      "affiliation": "Scum"
     },
     "Agent Blaise": {
       "abilityText": "Adapt: The first time your opponent plays a Command card each round, choose 1 SPY or TROOPER. That figure becomes Hidden\n\nSurge (Interrogate): Look at your opponent's hand and choose a Command card. You may discard a card of equal or greater cost from your hand to discard the chosen card.",
@@ -649,8 +650,9 @@
         "damage 1"
       ],
       "attachment": false,
-      "affiliation": "Imperial",
-      "elite": true
+      "elite": true,
+      "unique": true,
+      "affiliation": "Imperial"
     },
     "Agent Kallus": {
       "abilityText": "Hunt Dissent: When your opponent plays a Command card, you may distribute 2 Hit Tokens among friendly figures within 1 space. Limit once per round.\n\nFulcrum: At the start of your activation, you may have each player draw 1 Command card.\n\nBo-Rifle: Before you declare an attack, you may treat your attack type as Melee. If you do, replace 1 blue die with 1 red die.",
@@ -715,6 +717,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Ahsoka Tano": {
@@ -1095,6 +1098,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Boba Fett": {
@@ -1194,6 +1198,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "BT-1": {
@@ -1335,6 +1340,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Captain Terro": {
@@ -1366,6 +1372,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "Cara Dune": {
@@ -1797,6 +1804,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Dewback Rider": {
@@ -1861,6 +1869,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Director Krennic": {
@@ -2134,6 +2143,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "Ewok Warrior (Elite)": {
@@ -2195,6 +2205,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Fenn Signis": {
@@ -2229,6 +2240,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Fennec Shand": {
@@ -2295,6 +2307,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "Gaarkhan": {
@@ -2331,6 +2344,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Gamorrean Guard (Elite)": {
@@ -2775,6 +2789,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Hondo Ohnaka": {
@@ -2837,6 +2852,7 @@
       "attachment": false,
       "companion": "Dio",
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "IG-11": {
@@ -2971,6 +2987,7 @@
         "SPY"
       ],
       "cost": 7,
+      "subCost": 4,
       "health": 7,
       "speed": 4,
       "figures": 2,
@@ -3232,6 +3249,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Jyn Odan": {
@@ -3328,6 +3346,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Kayn Somos": {
@@ -3358,6 +3377,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "Ko-Tun Feralo": {
@@ -3391,6 +3411,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Krrsantan": {
@@ -3426,6 +3447,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Kuiil": {
@@ -3522,6 +3544,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Loku Kanoloa": {
@@ -3640,11 +3663,9 @@
         "recover 2",
         "accuracy 2"
       ],
-      "specialAbilityIds": [
-        "luke_saber_strike"
-      ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Luke Skywalker (Jedi Knight)": {
@@ -3833,6 +3854,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Murne Rin": {
@@ -3961,6 +3983,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Onar Koma": {
@@ -4513,6 +4536,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Saska Teft": {
@@ -4805,6 +4829,7 @@
         "cleave 2"
       ],
       "attachment": false,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Snowtrooper (Elite)": {
@@ -5021,6 +5046,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "The Mandalorian, Renegade Hunter": {
@@ -5132,6 +5158,7 @@
         "BRAWLER"
       ],
       "cost": 7,
+      "subCost": 3,
       "health": 6,
       "speed": 4,
       "figures": 2,
@@ -5328,6 +5355,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Vinto Hreeda": {
@@ -5651,6 +5679,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Zuckuss": {
@@ -5786,6 +5815,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "BD-1": {

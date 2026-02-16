@@ -53,6 +53,10 @@ import {
   handleSquadSelect,
   handleIllegalCcIgnore,
   handleIllegalCcUnplay,
+  handleNegationPlay,
+  handleNegationLetResolve,
+  handleCelebrationPlay,
+  handleCelebrationPass,
 } from './cc-hand.js';
 import {
   handleBotmenuArchive,
@@ -128,6 +132,10 @@ register('cc_discard_', handleCcDiscard);
 register('squad_select_', handleSquadSelect);
 register('illegal_cc_ignore_', handleIllegalCcIgnore);
 register('illegal_cc_unplay_', handleIllegalCcUnplay);
+register('negation_play_', handleNegationPlay);
+register('negation_let_resolve_', handleNegationLetResolve);
+register('celebration_play_', handleCelebrationPlay);
+register('celebration_pass_', handleCelebrationPass);
 register('botmenu_archive_', handleBotmenuArchive);
 register('botmenu_kill_', handleBotmenuKill);
 register('botmenu_archive_yes_', handleBotmenuArchiveYes);
@@ -198,6 +206,10 @@ export {
   handleSquadSelect,
   handleIllegalCcIgnore,
   handleIllegalCcUnplay,
+  handleNegationPlay,
+  handleNegationLetResolve,
+  handleCelebrationPlay,
+  handleCelebrationPass,
 } from './cc-hand.js';
 export {
   handleBotmenuArchive,
