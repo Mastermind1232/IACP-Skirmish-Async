@@ -39,7 +39,7 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 
 **Focus**
 
-- `abilityId === "Focus"` — applies Focus condition to all figures in the active DC.
+- `abilityId === "Focus"` or `applyFocus: true` — applies Focus condition to all figures in the active DC. **Meditation** uses `applyFocus` (future attack option manual).
 - `resolveAbility` will mutate `game.player1CcDeck` / `player2CcDeck` and hand, return `{ applied: true, drewCards: [...] }`. The CC handler refreshes the hand message and logs the draw.
 **Power Token gain (powerTokenGain)**
 
@@ -71,6 +71,7 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 
 - Add `"attackBonusHits": N` — during attack, as the attacker, add +N Hit to this attack's results. Stored in `combat.bonusHits`.
 - Example: **Positioning Advantage** (+1 Hit), **Heavy Ordnance** (+1 Hit vs figure; vs object use +2 Hit and Pierce 2 manually), **Assassinate** (+3 Hits; play as first CC, no other CCs — honor rule manually), **Deathblow** (+1 Hit for Melee; +2 if defender has Ranged — manual).
+- Combo with **applyFocus**: `applyFocus: true` + `attackBonusHits: N` — become Focused and add +N Hit. Example: **Primary Target** (target must have highest figure cost — validate manually).
 
 **Attack accuracy bonus (attackAccuracyBonus)**
 
@@ -96,7 +97,12 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 - Add `"recoverDamage": N` — Special Action: the activating figure recovers N damage. Requires dcHealthState and msgId in context (passed when playing CC as special from DC play area).
 - Example: **Recovery** (Recover 2 Damage).
 
-- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fool Me Once** (draw 1 if SPY), **Fleet Footed** (+1 MP), **Advance Warning** (+2 MP to you and adjacent), **Force Rush** (+2 MP), **Heart of Freedom** (+2 MP), **Apex Predator** (+2 MP), **Price of Glory** (+2 MP), **Worth Every Credit** (+2 MP), **Rank and File** (+1 MP; adjacent TROOPERS manual), **Urgency** (Speed+2 MP), **Focus** (become Focused), **Battle Scars** (Power Token gain), **Rally** (discard HARMFUL conditions), **Against the Odds** (Focus up to 3 if VP condition met), **Hit and Run** (3 MP after attack), **Beatdown** (+1 Hit to next 2 attacks), **Blitz** (+1 Surge during attack), **Positioning Advantage** (+1 Hit), **Deadeye** (+2 Accuracy), **Heavy Ordnance** (+1 Hit vs figure), **Assassinate** (+3 Hits), **Deathblow** (+1 Hit), **Bladestorm** (+1 Surge; blast manual), **Lock On** (+3 Accuracy; -1 Dodge/Evade manual), **Explosive Weaponry** (Blast 1), **Maximum Firepower** (+4 Hit to next attack via nextAttacksBonusHits).
+**Heart of Freedom combo (discardUpToNHarmful + recoverDamage + mpBonus)**
+
+- Add `"discardUpToNHarmful": N`, `"recoverDamage": M`, `"mpBonus": K` — at start of activation: discard up to N HARMFUL conditions, recover M damage, gain K MP. Requires dcMessageMeta, dcHealthState (from cc-hand or dc-play-area).
+- Example: **Heart of Freedom** (discard 1, recover 2, gain 2 MP).
+
+- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fool Me Once** (draw 1 if SPY), **Fleet Footed** (+1 MP), **Advance Warning** (+2 MP to you and adjacent), **Force Rush** (+2 MP), **Heart of Freedom** (discard 1 HARMFUL, recover 2, +2 MP), **Apex Predator** (+2 MP), **Price of Glory** (+2 MP), **Worth Every Credit** (+2 MP), **Rank and File** (+1 MP; adjacent TROOPERS manual), **Urgency** (Speed+2 MP), **Focus** (become Focused), **Battle Scars** (Power Token gain), **Rally** (discard HARMFUL conditions), **Against the Odds** (Focus up to 3 if VP condition met), **Hit and Run** (3 MP after attack), **Beatdown** (+1 Hit to next 2 attacks), **Blitz** (+1 Surge during attack), **Positioning Advantage** (+1 Hit), **Deadeye** (+2 Accuracy), **Heavy Ordnance** (+1 Hit vs figure), **Assassinate** (+3 Hits), **Deathblow** (+1 Hit), **Bladestorm** (+1 Surge; blast manual), **Lock On** (+3 Accuracy; -1 Dodge/Evade manual), **Explosive Weaponry** (Blast 1), **Maximum Firepower** (+4 Hit to next attack via nextAttacksBonusHits).
 
 ### Adding a non-surge ability
 
@@ -143,7 +149,7 @@ From **docs/RULES_REFERENCE.md** and **docs/consolidated-rules-raw.txt**:
 ## Progress (~7% of CCs auto; ~90% of those with abilityId)
 
 - **Surge:** 100% — all surge abilities resolved.
-- **CC effects:** 298 total; 35 have abilityId; ~34 fully or partially automated.
-- **CCs with automation:** Draw (4), conditional draw (2), MP bonus (9 incl. Advance Warning), Focus (2), Power Token gain (1), Rally (discardHarmfulConditions), Recovery (recoverDamage), Against the Odds (1), Hit and Run (mpAfterAttack), Beatdown (nextAttacksBonusHits), Maximum Firepower (nextAttacksBonusHits), Size Advantage (nextAttacksBonusHits + nextAttacksBonusConditions; target SMALL manual), Blitz (attackSurgeBonus), Bladestorm (attackSurgeBonus; blast manual), Positioning Advantage (attackBonusHits), Assassinate (attackBonusHits), Deathblow (attackBonusHits; +2 vs Ranged manual), Deadeye (attackAccuracyBonus), Lock On (attackAccuracyBonus; -1 Dodge/Evade manual), Heavy Ordnance (attackBonusHits vs figure), Explosive Weaponry (attackBonusBlast).
+- **CC effects:** 298 total; 37 have abilityId; ~36 fully or partially automated.
+- **CCs with automation:** Draw (4), conditional draw (2), MP bonus (9 incl. Advance Warning), Focus (2 incl. Meditation), Power Token gain (1), Rally (discardHarmfulConditions), Recovery (recoverDamage), Heart of Freedom (discardUpToNHarmful + recoverDamage + mpBonus combo), Against the Odds (1), Hit and Run (mpAfterAttack), Beatdown (nextAttacksBonusHits), Maximum Firepower (nextAttacksBonusHits), Size Advantage (nextAttacksBonusHits + nextAttacksBonusConditions; target SMALL manual), Blitz (attackSurgeBonus), Master Operative (applyFocus + attackSurgeBonus), Primary Target (applyFocus + attackBonusHits; highest-cost target manual), Bladestorm (attackSurgeBonus; blast manual), Positioning Advantage (attackBonusHits), Assassinate (attackBonusHits), Deathblow (attackBonusHits; +2 vs Ranged manual), Deadeye (attackAccuracyBonus), Lock On (attackAccuracyBonus; -1 Dodge/Evade manual), Heavy Ordnance (attackBonusHits vs figure), Explosive Weaponry (attackBonusBlast).
 
 Phase 2 next: add more `type` values and branches in `resolveAbility` (e.g. more CC “draw N” effects, DC specials by name) so more effects run automatically instead of showing "Resolve manually".

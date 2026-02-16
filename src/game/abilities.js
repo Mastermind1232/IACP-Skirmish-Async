@@ -121,6 +121,71 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: msg };
   }
 
+  // ccEffect: Heart of Freedom combo — discard up to N HARMFUL + recover + MP (must run before mpBonus)
+  if (entry.type === 'ccEffect' && typeof entry.discardUpToNHarmful === 'number' && typeof entry.recoverDamage === 'number' && typeof entry.mpBonus === 'number') {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play at start of your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const HARMFUL = ['Stun', 'Weaken', 'Bleed'];
+    const limit = entry.discardUpToNHarmful;
+    let discarded = 0;
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of figureKeys) {
+      if (discarded >= limit) break;
+      const existing = game.figureConditions[fk] || [];
+      const harmful = existing.filter((c) => HARMFUL.includes(c));
+      if (harmful.length > 0) {
+        const toRemove = Math.min(harmful.length, limit - discarded);
+        const kept = [...existing];
+        for (let i = 0; i < toRemove; i++) {
+          const idx = kept.findIndex((c) => HARMFUL.includes(c));
+          if (idx >= 0) kept.splice(idx, 1);
+        }
+        game.figureConditions[fk] = kept.length ? kept : [];
+        discarded += toRemove;
+      }
+    }
+    let recovered = 0;
+    if (dcHealthState && entry.recoverDamage > 0) {
+      const healthState = dcHealthState.get(msgId) || [];
+      for (let i = 0; i < healthState.length && recovered < entry.recoverDamage; i++) {
+        const entry_ = healthState[i];
+        if (!Array.isArray(entry_)) continue;
+        const [cur, max] = entry_;
+        const mx = max ?? cur;
+        if (mx == null || cur == null) continue;
+        const damage = mx - cur;
+        if (damage <= 0) continue;
+        const heal = Math.min(entry.recoverDamage - recovered, damage);
+        healthState[i] = [cur + heal, mx];
+        recovered += heal;
+      }
+      if (recovered > 0) {
+        dcHealthState.set(msgId, healthState);
+        const dcMessageIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const idx = (dcMessageIds || []).indexOf(msgId);
+        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+      }
+    }
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    const mp = entry.mpBonus;
+    bank.total = (bank.total ?? 0) + mp;
+    bank.remaining = (bank.remaining ?? 0) + mp;
+    game.movementBank[msgId] = bank;
+    const parts = [];
+    if (discarded > 0) parts.push(`Discarded ${discarded} HARMFUL condition(s)`);
+    if (recovered > 0) parts.push(`recovered ${recovered} Damage`);
+    parts.push(`gained ${mp} MP`);
+    return { applied: true, logMessage: parts.join(', ') + '.', refreshDcEmbed: recovered > 0 };
+  }
+
   // ccEffect: +N MP (Fleet Footed, Force Rush, etc.) — requires active activation
   if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
     const { game, playerNum, dcMessageMeta } = context;
@@ -260,8 +325,70 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: Focus — requires active activation
-  if (abilityId === 'Focus') {
+  // ccEffect: applyFocus + attackBonusHits combo (Primary Target) — both Focus and +N Hit
+  if (entry.type === 'ccEffect' && entry.applyFocus && typeof entry.attackBonusHits === 'number') {
+    const { game, playerNum, combat, dcMessageMeta } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play when declaring attack (as the attacker).' };
+    }
+    let focusApplied = false;
+    if (dcMessageMeta) {
+      const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      if (msgId) {
+        const meta = dcMessageMeta.get(msgId);
+        if (meta) {
+          const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+          if (figureKeys.length > 0) {
+            game.figureConditions = game.figureConditions || {};
+            for (const fk of figureKeys) {
+              const existing = game.figureConditions[fk] || [];
+              if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+            }
+            focusApplied = true;
+          }
+        }
+      }
+    }
+    cbt.bonusHits = (cbt.bonusHits || 0) + entry.attackBonusHits;
+    const focusPart = focusApplied ? 'Became Focused. ' : '';
+    return { applied: true, logMessage: `${focusPart}+${entry.attackBonusHits} Hit added to this attack.` };
+  }
+
+  // ccEffect: applyFocus + attackSurgeBonus combo (Master Operative) — both Focus and +1 Surge
+  if (entry.type === 'ccEffect' && entry.applyFocus && typeof entry.attackSurgeBonus === 'number') {
+    const { game, playerNum, combat, dcMessageMeta } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play when declaring attack (as the attacker).' };
+    }
+    let focusApplied = false;
+    if (dcMessageMeta) {
+      const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      if (msgId) {
+        const meta = dcMessageMeta.get(msgId);
+        if (meta) {
+          const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+          if (figureKeys.length > 0) {
+            game.figureConditions = game.figureConditions || {};
+            for (const fk of figureKeys) {
+              const existing = game.figureConditions[fk] || [];
+              if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+            }
+            focusApplied = true;
+          }
+        }
+      }
+    }
+    const n = entry.attackSurgeBonus;
+    if (cbt.surgeRemaining != null) cbt.surgeRemaining = (cbt.surgeRemaining || 0) + n;
+    else cbt.surgeBonus = (cbt.surgeBonus || 0) + n;
+    const focusPart = focusApplied ? 'Became Focused. ' : '';
+    return { applied: true, logMessage: `${focusPart}+${n} Surge added to this attack.` };
+  }
+
+  // ccEffect: Focus / Meditation — apply Focus to activating figures; requires active activation
+  if (abilityId === 'Focus' || (entry.type === 'ccEffect' && entry.applyFocus)) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);

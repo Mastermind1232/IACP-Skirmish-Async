@@ -2228,6 +2228,14 @@ async function resolveCombatAfterRolls(game, combat, client) {
     pending.count -= 1;
     if (pending.count <= 0) delete game.nextAttacksBonusHits[combat.attackerPlayerNum];
   }
+  // Size Advantage / nextAttacksBonusConditions: consume and add conditions to defender
+  const condPending = game.nextAttacksBonusConditions?.[combat.attackerPlayerNum];
+  if (condPending && condPending.count > 0 && condPending.conditions?.length) {
+    combat.bonusConditions = combat.bonusConditions || [];
+    combat.bonusConditions.push(...condPending.conditions);
+    condPending.count -= 1;
+    if (condPending.count <= 0) delete game.nextAttacksBonusConditions[combat.attackerPlayerNum];
+  }
   const { hit, damage, resultText } = computeCombatResult(combat);
   const totalBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
   const attackerPlayerNum = combat.attackerPlayerNum;
@@ -2250,10 +2258,11 @@ async function resolveCombatAfterRolls(game, combat, client) {
       const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
       const idx = (dcMessageIds || []).indexOf(targetMsgId);
       if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-      if (combat.surgeConditions?.length) {
+      const allConditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
+      if (allConditions.length) {
         game.figureConditions = game.figureConditions || {};
         const existing = game.figureConditions[combat.target.figureKey] || [];
-        game.figureConditions[combat.target.figureKey] = [...new Set([...existing, ...(combat.surgeConditions || [])])];
+        game.figureConditions[combat.target.figureKey] = [...new Set([...existing, ...allConditions])];
       }
       if (newCur <= 0) {
         // F7: Keep healthState, figurePositions, and DC embed in sync when one figure in a group dies.
@@ -3822,6 +3831,7 @@ client.on('interactionCreate', async (interaction) => {
     const ccHandSelectContext = {
       getGame,
       dcMessageMeta,
+      dcHealthState,
       getCcEffect,
       buildHandDisplayPayload,
       updateAttachmentMessageForDc,
@@ -3850,6 +3860,7 @@ client.on('interactionCreate', async (interaction) => {
     const ccHandButtonContext = {
       getGame,
       dcMessageMeta,
+      dcHealthState,
       saveGames,
       pushUndo,
       client,

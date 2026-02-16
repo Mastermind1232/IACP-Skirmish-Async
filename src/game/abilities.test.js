@@ -282,6 +282,55 @@ test('resolveAbility Rally discards HARMFUL conditions from activating figures',
   assert.strictEqual(game.figureConditions['Stormtroopers-1-1']?.length, 0);
 });
 
+test('resolveAbility Primary Target applies Focus and attackBonusHits', () => {
+  const combat = { attackerPlayerNum: 1, gameId: 'g-pt' };
+  const game = {
+    gameId: 'g-pt',
+    dcActionsData: { 'msg-pt': {} },
+    pendingCombat: combat,
+    figurePositions: { 1: { 'Boba Fett-1-0': 'a1' } },
+    figureConditions: {},
+  };
+  const dcMessageMeta = new Map([['msg-pt', { gameId: 'g-pt', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba [DG 1]' }]]);
+  const result = resolveAbility('Primary Target', { game, playerNum: 1, combat, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('Hit'));
+  assert.strictEqual(combat.bonusHits, 1);
+  assert.strictEqual(game.figureConditions['Boba Fett-1-0']?.includes('Focus'), true);
+});
+
+test('resolveAbility Master Operative applies Focus and attackSurgeBonus', () => {
+  const combat = { attackerPlayerNum: 1, gameId: 'g-mo' };
+  const game = {
+    gameId: 'g-mo',
+    dcActionsData: { 'msg-mo': {} },
+    pendingCombat: combat,
+    figurePositions: { 1: { 'Verena Talos-1-0': 'a1' } },
+    figureConditions: {},
+  };
+  const dcMessageMeta = new Map([['msg-mo', { gameId: 'g-mo', playerNum: 1, dcName: 'Verena Talos', displayName: 'Verena [DG 1]' }]]);
+  const result = resolveAbility('Master Operative', { game, playerNum: 1, combat, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('Surge'));
+  assert.strictEqual(combat.surgeBonus, 1);
+  assert.strictEqual(game.figureConditions['Verena Talos-1-0']?.includes('Focus'), true);
+});
+
+test('resolveAbility Meditation applies Focus (same as Focus)', () => {
+  const msgId = 'msg-med';
+  const game = {
+    gameId: 'g-med',
+    dcActionsData: { [msgId]: {} },
+    figurePositions: { 1: { 'Luke Skywalker-1-0': 'a1' } },
+    figureConditions: {},
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-med', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const result = resolveAbility('Meditation', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(result.logMessage, 'Became Focused.');
+  assert.strictEqual(game.figureConditions['Luke Skywalker-1-0']?.includes('Focus'), true);
+});
+
 test('resolveAbility Recovery recovers 2 damage when dcHealthState and msgId provided', () => {
   const msgId = 'msg-rec';
   const healthState = [[3, 6]];
@@ -298,6 +347,29 @@ test('resolveAbility Recovery recovers 2 damage when dcHealthState and msgId pro
   assert.strictEqual(result.logMessage, 'Recovered 2 Damage.');
   assert.deepStrictEqual(healthState[0], [5, 6]);
   assert.deepStrictEqual(game.p1DcList[0].healthState[0], [5, 6]);
+});
+
+test('resolveAbility Heart of Freedom applies discard 1 HARMFUL, recover 2, gain 2 MP', () => {
+  const msgId = 'msg-hof';
+  const healthState = [[4, 6]];
+  const dcHealthState = new Map([[msgId, healthState]]);
+  const game = {
+    gameId: 'g-hof',
+    dcActionsData: { [msgId]: {} },
+    figurePositions: { 1: { 'Luke Skywalker-1-0': 'a1' } },
+    figureConditions: { 'Luke Skywalker-1-0': ['Stun', 'Focus'] },
+    p1DcMessageIds: [msgId],
+    p1DcList: [{ dcName: 'Luke Skywalker', healthState: [[4, 6]] }],
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-hof', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const result = resolveAbility('Heart of Freedom', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('HARMFUL'));
+  assert.ok(result.logMessage?.includes('Damage'));
+  assert.ok(result.logMessage?.includes('MP'));
+  assert.deepStrictEqual(game.figureConditions['Luke Skywalker-1-0'], ['Focus']);
+  assert.deepStrictEqual(healthState[0], [6, 6]);
+  assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
 });
 
 test('resolveAbility Rally with no harmful conditions returns applied', () => {

@@ -1156,7 +1156,8 @@
       "playableBy": "REBEL",
       "timing": "specialAction",
       "effect": "Special Action: You become Focused. Once during your next activation, if you are a FORCE USER, you may perform an attack targeting an adjacent figure without spending an action.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Meditation"
     },
     "Opportunistic": {
       "cost": 0,
@@ -1268,7 +1269,8 @@
       "playableBy": "Verena Talos",
       "timing": "whenYouDeclareCloseQuarters",
       "effect": "Use when you declare \"Close Quarters.\" You become Focused. Apply +1 Surge to the attack results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Master Operative"
     },
     "Merciless": {
       "cost": 1,
@@ -1493,7 +1495,8 @@
       "playableBy": "HUNTER",
       "timing": "whenYouDeclareAttackTargetingHostileWithHighestFigureCost",
       "effect": "Use when you declare an attack targeting a hostile figure with the highest figure cost of all hostile figures on the map. You become Focused and apply +1 Hit to the attack results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Primary Target"
     },
     "Protect the Old Ways": {
       "cost": 1,
