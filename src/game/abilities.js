@@ -75,5 +75,57 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, drewCards: drew };
   }
 
+  // ccEffect: +1 MP (Fleet Footed) or Focus — requires active activation
+  if (abilityId === 'cc:fleet_footed' || abilityId === 'Focus') {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+
+    if (abilityId === 'cc:fleet_footed') {
+      game.movementBank = game.movementBank || {};
+      const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+      bank.total = (bank.total ?? 0) + 1;
+      bank.remaining = (bank.remaining ?? 0) + 1;
+      game.movementBank[msgId] = bank;
+      return { applied: true, logMessage: 'Gained 1 movement point.' };
+    }
+
+    if (abilityId === 'Focus') {
+      const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+      if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found for activation.' };
+      game.figureConditions = game.figureConditions || {};
+      for (const fk of figureKeys) {
+        const existing = game.figureConditions[fk] || [];
+        if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+      }
+      return { applied: true, logMessage: 'Became Focused.' };
+    }
+  }
+
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
+}
+
+/** Find msgId of the DC currently being activated by playerNum (has dcActionsData). */
+function findActiveActivationMsgId(game, playerNum, dcMessageMeta) {
+  if (!game?.dcActionsData || !dcMessageMeta) return null;
+  for (const [msgId, meta] of dcMessageMeta) {
+    if (meta?.gameId === game.gameId && meta?.playerNum === playerNum && game.dcActionsData?.[msgId]) {
+      return msgId;
+    }
+  }
+  return null;
+}
+
+/** Get figure keys for the DC represented by meta (msgId). */
+function getFigureKeysForDcMsg(game, playerNum, meta) {
+  const dcName = meta?.dcName;
+  if (!dcName) return [];
+  const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const prefix = `${dcName}-${dgIndex}-`;
+  const positions = game.figurePositions?.[playerNum] || {};
+  return Object.keys(positions).filter((k) => k.startsWith(prefix));
 }

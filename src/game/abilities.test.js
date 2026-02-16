@@ -79,3 +79,26 @@ test('resolveAbility returns manual for unimplemented ccEffect', () => {
   assert.strictEqual(result.applied, false);
   assert.ok(result.manualMessage);
 });
+
+test('resolveAbility Fleet Footed without activation returns manual', () => {
+  const game = { gameId: 'g1', dcActionsData: {}, movementBank: {} };
+  const dcMessageMeta = new Map();
+  const result = resolveAbility('cc:fleet_footed', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, false);
+  assert.ok(result.manualMessage?.includes('activation'));
+});
+
+test('resolveAbility Fleet Footed with active activation applies +1 MP', () => {
+  const msgId = 'msg123';
+  const game = {
+    gameId: 'g1',
+    dcActionsData: { [msgId]: { remaining: 1 } },
+    movementBank: { [msgId]: { total: 4, remaining: 2 } },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g1', playerNum: 1, dcName: 'Test', displayName: 'Test [DG 1]' }]]);
+  const result = resolveAbility('cc:fleet_footed', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(result.logMessage, 'Gained 1 movement point.');
+  assert.strictEqual(game.movementBank[msgId].remaining, 3);
+  assert.strictEqual(game.movementBank[msgId].total, 5);
+});

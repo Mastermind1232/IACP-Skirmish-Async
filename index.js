@@ -3677,6 +3677,7 @@ client.on('interactionCreate', async (interaction) => {
     }
     const ccHandSelectContext = {
       getGame,
+      dcMessageMeta,
       getCcEffect,
       buildHandDisplayPayload,
       updateAttachmentMessageForDc,
@@ -3704,6 +3705,7 @@ client.on('interactionCreate', async (interaction) => {
   if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'squad_select_' || buttonKey === 'illegal_cc_ignore_' || buttonKey === 'illegal_cc_unplay_') {
     const ccHandButtonContext = {
       getGame,
+      dcMessageMeta,
       saveGames,
       pushUndo,
       client,

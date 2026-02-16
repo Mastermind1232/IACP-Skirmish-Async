@@ -23,7 +23,7 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 
 - In `ability-library.json`, add `"Card Name": { "type": "ccEffect", "label": "Draw 1 Command card", "draw": 1 }` (use `draw`: 2, 3, etc. for multi-draw).
 - `resolveAbility` will mutate `game.player1CcDeck` / `player2CcDeck` and hand, return `{ applied: true, drewCards: [...] }`. The CC handler refreshes the hand message and logs the draw.
-- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1).
+- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Fleet Footed** (+1 MP), **Focus** (become Focused).
 
 ### Adding a non-surge ability
 

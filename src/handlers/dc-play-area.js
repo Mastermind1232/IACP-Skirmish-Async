@@ -434,6 +434,7 @@ export async function handleDcCcSpecial(interaction, ctx) {
     dcMessageMeta,
     getPlayableCcSpecialsForDc,
     getCcEffect,
+    resolveAbility,
     isCcAttachment,
     updateAttachmentMessageForDc,
     buildHandDisplayPayload,
@@ -511,6 +512,20 @@ export async function handleDcCcSpecial(interaction, ctx) {
   await updateDiscardPileMessage(game, meta.playerNum, interaction.client);
   await updateDcActionsMessage(game, msgId, interaction.client);
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}** (Special Action).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  if (ctx.resolveAbility) {
+    const effectData = getCcEffect(card);
+    const abilityId = effectData?.abilityId ?? card;
+    const result = ctx.resolveAbility(abilityId, { game, playerNum: meta.playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta });
+    if (result.applied && result.drewCards?.length) {
+      await updateHandVisualMessage(game, meta.playerNum, interaction.client);
+      const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
+      await logGameAction(game, interaction.client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
+    } else if (result.applied && result.logMessage) {
+      await logGameAction(game, interaction.client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
+    } else if (!result.applied && result.manualMessage) {
+      await logGameAction(game, interaction.client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
+    }
+  }
   if (ctx.pushUndo) {
     ctx.pushUndo(game, {
       type: 'cc_play_dc',

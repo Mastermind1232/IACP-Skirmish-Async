@@ -717,7 +717,8 @@
       "playableBy": "Any Figure",
       "timing": "duringActivation",
       "effect": "Use during your activation to gain 1 movement point.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "cc:fleet_footed"
     },
     "Flurry of Blades": {
       "cost": 2,
@@ -731,7 +732,8 @@
       "playableBy": "Any Figure",
       "timing": "specialAction",
       "effect": "Special Action: You become Focused.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Focus"
     },
     "Fool Me Once": {
       "cost": 0,

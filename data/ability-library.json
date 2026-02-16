@@ -41,6 +41,8 @@
     "There is Another": { "type": "ccEffect", "label": "Draw 1 Command card", "draw": 1 },
     "Planning": { "type": "ccEffect", "label": "Draw 2 Command cards", "draw": 2 },
     "Black Market Prices": { "type": "ccEffect", "label": "Draw 2 Command cards", "draw": 2 },
-    "Forbidden Knowledge": { "type": "ccEffect", "label": "Draw 1 Command card", "draw": 1 }
+    "Forbidden Knowledge": { "type": "ccEffect", "label": "Draw 1 Command card", "draw": 1 },
+    "cc:fleet_footed": { "type": "ccEffect", "label": "Gain 1 movement point" },
+    "Focus": { "type": "ccEffect", "label": "You become Focused" }
   }
 }
