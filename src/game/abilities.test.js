@@ -227,6 +227,22 @@ test('resolveAbility Blitz during attack adds surgeBonus', () => {
   assert.strictEqual(combat.surgeBonus, 1);
 });
 
+test('resolveAbility Positioning Advantage adds bonusHits to combat', () => {
+  const combat = { attackerPlayerNum: 1, gameId: 'g9b' };
+  const game = { gameId: 'g9b', pendingCombat: combat };
+  const result = resolveAbility('Positioning Advantage', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(combat.bonusHits, 1);
+});
+
+test('resolveAbility Deadeye adds bonusAccuracy to combat', () => {
+  const combat = { attackerPlayerNum: 1, gameId: 'g9c' };
+  const game = { gameId: 'g9c', pendingCombat: combat };
+  const result = resolveAbility('Deadeye', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(combat.bonusAccuracy, 2);
+});
+
 test('resolveAbility Blitz during surge step adds to surgeRemaining', () => {
   const combat = { attackerPlayerNum: 1, gameId: 'g10', surgeRemaining: 2 };
   const game = { gameId: 'g10', pendingCombat: combat };

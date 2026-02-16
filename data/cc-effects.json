@@ -416,7 +416,7 @@
       "playableBy": "Any Figure",
       "timing": "duringAttack",
       "effect": "Use while attacking to apply +2 Accuracy to the attack results.",
-      "effectType": "manual"
+      "abilityId": "Deadeye"
     },
     "Deadly Precision": {
       "cost": 0,
@@ -909,7 +909,7 @@
       "playableBy": "HEAVY WEAPON",
       "timing": "duringAttack",
       "effect": "Use while attacking to apply +1 Hit to the attack results. If the defender is an object, apply +2 Hit and Pierce 2 to the attack results instead.",
-      "effectType": "manual"
+      "abilityId": "Heavy Ordnance"
     },
     "Heightened Reflexes": {
       "cost": 2,
@@ -1456,7 +1456,7 @@
       "playableBy": "Any Figure",
       "timing": "duringAttack",
       "effect": "Use while attacking to apply +1 Hit to the attack results.",
-      "effectType": "manual"
+      "abilityId": "Positioning Advantage"
     },
     "Prepared for Battle": {
       "cost": 2,

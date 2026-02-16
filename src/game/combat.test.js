@@ -71,6 +71,17 @@ test('computeCombatResult surge modifiers', () => {
   assert.strictEqual(r.damage, 2);
 });
 
+test('computeCombatResult bonusAccuracy (Deadeye)', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 0, dmg: 2, surge: 0 },
+    defenseRoll: { block: 1, evade: 2 },
+    bonusAccuracy: 2,
+  });
+  assert.strictEqual(r.hit, true); // 0 + 2 >= 2
+  assert.strictEqual(r.damage, 1); // 2 - 1 block
+  assert.ok(r.resultText.includes('CC bonus: +2 acc'));
+});
+
 test('computeCombatResult bonusHits (Beatdown)', () => {
   const r = computeCombatResult({
     attackRoll: { acc: 2, dmg: 2, surge: 0 },

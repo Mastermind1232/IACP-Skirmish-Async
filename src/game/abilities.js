@@ -231,6 +231,34 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: attackBonusHits (Positioning Advantage) — +N Hit to this attack; attacker only
+  if (entry.type === 'ccEffect' && typeof entry.attackBonusHits === 'number' && entry.attackBonusHits > 0) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play while attacking (as the attacker).' };
+    }
+    cbt.bonusHits = (cbt.bonusHits || 0) + entry.attackBonusHits;
+    return {
+      applied: true,
+      logMessage: `+${entry.attackBonusHits} Hit added to this attack.`,
+    };
+  }
+
+  // ccEffect: attackAccuracyBonus (Deadeye) — +N Accuracy to this attack; attacker only
+  if (entry.type === 'ccEffect' && typeof entry.attackAccuracyBonus === 'number' && entry.attackAccuracyBonus > 0) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play while attacking (as the attacker).' };
+    }
+    cbt.bonusAccuracy = (cbt.bonusAccuracy || 0) + entry.attackAccuracyBonus;
+    return {
+      applied: true,
+      logMessage: `+${entry.attackAccuracyBonus} Accuracy added to this attack.`,
+    };
+  }
+
   // ccEffect: attackSurgeBonus (Blitz) — +N Surge during attack; attacker only
   if (entry.type === 'ccEffect' && typeof entry.attackSurgeBonus === 'number' && entry.attackSurgeBonus > 0) {
     const { game, playerNum, combat } = context;

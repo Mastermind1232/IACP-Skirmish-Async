@@ -2224,7 +2224,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
   // Beatdown / nextAttacksBonusHits: consume one charge and add bonus to this attack
   const pending = game.nextAttacksBonusHits?.[combat.attackerPlayerNum];
   if (pending && pending.count > 0 && pending.bonus > 0) {
-    combat.bonusHits = pending.bonus;
+    combat.bonusHits = (combat.bonusHits || 0) + pending.bonus;
     pending.count -= 1;
     if (pending.count <= 0) delete game.nextAttacksBonusHits[combat.attackerPlayerNum];
   }
