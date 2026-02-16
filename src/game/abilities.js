@@ -535,6 +535,22 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: attackBonusHitsFromDefeatedFriendly (Honoring the Fallen) — +N Hit per defeated friendly figure, cap M
+  if (entry.type === 'ccEffect' && typeof entry.attackBonusHitsFromDefeatedFriendly === 'number' && typeof entry.attackBonusHitsFromDefeatedMax === 'number') {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: "Resolve manually: play when declaring an attack (as the attacker)." };
+    }
+    const defeated = countDefeatedFriendlyFigures(game, playerNum);
+    const bonus = Math.min(defeated * entry.attackBonusHitsFromDefeatedFriendly, entry.attackBonusHitsFromDefeatedMax);
+    if (bonus <= 0) {
+      return { applied: true, logMessage: 'No defeated friendly figures; no bonus.' };
+    }
+    cbt.bonusHits = (cbt.bonusHits || 0) + bonus;
+    return { applied: true, logMessage: `+${bonus} Hit (${defeated} defeated friendly figure${defeated === 1 ? '' : 's'}).` };
+  }
+
   // ccEffect: attackBonusHits (Positioning Advantage) — +N Hit to this attack; attacker only
   if (entry.type === 'ccEffect' && typeof entry.attackBonusHits === 'number' && entry.attackBonusHits > 0) {
     const { game, playerNum, combat } = context;
@@ -694,6 +710,30 @@ export function resolveAbility(abilityId, context) {
   }
 
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
+}
+
+/** Count defeated friendly figures for player (deployed but no longer on map). */
+function countDefeatedFriendlyFigures(game, playerNum) {
+  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  const poses = game.figurePositions?.[playerNum] || {};
+  let defeated = 0;
+  for (let i = 0; i < dcList.length; i++) {
+    const dc = dcList[i];
+    const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+    if (!dcName) continue;
+    const displayName = typeof dc === 'object' ? dc.displayName : dcName;
+    const dgMatch = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIndex = dgMatch ? dgMatch[1] : String(i + 1);
+    const stats = getStatsForDc(dcName);
+    const figureCount = stats?.figures ?? 1;
+    const prefix = `${dcName}-${dgIndex}-`;
+    let current = 0;
+    for (const k of Object.keys(poses)) {
+      if (k.startsWith(prefix)) current++;
+    }
+    defeated += Math.max(0, figureCount - current);
+  }
+  return defeated;
 }
 
 /** Find msgId of the DC currently being activated by playerNum (has dcActionsData). */

@@ -952,7 +952,7 @@
       "playableBy": "Migs Mayfeld",
       "timing": "whenYouDeclareAttack",
       "effect": "Use when you declare an attack to apply +1 Hit to the attack results for each currently defeated friendly figure, to a maximum of +3 Hits.",
-      "effectType": "manual"
+      "abilityId": "Honoring the Fallen"
     },
     "Hostile Negotiation": {
       "cost": 1,

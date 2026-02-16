@@ -453,6 +453,47 @@ test('resolveAbility Apex Predator applies Focus, Hide, 2 Power Tokens, 2 MP', (
   assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
 });
 
+test('resolveAbility Honoring the Fallen adds +1 Hit per defeated friendly figure (max 3)', () => {
+  const combat = {
+    attackerPlayerNum: 1,
+    attackInfo: { dice: ['red'] },
+  };
+  const game = {
+    gameId: 'g-htf',
+    pendingCombat: combat,
+    p1DcList: [
+      { dcName: 'Nexu', displayName: 'Nexu [DG 1]' },
+      { dcName: 'Echo Base Trooper (Elite)', displayName: 'Echo Base Trooper (Elite) [DG 2]' },
+    ],
+    figurePositions: {
+      1: { 'Nexu-1-0': 'a1' },
+      2: {},
+    },
+  };
+  const result = resolveAbility('Honoring the Fallen', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('defeated'));
+  assert.strictEqual(combat.bonusHits, 2);
+});
+
+test('resolveAbility Honoring the Fallen caps at 3 Hits', () => {
+  const combat = { attackerPlayerNum: 1 };
+  const game = {
+    gameId: 'g-htf2',
+    pendingCombat: combat,
+    p1DcList: [
+      { dcName: 'A', displayName: 'A [DG 1]' },
+      { dcName: 'B', displayName: 'B [DG 2]' },
+      { dcName: 'C', displayName: 'C [DG 3]' },
+      { dcName: 'D', displayName: 'D [DG 4]' },
+    ],
+    figurePositions: { 1: {} },
+  };
+  const result = resolveAbility('Honoring the Fallen', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(combat.bonusHits, 3);
+});
+
 test('resolveAbility Tools for the Job adds 1 attack die when declaring attack', () => {
   const combat = {
     attackerPlayerNum: 1,
