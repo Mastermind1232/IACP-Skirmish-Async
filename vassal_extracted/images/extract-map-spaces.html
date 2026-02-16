@@ -590,7 +590,8 @@
         : key === 'persistent' ? (variant === 'b' ? missionBPersistent : missionAPersistent)
         : key === 'startOfRound' ? (variant === 'b' ? missionBStartOfRound : missionAStartOfRound)
         : (variant === 'b' ? missionBEndOfRound : missionAEndOfRound);
-      return (str || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+      const trimmed = (str || '').trim();
+      return trimmed ? [trimmed] : [];
     }
 
     function getMissionEffectList() {
@@ -600,7 +601,7 @@
     function setMissionEffectList(arr) {
       const variant = getMissionVariant();
       const key = getMissionTimingKey();
-      const s = Array.isArray(arr) ? arr.join('\n') : '';
+      const s = Array.isArray(arr) && arr.length ? arr[0] : '';
       if (key === 'setup') {
         if (variant === 'b') missionBSetup = s; else missionASetup = s;
       } else if (key === 'persistent') {
@@ -616,7 +617,7 @@
       const arr = getMissionEffectListForKey(timingKey);
       arr.splice(index, 1);
       const variant = getMissionVariant();
-      const s = arr.join('\n');
+      const s = arr.length ? arr[0] : '';
       if (timingKey === 'setup') {
         if (variant === 'b') missionBSetup = s; else missionASetup = s;
       } else if (timingKey === 'persistent') {
@@ -649,6 +650,19 @@
           const textSpan = document.createElement('span');
           textSpan.textContent = text;
           textSpan.style.flex = '1';
+          const editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.textContent = 'Edit';
+          editBtn.title = 'Edit this effect';
+          editBtn.style.cssText = 'flex-shrink:0; padding:0 6px; cursor:pointer; font-size:0.85em;';
+          editBtn.onclick = function () {
+            const timingSelect = document.getElementById('missionTimingSelect');
+            const effectInput = document.getElementById('missionEffectTextInput');
+            const addPanel = document.getElementById('missionEffectAddPanel');
+            if (timingSelect) timingSelect.value = key;
+            if (effectInput) { effectInput.value = text; effectInput.focus(); }
+            if (addPanel) addPanel.style.display = 'block';
+          };
           const rmBtn = document.createElement('button');
           rmBtn.type = 'button';
           rmBtn.textContent = '×';
@@ -661,6 +675,7 @@
           };
           row.appendChild(badge);
           row.appendChild(textSpan);
+          row.appendChild(editBtn);
           row.appendChild(rmBtn);
           listEl.appendChild(row);
         });
@@ -1229,9 +1244,7 @@
       missionEffectAddConfirmBtn.onclick = function () {
         const text = (missionEffectTextInput.value || '').trim();
         if (text) {
-          const arr = getMissionEffectList();
-          arr.push(text);
-          setMissionEffectList(arr);
+          setMissionEffectList([text]);
           renderMissionEffectsList();
           missionEffectTextInput.value = '';
         }

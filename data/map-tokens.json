@@ -234,14 +234,59 @@
         "tokenTypes": [
           {
             "id": "0",
-            "label": "Token",
-            "image": "Mission Token--Neutral GRAY.gif"
+            "label": "Fluctuation",
+            "image": "Mission Token--Neutral Yellow.gif"
+          },
+          {
+            "id": "1",
+            "label": "Fluctuation",
+            "image": "Mission Token--Neutral Blue.gif"
+          },
+          {
+            "id": "2",
+            "label": "Fluctuation",
+            "image": "Mission Token--Neutral Blue.gif"
+          },
+          {
+            "id": "3",
+            "label": "Fluctuation",
+            "image": "Mission Token--Neutral Green.gif"
+          },
+          {
+            "id": "4",
+            "label": "Fluctuation",
+            "image": "Mission Token--Neutral Red.gif"
           }
         ],
         "positions": {
-          "0": []
+          "0": [
+            "j10",
+            "p10"
+          ],
+          "1": [],
+          "2": [
+            "h21",
+            "t21"
+          ],
+          "3": [
+            "i16",
+            "q16"
+          ],
+          "4": [
+            "l7",
+            "o7"
+          ]
         },
-        "contraband": []
+        "contraband": [
+          "h21",
+          "i16",
+          "j10",
+          "l7",
+          "o7",
+          "p10",
+          "q16",
+          "t21"
+        ]
       },
       "doors": [],
       "namedAreas": [
