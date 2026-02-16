@@ -262,14 +262,16 @@ export async function handleCombatRoll(interaction, ctx) {
     await thread.send(`**Defense roll** — ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade`);
     const roll = combat.attackRoll;
     const defRoll = combat.defenseRoll;
+    const surgeBonus = combat.surgeBonus || 0;
+    const totalSurge = roll.surge + surgeBonus;
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const getAbility = ctx.getAbility || (() => null);
     const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS && ctx.SURGE_LABELS[id]) || id);
-    const remaining = roll.surge;
+    const remaining = totalSurge;
     const affordable = surgeAbilities.filter((key) => (getAbility(key)?.surgeCost ?? 1) <= remaining);
-    const hasSurgeStep = roll.surge > 0 && affordable.length > 0;
+    const hasSurgeStep = totalSurge > 0 && affordable.length > 0;
     if (hasSurgeStep) {
-      combat.surgeRemaining = roll.surge;
+      combat.surgeRemaining = totalSurge;
       combat.surgeDamage = 0;
       combat.surgePierce = 0;
       combat.surgeAccuracy = 0;
@@ -295,8 +297,9 @@ export async function handleCombatRoll(interaction, ctx) {
           .setStyle(ButtonStyle.Primary)
       );
       const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
+      const surgeDisplay = surgeBonus > 0 ? `${roll.surge} + ${surgeBonus} (Blitz/CC) = **${totalSurge}**` : `**${totalSurge}**`;
       await thread.send({
-        content: `**Spend surge?** You have **${roll.surge}** surge. Choose an ability or Done.`,
+        content: `**Spend surge?** You have ${surgeDisplay} surge. Choose an ability or Done.`,
         components: [surgeRow],
       });
       saveGames();

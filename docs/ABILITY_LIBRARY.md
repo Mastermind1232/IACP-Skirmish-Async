@@ -51,7 +51,22 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 - Add `"focusGainToUpToNFigures": 3` with `vpCondition: { opponentHasAtLeastMore: 8 }` — end of round; if opponent has ≥8 more VPs, apply Focus to up to N of your figures. Auto when you have ≤N figures; manual when >N (choose which).
 - Example: **Against the Odds**.
 
-- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fool Me Once** (draw 1 if SPY), **Fleet Footed** (+1 MP), **Force Rush** (+2 MP), **Heart of Freedom** (+2 MP), **Apex Predator** (+2 MP), **Price of Glory** (+2 MP), **Worth Every Credit** (+2 MP), **Rank and File** (+1 MP; adjacent TROOPERS manual), **Urgency** (Speed+2 MP), **Focus** (become Focused), **Battle Scars** (Power Token gain), **Against the Odds** (Focus up to 3 if VP condition met).
+**MP after attack (mpAfterAttack)**
+
+- Add `"mpAfterAttack": N` — Special Action: perform an attack; after it resolves, gain N movement points. Sets `game.hitAndRunPendingMp`; `finishCombatResolution` in index.js adds MP when the attacker's combat resolves.
+- Example: **Hit and Run** (3 MP after attack).
+
+**Next N attacks bonus hits (nextAttacksBonusHits)**
+
+- Add `"nextAttacksBonusHits": { "count": N, "bonus": M }` — during activation, apply +M Hit to the next N attacks by your figures. Consumed in `resolveCombatAfterRolls`; cleared when activation ends.
+- Example: **Beatdown** (+1 Hit to next 2 attacks).
+
+**Attack surge bonus (attackSurgeBonus)**
+
+- Add `"attackSurgeBonus": N` — during attack, as the attacker, add +N Surge to the attack results. If played before surge step, stored in `combat.surgeBonus`; if played during surge step, added directly to `combat.surgeRemaining`.
+- Example: **Blitz** (+1 Surge).
+
+- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fool Me Once** (draw 1 if SPY), **Fleet Footed** (+1 MP), **Force Rush** (+2 MP), **Heart of Freedom** (+2 MP), **Apex Predator** (+2 MP), **Price of Glory** (+2 MP), **Worth Every Credit** (+2 MP), **Rank and File** (+1 MP; adjacent TROOPERS manual), **Urgency** (Speed+2 MP), **Focus** (become Focused), **Battle Scars** (Power Token gain), **Against the Odds** (Focus up to 3 if VP condition met), **Hit and Run** (3 MP after attack), **Beatdown** (+1 Hit to next 2 attacks), **Blitz** (+1 Surge during attack).
 
 ### Adding a non-surge ability
 
@@ -95,10 +110,10 @@ From **docs/RULES_REFERENCE.md** and **docs/consolidated-rules-raw.txt**:
 
 ---
 
-## Progress (~6% of CCs auto; ~90% of those with abilityId)
+## Progress (~7% of CCs auto; ~90% of those with abilityId)
 
 - **Surge:** 100% — all surge abilities resolved.
-- **CC effects:** 298 total; 20 have abilityId; ~18 fully or partially automated.
-- **CCs with automation:** Draw (4), conditional draw (2), MP bonus (8), Focus (2), Power Token gain (1), Against the Odds (1).
+- **CC effects:** 298 total; 23 have abilityId; ~21 fully or partially automated.
+- **CCs with automation:** Draw (4), conditional draw (2), MP bonus (8), Focus (2), Power Token gain (1), Against the Odds (1), Hit and Run (mpAfterAttack), Beatdown (nextAttacksBonusHits), Blitz (attackSurgeBonus).
 
 Phase 2 next: add more `type` values and branches in `resolveAbility` (e.g. more CC “draw N” effects, DC specials by name) so more effects run automatically instead of showing "Resolve manually".

@@ -2221,6 +2221,13 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
 
 /** Resolve combat after rolls (and optional surge). Applies damage, VP, updates embeds/board, clears pendingCombat. */
 async function resolveCombatAfterRolls(game, combat, client) {
+  // Beatdown / nextAttacksBonusHits: consume one charge and add bonus to this attack
+  const pending = game.nextAttacksBonusHits?.[combat.attackerPlayerNum];
+  if (pending && pending.count > 0 && pending.bonus > 0) {
+    combat.bonusHits = pending.bonus;
+    pending.count -= 1;
+    if (pending.count <= 0) delete game.nextAttacksBonusHits[combat.attackerPlayerNum];
+  }
   const { hit, damage, resultText } = computeCombatResult(combat);
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
@@ -2394,6 +2401,20 @@ async function resolveCombatAfterRolls(game, combat, client) {
 async function finishCombatResolution(game, combat, resultText, embedRefreshMsgIds, client) {
   const thread = await client.channels.fetch(combat.combatThreadId);
   await thread.send(resultText);
+  // Hit and Run: add pending MP when attack resolves
+  const pending = game.hitAndRunPendingMp;
+  if (pending && pending.msgId === combat.attackerMsgId && pending.amount > 0) {
+    const n = pending.amount;
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[pending.msgId] || { total: 0, remaining: 0 };
+    bank.total = (bank.total ?? 0) + n;
+    bank.remaining = (bank.remaining ?? 0) + n;
+    game.movementBank[pending.msgId] = bank;
+    const ownerId = combat.attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+    await logGameAction(game, client, `Hit and Run: <@${ownerId}> gained **${n}** movement point${n === 1 ? '' : 's'} after the attack.`, { allowedMentions: { users: [ownerId] }, phase: 'ACTION', icon: 'card' });
+    await ensureMovementBankMessage(game, pending.msgId, client);
+    delete game.hitAndRunPendingMp;
+  }
   delete game.pendingCombat;
   delete game.pendingCleave;
   if (combat.rollMessageId) {

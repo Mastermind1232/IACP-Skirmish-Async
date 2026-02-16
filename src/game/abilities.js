@@ -216,6 +216,53 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Became Focused.' };
   }
 
+  // ccEffect: nextAttacksBonusHits (Beatdown) — +N Hit to next M attacks by this player
+  const nb = entry.type === 'ccEffect' && entry.nextAttacksBonusHits;
+  if (nb && typeof nb.count === 'number' && nb.count > 0 && typeof nb.bonus === 'number' && nb.bonus > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
+    game.nextAttacksBonusHits[playerNum] = { count: nb.count, bonus: nb.bonus };
+    return {
+      applied: true,
+      logMessage: `Next ${nb.count} attack(s) by your figures this activation gain +${nb.bonus} Hit to results.`,
+    };
+  }
+
+  // ccEffect: attackSurgeBonus (Blitz) — +N Surge during attack; attacker only
+  if (entry.type === 'ccEffect' && typeof entry.attackSurgeBonus === 'number' && entry.attackSurgeBonus > 0) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play while attacking (as the attacker).' };
+    }
+    const n = entry.attackSurgeBonus;
+    if (cbt.surgeRemaining != null) {
+      cbt.surgeRemaining = (cbt.surgeRemaining || 0) + n;
+    } else {
+      cbt.surgeBonus = (cbt.surgeBonus || 0) + n;
+    }
+    return {
+      applied: true,
+      logMessage: `+${n} Surge added to this attack.`,
+    };
+  }
+
+  // ccEffect: mpAfterAttack (Hit and Run) — set pending; MP added when combat resolves
+  if (entry.type === 'ccEffect' && typeof entry.mpAfterAttack === 'number' && entry.mpAfterAttack > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.hitAndRunPendingMp = { msgId, amount: entry.mpAfterAttack };
+    return {
+      applied: true,
+      logMessage: `Perform an attack. After it resolves, you gain ${entry.mpAfterAttack} movement point${entry.mpAfterAttack === 1 ? '' : 's'}.`,
+    };
+  }
+
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
 }
 

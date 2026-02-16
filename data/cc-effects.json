@@ -100,7 +100,7 @@
       "playableBy": "BRAWLER",
       "timing": "duringActivation",
       "effect": "Use during your activation. During your group's activation, apply +1 Hit to the attack results of the next 2 attacks performed by friendly figures.",
-      "effectType": "manual"
+      "abilityId": "Beatdown"
     },
     "Behind Enemy Lines": {
       "cost": 1,
@@ -143,7 +143,7 @@
       "playableBy": "Any Figure",
       "timing": "duringAttack",
       "effect": "Use while attacking to apply +1 Surge to the attack results.",
-      "effectType": "manual"
+      "abilityId": "Blitz"
     },
     "Blood Feud": {
       "cost": 2,
@@ -937,7 +937,7 @@
       "playableBy": "Any Figure",
       "timing": "specialAction",
       "effect": "Special Action: Perform an attack. After the attack resolves, you gain 3 movement points.",
-      "effectType": "manual"
+      "abilityId": "Hit and Run"
     },
     "Hold Ground": {
       "cost": 2,

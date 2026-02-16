@@ -73,15 +73,17 @@ export function computeCombatResult(combat) {
   const surgeD = combat.surgeDamage || 0;
   const surgeP = combat.surgePierce || 0;
   const surgeA = combat.surgeAccuracy || 0;
+  const bonusHits = combat.bonusHits || 0;
   const hit = (roll.acc + surgeA) >= defRoll.evade;
   const effectiveBlock = Math.max(0, defRoll.block - surgeP);
-  const damage = hit ? Math.max(0, roll.dmg + surgeD - effectiveBlock) : 0;
+  const damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits - effectiveBlock) : 0;
   const conditionsText = (combat.surgeConditions?.length) ? ` (${combat.surgeConditions.join(', ')})` : '';
   const blastText = combat.surgeBlast ? ` Blast ${combat.surgeBlast}` : '';
   const recoverText = combat.surgeRecover ? ` Recover ${combat.surgeRecover}` : '';
   const cleaveText = combat.surgeCleave ? ` Cleave ${combat.surgeCleave}` : '';
 
   let resultText = `**Result:** Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
+  if (bonusHits) resultText += ` | CC bonus: +${bonusHits} Hit`;
   if (surgeD || surgeP || surgeA || conditionsText || blastText || recoverText || cleaveText) {
     resultText += ` | Surge: +${surgeD} dmg, +${surgeP} pierce, +${surgeA} acc${conditionsText}${blastText}${recoverText}${cleaveText}`;
   }

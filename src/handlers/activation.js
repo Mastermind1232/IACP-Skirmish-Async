@@ -232,6 +232,7 @@ export async function handleEndTurn(interaction, ctx) {
       console.error('Failed to delete DC activation thread:', err);
     }
     if (game.dcActionsData?.[dcMsgId]) delete game.dcActionsData[dcMsgId];
+    if (game.nextAttacksBonusHits?.[meta.playerNum]) delete game.nextAttacksBonusHits[meta.playerNum];
     if (game.movementBank?.[dcMsgId]) delete game.movementBank[dcMsgId];
   }
   try {

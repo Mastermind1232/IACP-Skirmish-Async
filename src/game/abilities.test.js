@@ -218,3 +218,19 @@ test('resolveAbility Against the Odds when VP condition not met does nothing', (
   assert.strictEqual(result.applied, true);
   assert.ok(!game.figureConditions || !game.figureConditions['Luke-1-0']?.includes('Focus'));
 });
+
+test('resolveAbility Blitz during attack adds surgeBonus', () => {
+  const combat = { attackerPlayerNum: 1, gameId: 'g9' };
+  const game = { gameId: 'g9', pendingCombat: combat };
+  const result = resolveAbility('Blitz', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(combat.surgeBonus, 1);
+});
+
+test('resolveAbility Blitz during surge step adds to surgeRemaining', () => {
+  const combat = { attackerPlayerNum: 1, gameId: 'g10', surgeRemaining: 2 };
+  const game = { gameId: 'g10', pendingCombat: combat };
+  const result = resolveAbility('Blitz', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(combat.surgeRemaining, 3);
+});

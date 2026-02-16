@@ -190,6 +190,7 @@ export async function handleDcUnactivate(interaction, ctx) {
   }
   if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
   if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
+  if (game.nextAttacksBonusHits?.[meta.playerNum]) delete game.nextAttacksBonusHits[meta.playerNum];
   if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
   if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
   if (game.dcActivationLogMessageIds?.[msgId]) {
@@ -345,6 +346,7 @@ export async function handleDcToggle(interaction, ctx) {
     }
     if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
     if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
+    if (game.nextAttacksBonusHits?.[meta.playerNum]) delete game.nextAttacksBonusHits[meta.playerNum];
     if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
     if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
     if (game.dcActivationLogMessageIds?.[msgId]) {
