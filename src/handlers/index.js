@@ -171,6 +171,7 @@ export {
   handleDeploymentOrient,
   handleDeployPick,
   handleDeploymentDone,
+  handleSetupAttachTo,
 } from './setup.js';
 export {
   handleDcActivate,
