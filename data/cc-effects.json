@@ -38,7 +38,8 @@
       "playableBy": "Cara Dune",
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when an attack targeting you is declared. If you share an edge or corner with a space containing blocking, impassable, or difficult terrain, interrupt to move 4 spaces to a space adjacent to the attacker, then the attacker suffers 2 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Ambush"
     },
     "Apex Predator": {
       "cost": 3,
@@ -1470,7 +1471,8 @@
       "playableBy": "Dengar",
       "timing": "afterAttackTargetingYouResolved",
       "effect": "Use after an attack targeting you resolves to interrupt to perform an attack targeting the attacker. Apply +2 Surge to the attack results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Payback"
     },
     "Personal Energy Shield": {
       "cost": 1,
@@ -1675,7 +1677,8 @@
       "playableBy": "Ahsoka Tano",
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when an attack targeting you is declared. The attacker suffers 1 Damage (3 Damage if you spent a Block Token during this attack).",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Right Back At Ya!"
     },
     "Roar": {
       "cost": 1,
