@@ -92,6 +92,9 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'whenhostilefigureentersspacewithin3spaces':
       // Disengage: playable during your activation (honor system: play when hostile entered)
       return ctx.duringActivation;
+    case 'whenhostilefigureentersadjacentspace':
+      // Self-Defense, Slippery Target: playable during your activation (honor system: play when hostile entered adjacent)
+      return ctx.duringActivation;
     case 'whenfriendlyfigurewithin3spaceswouldbedefeated':
       // Final Stand: playable during your activation (honor system: play when friendly at 0 health)
       return ctx.duringActivation;

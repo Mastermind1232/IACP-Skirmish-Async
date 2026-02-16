@@ -869,7 +869,8 @@
       "playableBy": "BRAWLER",
       "timing": "duringActivation",
       "effect": "Use during your activation. An adjacent hostile figure suffers 2 Damage. Then, you suffer 2 Strain.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Grisly Contest"
     },
     "Guardian Stance": {
       "cost": 1,
@@ -1714,7 +1715,8 @@
       "playableBy": "Any Figure",
       "timing": "whenHostileFigureEntersAdjacentSpace",
       "effect": "Use when a hostile figure enters a space adjacent to you. That figure suffers 1 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Self-Defense"
     },
     "Set a Trap": {
       "cost": 0,
@@ -1778,7 +1780,8 @@
       "playableBy": "SMUGGLER or SPY",
       "timing": "whenHostileFigureEntersAdjacentSpace",
       "effect": "Use when a hostile figure enters an adjacent space. Gain movement points equal to your Speed.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Slippery Target"
     },
     "Smuggled Supplies": {
       "cost": 1,
