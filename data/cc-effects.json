@@ -564,7 +564,8 @@
       "playableBy": "0-0-0",
       "timing": "specialAction",
       "effect": "Special Action: Each hostile figure with line of sight to you suffers 1 Strain and becomes Weakened.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Eerie Visage"
     },
     "Efficient Travel": {
       "cost": 1,
@@ -799,7 +800,8 @@
       "playableBy": "IMPERIAL FORCE USER",
       "timing": "specialAction",
       "effect": "Special Action: Choose a hostile figure in your line of sight within 2 spaces. That figure and each figure adjacent to it suffers 2 Damage and becomes Stunned.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Force Lightning"
     },
     "Force Push": {
       "cost": 1,
@@ -1038,7 +1040,8 @@
       "playableBy": "Any Small Figure",
       "timing": "specialAction",
       "effect": "Special Action: Place your figure in an empty space within 5 spaces.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Jump Jets"
     },
     "Jundland Terror": {
       "cost": 2,
