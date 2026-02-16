@@ -122,7 +122,7 @@
         </div>
         <div id="missionEffectAddPanel" style="display:none; margin-top:8px; padding:8px; background:rgba(0,0,0,0.25); border-radius:4px; border:1px solid #555;">
           <label for="missionEffectTextInput" style="display:block; margin-bottom:4px;">Effect text</label>
-          <textarea id="missionEffectTextInput" rows="2" placeholder="e.g. Place 2 terminals on the map" style="width:100%; box-sizing:border-box; margin-bottom:6px;"></textarea>
+          <textarea id="missionEffectTextInput" rows="8" placeholder="e.g. Place 2 terminals on the map" style="width:100%; box-sizing:border-box; margin-bottom:6px; min-height:140px; resize:vertical;"></textarea>
           <button type="button" id="missionEffectAddConfirmBtn">Add to list</button>
           <button type="button" id="missionEffectAddCancelBtn" style="margin-left:6px;">Cancel</button>
         </div>
@@ -385,6 +385,8 @@
     let missionAPersistent = '', missionBPersistent = '';
     let missionAStartOfRound = '', missionBStartOfRound = '';
     let missionAEndOfRound = '', missionBEndOfRound = '';
+    /** When editing an effect: { key, index }. Null when adding a new effect. */
+    let missionEffectEditing = null;
 
     /** Mission card image paths must live under images/mission-cards/. Normalize so saved data always uses that subfolder. */
     function missionCardImagePath(path) {
@@ -591,7 +593,8 @@
         : key === 'startOfRound' ? (variant === 'b' ? missionBStartOfRound : missionAStartOfRound)
         : (variant === 'b' ? missionBEndOfRound : missionAEndOfRound);
       const trimmed = (str || '').trim();
-      return trimmed ? [trimmed] : [];
+      if (!trimmed) return [];
+      return trimmed.split(/\n/).map(function (s) { return s.trim(); }).filter(Boolean);
     }
 
     function getMissionEffectList() {
@@ -601,7 +604,7 @@
     function setMissionEffectList(arr) {
       const variant = getMissionVariant();
       const key = getMissionTimingKey();
-      const s = Array.isArray(arr) && arr.length ? arr[0] : '';
+      const s = Array.isArray(arr) && arr.length ? arr.join('\n') : '';
       if (key === 'setup') {
         if (variant === 'b') missionBSetup = s; else missionASetup = s;
       } else if (key === 'persistent') {
@@ -616,8 +619,8 @@
     function removeMissionEffectAt(timingKey, index) {
       const arr = getMissionEffectListForKey(timingKey);
       arr.splice(index, 1);
+      const s = arr.length ? arr.join('\n') : '';
       const variant = getMissionVariant();
-      const s = arr.length ? arr[0] : '';
       if (timingKey === 'setup') {
         if (variant === 'b') missionBSetup = s; else missionASetup = s;
       } else if (timingKey === 'persistent') {
@@ -656,12 +659,15 @@
           editBtn.title = 'Edit this effect';
           editBtn.style.cssText = 'flex-shrink:0; padding:0 6px; cursor:pointer; font-size:0.85em;';
           editBtn.onclick = function () {
+            missionEffectEditing = { key: key, index: i };
             const timingSelect = document.getElementById('missionTimingSelect');
             const effectInput = document.getElementById('missionEffectTextInput');
             const addPanel = document.getElementById('missionEffectAddPanel');
+            const confirmBtn = document.getElementById('missionEffectAddConfirmBtn');
             if (timingSelect) timingSelect.value = key;
             if (effectInput) { effectInput.value = text; effectInput.focus(); }
             if (addPanel) addPanel.style.display = 'block';
+            if (confirmBtn) confirmBtn.textContent = 'Update';
           };
           const rmBtn = document.createElement('button');
           rmBtn.type = 'button';
@@ -1236,25 +1242,38 @@
     const missionEffectAddCancelBtn = document.getElementById('missionEffectAddCancelBtn');
     if (missionAddEffectBtn) {
       missionAddEffectBtn.onclick = function () {
+        missionEffectEditing = null;
         if (missionEffectAddPanel) missionEffectAddPanel.style.display = 'block';
         if (missionEffectTextInput) { missionEffectTextInput.value = ''; missionEffectTextInput.focus(); }
+        if (missionEffectAddConfirmBtn) missionEffectAddConfirmBtn.textContent = 'Add to list';
       };
     }
     if (missionEffectAddConfirmBtn && missionEffectTextInput) {
       missionEffectAddConfirmBtn.onclick = function () {
         const text = (missionEffectTextInput.value || '').trim();
         if (text) {
-          setMissionEffectList([text]);
+          const key = getMissionTimingKey();
+          const currentList = getMissionEffectListForKey(key);
+          if (missionEffectEditing && missionEffectEditing.key === key && missionEffectEditing.index >= 0 && missionEffectEditing.index < currentList.length) {
+            currentList[missionEffectEditing.index] = text;
+          } else {
+            currentList.push(text);
+          }
+          setMissionEffectList(currentList);
           renderMissionEffectsList();
           missionEffectTextInput.value = '';
         }
+        missionEffectEditing = null;
         if (missionEffectAddPanel) missionEffectAddPanel.style.display = 'none';
+        if (missionEffectAddConfirmBtn) missionEffectAddConfirmBtn.textContent = 'Add to list';
       };
     }
     if (missionEffectAddCancelBtn) {
       missionEffectAddCancelBtn.onclick = function () {
+        missionEffectEditing = null;
         if (missionEffectAddPanel) missionEffectAddPanel.style.display = 'none';
         if (missionEffectTextInput) missionEffectTextInput.value = '';
+        if (missionEffectAddConfirmBtn) missionEffectAddConfirmBtn.textContent = 'Add to list';
       };
     }
 

@@ -43,18 +43,20 @@
     },
     "chopper-base-atollon": {
       "a": {
-        "name": "",
+        "name": "Krykna Infestation",
         "tokenLabel": "",
-        "imagePath": "",
+        "imagePath": "vassal_extracted/images/mission-cards/Chopper Base Atollon-A-Krykna Infestation.png",
         "setup": "",
+        "persistent": "asd",
         "startOfRound": "",
-        "endOfRound": ""
+        "endOfRound": "In order of initiative, each player chooses and pushes a Krykna up to 3 spaces, ending in a space adjacent to the most non-Krykna figures possible."
       },
       "b": {
-        "name": "",
+        "name": "Powered Perimeter",
         "tokenLabel": "",
-        "imagePath": "",
+        "imagePath": "vassal_extracted/images/mission-cards/Chopper Base, Atollon-B-Powered Perimeter.jpg",
         "setup": "",
+        "persistent": "",
         "startOfRound": "",
         "endOfRound": ""
       }
@@ -76,7 +78,7 @@
         "setup": "",
         "persistent": "",
         "startOfRound": "",
-        "endOfRound": ""
+        "endOfRound": "Each player gains 1 VP for each fluctuation they control. Each figure on a fluctuation gains a Power Token based on its color: (Blue: Evade Token), (Green: Block Token), (Red: Hit Token), (Yellow: Surge Token)\n\nThen, in order of initiative, each player may swap 1 fluctuation with another. A fluctuation cannot be moved twice in the same round."
       }
     }
   }

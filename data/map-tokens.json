@@ -153,19 +153,36 @@
       ]
     },
     "chopper-base-atollon": {
-      "terminals": [],
+      "terminals": [
+        "j9",
+        "r20"
+      ],
       "missionA": {
         "tokenTypes": [
           {
             "id": "0",
-            "label": "Panel",
-            "image": "Mission Token--Neutral GRAY.gif"
+            "label": "Krykna",
+            "image": "Mission Token--Neutral Red.gif"
           }
         ],
         "positions": {
-          "0": []
+          "0": [
+            "k23",
+            "l6",
+            "m17",
+            "o12",
+            "p23",
+            "q6"
+          ]
         },
-        "launchPanels": []
+        "launchPanels": [
+          "k23",
+          "l6",
+          "m17",
+          "o12",
+          "p23",
+          "q6"
+        ]
       },
       "missionB": {
         "tokenTypes": [
@@ -180,7 +197,32 @@
         },
         "contraband": []
       },
-      "doors": [],
+      "doors": [
+        [
+          "r9",
+          "r10"
+        ],
+        [
+          "s9",
+          "s10"
+        ],
+        [
+          "o15",
+          "o14"
+        ],
+        [
+          "n15",
+          "n14"
+        ],
+        [
+          "j20",
+          "j19"
+        ],
+        [
+          "i19",
+          "i20"
+        ]
+      ],
       "namedAreas": [
         {
           "name": "Area 1",
