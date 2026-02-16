@@ -38,11 +38,18 @@
     "luke_saber_strike": { "type": "dcSpecial", "label": "Saber Strike: Perform a melee attack using 1 red and 1 yellow die. This attack gains Pierce 3." },
     "cc:advance_warning": { "type": "ccEffect", "label": "Advance Warning: You and an adjacent friendly figure each gain 1 movement point." },
     "cc:against_the_odds": { "type": "ccEffect", "label": "Against the Odds: If your opponent has ≥8 more VPs, choose up to 3 of your figures; they become Focused." },
+    "Officer's Training": { "type": "ccEffect", "label": "Draw 1 if LEADER", "draw": 1, "drawIfTrait": "LEADER" },
     "There is Another": { "type": "ccEffect", "label": "Draw 1 Command card", "draw": 1 },
     "Planning": { "type": "ccEffect", "label": "Draw 2 Command cards", "draw": 2 },
     "Black Market Prices": { "type": "ccEffect", "label": "Draw 2 Command cards", "draw": 2 },
     "Forbidden Knowledge": { "type": "ccEffect", "label": "Draw 1 Command card", "draw": 1 },
-    "cc:fleet_footed": { "type": "ccEffect", "label": "Gain 1 movement point" },
+    "cc:fleet_footed": { "type": "ccEffect", "label": "Gain 1 movement point", "mpBonus": 1 },
+    "Force Rush": { "type": "ccEffect", "label": "Gain 2 movement points", "mpBonus": 2 },
+    "Heart of Freedom": { "type": "ccEffect", "label": "Gain 2 movement points", "mpBonus": 2 },
+    "Apex Predator": { "type": "ccEffect", "label": "Gain 2 movement points", "mpBonus": 2 },
+    "Price of Glory": { "type": "ccEffect", "label": "Gain 2 movement points", "mpBonus": 2 },
+    "Worth Every Credit": { "type": "ccEffect", "label": "Gain 2 movement points", "mpBonus": 2 },
+    "Urgency": { "type": "ccEffect", "label": "Gain movement points equal to Speed +2", "mpBonusFromSpeed": 2 },
     "Focus": { "type": "ccEffect", "label": "You become Focused" }
   }
 }

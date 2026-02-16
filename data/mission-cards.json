@@ -80,6 +80,46 @@
         "startOfRound": "",
         "endOfRound": "Each player gains 1 VP for each fluctuation they control. Each figure on a fluctuation gains a Power Token based on its color: (Blue: Evade Token), (Green: Block Token), (Red: Hit Token), (Yellow: Surge Token)\n\nThen, in order of initiative, each player may swap 1 fluctuation with another. A fluctuation cannot be moved twice in the same round."
       }
+    },
+    "development-facility": {
+      "a": {
+        "name": "",
+        "tokenLabel": "",
+        "imagePath": "",
+        "setup": "",
+        "persistent": "",
+        "startOfRound": "",
+        "endOfRound": ""
+      },
+      "b": {
+        "name": "",
+        "tokenLabel": "",
+        "imagePath": "",
+        "setup": "",
+        "persistent": "",
+        "startOfRound": "",
+        "endOfRound": ""
+      }
+    },
+    "devaron-garrison": {
+      "a": {
+        "name": "",
+        "tokenLabel": "",
+        "imagePath": "",
+        "setup": "",
+        "persistent": "",
+        "startOfRound": "Place 1 Power Token on each crate, according to that crate's color: (Red: Hit Token), (Yellow: Surge Token), (Blue: Block Token)",
+        "endOfRound": "For each crate a player controls, that player may distribute the Power Tokens on that create among friendly figures on or adjacent to that crate. Then, that player gains 2 VPs."
+      },
+      "b": {
+        "name": "",
+        "tokenLabel": "",
+        "imagePath": "",
+        "setup": "",
+        "persistent": "Doors are locked.\n\nA figure can attack a crate (Health: 5, Defense: 1 Block). When a create is destroyed, all figures and objects on or adjacent to that create suffer 2 Damage.\n\nFor each create in a players deployment zone, that player counts as having 6 additional VPs.",
+        "startOfRound": "",
+        "endOfRound": "For each terminal a player controls, that player chooses and opens 1 door. Then, each player pushes each crate they control up to 3 spaces."
+      }
     }
   }
 }

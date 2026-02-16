@@ -365,6 +365,158 @@
           "cells": []
         }
       ]
+    },
+    "development-facility": {
+      "terminals": [],
+      "missionA": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "Panel",
+            "image": "Mission Token--Neutral GRAY.gif"
+          }
+        ],
+        "positions": {
+          "0": []
+        },
+        "launchPanels": []
+      },
+      "missionB": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "",
+            "image": "Mission Token--Neutral GRAY.gif"
+          }
+        ],
+        "positions": {
+          "0": []
+        },
+        "contraband": []
+      },
+      "doors": [],
+      "namedAreas": [
+        {
+          "name": "Area 1",
+          "cells": []
+        }
+      ]
+    },
+    "devaron-garrison": {
+      "terminals": [
+        "o20",
+        "o5"
+      ],
+      "missionA": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "",
+            "image": "Counter--Crate Blue.gif"
+          },
+          {
+            "id": "1",
+            "label": "",
+            "image": "Counter--Crate Red.gif"
+          },
+          {
+            "id": "2",
+            "label": "",
+            "image": "Counter--Crate Yellow.gif"
+          }
+        ],
+        "positions": {
+          "0": [
+            "i12",
+            "j13"
+          ],
+          "1": [
+            "r11",
+            "r15"
+          ],
+          "2": [
+            "t13"
+          ]
+        },
+        "launchPanels": [
+          "i12",
+          "j13",
+          "r11",
+          "r15",
+          "t13"
+        ]
+      },
+      "missionB": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "",
+            "image": "Counter--Crate Blue.gif"
+          },
+          {
+            "id": "1",
+            "label": "",
+            "image": "Counter--Crate Red.gif"
+          },
+          {
+            "id": "2",
+            "label": "",
+            "image": "Counter--Crate Yellow.gif"
+          }
+        ],
+        "positions": {
+          "0": [
+            "i12",
+            "j13"
+          ],
+          "1": [
+            "r11",
+            "r15"
+          ],
+          "2": [
+            "t13"
+          ]
+        },
+        "contraband": [
+          "i12",
+          "j13",
+          "r11",
+          "r15",
+          "t13"
+        ]
+      },
+      "doors": [
+        [
+          "j15",
+          "j14"
+        ],
+        [
+          "i15",
+          "i14"
+        ],
+        [
+          "o12",
+          "n12"
+        ],
+        [
+          "o13",
+          "n13"
+        ],
+        [
+          "i11",
+          "i10"
+        ],
+        [
+          "j10",
+          "j11"
+        ]
+      ],
+      "namedAreas": [
+        {
+          "name": "Area 1",
+          "cells": []
+        }
+      ]
     }
   }
 }

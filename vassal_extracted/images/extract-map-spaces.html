@@ -102,7 +102,10 @@
         <label>Mission token types</label>
         <p style="margin:2px 0 4px 0; font-size:0.8em; color:#999;">Each type has its own label and color/image. Use "Add token type" for more colors.</p>
         <div id="missionTokenTypesList" style="margin-bottom:6px;"></div>
-        <button type="button" id="missionAddTokenTypeBtn" title="Add another token color/type for this variant">Add token type</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" id="missionAddTokenTypeBtn" title="Add another token color/type for this variant">Add token type</button>
+          <button type="button" id="missionCopyFromOtherVariantBtn" title="Copy token types and positions from the other mission variant">Copy from Mission B</button>
+        </div>
       </div>
       <div id="missionTokenPlaceWrap" class="mission-field" style="display:none;">
         <label for="missionTokenTypeSelect">Placing</label>
@@ -428,7 +431,7 @@
       if (ma.tokenTypes && Array.isArray(ma.tokenTypes) && ma.positions && typeof ma.positions === 'object') {
         const positions = {};
         ma.tokenTypes.forEach((tt) => { positions[tt.id] = (ma.positions[tt.id] || []).map(s => String(s).toLowerCase()); });
-        return { tokenTypes: ma.tokenTypes.map((tt) => ({ id: String(tt.id), label: tt.label || 'Token', image: tt.image || 'Mission Token--Neutral GRAY.gif' })), positions };
+        return { tokenTypes: ma.tokenTypes.map((tt) => ({ id: String(tt.id), label: tt.label !== undefined ? String(tt.label) : 'Token', image: tt.image || 'Mission Token--Neutral GRAY.gif' })), positions };
       }
       const cells = (ma.launchPanels || []).map(s => String(s).toLowerCase());
       const defLabel = 'Panel';
@@ -440,7 +443,7 @@
       if (mb.tokenTypes && Array.isArray(mb.tokenTypes) && mb.positions && typeof mb.positions === 'object') {
         const positions = {};
         mb.tokenTypes.forEach((tt) => { positions[tt.id] = (mb.positions[tt.id] || []).map(s => String(s).toLowerCase()); });
-        return { tokenTypes: mb.tokenTypes.map((tt) => ({ id: String(tt.id), label: tt.label || 'Token', image: tt.image || 'Mission Token--Neutral GRAY.gif' })), positions };
+        return { tokenTypes: mb.tokenTypes.map((tt) => ({ id: String(tt.id), label: tt.label !== undefined ? String(tt.label) : 'Token', image: tt.image || 'Mission Token--Neutral GRAY.gif' })), positions };
       }
       const cells = (mb.contraband || mb.crates || []).map(s => String(s).toLowerCase());
       return { tokenTypes: [{ id: '0', label: '', image: 'Mission Token--Neutral GRAY.gif' }], positions: { '0': cells } };
@@ -713,6 +716,7 @@
       }
       if (nameInput) nameInput.value = newVariant === 'b' ? missionBNameValue : missionANameValue;
       if (tokenLabelEl) tokenLabelEl.value = newVariant === 'b' ? missionBTokenLabel : missionATokenLabel;
+      if (typeof updateCopyFromOtherVariantButtonLabel === 'function') updateCopyFromOtherVariantButtonLabel();
       renderMissionTokenTypesList();
       updateMissionTokenTypeSelect();
       updateMissionCardImage();
@@ -773,7 +777,7 @@
           const id = this.getAttribute('data-type-id');
           const ma = getMissionTokenVariantData();
           const tt = ma.tokenTypes.find((t) => t.id === id);
-          if (tt) { tt.label = (this.value || '').trim() || tt.label; updateMissionTokenTypeSelect(); draw(); }
+          if (tt) { tt.label = (this.value || '').trim(); updateMissionTokenTypeSelect(); draw(); }
         };
       });
       listEl.querySelectorAll('.mission-token-type-image').forEach((sel) => {
@@ -1015,7 +1019,7 @@
             const cells = (ma.positions || {})[tt.id] || [];
             if (cells.some((cell) => kLower(cell) === kLower(k))) {
               const img = getTokenImage(tt.image);
-              drawTokenAt(ctx, img, 'circle', 'rgba(129,199,132,0.65)', x, y, sdx, sdy, (tt.label || '').trim() || 'Panel');
+              drawTokenAt(ctx, img, 'circle', 'rgba(129,199,132,0.65)', x, y, sdx, sdy, (tt.label || '').trim());
               break;
             }
           }
@@ -1293,6 +1297,29 @@
         if (sel) sel.value = newId;
         draw();
       };
+    }
+
+    function updateCopyFromOtherVariantButtonLabel() {
+      const btn = document.getElementById('missionCopyFromOtherVariantBtn');
+      if (btn) btn.textContent = getMissionVariant() === 'b' ? 'Copy from Mission A' : 'Copy from Mission B';
+    }
+
+    const missionCopyFromOtherVariantBtn = document.getElementById('missionCopyFromOtherVariantBtn');
+    if (missionCopyFromOtherVariantBtn) {
+      missionCopyFromOtherVariantBtn.onclick = function () {
+        const variant = getMissionVariant();
+        const source = variant === 'b' ? missionTokenState.missionA : missionTokenState.missionB;
+        const target = variant === 'b' ? missionTokenState.missionB : missionTokenState.missionA;
+        target.tokenTypes = (source.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label != null ? String(tt.label) : '', image: tt.image || 'Mission Token--Neutral GRAY.gif' }));
+        target.positions = {};
+        for (const tt of target.tokenTypes) {
+          target.positions[tt.id] = [...(source.positions && source.positions[tt.id] ? source.positions[tt.id] : [])].map((s) => String(s).toLowerCase());
+        }
+        renderMissionTokenTypesList();
+        updateMissionTokenTypeSelect();
+        draw();
+      };
+      updateCopyFromOtherVariantButtonLabel();
     }
 
     document.getElementById('addNamedAreaBtn').onclick = () => {
@@ -1638,12 +1665,12 @@
       const tokensPayload = {
         terminals: [...missionTokenState.terminals].sort(),
         missionA: {
-          tokenTypes: (ma.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label || 'Token', image: tt.image || 'Mission Token--Neutral GRAY.gif' })),
+          tokenTypes: (ma.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label != null ? String(tt.label) : '', image: tt.image || 'Mission Token--Neutral GRAY.gif' })),
           positions: Object.fromEntries(Object.entries(ma.positions || {}).map(([id, arr]) => [id, [...(Array.isArray(arr) ? arr : [])].map(s => String(s).toLowerCase()).sort()])),
           launchPanels: [...getMissionTokenCells(missionTokenState.missionA)].sort()
         },
         missionB: {
-          tokenTypes: (mb.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label || '', image: tt.image || 'Mission Token--Neutral GRAY.gif' })),
+          tokenTypes: (mb.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label != null ? String(tt.label) : '', image: tt.image || 'Mission Token--Neutral GRAY.gif' })),
           positions: Object.fromEntries(Object.entries(mb.positions || {}).map(([id, arr]) => [id, [...(Array.isArray(arr) ? arr : [])].map(s => String(s).toLowerCase()).sort()])),
           contraband: [...getMissionTokenCells(missionTokenState.missionB)].sort()
         },
@@ -1760,12 +1787,12 @@
       const tokensPayload = {
         terminals: [...missionTokenState.terminals].sort(),
         missionA: {
-          tokenTypes: (ma.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label || 'Token', image: tt.image || 'Mission Token--Neutral GRAY.gif' })),
+          tokenTypes: (ma.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label != null ? String(tt.label) : '', image: tt.image || 'Mission Token--Neutral GRAY.gif' })),
           positions: Object.fromEntries(Object.entries(ma.positions || {}).map(([id, arr]) => [id, [...(Array.isArray(arr) ? arr : [])].map(s => String(s).toLowerCase()).sort()])),
           launchPanels: [...getMissionTokenCells(missionTokenState.missionA)].sort()
         },
         missionB: {
-          tokenTypes: (mb.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label || '', image: tt.image || 'Mission Token--Neutral GRAY.gif' })),
+          tokenTypes: (mb.tokenTypes || []).map((tt) => ({ id: String(tt.id), label: tt.label != null ? String(tt.label) : '', image: tt.image || 'Mission Token--Neutral GRAY.gif' })),
           positions: Object.fromEntries(Object.entries(mb.positions || {}).map(([id, arr]) => [id, [...(Array.isArray(arr) ? arr : [])].map(s => String(s).toLowerCase()).sort()])),
           contraband: [...getMissionTokenCells(missionTokenState.missionB)].sort()
         },

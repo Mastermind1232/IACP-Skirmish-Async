@@ -268,7 +268,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
   if (ctx.resolveAbility) {
     const effectData = getCcEffect(card);
     const abilityId = effectData?.abilityId ?? card;
-    const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta });
+    const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, combat: game.combat || game.pendingCombat });
     if (result.applied && result.drewCards?.length) {
       await updateHandVisualMessage(game, playerNum, interaction.client);
       const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
@@ -324,7 +324,7 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
   await logGameAction(game, client, `Played command card **${card}**.`, { phase: 'ACTION', icon: 'card' });
   if (resolveAbility) {
     const abilityId = effectData?.abilityId ?? card;
-    const result = resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta });
+    const result = resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta, combat: game.combat || game.pendingCombat });
     if (result.applied && result.drewCards?.length) {
       await updateHandVisualMessage(game, playerNum, client);
       const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');

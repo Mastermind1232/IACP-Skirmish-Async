@@ -19,11 +19,29 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 - **DC Special:** Handler passes an ability id (e.g. `dc_special:DCName:0`) to `resolveAbility(id, ctx)`. If the library has a non-surge implementation, it runs; otherwise the user sees "Resolve manually: …".
 - **CC play:** After a CC is played, the bot calls `resolveAbility(cardName, ctx)`. Card name is used as the library id for CCs unless we migrate to explicit ids (D2).
 
-### Implemented CC effect: draw N cards
+### Implemented CC effects
+
+**Draw N cards**
 
 - In `ability-library.json`, add `"Card Name": { "type": "ccEffect", "label": "Draw 1 Command card", "draw": 1 }` (use `draw`: 2, 3, etc. for multi-draw).
+
+**Conditional draw (drawIfTrait)**
+
+- Add `"drawIfTrait": "LEADER"` (or other trait) to only draw when the figure has that trait. Uses combat context (attacker during attack) or dcMessageMeta (during activation). Example: **Officer's Training** — draws 1 only if the attacking figure is a LEADER.
+
+**+N MP (fixed bonus)**
+
+- Add `"mpBonus": N` — e.g. Fleet Footed (+1 MP), Force Rush (+2 MP). Requires active activation (`dcMessageMeta`, `findActiveActivationMsgId`).
+
+**Speed + N MP**
+
+- Add `"mpBonusFromSpeed": N` — MP gained = DC's Speed + N (e.g. Urgency: Speed+2). Requires active activation. Uses `getStatsForDc(meta.dcName)` for speed lookup.
+
+**Focus**
+
+- `abilityId === "Focus"` — applies Focus condition to all figures in the active DC.
 - `resolveAbility` will mutate `game.player1CcDeck` / `player2CcDeck` and hand, return `{ applied: true, drewCards: [...] }`. The CC handler refreshes the hand message and logs the draw.
-- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Fleet Footed** (+1 MP), **Focus** (become Focused).
+- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fleet Footed** (+1 MP), **Force Rush** (+2 MP), **Heart of Freedom** (+2 MP), **Apex Predator** (+2 MP), **Price of Glory** (+2 MP), **Worth Every Credit** (+2 MP), **Urgency** (Speed+2 MP), **Focus** (become Focused).
 
 ### Adding a non-surge ability
 

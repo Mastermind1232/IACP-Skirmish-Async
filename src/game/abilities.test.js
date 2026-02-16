@@ -102,3 +102,52 @@ test('resolveAbility Fleet Footed with active activation applies +1 MP', () => {
   assert.strictEqual(game.movementBank[msgId].remaining, 3);
   assert.strictEqual(game.movementBank[msgId].total, 5);
 });
+
+test('resolveAbility Force Rush with active activation applies +2 MP', () => {
+  const msgId = 'msg456';
+  const game = {
+    gameId: 'g2',
+    dcActionsData: { [msgId]: { remaining: 1 } },
+    movementBank: { [msgId]: { total: 4, remaining: 2 } },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g2', playerNum: 2, dcName: 'Vader', displayName: 'Vader [DG 1]' }]]);
+  const result = resolveAbility('Force Rush', { game, playerNum: 2, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(result.logMessage, 'Gained 2 movement points.');
+  assert.strictEqual(game.movementBank[msgId].remaining, 4);
+  assert.strictEqual(game.movementBank[msgId].total, 6);
+});
+
+test('resolveAbility Urgency (Speed+2) with active activation applies MP', () => {
+  const msgId = 'msg789';
+  const game = {
+    gameId: 'g3',
+    dcActionsData: { [msgId]: { remaining: 1 } },
+    movementBank: { [msgId]: { total: 4, remaining: 2 } },
+  };
+  // Luke Skywalker has speed 5 in dc-stats → 5+2=7 MP
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g3', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const result = resolveAbility('Urgency', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(result.logMessage, 'Gained 7 movement points.');
+  assert.strictEqual(game.movementBank[msgId].remaining, 9);
+  assert.strictEqual(game.movementBank[msgId].total, 11);
+});
+
+test("resolveAbility Officer's Training with LEADER (during attack) draws 1", () => {
+  const game = { player1CcDeck: ['X', 'Y'], player2CcDeck: [], player1CcHand: [], player2CcHand: [] };
+  const combat = { attackerPlayerNum: 1, attackerDcName: 'Darth Vader' };
+  const result = resolveAbility("Officer's Training", { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(result.drewCards?.length, 1);
+  assert.strictEqual(game.player1CcHand.length, 1);
+});
+
+test("resolveAbility Officer's Training without LEADER (during attack) does not draw", () => {
+  const game = { player1CcDeck: ['X', 'Y'], player2CcDeck: [], player1CcHand: [], player2CcHand: [] };
+  const combat = { attackerPlayerNum: 1, attackerDcName: 'Nexu (Regular)' };
+  const result = resolveAbility("Officer's Training", { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(result.drewCards?.length ?? 0, 0);
+  assert.strictEqual(game.player1CcHand.length, 0);
+});

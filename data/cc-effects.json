@@ -44,7 +44,7 @@
       "playableBy": "LARGE CREATURE",
       "timing": "duringActivation",
       "effect": "Use during your activation to become focused, Hidden, gain 2 Power Tokens, and 2 movement points. The next time a hostile figure within 2 spaces is defeated during this activation, recover 2 Damage.",
-      "effectType": "manual"
+      "abilityId": "Apex Predator"
     },
     "Arcing Shot": {
       "cost": 1,
@@ -790,7 +790,7 @@
       "playableBy": "FORCE USER",
       "timing": "startOfActivation",
       "effect": "Use at the start of your activation. You gain 2 movement points.",
-      "effectType": "manual"
+      "abilityId": "Force Rush"
     },
     "Force Surge": {
       "cost": 2,
@@ -895,7 +895,7 @@
       "playableBy": "REBEL",
       "timing": "startOfActivation",
       "effect": "Use at the start of your activation to discard 1 HARMFUL condition, recover 2 Damage, and gain 2 movement points.",
-      "effectType": "manual"
+      "abilityId": "Heart of Freedom"
     },
     "Heavy Armor": {
       "cost": 1,
@@ -1126,7 +1126,7 @@
       "playableBy": "Any Figure",
       "timing": "specialAction",
       "effect": "Special Action: Gain a number of movement points equal to your Speed +2.",
-      "effectType": "manual"
+      "abilityId": "Urgency"
     },
     "Wookiee Rage": {
       "cost": 2,
@@ -1322,7 +1322,7 @@
       "playableBy": "Any Figure",
       "timing": "duringAttack",
       "effect": "Use while attacking to reroll 1 attack die. Then, if you are a LEADER, draw 1 Command card.",
-      "effectType": "manual"
+      "abilityId": "Officer's Training"
     },
     "On a Mission": {
       "cost": 0,
@@ -1477,7 +1477,7 @@
       "playableBy": "IMPERIAL",
       "timing": "duringActivation",
       "effect": "Use during your activation to discard 1 HARMFUL condition and gain 2 movement points. Then, you may suffer 1 Damage to gain up to 2 different Power Tokens.",
-      "effectType": "manual"
+      "abilityId": "Price of Glory"
     },
     "Price on Their Heads": {
       "cost": 1,
@@ -2080,7 +2080,7 @@
       "playableBy": "SCUM",
       "timing": "duringActivation",
       "effect": "Use during your activation to discard 1 HARMFUL condition and gain 2 movement points. When the next hostile figure is defeated during this activation, gain 2 VPs.",
-      "effectType": "manual"
+      "abilityId": "Worth Every Credit"
     },
     "Wreak Vengeance": {
       "cost": 1,

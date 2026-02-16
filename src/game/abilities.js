@@ -2,7 +2,17 @@
  * F1 Ability library: lookup by id, resolve surge (code-per-ability). No Discord.
  * Surge resolution uses combat.parseSurgeEffect; DCs still reference keys in dc-effects (surgeAbilities array).
  */
-import { getAbilityLibrary } from '../data-loader.js';
+import { getAbilityLibrary, getDcStats, getDcEffects } from '../data-loader.js';
+
+/** Look up DC stats by name (handles display variants). */
+function getStatsForDc(dcName) {
+  const map = getDcStats() || {};
+  const base = (dcName || '').replace(/\s*\[.*\]\s*$/, '').trim();
+  return map[base] || map[dcName] || (() => {
+    const key = Object.keys(map).find((k) => k.toLowerCase() === (base || dcName || '').toLowerCase());
+    return key ? map[key] : {};
+  })();
+}
 import { parseSurgeEffect } from './combat.js';
 
 /** Get ability metadata by id. Returns { type, surgeCost?, label?, ... } or null. */
@@ -67,42 +77,82 @@ export function resolveAbility(abilityId, context) {
     return { applied: false, manualMessage: 'Resolve manually (see rules).' };
   }
 
-  // ccEffect: Draw N cards
+  // ccEffect: Draw N cards (optionally conditional on figure trait, e.g. Officer's Training)
   if (entry.type === 'ccEffect' && typeof entry.draw === 'number' && entry.draw > 0) {
-    const { game, playerNum } = context;
+    const { game, playerNum, combat, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (entry.drawIfTrait) {
+      let dcName = null;
+      const cbt = combat || game.combat || game.pendingCombat;
+      if (cbt && cbt.attackerPlayerNum === playerNum && cbt.attackerDcName) {
+        dcName = cbt.attackerDcName;
+      } else if (dcMessageMeta) {
+        const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+        const meta = msgId ? dcMessageMeta.get(msgId) : null;
+        if (meta?.dcName) dcName = meta.dcName;
+      }
+      if (!dcName) return { applied: false, manualMessage: 'Resolve manually: could not determine figure for trait check.' };
+      const eff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const keywords = (eff?.keywords || []).map((k) => String(k).toUpperCase());
+      const trait = String(entry.drawIfTrait).toUpperCase();
+      if (!keywords.includes(trait)) return { applied: true };
+    }
     const drew = drawCcCards(game, playerNum, entry.draw);
     return { applied: true, drewCards: drew };
   }
 
-  // ccEffect: +1 MP (Fleet Footed) or Focus — requires active activation
-  if (abilityId === 'cc:fleet_footed' || abilityId === 'Focus') {
+  // ccEffect: +N MP from Speed (Urgency: Speed+2) — requires active activation
+  if (entry.type === 'ccEffect' && typeof entry.mpBonusFromSpeed === 'number') {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta?.dcName) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const speed = getStatsForDc(meta.dcName)?.speed ?? 4;
+    const n = speed + entry.mpBonusFromSpeed;
+    if (n < 1) return { applied: false, manualMessage: 'Resolve manually: no MP to gain.' };
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    bank.total = (bank.total ?? 0) + n;
+    bank.remaining = (bank.remaining ?? 0) + n;
+    game.movementBank[msgId] = bank;
+    const msg = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
+    return { applied: true, logMessage: msg };
+  }
+
+  // ccEffect: +N MP (Fleet Footed, Force Rush, etc.) — requires active activation
+  if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    const n = entry.mpBonus;
+    bank.total = (bank.total ?? 0) + n;
+    bank.remaining = (bank.remaining ?? 0) + n;
+    game.movementBank[msgId] = bank;
+    const msg = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
+    return { applied: true, logMessage: msg };
+  }
+
+  // ccEffect: Focus — requires active activation
+  if (abilityId === 'Focus') {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
     const meta = dcMessageMeta.get(msgId);
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-
-    if (abilityId === 'cc:fleet_footed') {
-      game.movementBank = game.movementBank || {};
-      const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-      bank.total = (bank.total ?? 0) + 1;
-      bank.remaining = (bank.remaining ?? 0) + 1;
-      game.movementBank[msgId] = bank;
-      return { applied: true, logMessage: 'Gained 1 movement point.' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found for activation.' };
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of figureKeys) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
     }
-
-    if (abilityId === 'Focus') {
-      const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-      if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found for activation.' };
-      game.figureConditions = game.figureConditions || {};
-      for (const fk of figureKeys) {
-        const existing = game.figureConditions[fk] || [];
-        if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
-      }
-      return { applied: true, logMessage: 'Became Focused.' };
-    }
+    return { applied: true, logMessage: 'Became Focused.' };
   }
 
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
