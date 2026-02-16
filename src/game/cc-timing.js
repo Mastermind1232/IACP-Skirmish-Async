@@ -84,6 +84,9 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'afterattack':
     case 'afterattackdice':
       return ctx.duringAttack;
+    case 'afteryouresolveattackthatdidnotmissduetoaccuracy':
+      // Reduce to Rubble: playable during/after attack (honor: only when attack did not miss due to accuracy)
+      return ctx.duringAttack;
     case 'afterattacktargetingyouresolved':
       return ctx.duringAttack && ctx.isDefender;
     case 'whenyouhavesuffereddamageequaltoyourhealth':

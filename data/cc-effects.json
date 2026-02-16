@@ -1639,7 +1639,8 @@
       "playableBy": "HEAVY WEAPON",
       "timing": "afterYouResolveAttackThatDidNotMissDueToAccuracy",
       "effect": "Use after you resolve an attack that did not miss due to accuracy. Each figure and object within 2 spaces of the target space suffers 1 Damage. Then, place a Rubble token in the target space and each adjacent space.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Reduce to Rubble"
     },
     "Regroup": {
       "cost": 1,
@@ -1676,7 +1677,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Put this card into play at the start of a round.\n\nPlayers cannot choose, play, or re-draw Command cards in discard piles.\n\nAt the end of the round, discard this card and draw 1 Command card.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Rest in Peace"
     },
     "Retaliation": {
       "cost": 1,
@@ -1734,7 +1736,8 @@
       "playableBy": "Unique",
       "timing": "startOfRound",
       "effect": "Place this card on your Deployment card at the start of a round as an Attachment.\n\nAttachment: Before you would be defeated, or at the end of this round, recover 2 Damage and discard this card.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Second Chance"
     },
     "Self-Augmentation": {
       "cost": 0,
