@@ -513,7 +513,8 @@
       "playableBy": "Mak Eshka'rey",
       "timing": "whenHostileFigureEntersSpaceWithin3Spaces",
       "effect": "Use when a hostile figure enters a space within 3 spaces of you to gain 3 movement points.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Disengage"
     },
     "Disorient": {
       "cost": 0,
@@ -712,7 +713,8 @@
       "playableBy": "Baze Malbus",
       "timing": "whenFriendlyFigureWithin3SpacesWouldBeDefeated",
       "effect": "Use when a friendly figure within 3 spaces has suffered damage equal to its Health, before it is defeated. Move up to 2 spaces, gain 1 Power Token, and then perform an attack. Then, that friendly figure is defeated.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Final Stand"
     },
     "Findsman Meditation": {
       "cost": 0,
@@ -764,7 +766,8 @@
       "playableBy": "Second Sister",
       "timing": "specialAction",
       "effect": "Special Action: Choose a hostile figure within 2 spaces. That figure suffers 3 Damage and becomes Stunned and Weakened. If that figure is a FORCE USER, you recover 3 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Force Drain"
     },
     "Force Illusion": {
       "cost": 2,

@@ -89,6 +89,12 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'whenyouhavesuffereddamageequaltoyourhealth':
       // Preservation Protocol: playable during your activation (honor system: only when at 0 health)
       return ctx.duringActivation;
+    case 'whenhostilefigureentersspacewithin3spaces':
+      // Disengage: playable during your activation (honor system: play when hostile entered)
+      return ctx.duringActivation;
+    case 'whenfriendlyfigurewithin3spaceswouldbedefeated':
+      // Final Stand: playable during your activation (honor system: play when friendly at 0 health)
+      return ctx.duringActivation;
     case 'other':
     default:
       return false;
