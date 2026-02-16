@@ -394,14 +394,16 @@
       "playableBy": "Fennec Shand",
       "timing": "afterAttackTargetingYouResolved",
       "effect": "Use after an attack targeting you resolves. If you are within 4 spaces of the attacker, the attacker suffers 1 Damage (3 Damage if you are adjacent). Then, move up to 2 spaces.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Dangerous Prey"
     },
     "Dark Energy": {
       "cost": 1,
       "playableBy": "IMPERIAL FORCE USER",
       "timing": "duringActivation",
       "effect": "Use during your activation. Choose another SMALL figure within 3 spaces. Push that figure up to 1 space, then it suffers 1 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Dark Energy"
     },
     "Data Theft": {
       "cost": 1,
@@ -458,7 +460,8 @@
       "playableBy": "FORCE USER",
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when a Ranged attack targeting you is declared. Apply -2 Accuracy to the attack results. After the attack is resolved, if you did not suffer any Damage, the attacker suffers 2 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Deflection"
     },
     "Demoralizing Monologue": {
       "cost": 1,
