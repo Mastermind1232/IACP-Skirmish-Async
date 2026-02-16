@@ -604,7 +604,8 @@
       "playableBy": "Agent Blaise",
       "timing": "afterYouResolveInterrogate",
       "effect": "Use after you resolve \"Interrogate.\" Return your discarded Command card to your hand. Then, draw 1 card.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Espionage Mastery"
     },
     "Etiquette and Protocol": {
       "cost": 2,
@@ -880,7 +881,8 @@
       "playableBy": "IG-11",
       "timing": "whenYouPerformRapidFire",
       "effect": "Use when you perform \"Rapid Fire\". Before you declare each attack, you become Focused.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Guild Programming"
     },
     "Hard to Hit": {
       "cost": 0,
@@ -1478,7 +1480,8 @@
       "playableBy": "Any Figure",
       "timing": "duringActivation",
       "effect": "Use during your activation to gain 1 Hit Token and 1 Block Token. Then, if you are a LEADER, an adjacent friendly figure gains 1 Hit Token and 1 Block Token.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Prepared for Battle"
     },
     "Preservation Protocol": {
       "cost": 1,
