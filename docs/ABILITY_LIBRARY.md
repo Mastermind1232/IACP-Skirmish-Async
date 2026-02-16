@@ -91,6 +91,10 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 - Add `"applyDefenseBonusBlock": N` — when defending, add +N Block to defense results. Stored in `combat.bonusBlock`.
 - Optional `"defenseBonusOnlyWhenNotAttackerActivation": true` — only apply when the attack is NOT during the attacker's activation (e.g. Overwatch). Example: **Brace Yourself** (+2 Block).
 
+**Defense bonus dice (defenseBonusDice)**
+
+- Add `"defenseBonusDice": N` and `"defenseBonusDiceColor": "black"` (or "white") — when defending, add N dice of that color to the defense pool. Stored in `combat.defenseBonusDice`. Example: **Brace for Impact** (+1 black die).
+
 **Attack bonus blast (attackBonusBlast)**
 
 - Add `"attackBonusBlast": N` — when declaring attack, as the attacker, this attack gains Blast N. Stored in `combat.bonusBlast`.
@@ -167,7 +171,7 @@ From **docs/RULES_REFERENCE.md** and **docs/consolidated-rules-raw.txt**:
 ## Progress (~7% of CCs auto; ~90% of those with abilityId)
 
 - **Surge:** 100% — all surge abilities resolved.
-- **CC effects:** 298 total; 39 have abilityId; ~39 fully or partially automated.
-- **CCs with automation:** Draw (4), conditional draw (2), MP bonus (9 incl. Advance Warning), Focus (2 incl. Meditation), Power Token gain (1), Rally (discardHarmfulConditions), Recovery (recoverDamage), Heart of Freedom, Price of Glory, Worth Every Credit (discardUpToNHarmful + mpBonus combo), Apex Predator (Focus + Hide + 2 Power Tokens + 2 MP; recovery on defeat manual), Against the Odds (1), Hit and Run (mpAfterAttack), Beatdown (nextAttacksBonusHits), Maximum Firepower (nextAttacksBonusHits), Size Advantage (nextAttacksBonusHits + nextAttacksBonusConditions; target SMALL manual), Blitz (attackSurgeBonus), Master Operative (applyFocus + attackSurgeBonus), Primary Target (applyFocus + attackBonusHits; highest-cost target manual), Bladestorm (attackSurgeBonus; blast manual), Camouflage (applyHideWhenDefending), Positioning Advantage (attackBonusHits), Assassinate (attackBonusHits), Deathblow (attackBonusHits; +2 vs Ranged manual), Deadeye (attackAccuracyBonus), Lock On (attackAccuracyBonus; -1 Dodge/Evade manual), Heavy Ordnance (attackBonusHits vs figure), Explosive Weaponry (attackBonusBlast), Tools for the Job (attackBonusDice), Brace Yourself (applyDefenseBonusBlock; when not attacker's activation), Fool Me Once (clearOpponentDiscard; draw 1 if SPY).
+- **CC effects:** 298 total; 40 have abilityId; ~40 fully or partially automated.
+- **CCs with automation:** Draw (4), conditional draw (2), MP bonus (9 incl. Advance Warning), Focus (2 incl. Meditation), Power Token gain (1), Rally (discardHarmfulConditions), Recovery (recoverDamage), Heart of Freedom, Price of Glory, Worth Every Credit (discardUpToNHarmful + mpBonus combo), Apex Predator (Focus + Hide + 2 Power Tokens + 2 MP; recovery on defeat manual), Against the Odds (1), Hit and Run (mpAfterAttack), Beatdown (nextAttacksBonusHits), Maximum Firepower (nextAttacksBonusHits), Size Advantage (nextAttacksBonusHits + nextAttacksBonusConditions; target SMALL manual), Blitz (attackSurgeBonus), Master Operative (applyFocus + attackSurgeBonus), Primary Target (applyFocus + attackBonusHits; highest-cost target manual), Bladestorm (attackSurgeBonus; blast manual), Camouflage (applyHideWhenDefending), Positioning Advantage (attackBonusHits), Assassinate (attackBonusHits), Deathblow (attackBonusHits; +2 vs Ranged manual), Deadeye (attackAccuracyBonus), Lock On (attackAccuracyBonus; -1 Dodge/Evade manual), Heavy Ordnance (attackBonusHits vs figure), Explosive Weaponry (attackBonusBlast), Tools for the Job (attackBonusDice), Brace Yourself (applyDefenseBonusBlock; when not attacker's activation), Brace for Impact (defenseBonusDice), Fool Me Once (clearOpponentDiscard; draw 1 if SPY).
 
 Phase 2 next: add more `type` values and branches in `resolveAbility` (e.g. more CC “draw N” effects, DC specials by name) so more effects run automatically instead of showing "Resolve manually".

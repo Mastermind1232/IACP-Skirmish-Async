@@ -164,7 +164,7 @@
       "playableBy": "Any Figure",
       "timing": "whileDefending",
       "effect": "Use while defending to add 1 black die to your defense pool.",
-      "effectType": "manual"
+      "abilityId": "Brace for Impact"
     },
     "Brace Yourself": {
       "cost": 0,

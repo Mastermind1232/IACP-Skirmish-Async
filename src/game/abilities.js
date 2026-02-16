@@ -581,6 +581,24 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: defenseBonusDice (Brace for Impact) — add N dice of color to defense pool; defender only
+  if (entry.type === 'ccEffect' && typeof entry.defenseBonusDice === 'number' && entry.defenseBonusDice > 0 && entry.defenseBonusDiceColor) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    const defenderPlayerNum = cbt?.attackerPlayerNum ? (cbt.attackerPlayerNum === 1 ? 2 : 1) : null;
+    if (!game || !playerNum || !cbt || defenderPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play while defending (as the defender).' };
+    }
+    cbt.defenseBonusDice = cbt.defenseBonusDice || [];
+    const color = String(entry.defenseBonusDiceColor).toLowerCase();
+    for (let i = 0; i < entry.defenseBonusDice; i++) cbt.defenseBonusDice.push(color);
+    const colorLabel = color.charAt(0).toUpperCase() + color.slice(1);
+    return {
+      applied: true,
+      logMessage: `Added ${entry.defenseBonusDice} ${colorLabel} die to defense pool.`,
+    };
+  }
+
   // ccEffect: applyDefenseBonusBlock (Brace Yourself) — +N Block when defending, only if not attacker's activation
   if (entry.type === 'ccEffect' && typeof entry.applyDefenseBonusBlock === 'number' && entry.applyDefenseBonusBlock > 0) {
     const { game, playerNum, combat } = context;

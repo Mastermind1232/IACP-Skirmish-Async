@@ -462,6 +462,19 @@ test('resolveAbility Brace Yourself applies +2 Block when not attacker activatio
   assert.strictEqual(combat.bonusBlock, 2);
 });
 
+test('resolveAbility Brace for Impact adds 1 black die to defense pool', () => {
+  const combat = {
+    attackerPlayerNum: 1,
+    defenderPlayerNum: 2,
+    target: { figureKey: 'Stormtroopers-2-0' },
+  };
+  const game = { gameId: 'g-bfi', pendingCombat: combat };
+  const result = resolveAbility('Brace for Impact', { game, playerNum: 2, combat });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.toLowerCase().includes('black'));
+  assert.deepStrictEqual(combat.defenseBonusDice, ['black']);
+});
+
 test('resolveAbility Brace Yourself returns manual when attacker is activating', () => {
   const combat = {
     attackerPlayerNum: 1,

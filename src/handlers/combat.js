@@ -263,7 +263,18 @@ export async function handleCombatRoll(interaction, ctx) {
       await interaction.reply({ content: 'Only the defender (P2) may roll defense dice.', ephemeral: true }).catch(() => {});
       return;
     }
-    combat.defenseRoll = rollDefenseDice(combat.targetStats.defense);
+    const baseDef = rollDefenseDice(combat.targetStats.defense);
+    const bonusDice = combat.defenseBonusDice || [];
+    let bonusBlock = 0, bonusEvade = 0;
+    for (const color of bonusDice) {
+      const r = rollDefenseDice(color);
+      bonusBlock += r.block;
+      bonusEvade += r.evade;
+    }
+    combat.defenseRoll = {
+      block: baseDef.block + bonusBlock,
+      evade: baseDef.evade + bonusEvade,
+    };
     await interaction.deferUpdate();
     await thread.send(`**Defense roll** — ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade`);
     const roll = combat.attackRoll;
