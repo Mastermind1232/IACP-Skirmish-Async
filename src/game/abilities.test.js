@@ -523,6 +523,30 @@ test('resolveAbility Tools for the Job adds 1 attack die when declaring attack',
   assert.strictEqual(combat.attackBonusDice, 1);
 });
 
+test('resolveAbility Spinning Kick adds Cleave 1 and Cleave 2 as surge options', () => {
+  const combat = {
+    attackerPlayerNum: 1,
+    attackerDcName: 'Tress Hacnua',
+    attackInfo: { dice: ['red'], range: [1, 2] },
+  };
+  const game = { gameId: 'g-sk', pendingCombat: combat };
+  const result = resolveAbility('Spinning Kick', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(combat.bonusSurgeAbilities, ['cleave 1', 'cleave 2']);
+});
+
+test('resolveAbility Parry adds +1 Block when defending', () => {
+  const combat = {
+    attackerPlayerNum: 1,
+    defenderPlayerNum: 2,
+    target: { figureKey: 'Wookiee-2-0' },
+  };
+  const game = { gameId: 'g-parry', pendingCombat: combat };
+  const result = resolveAbility('Parry', { game, playerNum: 2, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(combat.bonusBlock, 1);
+});
+
 test('resolveAbility Brace Yourself applies +2 Block when not attacker activation', () => {
   const combat = {
     attackerPlayerNum: 1,
@@ -557,6 +581,59 @@ test('resolveAbility Brace for Impact adds 1 black die to defense pool', () => {
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.toLowerCase().includes('black'));
   assert.deepStrictEqual(combat.defenseBonusDice, ['black']);
+});
+
+test("resolveAbility One in a Million removes all defense dice when not attacker's activation", () => {
+  const combat = {
+    attackerPlayerNum: 1,
+    attackerMsgId: 'msg-ow',
+    target: { figureKey: 'Stormtroopers-2-0' },
+  };
+  const game = { gameId: 'g-oam', pendingCombat: combat, dcActionsData: {} };
+  const result = resolveAbility("One in a Million", { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(combat.defensePoolRemoveAll, true);
+});
+
+test("resolveAbility One in a Million returns manual when it is attacker's activation", () => {
+  const combat = {
+    attackerPlayerNum: 1,
+    attackerMsgId: 'msg-act',
+    target: { figureKey: 'Stormtroopers-2-0' },
+  };
+  const game = { gameId: 'g-oam2', pendingCombat: combat, dcActionsData: { 'msg-act': {} } };
+  const result = resolveAbility("One in a Million", { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, false);
+  assert.ok(result.manualMessage?.toLowerCase().includes("not your activation"));
+});
+
+test('resolveAbility Wild Fire removes up to 2 dice from defense pool when attacker plays', () => {
+  const combat = {
+    attackerPlayerNum: 1,
+    target: { figureKey: 'CT-1701-2-0' },
+    targetStats: { defense: 'white' },
+  };
+  const game = { gameId: 'g-wf', pendingCombat: combat };
+  const result = resolveAbility('Wild Fire', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.toLowerCase().includes('remove'));
+  assert.strictEqual(combat.defensePoolRemoveMax, 2);
+});
+
+test('resolveAbility Wild Attack adds 1 red die to attack and 1 white die to defense when attacker plays', () => {
+  const combat = {
+    attackerPlayerNum: 1,
+    attackInfo: { dice: ['yellow'], range: [1, 3] },
+    target: { figureKey: 'Nexu-2-0' },
+  };
+  const game = { gameId: 'g-wa', pendingCombat: combat };
+  const result = resolveAbility('Wild Attack', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('attack die'));
+  assert.ok(result.logMessage?.toLowerCase().includes('white'));
+  assert.strictEqual(combat.attackBonusDice, 1);
+  assert.deepStrictEqual(combat.attackBonusDiceColors, ['red']);
+  assert.deepStrictEqual(combat.defenseBonusDice, ['white']);
 });
 
 test('resolveAbility Brace Yourself returns manual when attacker is activating', () => {
@@ -629,4 +706,12 @@ test('resolveAbility Maximum Firepower sets nextAttacksBonusHits', () => {
   const result = resolveAbility('Maximum Firepower', { game, playerNum: 2, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.deepStrictEqual(game.nextAttacksBonusHits[2], { count: 1, bonus: 4 });
+});
+
+test('resolveAbility Cruel Strike sets nextAttackBonusSurgeAbilities', () => {
+  const game = { gameId: 'g-cs', nextAttackBonusSurgeAbilities: {} };
+  const result = resolveAbility('Cruel Strike', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(game.nextAttackBonusSurgeAbilities[1], ['pierce 1, weaken']);
+  assert.ok(result.logMessage?.toLowerCase().includes('pierce') && result.logMessage?.toLowerCase().includes('weaken'));
 });

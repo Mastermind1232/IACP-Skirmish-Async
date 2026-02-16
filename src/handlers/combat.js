@@ -106,12 +106,14 @@ export async function handleAttackTarget(interaction, ctx) {
     content: '**Pre-combat window** — Both players: resolve any Command Cards, add/remove dice, apply/block damage, etc. When ready, click **Ready to roll combat dice** below.',
     components: [readyRow],
   });
+  const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
   game.pendingCombat = {
     gameId: game.gameId,
     attackerPlayerNum,
     defenderPlayerNum: attackerPlayerNum === 1 ? 2 : 1,
     attackerMsgId: msgId,
     attackerDcName: meta.dcName,
+    bonusSurgeAbilities: [...nextSurge],
     attackerDisplayName,
     attackerFigureIndex: figureIndex,
     target: { ...target },
@@ -131,6 +133,7 @@ export async function handleAttackTarget(interaction, ctx) {
     defenseRoll: null,
     attackTargetMsgId: interaction.message.id,
   };
+  if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
 
   await interaction.message.edit({
     content: `**Combat declared** — See thread in Game Log.`,
@@ -244,9 +247,10 @@ export async function handleCombatRoll(interaction, ctx) {
     }
     const baseDice = combat.attackInfo?.dice || [];
     const bonusDice = combat.attackBonusDice || 0;
+    const bonusColors = combat.attackBonusDiceColors || [];
     const primaryColor = baseDice[0] || 'red';
     const dice = [...baseDice];
-    for (let i = 0; i < bonusDice; i++) dice.push(primaryColor);
+    for (let i = 0; i < bonusDice; i++) dice.push(bonusColors[i] ?? primaryColor);
     combat.attackRoll = rollAttackDice(dice);
     await interaction.deferUpdate();
     await thread.send(`**Attack roll** — ${combat.attackRoll.acc} accuracy, ${combat.attackRoll.dmg} damage, ${combat.attackRoll.surge} surge`);
@@ -263,18 +267,19 @@ export async function handleCombatRoll(interaction, ctx) {
       await interaction.reply({ content: 'Only the defender (P2) may roll defense dice.', ephemeral: true }).catch(() => {});
       return;
     }
-    const baseDef = rollDefenseDice(combat.targetStats.defense);
+    const baseColor = combat.targetStats.defense || 'white';
     const bonusDice = combat.defenseBonusDice || [];
-    let bonusBlock = 0, bonusEvade = 0;
-    for (const color of bonusDice) {
+    const pool = [baseColor, ...bonusDice];
+    const removeMax = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
+    const removeCount = Math.min(removeMax, pool.length);
+    const diceToRoll = pool.slice(0, pool.length - removeCount);
+    let block = 0, evade = 0;
+    for (const color of diceToRoll) {
       const r = rollDefenseDice(color);
-      bonusBlock += r.block;
-      bonusEvade += r.evade;
+      block += r.block;
+      evade += r.evade;
     }
-    combat.defenseRoll = {
-      block: baseDef.block + bonusBlock,
-      evade: baseDef.evade + bonusEvade,
-    };
+    combat.defenseRoll = { block, evade };
     await interaction.deferUpdate();
     await thread.send(`**Defense roll** — ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade`);
     const roll = combat.attackRoll;

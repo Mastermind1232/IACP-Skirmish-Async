@@ -35,10 +35,12 @@ export const SURGE_LABELS = {
   'accuracy 2, surge 1': '+2 Accuracy, +1 Surge', 'damage 2, hide': '+2 Hits, Hide',
 };
 
-/** Get attacker's surge abilities from dc-effects. Includes all listed; cost filtering is done in UI (F13). */
+/** Get attacker's surge abilities from dc-effects + combat.bonusSurgeAbilities (CCs like Spinning Kick). */
 export function getAttackerSurgeAbilities(combat) {
   const card = getDcEffects()[combat.attackerDcName] || getDcEffects()[combat.attackerDcName?.replace(/\s*\[.*\]\s*$/, '')];
-  return card?.surgeAbilities || [];
+  const base = card?.surgeAbilities || [];
+  const bonus = combat?.bonusSurgeAbilities || [];
+  return [...base, ...bonus];
 }
 
 /** Parse a surge ability key into modifiers. F6: blast, recover, cleave. */

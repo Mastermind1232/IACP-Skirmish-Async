@@ -360,7 +360,8 @@
       "playableBy": "Any Figure",
       "timing": "specialAction",
       "effect": "Special Action: Perform an an attack. This attack gains:\n\n- Surge: Pierce 1, Weaken",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Cruel Strike"
     },
     "Crush": {
       "cost": 3,
@@ -1347,7 +1348,8 @@
       "playableBy": "Jyn Odan",
       "timing": "whenYouDeclareAttack",
       "effect": "Use when you declare an attack. If it is not your activation, remove all dice from the target's defense pool.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "One in a Million"
     },
     "Optimal Bombardment": {
       "cost": 3,
@@ -1417,7 +1419,8 @@
       "playableBy": "BRAWLER or GUARDIAN",
       "timing": "whileDefending",
       "effect": "Use while defending to apply +1 Block or +1 Evade to the defense results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Parry"
     },
     "Parting Blow": {
       "cost": 2,
@@ -1784,7 +1787,8 @@
       "playableBy": "Tress Hacnua",
       "timing": "duringAttack",
       "effect": "Use while attacking. This attack gains Cleave 1 and Cleave 2.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Spinning Kick"
     },
     "Spy": {
       "cost": null,
@@ -2051,14 +2055,16 @@
       "playableBy": "Any Figure",
       "timing": "whenYouDeclareAttack",
       "effect": "Use when you declare an attack. Add 1 red die to the attack pool and 1 white die to the defense pool.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Wild Attack"
     },
     "Wild Fire": {
       "cost": 1,
       "playableBy": "CT-1701",
       "timing": "whenYouDeclareAttack",
       "effect": "Use when you declare an attack. remove up to 2 dice of your choice from the defense pool.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Wild Fire"
     },
     "Wild Fury": {
       "cost": 2,

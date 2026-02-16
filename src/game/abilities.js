@@ -541,6 +541,23 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Became Focused.' };
   }
 
+  // ccEffect: nextAttackBonusSurgeAbilities (Cruel Strike) — next attack gains surge options; consumed when combat starts
+  if (entry.type === 'ccEffect' && Array.isArray(entry.nextAttackBonusSurgeAbilities) && entry.nextAttackBonusSurgeAbilities.length > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    let pnum = playerNum;
+    if (!pnum && dcMessageMeta) {
+      const msgId = findActiveActivationMsgId(game, 1, dcMessageMeta) || findActiveActivationMsgId(game, 2, dcMessageMeta);
+      const meta = msgId ? dcMessageMeta.get(msgId) : null;
+      pnum = meta?.playerNum;
+    }
+    if (!pnum) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    game.nextAttackBonusSurgeAbilities = game.nextAttackBonusSurgeAbilities || {};
+    game.nextAttackBonusSurgeAbilities[pnum] = entry.nextAttackBonusSurgeAbilities;
+    const labels = entry.nextAttackBonusSurgeAbilities.join(', ');
+    return { applied: true, logMessage: `Your next attack gains surge abilities: ${labels}.` };
+  }
+
   // ccEffect: nextAttacksBonusHits (Beatdown) — +N Hit to next M attacks by this player
   const nb = entry.type === 'ccEffect' && entry.nextAttacksBonusHits;
   if (nb && typeof nb.count === 'number' && nb.count > 0 && typeof nb.bonus === 'number' && nb.bonus > 0) {
@@ -589,6 +606,24 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: `+${entry.attackBonusHits} Hit added to this attack.`,
+    };
+  }
+
+  // ccEffect: attackBonusSurgeAbilities (Spinning Kick) — add surge options to this attack; attacker only
+  if (entry.type === 'ccEffect' && Array.isArray(entry.attackBonusSurgeAbilities) && entry.attackBonusSurgeAbilities.length > 0) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: "Resolve manually: play while attacking (as the attacker)." };
+    }
+    cbt.bonusSurgeAbilities = cbt.bonusSurgeAbilities || [];
+    for (const key of entry.attackBonusSurgeAbilities) {
+      if (key && !cbt.bonusSurgeAbilities.includes(key)) cbt.bonusSurgeAbilities.push(key);
+    }
+    const labels = entry.attackBonusSurgeAbilities.join(', ');
+    return {
+      applied: true,
+      logMessage: `This attack gains surge abilities: ${labels}.`,
     };
   }
 
@@ -653,6 +688,60 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: defensePoolRemoveAll only when NOT attacker's activation (One in a Million)
+  if (entry.type === 'ccEffect' && entry.defensePoolRemoveAll && entry.defensePoolRemoveOnlyWhenNotAttackerActivation) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: "Resolve manually: play when declaring an attack (as the attacker)." };
+    }
+    const attackerMsgId = cbt.attackerMsgId;
+    if (game.dcActionsData?.[attackerMsgId]) {
+      return { applied: false, manualMessage: "Resolve manually: One in a Million applies only when it is NOT your activation (e.g. Overwatch)." };
+    }
+    cbt.defensePoolRemoveAll = true;
+    return { applied: true, logMessage: "Removed all dice from the defense pool." };
+  }
+
+  // ccEffect: defensePoolRemoveMax (Wild Fire) — attacker removes up to N dice from defender's pool when declaring attack
+  if (entry.type === 'ccEffect' && typeof entry.defensePoolRemoveMax === 'number' && entry.defensePoolRemoveMax > 0) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: "Resolve manually: play when declaring an attack (as the attacker)." };
+    }
+    cbt.defensePoolRemoveMax = (cbt.defensePoolRemoveMax || 0) + entry.defensePoolRemoveMax;
+    return {
+      applied: true,
+      logMessage: `Remove up to ${entry.defensePoolRemoveMax} dice from the defense pool.`,
+    };
+  }
+
+  // ccEffect: defenseBonusDiceFromAttacker + optional attackBonusDice (Wild Attack) — must run before attackBonusDice when both exist
+  if (entry.type === 'ccEffect' && typeof entry.defenseBonusDiceFromAttacker === 'number' && entry.defenseBonusDiceFromAttacker > 0 && entry.defenseBonusDiceFromAttackerColor) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: "Resolve manually: play when declaring an attack (as the attacker)." };
+    }
+    const msgs = [];
+    if (typeof entry.attackBonusDice === 'number' && entry.attackBonusDice > 0) {
+      cbt.attackBonusDice = (cbt.attackBonusDice || 0) + entry.attackBonusDice;
+      if (entry.attackBonusDiceColor) {
+        cbt.attackBonusDiceColors = cbt.attackBonusDiceColors || [];
+        const ac = String(entry.attackBonusDiceColor).toLowerCase();
+        for (let i = 0; i < entry.attackBonusDice; i++) cbt.attackBonusDiceColors.push(ac);
+      }
+      msgs.push(`Added ${entry.attackBonusDice} attack die to the attack pool`);
+    }
+    cbt.defenseBonusDice = cbt.defenseBonusDice || [];
+    const color = String(entry.defenseBonusDiceFromAttackerColor).toLowerCase();
+    for (let i = 0; i < entry.defenseBonusDiceFromAttacker; i++) cbt.defenseBonusDice.push(color);
+    const colorLabel = color.charAt(0).toUpperCase() + color.slice(1);
+    msgs.push(`added ${entry.defenseBonusDiceFromAttacker} ${colorLabel} die to defense pool`);
+    return { applied: true, logMessage: msgs.join('; ') + '.' };
+  }
+
   // ccEffect: attackBonusDice (Tools for the Job) — add N dice to attack pool when declaring attack; attacker only
   if (entry.type === 'ccEffect' && typeof entry.attackBonusDice === 'number' && entry.attackBonusDice > 0) {
     const { game, playerNum, combat } = context;
@@ -661,6 +750,11 @@ export function resolveAbility(abilityId, context) {
       return { applied: false, manualMessage: "Resolve manually: play when declaring an attack (as the attacker)." };
     }
     cbt.attackBonusDice = (cbt.attackBonusDice || 0) + entry.attackBonusDice;
+    if (entry.attackBonusDiceColor) {
+      cbt.attackBonusDiceColors = cbt.attackBonusDiceColors || [];
+      const color = String(entry.attackBonusDiceColor).toLowerCase();
+      for (let i = 0; i < entry.attackBonusDice; i++) cbt.attackBonusDiceColors.push(color);
+    }
     return {
       applied: true,
       logMessage: `Added ${entry.attackBonusDice} attack die to the attack pool.`,
