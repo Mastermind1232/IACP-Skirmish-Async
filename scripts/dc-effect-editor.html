@@ -518,7 +518,8 @@
 
     const VERIFIED_KEY = 'dc-verified';
     let verified = new Set(JSON.parse(localStorage.getItem(VERIFIED_KEY) || '[]'));
-    let listSort = localStorage.getItem('dc-list-sort') || 'name'; // 'name' | 'cost'
+    let listSort = localStorage.getItem('dc-list-sort') || 'name'; // 'name' | 'cost_asc' | 'cost_desc'
+    if (listSort === 'cost') listSort = 'cost_asc'; // migrate legacy
     let names = [];
     let cards = {};
     let dcStats = {};
@@ -737,11 +738,12 @@
 
     function getUnverifiedCards() {
       const arr = names.filter((n) => !verified.has(n));
-      if (listSort === 'cost') {
+      if (listSort === 'cost_asc' || listSort === 'cost_desc') {
+        const dir = listSort === 'cost_asc' ? 1 : -1;
         return arr.sort((a, b) => {
           const ca = getCostForSort(a);
           const cb = getCostForSort(b);
-          if (ca !== cb) return ca - cb;
+          if (ca !== cb) return dir * (ca - cb);
           return a.localeCompare(b);
         });
       }
@@ -1167,11 +1169,17 @@
       listSort = sort;
       localStorage.setItem('dc-list-sort', sort);
       document.getElementById('sortName').classList.toggle('active-sort', sort === 'name');
-      document.getElementById('sortCost').classList.toggle('active-sort', sort === 'cost');
+      const costBtn = document.getElementById('sortCost');
+      costBtn.classList.toggle('active-sort', sort === 'cost_asc' || sort === 'cost_desc');
+      costBtn.textContent = sort === 'cost_asc' ? 'Cost ↑' : sort === 'cost_desc' ? 'Cost ↓' : 'Cost';
       render();
     }
     document.getElementById('sortName').addEventListener('click', () => setSort('name'));
-    document.getElementById('sortCost').addEventListener('click', () => setSort('cost'));
+    document.getElementById('sortCost').addEventListener('click', () => {
+      if (listSort === 'cost_asc') setSort('cost_desc');
+      else if (listSort === 'cost_desc') setSort('cost_asc');
+      else setSort('cost_asc');
+    });
 
     setSort(listSort);
     (async () => {

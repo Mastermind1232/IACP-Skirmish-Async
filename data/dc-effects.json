@@ -99,6 +99,7 @@
       "keywords": [],
       "cost": -5,
       "attachment": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "[Explosive Armaments]": {
@@ -1585,7 +1586,10 @@
         "damage 2",
         "pierce 3"
       ],
-      "specialAbilityIds": ["dv_force_choke", "dv_brutality"],
+      "specialAbilityIds": [
+        "dv_force_choke",
+        "dv_brutality"
+      ],
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial"
@@ -3581,7 +3585,9 @@
         "recover 2",
         "accuracy 2"
       ],
-      "specialAbilityIds": ["luke_saber_strike"],
+      "specialAbilityIds": [
+        "luke_saber_strike"
+      ],
       "attachment": false,
       "elite": true,
       "affiliation": "Rebel"
