@@ -48,10 +48,10 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 | `src/game/combat.js` | parseSurgeEffect (surge modifiers). |
 | DC/CC handlers | Call resolveAbility with the appropriate id and context. |
 
-### Example: Trust the Force (CC — Draw 1)
+### Example: There is Another (CC — Draw 1)
 
-- **ability-library.json:** `"Trust the Force": { "type": "ccEffect", "label": "Draw 1 Command card" }`.
-- **abilities.js:** For `ccEffect` + id `Trust the Force`, `drawCcCards(game, playerNum, 1)` is called; returns `{ applied: true, drewCards: [card] }`.
+- **ability-library.json:** `"There is Another": { "type": "ccEffect", "label": "Draw 1 Command card", "draw": 1 }`.
+- **abilities.js:** For `ccEffect` with `draw: 1`, `drawCcCards(game, playerNum, 1)` is called; returns `{ applied: true, drewCards: [card] }`.
 - **cc-hand.js:** When `resolveAbility` returns `applied: true` and `drewCards`, the handler calls `updateHandVisualMessage` and logs the drawn card(s).
 
 Phase 2 next: add more `type` values and branches in `resolveAbility` (e.g. more CC “draw N” effects, DC specials by name) so more effects run automatically instead of showing "Resolve manually".
