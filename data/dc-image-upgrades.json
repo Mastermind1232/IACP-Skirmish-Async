@@ -1,6 +1,8 @@
 {
   "description": "Tracks which cards have had their images upgraded with better quality versions",
   "dc_figures": [
+    "AT-ST",
+    "Alliance Ranger (Regular)",
     "ISB Infiltrator (Regular)",
     "Jabba the Hutt",
     "Jarrod Kelvin",
@@ -41,6 +43,8 @@
     "Riot Trooper (Elite)",
     "Riot Trooper (Regular)",
     "Royal Guard (Elite)",
+    "Royal Guard Champion",
+    "SC2-M Repulsor Tank",
     "Sabine Wren",
     "Saska Teft",
     "Saw Gerrerra",
@@ -66,6 +70,7 @@
     "Wampa (Elite)",
     "Wing Guard (Elite)",
     "Wing Guard (Regular)",
+    "Wookiee Warrior (Elite)",
     "Wookiee Warrior (Regular)",
     "Zeb Orrelios",
     "Zuckuss"

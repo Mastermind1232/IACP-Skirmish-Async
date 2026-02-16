@@ -26,6 +26,8 @@ export {
   getCcShuffleDrawButton,
   getCcActionButtons,
   getIllegalCcPlayButtons,
+  getNegationResponseButtons,
+  getCelebrationButtons,
   getSelectSquadButton,
   getHandSquadButtons,
   getKillGameButton,

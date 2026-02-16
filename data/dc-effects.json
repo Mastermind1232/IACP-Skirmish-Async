@@ -746,8 +746,9 @@
         "hit token"
       ],
       "attachment": false,
-      "affiliation": "Rebel",
-      "elite": true
+      "elite": true,
+      "unique": true,
+      "affiliation": "Rebel"
     },
     "Alliance Ranger (Elite)": {
       "abilityText": "Guerilla: After you resolve an attack, if the defender was defeated, become Hidden\n\nElite Sniper: While attacking, if the target space is 5 or more spaces away, you may reroll up to 2 attack dice.",
@@ -1400,6 +1401,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Cassian Andor": {
@@ -1958,10 +1960,10 @@
       "cost": 9,
       "health": 12,
       "speed": 4,
-      "figures": 1,
       "passives": [
         "+1 Hit, +1 Accuracy, +1 Block"
       ],
+      "figures": 1,
       "attack": {
         "dice": [
           "blue",
@@ -1977,7 +1979,7 @@
         "damage 2"
       ],
       "attachment": false,
-      "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "E-Web Engineer (Elite)": {
@@ -2869,6 +2871,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "IG-88": {
@@ -3677,6 +3680,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Mak Eshka'rey": {
@@ -4475,6 +4479,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "Sabine Wren": {
