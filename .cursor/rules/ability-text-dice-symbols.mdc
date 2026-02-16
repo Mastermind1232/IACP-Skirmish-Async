@@ -13,7 +13,7 @@ alwaysApply: false
 3. **keywords** — The trait/keyword list (e.g. SMUGGLER, HUNTER).
 4. **Image upgraded tag** — Add the card name to `dc-image-upgrades.json` → `dc_figures` array so it shows the HIGH-RES IMAGE badge.
 
-**Do NOT update** cost, health, speed, figures, attack, defense, passives, surgeAbilities, subname, affiliation, elite, or any other fields.
+**Do NOT update** cost, health, speed, figures, attack, defense, passives, surgeAbilities, subname, affiliation, elite, unique, or any other fields.
 
 If the user explicitly asks for a full update (e.g. "full read and update"), then use the full-read rules below. Otherwise, stick to image + abilityText + keywords only.
 
@@ -23,7 +23,7 @@ If the user explicitly asks for a full update (e.g. "full read and update"), the
 
 If the user says "full update" or "update everything from the card" or similar, then:
 
-1. **Fully read the card** from the image/description: cost, sub-cost, health, speed, figures, attack (dice colors and type: Ranged/Melee), defense (white or black — read from the card, do not infer from faction), passives, surge abilities, ability text, keywords, subname, affiliation, elite.
+1. **Fully read the card** from the image/description: cost, sub-cost, health, speed, figures, attack (dice colors and type: Ranged/Melee), defense (white or black — read from the card, do not infer from faction), passives, surge abilities, ability text, keywords, subname, affiliation, elite, unique.
 2. **Update all relevant fields**: copy the image, update `dc-images.json` if needed, and update `data/dc-effects.json` with complete data.
 3. **Notch count** = figures. **Defense die** = the white or black square under "Defense" in the bottom corner.
 
@@ -83,8 +83,9 @@ When editing `abilityText` or `effect` in DC/CC data, **never leave a dice resul
    - Movement abilities (e.g. "Lift Off", "Jump", "Fly") are especially likely to be special actions — double-check these. If you are not 100% sure, list it in uncertainties.
 7. **Tokens/symbols:** Surge (starburst) ≠ Focus (focus token) ≠ Power Token. **Question mark on a token background** = generic **Power Token** (player chooses any: Block, Hit, Surge, Evade, etc.). Write "gain 1 Power Token". Read the actual symbol.
 8. **Elite flag:** Check the **cost number color**. Red = elite → add `"elite": true`. Grey/white = not elite → do not add the field. ALL unique characters with red cost numbers are elite. ALL "(Elite)" group cards are elite.
-9. **Figure count from notches:** Below the cost number on the left edge, count the small notch marks. Red notches = elite, grey notches = regular. Number of notches = number of figures. Always check and record this.
-10. **New surge combos:** If a card has a surge combination not yet in the editor dropdown, add it to both the `<option>` list and `SURGE_LABELS` in `dc-effect-editor.html`. Use "Hit" not "Damage" in display labels.
+9. **Unique flag (independent of elite):** Check for the **bullet (▪) before the card name**. Bullet present = unique → add `"unique": true`. No bullet = not unique → do not add the field. **Unique and elite are separate traits** — do NOT infer unique from elite. Non-elite cards can be unique; elite cards can be non-unique.
+10. **Figure count from notches:** Below the cost number on the left edge, count the small notch marks. Red notches = elite, grey notches = regular. Number of notches = number of figures. Always check and record this.
+11. **New surge combos:** If a card has a surge combination not yet in the editor dropdown, add it to both the `<option>` list and `SURGE_LABELS` in `dc-effect-editor.html`. Use "Hit" not "Damage" in display labels.
 
 ## Mandatory visible checklist (output to user for EVERY card)
 
@@ -93,6 +94,7 @@ Before making ANY edit to a card's data, you MUST output the following checklist
 ```
 CARD: [Card Name]
 - Cost color: red (elite) / grey (not elite)
+- Unique: bullet (▪) before name? yes / no
 - Notch count: ___ notches, color: red/grey → figures: ___
 - Dice count: ___ icons seen → ___ colors listed (match? yes/no)
 - Dice colors (L→R): die 1 = ___, die 2 = ___, die 3 = ___
@@ -123,6 +125,7 @@ CARD: [Card Name]
 - Yellow dice blend into backgrounds — if cost is 5+ with only 2 dice, re-examine for yellow.
 - If uncertain about ANY field, flag it and leave it blank. The user will fill it in.
 - **Elite flag is non-negotiable.** Every card must be checked for red vs grey cost. Red = `"elite": true`. If you see "(Elite)" in the name, it must also have `"elite": true`.
+- **Unique flag is independent of elite.** Check the bullet (▪) before the name. Bullet = `"unique": true`. Do NOT infer unique from elite or figures count.
 - **Stat bar items must be checked individually for ⟋.** Do not assume they are all surges or all passives. Each item is independent.
 - **Ability prefixes must be checked individually.** For each named ability, look for ⇒, ⇒⇒, or ⟋ immediately before the name. Missing a prefix is a data error.
 - **Surge values in `surgeAbilities`** use the internal format (e.g., `"damage 2"`, `"pierce 3"`, `"accuracy 2"`, `"damage 2, hide"`). Display labels use "Hit/Hits" but internal keys use "damage".

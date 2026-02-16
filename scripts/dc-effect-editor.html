@@ -93,6 +93,7 @@
     .form-stats .form-row-surge-passives { gap: 10px; }
     button.secondary-btn { padding: 6px 12px; font-size: 12px; background: #444; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; }
     button.secondary-btn:hover { background: #555; }
+    button.secondary-btn.active-sort { background: #0d6efd; color: #fff; border-color: #0d6efd; }
   </style>
 </head>
 <body>
@@ -423,6 +424,10 @@
         <input type="checkbox" id="elite" style="width: auto;">
         <span>Elite</span>
       </label>
+      <label style="display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px;">
+        <input type="checkbox" id="unique" style="width: auto;">
+        <span>Unique</span>
+      </label>
       <div class="field inline" style="max-width: 160px;">
         <label>Companion name</label>
         <input type="text" id="companionName" placeholder="e.g. The Child">
@@ -456,6 +461,11 @@
 
   <div class="entries">
     <h2>Unverified: <span id="count">0</span> — Verified: <span id="verifiedCount">0</span> — Img Upgraded: <span id="imgUpgradeCount">0</span> — Total: <span id="totalCount">0</span></h2>
+    <div class="form-row" style="margin-bottom:12px; align-items:center; gap:8px;">
+      <span class="form-section-title" style="margin:0;">Sort:</span>
+      <button type="button" id="sortName" class="secondary-btn">A–Z</button>
+      <button type="button" id="sortCost" class="secondary-btn">Cost</button>
+    </div>
     <div id="list"></div>
   </div>
 
@@ -498,6 +508,7 @@
     const companionCheckbox = document.getElementById('companion');
     const companionNameInput = document.getElementById('companionName');
     const eliteCheckbox = document.getElementById('elite');
+    const uniqueCheckbox = document.getElementById('unique');
     const affiliationSelect = document.getElementById('affiliation');
     const addBtn = document.getElementById('addBtn');
     const listEl = document.getElementById('list');
@@ -507,6 +518,7 @@
 
     const VERIFIED_KEY = 'dc-verified';
     let verified = new Set(JSON.parse(localStorage.getItem(VERIFIED_KEY) || '[]'));
+    let listSort = localStorage.getItem('dc-list-sort') || 'name'; // 'name' | 'cost'
     let names = [];
     let cards = {};
     let dcStats = {};
@@ -716,8 +728,24 @@
       return names.length - getVerifiedCount();
     }
 
+    function getCostForSort(name) {
+      const data = cards[name] || {};
+      if (data.cost !== undefined && data.cost !== null) return Number(data.cost);
+      const stats = dcStats[name] || dcStats[name.replace(/\s*\[.*\]\s*$/, '')];
+      return (stats?.cost != null) ? Number(stats.cost) : 999;
+    }
+
     function getUnverifiedCards() {
-      return names.filter((n) => !verified.has(n)).sort((a, b) => {
+      const arr = names.filter((n) => !verified.has(n));
+      if (listSort === 'cost') {
+        return arr.sort((a, b) => {
+          const ca = getCostForSort(a);
+          const cb = getCostForSort(b);
+          if (ca !== cb) return ca - cb;
+          return a.localeCompare(b);
+        });
+      }
+      return arr.sort((a, b) => {
         const aCompanion = companionNames.has(a) ? 2 : 0;
         const bCompanion = companionNames.has(b) ? 2 : 0;
         if (aCompanion !== bCompanion) return aCompanion - bCompanion;
@@ -837,6 +865,7 @@
         const aff = card.affiliation || '';
         affiliationSelect.value = (aff === 'Mercenary' ? 'Scum' : aff === 'Neutral' ? 'Any' : aff) || '';
         eliteCheckbox.checked = card.elite === true || (card.elite !== false && /\(Elite\)\s*$/i.test(name));
+        uniqueCheckbox.checked = card.unique === true;
       } else {
         abilityText.value = '';
         keywords.value = '';
@@ -859,6 +888,7 @@
         companionCheckbox.checked = false;
         companionNameInput.value = '';
         eliteCheckbox.checked = /\(Elite\)\s*$/i.test((cardName.value || cardSelect.value || '').trim());
+        uniqueCheckbox.checked = false;
         affiliationSelect.value = '';
       }
       updateAbilityTextState();
@@ -933,6 +963,7 @@
         attachment: attachmentCheckbox.checked,
         companion: companionCheckbox.checked ? (companionNameInput.value.trim() || true) : undefined,
         elite: eliteCheckbox.checked || undefined,
+        unique: uniqueCheckbox.checked || undefined,
         affiliation: affiliationSelect.value || undefined,
         isIACPVariant: existing.isIACPVariant,
       };
@@ -969,6 +1000,7 @@
         attachment: attachmentCheckbox.checked,
         companion: companionCheckbox.checked ? (companionNameInput.value.trim() || true) : undefined,
         elite: eliteCheckbox.checked || undefined,
+        unique: uniqueCheckbox.checked || undefined,
         affiliation: affiliationSelect.value || undefined,
         isIACPVariant: existing.isIACPVariant,
       };
@@ -1094,10 +1126,11 @@
         const attStr = data.attachment ? ' · Attachment' : '';
         const compStr = data.companion ? (' · Companion' + (typeof data.companion === 'string' ? ` (${data.companion})` : '')) : '';
         const eliteStr = data.elite ? ' · Elite' : '';
+        const uniqueStr = data.unique ? ' · Unique' : '';
         const affStr = data.affiliation ? ' · ' + data.affiliation : '';
         const imgBadge = isImageUpgraded(name) ? '<span style="background:#0dcaf0;color:#000;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:6px;">IMG</span>' : '';
         const mid = [costStr, subCostStr, healthStr, kwStr || '—'].filter(Boolean).join(' · ');
-        div.innerHTML = `<strong>${name}</strong>${imgBadge} <span>${mid}${attStr}${compStr}${eliteStr}${affStr}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
+        div.innerHTML = `<strong>${name}</strong>${imgBadge} <span>${mid}${attStr}${compStr}${eliteStr}${uniqueStr}${affStr}</span> <button data-name="${name.replace(/"/g, '&quot;')}">Remove</button>`;
         div.querySelector('button').addEventListener('click', (e) => {
           e.stopPropagation();
           delete cards[name];
@@ -1130,7 +1163,17 @@
       }
     }
 
-    render();
+    function setSort(sort) {
+      listSort = sort;
+      localStorage.setItem('dc-list-sort', sort);
+      document.getElementById('sortName').classList.toggle('active-sort', sort === 'name');
+      document.getElementById('sortCost').classList.toggle('active-sort', sort === 'cost');
+      render();
+    }
+    document.getElementById('sortName').addEventListener('click', () => setSort('name'));
+    document.getElementById('sortCost').addEventListener('click', () => setSort('cost'));
+
+    setSort(listSort);
     (async () => {
       try {
         const ri = await fetch('/data/dc-images.json');
