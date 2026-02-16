@@ -1035,7 +1035,7 @@
       "playableBy": "FORCE USER",
       "timing": "whileDefending",
       "effect": "Use while defending to add 1 black die to your defense pool.\n\nPassive: While this card is in your discard pile, FORCE USERS  gain:\n- Surge: Re-draw this card.",
-      "effectType": "manual"
+      "abilityId": "Knowledge and Defense"
     },
     "Learn by Example": {
       "cost": 1,
@@ -1826,7 +1826,7 @@
       "playableBy": "Any Small Figure",
       "timing": "whileDefending",
       "effect": "Use while defending to add 1 white die to your defense pool.",
-      "effectType": "manual"
+      "abilityId": "Stealth Tactics"
     },
     "Still Faster Than You": {
       "cost": 2,
