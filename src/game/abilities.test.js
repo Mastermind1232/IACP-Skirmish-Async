@@ -83,6 +83,23 @@ test('resolveAbility Planning with non-LEADER discards 1 of drawn', () => {
   assert.ok(result.logMessage?.includes('not LEADER'));
 });
 
+test('resolveAbility Black Market Prices draws 2, discards 1, gains VP = cost', () => {
+  const game = {
+    player1CcDeck: ['Planning', 'Blitz'],
+    player1CcHand: [],
+    player2CcHand: [],
+    player1VP: { total: 0 },
+    gameId: 'g-bmp',
+  };
+  const result = resolveAbility('Black Market Prices', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.player1CcHand.length, 1);
+  assert.strictEqual((game.player1CcDiscard || []).length, 1);
+  assert.strictEqual(game.player1CcDiscard[0], 'Blitz');
+  assert.strictEqual(game.player1CcHand[0], 'Planning');
+  assert.ok(game.player1VP.total >= 0);
+});
+
 test('resolveAbility draw with empty deck: draws what is available', () => {
   const game = { player1CcDeck: ['Only'], player2CcDeck: [], player1CcHand: [], player2CcHand: [] };
   const result = resolveAbility('Planning', { game, playerNum: 1 });

@@ -114,7 +114,6 @@
       "playableBy": "SMUGGLER",
       "timing": "specialAction",
       "effect": "Special Action: Draw 2 Command cards. Then discard 1 card from your hand. You gain VPs equal to the cost of the discarded card.",
-      "effectType": "manual",
       "abilityId": "Black Market Prices"
     },
     "Bladestorm": {

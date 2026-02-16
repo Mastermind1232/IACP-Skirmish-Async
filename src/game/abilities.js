@@ -2,7 +2,7 @@
  * F1 Ability library: lookup by id, resolve surge (code-per-ability). No Discord.
  * Surge resolution uses combat.parseSurgeEffect; DCs still reference keys in dc-effects (surgeAbilities array).
  */
-import { getAbilityLibrary, getDcStats, getDcEffects } from '../data-loader.js';
+import { getAbilityLibrary, getDcStats, getDcEffects, getCcEffect } from '../data-loader.js';
 
 /** Look up DC stats by name (handles display variants). */
 function getStatsForDc(dcName) {
@@ -106,6 +106,33 @@ export function resolveAbility(abilityId, context) {
       logMessage: parts.length ? parts.join('; ') + '.' : 'Opponent discard cleared.',
       drewCards: drew.length ? drew : undefined,
       refreshOpponentDiscard: cleared > 0,
+    };
+  }
+
+  // ccEffect: Draw N, then discard 1, gain VP = cost of discarded (Black Market Prices)
+  if (entry.type === 'ccEffect' && typeof entry.draw === 'number' && entry.draw > 0 && entry.drawThenDiscardOneGainVp) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const drew = drawCcCards(game, playerNum, entry.draw);
+    if (drew.length === 0) return { applied: true, logMessage: 'No cards to draw.' };
+    const toDiscard = drew[drew.length - 1];
+    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const hand = (game[handKey] || []).slice();
+    const idx = hand.indexOf(toDiscard);
+    if (idx >= 0) hand.splice(idx, 1);
+    game[handKey] = hand;
+    game[discardKey] = (game[discardKey] || []).concat(toDiscard);
+    const eff = getCcEffect(toDiscard);
+    const cost = typeof eff?.cost === 'number' ? eff.cost : 0;
+    const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[vpKey].total = (game[vpKey].total ?? 0) + cost;
+    const kept = drew.slice(0, -1);
+    return {
+      applied: true,
+      drewCards: kept,
+      logMessage: `Drew 2, discarded **${toDiscard}** (cost ${cost}), gained ${cost} VP.`,
     };
   }
 
