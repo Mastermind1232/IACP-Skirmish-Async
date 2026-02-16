@@ -66,6 +66,23 @@ test('resolveAbility draw 2 (Planning): draws two cards', () => {
   assert.strictEqual(game.player1CcDeck.length, 1);
 });
 
+test('resolveAbility Planning with non-LEADER discards 1 of drawn', () => {
+  const msgId = 'msg-plan';
+  const game = {
+    player1CcDeck: ['A', 'B', 'C'],
+    player1CcHand: [],
+    player2CcHand: [],
+    gameId: 'g-plan',
+    dcActionsData: { [msgId]: {} },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-plan', playerNum: 1, dcName: 'Nexu', displayName: 'Nexu [DG 1]' }]]);
+  const result = resolveAbility('Planning', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.player1CcHand.length, 1);
+  assert.strictEqual((game.player1CcDiscard || []).length, 1);
+  assert.ok(result.logMessage?.includes('not LEADER'));
+});
+
 test('resolveAbility draw with empty deck: draws what is available', () => {
   const game = { player1CcDeck: ['Only'], player2CcDeck: [], player1CcHand: [], player2CcHand: [] };
   const result = resolveAbility('Planning', { game, playerNum: 1 });

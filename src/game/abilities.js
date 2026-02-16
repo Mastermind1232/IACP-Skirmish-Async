@@ -109,6 +109,49 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: Draw N, then discard M of drawn if figure does NOT have trait (Planning)
+  if (entry.type === 'ccEffect' && typeof entry.draw === 'number' && entry.draw > 0 && entry.discardIfNotTrait && typeof entry.discardFromDrawn === 'number') {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const drew = drawCcCards(game, playerNum, entry.draw);
+    if (drew.length === 0) return { applied: true, logMessage: 'No cards to draw.' };
+    let dcName = null;
+    if (dcMessageMeta) {
+      const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      const meta = msgId ? dcMessageMeta.get(msgId) : null;
+      if (meta?.dcName) dcName = meta.dcName;
+    }
+    const hasTrait = dcName ? (() => {
+      const eff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const keywords = (eff?.keywords || []).map((k) => String(k).toUpperCase());
+      return keywords.includes(String(entry.discardIfNotTrait).toUpperCase());
+    })() : true;
+    if (!hasTrait && entry.discardFromDrawn > 0) {
+      const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+      const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+      const hand = game[handKey] || [];
+      const toDiscard = Math.min(entry.discardFromDrawn, drew.length);
+      const discarded = [];
+      for (let i = 0; i < toDiscard; i++) {
+        const card = drew[drew.length - 1 - i];
+        const idx = hand.lastIndexOf(card);
+        if (idx >= 0) {
+          hand.splice(idx, 1);
+          discarded.push(card);
+        }
+      }
+      game[handKey] = hand;
+      game[discardKey] = (game[discardKey] || []).concat(discarded);
+      const kept = drew.filter((c) => !discarded.includes(c));
+      return {
+        applied: true,
+        drewCards: kept,
+        logMessage: `Drew 2, discarded ${discarded.length} (not LEADER).`,
+      };
+    }
+    return { applied: true, drewCards: drew };
+  }
+
   // ccEffect: Draw N cards (optionally conditional on figure trait, e.g. Officer's Training)
   if (entry.type === 'ccEffect' && typeof entry.draw === 'number' && entry.draw > 0) {
     const { game, playerNum, combat, dcMessageMeta } = context;

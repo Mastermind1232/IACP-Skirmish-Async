@@ -1453,7 +1453,6 @@
       "playableBy": "Any Figure",
       "timing": "specialAction",
       "effect": "Special Action: Draw 2 Command cards. Then, if you are not a LEADER, discard 1 of those cards.",
-      "effectType": "manual",
       "abilityId": "Planning"
     },
     "Positioning Advantage": {
