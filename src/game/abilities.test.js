@@ -152,12 +152,21 @@ test("resolveAbility Officer's Training without LEADER (during attack) does not 
   assert.strictEqual(game.player1CcHand.length, 0);
 });
 
-test("resolveAbility Fool Me Once with SPY (during activation) draws 1", () => {
+test("resolveAbility Fool Me Once clears opponent discard and draws 1 if SPY", () => {
   const msgId = 'msg-spy';
-  const game = { player1CcDeck: ['A'], player2CcDeck: [], player1CcHand: [], player2CcHand: [], gameId: 'g4', dcActionsData: { [msgId]: {} } };
+  const game = {
+    player1CcDeck: ['A'],
+    player2CcDeck: [],
+    player1CcHand: [],
+    player2CcHand: [],
+    player2CcDiscard: ['X', 'Y'],
+    gameId: 'g4',
+    dcActionsData: { [msgId]: {} },
+  };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g4', playerNum: 1, dcName: 'Agent Blaise', displayName: 'Agent Blaise [DG 1]' }]]);
   const result = resolveAbility('Fool Me Once', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.player2CcDiscard.length, 0);
   assert.strictEqual(result.drewCards?.length, 1);
   assert.strictEqual(game.player1CcHand.length, 1);
 });

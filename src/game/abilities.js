@@ -77,6 +77,38 @@ export function resolveAbility(abilityId, context) {
     return { applied: false, manualMessage: 'Resolve manually (see rules).' };
   }
 
+  // ccEffect: clearOpponentDiscard + optional draw with drawIfTrait (Fool Me Once)
+  if (entry.type === 'ccEffect' && entry.clearOpponentDiscard) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const discardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const cleared = (game[discardKey] || []).length;
+    game[discardKey] = [];
+    let drew = [];
+    if (typeof entry.draw === 'number' && entry.draw > 0 && entry.drawIfTrait && dcMessageMeta) {
+      const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      const meta = msgId ? dcMessageMeta.get(msgId) : null;
+      if (meta?.dcName) {
+        const eff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+        const keywords = (eff?.keywords || []).map((k) => String(k).toUpperCase());
+        const trait = String(entry.drawIfTrait).toUpperCase();
+        if (keywords.includes(trait)) {
+          drew = drawCcCards(game, playerNum, entry.draw);
+        }
+      }
+    }
+    const parts = [];
+    if (cleared > 0) parts.push(`Returned ${cleared} card(s) from opponent's discard to the game box`);
+    if (drew.length > 0) parts.push(`drew ${drew.length} card(s)`);
+    return {
+      applied: true,
+      logMessage: parts.length ? parts.join('; ') + '.' : 'Opponent discard cleared.',
+      drewCards: drew.length ? drew : undefined,
+      refreshOpponentDiscard: cleared > 0,
+    };
+  }
+
   // ccEffect: Draw N cards (optionally conditional on figure trait, e.g. Officer's Training)
   if (entry.type === 'ccEffect' && typeof entry.draw === 'number' && entry.draw > 0) {
     const { game, playerNum, combat, dcMessageMeta } = context;

@@ -327,10 +327,16 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
     const result = resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat });
     if (result.applied && result.drewCards?.length) {
       await updateHandVisualMessage(game, playerNum, client);
+    }
+    if (result.applied && result.refreshOpponentDiscard) {
+      const oppNum = playerNum === 1 ? 2 : 1;
+      await updateDiscardPileMessage(game, oppNum, client);
+    }
+    if (result.applied && result.logMessage) {
+      await logGameAction(game, client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
+    } else if (result.applied && result.drewCards?.length) {
       const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
       await logGameAction(game, client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
-    } else if (result.applied && result.logMessage) {
-      await logGameAction(game, client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
     } else if (!result.applied && result.manualMessage) {
       await logGameAction(game, client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
     }
