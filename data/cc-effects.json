@@ -278,7 +278,8 @@
       "playableBy": "Biv Bodhrik",
       "timing": "duringActivation",
       "effect": "Use during your activation to move up to 2 spaces. Then perform a melee attack without using an action using 1 red and 1 yellow die. The attack uses only the following abilities:\n- Pierce 1\n- Surge: +1 Hit\n- Surge: Stun",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Close and Personal"
     },
     "Close the Gap": {
       "cost": 3,
@@ -804,7 +805,8 @@
       "playableBy": "Force User",
       "timing": "endOfActivation",
       "effect": "Use at the end of your activation to move up to 1 space. Then, choose an adjacent hostile figure. That figure suffers 2 Damage and 1 Strain.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Force Surge"
     },
     "Foresee": {
       "cost": 0,
@@ -1255,14 +1257,16 @@
       "playableBy": "BRAWLER",
       "timing": "duringActivation",
       "effect": "Use during your activation to gain 1 Hit Token. Then, either move up to 1 space or push an adjacent SMALL figure up to 1 space.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Looking for a Fight"
     },
     "Lord of the Sith": {
       "cost": 3,
       "playableBy": "Darth Vader",
       "timing": "whenHostileFigureDefeatedNotYourActivation",
       "effect": "Use when a hostile figure is defeated to interrupt to move up to 2 spaces. Then, you may use \"Force Choke\" or perform an attack.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Lord of the Sith"
     },
     "Mandalorian Steel": {
       "cost": 2,
@@ -1733,7 +1737,8 @@
       "playableBy": "DROID or VEHICLE",
       "timing": "duringActivation",
       "effect": "Use during your activation. Spend 3 movement points to become Focused. \n\nPassive (Discard): When a friendly DROID or VEHICLE is defeated, you may re-draw this card.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Shared Experience"
     },
     "Signal Jammer": {
       "cost": 1,
@@ -2061,7 +2066,8 @@
       "playableBy": "Any Unique Figure",
       "timing": "duringActivation",
       "effect": "Use during your activation to gain 1 Hit Token or Surge Token. Then, gain 1 Block Token or Evade Token.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Veteran Instincts"
     },
     "Whistling Birds": {
       "cost": 2,
