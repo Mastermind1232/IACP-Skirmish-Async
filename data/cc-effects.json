@@ -60,7 +60,8 @@
       "playableBy": "VEHICLE or DROID",
       "timing": "duringActivation",
       "effect": "Use during your activation. During this round, other friendly figures within 2 spaces of you gain +1 Evade.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Armed Escort"
     },
     "Assassinate": {
       "cost": 3,
@@ -375,7 +376,8 @@
       "playableBy": "MASSIVE",
       "timing": "whenYouEndMovementInSpacesWithOtherFigures",
       "effect": "Use when you end your movement in spaces that contain one or more other figures. Choose one of those figures that is SMALL. That figure suffers 4 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Crush"
     },
     "Cut Lines": {
       "cost": 0,
@@ -492,7 +494,8 @@
       "playableBy": "DROID",
       "timing": "specialAction",
       "effect": "Special Action: Choose an adjacent friendly figure. Then, search your Command deck and draw 1 card with that figure's name as a trait, reveal it, and then shuffle your Command deck.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Devotion"
     },
     "Dirty Trick": {
       "cost": 2,
@@ -514,7 +517,8 @@
       "playableBy": "Krrsantan",
       "timing": "other",
       "effect": "Use when an adjacent hostile figure becomes Bleeding from your attack. Put this card into play, then that figure suffers 1 Damage, becomes Weakened, and can't discard the Weakened condition.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Disarm"
     },
     "Disengage": {
       "cost": 1,
@@ -557,7 +561,8 @@
       "playableBy": "Any Figure",
       "timing": "other",
       "effect": "Use when you have suffered Damage equal to your Health, before you are defeated. Move up to 2 spaces, then perform a Melee attack. Then, you are defeated.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Dying Lunge"
     },
     "Eerie Visage": {
       "cost": 1,
@@ -785,7 +790,8 @@
       "playableBy": "FORCE USER",
       "timing": "whenHostileFigureInYourLineOfSightAttacking",
       "effect": "Use while a hostile figure in your line of sight is attacking. The defender becomes Hidden.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Force Illusion"
     },
     "Force Jump": {
       "cost": 1,
@@ -1005,7 +1011,8 @@
       "playableBy": "The Grand Inquisitor",
       "timing": "whenYouDeclareLightsaberThrow",
       "effect": "Use when you declare \"Lightsaber Throw\". Apply +2 Accuracy to the attack results. The attack gains Cleave 2.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Hunt Them Down"
     },
     "Hunter Protocol": {
       "cost": 1,
@@ -1062,7 +1069,8 @@
       "playableBy": "Zeb Orellios",
       "timing": "duringActivation",
       "effect": "Use during your activation. For each Damage you have suffered, you may choose a hostile figure within 2 spaces. Each chosen figure suffers 1 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Karabast!"
     },
     "Knowledge and Defense": {
       "cost": 2,
@@ -1171,7 +1179,8 @@
       "playableBy": "WOOKIE",
       "timing": "specialAction",
       "effect": "Special Action: Choose an adjacent hostile figure. The chosen figure suffers 1 Damage for each Damage you have suffered, to a maximum of 3 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Wookiee Rage"
     },
     "Mandalorian Tactics": {
       "cost": 3,
@@ -1327,7 +1336,8 @@
       "playableBy": "MHD-19",
       "timing": "whenFriendlyFigureWithin3SpacesWouldBeDefeated",
       "effect": "Use when a friendly figure within 3 spaces of you has suffered damage equal to its Health. Instead of being defeated, it recovers 3 damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Miracle Worker"
     },
     "Mitigate": {
       "cost": 0,
@@ -1407,7 +1417,8 @@
       "playableBy": "SCUM",
       "timing": "duringActivation",
       "effect": "Use during your activation. A hostile figure within 3 spaces and line of sight suffers Strain equal to the current round number.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Out of Time"
     },
     "Overcharged Weapons": {
       "cost": 0,
@@ -1981,7 +1992,8 @@
       "playableBy": "FORCE USER",
       "timing": "specialAction",
       "effect": "Special Action: Choose a hostile figure in your line of sight within 3 spaces. Roll 2 blue dice. That figure suffers Damage equal to the Hit results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Telekinetic Throw"
     },
     "Terminal Network": {
       "cost": 2,
@@ -2111,7 +2123,8 @@
       "playableBy": "The Mandalorian",
       "timing": "specialAction",
       "effect": "Special Action: Move up to 2 spaces, then choose up to 3 figures within 2 spaces and roll 1 red die. Each of those figures suffers Damage equal to the Hit results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Whistling Birds"
     },
     "Wild Attack": {
       "cost": 0,

@@ -101,7 +101,18 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'whenfriendlyfigurewithin3spaceswouldbedefeated':
       // Final Stand: playable during your activation (honor system: play when friendly at 0 health)
       return ctx.duringActivation;
+    case 'whenyouendmovementinspaceswithotherfigures':
+      // Crush: playable during your activation (honor system: play when you end movement in space with figures)
+      return ctx.duringActivation;
+    case 'whenhostilefigureinyourlineofsightattacking':
+      // Force Illusion: playable while defending (honor system: play when hostile in LOS is attacking)
+      return ctx.duringAttack && ctx.isDefender;
+    case 'whenyoudeclarelightsaberthrow':
+      // Hunt Them Down: playable during your activation (honor system: play when declaring Lightsaber Throw)
+      return ctx.duringActivation;
     case 'other':
+      // Disarm, Dying Lunge: playable during your activation (honor system: play at actual trigger)
+      return ctx.duringActivation;
     default:
       return false;
   }
