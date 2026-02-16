@@ -1,5 +1,5 @@
 /**
- * Combat handlers: attack_target_, combat_ready_, combat_roll_, combat_surge_, combat_resolve_ready_ (F10)
+ * Combat handlers: attack_target_, combat_ready_, combat_roll_, combat_surge_, combat_resolve_ready_ (F10), cleave_target_ (F6)
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 
@@ -419,7 +419,6 @@ export async function handleCombatSurge(interaction, ctx) {
           .setLabel(btnLabel.slice(0, 80))
           .setStyle(ButtonStyle.Secondary)
       );
-      rowIndex++;
     }
     surgeRows.push(
       new ButtonBuilder()
@@ -433,5 +432,105 @@ export async function handleCombatSurge(interaction, ctx) {
       components: [surgeRow],
     });
   }
+  saveGames();
+}
+
+/**
+ * F6 Cleave: Apply cleave damage to chosen target in melee; finish combat resolution.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - getGame, replyIfGameEnded, dcHealthState, findDcMessageIdForFigure, getDcStats, getDcEffects, logGameAction, isGroupDefeated, checkWinConditions, finishCombatResolution, updateActivationsMessage, saveGames, client
+ */
+export async function handleCleaveTarget(interaction, ctx) {
+  const {
+    getGame,
+    replyIfGameEnded,
+    dcHealthState,
+    findDcMessageIdForFigure,
+    getDcStats,
+    getDcEffects,
+    logGameAction,
+    isGroupDefeated,
+    checkWinConditions,
+    finishCombatResolution,
+    updateActivationsMessage,
+    saveGames,
+    client,
+  } = ctx;
+  const match = interaction.customId.match(/^cleave_target_([^_]+)_(\d+)$/);
+  if (!match) return;
+  const [, gameId, indexStr] = match;
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (await replyIfGameEnded(game, interaction)) return;
+  const pending = game.pendingCleave;
+  if (!pending || pending.gameId !== gameId) {
+    await interaction.reply({ content: 'No cleave target selection in progress.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (interaction.user.id !== pending.ownerId) {
+    await interaction.reply({ content: 'Only the attacker may choose the cleave target.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const targetIndex = parseInt(indexStr, 10);
+  const target = pending.targets[targetIndex];
+  if (!target) {
+    await interaction.reply({ content: 'Invalid target.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate().catch(() => {});
+  const { figureKey: cleaveFigureKey, playerNum: cleavePlayerNum } = target;
+  const attackerPlayerNum = pending.attackerPlayerNum;
+  const ownerId = pending.ownerId;
+  const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+  const cleaveMsgId = findDcMessageIdForFigure(game.gameId, cleavePlayerNum, cleaveFigureKey);
+  if (cleaveMsgId) {
+    const cleaveM = cleaveFigureKey.match(/-(\d+)-(\d+)$/);
+    const cleaveFigIndex = cleaveM ? parseInt(cleaveM[2], 10) : 0;
+    const cleaveHS = dcHealthState.get(cleaveMsgId) || [];
+    const cleaveEntry = cleaveHS[cleaveFigIndex];
+    if (cleaveEntry) {
+      const [cCur, cMax] = cleaveEntry;
+      const cleaveDmg = pending.surgeCleave || 0;
+      const newCCur = Math.max(0, (cCur ?? cMax) - cleaveDmg);
+      cleaveHS[cleaveFigIndex] = [newCCur, cMax ?? newCCur];
+      dcHealthState.set(cleaveMsgId, cleaveHS);
+      const cleaveDcIds = cleavePlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const cleaveDcList = cleavePlayerNum === 1 ? game.p1DcList : game.p2DcList;
+      const cleaveIdx = (cleaveDcIds || []).indexOf(cleaveMsgId);
+      if (cleaveIdx >= 0 && cleaveDcList?.[cleaveIdx]) cleaveDcList[cleaveIdx].healthState = [...cleaveHS];
+      const cleaveLabel = target.label || cleaveDcList?.[cleaveIdx]?.displayName || cleaveFigureKey;
+      await logGameAction(game, client, `Cleave: <@${ownerId}> dealt **${pending.surgeCleave}** damage to **${cleaveLabel}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+      if (newCCur <= 0) {
+        if (game.figurePositions?.[cleavePlayerNum]) delete game.figurePositions[cleavePlayerNum][cleaveFigureKey];
+        const cleaveStats = getDcStats(cleaveDcList[cleaveIdx]?.dcName);
+        const cost = cleaveStats?.cost ?? 5;
+        const figures = cleaveStats?.figures ?? 1;
+        const subCost = getDcEffects()[cleaveDcList[cleaveIdx]?.dcName]?.subCost;
+        const vp = (figures > 1 && subCost != null) ? subCost : cost;
+        game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+        game[vpKey].kills += vp;
+        game[vpKey].total += vp;
+        await logGameAction(game, client, `Cleave: <@${ownerId}> defeated **${cleaveLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+        if (cleaveIdx >= 0 && isGroupDefeated(game, cleavePlayerNum, cleaveIdx)) {
+          const activatedIndices = cleavePlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+          if (!activatedIndices.includes(cleaveIdx)) {
+            if (cleavePlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
+            else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+            await updateActivationsMessage(game, cleavePlayerNum, client);
+          }
+        }
+        await checkWinConditions(game, client);
+      }
+    }
+  }
+  try {
+    await interaction.message.edit({ components: [] }).catch(() => {});
+  } catch {}
+  const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
+  if (cleaveMsgId) embedRefreshMsgIds.add(cleaveMsgId);
+  await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
   saveGames();
 }

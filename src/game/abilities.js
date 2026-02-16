@@ -33,16 +33,47 @@ export function getSurgeAbilityLabel(abilityId) {
 }
 
 /**
+ * Draw N command cards from deck to hand.
+ * @param {object} game - Game state
+ * @param {number} playerNum - 1 or 2
+ * @param {number} n - Number of cards to draw
+ * @returns {string[]} - Cards drawn (may be fewer if deck has fewer than n cards)
+ */
+function drawCcCards(game, playerNum, n) {
+  const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  const deck = (game[deckKey] || []).slice();
+  const hand = (game[handKey] || []).slice();
+  const drew = [];
+  for (let i = 0; i < n && deck.length > 0; i++) {
+    const card = deck.shift();
+    hand.push(card);
+    drew.push(card);
+  }
+  game[deckKey] = deck;
+  game[handKey] = hand;
+  return drew;
+}
+
+/**
  * F3/F4: Resolve a non-surge ability by id (DC special or CC effect). Code-per-ability; most return manual.
  * @param {string|null|undefined} abilityId - Library id or synthetic key (e.g. dc_special:DCName:0 or CC card name).
  * @param {object} context - { game, ... } plus optional msgId, meta, playerNum, cardName, specialLabel.
- * @returns {{ applied: boolean, manualMessage?: string }}
+ * @returns {{ applied: boolean, manualMessage?: string, drewCards?: string[] }}
  */
 export function resolveAbility(abilityId, context) {
   const entry = abilityId ? getAbility(abilityId) : null;
   if (!entry || entry.type === 'surge') {
     return { applied: false, manualMessage: 'Resolve manually (see rules).' };
   }
-  // Future: switch on entry.type (specialAction, passive, triggered, ccEffect) and run implemented handlers.
+
+  // ccEffect: Draw N cards
+  if (entry.type === 'ccEffect' && typeof entry.draw === 'number' && entry.draw > 0) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const drew = drawCcCards(game, playerNum, entry.draw);
+    return { applied: true, drewCards: drew };
+  }
+
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
 }

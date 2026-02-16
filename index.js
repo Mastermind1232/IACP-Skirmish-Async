@@ -83,6 +83,7 @@ import {
   handleMoveAdjustMp,
   handleMovePick,
   handleAttackTarget,
+  handleCleaveTarget,
   handleCombatReady,
   handleCombatResolveReady,
   handleCombatRoll,
@@ -3776,6 +3777,7 @@ client.on('interactionCreate', async (interaction) => {
       updateDiscardPileMessage,
       updateDcActionsMessage,
       getDcStats,
+      getDcEffects,
       getMapSpaces,
       getFigureSize,
       getFootprintCells,
@@ -3861,96 +3863,21 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'cleave_target_') {
-    const match = interaction.customId.match(/^cleave_target_([^_]+)_(\d+)$/);
-    if (!match) return;
-    const [, gameId, indexStr] = match;
-    const game = getGame(gameId);
-    if (!game) {
-      await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (await replyIfGameEnded(game, interaction)) return;
-    const pending = game.pendingCleave;
-    if (!pending || pending.gameId !== gameId) {
-      await interaction.reply({ content: 'No cleave target selection in progress.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (interaction.user.id !== pending.ownerId) {
-      await interaction.reply({ content: 'Only the attacker may choose the cleave target.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    const targetIndex = parseInt(indexStr, 10);
-    const target = pending.targets[targetIndex];
-    if (!target) {
-      await interaction.reply({ content: 'Invalid target.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    await interaction.deferUpdate().catch(() => {});
-    const { figureKey: cleaveFigureKey, playerNum: cleavePlayerNum } = target;
-    const defenderPlayerNum = cleavePlayerNum;
-    const attackerPlayerNum = pending.attackerPlayerNum;
-    const ownerId = pending.ownerId;
-    const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-    const cleaveMsgId = findDcMessageIdForFigure(game.gameId, cleavePlayerNum, cleaveFigureKey);
-    if (cleaveMsgId) {
-      const cleaveM = cleaveFigureKey.match(/-(\d+)-(\d+)$/);
-      const cleaveFigIndex = cleaveM ? parseInt(cleaveM[2], 10) : 0;
-      const cleaveHS = dcHealthState.get(cleaveMsgId) || [];
-      const cleaveEntry = cleaveHS[cleaveFigIndex];
-      if (cleaveEntry) {
-        const [cCur, cMax] = cleaveEntry;
-        const cleaveDmg = pending.surgeCleave || 0;
-        const newCCur = Math.max(0, (cCur ?? cMax) - cleaveDmg);
-        cleaveHS[cleaveFigIndex] = [newCCur, cMax ?? newCCur];
-        dcHealthState.set(cleaveMsgId, cleaveHS);
-        const cleaveDcIds = cleavePlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const cleaveDcList = cleavePlayerNum === 1 ? game.p1DcList : game.p2DcList;
-        const cleaveIdx = (cleaveDcIds || []).indexOf(cleaveMsgId);
-        if (cleaveIdx >= 0 && cleaveDcList?.[cleaveIdx]) cleaveDcList[cleaveIdx].healthState = [...cleaveHS];
-        const cleaveLabel = target.label || cleaveDcList?.[cleaveIdx]?.displayName || cleaveFigureKey;
-        await logGameAction(game, client, `Cleave: <@${ownerId}> dealt **${pending.surgeCleave}** damage to **${cleaveLabel}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
-        if (newCCur <= 0) {
-          if (game.figurePositions?.[cleavePlayerNum]) delete game.figurePositions[cleavePlayerNum][cleaveFigureKey];
-          const cleaveStats = getDcStats(cleaveDcList[cleaveIdx]?.dcName);
-          const cost = cleaveStats?.cost ?? 5;
-          const figures = cleaveStats?.figures ?? 1;
-          const subCost = getDcEffects()[cleaveDcList[cleaveIdx]?.dcName]?.subCost;
-          const vp = (figures > 1 && subCost != null) ? subCost : cost;
-          game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-          game[vpKey].kills += vp;
-          game[vpKey].total += vp;
-          await logGameAction(game, client, `Cleave: <@${ownerId}> defeated **${cleaveLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
-          if (cleaveIdx >= 0 && isGroupDefeated(game, cleavePlayerNum, cleaveIdx)) {
-            const activatedIndices = cleavePlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
-            if (!activatedIndices.includes(cleaveIdx)) {
-              if (cleavePlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
-              else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
-              await updateActivationsMessage(game, cleavePlayerNum, client);
-            }
-          }
-          await checkWinConditions(game, client);
-        }
-      }
-    }
-    try {
-      await interaction.message.edit({ components: [] }).catch(() => {});
-    } catch {}
-    const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
-    if (cleaveMsgId) embedRefreshMsgIds.add(cleaveMsgId);
-    await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
-    saveGames();
-    return;
-  }
-
-  if (buttonKey === 'attack_target_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_') {
+  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_') {
     const combatContext = {
       getGame,
       replyIfGameEnded,
       dcMessageMeta,
+      dcHealthState,
+      findDcMessageIdForFigure,
       getDcStats,
       getDcEffects,
       updateDcActionsMessage,
+      updateActivationsMessage,
+      logGameAction,
+      isGroupDefeated,
+      checkWinConditions,
+      finishCombatResolution,
       ACTION_ICONS,
       ThreadAutoArchiveDuration,
       resolveCombatAfterRolls,
@@ -3965,7 +3892,8 @@ client.on('interactionCreate', async (interaction) => {
       resolveSurgeAbility,
       getSurgeAbilityLabel,
     };
-    if (buttonKey === 'attack_target_') await handleAttackTarget(interaction, combatContext);
+    if (buttonKey === 'cleave_target_') await handleCleaveTarget(interaction, combatContext);
+    else if (buttonKey === 'attack_target_') await handleAttackTarget(interaction, combatContext);
     else if (buttonKey === 'combat_resolve_ready_') await handleCombatResolveReady(interaction, combatContext);
     else if (buttonKey === 'combat_ready_') await handleCombatReady(interaction, combatContext);
     else if (buttonKey === 'combat_roll_') await handleCombatRoll(interaction, combatContext);

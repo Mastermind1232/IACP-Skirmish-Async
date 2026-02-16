@@ -15,7 +15,7 @@ import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
 import { handleEndEndOfRound, handleEndStartOfRound } from './round.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick } from './movement.js';
-import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge } from './combat.js';
+import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget } from './combat.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleConfirmActivate, handleCancelActivate } from './activation.js';
 import {
   handleMapSelection,
@@ -88,6 +88,7 @@ register('move_mp_', handleMoveMp);
 register('move_adjust_mp_', handleMoveAdjustMp);
 register('move_pick_', handleMovePick);
 register('attack_target_', handleAttackTarget);
+register('cleave_target_', handleCleaveTarget);
 register('combat_resolve_ready_', handleCombatResolveReady);
   register('combat_ready_', handleCombatReady);
   register('combat_roll_', handleCombatRoll);
@@ -156,7 +157,7 @@ export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
 export { handleEndEndOfRound, handleEndStartOfRound } from './round.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick } from './movement.js';
-export { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge } from './combat.js';
+export { handleAttackTarget, handleCleaveTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge } from './combat.js';
 export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleConfirmActivate, handleCancelActivate } from './activation.js';
 export {
   handleMapSelection,

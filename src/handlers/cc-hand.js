@@ -266,8 +266,14 @@ export async function handleCcPlaySelect(interaction, ctx) {
   await updateDiscardPileMessage(game, playerNum, interaction.client);
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   if (ctx.resolveAbility) {
-    const result = ctx.resolveAbility(card, { game, playerNum, cardName: card });
-    if (!result.applied && result.manualMessage) {
+    const effectData = getCcEffect(card);
+    const abilityId = effectData?.abilityId ?? card;
+    const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card });
+    if (result.applied && result.drewCards?.length) {
+      await updateHandVisualMessage(game, playerNum, interaction.client);
+      const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
+      await ctx.logGameAction(game, interaction.client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
+    } else if (!result.applied && result.manualMessage) {
       await ctx.logGameAction(game, interaction.client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
     }
   }
@@ -299,9 +305,9 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
   const handMessages = await handChannel.messages.fetch({ limit: 20 });
   const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
   const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+  const effectData = getCcEffect(card);
   if (handMsg) {
     const handPayload = buildHandDisplayPayload(hand, deck, game.gameId, game, playerNum);
-    const effectData = getCcEffect(card);
     const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
     handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
     await handMsg.edit({
@@ -315,8 +321,13 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
   await updateDiscardPileMessage(game, playerNum, client);
   await logGameAction(game, client, `Played command card **${card}**.`, { phase: 'ACTION', icon: 'card' });
   if (resolveAbility) {
-    const result = resolveAbility(card, { game, playerNum, cardName: card });
-    if (!result.applied && result.manualMessage) {
+    const abilityId = effectData?.abilityId ?? card;
+    const result = resolveAbility(abilityId, { game, playerNum, cardName: card });
+    if (result.applied && result.drewCards?.length) {
+      await updateHandVisualMessage(game, playerNum, client);
+      const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
+      await logGameAction(game, client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
+    } else if (!result.applied && result.manualMessage) {
       await logGameAction(game, client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
     }
   }
