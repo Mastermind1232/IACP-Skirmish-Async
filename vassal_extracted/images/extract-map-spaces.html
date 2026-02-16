@@ -594,7 +594,7 @@
         : (variant === 'b' ? missionBEndOfRound : missionAEndOfRound);
       const trimmed = (str || '').trim();
       if (!trimmed) return [];
-      return trimmed.split(/\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+      return trimmed.split(/\n\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
     }
 
     function getMissionEffectList() {
@@ -604,7 +604,7 @@
     function setMissionEffectList(arr) {
       const variant = getMissionVariant();
       const key = getMissionTimingKey();
-      const s = Array.isArray(arr) && arr.length ? arr.join('\n') : '';
+      const s = Array.isArray(arr) && arr.length ? arr.join('\n\n') : '';
       if (key === 'setup') {
         if (variant === 'b') missionBSetup = s; else missionASetup = s;
       } else if (key === 'persistent') {
@@ -619,7 +619,7 @@
     function removeMissionEffectAt(timingKey, index) {
       const arr = getMissionEffectListForKey(timingKey);
       arr.splice(index, 1);
-      const s = arr.length ? arr.join('\n') : '';
+      const s = arr.length ? arr.join('\n\n') : '';
       const variant = getMissionVariant();
       if (timingKey === 'setup') {
         if (variant === 'b') missionBSetup = s; else missionASetup = s;
