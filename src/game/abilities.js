@@ -95,6 +95,83 @@ export function resolveAbility(abilityId, context) {
     entry = { type: 'ccEffect', ...chosen };
   }
 
+  // ccEffect: informational / log-only (e.g. Collect Intel — look at opponent hand)
+  if (entry.type === 'ccEffect' && entry.informational && (entry.logMessage != null || entry.label)) {
+    return {
+      applied: true,
+      logMessage: entry.logMessage || entry.label || 'Resolve manually (see rules).',
+    };
+  }
+
+  // ccEffect: noCommandDrawThisRound (Cut Lines — players cannot draw CCs this round)
+  if (entry.type === 'ccEffect' && entry.noCommandDrawThisRound) {
+    const { game } = context;
+    if (!game) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.noCommandDrawThisRound = true;
+    return {
+      applied: true,
+      logMessage: 'Players cannot draw Command cards during this round.',
+    };
+  }
+
+  // ccEffect: claimInitiative (Take Initiative — you become the initiative player; exhaust 1 DC manual)
+  if (entry.type === 'ccEffect' && entry.claimInitiative) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+    if (playerId) {
+      game.initiativePlayerId = playerId;
+    }
+    return {
+      applied: true,
+      logMessage: 'You claimed the initiative token. Exhaust one of your Deployment cards (use Exhaust on the DC).',
+    };
+  }
+
+  // ccEffect: selfDamageThenMpAndFocus (Stimulants — you suffer N damage, then gain MP and Focus)
+  if (entry.type === 'ccEffect' && entry.selfDamageThenMpAndFocus) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    const { damage = 1, mpBonus = 0, applyFocus: doFocus = false } = entry.selfDamageThenMpAndFocus;
+    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually: play during your activation (Special Action).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const healthState = dcHealthState.get(msgId) || [];
+    if (!healthState.length || !Array.isArray(healthState[0])) return { applied: false, manualMessage: 'Resolve manually: no health state for this DC.' };
+    const [cur, max] = healthState[0];
+    const newCur = Math.max(0, (cur ?? max ?? 0) - damage);
+    healthState[0] = [newCur, max ?? cur];
+    dcHealthState.set(msgId, healthState);
+    const dcMessageIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+    const idx = (dcMessageIds || []).indexOf(msgId);
+    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    if (mpBonus > 0) {
+      game.movementBank = game.movementBank || {};
+      const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+      bank.total = (bank.total ?? 0) + mpBonus;
+      bank.remaining = (bank.remaining ?? 0) + mpBonus;
+      game.movementBank[msgId] = bank;
+    }
+    if (doFocus) {
+      const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+      game.figureConditions = game.figureConditions || {};
+      for (const fk of figureKeys) {
+        const existing = game.figureConditions[fk] || [];
+        if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+      }
+    }
+    const parts = [`Suffered ${damage} Damage.`];
+    if (mpBonus > 0) parts.push(`Gained ${mpBonus} MP.`);
+    if (doFocus) parts.push('Became Focused.');
+    return {
+      applied: true,
+      logMessage: parts.join(' '),
+      refreshDcEmbed: true,
+    };
+  }
+
   // ccEffect: returnDiscardToHand — move one card from discard to hand (the card that was last in discard before the current play)
   if (entry.type === 'ccEffect' && entry.returnDiscardToHand) {
     const { game, playerNum, cardName } = context;
@@ -480,6 +557,26 @@ export function resolveAbility(abilityId, context) {
       if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
     }
     return { applied: true, logMessage: `${allKeys.length} figure(s) became Focused.` };
+  }
+
+  // ccEffect: vpGainSelf + vpGainOpponent (e.g. Dangerous Bargains — start of round, if self VP ≤ N, both gain VP)
+  if (entry.type === 'ccEffect' && typeof entry.vpGainSelf === 'number' && typeof entry.vpGainOpponent === 'number') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const selfKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    const oppKey = playerNum === 1 ? 'player2VP' : 'player1VP';
+    const selfVP = (game[selfKey]?.total ?? 0);
+    if (entry.vpCondition?.selfHasAtMost != null && selfVP > entry.vpCondition.selfHasAtMost) {
+      return { applied: true, logMessage: 'Condition not met (you have more than 30 VP). No effect.' };
+    }
+    game[selfKey] = game[selfKey] || { total: 0, kills: 0, objectives: 0 };
+    game[oppKey] = game[oppKey] || { total: 0, kills: 0, objectives: 0 };
+    game[selfKey].total = (game[selfKey].total ?? 0) + entry.vpGainSelf;
+    game[oppKey].total = (game[oppKey].total ?? 0) + entry.vpGainOpponent;
+    return {
+      applied: true,
+      logMessage: `You and your opponent each gained VP (you +${entry.vpGainSelf}, opponent +${entry.vpGainOpponent}).`,
+    };
   }
 
   // ccEffect: recoverDamageFromRound (Hour of Need) — recover damage equal to current round number

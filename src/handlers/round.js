@@ -90,8 +90,14 @@ export async function handleEndEndOfRound(interaction, ctx) {
   const mapId = game.selectedMap?.id;
   const p1Terminals = mapId ? countTerminalsControlledByPlayer(game, 1, mapId) : 0;
   const p2Terminals = mapId ? countTerminalsControlledByPlayer(game, 2, mapId) : 0;
-  const p1DrawCount = 1 + p1Terminals;
-  const p2DrawCount = 1 + p2Terminals;
+  let p1DrawCount = 1 + p1Terminals;
+  let p2DrawCount = 1 + p2Terminals;
+  const hadCutLines = !!game.noCommandDrawThisRound;
+  if (game.noCommandDrawThisRound) {
+    p1DrawCount = 0;
+    p2DrawCount = 0;
+    game.noCommandDrawThisRound = false;
+  }
   const p1Deck = game.player1CcDeck || [];
   const p2Deck = game.player2CcDeck || [];
   const p1Drawn = [];
@@ -151,9 +157,11 @@ export async function handleEndEndOfRound(interaction, ctx) {
     }
   }
   const generalChannel = await client.channels.fetch(game.generalId);
-  const drawDesc = p1Terminals > 0 || p2Terminals > 0
-    ? `Draw 1 CC each (P1 +${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''}, P2 +${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''}).`
-    : 'Draw 1 command card each.';
+  const drawDesc = hadCutLines
+    ? 'No Command card draw this round (Cut Lines).'
+    : (p1Terminals > 0 || p2Terminals > 0
+      ? `Draw 1 CC each (P1 +${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''}, P2 +${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''}).`
+      : 'Draw 1 command card each.');
   const initZone = getInitiativePlayerZoneLabel(game);
   const initNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
   await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });

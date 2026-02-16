@@ -108,7 +108,8 @@
       "playableBy": "SPY",
       "timing": "duringActivation",
       "effect": "Use during your activation while in your opponents deployment zone to look at the top 3 cards of their Command deck and return those cards in any order.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Behind Enemy Lines"
     },
     "Black Market Prices": {
       "cost": 1,
@@ -178,7 +179,8 @@
       "playableBy": "Jyn Erso",
       "timing": "duringActivation",
       "effect": "Use during your activation to look at the top 3 cards of your Command deck. Place 1 of them into your hand and the others on the top of bottom of your Command deck in any order.\n\nPassive: When this card is discarded from your Command deck, re-draw it.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Built on Hope"
     },
     "Burst Fire": {
       "cost": 2,
@@ -301,7 +303,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if you have 1 or more SPIES on the map. Look at your opponent's hand of Command cards.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Collect Intel"
     },
     "Combat Resupply": {
       "cost": 1,
@@ -379,14 +382,16 @@
       "playableBy": "SPY",
       "timing": "startOfStatusPhase",
       "effect": "Use at the start of a Status Phase. Players cannot draw Command cards during this round.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Cut Lines"
     },
     "Dangerous Bargains": {
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if you have 30 or fewer VPs. You and your opponent each gain 3 VPs.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Dangerous Bargains"
     },
     "Dangerous Prey": {
       "cost": 1,
@@ -1137,7 +1142,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round to claim the initiative token. Then exhaust 1 of your Deployment cards.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Take Initiative"
     },
     "Urgency": {
       "cost": 0,
@@ -1872,7 +1878,8 @@
       "playableBy": "SMUGGLER",
       "timing": "specialAction",
       "effect": "Special Action: You or an adjacent figure suffers 1 Damage, then gains 1 movement point and becomes Focused.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Stimulants"
     },
     "Strategic Shift": {
       "cost": 1,
