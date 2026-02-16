@@ -818,7 +818,8 @@
       "playableBy": "VEHICLE",
       "timing": "duringActivation",
       "effect": "Use during your activation. Each friendly figure within 2 spaces of you gains 1 movement point.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Forward March"
     },
     "Fuel Upgrade": {
       "cost": 1,
@@ -1058,7 +1059,8 @@
       "playableBy": "Hondo Ohnaka",
       "timing": "whileDefending",
       "effect": "Use while defending. Pay your opponent X VPs to apply -X Hits to the attack results. Then, you become Focused.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Let's Make a Deal"
     },
     "Lightbow": {
       "cost": 1,
@@ -1274,7 +1276,8 @@
       "playableBy": "CREATURE",
       "timing": "duringActivation",
       "effect": "Use during your activation to gain 1 Power Token. Then, a figure in your group in an exterior space gains 1 Power Token.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Marked Territory"
     },
     "Master Operative": {
       "cost": 2,
