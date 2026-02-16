@@ -1,11 +1,6 @@
 {
   "source": "DC Effect Editor",
   "cards": {
-    "[A Fighting Chance]": {
-      "abilityText": "If you are Daniel Taylor, you must add this card to any skirmish army you play.\n\nAt the start of the game, each figure in your army becomes Stunned.",
-      "keywords": [],
-      "cost": 3
-    },
     "[A New Hope]": {
       "abilityText": "Include this card in your army only if each group in your army has one of the following names or sub-names:\n- \"Hero of the Rebellion\"\n- \"C-3PO'\n- \"Chewbacca\"\n- \"Han Solo\"\n- \"Leia Organa\"\n- \"Obi-Wan Kenobi\"\n- \"R2-D2\"\n\n--------------------------\nDeplete this card to have a friendly figure play a Command card with a restriction matching the name of another Deployment card in your army.",
       "keywords": [],
@@ -181,6 +176,7 @@
         "blast 1"
       ],
       "attachment": true,
+      "elite": true,
       "affiliation": "Imperial"
     },
     "[Focused on the Kill]": {
@@ -425,6 +421,7 @@
       "keywords": [],
       "cost": 2,
       "attachment": false,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "[Suppressive Fire]": {
@@ -480,6 +477,7 @@
       "keywords": [],
       "cost": 2,
       "attachment": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "[Trusted Ally]": {
@@ -491,10 +489,11 @@
       "affiliation": "Any"
     },
     "[Under Duress]": {
-      "abilityText": "When a hostile figure suffers Strain, for each resulting Damage they wish to prevent, the player controlling that figure must discard 2 Command cards from the top of their deck instead of 1.",
+      "abilityText": "When a hostile figure suffers Strain, for each resulting Damage they wish to prevent, the player controlling that figure must discard 2 Command cards from the top of their deck instead of 1.\n\nDeplete this card when a hostile figure suffers Strain to resolve any choices for that Strain instead of your opponent.",
       "keywords": [],
-      "cost": 2,
+      "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Unshakable]": {
@@ -506,10 +505,11 @@
       "affiliation": "Any"
     },
     "[Vader's Finest]": {
-      "abilityText": "TROOPER ONLY\n\nFigures in this group gain:\n\nSpecial Action: Perform an attack, then gain 2 movement points.\n\nDouble Action Special: Discard 1 HARMFUL condition and become Focused.",
+      "abilityText": "TROOPER ONLY\n\nFigures in this group gain:\n\nSpecial Action: Perform an attack, then move up to 1 space.\n\nSpecial Action: If you have less than 2 dice in your printed attack pool, you become Focused. Limit once per group per round.",
       "keywords": [],
-      "cost": 2,
+      "cost": 1,
       "attachment": true,
+      "elite": true,
       "affiliation": "Imperial"
     },
     "[Wookiee Avenger]": {
@@ -549,6 +549,7 @@
         "accuracy 2, pierce 1"
       ],
       "attachment": true,
+      "elite": true,
       "affiliation": "Rebel"
     },
     "[Zillo Technique]": {
@@ -584,8 +585,9 @@
         "recover 2"
       ],
       "attachment": false,
-      "affiliation": "Imperial",
-      "elite": true
+      "elite": true,
+      "unique": true,
+      "affiliation": "Imperial"
     },
     "4-LOM": {
       "abilityText": "Programming Override: At the start of each round, choose one TRAIT. You gain that TRAIT until the end of the round.\n\nSurge (Concussive Bolt): After this attack resolves, if you are targeting a SMALL figure and it did not miss, you may push that figure 1 space.\n\nShared Intuition: While attacking, if another friendly HUNTER within 3 spaces has line of sight to the target space, apply +1 Hit to your attack results.",
@@ -683,8 +685,9 @@
         "pierce 2"
       ],
       "attachment": false,
-      "affiliation": "Imperial",
-      "elite": true
+      "elite": true,
+      "unique": true,
+      "affiliation": "Imperial"
     },
     "Asajj Ventress": {
       "abilityText": "Nimble: After an attack targeting you is resolved, gain 2 movement points for each of your Block results.\n\nConsider It My Payment: At the start of your activation, your opponent reveals a Command card from his hand. During this round, if the next Command card played by that player does not have the same name as the revealed card, that player discards a copy of the revealed card, or reveals a hand without any copies of that card.",
@@ -1032,6 +1035,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Bib Fortuna": {
@@ -1064,6 +1068,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Biv Bodhrik": {
@@ -1163,8 +1168,9 @@
         "damage 1, pierce 1"
       ],
       "attachment": false,
-      "affiliation": "Rebel",
-      "elite": true
+      "elite": true,
+      "unique": true,
+      "affiliation": "Rebel"
     },
     "Bossk": {
       "abilityText": "Special Action (Indiscriminate Fire): Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red attack die. Each other figure within 2 spaces of the target space other than the defender suffers Damage equal to the Hit results and Strain equal to the Surge results.\n\nRegenerate: At the end of each round, recover 2 Damage and discard all Harmful conditions.",
@@ -1231,6 +1237,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "C-3P0": {
@@ -1248,6 +1255,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "C1-10P \"Chopper\"": {
@@ -1276,6 +1284,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Cad Bane": {
@@ -1308,6 +1317,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Cal Kestis": {
@@ -1440,6 +1450,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Chewbacca": {
@@ -1508,6 +1519,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Clawdite Shapeshifter (Elite)": {
@@ -1589,6 +1601,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Dark Trooper Mk III": {
@@ -1679,6 +1692,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Death Trooper (Elite)": {
@@ -1771,6 +1785,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "Dengar": {
@@ -1902,6 +1917,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "Doctor Aphra": {
@@ -1931,6 +1947,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Dr. Royce Hemlock": {
@@ -1961,6 +1978,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "Drokkatta": {
@@ -2273,6 +2291,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Fifth Brother": {
@@ -2412,6 +2431,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "General Sorin": {
@@ -2441,6 +2461,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "General Weiss": {
@@ -2505,6 +2526,7 @@
         "damage 2"
       ],
       "attachment": false,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Greedo": {
@@ -2539,6 +2561,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Han Solo": {
@@ -2665,6 +2688,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Hired Gun (Elite)": {
@@ -2820,6 +2844,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Iden Versio": {
@@ -3062,6 +3087,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Jarrod Kelvin": {
@@ -3096,6 +3122,7 @@
       ],
       "attachment": false,
       "companion": "J4X-7",
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Jawa Scavenger (Elite)": {
@@ -3282,6 +3309,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "K-2S0": {
@@ -3316,6 +3344,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Kanan Jarrus": {
@@ -3479,6 +3508,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Lando Calrissian": {
@@ -3509,6 +3539,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Leia Organa": {
@@ -3573,6 +3604,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Loth-cat (Elite)": {
@@ -3733,6 +3765,7 @@
         "pierce 2"
       ],
       "attachment": false,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Mara Jade": {
@@ -3763,6 +3796,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Any"
     },
     "Maul": {
@@ -3794,6 +3828,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "MHD-19": {
@@ -3821,6 +3856,7 @@
         "focus"
       ],
       "attachment": false,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Migs Mayfeld": {
@@ -3867,6 +3903,9 @@
       "cost": 4,
       "health": 9,
       "speed": 4,
+      "passives": [
+        "+2 Accuracy"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3878,15 +3917,14 @@
       "defense": [
         "black"
       ],
-      "passives": [
-        "+2 Accuracy"
-      ],
       "surgeAbilities": [
         "damage 2",
         "accuracy 2",
         "hide"
       ],
       "attachment": false,
+      "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Nexu (Elite)": {
@@ -4008,7 +4046,8 @@
         "accuracy 2, damage 2",
         "damage 1, accuracy -1"
       ],
-      "attachment": false
+      "attachment": false,
+      "unique": true
     },
     "Probe Droid (Elite)": {
       "abilityText": "Targeting Computer: While attacking, you may reroll 1 attack die.\n\nSelf-Destruct: At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.",
@@ -4160,6 +4199,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Rancor": {
@@ -4571,6 +4611,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Saw Gerrerra": {
@@ -4604,6 +4645,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "SC2-M Repulsor Tank": {
@@ -4703,6 +4745,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "Sentry Droid (Elite)": {
@@ -5015,6 +5058,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "The Grand Inquisitor": {
@@ -5088,6 +5132,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "The Armorer": {
@@ -5119,6 +5164,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Trandoshan Hunter (Elite)": {
@@ -5385,6 +5431,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Wampa (Elite)": {
@@ -5647,6 +5694,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Zeb Orrelios": {
@@ -5712,13 +5760,15 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Nemik's Manifesto]": {
-      "abilityText": "Your command deck may include up to 3 additional Command cards. Exhaust this card during a friendly figure's activation to have that figure suffer 2 Strain and gain 1 movement point.",
+      "abilityText": "Your command deck may include up to 3 additional Command cards. \n\nExhaust this card during a friendly figure's activation to have that figure suffer 2 Strain and gain 1 movement point.",
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "88-Z": {
