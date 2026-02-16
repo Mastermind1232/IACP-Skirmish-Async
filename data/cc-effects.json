@@ -430,7 +430,7 @@
       "playableBy": "Any Figure",
       "timing": "whenYouDeclareAttack",
       "effect": "Use when you declare a Melee attack to apply +1 Hit to the attack results. If the defender has the Ranged attack type, apply an additional +1 Hit to the attack results.",
-      "effectType": "manual"
+      "abilityId": "Deathblow"
     },
     "Debts Repaid": {
       "cost": 3,
@@ -619,7 +619,7 @@
       "playableBy": "HEAVY WEAPON",
       "timing": "whenYouDeclareAttack",
       "effect": "Use when you declare an attack. This attack gains Blast 1.",
-      "effectType": "manual"
+      "abilityId": "Explosive Weaponry"
     },
     "Expose Weakness": {
       "cost": 0,
@@ -1147,7 +1147,8 @@
       "playableBy": "HEAVY WEAPON",
       "timing": "doubleActionSpecial",
       "effect": "Special Action: Perform an attack. Apply +4 Hit to the attack results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Maximum Firepower"
     },
     "Meditation": {
       "cost": 3,

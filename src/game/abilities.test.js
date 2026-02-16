@@ -250,3 +250,16 @@ test('resolveAbility Blitz during surge step adds to surgeRemaining', () => {
   assert.strictEqual(result.applied, true);
   assert.strictEqual(combat.surgeRemaining, 3);
 });
+
+test('resolveAbility Maximum Firepower sets nextAttacksBonusHits', () => {
+  const msgId = 'msg-mfp';
+  const game = {
+    gameId: 'g11',
+    dcActionsData: { [msgId]: {} },
+    nextAttacksBonusHits: {},
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g11', playerNum: 2, dcName: 'Heavy Troopers', displayName: 'Heavy [DG 1]' }]]);
+  const result = resolveAbility('Maximum Firepower', { game, playerNum: 2, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(game.nextAttacksBonusHits[2], { count: 1, bonus: 4 });
+});

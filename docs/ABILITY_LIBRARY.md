@@ -69,7 +69,7 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 **Attack bonus hits (attackBonusHits)**
 
 - Add `"attackBonusHits": N` — during attack, as the attacker, add +N Hit to this attack's results. Stored in `combat.bonusHits`.
-- Example: **Positioning Advantage** (+1 Hit), **Heavy Ordnance** (+1 Hit vs figure; vs object use +2 Hit and Pierce 2 manually), **Assassinate** (+3 Hits; play as first CC, no other CCs — honor rule manually).
+- Example: **Positioning Advantage** (+1 Hit), **Heavy Ordnance** (+1 Hit vs figure; vs object use +2 Hit and Pierce 2 manually), **Assassinate** (+3 Hits; play as first CC, no other CCs — honor rule manually), **Deathblow** (+1 Hit for Melee; +2 if defender has Ranged — manual).
 
 **Attack accuracy bonus (attackAccuracyBonus)**
 
@@ -80,7 +80,12 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 
 - Add `"attackBonusPierce": N` — during attack, as the attacker, add +N Pierce to this attack. Stored in `combat.bonusPierce`. Ready for Heavy Ordnance vs object (+2 Hit, Pierce 2) when object detection is added.
 
-- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fool Me Once** (draw 1 if SPY), **Fleet Footed** (+1 MP), **Force Rush** (+2 MP), **Heart of Freedom** (+2 MP), **Apex Predator** (+2 MP), **Price of Glory** (+2 MP), **Worth Every Credit** (+2 MP), **Rank and File** (+1 MP; adjacent TROOPERS manual), **Urgency** (Speed+2 MP), **Focus** (become Focused), **Battle Scars** (Power Token gain), **Against the Odds** (Focus up to 3 if VP condition met), **Hit and Run** (3 MP after attack), **Beatdown** (+1 Hit to next 2 attacks), **Blitz** (+1 Surge during attack), **Positioning Advantage** (+1 Hit), **Deadeye** (+2 Accuracy), **Heavy Ordnance** (+1 Hit vs figure), **Assassinate** (+3 Hits), **Bladestorm** (+1 Surge; blast manual), **Lock On** (+3 Accuracy; -1 Dodge/Evade manual).
+**Attack bonus blast (attackBonusBlast)**
+
+- Add `"attackBonusBlast": N` — when declaring attack, as the attacker, this attack gains Blast N. Stored in `combat.bonusBlast`.
+- Example: **Explosive Weaponry** (Blast 1).
+
+- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fool Me Once** (draw 1 if SPY), **Fleet Footed** (+1 MP), **Force Rush** (+2 MP), **Heart of Freedom** (+2 MP), **Apex Predator** (+2 MP), **Price of Glory** (+2 MP), **Worth Every Credit** (+2 MP), **Rank and File** (+1 MP; adjacent TROOPERS manual), **Urgency** (Speed+2 MP), **Focus** (become Focused), **Battle Scars** (Power Token gain), **Against the Odds** (Focus up to 3 if VP condition met), **Hit and Run** (3 MP after attack), **Beatdown** (+1 Hit to next 2 attacks), **Blitz** (+1 Surge during attack), **Positioning Advantage** (+1 Hit), **Deadeye** (+2 Accuracy), **Heavy Ordnance** (+1 Hit vs figure), **Assassinate** (+3 Hits), **Deathblow** (+1 Hit), **Bladestorm** (+1 Surge; blast manual), **Lock On** (+3 Accuracy; -1 Dodge/Evade manual), **Explosive Weaponry** (Blast 1), **Maximum Firepower** (+4 Hit to next attack via nextAttacksBonusHits).
 
 ### Adding a non-surge ability
 
@@ -127,7 +132,7 @@ From **docs/RULES_REFERENCE.md** and **docs/consolidated-rules-raw.txt**:
 ## Progress (~7% of CCs auto; ~90% of those with abilityId)
 
 - **Surge:** 100% — all surge abilities resolved.
-- **CC effects:** 298 total; 29 have abilityId; ~27 fully or partially automated.
-- **CCs with automation:** Draw (4), conditional draw (2), MP bonus (8), Focus (2), Power Token gain (1), Against the Odds (1), Hit and Run (mpAfterAttack), Beatdown (nextAttacksBonusHits), Blitz (attackSurgeBonus), Bladestorm (attackSurgeBonus; blast manual), Positioning Advantage (attackBonusHits), Assassinate (attackBonusHits), Deadeye (attackAccuracyBonus), Lock On (attackAccuracyBonus; -1 Dodge/Evade manual), Heavy Ordnance (attackBonusHits vs figure).
+- **CC effects:** 298 total; 32 have abilityId; ~30 fully or partially automated.
+- **CCs with automation:** Draw (4), conditional draw (2), MP bonus (8), Focus (2), Power Token gain (1), Against the Odds (1), Hit and Run (mpAfterAttack), Beatdown (nextAttacksBonusHits), Maximum Firepower (nextAttacksBonusHits), Blitz (attackSurgeBonus), Bladestorm (attackSurgeBonus; blast manual), Positioning Advantage (attackBonusHits), Assassinate (attackBonusHits), Deathblow (attackBonusHits; +2 vs Ranged manual), Deadeye (attackAccuracyBonus), Lock On (attackAccuracyBonus; -1 Dodge/Evade manual), Heavy Ordnance (attackBonusHits vs figure), Explosive Weaponry (attackBonusBlast).
 
 Phase 2 next: add more `type` values and branches in `resolveAbility` (e.g. more CC “draw N” effects, DC specials by name) so more effects run automatically instead of showing "Resolve manually".

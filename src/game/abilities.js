@@ -245,6 +245,20 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: attackBonusBlast — +N Blast to this attack; attacker only
+  if (entry.type === 'ccEffect' && typeof entry.attackBonusBlast === 'number' && entry.attackBonusBlast > 0) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play when declaring attack (as the attacker).' };
+    }
+    cbt.bonusBlast = (cbt.bonusBlast || 0) + entry.attackBonusBlast;
+    return {
+      applied: true,
+      logMessage: `This attack gains Blast ${entry.attackBonusBlast}.`,
+    };
+  }
+
   // ccEffect: attackBonusPierce — +N Pierce to this attack; attacker only
   if (entry.type === 'ccEffect' && typeof entry.attackBonusPierce === 'number' && entry.attackBonusPierce > 0) {
     const { game, playerNum, combat } = context;

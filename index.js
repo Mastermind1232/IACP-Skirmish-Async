@@ -2229,6 +2229,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
     if (pending.count <= 0) delete game.nextAttacksBonusHits[combat.attackerPlayerNum];
   }
   const { hit, damage, resultText } = computeCombatResult(combat);
+  const totalBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
   const ownerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
@@ -2294,7 +2295,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
         if (i >= 0 && dcL?.[i]) dcL[i].healthState = [...attHS];
       }
     }
-    if (combat.surgeBlast > 0 && hit && game.selectedMap?.id) {
+    if (totalBlast > 0 && hit && game.selectedMap?.id) {
       const adjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
       const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
       for (const { figureKey: blastFigureKey, playerNum: blastPlayerNum } of adjacent) {
@@ -2306,7 +2307,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
         const blastEntry = blastHS[blastFigIndex];
         if (!blastEntry) continue;
         const [bCur, bMax] = blastEntry;
-        const blastDmg = combat.surgeBlast || 0;
+        const blastDmg = totalBlast;
         const newBCur = Math.max(0, (bCur ?? bMax) - blastDmg);
         blastHS[blastFigIndex] = [newBCur, bMax ?? newBCur];
         dcHealthState.set(blastMsgId, blastHS);
@@ -2347,7 +2348,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
   }
   const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
-  if (combat.surgeBlast > 0 && hit && game.selectedMap?.id) {
+  if (totalBlast > 0 && hit && game.selectedMap?.id) {
     const blastAdjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
     for (const { figureKey: bk, playerNum: bp } of blastAdjacent) {
       const mid = findDcMessageIdForFigure(game.gameId, bp, bk);
