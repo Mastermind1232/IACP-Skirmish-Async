@@ -242,7 +242,12 @@ export async function handleCombatRoll(interaction, ctx) {
       await interaction.reply({ content: 'Only the attacker (P2) may roll attack dice.', ephemeral: true }).catch(() => {});
       return;
     }
-    combat.attackRoll = rollAttackDice(combat.attackInfo.dice);
+    const baseDice = combat.attackInfo?.dice || [];
+    const bonusDice = combat.attackBonusDice || 0;
+    const primaryColor = baseDice[0] || 'red';
+    const dice = [...baseDice];
+    for (let i = 0; i < bonusDice; i++) dice.push(primaryColor);
+    combat.attackRoll = rollAttackDice(dice);
     await interaction.deferUpdate();
     await thread.send(`**Attack roll** — ${combat.attackRoll.acc} accuracy, ${combat.attackRoll.dmg} damage, ${combat.attackRoll.surge} surge`);
     saveGames();

@@ -104,6 +104,18 @@ test('computeCombatResult bonusHits (Beatdown)', () => {
   assert.ok(r.resultText.includes('CC bonus: +1 Hit'));
 });
 
+test('computeCombatResult bonusBlock (Brace Yourself)', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 4, surge: 0 },
+    defenseRoll: { block: 2, evade: 0 },
+    bonusBlock: 2,
+  });
+  assert.strictEqual(r.hit, true);
+  assert.strictEqual(r.effectiveBlock, 4); // 2 + 2 block
+  assert.strictEqual(r.damage, 0); // 4 dmg - 4 block = 0
+  assert.ok(r.resultText.includes('CC bonus: +2 Block'));
+});
+
 test('computeCombatResult surge conditions in text', () => {
   const r = computeCombatResult({
     attackRoll: { acc: 2, dmg: 1, surge: 1 },

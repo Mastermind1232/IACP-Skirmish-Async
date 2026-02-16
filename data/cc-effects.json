@@ -171,7 +171,7 @@
       "playableBy": "Any Figure",
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when an attack targeting you is declared. if it is not the attackers activation, apply +2 Block to the defense results.",
-      "effectType": "manual"
+      "abilityId": "Brace Yourself"
     },
     "Built on Hope": {
       "cost": 1,
@@ -1962,7 +1962,7 @@
       "playableBy": "HUNTER or SMUGGLER",
       "timing": "whenYouDeclareAttack",
       "effect": "Use when you declare an attack to add 1 attack die of your choice to the attack pool.",
-      "effectType": "manual"
+      "abilityId": "Tools for the Job"
     },
     "Tough Luck": {
       "cost": 1,

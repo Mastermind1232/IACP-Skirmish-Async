@@ -427,6 +427,45 @@ test('resolveAbility Apex Predator applies Focus, Hide, 2 Power Tokens, 2 MP', (
   assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
 });
 
+test('resolveAbility Tools for the Job adds 1 attack die when declaring attack', () => {
+  const combat = {
+    attackerPlayerNum: 1,
+    attackInfo: { dice: ['red', 'blue'], range: [1, 3] },
+  };
+  const game = { gameId: 'g-tfj', pendingCombat: combat };
+  const result = resolveAbility('Tools for the Job', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('attack die'));
+  assert.strictEqual(combat.attackBonusDice, 1);
+});
+
+test('resolveAbility Brace Yourself applies +2 Block when not attacker activation', () => {
+  const combat = {
+    attackerPlayerNum: 1,
+    defenderPlayerNum: 2,
+    attackerMsgId: 'msg-attacker',
+    target: { figureKey: 'Wookiee-2-0', label: 'Wookiee [DG 1]' },
+  };
+  const game = { gameId: 'g-by', pendingCombat: combat };
+  const result = resolveAbility('Brace Yourself', { game, playerNum: 2, combat });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('Block'));
+  assert.strictEqual(combat.bonusBlock, 2);
+});
+
+test('resolveAbility Brace Yourself returns manual when attacker is activating', () => {
+  const combat = {
+    attackerPlayerNum: 1,
+    defenderPlayerNum: 2,
+    attackerMsgId: 'msg-attacker',
+    target: { figureKey: 'Wookiee-2-0' },
+  };
+  const game = { gameId: 'g-by2', pendingCombat: combat, dcActionsData: { 'msg-attacker': {} } };
+  const result = resolveAbility('Brace Yourself', { game, playerNum: 2, combat });
+  assert.strictEqual(result.applied, false);
+  assert.ok(result.manualMessage?.includes("attacker's activation"));
+});
+
 test('resolveAbility Camouflage applies Hide to defender when attack declared on them', () => {
   const combat = {
     attackerPlayerNum: 1,

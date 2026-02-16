@@ -535,6 +535,41 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: attackBonusDice (Tools for the Job) — add N dice to attack pool when declaring attack; attacker only
+  if (entry.type === 'ccEffect' && typeof entry.attackBonusDice === 'number' && entry.attackBonusDice > 0) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: "Resolve manually: play when declaring an attack (as the attacker)." };
+    }
+    cbt.attackBonusDice = (cbt.attackBonusDice || 0) + entry.attackBonusDice;
+    return {
+      applied: true,
+      logMessage: `Added ${entry.attackBonusDice} attack die to the attack pool.`,
+    };
+  }
+
+  // ccEffect: applyDefenseBonusBlock (Brace Yourself) — +N Block when defending, only if not attacker's activation
+  if (entry.type === 'ccEffect' && typeof entry.applyDefenseBonusBlock === 'number' && entry.applyDefenseBonusBlock > 0) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    const defenderPlayerNum = cbt?.attackerPlayerNum ? (cbt.attackerPlayerNum === 1 ? 2 : 1) : null;
+    if (!game || !playerNum || !cbt || defenderPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: "Resolve manually: play when an attack targeting you is declared (as the defender)." };
+    }
+    if (entry.defenseBonusOnlyWhenNotAttackerActivation) {
+      const attackerMsgId = cbt.attackerMsgId;
+      if (game.dcActionsData?.[attackerMsgId]) {
+        return { applied: false, manualMessage: "Resolve manually: +2 Block applies only when it is NOT the attacker's activation (e.g. Overwatch)." };
+      }
+    }
+    cbt.bonusBlock = (cbt.bonusBlock || 0) + entry.applyDefenseBonusBlock;
+    return {
+      applied: true,
+      logMessage: `+${entry.applyDefenseBonusBlock} Block added to defense results.`,
+    };
+  }
+
   // ccEffect: applyHideWhenDefending (Camouflage) — apply Hide to defender when attack declared on you
   if (entry.type === 'ccEffect' && entry.applyHideWhenDefending) {
     const { game, playerNum, combat } = context;
