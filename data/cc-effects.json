@@ -30,7 +30,8 @@
       "playableBy": "TECHNICIAN",
       "timing": "afterSpecialOrInteract",
       "effect": "Use after you resolve a Special or Interact during your activation to become Focused and perform 1 additional action.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "All in a Day's Work"
     },
     "Ambush": {
       "cost": 1,
@@ -439,7 +440,8 @@
       "playableBy": "Chewbacca",
       "timing": "whenOneOfYourFiguresDefeated",
       "effect": "Use when a friendly figure is defeated. Ready your Deployment card and become Focused.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Debts Repaid"
     },
     "Definition: 'Love'": {
       "cost": 1,
@@ -2083,7 +2085,8 @@
       "playableBy": "CREATURE or WOOKIE",
       "timing": "duringActivation",
       "effect": "Use during your activation. You become Focused and may perform multiple attacks during this activation. At the end of your activation, become Stunned and Bleeding.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Wild Fury"
     },
     "Windfall": {
       "cost": 0,
