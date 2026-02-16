@@ -297,7 +297,8 @@
       "playableBy": "HEAVY WEAPON",
       "timing": "afterAttack",
       "effect": "Use after you resolve an attack. Choose a figure or object other than the defender within 2 spaces of the target space. That figure or object suffers 2 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Collateral Damage"
     },
     "Collect Intel": {
       "cost": 1,
@@ -614,7 +615,8 @@
       "playableBy": "Any Figure",
       "timing": "afterAttack",
       "effect": "Use after you resolve an attack that did not miss. The defender suffers 1 Strain , plus an additional 1 Strain for each other \"Escalating Hostility\" Command card in your discard pile.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Escalating Hostility"
     },
     "Espionage Mastery": {
       "cost": 0,
@@ -852,7 +854,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Until the end of the round, each of your VEHICLES gains +1 Speed and applies +1 Evade to its defense results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Fuel Upgrade"
     },
     "Furious Charge": {
       "cost": 2,

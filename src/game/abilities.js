@@ -670,6 +670,41 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: defenderStrain (Escalating Hostility) — after attack, defender suffers N Strain (strain applied as damage to health)
+  if (entry.type === 'ccEffect' && typeof entry.defenderStrain === 'number' && entry.defenderStrain > 0) {
+    const { game, playerNum, combat, dcMessageMeta, dcHealthState } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !cbt?.target?.figureKey) return { applied: false, manualMessage: 'Resolve manually: play after an attack (defender must be the target).' };
+    const defenderPlayerNum = cbt.defenderPlayerNum ?? (cbt.attackerPlayerNum === 1 ? 2 : 1);
+    const targetFk = cbt.target.figureKey;
+    if (!dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
+    const targetMsgId = findMsgIdForFigureKey(game, defenderPlayerNum, targetFk, dcMessageMeta);
+    if (!targetMsgId) return { applied: false, manualMessage: 'Resolve manually: could not find defender.' };
+    const targetMeta = dcMessageMeta.get(targetMsgId);
+    if (!targetMeta) return { applied: false, manualMessage: 'Resolve manually: could not find defender deployment.' };
+    const targetKeys = getFigureKeysForDcMsg(game, defenderPlayerNum, targetMeta);
+    const targetIdx = targetKeys.indexOf(targetFk);
+    if (targetIdx < 0) return { applied: false, manualMessage: 'Resolve manually: could not find defender figure index.' };
+    const healthState = dcHealthState.get(targetMsgId) || [];
+    const entry_ = healthState[targetIdx];
+    if (!Array.isArray(entry_) || entry_.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for defender.' };
+    const n = entry.defenderStrain;
+    const [cur, max] = entry_;
+    const newCur = Math.max(0, (cur ?? max ?? 0) - n);
+    healthState[targetIdx] = [newCur, max];
+    dcHealthState.set(targetMsgId, healthState);
+    const dcMessageIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+    const idx = (dcMessageIds || []).indexOf(targetMsgId);
+    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    return {
+      applied: true,
+      logMessage: `Defender suffered ${n} Strain.`,
+      refreshDcEmbed: true,
+      refreshDcEmbedMsgIds: [targetMsgId],
+    };
+  }
+
   // ccEffect: applyFocus + attackBonusHits combo (Primary Target) — both Focus and +N Hit
   if (entry.type === 'ccEffect' && entry.applyFocus && typeof entry.attackBonusHits === 'number') {
     const { game, playerNum, combat, dcMessageMeta } = context;
