@@ -222,7 +222,8 @@
       "playableBy": "HUNTER",
       "timing": "specialAction",
       "effect": "Special Action: Choose an adjacent hostile figure. That figure becomes Weakened. If that figure was already Weakened, it suffers 2 Strain instead.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Capture the Weary"
     },
     "Cavalry Charge": {
       "cost": 1,
@@ -1372,7 +1373,8 @@
       "playableBy": "C1-10P",
       "timing": "specialAction",
       "effect": "Special Action: Move up to 5 spaces. Each time you enter a space containing a SMALL figure, you may push that figure 1 space.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "On a Mission"
     },
     "On the Lam": {
       "cost": 3,
@@ -1895,7 +1897,8 @@
       "playableBy": "SMUGGLER",
       "timing": "specialAction",
       "effect": "Special Action: You or an adjacent figure suffers 1 Damage, then gains 1 movement point and becomes Focused.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Stimulants"
     },
     "Strategic Shift": {
       "cost": 1,
