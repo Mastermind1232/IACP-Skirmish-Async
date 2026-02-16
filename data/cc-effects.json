@@ -849,7 +849,8 @@
       "playableBy": "HUNTER",
       "timing": "afterAttack",
       "effect": "Use after you resolve an attack targeting a figure. If the defender was defeated, recover 3 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Glory of the Kill"
     },
     "Grenadier": {
       "cost": 3,
@@ -1618,7 +1619,8 @@
       "playableBy": "Any Figure",
       "timing": "duringActivation",
       "effect": "If you a are TECHNICIAN, you may use this card during your activation without spending an action.\n\nSpecial Action: Choose an adjacent friendly DROID or VEHICLE. That figure recovers 3 damage.\nFree Action (TECHNICIAN): Choose an adjacent friendly DROID or VEHICLE. That figure recovers 3 damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Repair"
     },
     "Reposition": {
       "cost": 1,
@@ -1639,7 +1641,8 @@
       "playableBy": "GUARDIAN",
       "timing": "whenOneOfYourFiguresDefeated",
       "effect": "Use when a friendly figure is defeated to either become Focused, gain 2 Hit Tokens, or move up to 2 spaces.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Retaliation"
     },
     "Reverse Engineer": {
       "cost": 0,
@@ -1773,7 +1776,8 @@
       "playableBy": "SMUGGLER",
       "timing": "startOfActivation",
       "effect": "Use at the start of your activation to recover 2 Damage, apply +1 Surge to your attack results until the end of the round, or apply +1 Evade to your defense results until the end of the round.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Smuggled Supplies"
     },
     "Smuggler": {
       "cost": null,

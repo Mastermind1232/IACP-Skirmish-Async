@@ -127,6 +127,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.currentRound = (game.currentRound || 1) + 1;
   game.roundDefenseBonusBlock = {};
   game.roundDefenseBonusEvade = {};
+  game.roundAttackSurgeBonus = {};
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client });
   }

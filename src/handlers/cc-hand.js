@@ -287,6 +287,25 @@ export async function handleCcPlaySelect(interaction, ctx) {
   if (ctx.resolveAbility) {
     const abilityId = effectData?.abilityId ?? card;
     const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, combat: game.combat || game.pendingCombat });
+    if (result.requiresChoice && result.choiceOptions?.length > 0) {
+      game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId, playerNum };
+      const rows = [];
+      const maxPerRow = 5;
+      for (let i = 0; i < result.choiceOptions.length; i++) {
+        if (i % maxPerRow === 0) rows.push(new ActionRowBuilder());
+        const label = String(result.choiceOptions[i]).slice(0, 80);
+        rows[rows.length - 1].addComponents(
+          new ButtonBuilder().setCustomId(`cc_choice_${gameId}_${i}`).setLabel(label).setStyle(ButtonStyle.Secondary)
+        );
+      }
+      const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+      await handChannel.send({
+        content: `**Choose one** (for **${card}**):`,
+        components: rows,
+      }).catch(() => {});
+      saveGames();
+      return;
+    }
     if (result.applied && result.drewCards?.length) {
       await updateHandVisualMessage(game, playerNum, interaction.client);
       const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
@@ -295,6 +314,10 @@ export async function handleCcPlaySelect(interaction, ctx) {
       await ctx.logGameAction(game, interaction.client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
     } else if (!result.applied && result.manualMessage) {
       await ctx.logGameAction(game, interaction.client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
+    }
+    if (result.applied && (result.refreshHand || result.refreshDiscard)) {
+      if (result.refreshHand) await updateHandVisualMessage(game, playerNum, interaction.client);
+      if (result.refreshDiscard) await updateDiscardPileMessage(game, playerNum, interaction.client);
     }
   }
   if (ctx.pushUndo) {
@@ -350,6 +373,10 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
       const oppNum = playerNum === 1 ? 2 : 1;
       await updateDiscardPileMessage(game, oppNum, client);
     }
+    if (result.applied && (result.refreshHand || result.refreshDiscard)) {
+      if (result.refreshHand) await updateHandVisualMessage(game, playerNum, client);
+      if (result.refreshDiscard) await updateDiscardPileMessage(game, playerNum, client);
+    }
     if (result.applied && result.logMessage) {
       await logGameAction(game, client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
     } else if (result.applied && result.drewCards?.length) {
@@ -359,6 +386,71 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
       await logGameAction(game, client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
     }
   }
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction — choice button for choose-one CC (e.g. Retaliation). */
+export async function handleCcChoice(interaction, ctx) {
+  const match = interaction.customId.match(/^cc_choice_(.+)_(\d+)$/);
+  if (!match) {
+    await interaction.reply({ content: 'Invalid choice.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const [, gameId, choiceIndexStr] = match;
+  const choiceIndex = parseInt(choiceIndexStr, 10);
+  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, client, saveGames } = ctx;
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const pending = game.pendingCcChoice;
+  if (!pending || pending.gameId !== gameId) {
+    await interaction.reply({ content: 'No pending choice for this game.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const playerNum = pending.playerNum;
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== playerId) {
+    await interaction.reply({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (choiceIndex < 0 || choiceIndex >= (pending.choiceOptions?.length ?? 0)) {
+    await interaction.reply({ content: 'Invalid option.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  const result = resolveAbility(pending.abilityId, {
+    game,
+    playerNum,
+    dcMessageMeta,
+    dcHealthState,
+    choiceIndex,
+    combat: game.combat || game.pendingCombat,
+  });
+  delete game.pendingCcChoice;
+  if (result.applied && result.drewCards?.length) {
+    await updateHandVisualMessage(game, playerNum, client);
+    const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
+    await logGameAction(game, client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
+  } else if (result.applied && result.logMessage) {
+    await logGameAction(game, client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
+  }
+  if (result.applied && (result.refreshHand || result.refreshDiscard)) {
+    if (result.refreshHand) await updateHandVisualMessage(game, playerNum, client);
+    if (result.refreshDiscard) await updateDiscardPileMessage(game, playerNum, client);
+  }
+  if (result.applied && result.refreshDcEmbed && result.refreshDcEmbedMsgIds?.length) {
+    for (const msgId of result.refreshDcEmbedMsgIds) {
+      await updateDcActionsMessage(game, msgId, client).catch(() => {});
+    }
+  }
+  if (!result.applied && result.manualMessage) {
+    await logGameAction(game, client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
+  }
+  try {
+    await interaction.message.edit({ content: 'Choice resolved.', components: [] }).catch(() => {});
+  } catch {}
+  saveGames();
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction — "Ignore and play" for pending illegal CC. */

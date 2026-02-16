@@ -73,9 +73,58 @@ function drawCcCards(game, playerNum, n) {
  * @returns {{ applied: boolean, manualMessage?: string, drewCards?: string[] }}
  */
 export function resolveAbility(abilityId, context) {
-  const entry = abilityId ? getAbility(abilityId) : null;
+  let entry = abilityId ? getAbility(abilityId) : null;
   if (!entry || entry.type === 'surge') {
     return { applied: false, manualMessage: 'Resolve manually (see rules).' };
+  }
+
+  // ccEffect: chooseOne — player must pick one option; when choiceIndex is provided, resolve that option
+  if (entry.type === 'ccEffect' && Array.isArray(entry.chooseOne) && entry.chooseOne.length > 0) {
+    const choiceIndex = context.choiceIndex;
+    if (choiceIndex == null || choiceIndex < 0 || choiceIndex >= entry.chooseOne.length) {
+      const choiceOptions = entry.chooseOne.map((o, i) => o.label || `Option ${i + 1}`);
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions,
+        choiceCount: entry.chooseOne.length,
+        manualMessage: `Choose one: ${choiceOptions.join(', ')}.`,
+      };
+    }
+    const chosen = entry.chooseOne[choiceIndex];
+    entry = { type: 'ccEffect', ...chosen };
+  }
+
+  // ccEffect: returnDiscardToHand — move one card from discard to hand (the card that was last in discard before the current play)
+  if (entry.type === 'ccEffect' && entry.returnDiscardToHand) {
+    const { game, playerNum, cardName } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const discard = (game[discardKey] || []).slice();
+    const hand = (game[handKey] || []).slice();
+    if (discard.length < 2) return { applied: false, manualMessage: 'No other card in discard to return to hand.' };
+    const lastIndex = discard.length - 1;
+    const isCurrentCardLast = cardName && discard[lastIndex] === cardName;
+    const toReturnIndex = isCurrentCardLast ? lastIndex - 1 : lastIndex;
+    if (toReturnIndex < 0) return { applied: false, manualMessage: 'No other card in discard to return to hand.' };
+    const toReturn = discard.splice(toReturnIndex, 1)[0];
+    hand.push(toReturn);
+    game[discardKey] = discard;
+    game[handKey] = hand;
+    const logParts = [`Returned **${toReturn}** from discard to hand.`];
+    let drewCards = [];
+    if (typeof entry.draw === 'number' && entry.draw > 0) {
+      drewCards = drawCcCards(game, playerNum, entry.draw);
+      if (drewCards.length > 0) logParts.push(`Drew ${drewCards.map((c) => `**${c}**`).join(', ')}.`);
+    }
+    return {
+      applied: true,
+      logMessage: logParts.join(' '),
+      drewCards: drewCards.length > 0 ? drewCards : undefined,
+      refreshHand: true,
+      refreshDiscard: true,
+    };
   }
 
   // ccEffect: clearOpponentDiscard + optional draw with drawIfTrait (Fool Me Once)
@@ -683,6 +732,32 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `${focusPart}+${n} Surge added to this attack.` };
   }
 
+  // ccEffect: mpCost + applyFocus (e.g. Shared Experience — spend 3 MP to become Focused)
+  if (entry.type === 'ccEffect' && entry.applyFocus && typeof entry.mpCost === 'number' && entry.mpCost > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    const remaining = bank.remaining ?? 0;
+    if (remaining < entry.mpCost) {
+      return { applied: false, manualMessage: `Resolve manually: need ${entry.mpCost} MP to spend (have ${remaining}).` };
+    }
+    bank.remaining = remaining - entry.mpCost;
+    game.movementBank[msgId] = bank;
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found for activation.' };
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of figureKeys) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+    }
+    return { applied: true, logMessage: `Spent ${entry.mpCost} MP and became Focused.` };
+  }
+
   // ccEffect: Focus / Meditation — apply Focus to activating figures; requires active activation
   if (abilityId === 'Focus' || (entry.type === 'ccEffect' && entry.applyFocus)) {
     const { game, playerNum, dcMessageMeta } = context;
@@ -1004,6 +1079,21 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: roundAttackSurgeBonus (e.g. Smuggled Supplies) — until end of round, +N Surge when attacking
+  if (entry.type === 'ccEffect' && typeof entry.roundAttackSurgeBonus === 'number' && entry.roundAttackSurgeBonus > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.roundAttackSurgeBonus = game.roundAttackSurgeBonus || {};
+    const n = entry.roundAttackSurgeBonus;
+    game.roundAttackSurgeBonus[playerNum] = (game.roundAttackSurgeBonus[playerNum] || 0) + n;
+    return {
+      applied: true,
+      logMessage: `Until end of round, apply +${n} Surge to your attack results.`,
+    };
+  }
+
   // ccEffect: mpAfterAttack (Hit and Run) — set pending; MP added when combat resolves
   if (entry.type === 'ccEffect' && typeof entry.mpAfterAttack === 'number' && entry.mpAfterAttack > 0) {
     const { game, playerNum, dcMessageMeta } = context;
@@ -1014,6 +1104,122 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: `Perform an attack. After it resolves, you gain ${entry.mpAfterAttack} movement point${entry.mpAfterAttack === 1 ? '' : 's'}.`,
+    };
+  }
+
+  // ccEffect: mpBonus + chooseAdjacentHostileThen (e.g. Force Surge — gain 1 MP then choose adjacent hostile for damage/strain)
+  if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0 && entry.chooseAdjacentHostileThen) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    bank.total = (bank.total ?? 0) + entry.mpBonus;
+    bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
+    game.movementBank[msgId] = bank;
+    const { damage = 0, strain = 0 } = entry.chooseAdjacentHostileThen;
+    const totalDamage = damage + strain;
+    if (totalDamage <= 0) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const mapId = game.selectedMap?.id;
+    if (!mapId || activatingKeys.length === 0) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const hostileSet = new Set();
+    for (const fk of activatingKeys) {
+      const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+      for (const { figureKey, playerNum: p } of adj) {
+        if (p === oppNum) hostileSet.add(figureKey);
+      }
+    }
+    const hostiles = [...hostileSet];
+    if (hostiles.length === 0) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP. No adjacent hostile.` };
+    if (hostiles.length > 1 || !dcHealthState) {
+      return { applied: true, logMessage: `Gained ${entry.mpBonus} MP. Resolve manually: choose adjacent hostile for ${damage} Damage, ${strain} Strain.` };
+    }
+    const targetFk = hostiles[0];
+    const targetMsgId = findMsgIdForFigureKey(game, oppNum, targetFk, dcMessageMeta);
+    if (!targetMsgId) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
+    const targetMeta = dcMessageMeta.get(targetMsgId);
+    if (!targetMeta) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
+    const targetKeys = getFigureKeysForDcMsg(game, oppNum, targetMeta);
+    const targetIdx = targetKeys.indexOf(targetFk);
+    if (targetIdx < 0) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
+    const healthState = dcHealthState.get(targetMsgId) || [];
+    const entry_ = healthState[targetIdx];
+    if (!Array.isArray(entry_) || entry_.length < 1) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
+    const [cur, max] = entry_;
+    const newCur = Math.max(0, (cur ?? max ?? 0) - totalDamage);
+    healthState[targetIdx] = [newCur, max];
+    dcHealthState.set(targetMsgId, healthState);
+    const dcMessageIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
+    const idx = (dcMessageIds || []).indexOf(targetMsgId);
+    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    const strainPart = strain > 0 ? ` and ${strain} Strain` : '';
+    return {
+      applied: true,
+      logMessage: `Gained ${entry.mpBonus} MP. Adjacent hostile suffered ${damage} Damage${strainPart} (${totalDamage} total).`,
+      refreshDcEmbed: true,
+      refreshDcEmbedMsgIds: [targetMsgId],
+    };
+  }
+
+  // ccEffect: chooseAdjacentHostileThen — choose one adjacent hostile figure, apply damage and/or strain (strain applied as damage)
+  if (entry.type === 'ccEffect' && entry.chooseAdjacentHostileThen && (entry.chooseAdjacentHostileThen.damage > 0 || entry.chooseAdjacentHostileThen.strain > 0)) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    const { damage = 0, strain = 0 } = entry.chooseAdjacentHostileThen;
+    const totalDamage = damage + strain;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (activatingKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const mapId = game.selectedMap?.id;
+    if (!mapId) return { applied: false, manualMessage: 'Resolve manually: no map selected.' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const hostileSet = new Set();
+    for (const fk of activatingKeys) {
+      const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+      for (const { figureKey, playerNum: p } of adj) {
+        if (p === oppNum) hostileSet.add(figureKey);
+      }
+    }
+    const hostiles = [...hostileSet];
+    if (hostiles.length === 0) return { applied: true, logMessage: 'No adjacent hostile figure.' };
+    if (hostiles.length > 1) {
+      return { applied: false, manualMessage: `Resolve manually: choose which of ${hostiles.length} adjacent hostile figures.` };
+    }
+    if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
+    const targetFk = hostiles[0];
+    const targetMsgId = findMsgIdForFigureKey(game, oppNum, targetFk, dcMessageMeta);
+    if (!targetMsgId) return { applied: false, manualMessage: 'Resolve manually: could not find target deployment.' };
+    const targetMeta = dcMessageMeta.get(targetMsgId);
+    if (!targetMeta) return { applied: false, manualMessage: 'Resolve manually: could not find target.' };
+    const targetKeys = getFigureKeysForDcMsg(game, oppNum, targetMeta);
+    const targetIdx = targetKeys.indexOf(targetFk);
+    if (targetIdx < 0) return { applied: false, manualMessage: 'Resolve manually: could not find target figure index.' };
+    const healthState = dcHealthState.get(targetMsgId) || [];
+    const entry_ = healthState[targetIdx];
+    if (!Array.isArray(entry_) || entry_.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for target.' };
+    const [cur, max] = entry_;
+    const newCur = Math.max(0, (cur ?? max ?? 0) - totalDamage);
+    healthState[targetIdx] = [newCur, max];
+    dcHealthState.set(targetMsgId, healthState);
+    const dcMessageIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
+    const idx = (dcMessageIds || []).indexOf(targetMsgId);
+    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    const strainPart = strain > 0 ? ` and ${strain} Strain` : '';
+    return {
+      applied: true,
+      logMessage: `Adjacent hostile figure suffered ${damage} Damage${strainPart} (${totalDamage} total).`,
+      refreshDcEmbed: true,
+      refreshDcEmbedMsgIds: [targetMsgId],
     };
   }
 

@@ -124,6 +124,7 @@ import {
   handleCcSearchDiscard,
   handleCcCloseDiscard,
   handleCcDiscard,
+  handleCcChoice,
   handleSquadSelect,
   handleIllegalCcIgnore,
   handleIllegalCcUnplay,
@@ -3888,7 +3889,7 @@ client.on('interactionCreate', async (interaction) => {
   const buttonKey = getHandlerKey(interaction.customId, 'button');
   if (!buttonKey) return;
 
-  if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'squad_select_' || buttonKey === 'illegal_cc_ignore_' || buttonKey === 'illegal_cc_unplay_' || buttonKey === 'negation_play_' || buttonKey === 'negation_let_resolve_' || buttonKey === 'celebration_play_' || buttonKey === 'celebration_pass_') {
+    if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'cc_choice_' || buttonKey === 'squad_select_' || buttonKey === 'illegal_cc_ignore_' || buttonKey === 'illegal_cc_unplay_' || buttonKey === 'negation_play_' || buttonKey === 'negation_let_resolve_' || buttonKey === 'celebration_play_' || buttonKey === 'celebration_pass_') {
     const ccHandButtonContext = {
       getGame,
       dcMessageMeta,
@@ -3927,6 +3928,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'cc_search_discard_') await handleCcSearchDiscard(interaction, ccHandButtonContext);
     else if (buttonKey === 'cc_close_discard_') await handleCcCloseDiscard(interaction, ccHandButtonContext);
     else if (buttonKey === 'cc_discard_') await handleCcDiscard(interaction, ccHandButtonContext);
+    else if (buttonKey === 'cc_choice_') await handleCcChoice(interaction, ccHandButtonContext);
     else if (buttonKey === 'squad_select_') await handleSquadSelect(interaction, ccHandButtonContext);
     else if (buttonKey === 'illegal_cc_ignore_') await handleIllegalCcIgnore(interaction, ccHandButtonContext);
     else if (buttonKey === 'illegal_cc_unplay_') await handleIllegalCcUnplay(interaction, ccHandButtonContext);
