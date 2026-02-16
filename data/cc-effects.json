@@ -65,7 +65,7 @@
       "playableBy": "HUNTER",
       "timing": "duringAttack",
       "effect": "Use while attacking a figure. If this is the first Command card you play during this attack, apply +3 Hits to the attack results. You cannot play other Command cards during this attack.",
-      "effectType": "manual"
+      "abilityId": "Assassinate"
     },
     "Balancing Force": {
       "cost": 2,
@@ -122,7 +122,7 @@
       "playableBy": "Shyla Varad",
       "timing": "duringAttack",
       "effect": "Use while attacking to apply +1 Surge to the attack results. After the attack resolves, each hostile figure within 2 spaces of you suffers 1 Damage.",
-      "effectType": "manual"
+      "abilityId": "Bladestorm"
     },
     "Blaze of Glory": {
       "cost": 2,
@@ -1063,7 +1063,7 @@
       "playableBy": "HEAVY WEAPON",
       "timing": "duringAttack",
       "effect": "Use while attacking to apply +3 Accuracy, or -1 Dodge, or -1 Evade to the results.",
-      "effectType": "manual"
+      "abilityId": "Lock On"
     },
     "Lure of the Dark Side": {
       "cost": 3,

@@ -72,11 +72,13 @@ export function computeCombatResult(combat) {
   const defRoll = combat.defenseRoll;
   const surgeD = combat.surgeDamage || 0;
   const surgeP = combat.surgePierce || 0;
+  const bonusPierce = combat.bonusPierce || 0;
+  const totalPierce = surgeP + bonusPierce;
   const surgeA = combat.surgeAccuracy || 0;
   const bonusAcc = combat.bonusAccuracy || 0;
   const bonusHits = combat.bonusHits || 0;
   const hit = (roll.acc + surgeA + bonusAcc) >= defRoll.evade;
-  const effectiveBlock = Math.max(0, defRoll.block - surgeP);
+  const effectiveBlock = Math.max(0, defRoll.block - totalPierce);
   const damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits - effectiveBlock) : 0;
   const conditionsText = (combat.surgeConditions?.length) ? ` (${combat.surgeConditions.join(', ')})` : '';
   const blastText = combat.surgeBlast ? ` Blast ${combat.surgeBlast}` : '';
@@ -86,6 +88,7 @@ export function computeCombatResult(combat) {
   let resultText = `**Result:** Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
   if (bonusAcc) resultText += ` | CC bonus: +${bonusAcc} acc`;
   if (bonusHits) resultText += ` | CC bonus: +${bonusHits} Hit`;
+  if (bonusPierce) resultText += ` | CC bonus: +${bonusPierce} pierce`;
   if (surgeD || surgeP || surgeA || conditionsText || blastText || recoverText || cleaveText) {
     resultText += ` | Surge: +${surgeD} dmg, +${surgeP} pierce, +${surgeA} acc${conditionsText}${blastText}${recoverText}${cleaveText}`;
   }

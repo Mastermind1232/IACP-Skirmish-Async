@@ -245,6 +245,20 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: attackBonusPierce — +N Pierce to this attack; attacker only
+  if (entry.type === 'ccEffect' && typeof entry.attackBonusPierce === 'number' && entry.attackBonusPierce > 0) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play while attacking (as the attacker).' };
+    }
+    cbt.bonusPierce = (cbt.bonusPierce || 0) + entry.attackBonusPierce;
+    return {
+      applied: true,
+      logMessage: `+${entry.attackBonusPierce} Pierce added to this attack.`,
+    };
+  }
+
   // ccEffect: attackAccuracyBonus (Deadeye) — +N Accuracy to this attack; attacker only
   if (entry.type === 'ccEffect' && typeof entry.attackAccuracyBonus === 'number' && entry.attackAccuracyBonus > 0) {
     const { game, playerNum, combat } = context;
