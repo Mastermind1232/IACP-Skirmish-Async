@@ -3,7 +3,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert';
-import { getAbility, resolveSurgeAbility, getSurgeAbilityLabel } from './abilities.js';
+import { getAbility, resolveSurgeAbility, getSurgeAbilityLabel, resolveAbility } from './abilities.js';
 
 test('getAbility returns library entry for known surge id', () => {
   const entry = getAbility('damage 1');
@@ -45,4 +45,37 @@ test('getSurgeAbilityLabel uses library when present', () => {
 test('getSurgeAbilityLabel returns id for unknown (composite or not in library)', () => {
   const label = getSurgeAbilityLabel('some composite key');
   assert.strictEqual(label, 'some composite key');
+});
+
+test('resolveAbility draw 1 (There is Another): mutates game, returns applied and drewCards', () => {
+  const game = { player1CcDeck: ['A', 'B', 'C'], player2CcDeck: [], player1CcHand: [], player2CcHand: [] };
+  const result = resolveAbility('There is Another', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(result.drewCards, ['A']);
+  assert.strictEqual(game.player1CcHand.length, 1);
+  assert.strictEqual(game.player1CcHand[0], 'A');
+  assert.strictEqual(game.player1CcDeck.length, 2);
+});
+
+test('resolveAbility draw 2 (Planning): draws two cards', () => {
+  const game = { player1CcDeck: ['X', 'Y', 'Z'], player2CcDeck: [], player1CcHand: [], player2CcHand: [] };
+  const result = resolveAbility('Planning', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(result.drewCards, ['X', 'Y']);
+  assert.strictEqual(game.player1CcHand.length, 2);
+  assert.strictEqual(game.player1CcDeck.length, 1);
+});
+
+test('resolveAbility draw with empty deck: draws what is available', () => {
+  const game = { player1CcDeck: ['Only'], player2CcDeck: [], player1CcHand: [], player2CcHand: [] };
+  const result = resolveAbility('Planning', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(result.drewCards, ['Only']);
+  assert.strictEqual(game.player1CcDeck.length, 0);
+});
+
+test('resolveAbility returns manual for unimplemented ccEffect', () => {
+  const result = resolveAbility('cc:adrenaline', { game: {}, playerNum: 1 });
+  assert.strictEqual(result.applied, false);
+  assert.ok(result.manualMessage);
 });
