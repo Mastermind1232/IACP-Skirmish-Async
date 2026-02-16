@@ -343,7 +343,8 @@
       "playableBy": "BRAWLER",
       "timing": "afterAttackTargetingYouResolved",
       "effect": "Use after an attack targeting you is resolved. If you were not defeated and are adjacent to the attacker, the attacker suffers 2 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Counter Attack"
     },
     "Covering Fire": {
       "cost": 3,
@@ -478,7 +479,8 @@
       "playableBy": "Kuiil",
       "timing": "endOfRound",
       "effect": "Use at the end of the round to move up to 6 spaces.\n\nPassive: At the end of the round, if your Kuiil is defeated, you may discard this card from your hand to distribute 2 Hit Tokens among friendly figures.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Desperate Escape"
     },
     "Devotion": {
       "cost": 0,
@@ -1371,7 +1373,8 @@
       "playableBy": "SMUGGLER",
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when an attack targeting you is declared to perform a move.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "On the Lam"
     },
     "One in a Million": {
       "cost": 2,
