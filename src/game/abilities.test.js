@@ -406,6 +406,27 @@ test('resolveAbility Worth Every Credit applies discard 1 HARMFUL and gain 2 MP'
   assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
 });
 
+test('resolveAbility Apex Predator applies Focus, Hide, 2 Power Tokens, 2 MP', () => {
+  const msgId = 'msg-apex';
+  const game = {
+    gameId: 'g-apex',
+    dcActionsData: { [msgId]: {} },
+    figurePositions: { 1: { 'Nexu-1-0': 'a1' } },
+    figureConditions: {},
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-apex', playerNum: 1, dcName: 'Nexu', displayName: 'Nexu [DG 1]' }]]);
+  const result = resolveAbility('Apex Predator', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('Focused'));
+  assert.ok(result.logMessage?.includes('Hidden'));
+  assert.ok(result.logMessage?.includes('Power Token'));
+  assert.ok(result.logMessage?.includes('MP'));
+  assert.strictEqual(game.figureConditions['Nexu-1-0']?.includes('Focus'), true);
+  assert.strictEqual(game.figureConditions['Nexu-1-0']?.includes('Hide'), true);
+  assert.strictEqual(game.figurePowerTokens['Nexu-1-0']?.length, 2);
+  assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
+});
+
 test('resolveAbility Camouflage applies Hide to defender when attack declared on them', () => {
   const combat = {
     attackerPlayerNum: 1,

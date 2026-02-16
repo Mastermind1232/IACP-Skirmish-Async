@@ -186,6 +186,40 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: parts.join(', ') + '.', refreshDcEmbed: recovered > 0 };
   }
 
+  // ccEffect: Apex Predator combo — Focus + Hide + powerTokenGain + mpBonus (must run before individual branches)
+  if (entry.type === 'ccEffect' && entry.applyFocus && entry.applyHide && typeof entry.powerTokenGain === 'number' && typeof entry.mpBonus === 'number') {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    if (figureKeys.length > 1) return { applied: false, manualMessage: 'Resolve manually: choose which figure gains Power Tokens.' };
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of figureKeys) {
+      const existing = game.figureConditions[fk] || [];
+      const updated = [...existing];
+      if (!updated.includes('Focus')) updated.push('Focus');
+      if (!updated.includes('Hide')) updated.push('Hide');
+      game.figureConditions[fk] = updated;
+    }
+    const fk = figureKeys[0];
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+    const current = game.figurePowerTokens[fk].length;
+    const toAdd = Math.min(entry.powerTokenGain, 2 - current);
+    for (let i = 0; i < toAdd; i++) game.figurePowerTokens[fk].push('Wild');
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    bank.total = (bank.total ?? 0) + entry.mpBonus;
+    bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
+    game.movementBank[msgId] = bank;
+    const parts = ['Became Focused', 'Hidden', toAdd > 0 ? `gained ${toAdd} Power Token(s)` : null, `gained ${entry.mpBonus} MP`].filter(Boolean);
+    return { applied: true, logMessage: parts.join(', ') + '.' };
+  }
+
   // ccEffect: +N MP (Fleet Footed, Force Rush, etc.) — requires active activation
   if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
     const { game, playerNum, dcMessageMeta } = context;
