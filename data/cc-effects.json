@@ -86,7 +86,7 @@
       "playableBy": "WOOKIE",
       "timing": "duringActivation",
       "effect": "Use during your activation to get 1 Power Token. If you have suffered 3 or more Damage, gain 2 Power Tokens instead.",
-      "effectType": "manual"
+      "abilityId": "Battle Scars"
     },
     "Battlefield Awareness": {
       "cost": 1,
@@ -740,7 +740,7 @@
       "playableBy": "Any Figure",
       "timing": "duringActivation",
       "effect": "Cost: 2 Strain\n\nUse during your activation to return your opponent's Command discard pile to the game box. Then, if you are a SPY, draw 1 Command card.",
-      "effectType": "manual"
+      "abilityId": "Fool Me Once"
     },
     "Forbidden Knowledge": {
       "cost": 1,
@@ -1533,7 +1533,7 @@
       "playableBy": "TROOPER",
       "timing": "startOfActivation",
       "effect": "Use at the start of your activation. You and each friendly TROOPER adjacent to you gain 1 movement point.",
-      "effectType": "manual"
+      "abilityId": "Rank and File"
     },
     "Rapid Recalibration": {
       "cost": 1,

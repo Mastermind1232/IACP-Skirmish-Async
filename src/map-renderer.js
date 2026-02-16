@@ -262,6 +262,37 @@ export async function renderMap(mapId, options = {}) {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
+    // Power Tokens: 2 slots at top-left of unit (slot 1, slot 2 right next to it)
+    const powerTokenTypes = (fig.powerTokens || []).slice(0, 2);
+    const ptSize = Math.max(12, clipRadius * 0.45);
+    const ptConfig = getTokenImagesConfig().powerTokens || {};
+    const x0 = cx - clipRadius;
+    const y0 = cy - clipRadius;
+    for (let i = 0; i < 2; i++) {
+      const ptType = powerTokenTypes[i];
+      const px = x0 + i * (ptSize * 0.9);
+      const py = y0;
+      if (ptType) {
+        const filename = ptConfig[ptType] || ptConfig.Surge;
+        if (filename) {
+          const resolved = resolveImagePath(join('vassal_extracted', 'images', filename), 'tokens');
+          const imgPath = join(rootDir, resolved);
+          if (existsSync(imgPath)) {
+            try {
+              const ptImg = await loadImage(imgPath);
+              const tw = ptImg.width;
+              const th = ptImg.height;
+              const tScale = Math.min(ptSize / tw, ptSize / th);
+              const dw = Math.round(tw * tScale);
+              const dh = Math.round(th * tScale);
+              ctx.drawImage(ptImg, px, py, dw, dh);
+            } catch (err) {
+              console.error('Power token image load failed:', filename, err);
+            }
+          }
+        }
+      }
+    }
   }
 
   // Draw map tokens using game box images from vassal_extracted/images/tokens

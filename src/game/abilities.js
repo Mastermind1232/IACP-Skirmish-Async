@@ -137,6 +137,67 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: msg };
   }
 
+  // ccEffect: Power Token gain (Battle Scars, etc.) — requires active activation
+  if (entry.type === 'ccEffect' && (typeof entry.powerTokenGain === 'number' || entry.powerTokenGainIfDamagedGte)) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta?.dcName) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    let n = typeof entry.powerTokenGain === 'number' ? entry.powerTokenGain : 1;
+    const ifDamaged = entry.powerTokenGainIfDamagedGte;
+    if (ifDamaged && typeof ifDamaged === 'object') {
+      const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const idx = dcMessageIds.indexOf(msgId);
+      const dc = idx >= 0 ? dcList[idx] : null;
+      const healthState = dc?.healthState || [];
+      let maxDamage = 0;
+      for (const [cur, max] of healthState) {
+        if (cur != null && max != null) maxDamage = Math.max(maxDamage, max - cur);
+      }
+      for (const [thresh, val] of Object.entries(ifDamaged)) {
+        if (maxDamage >= parseInt(thresh, 10) && val > n) n = val;
+      }
+    }
+    if (n < 1) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (figureKeys.length > 1) return { applied: false, manualMessage: 'Resolve manually: choose which figure gains the Power Token(s).' };
+    const fk = figureKeys[0];
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+    const current = game.figurePowerTokens[fk].length;
+    const toAdd = Math.min(n, 2 - current);
+    if (toAdd <= 0) return { applied: false, manualMessage: 'That figure already has 2 Power Tokens (max).' };
+    for (let i = 0; i < toAdd; i++) game.figurePowerTokens[fk].push('Wild');
+    const msg = toAdd === 1 ? 'Gained 1 Power Token.' : `Gained ${toAdd} Power Tokens.`;
+    return { applied: true, logMessage: msg };
+  }
+
+  // ccEffect: Against the Odds — end of round, VP condition, Focus up to 3 figures
+  if (entry.type === 'ccEffect' && typeof entry.focusGainToUpToNFigures === 'number' && entry.vpCondition?.opponentHasAtLeastMore != null) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const playerVP = (playerNum === 1 ? game.player1VP : game.player2VP)?.total ?? 0;
+    const oppVP = (oppNum === 1 ? game.player1VP : game.player2VP)?.total ?? 0;
+    const diff = entry.vpCondition.opponentHasAtLeastMore;
+    if (oppVP - playerVP < diff) return { applied: true };
+    const poses = game.figurePositions?.[playerNum] || {};
+    const allKeys = Object.keys(poses);
+    if (allKeys.length === 0) return { applied: true };
+    const n = Math.min(entry.focusGainToUpToNFigures, allKeys.length);
+    if (allKeys.length > n) return { applied: false, manualMessage: `Resolve manually: choose up to ${n} of your ${allKeys.length} figures to become Focused.` };
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of allKeys) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+    }
+    return { applied: true, logMessage: `${allKeys.length} figure(s) became Focused.` };
+  }
+
   // ccEffect: Focus — requires active activation
   if (abilityId === 'Focus') {
     const { game, playerNum, dcMessageMeta } = context;

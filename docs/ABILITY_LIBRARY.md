@@ -41,7 +41,17 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 
 - `abilityId === "Focus"` — applies Focus condition to all figures in the active DC.
 - `resolveAbility` will mutate `game.player1CcDeck` / `player2CcDeck` and hand, return `{ applied: true, drewCards: [...] }`. The CC handler refreshes the hand message and logs the draw.
-- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fleet Footed** (+1 MP), **Force Rush** (+2 MP), **Heart of Freedom** (+2 MP), **Apex Predator** (+2 MP), **Price of Glory** (+2 MP), **Worth Every Credit** (+2 MP), **Urgency** (Speed+2 MP), **Focus** (become Focused).
+**Power Token gain (powerTokenGain)**
+
+- Add `"powerTokenGain": 1` (or 2) — give Power Token(s) to activating figure. Optional `powerTokenGainIfDamagedGte: { "3": 2 }` — if figure has suffered ≥3 damage, give 2 instead.
+- Example: **Battle Scars** — 1 token normally, 2 if suffered 3+ damage.
+
+**Focus to figures (focusGainToUpToNFigures)**
+
+- Add `"focusGainToUpToNFigures": 3` with `vpCondition: { opponentHasAtLeastMore: 8 }` — end of round; if opponent has ≥8 more VPs, apply Focus to up to N of your figures. Auto when you have ≤N figures; manual when >N (choose which).
+- Example: **Against the Odds**.
+
+- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fool Me Once** (draw 1 if SPY), **Fleet Footed** (+1 MP), **Force Rush** (+2 MP), **Heart of Freedom** (+2 MP), **Apex Predator** (+2 MP), **Price of Glory** (+2 MP), **Worth Every Credit** (+2 MP), **Rank and File** (+1 MP; adjacent TROOPERS manual), **Urgency** (Speed+2 MP), **Focus** (become Focused), **Battle Scars** (Power Token gain), **Against the Odds** (Focus up to 3 if VP condition met).
 
 ### Adding a non-surge ability
 
@@ -71,5 +81,24 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 - **ability-library.json:** `"There is Another": { "type": "ccEffect", "label": "Draw 1 Command card", "draw": 1 }`.
 - **abilities.js:** For `ccEffect` with `draw: 1`, `drawCcCards(game, playerNum, 1)` is called; returns `{ applied: true, drewCards: [card] }`.
 - **cc-hand.js:** When `resolveAbility` returns `applied: true` and `drewCards`, the handler calls `updateHandVisualMessage` and logs the drawn card(s).
+
+## Power Tokens (consolidated rules reference)
+
+From **docs/RULES_REFERENCE.md** and **docs/consolidated-rules-raw.txt**:
+
+- **Types:** Surge (surge), Damage/Hit, Evade, Block. Wild (player chooses any).
+- **Spending:** When a figure declares an attack or is declared as target, it may spend 1 Power Token to apply +1 of the symbol to attack results. Attacker cannot spend Block or Evade; defender cannot spend Hit or Surge.
+- **Max 2 per figure.** If a figure would gain more than 2, its player must choose tokens to discard until the figure has 2.
+- **Max 1 spent per attack.**
+
+**Status:** Power Token **tracking and display** are implemented. `game.figurePowerTokens[figureKey]` stores tokens; map shows them on figures. **Gaining** via CC (Battle Scars) is automated. **Spending** during combat (attacker/defender restrictions) is not yet wired — resolve manually.
+
+---
+
+## Progress (~6% of CCs auto; ~90% of those with abilityId)
+
+- **Surge:** 100% — all surge abilities resolved.
+- **CC effects:** 298 total; 20 have abilityId; ~18 fully or partially automated.
+- **CCs with automation:** Draw (4), conditional draw (2), MP bonus (8), Focus (2), Power Token gain (1), Against the Odds (1).
 
 Phase 2 next: add more `type` values and branches in `resolveAbility` (e.g. more CC “draw N” effects, DC specials by name) so more effects run automatically instead of showing "Resolve manually".

@@ -1471,6 +1471,7 @@ function getFiguresForRender(game) {
       const imagePath = getFigureImagePath(dcName);
       const baseSize = getFigureSize(dcName);
       const figureSize = game.figureOrientations?.[figureKey] || baseSize;
+      const powerTokens = game.figurePowerTokens?.[figureKey] || [];
       figures.push({
         coord: space,
         color,
@@ -1478,6 +1479,8 @@ function getFiguresForRender(game) {
         dcName,
         figureSize,
         label,
+        figureKey,
+        powerTokens,
       });
     }
   }
@@ -3135,10 +3138,40 @@ client.once('ready', async () => {
       .setName('dcwinrate')
       .setDescription('Win rate by Deployment Card (top N by games played). Use in #statistics.')
       .addIntegerOption((o) => o.setName('limit').setDescription('Max number of DCs to show (default 20)').setMinValue(5).setMaxValue(50));
+    const powertoken = new SlashCommandBuilder()
+      .setName('power-token')
+      .setDescription('Add or remove a Power Token on a figure. Use in Game Log / Board channel.')
+      .addSubcommand((s) =>
+        s
+          .setName('add')
+          .setDescription('Add a Power Token to a figure (max 2 per figure)')
+          .addStringOption((o) => o.setName('figure').setDescription('Figure key, e.g. Stormtrooper (Regular)-1-0').setRequired(true))
+          .addStringOption((o) =>
+            o.setName('type').setDescription('Token type').setRequired(true).addChoices(
+              { name: 'Hit (Damage)', value: 'Hit' },
+              { name: 'Surge', value: 'Surge' },
+              { name: 'Block', value: 'Block' },
+              { name: 'Evade', value: 'Evade' },
+              { name: 'Wild', value: 'Wild' },
+            )
+          )
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('remove')
+          .setDescription('Remove a Power Token from a figure')
+          .addStringOption((o) => o.setName('figure').setDescription('Figure key').setRequired(true))
+          .addIntegerOption((o) => o.setName('index').setDescription('Which token to remove (1 or 2)').setMinValue(1).setMaxValue(2).setRequired(true))
+      )
+      .addSubcommand((s) =>
+        s
+          .setName('list')
+          .setDescription('List figures with Power Tokens')
+      );
     await rest.put(Routes.applicationCommands(client.user.id), {
-      body: [botmenu.toJSON(), statcheck.toJSON(), affiliation.toJSON(), dcwinrate.toJSON()],
+      body: [botmenu.toJSON(), statcheck.toJSON(), affiliation.toJSON(), dcwinrate.toJSON(), powertoken.toJSON()],
     });
-    console.log('Slash commands registered: /botmenu, /statcheck, /affiliation, /dcwinrate');
+    console.log('Slash commands registered: /botmenu, /statcheck, /affiliation, /dcwinrate, /power-token');
   } catch (err) {
     console.error('Failed to register slash commands:', err.message);
   }
@@ -3548,6 +3581,95 @@ client.on('interactionCreate', async (interaction) => {
         components: [getBotmenuButtons(gameByChannel.gameId)],
         ephemeral: false,
       }).catch(() => {});
+      return;
+    }
+    if (cmd === 'power-token') {
+      const channelId = interaction.channelId;
+      let game = null;
+      for (const [, g] of getGamesMap()) {
+        if (g.generalId === channelId || g.boardId === channelId || g.chatId === channelId) {
+          game = g;
+          break;
+        }
+      }
+      if (!game) {
+        await interaction.reply({
+          content: 'Use /power-token in the **Game Log** or **Board** channel of an active game.',
+          ephemeral: true,
+        }).catch(() => {});
+        return;
+      }
+      if (await replyIfGameEnded(game, interaction)) return;
+      const sub = interaction.options.getSubcommand();
+      if (sub === 'list') {
+        const tokens = game.figurePowerTokens || {};
+        const entries = Object.entries(tokens).filter(([, arr]) => arr?.length > 0);
+        const lines = entries.length
+          ? entries.map(([fk, arr]) => `**${fk}**: ${arr.join(', ')}`).join('\n')
+          : 'No Power Tokens on any figure.';
+        await interaction.reply({
+          content: `**Power Tokens**\n${lines}`,
+          ephemeral: true,
+        }).catch(() => {});
+        return;
+      }
+      const figureKey = interaction.options.getString('figure');
+      const poses = game.figurePositions || { 1: {}, 2: {} };
+      const allFigureKeys = [...Object.keys(poses[1] || {}), ...Object.keys(poses[2] || {})];
+      const match = allFigureKeys.find((k) => k.toLowerCase() === figureKey.toLowerCase());
+      const fk = match || (allFigureKeys.includes(figureKey) ? figureKey : null);
+      if (!fk) {
+        await interaction.reply({
+          content: `Figure **${figureKey}** not found. Valid keys: ${allFigureKeys.slice(0, 8).join(', ')}${allFigureKeys.length > 8 ? '...' : ''}`,
+          ephemeral: true,
+        }).catch(() => {});
+        return;
+      }
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+      if (sub === 'add') {
+        const type = interaction.options.getString('type');
+        if (game.figurePowerTokens[fk].length >= 2) {
+          await interaction.reply({
+            content: `${fk} already has 2 Power Tokens (max). Remove one first.`,
+            ephemeral: true,
+          }).catch(() => {});
+          return;
+        }
+        game.figurePowerTokens[fk] = [...game.figurePowerTokens[fk], type];
+        saveGames();
+        await interaction.reply({
+          content: `Added **${type}** Power Token to **${fk}**.`,
+          ephemeral: false,
+        }).catch(() => {});
+      } else {
+        const idx = interaction.options.getInteger('index');
+        const arr = game.figurePowerTokens[fk];
+        if (!arr || arr.length < idx) {
+          await interaction.reply({
+            content: `${fk} does not have a token at index ${idx}. Current: ${(arr || []).join(', ') || 'none'}`,
+            ephemeral: true,
+          }).catch(() => {});
+          return;
+        }
+        const removed = arr[idx - 1];
+        game.figurePowerTokens[fk] = arr.filter((_, i) => i !== idx - 1);
+        if (game.figurePowerTokens[fk].length === 0) delete game.figurePowerTokens[fk];
+        saveGames();
+        await interaction.reply({
+          content: `Removed **${removed}** Power Token from **${fk}**.`,
+          ephemeral: false,
+        }).catch(() => {});
+      }
+      if (game.boardId && game.selectedMap) {
+        try {
+          const boardChannel = await interaction.client.channels.fetch(game.boardId);
+          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
+        } catch (e) {
+          console.error('Power token: refresh map failed', e);
+        }
+      }
       return;
     }
     // Stats commands: only in #statistics channel; require DB

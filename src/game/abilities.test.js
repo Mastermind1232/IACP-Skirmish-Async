@@ -151,3 +151,70 @@ test("resolveAbility Officer's Training without LEADER (during attack) does not 
   assert.strictEqual(result.drewCards?.length ?? 0, 0);
   assert.strictEqual(game.player1CcHand.length, 0);
 });
+
+test("resolveAbility Fool Me Once with SPY (during activation) draws 1", () => {
+  const msgId = 'msg-spy';
+  const game = { player1CcDeck: ['A'], player2CcDeck: [], player1CcHand: [], player2CcHand: [], gameId: 'g4', dcActionsData: { [msgId]: {} } };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g4', playerNum: 1, dcName: 'Agent Blaise', displayName: 'Agent Blaise [DG 1]' }]]);
+  const result = resolveAbility('Fool Me Once', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(result.drewCards?.length, 1);
+  assert.strictEqual(game.player1CcHand.length, 1);
+});
+
+test('resolveAbility Battle Scars with active activation gains 1 Power Token', () => {
+  const msgId = 'msg-pt';
+  const game = {
+    gameId: 'g5',
+    dcActionsData: { [msgId]: {} },
+    figurePositions: { 1: { 'Wookiee Warrior (Elite)-1-0': 'a1' }, 2: {} },
+    p1DcMessageIds: [msgId],
+    p1DcList: [{ dcName: 'Wookiee Warrior (Elite)', healthState: [[7, 8]] }],
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g5', playerNum: 1, dcName: 'Wookiee Warrior (Elite)', displayName: 'Wookiee [DG 1]' }]]);
+  const result = resolveAbility('Battle Scars', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(result.logMessage, 'Gained 1 Power Token.');
+  assert.deepStrictEqual(game.figurePowerTokens['Wookiee Warrior (Elite)-1-0'], ['Wild']);
+});
+
+test('resolveAbility Battle Scars with 3+ damage gains 2 Power Tokens', () => {
+  const msgId = 'msg-pt2';
+  const game = {
+    gameId: 'g6',
+    dcActionsData: { [msgId]: {} },
+    figurePositions: { 1: { 'Wookiee Warrior (Regular)-1-0': 'b2' }, 2: {} },
+    p1DcMessageIds: [msgId],
+    p1DcList: [{ dcName: 'Wookiee Warrior (Regular)', healthState: [[4, 8]] }],
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g6', playerNum: 1, dcName: 'Wookiee Warrior (Regular)', displayName: 'Wookiee [DG 1]' }]]);
+  const result = resolveAbility('Battle Scars', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(result.logMessage, 'Gained 2 Power Tokens.');
+  assert.deepStrictEqual(game.figurePowerTokens['Wookiee Warrior (Regular)-1-0'], ['Wild', 'Wild']);
+});
+
+test('resolveAbility Against the Odds when VP condition met applies Focus to all figures', () => {
+  const game = {
+    gameId: 'g7',
+    player1VP: { total: 2 },
+    player2VP: { total: 12 },
+    figurePositions: { 1: { 'Luke-1-0': 'a1', 'Trooper-1-0': 'a2' }, 2: {} },
+  };
+  const result = resolveAbility('cc:against_the_odds', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.figureConditions['Luke-1-0']?.includes('Focus'), true);
+  assert.strictEqual(game.figureConditions['Trooper-1-0']?.includes('Focus'), true);
+});
+
+test('resolveAbility Against the Odds when VP condition not met does nothing', () => {
+  const game = {
+    gameId: 'g8',
+    player1VP: { total: 8 },
+    player2VP: { total: 10 },
+    figurePositions: { 1: { 'Luke-1-0': 'a1' }, 2: {} },
+  };
+  const result = resolveAbility('cc:against_the_odds', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.ok(!game.figureConditions || !game.figureConditions['Luke-1-0']?.includes('Focus'));
+});
