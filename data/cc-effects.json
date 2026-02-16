@@ -1098,7 +1098,8 @@
       "playableBy": "LARGE",
       "timing": "specialAction",
       "effect": "Special Action: Perform an attack targeting a SMALL figure. Apply +2 Hit to the attack results and the attack gains Weaken.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Size Advantage"
     },
     "Smoke Grenade": {
       "cost": 1,
@@ -1520,7 +1521,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfActivation",
       "effect": "Use at the start of your activation to discard all of your HARMFUL conditions.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Rally"
     },
     "Rally the Troops": {
       "cost": 3,
@@ -1562,7 +1564,8 @@
       "playableBy": "Any Figure",
       "timing": "specialAction",
       "effect": "Special Action: Recover 2 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Recovery"
     },
     "Reduce to Rubble": {
       "cost": 2,

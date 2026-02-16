@@ -198,6 +198,68 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `${allKeys.length} figure(s) became Focused.` };
   }
 
+  // ccEffect: recoverDamage (Recovery) — recover N damage on activating figure(s); requires dcHealthState, msgId
+  if (entry.type === 'ccEffect' && typeof entry.recoverDamage === 'number' && entry.recoverDamage > 0) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, msgId } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation (Special Action).' };
+    const actMsgId = msgId || findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!actMsgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: recovery requires health state.' };
+    const healthState = dcHealthState.get(actMsgId) || [];
+    if (!healthState.length) return { applied: false, manualMessage: 'Resolve manually: no health state for this DC.' };
+    const n = entry.recoverDamage;
+    let recovered = 0;
+    for (let i = 0; i < healthState.length; i++) {
+      const entry_ = healthState[i];
+      if (!Array.isArray(entry_)) continue;
+      const [cur, max] = entry_;
+      const mx = max ?? cur;
+      if (mx == null || cur == null) continue;
+      const damage = mx - cur;
+      if (damage <= 0) continue;
+      const heal = Math.min(n, damage);
+      healthState[i] = [cur + heal, mx];
+      recovered = heal;
+      break;
+    }
+    if (recovered > 0) {
+      dcHealthState.set(actMsgId, healthState);
+      const dcMessageIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const idx = (dcMessageIds || []).indexOf(actMsgId);
+      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+      return { applied: true, logMessage: `Recovered ${recovered} Damage.`, refreshDcEmbed: true };
+    }
+    return { applied: true, logMessage: 'No damage to recover.' };
+  }
+
+  // ccEffect: discardHarmfulConditions (Rally) — discard Stun, Weaken, Bleed from activating figures
+  if (entry.type === 'ccEffect' && entry.discardHarmfulConditions) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play at start of your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const HARMFUL = ['Stun', 'Weaken', 'Bleed'];
+    game.figureConditions = game.figureConditions || {};
+    let discarded = 0;
+    for (const fk of figureKeys) {
+      const existing = game.figureConditions[fk] || [];
+      const kept = existing.filter((c) => !HARMFUL.includes(c));
+      if (kept.length < existing.length) {
+        game.figureConditions[fk] = kept.length ? kept : [];
+        discarded += existing.length - kept.length;
+      }
+    }
+    return {
+      applied: true,
+      logMessage: discarded > 0 ? `Discarded ${discarded} HARMFUL condition(s).` : 'No HARMFUL conditions to discard.',
+    };
+  }
+
   // ccEffect: Focus — requires active activation
   if (abilityId === 'Focus') {
     const { game, playerNum, dcMessageMeta } = context;
@@ -225,9 +287,15 @@ export function resolveAbility(abilityId, context) {
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
     game.nextAttacksBonusHits[playerNum] = { count: nb.count, bonus: nb.bonus };
+    const nbc = entry.nextAttacksBonusConditions;
+    if (nbc && typeof nbc.count === 'number' && nbc.count > 0 && Array.isArray(nbc.conditions) && nbc.conditions.length > 0) {
+      game.nextAttacksBonusConditions = game.nextAttacksBonusConditions || {};
+      game.nextAttacksBonusConditions[playerNum] = { count: nbc.count, conditions: nbc.conditions };
+    }
+    const condPart = (nbc?.conditions?.length) ? ` and ${nbc.conditions.join(', ')}` : '';
     return {
       applied: true,
-      logMessage: `Next ${nb.count} attack(s) by your figures this activation gain +${nb.bonus} Hit to results.`,
+      logMessage: `Next ${nb.count} attack(s) by your figures this activation gain +${nb.bonus} Hit to results${condPart}.`,
     };
   }
 

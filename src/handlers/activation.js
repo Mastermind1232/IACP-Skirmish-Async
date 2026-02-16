@@ -233,6 +233,7 @@ export async function handleEndTurn(interaction, ctx) {
     }
     if (game.dcActionsData?.[dcMsgId]) delete game.dcActionsData[dcMsgId];
     if (game.nextAttacksBonusHits?.[meta.playerNum]) delete game.nextAttacksBonusHits[meta.playerNum];
+    if (game.nextAttacksBonusConditions?.[meta.playerNum]) delete game.nextAttacksBonusConditions[meta.playerNum];
     if (game.movementBank?.[dcMsgId]) delete game.movementBank[dcMsgId];
   }
   try {

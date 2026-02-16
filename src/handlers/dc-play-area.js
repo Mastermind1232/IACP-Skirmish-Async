@@ -191,6 +191,7 @@ export async function handleDcUnactivate(interaction, ctx) {
   if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
   if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
   if (game.nextAttacksBonusHits?.[meta.playerNum]) delete game.nextAttacksBonusHits[meta.playerNum];
+  if (game.nextAttacksBonusConditions?.[meta.playerNum]) delete game.nextAttacksBonusConditions[meta.playerNum];
   if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
   if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
   if (game.dcActivationLogMessageIds?.[msgId]) {
@@ -347,6 +348,7 @@ export async function handleDcToggle(interaction, ctx) {
     if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
     if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
     if (game.nextAttacksBonusHits?.[meta.playerNum]) delete game.nextAttacksBonusHits[meta.playerNum];
+    if (game.nextAttacksBonusConditions?.[meta.playerNum]) delete game.nextAttacksBonusConditions[meta.playerNum];
     if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
     if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
     if (game.dcActivationLogMessageIds?.[msgId]) {
@@ -517,13 +519,14 @@ export async function handleDcCcSpecial(interaction, ctx) {
   if (ctx.resolveAbility) {
     const effectData = getCcEffect(card);
     const abilityId = effectData?.abilityId ?? card;
-    const result = ctx.resolveAbility(abilityId, { game, playerNum: meta.playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta });
+    const result = ctx.resolveAbility(abilityId, { game, playerNum: meta.playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, msgId });
     if (result.applied && result.drewCards?.length) {
       await updateHandVisualMessage(game, meta.playerNum, interaction.client);
       const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
       await logGameAction(game, interaction.client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
     } else if (result.applied && result.logMessage) {
       await logGameAction(game, interaction.client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
+      if (result.refreshDcEmbed) await updateDcActionsMessage(game, msgId, interaction.client);
     } else if (!result.applied && result.manualMessage) {
       await logGameAction(game, interaction.client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
     }

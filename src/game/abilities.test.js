@@ -251,6 +251,84 @@ test('resolveAbility Blitz during surge step adds to surgeRemaining', () => {
   assert.strictEqual(combat.surgeRemaining, 3);
 });
 
+test('resolveAbility Advance Warning (cc:advance_warning) with active activation applies +2 MP', () => {
+  const msgId = 'msg-aw';
+  const game = {
+    gameId: 'g-aw',
+    dcActionsData: { [msgId]: {} },
+    movementBank: {},
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-aw', playerNum: 1, dcName: 'C-3PO', displayName: 'C-3PO [DG 1]' }]]);
+  const result = resolveAbility('cc:advance_warning', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(result.logMessage, 'Gained 2 movement points.');
+});
+
+test('resolveAbility Rally discards HARMFUL conditions from activating figures', () => {
+  const msgId = 'msg-rally';
+  const game = {
+    gameId: 'g-rally',
+    dcActionsData: { [msgId]: {} },
+    figurePositions: { 1: { 'Stormtroopers-1-0': 'a1', 'Stormtroopers-1-1': 'a2' } },
+    figureConditions: {
+      'Stormtroopers-1-0': ['Stun', 'Focus'],
+      'Stormtroopers-1-1': ['Weaken'],
+    },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-rally', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 1]' }]]);
+  const result = resolveAbility('Rally', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(game.figureConditions['Stormtroopers-1-0'], ['Focus']);
+  assert.strictEqual(game.figureConditions['Stormtroopers-1-1']?.length, 0);
+});
+
+test('resolveAbility Recovery recovers 2 damage when dcHealthState and msgId provided', () => {
+  const msgId = 'msg-rec';
+  const healthState = [[3, 6]];
+  const dcHealthState = new Map([[msgId, healthState]]);
+  const game = {
+    gameId: 'g-rec',
+    dcActionsData: { [msgId]: {} },
+    p1DcMessageIds: [msgId],
+    p1DcList: [{ dcName: 'Luke Skywalker', healthState: [[3, 6]] }],
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-rec', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const result = resolveAbility('Recovery', { game, playerNum: 1, dcMessageMeta, dcHealthState, msgId });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(result.logMessage, 'Recovered 2 Damage.');
+  assert.deepStrictEqual(healthState[0], [5, 6]);
+  assert.deepStrictEqual(game.p1DcList[0].healthState[0], [5, 6]);
+});
+
+test('resolveAbility Rally with no harmful conditions returns applied', () => {
+  const msgId = 'msg-rally2';
+  const game = {
+    gameId: 'g-rally2',
+    dcActionsData: { [msgId]: {} },
+    figurePositions: { 1: { 'Darth Vader-1-0': 'a1' } },
+    figureConditions: { 'Darth Vader-1-0': ['Focus'] },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-rally2', playerNum: 1, dcName: 'Darth Vader', displayName: 'Vader [DG 1]' }]]);
+  const result = resolveAbility('Rally', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(game.figureConditions['Darth Vader-1-0'], ['Focus']);
+});
+
+test('resolveAbility Size Advantage sets nextAttacksBonusHits and nextAttacksBonusConditions', () => {
+  const msgId = 'msg-sa';
+  const game = {
+    gameId: 'g-sa',
+    dcActionsData: { [msgId]: {} },
+    nextAttacksBonusHits: {},
+    nextAttacksBonusConditions: {},
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-sa', playerNum: 1, dcName: 'Nexu', displayName: 'Nexu [DG 1]' }]]);
+  const result = resolveAbility('Size Advantage', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(game.nextAttacksBonusHits[1], { count: 1, bonus: 2 });
+  assert.deepStrictEqual(game.nextAttacksBonusConditions[1], { count: 1, conditions: ['Weaken'] });
+});
+
 test('resolveAbility Maximum Firepower sets nextAttacksBonusHits', () => {
   const msgId = 'msg-mfp';
   const game = {

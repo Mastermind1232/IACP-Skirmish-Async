@@ -59,7 +59,8 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 **Next N attacks bonus hits (nextAttacksBonusHits)**
 
 - Add `"nextAttacksBonusHits": { "count": N, "bonus": M }` — during activation, apply +M Hit to the next N attacks by your figures. Consumed in `resolveCombatAfterRolls`; cleared when activation ends.
-- Example: **Beatdown** (+1 Hit to next 2 attacks).
+- Optional `"nextAttacksBonusConditions": { "count": N, "conditions": ["Weaken"] }` — also apply conditions to the defender on the next N attacks.
+- Example: **Beatdown** (+1 Hit to next 2 attacks), **Size Advantage** (+2 Hit, Weaken to next attack).
 
 **Attack surge bonus (attackSurgeBonus)**
 
@@ -85,7 +86,17 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 - Add `"attackBonusBlast": N` — when declaring attack, as the attacker, this attack gains Blast N. Stored in `combat.bonusBlast`.
 - Example: **Explosive Weaponry** (Blast 1).
 
-- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fool Me Once** (draw 1 if SPY), **Fleet Footed** (+1 MP), **Force Rush** (+2 MP), **Heart of Freedom** (+2 MP), **Apex Predator** (+2 MP), **Price of Glory** (+2 MP), **Worth Every Credit** (+2 MP), **Rank and File** (+1 MP; adjacent TROOPERS manual), **Urgency** (Speed+2 MP), **Focus** (become Focused), **Battle Scars** (Power Token gain), **Against the Odds** (Focus up to 3 if VP condition met), **Hit and Run** (3 MP after attack), **Beatdown** (+1 Hit to next 2 attacks), **Blitz** (+1 Surge during attack), **Positioning Advantage** (+1 Hit), **Deadeye** (+2 Accuracy), **Heavy Ordnance** (+1 Hit vs figure), **Assassinate** (+3 Hits), **Deathblow** (+1 Hit), **Bladestorm** (+1 Surge; blast manual), **Lock On** (+3 Accuracy; -1 Dodge/Evade manual), **Explosive Weaponry** (Blast 1), **Maximum Firepower** (+4 Hit to next attack via nextAttacksBonusHits).
+**Discard HARMFUL conditions (discardHarmfulConditions)**
+
+- Add `"discardHarmfulConditions": true` — at start of activation, discard all Stun, Weaken, Bleed from the activating figure(s). Requires active activation.
+- Example: **Rally**.
+
+**Recover damage (recoverDamage)**
+
+- Add `"recoverDamage": N` — Special Action: the activating figure recovers N damage. Requires dcHealthState and msgId in context (passed when playing CC as special from DC play area).
+- Example: **Recovery** (Recover 2 Damage).
+
+- Example cards in library: **There is Another** (draw 1), **Planning** (draw 2), **Black Market Prices** (draw 2), **Forbidden Knowledge** (draw 1), **Officer's Training** (draw 1 if LEADER), **Fool Me Once** (draw 1 if SPY), **Fleet Footed** (+1 MP), **Advance Warning** (+2 MP to you and adjacent), **Force Rush** (+2 MP), **Heart of Freedom** (+2 MP), **Apex Predator** (+2 MP), **Price of Glory** (+2 MP), **Worth Every Credit** (+2 MP), **Rank and File** (+1 MP; adjacent TROOPERS manual), **Urgency** (Speed+2 MP), **Focus** (become Focused), **Battle Scars** (Power Token gain), **Rally** (discard HARMFUL conditions), **Against the Odds** (Focus up to 3 if VP condition met), **Hit and Run** (3 MP after attack), **Beatdown** (+1 Hit to next 2 attacks), **Blitz** (+1 Surge during attack), **Positioning Advantage** (+1 Hit), **Deadeye** (+2 Accuracy), **Heavy Ordnance** (+1 Hit vs figure), **Assassinate** (+3 Hits), **Deathblow** (+1 Hit), **Bladestorm** (+1 Surge; blast manual), **Lock On** (+3 Accuracy; -1 Dodge/Evade manual), **Explosive Weaponry** (Blast 1), **Maximum Firepower** (+4 Hit to next attack via nextAttacksBonusHits).
 
 ### Adding a non-surge ability
 
@@ -132,7 +143,7 @@ From **docs/RULES_REFERENCE.md** and **docs/consolidated-rules-raw.txt**:
 ## Progress (~7% of CCs auto; ~90% of those with abilityId)
 
 - **Surge:** 100% — all surge abilities resolved.
-- **CC effects:** 298 total; 32 have abilityId; ~30 fully or partially automated.
-- **CCs with automation:** Draw (4), conditional draw (2), MP bonus (8), Focus (2), Power Token gain (1), Against the Odds (1), Hit and Run (mpAfterAttack), Beatdown (nextAttacksBonusHits), Maximum Firepower (nextAttacksBonusHits), Blitz (attackSurgeBonus), Bladestorm (attackSurgeBonus; blast manual), Positioning Advantage (attackBonusHits), Assassinate (attackBonusHits), Deathblow (attackBonusHits; +2 vs Ranged manual), Deadeye (attackAccuracyBonus), Lock On (attackAccuracyBonus; -1 Dodge/Evade manual), Heavy Ordnance (attackBonusHits vs figure), Explosive Weaponry (attackBonusBlast).
+- **CC effects:** 298 total; 35 have abilityId; ~34 fully or partially automated.
+- **CCs with automation:** Draw (4), conditional draw (2), MP bonus (9 incl. Advance Warning), Focus (2), Power Token gain (1), Rally (discardHarmfulConditions), Recovery (recoverDamage), Against the Odds (1), Hit and Run (mpAfterAttack), Beatdown (nextAttacksBonusHits), Maximum Firepower (nextAttacksBonusHits), Size Advantage (nextAttacksBonusHits + nextAttacksBonusConditions; target SMALL manual), Blitz (attackSurgeBonus), Bladestorm (attackSurgeBonus; blast manual), Positioning Advantage (attackBonusHits), Assassinate (attackBonusHits), Deathblow (attackBonusHits; +2 vs Ranged manual), Deadeye (attackAccuracyBonus), Lock On (attackAccuracyBonus; -1 Dodge/Evade manual), Heavy Ordnance (attackBonusHits vs figure), Explosive Weaponry (attackBonusBlast).
 
 Phase 2 next: add more `type` values and branches in `resolveAbility` (e.g. more CC “draw N” effects, DC specials by name) so more effects run automatically instead of showing "Resolve manually".

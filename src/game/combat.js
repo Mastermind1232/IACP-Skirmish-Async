@@ -80,7 +80,8 @@ export function computeCombatResult(combat) {
   const hit = (roll.acc + surgeA + bonusAcc) >= defRoll.evade;
   const effectiveBlock = Math.max(0, defRoll.block - totalPierce);
   const damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits - effectiveBlock) : 0;
-  const conditionsText = (combat.surgeConditions?.length) ? ` (${combat.surgeConditions.join(', ')})` : '';
+  const allConds = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
+  const conditionsText = allConds.length ? ` (${allConds.join(', ')})` : '';
   const bonusBlast = combat.bonusBlast || 0;
   const totalBlastDisplay = (combat.surgeBlast || 0) + bonusBlast;
   const blastText = totalBlastDisplay ? ` Blast ${totalBlastDisplay}` : '';
@@ -92,6 +93,7 @@ export function computeCombatResult(combat) {
   if (bonusHits) resultText += ` | CC bonus: +${bonusHits} Hit`;
   if (bonusPierce) resultText += ` | CC bonus: +${bonusPierce} pierce`;
   if (bonusBlast) resultText += ` | CC bonus: Blast ${bonusBlast}`;
+  if ((combat.bonusConditions || []).length) resultText += ` | CC bonus: ${combat.bonusConditions.join(', ')}`;
   if (surgeD || surgeP || surgeA || conditionsText || blastText || recoverText || cleaveText) {
     resultText += ` | Surge: +${surgeD} dmg, +${surgeP} pierce, +${surgeA} acc${conditionsText}${blastText}${recoverText}${cleaveText}`;
   }
