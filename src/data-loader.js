@@ -268,6 +268,15 @@ export function isDcAttachment(dcName) {
   return card?.attachment === true;
 }
 
+/** True if this Deployment Card is unique (from dc-effects.json unique field). */
+export function isDcUnique(dcName) {
+  if (!dcName || typeof dcName !== 'string') return false;
+  const n = dcName.trim();
+  const effects = getDcEffects();
+  const card = effects[n] || effects[`[${n}]`] || (n.startsWith('[') ? effects[n] : null);
+  return card?.unique === true;
+}
+
 export function getRootDir() {
   return rootDir;
 }

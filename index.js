@@ -260,6 +260,7 @@ import {
   getCcEffect,
   isCcAttachment,
   isDcAttachment,
+  isDcUnique,
   getTournamentRotation,
   getMissionRules,
 } from './src/data-loader.js';
@@ -2295,7 +2296,8 @@ async function resolveCombatAfterRolls(game, combat, client) {
         }
         await checkWinConditions(game, client);
         // Celebration: after unique hostile defeated, offer attacker a chance to play it
-        if (figures === 1) {
+        const defeatedDcName = idx >= 0 ? dcList[idx]?.dcName : null;
+        if (isDcUnique(defeatedDcName)) {
           game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
           await thread.send({
             content: `<@${ownerId}> — You defeated a unique figure. Play **Celebration** to gain 4 VP?`,
@@ -2364,6 +2366,15 @@ async function resolveCombatAfterRolls(game, combat, client) {
             }
           }
           await checkWinConditions(game, client);
+          const blastDefeatedDcName = blastDcList[blastIdx]?.dcName;
+          if (!game.pendingCelebration && isDcUnique(blastDefeatedDcName)) {
+            game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
+            await thread.send({
+              content: `<@${ownerId}> — You defeated a unique figure (Blast). Play **Celebration** to gain 4 VP?`,
+              components: [getCelebrationButtons(game.gameId)],
+              allowedMentions: { users: [ownerId] },
+            }).catch(() => {});
+          }
         }
       }
     }
