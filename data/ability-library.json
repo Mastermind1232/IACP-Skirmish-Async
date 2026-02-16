@@ -39,6 +39,8 @@
     "cc:advance_warning": { "type": "ccEffect", "label": "Advance Warning: You and an adjacent friendly figure each gain 1 movement point." },
     "cc:against_the_odds": { "type": "ccEffect", "label": "Against the Odds: If your opponent has ≥8 more VPs, choose up to 3 of your figures; they become Focused." },
     "There is Another": { "type": "ccEffect", "label": "Draw 1 Command card", "draw": 1 },
-    "Planning": { "type": "ccEffect", "label": "Draw 2 Command cards", "draw": 2 }
+    "Planning": { "type": "ccEffect", "label": "Draw 2 Command cards", "draw": 2 },
+    "Black Market Prices": { "type": "ccEffect", "label": "Draw 2 Command cards", "draw": 2 },
+    "Forbidden Knowledge": { "type": "ccEffect", "label": "Draw 1 Command card", "draw": 1 }
   }
 }

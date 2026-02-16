@@ -37,13 +37,15 @@ So the monolith is being split by responsibility: **state**, **data**, **router*
 
 | Layer | Where it lives | Notes |
 |-------|----------------|-------|
-| **Entry / Discord** | `index.js` only | Single file ~8.4k lines. Bot entry, client setup, all listeners. |
-| **Game state** | `index.js` | `games` Map, `dcMessageMeta`, `dcExhaustedState`, `dcDepletedState`, `dcHealthState`, `pendingIllegalSquad` — all globals. |
-| **Data load** | `index.js` (top + `reloadGameData`) | 12+ JSON files read at startup into globals: `dcImages`, `figureImages`, `dcStats`, `mapRegistry`, `deploymentZones`, `mapSpacesData`, `dcEffects`, `dcKeywords`, `diceData`, `missionCardsData`, `mapTokensData`, `ccEffectsData`. |
+| **Entry / Discord** | `index.js` | Bot entry, client setup, listeners; builds context and calls router → handler. |
+| **Game state** | `src/game-state.js` | `games` Map, `dcMessageMeta`, `dcHealthState`, etc.; `getGame`, `setGame`, `saveGames`. Index imports from here. |
+| **Data load** | `src/data-loader.js` | All JSON load + `reloadGameData`; exports `getDcStats`, `getMapSpaces`, `getDeploymentZones`, `getTournamentRotation`, etc. Index imports from here. |
 | **Persistence** | `src/db.js` | Load/save games; used by index. |
-| **Helpers** | `index.js` | 200+ functions in one file: movement, LOS, map, combat, embeds, validation, etc. |
-| **Interaction handling** | `index.js` | Single `client.on('interactionCreate')` with 40+ `if (customId.startsWith(...))` branches. Buttons, modals, selects all in one handler. |
-| **Other modules** | `src/vsav-parser.js`, `src/map-renderer.js`, `src/dc-image-utils.js` | Small, focused. |
+| **Router** | `src/router.js` | Maps customId prefix → handler key; single place for BUTTON/MODAL/SELECT prefixes. |
+| **Handlers** | `src/handlers/*` | Lobby, setup, activation, combat, round, movement, interact, cc-hand, dc-play-area, game-tools, botmenu, special, requests. Index calls handler with (interaction, context). |
+| **Game logic** | `src/game/*` | Coords, movement, combat, validation, abilities, cc-timing. No Discord. |
+| **Discord helpers** | `src/discord/*` | Embeds, messages, components (buttons, truncation, row caps). |
+| **Other modules** | `src/error-handling.js`, `src/vsav-parser.js`, `src/map-renderer.js`, `src/dc-image-utils.js` | Focused. |
 
 ### 1.2 Data (reference only)
 
@@ -113,7 +115,7 @@ src/
     activation.js           # status_phase_, pass_activation_turn_, end_turn_, confirm_activate_, cancel_activate_
     dc-play-area.js         # dc_activate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_, dc_attack_, dc_interact_, dc_special_
     movement.js             # move_mp_, move_pick_, move_adjust_mp_
-    combat.js               # attack_target_, combat_ready_, combat_roll_, combat_surge_
+    combat.js               # attack_target_, cleave_target_, combat_ready_, combat_roll_, combat_surge_, combat_resolve_ready_
     special.js              # special_done_
     interact.js             # interact_choice_, interact_cancel_
     cc-hand.js              # cc_play_, cc_draw_, cc_discard_, cc_attach_, cc_search_discard_, cc_close_discard_, squad_modal_, deploy_modal_, etc.
@@ -218,7 +220,7 @@ Definition of “full game” for this plan:
 | F5 | CC timing | ✅ **Done.** Documented in `docs/CC_TIMING.md`. `src/game/cc-timing.js`: getCcPlayContext, isCcPlayableNow, getPlayableCcFromHand. Hand Play filters to playable cards only; Play Select validates timing. Supported: startOfRound, duringActivation, endOfRound, duringAttack, whileDefending, whenAttackDeclaredOnYou, etc. specialAction played only from DC button. |
 | F6 | Conditions and combat extras | ✅ **Done (core).** Conditions: stun/weaken/bleed applied to defender and stored in `game.figureConditions[figureKey]`. **Conditions displayed** in DC embed health section. Recover: parsed and applied (heal attacker). Blast: parsed and applied (figures adjacent to target). **Cleave:** parsed (surgeCleave) and **applied**: after hit, if surgeCleave > 0, attacker chooses one other figure **in melee** (adjacent to attacker, enemy only, excluding primary target); cleave target takes surgeCleave damage (VP, defeat, embed refresh). Discord: "Cleave (N damage): Choose one target in melee" + buttons in combat thread; `cleave_target_` handler applies damage and finishes combat. |
 | F7 | Multi-figure defeat | ✅ **Verified.** resolveCombatAfterRolls updates dcHealthState and dcList[idx].healthState, removes defeated figure from figurePositions, then re-renders target DC embed from dcHealthState; board map is updated. isGroupDefeated uses figurePositions so activation count stays correct. |
-| F8 | Map data for all maps in use | Extend map-spaces (or equivalent) so every map has spaces, adjacency, terrain. |
+| F8 | Map data for all maps in use | **Done for current maps.** map-spaces.json + deployment-zones.json have full data (spaces/adjacency, red+blue zones, playReady) for mos-eisley-outskirts, corellian-underground, chopper-base-atollon, lothal-wastes. getPlayReadyMaps() offers all four. New maps: add via map tool. |
 | F9 | Interior/exterior | **Done.** Per-map `exterior: { coord: true }` in map-spaces; `isExteriorSpace()` in data-loader; extract-map-spaces.html Exterior mode (toggle, load, export). |
 | F10 | Optional: “Ready to resolve rolls” | **Done.** Button after rolls/surge; resolve on click. |
 
@@ -234,8 +236,8 @@ Definition of “full game” for this plan:
 
 | ID | Item | Notes |
 |----|------|-------|
-| D1 | Migrate DC surge/passives/specials to reference ability ids | After F1/F2; cards hold ids, not only free text. |
-| D2 | Migrate CC effects to reference ability ids | After F1/F4. |
+| D1 | Migrate DC surge/passives/specials to reference ability ids | DC surge already uses ids (surgeAbilities array). Optional: add abilityId per special/passive for library lookup. |
+| D2 | Migrate CC effects to reference ability ids | **Scaffold done.** resolveCcPlay uses `effectData?.abilityId ?? card` for resolveAbility. Optional `abilityId` in cc-effects (e.g. Adrenaline: `cc:adrenaline`); add library entries as effects are implemented. |
 | D3 | Validate critical JSON on load | Validate dc-effects, dc-stats, map-spaces, ability-library shape; log warnings and fail fast in dev so we don't run with bad data. |
 | D4 | Tournament rotation config | **Competitive** uses a list of mission IDs (`mapId:variant`) in data (e.g. `data/tournament-rotation.json`). **Commit the file in the repo** with a default (e.g. `[]`) so the repo works out of the box and we only handle "empty or missing" as one case (show "No rotation configured"). If the file is empty or missing at runtime, show "No rotation configured" and do not pick a mission (user chooses another option). Provide an **HTML UI tool** (like the existing tools e.g. for difficult terrain) that shows (1) all playable maps + mission variants and (2) the current tournament rotation list; the tool saves edits to that same JSON file so the bot and the tool share one source of truth (100% deterministic). Maintainer updates the rotation manually every few months. |
 
@@ -251,7 +253,7 @@ Definition of “full game” for this plan:
 ### 4.5 Plan clarifications (no new work, just lock in)
 
 - **Ability library:** **Every** ability on all DCs (and CCs) must be implemented — 100%, no subset, no priority list. Use **code-per-ability**: each ability is implemented in code (e.g. `game/abilities.js`), with data referencing ability ids for lookup; no data-only interpreter for complex logic. Rollout can be phased (e.g. surge first, then wire DC/CC). Manual fallback ("resolve manually") only until that ability is in the library.
-- **Maps "in use":** Only maps that are **playable** — i.e. have mission data and full map data (spaces, terrain, adjacency) so the bot can run a game on them — are loadable. **getPlayReadyMaps** filters by **both** deployment zones and map-spaces (spaces or adjacency); a map is offered only if it has red/blue zones and has map-spaces data. Today that is only mos-eisley-outskirts; as we add map-spaces (F8) for more maps, they join the set.
+- **Maps "in use":** Only maps that are **playable** — i.e. have mission data and full map data (spaces, terrain, adjacency) — are loadable. **getPlayReadyMaps** filters by deployment zones and map-spaces (spaces or adjacency, playReady). Currently four maps: mos-eisley-outskirts, corellian-underground, chopper-base-atollon, lothal-wastes. New maps: add map-spaces (and zones) via map tool.
 - **Mission ID:** Use a single string: **`mapId:variant`** (e.g. `mos-eisley-outskirts:a`, `mos-eisley-outskirts:b`). No separate mission list; derived from mission-cards / playable maps. D4 (tournament rotation) and F17 (map selection) use this format.
 - **Command card hand size:** No cap. Do not enforce discard-down at end of round; hand size can grow.
 - **CC initial draw:** Enforce **3 cards per player at setup** (per rules) as the base. Abilities/effects can add extra draws (e.g. Imperial DC Skirmish Upgrade that draws an extra card at the beginning); implementation must apply base 3 then any modifiers.
@@ -308,11 +310,11 @@ Definition of “full game” for this plan:
 - F10 if desired; F11 (Archive via /botmenu); F14 (Undo scope); F15 (Discord limits); F16 (Kill/Archive via /botmenu); stat tracking UI when DB2 exists.
 
 **§7 Remaining work (as of last update)**  
-- **F8:** Extend map-spaces so every map in use has spaces, adjacency, terrain (data content). Content work: add/export map-spaces per map via extract-map-spaces tool; code already supports any map with data.  
+- **F8:** ~~Extend map-spaces for maps in use~~ — **Done.** Four maps have full map-spaces + deployment zones + playReady (mos-eisley-outskirts, corellian-underground, chopper-base-atollon, lothal-wastes). New maps: add via extract-map-spaces tool.  
 - **F9:** ~~Interior/exterior per-space flags in map data + UI tool~~ — **Done:** optional `exterior: { coord: true }` per map in map-spaces; `isExteriorSpace(mapSpaces, coord)` in data-loader; extract-map-spaces.html has Exterior mode (toggle, load, export). Game logic that applies exterior effects (e.g. CC “exterior spaces”) can wire to this getter next.  
 - **F10:** ~~Optional “Ready to resolve rolls” confirmation step in combat~~ — **Done:** button sent after rolls (and after surge step); handler `combat_resolve_ready_` calls `resolveCombatAfterRolls`.  
 - **F14:** ~~More undo types (e.g. interact, CC play)~~ — **Done:** undo for interact (restore actions remaining + contraband/launch panel/doors), CC play from hand, CC play from DC (Special). Optional full-state snapshots still not implemented.  
-- **D1/D2:** Migrate DC/CC to reference ability ids.  
+- **D1/D2:** Migrate DC/CC to reference ability ids. **Done (scaffold).** **D1:** DC specials: optional `specialAbilityIds` array in dc-effects (one id per special, same order as dc-stats specials). Handler uses `effectEntry.specialAbilityIds[specialIdx]` when present, else synthetic `dc_special:dcName:idx`. Added for Darth Vader and Luke Skywalker; ability-library has `dv_force_choke`, `dv_brutality`, `luke_saber_strike` (type dcSpecial). **D2:** CC resolve uses `effectData?.abilityId ?? card`; added `abilityId` to Adrenaline, Advance Warning, Against the Odds; ability-library has cc:adrenaline, cc:advance_warning, cc:against_the_odds (type ccEffect). New cards: add abilityId + library entry when implementing.  
 - **D3:** ~~Validate critical JSON on load~~ — **Done:** `validateCriticalData()` in data-loader runs after loadAll(); validates dc-effects, dc-stats, map-spaces, ability-library, cc-effects, map-registry, deployment-zones, dice; logs warnings and throws in `NODE_ENV=development`.  
 - **DB2:** ~~Stats-ready schema (completed_games)~~ — **Done:** `insertCompletedGame(game)` in db.js; called from `postGameOver()` when DB configured; row written when game ends.  
 - **DB3:** Optional indexes — **Done:** `idx_games_updated_at`, `idx_games_ended` (expression on `game_data->>'ended'`) created in initDb.
