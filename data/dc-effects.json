@@ -9,7 +9,9 @@
     "[A New Hope]": {
       "abilityText": "Include this card in your army only if each group in your army has one of the following names or sub-names:\n- \"Hero of the Rebellion\"\n- \"C-3PO'\n- \"Chewbacca\"\n- \"Han Solo\"\n- \"Leia Organa\"\n- \"Obi-Wan Kenobi\"\n- \"R2-D2\"\n\n--------------------------\nDeplete this card to have a friendly figure play a Command card with a restriction matching the name of another Deployment card in your army.",
       "keywords": [],
-      "cost": -1
+      "cost": -1,
+      "attachment": false,
+      "unique": true
     },
     "[Advanced Com Systems]": {
       "abilityText": "LEADER ONLY\n\nAbilities on your Deployment card that choose or affect adjacent friendly figures or friendly figures within 2 spaces can choose or affect other friendly figures within 3 spaces instead.",
@@ -18,6 +20,7 @@
       ],
       "cost": 1,
       "attachment": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "[Balance of the Force]": {
@@ -25,6 +28,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "[Beast Tamer]": {
@@ -34,6 +38,7 @@
       ],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Black Market]": {
@@ -41,6 +46,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Channel the Force]": {
@@ -48,6 +54,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Any"
     },
     "[Clan of Two]": {
@@ -58,6 +65,7 @@
       "cost": 1,
       "attachment": true,
       "companion": "The Child",
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Combat Suit]": {
@@ -78,6 +86,7 @@
       ],
       "cost": 1,
       "attachment": true,
+      "elite": true,
       "affiliation": "Imperial"
     },
     "[Devious Scheme]": {
@@ -85,6 +94,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Doubt]": {
@@ -92,6 +102,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Any"
     },
     "[Driven by Hatred]": {
@@ -110,6 +121,7 @@
       ],
       "cost": 1,
       "attachment": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Extra Armor]": {
@@ -117,6 +129,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "elite": true,
       "affiliation": "Any"
     },
     "[Feeding Frenzy]": {
@@ -126,6 +139,7 @@
       ],
       "cost": 1,
       "attachment": true,
+      "elite": true,
       "affiliation": "Any"
     },
     "[First Strike]": {
@@ -133,6 +147,7 @@
       "keywords": [],
       "cost": 2,
       "attachment": false,
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Flame Trooper]": {
@@ -175,6 +190,7 @@
       ],
       "cost": 0,
       "attachment": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Fury of Kashyyyk]": {
@@ -184,6 +200,7 @@
       ],
       "cost": 2,
       "attachment": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "[Headhunter]": {
@@ -191,6 +208,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Heavy Fire]": {
@@ -198,6 +216,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Any"
     },
     "[Heir to the Jedi]": {
@@ -207,6 +226,7 @@
       ],
       "cost": 0,
       "attachment": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "[Heroic Effort]": {
@@ -214,6 +234,7 @@
       "keywords": [],
       "cost": 0,
       "attachment": false,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "[Imperial Citadel]": {
@@ -221,6 +242,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "[Imperial Retrofitting]": {
@@ -228,6 +250,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "[Indentured Jester]": {
@@ -236,6 +259,7 @@
       "cost": 1,
       "attachment": true,
       "companion": "Salacious B. Crumb",
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Last Resort]": {
@@ -250,6 +274,7 @@
       "keywords": [],
       "cost": 0,
       "attachment": true,
+      "unique": true,
       "affiliation": "Any"
     },
     "[Mortar Trooper]": {
@@ -288,6 +313,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": true,
+      "unique": true,
       "affiliation": "Any"
     },
     "[On a Diplomatic Mission]": {
@@ -295,6 +321,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "[Orbital Bombardment]": {
@@ -302,6 +329,7 @@
       "keywords": [],
       "cost": 0,
       "attachment": true,
+      "unique": true,
       "affiliation": "Any"
     },
     "[Overwatch]": {
@@ -309,6 +337,7 @@
       "keywords": [],
       "cost": 0,
       "attachment": true,
+      "elite": true,
       "affiliation": "Imperial"
     },
     "[Prey on the Weak]": {
@@ -316,6 +345,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Punishing Strike]": {
@@ -323,6 +353,7 @@
       "keywords": [],
       "cost": 2,
       "attachment": false,
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Rebel High Command]": {
@@ -330,6 +361,7 @@
       "keywords": [],
       "cost": 2,
       "attachment": false,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "[Rogue One]": {
@@ -337,6 +369,7 @@
       "keywords": [],
       "cost": 0,
       "attachment": false,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "[Rogue Smuggler]": {
@@ -344,6 +377,7 @@
       "keywords": [],
       "cost": -2,
       "attachment": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "[Rule by Fear]": {
@@ -351,6 +385,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "[Scavenged Walker]": {
@@ -358,6 +393,7 @@
       "keywords": [],
       "cost": -1,
       "attachment": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "[Scavenged Weaponry]": {
@@ -365,6 +401,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": true,
+      "unique": true,
       "affiliation": "Any"
     },
     "[Smuggler's Run]": {
@@ -372,6 +409,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "[Smuggling Compartment]": {
@@ -379,6 +417,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Any"
     },
     "[Spectre Cell]": {
@@ -393,6 +432,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": true,
+      "elite": true,
       "affiliation": "Any"
     },
     "[Survivalist]": {
@@ -414,6 +454,7 @@
       "keywords": [],
       "cost": 0,
       "attachment": false,
+      "unique": true,
       "affiliation": "Any"
     },
     "[Temporary Alliance]": {
@@ -421,6 +462,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "[The Darksaber]": {
@@ -429,11 +471,14 @@
       "subname": "WEAPON OF THE ANCIENTS",
       "cost": 1,
       "attachment": true,
+      "elite": true,
+      "unique": true,
       "affiliation": "Any"
     },
     "[The General's Ranks]": {
       "abilityText": "NON-UNIQUE ONLY\n\nWhen you perform a move, if it is not your activation, you gain 2 additional movement points. \n\nWhen you perform an attack, if it is not your activation, apply +1 Hit to the attack results.",
       "keywords": [],
+      "cost": 2,
       "attachment": true,
       "affiliation": "Imperial"
     },
@@ -442,6 +487,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": true,
+      "unique": true,
       "affiliation": "Any"
     },
     "[Under Duress]": {
@@ -456,6 +502,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Any"
     },
     "[Vader's Finest]": {
@@ -470,6 +517,7 @@
       "keywords": [],
       "cost": -4,
       "attachment": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "[Z-6 Trooper]": {
@@ -508,6 +556,7 @@
       "keywords": [],
       "cost": 1,
       "attachment": false,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "0-0-0": {
@@ -707,6 +756,7 @@
         "HUNTER"
       ],
       "cost": 12,
+      "subCost": 4,
       "health": 7,
       "speed": 4,
       "passives": [
@@ -730,8 +780,8 @@
         "accuracy 3"
       ],
       "attachment": false,
-      "affiliation": "Rebel",
-      "elite": true
+      "elite": true,
+      "affiliation": "Rebel"
     },
     "Alliance Ranger (Regular)": {
       "abilityText": "Guerilla: After you resolve an attack, if the defender was defeated, become Hidden.\n\nSniper: While attacking, if the target space is 5 or more spaces away, you reroll 1 attack die.",
@@ -1078,6 +1128,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Bodhi Rook": {
@@ -1414,6 +1465,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Chirrut Imwe": {
@@ -1586,12 +1638,9 @@
         "damage 2",
         "pierce 3"
       ],
-      "specialAbilityIds": [
-        "dv_force_choke",
-        "dv_brutality"
-      ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "Davith Elso": {
@@ -2413,6 +2462,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Imperial"
     },
     "Gideon Argus": {
@@ -2503,6 +2553,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Rebel"
     },
     "Heavy Stormtrooper (Elite)": {
@@ -2851,6 +2902,7 @@
       ],
       "attachment": false,
       "elite": true,
+      "unique": true,
       "affiliation": "Scum"
     },
     "Imperial Officer (Elite)": {
@@ -3937,9 +3989,13 @@
         "DROID",
         "MOBILE"
       ],
+      "cost": 4,
+      "health": 7,
+      "speed": 4,
       "passives": [
         "Mobile"
       ],
+      "figures": 1,
       "attack": {
         "dice": [
           "blue",
@@ -5627,6 +5683,7 @@
     "[Nemik's Manifesto]": {
       "abilityText": "Your command deck may include up to 3 additional Command cards. Exhaust this card during a friendly figure's activation to have that figure suffer 2 Strain and gain 1 movement point.",
       "keywords": [],
+      "cost": 1,
       "attachment": false,
       "affiliation": "Rebel"
     },
@@ -5672,7 +5729,8 @@
         "damage 1"
       ],
       "attachment": false,
-      "companion": true
+      "companion": true,
+      "unique": true
     },
     "Cam Droid": {
       "abilityText": "Surge (Agitate): If this attack does not miss, the defending figure's group must be the next group to activate, if able.",
@@ -5736,7 +5794,9 @@
       "defense": [
         "black"
       ],
-      "attachment": false
+      "attachment": false,
+      "companion": true,
+      "unique": true
     },
     "Junk Droid": {
       "abilityText": "",
@@ -5765,7 +5825,8 @@
       "health": 6,
       "speed": 3,
       "attachment": false,
-      "companion": true
+      "companion": true,
+      "unique": true
     },
     "The Child": {
       "abilityText": "Special Action (Force Heal): An adjacent friendly figure recovers 1 Damage and discards a HARMFUL condition.\n\nForce Exhaustion: When an attack is declared targeting you or a friendly figure with \"Clan of Two\", you may become Incapacitated. If you do, the attacker removes 1 attack die from the attack pool and becomes Weakened.",
@@ -5779,6 +5840,7 @@
       ],
       "attachment": false,
       "companion": true,
+      "unique": true,
       "affiliation": "Any"
     },
     "Dio": {
@@ -5806,7 +5868,8 @@
         "damage 1, accuracy 2"
       ],
       "attachment": false,
-      "companion": true
+      "companion": true,
+      "unique": true
     }
   }
 }
