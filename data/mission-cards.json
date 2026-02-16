@@ -47,18 +47,18 @@
         "tokenLabel": "",
         "imagePath": "vassal_extracted/images/mission-cards/Chopper Base Atollon-A-Krykna Infestation.png",
         "setup": "",
-        "persistent": "asd",
+        "persistent": "Kryknas are neutral figures (Health: 8, Defense: 2 Blocks). Krykna can suffer Damage and be targeted by attacks and abilities that can target hostile figures.\nWhen a player defeats a Krykna, that player gains 2 VPs and claims that Krykna.",
         "startOfRound": "",
-        "endOfRound": "In order of initiative, each player chooses and pushes a Krykna up to 3 spaces, ending in a space adjacent to the most non-Krykna figures possible."
+        "endOfRound": "In order of initiative, each player chooses and pushes a Krykna up to 3 spaces, ending in a space adjacent to the most non-Krykna figures possible. Repeat this process until all Krykna have been chosen. Then, each non-Krykna figure adjacent to a Krykna suffers 2 Damage. Then, each player may place 1 of his claimed Krykna in his opponents deployment zone."
       },
       "b": {
         "name": "Powered Perimeter",
         "tokenLabel": "",
         "imagePath": "vassal_extracted/images/mission-cards/Chopper Base, Atollon-B-Powered Perimeter.jpg",
-        "setup": "",
+        "setup": "Set aside 1 blue, 1 green, and 1 red neutral mission token face down.",
         "persistent": "",
-        "startOfRound": "",
-        "endOfRound": ""
+        "startOfRound": "Each player randomly reveals 1 set aside mission token. Place 1 strain token on each signal market that matches a revealed mission token. Flip the revealed tokens face down.",
+        "endOfRound": "Each player removes all Strain tokens from signal markers they control, gaining 2 VPs for each Strain token removed this way."
       }
     },
     "lothal-wastes": {

@@ -539,6 +539,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     replyIfGameEnded,
     dcMessageMeta,
     getDcStats,
+    getDcEffects,
     getMapSpaces,
     getFigureSize,
     getFootprintCells,
@@ -828,7 +829,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   const displayName = meta.displayName || meta.dcName;
   const pLabel = `P${meta.playerNum}`;
   await logGameAction(game, client, `**${pLabel}:** <@${ownerId}> used **${action}**.`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'activate' });
-  const abilityId = buttonKey === 'dc_special_' && specialIdx >= 0 ? `dc_special:${meta.dcName}:${specialIdx}` : null;
+  // D1: Prefer abilityId from dc-effects (specialAbilityIds[specialIdx]) when present; else synthetic id for library lookup
+  let abilityId = null;
+  if (buttonKey === 'dc_special_' && specialIdx >= 0) {
+    const effects = getDcEffects?.() || {};
+    const effectEntry = effects[meta.dcName] || effects[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const ids = effectEntry?.specialAbilityIds;
+    abilityId = Array.isArray(ids) && ids[specialIdx] != null ? ids[specialIdx] : `dc_special:${meta.dcName}:${specialIdx}`;
+  }
   const resolveResult = resolveAbility ? resolveAbility(abilityId, { game, msgId, meta, specialLabel: action }) : { applied: false, manualMessage: 'Resolve manually (see rules).' };
   const manualMsg = resolveResult.manualMessage || 'Resolve manually (see rules).';
   const doneRow = new ActionRowBuilder().addComponents(

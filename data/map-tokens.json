@@ -188,14 +188,42 @@
         "tokenTypes": [
           {
             "id": "0",
-            "label": "Token",
-            "image": "Mission Token--Neutral GRAY.gif"
+            "label": "Signal Marker",
+            "image": "Mission Token--Neutral Red.gif"
+          },
+          {
+            "id": "1",
+            "label": "Signal Marker",
+            "image": "Mission Token--Neutral Green.gif"
+          },
+          {
+            "id": "2",
+            "label": "Signal Marker",
+            "image": "Mission Token--Neutral Blue.gif"
           }
         ],
         "positions": {
-          "0": []
+          "0": [
+            "m17",
+            "o12"
+          ],
+          "1": [
+            "k23",
+            "q6"
+          ],
+          "2": [
+            "l6",
+            "p23"
+          ]
         },
-        "contraband": []
+        "contraband": [
+          "k23",
+          "l6",
+          "m17",
+          "o12",
+          "p23",
+          "q6"
+        ]
       },
       "doors": [
         [
