@@ -433,6 +433,94 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `${allKeys.length} figure(s) became Focused.` };
   }
 
+  // ccEffect: recoverDamageFromRound (Hour of Need) — recover damage equal to current round number
+  if (entry.type === 'ccEffect' && entry.recoverDamageFromRound) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const actMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!actMsgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: recovery requires health state.' };
+    const healthState = dcHealthState.get(actMsgId) || [];
+    if (!healthState.length) return { applied: false, manualMessage: 'Resolve manually: no health state for this DC.' };
+    const n = Math.max(1, game.currentRound || 1);
+    let recovered = 0;
+    for (let i = 0; i < healthState.length && recovered < n; i++) {
+      const entry_ = healthState[i];
+      if (!Array.isArray(entry_)) continue;
+      const [cur, max] = entry_;
+      const mx = max ?? cur;
+      if (mx == null || cur == null) continue;
+      const damage = mx - cur;
+      if (damage <= 0) continue;
+      const heal = Math.min(n - recovered, damage);
+      healthState[i] = [cur + heal, mx];
+      recovered += heal;
+    }
+    if (recovered > 0) {
+      dcHealthState.set(actMsgId, healthState);
+      const dcMessageIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const idx = (dcMessageIds || []).indexOf(actMsgId);
+      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+      return { applied: true, logMessage: `Recovered ${recovered} Damage (round ${n}).`, refreshDcEmbed: true };
+    }
+    return { applied: true, logMessage: 'No damage to recover.' };
+  }
+
+  // ccEffect: recoverDamageToAdjacent (Emergency Aid) — adjacent friendly recovers N (or more if trait)
+  if (entry.type === 'ccEffect' && typeof entry.recoverDamageToAdjacent === 'number') {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually: play during your activation (Special Action).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (activatingKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const mapId = game.selectedMap?.id;
+    if (!mapId) return { applied: false, manualMessage: 'Resolve manually: no map selected.' };
+    const adjacentSet = new Set();
+    for (const fk of activatingKeys) {
+      const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+      for (const { figureKey, playerNum: p } of adj) {
+        if (p === playerNum && !activatingKeys.includes(figureKey)) adjacentSet.add(figureKey);
+      }
+    }
+    const adjacent = [...adjacentSet];
+    if (adjacent.length === 0) return { applied: true, logMessage: 'No adjacent friendly figures.' };
+    if (adjacent.length > 1) return { applied: false, manualMessage: `Resolve manually: choose which of ${adjacent.length} adjacent figures recovers.` };
+    const targetFk = adjacent[0];
+    let n = entry.recoverDamageToAdjacent;
+    const ifTrait = entry.recoverDamageToAdjacentIfTrait;
+    if (ifTrait && meta?.dcName) {
+      const eff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const keywords = ((eff?.keywords || []).map((k) => String(k).toUpperCase())) || [];
+      for (const [trait, val] of Object.entries(ifTrait)) {
+        if (keywords.includes(String(trait).toUpperCase()) && val > n) n = val;
+      }
+    }
+    const targetMsgId = findMsgIdForFigureKey(game, playerNum, targetFk, dcMessageMeta);
+    if (!targetMsgId) return { applied: false, manualMessage: 'Resolve manually: could not find target health state.' };
+    const healthState = dcHealthState.get(targetMsgId) || [];
+    const tm = targetFk.match(/-(\d+)-(\d+)$/);
+    const targetFigIndex = tm ? parseInt(tm[2], 10) : 0;
+    const entry_ = healthState[targetFigIndex];
+    if (!entry_ || !Array.isArray(entry_)) return { applied: true, logMessage: 'Target has no damage to recover.' };
+    const [cur, max] = entry_;
+    const mx = max ?? cur;
+    if (mx == null || cur == null) return { applied: true, logMessage: 'No damage to recover.' };
+    const damage = mx - cur;
+    if (damage <= 0) return { applied: true, logMessage: 'No damage to recover.' };
+    const heal = Math.min(n, damage);
+    healthState[targetFigIndex] = [cur + heal, mx];
+    dcHealthState.set(targetMsgId, healthState);
+    const dcMessageIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+    const idx = (dcMessageIds || []).indexOf(targetMsgId);
+    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    return { applied: true, logMessage: `Adjacent figure recovered ${heal} Damage.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [targetMsgId] };
+  }
+
   // ccEffect: recoverDamage (Recovery) — recover N damage on activating figure(s); requires dcHealthState, msgId
   if (entry.type === 'ccEffect' && typeof entry.recoverDamage === 'number' && entry.recoverDamage > 0) {
     const { game, playerNum, dcMessageMeta, dcHealthState, msgId } = context;
@@ -976,4 +1064,15 @@ function getFigureKeysForDcMsg(game, playerNum, meta) {
   const prefix = `${dcName}-${dgIndex}-`;
   const positions = game.figurePositions?.[playerNum] || {};
   return Object.keys(positions).filter((k) => k.startsWith(prefix));
+}
+
+/** Find msgId for a figure key (for dcHealthState lookup). */
+function findMsgIdForFigureKey(game, playerNum, figureKey, dcMessageMeta) {
+  if (!dcMessageMeta) return null;
+  for (const [msgId, meta] of dcMessageMeta) {
+    if (meta?.gameId !== game.gameId || meta?.playerNum !== playerNum) continue;
+    const keys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (keys.includes(figureKey)) return msgId;
+  }
+  return null;
 }

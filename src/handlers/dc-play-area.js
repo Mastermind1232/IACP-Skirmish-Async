@@ -487,11 +487,14 @@ export async function handleDcCcSpecial(interaction, ctx) {
   const previousAttachments = isCcAttachment(card) && game[attachKey]?.[msgId] ? game[attachKey][msgId].slice() : undefined;
 
   await interaction.deferUpdate();
+  const effectData = getCcEffect(card);
+  const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
+  const enteringNegation = cost === 0 && ctx.getNegationResponseButtons;
   hand.splice(hand.indexOf(card), 1);
   game[handKey] = hand;
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push(card);
-  if (isCcAttachment(card)) {
+  if (isCcAttachment(card) && !enteringNegation) {
     game[attachKey] = game[attachKey] || {};
     if (!Array.isArray(game[attachKey][msgId])) game[attachKey][msgId] = [];
     game[attachKey][msgId].push(card);
@@ -504,7 +507,6 @@ export async function handleDcCcSpecial(interaction, ctx) {
   const deck = meta.playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
   if (handMsg) {
     const handPayload = buildHandDisplayPayload(hand, deck, game.gameId, game, meta.playerNum);
-    const effectData = getCcEffect(card);
     const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
     handPayload.content = `**Command Cards** — Played **${card}** (Special Action).${effectReminder}\n\n` + (handPayload.content || '');
     await handMsg.edit({
@@ -518,8 +520,36 @@ export async function handleDcCcSpecial(interaction, ctx) {
   await updateDiscardPileMessage(game, meta.playerNum, interaction.client);
   await updateDcActionsMessage(game, msgId, interaction.client);
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}** (Special Action).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  if (enteringNegation) {
+    game.pendingNegation = { playedBy: meta.playerNum, card, fromDc: true, msgId, wasAttachment: isCcAttachment(card) };
+    const oppNum = meta.playerNum === 1 ? 2 : 1;
+    const oppHandId = oppNum === 1 ? game.p1HandId : game.p2HandId;
+    const oppHandChannel = await interaction.client.channels.fetch(oppHandId).catch(() => null);
+    if (oppHandChannel) {
+      const oppId = oppNum === 1 ? game.player1Id : game.player2Id;
+      await oppHandChannel.send({
+        content: `Your opponent played **${card}** (cost 0). You may play **Negation** to cancel it.`,
+        components: [ctx.getNegationResponseButtons(game.gameId)],
+        allowedMentions: { users: [oppId] },
+      }).catch(() => {});
+    }
+    if (ctx.pushUndo) {
+      ctx.pushUndo(game, {
+        type: 'cc_play_dc',
+        gameId: game.gameId,
+        msgId,
+        playerNum: meta.playerNum,
+        card,
+        previousHand,
+        previousDiscard,
+        previousAttachments,
+        gameLogMessageId: logMsg?.id,
+      });
+    }
+    saveGames();
+    return;
+  }
   if (ctx.resolveAbility) {
-    const effectData = getCcEffect(card);
     const abilityId = effectData?.abilityId ?? card;
     const result = ctx.resolveAbility(abilityId, { game, playerNum: meta.playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, msgId });
     if (result.applied && result.drewCards?.length) {
@@ -528,7 +558,12 @@ export async function handleDcCcSpecial(interaction, ctx) {
       await logGameAction(game, interaction.client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
     } else if (result.applied && result.logMessage) {
       await logGameAction(game, interaction.client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
-      if (result.refreshDcEmbed) await updateDcActionsMessage(game, msgId, interaction.client);
+      if (result.refreshDcEmbed) {
+        await updateDcActionsMessage(game, msgId, interaction.client);
+        for (const mid of result.refreshDcEmbedMsgIds || []) {
+          if (mid !== msgId) await updateDcActionsMessage(game, mid, interaction.client).catch(() => {});
+        }
+      }
     } else if (!result.applied && result.manualMessage) {
       await logGameAction(game, interaction.client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
     }

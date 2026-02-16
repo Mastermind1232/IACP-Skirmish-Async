@@ -127,6 +127,10 @@ import {
   handleSquadSelect,
   handleIllegalCcIgnore,
   handleIllegalCcUnplay,
+  handleNegationPlay,
+  handleNegationLetResolve,
+  handleCelebrationPlay,
+  handleCelebrationPass,
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
@@ -226,6 +230,8 @@ import {
   getCcShuffleDrawButton,
   getCcActionButtons,
   getIllegalCcPlayButtons,
+  getNegationResponseButtons,
+  getCelebrationButtons,
   getSelectSquadButton,
   getHandSquadButtons,
   getKillGameButton,
@@ -2288,6 +2294,15 @@ async function resolveCombatAfterRolls(game, combat, client) {
           }
         }
         await checkWinConditions(game, client);
+        // Celebration: after unique hostile defeated, offer attacker a chance to play it
+        if (figures === 1) {
+          game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
+          await thread.send({
+            content: `<@${ownerId}> — You defeated a unique figure. Play **Celebration** to gain 4 VP?`,
+            components: [getCelebrationButtons(game.gameId)],
+            allowedMentions: { users: [ownerId] },
+          }).catch(() => {});
+        }
       }
     }
     if (combat.surgeRecover > 0 && combat.attackerMsgId != null) {
@@ -3847,8 +3862,10 @@ client.on('interactionCreate', async (interaction) => {
       isCcPlayableNow,
       isCcPlayLegalByRestriction,
       getIllegalCcPlayButtons,
+      getNegationResponseButtons,
       client,
       resolveAbility,
+      pushUndo,
     };
     if (selectKey === 'cc_attach_to_') await handleCcAttachTo(interaction, ccHandSelectContext);
     else if (selectKey === 'cc_play_select_') await handleCcPlaySelect(interaction, ccHandSelectContext);
@@ -3860,7 +3877,7 @@ client.on('interactionCreate', async (interaction) => {
   const buttonKey = getHandlerKey(interaction.customId, 'button');
   if (!buttonKey) return;
 
-  if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'squad_select_' || buttonKey === 'illegal_cc_ignore_' || buttonKey === 'illegal_cc_unplay_') {
+  if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'squad_select_' || buttonKey === 'illegal_cc_ignore_' || buttonKey === 'illegal_cc_unplay_' || buttonKey === 'negation_play_' || buttonKey === 'negation_let_resolve_' || buttonKey === 'celebration_play_' || buttonKey === 'celebration_pass_') {
     const ccHandButtonContext = {
       getGame,
       dcMessageMeta,
@@ -3889,6 +3906,7 @@ client.on('interactionCreate', async (interaction) => {
       updateAttachmentMessageForDc,
       getPlayableCcFromHand,
       resolveAbility,
+      updateDcActionsMessage,
     };
     if (buttonKey === 'deck_illegal_play_') await handleDeckIllegalPlay(interaction, ccHandButtonContext);
     else if (buttonKey === 'deck_illegal_redo_') await handleDeckIllegalRedo(interaction, ccHandButtonContext);
@@ -3901,6 +3919,10 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'squad_select_') await handleSquadSelect(interaction, ccHandButtonContext);
     else if (buttonKey === 'illegal_cc_ignore_') await handleIllegalCcIgnore(interaction, ccHandButtonContext);
     else if (buttonKey === 'illegal_cc_unplay_') await handleIllegalCcUnplay(interaction, ccHandButtonContext);
+    else if (buttonKey === 'negation_play_') await handleNegationPlay(interaction, ccHandButtonContext);
+    else if (buttonKey === 'negation_let_resolve_') await handleNegationLetResolve(interaction, ccHandButtonContext);
+    else if (buttonKey === 'celebration_play_') await handleCelebrationPlay(interaction, ccHandButtonContext);
+    else if (buttonKey === 'celebration_pass_') await handleCelebrationPass(interaction, ccHandButtonContext);
     return;
   }
 
@@ -3953,6 +3975,7 @@ client.on('interactionCreate', async (interaction) => {
       getLegalInteractOptions,
       FIGURE_LETTERS,
       resolveAbility,
+      getNegationResponseButtons,
     };
     if (buttonKey === 'dc_activate_') await handleDcActivate(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_unactivate_') await handleDcUnactivate(interaction, dcPlayAreaContext);

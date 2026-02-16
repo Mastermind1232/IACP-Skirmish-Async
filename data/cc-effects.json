@@ -234,7 +234,8 @@
       "playableBy": "Any Figure",
       "timing": "afterUniqueHostileDefeated",
       "effect": "Use after a unique hostile figure is defeated to gain 4 VPs.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Celebration"
     },
     "Change of Plans": {
       "cost": 1,
@@ -579,6 +580,7 @@
       "playableBy": "Any Figure",
       "timing": "specialAction",
       "effect": "Special Action: Choose an adjacent figure. That figure recovers 2 Damage. If you are a GUARDIAN or LEADER, that figure recovers an additional 1 Damage.",
+      "abilityId": "Emergency Aid",
       "effectType": "manual"
     },
     "Endless Reserves": {
@@ -967,6 +969,7 @@
       "playableBy": "REBEL",
       "timing": "duringActivation",
       "effect": "Use during your activation. You recover Damage equal to the current round number.",
+      "abilityId": "Hour of Need",
       "effectType": "manual"
     },
     "Hunt Them Down": {
@@ -1079,7 +1082,8 @@
       "playableBy": "Any Figure",
       "timing": "whenCommandCardPlayed",
       "effect": "Use after your opponent plays a Command card with a cost of 0. Discard that card and cancel its effects.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Negation"
     },
     "Marksman": {
       "cost": 1,
@@ -1115,6 +1119,7 @@
       "playableBy": "Any Figure",
       "timing": "specialAction",
       "effect": "Special Action: During this round, while defending, apply +1 Block and -2 Accuracy to the results.",
+      "abilityId": "Take Cover",
       "effectType": "manual"
     },
     "Take Initiative": {

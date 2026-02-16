@@ -775,3 +775,59 @@ test('resolveAbility Survival Instincts sets roundDefenseBonusBlock and Evade', 
   assert.strictEqual(game.roundDefenseBonusBlock?.[2], 1);
   assert.strictEqual(game.roundDefenseBonusEvade?.[2], 1);
 });
+
+test('resolveAbility Hour of Need recovers round number damage', () => {
+  const msgId = 'msg-hon';
+  const healthState = [[4, 6]];
+  const dcHealthState = new Map([[msgId, healthState]]);
+  const game = {
+    gameId: 'g-hon',
+    currentRound: 3,
+    dcActionsData: { [msgId]: {} },
+    p1DcMessageIds: [msgId],
+    p1DcList: [{ dcName: 'Luke Skywalker', healthState: [[4, 6]] }],
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-hon', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const result = resolveAbility('Hour of Need', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(healthState[0], [6, 6]);
+  assert.ok(result.logMessage?.includes('3'));
+});
+
+test('resolveAbility Take Cover sets roundDefenseBonusBlock and Evade', () => {
+  const msgId = 'msg-tc';
+  const game = { gameId: 'g-tc', dcActionsData: { [msgId]: {} } };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-tc', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 1]' }]]);
+  const result = resolveAbility('Take Cover', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.roundDefenseBonusBlock?.[1], 1);
+  assert.strictEqual(game.roundDefenseBonusEvade?.[1], 2);
+});
+
+test('resolveAbility Emergency Aid recovers to adjacent figure', () => {
+  const msgId = 'msg-ea';
+  const targetMsgId = 'msg-target';
+  const healthState = [[3, 6]];
+  const dcHealthState = new Map([
+    [msgId, [[6, 6]]],
+    [targetMsgId, healthState],
+  ]);
+  const game = {
+    gameId: 'g-ea',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: { 'Leader-1-0': 'o8', 'Trooper-1-0': 'p8' }, 2: {} },
+    dcActionsData: { [msgId]: {} },
+    p1DcMessageIds: [msgId, targetMsgId],
+    p1DcList: [
+      { dcName: 'Leader', healthState: [[6, 6]] },
+      { dcName: 'Trooper', healthState: [[3, 6]] },
+    ],
+  };
+  const dcMessageMeta = new Map([
+    [msgId, { gameId: 'g-ea', playerNum: 1, dcName: 'Leader', displayName: 'Leader [DG 1]' }],
+    [targetMsgId, { gameId: 'g-ea', playerNum: 1, dcName: 'Trooper', displayName: 'Trooper [DG 1]' }],
+  ]);
+  const result = resolveAbility('Emergency Aid', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(healthState[0], [5, 6]);
+});

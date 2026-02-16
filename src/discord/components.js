@@ -354,6 +354,34 @@ export function getCcActionButtons(gameId, hand = [], deck = []) {
   );
 }
 
+/** Buttons for Negation response: Play Negation / Let it resolve. */
+export function getNegationResponseButtons(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`negation_play_${gameId}`)
+      .setLabel('Play Negation')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`negation_let_resolve_${gameId}`)
+      .setLabel('Let it resolve')
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
+/** Buttons for Celebration: Play Celebration / Pass. */
+export function getCelebrationButtons(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`celebration_play_${gameId}`)
+      .setLabel('Play Celebration (+4 VP)')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`celebration_pass_${gameId}`)
+      .setLabel('Pass')
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
 /** Buttons for "bot thinks this CC play is illegal" prompt: Ignore and play / Unplay card. */
 export function getIllegalCcPlayButtons(gameId) {
   return new ActionRowBuilder().addComponents(

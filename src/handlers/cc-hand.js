@@ -265,8 +265,26 @@ export async function handleCcPlaySelect(interaction, ctx) {
   await updateHandVisualMessage(game, playerNum, interaction.client);
   await updateDiscardPileMessage(game, playerNum, interaction.client);
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  const effectData = getCcEffect(card);
+  const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
+  if (cost === 0 && ctx.getNegationResponseButtons) {
+    game.pendingNegation = { playedBy: playerNum, card, fromDc: false };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppHandId = oppNum === 1 ? game.p1HandId : game.p2HandId;
+    const oppHandChannel = await interaction.client.channels.fetch(oppHandId).catch(() => null);
+    if (oppHandChannel) {
+      const oppId = oppNum === 1 ? game.player1Id : game.player2Id;
+      await oppHandChannel.send({
+        content: `Your opponent played **${card}** (cost 0). You may play **Negation** to cancel it.`,
+        components: [ctx.getNegationResponseButtons(gameId)],
+        allowedMentions: { users: [oppId] },
+      }).catch(() => {});
+    }
+    if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
+    saveGames();
+    return;
+  }
   if (ctx.resolveAbility) {
-    const effectData = getCcEffect(card);
     const abilityId = effectData?.abilityId ?? card;
     const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, combat: game.combat || game.pendingCombat });
     if (result.applied && result.drewCards?.length) {
@@ -367,6 +385,160 @@ export async function handleIllegalCcIgnore(interaction, ctx) {
       await msg.edit({ content: 'Play resolved.', components: [] }).catch(() => {});
     } catch {}
   }
+  saveGames();
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction — "Play Negation" to cancel opponent's cost-0 CC. */
+export async function handleNegationPlay(interaction, ctx) {
+  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, saveGames } = ctx;
+  const gameId = interaction.customId.replace('negation_play_', '');
+  const game = getGame(gameId);
+  if (!game || !game.pendingNegation) {
+    await interaction.reply({ content: 'No pending play to negate.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const { playedBy, card } = game.pendingNegation;
+  const oppNum = playedBy === 1 ? 2 : 1;
+  const playerId = oppNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== playerId) {
+    await interaction.reply({ content: 'Only the opponent can play Negation.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const handKey = oppNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  const discardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const hand = game[handKey] || [];
+  const idx = hand.indexOf('Negation');
+  if (idx < 0) {
+    await interaction.reply({ content: "You don't have Negation in your hand.", ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  hand.splice(idx, 1);
+  game[handKey] = hand;
+  game[discardKey] = game[discardKey] || [];
+  game[discardKey].push('Negation');
+  delete game.pendingNegation;
+  await updateHandVisualMessage(game, oppNum, client);
+  await updateDiscardPileMessage(game, oppNum, client);
+  await interaction.message.edit({ content: `**Negation** cancelled **${card}**.`, components: [] }).catch(() => {});
+  await logGameAction(game, client, `<@${playerId}> played **Negation** — cancelled **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [playerId] } });
+  saveGames();
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction — "Let it resolve" for pending cost-0 CC. */
+export async function handleNegationLetResolve(interaction, ctx) {
+  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, saveGames, resolveAbility, dcMessageMeta, dcHealthState, updateDcActionsMessage, updateAttachmentMessageForDc, isCcAttachment } = ctx;
+  const gameId = interaction.customId.replace('negation_let_resolve_', '');
+  const game = getGame(gameId);
+  if (!game || !game.pendingNegation) {
+    await interaction.reply({ content: 'No pending play to resolve.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const { playedBy, card, fromDc, msgId, wasAttachment } = game.pendingNegation;
+  const oppNum = playedBy === 1 ? 2 : 1;
+  const playerId = oppNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== playerId) {
+    await interaction.reply({ content: 'Only the opponent can choose to let it resolve.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  delete game.pendingNegation;
+  await interaction.message.edit({ content: `**${card}** resolves.`, components: [] }).catch(() => {});
+  if (fromDc && msgId && wasAttachment && updateAttachmentMessageForDc && isCcAttachment?.(card)) {
+    const attachKey = playedBy === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+    const discardKey = playedBy === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const discard = game[discardKey] || [];
+    const idx = discard.indexOf(card);
+    if (idx >= 0) {
+      discard.splice(idx, 1);
+      game[discardKey] = discard;
+    }
+    game[attachKey] = game[attachKey] || {};
+    if (!Array.isArray(game[attachKey][msgId])) game[attachKey][msgId] = [];
+    game[attachKey][msgId].push(card);
+    await updateAttachmentMessageForDc(game, playedBy, msgId, client);
+  }
+  if (resolveAbility) {
+    const effectData = getCcEffect(card);
+    const abilityId = effectData?.abilityId ?? card;
+    const result = resolveAbility(abilityId, { game, playerNum: playedBy, cardName: card, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat, msgId });
+    if (result.applied && result.drewCards?.length) {
+      await updateHandVisualMessage(game, playedBy, client);
+      const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
+      await logGameAction(game, client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
+    } else if (result.applied && result.logMessage) {
+      await logGameAction(game, client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
+      if (result.refreshDcEmbed && fromDc && msgId && updateDcActionsMessage) {
+        await updateDcActionsMessage(game, msgId, client).catch(() => {});
+      }
+    } else if (result.applied && result.refreshOpponentDiscard) {
+      const opp = playedBy === 1 ? 2 : 1;
+      await updateDiscardPileMessage(game, opp, client);
+    } else if (!result.applied && result.manualMessage) {
+      await logGameAction(game, client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
+    }
+  }
+  saveGames();
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction — "Play Celebration" to gain 4 VP. */
+export async function handleCelebrationPlay(interaction, ctx) {
+  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, client, saveGames } = ctx;
+  const gameId = interaction.customId.replace('celebration_play_', '');
+  const game = getGame(gameId);
+  if (!game || !game.pendingCelebration) {
+    await interaction.reply({ content: 'No Celebration window open.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const { attackerPlayerNum } = game.pendingCelebration;
+  const playerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== playerId) {
+    await interaction.reply({ content: 'Only the player who defeated the figure can play Celebration.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const handKey = attackerPlayerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  const discardKey = attackerPlayerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const hand = game[handKey] || [];
+  const idx = hand.indexOf('Celebration');
+  if (idx < 0) {
+    await interaction.reply({ content: "You don't have Celebration in your hand.", ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  hand.splice(idx, 1);
+  game[handKey] = hand;
+  game[discardKey] = game[discardKey] || [];
+  game[discardKey].push('Celebration');
+  const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+  game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+  game[vpKey].total += 4;
+  game[vpKey].objectives = (game[vpKey].objectives || 0) + 4;
+  delete game.pendingCelebration;
+  await updateHandVisualMessage(game, attackerPlayerNum, client);
+  await updateDiscardPileMessage(game, attackerPlayerNum, client);
+  await interaction.message.edit({ content: `**Celebration** — +4 VP.`, components: [] }).catch(() => {});
+  await logGameAction(game, client, `<@${playerId}> played **Celebration** — gained 4 VP.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [playerId] } });
+  saveGames();
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction — "Pass" on Celebration. */
+export async function handleCelebrationPass(interaction, ctx) {
+  const { getGame, logGameAction, client, saveGames } = ctx;
+  const gameId = interaction.customId.replace('celebration_pass_', '');
+  const game = getGame(gameId);
+  if (!game || !game.pendingCelebration) {
+    await interaction.reply({ content: 'No Celebration window open.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const { attackerPlayerNum } = game.pendingCelebration;
+  const playerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== playerId) {
+    await interaction.reply({ content: 'Only the player who defeated the figure can pass.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  delete game.pendingCelebration;
+  await interaction.message.edit({ content: 'Passed on Celebration.', components: [] }).catch(() => {});
   saveGames();
 }
 
