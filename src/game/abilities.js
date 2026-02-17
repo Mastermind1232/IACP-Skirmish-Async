@@ -1272,6 +1272,201 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: powerTokenGainToGroup (Ready Weapons) — distribute up to N tokens among figures in activating group (max 2 per figure)
+  if (entry.type === 'ccEffect' && typeof entry.powerTokenGainToGroup === 'number' && entry.powerTokenGainToGroup > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress (play as Special Action during your activation).' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures in group.' };
+    const totalToAdd = Math.min(entry.powerTokenGainToGroup, figureKeys.length * 2);
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    let remaining = totalToAdd;
+    for (const fk of figureKeys) {
+      if (remaining <= 0) break;
+      const current = (game.figurePowerTokens[fk] || []).length;
+      const cap = 2 - current;
+      const toAdd = Math.min(remaining, Math.max(0, cap));
+      for (let i = 0; i < toAdd; i++) (game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || []).push('Wild');
+      remaining -= toAdd;
+    }
+    return { applied: true, logMessage: `Distributed ${totalToAdd} Hit Token(s) among figures in your group.` };
+  }
+
+  // ccEffect: claimInitiative + exhaustOneDeploymentCard (Take Initiative)
+  if (entry.type === 'ccEffect' && entry.claimInitiative && entry.exhaustOneDeploymentCard) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.initiativePlayerNum = playerNum;
+    const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    let exhausted = false;
+    for (let i = 0; i < (dcList || []).length; i++) {
+      const dc = dcList[i];
+      const isExhausted = typeof dc === 'object' && dc.exhausted;
+      if (!isExhausted) {
+        if (typeof dc === 'object') dcList[i] = { ...dc, exhausted: true };
+        exhausted = true;
+        break;
+        // Exhaust first non-exhausted DC
+      }
+    }
+    return {
+      applied: true,
+      logMessage: `Claimed the initiative token.${exhausted ? ' Exhausted 1 Deployment card.' : ' (No non-exhausted DC to exhaust.)'}`,
+    };
+  }
+
+  // ccEffect: discardRandomFromHand + opponentDiscardRandomFromHand (Hostile Negotiation)
+  if (entry.type === 'ccEffect' && typeof entry.discardRandomFromHand === 'number' && typeof entry.opponentDiscardRandomFromHand === 'number') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppHandKey = oppNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const oppDiscardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const hand = (game[handKey] || []).slice();
+    const oppHand = (game[oppHandKey] || []).slice();
+    const n1 = Math.min(entry.discardRandomFromHand, hand.length);
+    const n2 = Math.min(entry.opponentDiscardRandomFromHand, oppHand.length);
+    const discarded1 = [];
+    for (let i = 0; i < n1; i++) {
+      const idx = Math.floor(Math.random() * hand.length);
+      discarded1.push(hand.splice(idx, 1)[0]);
+    }
+    const discarded2 = [];
+    for (let i = 0; i < n2; i++) {
+      const idx = Math.floor(Math.random() * oppHand.length);
+      discarded2.push(oppHand.splice(idx, 1)[0]);
+    }
+    game[handKey] = hand;
+    game[discardKey] = (game[discardKey] || []).concat(discarded1);
+    game[oppHandKey] = oppHand;
+    game[oppDiscardKey] = (game[oppDiscardKey] || []).concat(discarded2);
+    const parts = [];
+    if (discarded1.length) parts.push(`You discarded ${discarded1.map((c) => `**${c}**`).join(', ')}`);
+    if (discarded2.length) parts.push(`opponent discarded ${discarded2.length} card(s)`);
+    return {
+      applied: true,
+      logMessage: parts.join('; ') + '.',
+      refreshHand: true,
+      refreshDiscard: true,
+    };
+  }
+
+  // ccEffect: shuffleOneFromDiscardIntoDeck (De Wanna Wanga) — choiceIndex = index in discard to shuffle in
+  if (entry.type === 'ccEffect' && entry.shuffleOneFromDiscardIntoDeck) {
+    const { game, playerNum, cardName } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const discard = (game[discardKey] || []).slice();
+    const deck = (game[deckKey] || []).slice();
+    const choiceIndex = context.choiceIndex;
+    if (discard.length === 0) return { applied: false, manualMessage: 'No cards in discard to shuffle into deck.' };
+    if (choiceIndex == null || choiceIndex < 0 || choiceIndex >= discard.length) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: discard.map((c, i) => `${i + 1}. ${c}`),
+        choiceCount: discard.length,
+        manualMessage: 'Choose which card to shuffle into your deck (by index).',
+      };
+    }
+    const card = discard.splice(choiceIndex, 1)[0];
+    deck.push(card);
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    game[discardKey] = discard;
+    game[deckKey] = deck;
+    return {
+      applied: true,
+      logMessage: `Shuffled **${card}** from discard into your Command deck.`,
+      refreshDiscard: true,
+    };
+  }
+
+  // ccEffect: opponentDiscardDeckTop (Shoot the Messenger) — when defender was defeated
+  if (entry.type === 'ccEffect' && typeof entry.opponentDiscardDeckTop === 'number' && entry.opponentDiscardDeckTop > 0) {
+    const { game, playerNum, defenderDefeated } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (!defenderDefeated) return { applied: false, manualMessage: 'Shoot the Messenger: defender was not defeated.' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const deckKey = oppNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const discardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const deck = (game[deckKey] || []).slice();
+    const n = Math.min(entry.opponentDiscardDeckTop, deck.length);
+    const removed = deck.splice(0, n);
+    game[deckKey] = deck;
+    game[discardKey] = (game[discardKey] || []).concat(removed);
+    return {
+      applied: true,
+      logMessage: `Defender was defeated. Opponent discarded top ${n} card(s) of their Command deck.`,
+      refreshOpponentDiscard: n > 0,
+    };
+  }
+
+  // ccEffect: maxDamageFromAttack (Iron Will) — store on combat; defender cannot suffer more than N from this attack
+  if (entry.type === 'ccEffect' && typeof entry.maxDamageFromAttack === 'number' && entry.maxDamageFromAttack > 0) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play when an attack targeting you is declared.' };
+    cbt.maxDamageToDefender = Math.min(cbt.maxDamageToDefender ?? 999, entry.maxDamageFromAttack);
+    return { applied: true, logMessage: `You cannot suffer more than ${entry.maxDamageFromAttack} Damage from this attack.` };
+  }
+
+  // ccEffect: defenderIgnorePierce (Heavy Armor)
+  if (entry.type === 'ccEffect' && entry.defenderIgnorePierce) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play while defending.' };
+    cbt.defenderIgnorePierce = true;
+    return { applied: true, logMessage: 'During this attack, Pierce has no effect.' };
+  }
+
+  // ccEffect: rerollOneAttackDie (Mitigate)
+  if (entry.type === 'ccEffect' && entry.rerollOneAttackDie) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play while attacking.' };
+    cbt.rerollOneAttackDie = (cbt.rerollOneAttackDie || 0) + 1;
+    return { applied: true, logMessage: 'You may reroll 1 attack die.' };
+  }
+
+  // ccEffect: celebrationVp + increaseArmyCostBy (Field Promotion)
+  if (entry.type === 'ccEffect' && typeof entry.celebrationVp === 'number' && typeof entry.increaseArmyCostBy === 'number') {
+    const { game, playerNum, defenderDefeated } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (!defenderDefeated) return { applied: false, manualMessage: 'Field Promotion: defender was not defeated.' };
+    const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[vpKey].total = (game[vpKey].total ?? 0) + entry.celebrationVp;
+    const costKey = playerNum === 1 ? 'player1ArmyCostModifier' : 'player2ArmyCostModifier';
+    game[costKey] = (game[costKey] || 0) + entry.increaseArmyCostBy;
+    return {
+      applied: true,
+      logMessage: `Defender defeated. Gained ${entry.celebrationVp} VP and increased your figure cost by ${entry.increaseArmyCostBy}.`,
+    };
+  }
+
+  // ccEffect: roundAttackRerollDice (Just Business) — until end of round, may reroll 1 attack die when attacking
+  if (entry.type === 'ccEffect' && typeof entry.roundAttackRerollDice === 'number' && entry.roundAttackRerollDice > 0) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundAttackRerollDice = game.roundAttackRerollDice || {};
+    game.roundAttackRerollDice[playerNum] = (game.roundAttackRerollDice[playerNum] || 0) + entry.roundAttackRerollDice;
+    return {
+      applied: true,
+      logMessage: `Until end of round, friendly figures may reroll up to ${entry.roundAttackRerollDice} attack die when attacking.`,
+    };
+  }
+
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
 }
 

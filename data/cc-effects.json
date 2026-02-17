@@ -447,7 +447,8 @@
       "playableBy": "Bib Fortuna",
       "timing": "specialAction",
       "effect": "Choose 1 Command card in your discard pile and shuffle it into your Command deck.\n\nPassive: Once per round, when this card is discarded from your hand or deck, you may shuffle it into your Command deck.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "De Wanna Wanga"
     },
     "Deadeye": {
       "cost": 0,
@@ -749,7 +750,8 @@
       "playableBy": "LEADER",
       "timing": "afterYouResolveAttackTargetingFigure",
       "effect": "Use after you resolve an attack targeting a figure. If that figure has been defeated and your army affiliation is REBEL or IMPERIAL, you gain 4 VPs and increase your figure cost by 2.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Field Promotion"
     },
     "Field Supply": {
       "cost": 1,
@@ -992,7 +994,8 @@
       "playableBy": "VEHICLE",
       "timing": "whileDefending",
       "effect": "Use while defending. During this attack, the Pierce keyword has no effect.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Heavy Armor"
     },
     "Heavy Ordnance": {
       "cost": 0,
@@ -1051,7 +1054,8 @@
       "playableBy": "Any Figure",
       "timing": "duringActivation",
       "effect": "Use during your activation to discard a random Command card from your hand. If you do, your opponent discards 2 random cards from their hand.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Hostile Negotiation"
     },
     "Hour of Need": {
       "cost": 0,
@@ -1097,7 +1101,8 @@
       "playableBy": "GUARDIAN",
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when an attack targeting you is declared. You cannot suffer more than 3 Damage from that attack.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Iron Will"
     },
     "Jump Jets": {
       "cost": 1,
@@ -1120,7 +1125,8 @@
       "playableBy": "LEADER",
       "timing": "startOfRound",
       "effect": "Use at the start of the round. During this round, friendly Scum figures gain 'Professional' while within 3 spaces of you. (Those figures may reroll 1 attack die while attacking.)",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Just Business"
     },
     "Karabast!": {
       "cost": 1,
@@ -1196,7 +1202,8 @@
       "playableBy": "TROOPER or GUARDIAN",
       "timing": "specialAction",
       "effect": "Special Action: Distribute 3 Hit Tokens among figures in your group.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Ready Weapons"
     },
     "Size Advantage": {
       "cost": 2,
@@ -1227,7 +1234,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round to claim the initiative token. Then exhaust 1 of your Deployment cards.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Take Initiative"
     },
     "Urgency": {
       "cost": 0,
@@ -1281,7 +1289,8 @@
       "playableBy": "SCUM",
       "timing": "afterYouResolveAttackTargetingFigure",
       "effect": "Use after you resolve an attack targeting a figure. If the defender was defeated, your opponent discards the top 3 cards of their Command deck.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Shoot the Messenger"
     },
     "Heavy Weapon": {
       "cost": null,
@@ -1406,7 +1415,8 @@
       "playableBy": "Any Figure",
       "timing": "duringAttack",
       "effect": "Use while attacking to reroll 1 attack die.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Mitigate"
     },
     "Navigation Upgrade": {
       "cost": 2,

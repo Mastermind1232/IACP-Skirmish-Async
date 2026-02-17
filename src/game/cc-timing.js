@@ -134,6 +134,9 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'beforedeclaringrangedattack':
       // Marksman: playable before declaring a Ranged attack (honor system: play when about to declare ranged attack)
       return ctx.duringActivation;
+    case 'afteryouresolveattacktargetingfigure':
+      // Field Promotion, Shoot the Messenger: playable after you resolve an attack targeting a figure (honor: play when attack just resolved)
+      return ctx.duringAttack;
     case 'other':
       // Disarm, Dying Lunge: playable during your activation (honor system: play at actual trigger)
       return ctx.duringActivation;

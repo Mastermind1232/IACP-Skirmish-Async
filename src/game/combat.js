@@ -82,8 +82,10 @@ export function computeCombatResult(combat) {
   const bonusBlock = combat.bonusBlock || 0;
   const bonusEvade = combat.bonusEvade || 0;
   const hit = (roll.acc + surgeA + bonusAcc) >= (defRoll.evade + bonusEvade);
-  const effectiveBlock = Math.max(0, (defRoll.block + bonusBlock) - totalPierce);
-  const damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits - effectiveBlock) : 0;
+  const pierceToUse = combat.defenderIgnorePierce ? 0 : totalPierce;
+  const effectiveBlock = Math.max(0, (defRoll.block + bonusBlock) - pierceToUse);
+  let damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits - effectiveBlock) : 0;
+  if (combat.maxDamageToDefender != null && damage > combat.maxDamageToDefender) damage = combat.maxDamageToDefender;
   const allConds = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
   const conditionsText = allConds.length ? ` (${allConds.join(', ')})` : '';
   const bonusBlast = combat.bonusBlast || 0;
