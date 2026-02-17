@@ -1024,6 +1024,52 @@ const DEFAULT_DECK_SCUM = {
   ccCount: 15,
 };
 
+/** Sample DCs per affiliation for testready — 2 DCs, 1–2 groups. Includes Trooper/Technician for CCs like Smoke Grenade. */
+const TESTREADY_SAMPLE_DCS = {
+  rebel: {
+    troopers: ['Rebel Trooper (Elite)', 'Rebel Trooper (Regular)'],
+    others: ['Wookiee Warrior (Elite)', 'Luke Skywalker'],
+  },
+  scum: {
+    troopers: ['Hired Gun (Elite)'],
+    technicians: ['Ugnaught Tinkerer (Elite)'],
+    others: ['Nexu (Elite)', 'Trandoshan Hunter (Elite)', 'Boba Fett'],
+  },
+};
+
+/** Scenario requirements: playableBy traits needed for P1 (e.g. smoke_grenade needs TROOPER or TECHNICIAN). */
+const TESTREADY_SCENARIO_DC_REQUIREMENTS = {
+  smoke_grenade: ['troopers', 'technicians'],
+};
+
+function buildTestreadyDeck(affiliation, scenarioId, baseCcList) {
+  const samples = TESTREADY_SAMPLE_DCS[affiliation];
+  if (!samples) return null;
+  const required = TESTREADY_SCENARIO_DC_REQUIREMENTS[scenarioId];
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const all = [...(samples.troopers || []), ...(samples.technicians || []), ...(samples.others || [])];
+
+  let dc1;
+  if (required && affiliation === 'rebel') {
+    const eligibles = [...(samples.troopers || []), ...(samples.technicians || [])];
+    if (eligibles.length > 0) dc1 = pick(eligibles);
+  }
+  if (!dc1) dc1 = pick(all);
+
+  const rest = all.filter((d) => d !== dc1);
+  const dc2 = rest.length > 0 ? pick(rest) : dc1;
+
+  const dcList = [dc1, dc2];
+  const name = affiliation === 'rebel' ? 'Testready Rebels' : 'Testready Scum';
+  return {
+    name,
+    dcList,
+    ccList: [...(baseCcList || [])],
+    dcCount: dcList.length,
+    ccCount: (baseCcList || []).length,
+  };
+}
+
 const DEFAULT_DECK_IMPERIAL = {
   name: 'Default Imperial',
   dcList: ['Darth Vader', 'Emperor Palpatine', 'Stormtrooper (Elite)'],
@@ -2104,18 +2150,27 @@ async function runDraftRandom(game, client, options = {}) {
     game.p2HandId = p2HandChannel.id;
   }
 
-  // One side Rebels, one side Scum (fixed for Draft Random). Scenario may override P1 deck (e.g. smoke_grenade needs Smoke Grenade)
-  let p1Deck = { ...DEFAULT_DECK_REBELS };
-  if (scenarioId === 'smoke_grenade') {
-    const ccList = [...(DEFAULT_DECK_REBELS.ccList || [])];
-    const idx = ccList.findIndex((c) => c === 'Force Push');
-    if (idx >= 0) ccList[idx] = 'Smoke Grenade';
-    else ccList[0] = 'Smoke Grenade';
-    p1Deck = { ...DEFAULT_DECK_REBELS, ccList };
+  // One side Rebels, one side Scum. Testready: 2 sample DCs per player (1-2 groups, different affiliations), scenario-aware (e.g. smoke_grenade needs Trooper/Technician)
+  let p1Deck;
+  let p2Deck;
+  if (scenarioId) {
+    const p1Cc = scenarioId === 'smoke_grenade'
+      ? (() => {
+          const cc = [...(DEFAULT_DECK_REBELS.ccList || [])];
+          const idx = cc.findIndex((c) => c === 'Force Push');
+          if (idx >= 0) cc[idx] = 'Smoke Grenade';
+          else cc[0] = 'Smoke Grenade';
+          return cc;
+        })()
+      : (DEFAULT_DECK_REBELS.ccList || []);
+    p1Deck = buildTestreadyDeck('rebel', scenarioId, p1Cc) || { ...DEFAULT_DECK_REBELS };
+    p2Deck = buildTestreadyDeck('scum', scenarioId, DEFAULT_DECK_SCUM.ccList || []) || { ...DEFAULT_DECK_SCUM };
+  } else {
+    p1Deck = { ...DEFAULT_DECK_REBELS };
+    p2Deck = { ...DEFAULT_DECK_SCUM };
   }
-  const p2Deck = DEFAULT_DECK_SCUM;
   await applySquadSubmission(game, true, p1Deck, client);
-  await applySquadSubmission(game, false, { ...p2Deck }, client);
+  await applySquadSubmission(game, false, p2Deck, client);
 
   // Initiative + deployment zone
   if (!game.initiativeDetermined) {
