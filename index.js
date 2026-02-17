@@ -309,30 +309,41 @@ async function buildAttachmentEmbedsAndFiles(ccNames, dcNames = []) {
   return { embeds, files };
 }
 
-/** Update the Play Area "Attachments" message for a DC (CC + DC Skirmish Upgrade attachments). */
+/** Update the Play Area "Attachments" message for a DC (CC + DC Skirmish Upgrade attachments).
+ * Creates the message on demand when first attachment is added; deletes when last is removed. */
 async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, client) {
   const ccKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
   const dcKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
   const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-  const attachMsgIds = playerNum === 1 ? (game.p1DcAttachmentMessageIds || []) : (game.p2DcAttachmentMessageIds || []);
+  const attachMsgIdsKey = playerNum === 1 ? 'p1DcAttachmentMessageIds' : 'p2DcAttachmentMessageIds';
+  game[attachMsgIdsKey] = game[attachMsgIdsKey] || [];
+  const attachMsgIds = game[attachMsgIdsKey];
   const idx = msgIds.indexOf(dcMsgId);
-  if (idx < 0 || idx >= attachMsgIds.length) return;
+  if (idx < 0) return;
+  while (attachMsgIds.length <= idx) attachMsgIds.push(null);
   const attachMsgId = attachMsgIds[idx];
   const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
   const ccList = (game[ccKey] || {})[dcMsgId] || [];
   const dcList = (game[dcKey] || {})[dcMsgId] || [];
+  const hasContent = ccList.length > 0 || dcList.length > 0;
   try {
     const channel = await client.channels.fetch(channelId);
-    const msg = await channel.messages.fetch(attachMsgId);
-    if (ccList.length === 0 && dcList.length === 0) {
-      await msg.edit({
-        embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
-        files: [],
-      });
-    } else {
+    if (!attachMsgId) {
+      if (!hasContent) return;
       const { embeds, files } = await buildAttachmentEmbedsAndFiles(ccList, dcList);
-      await msg.edit({ embeds, files });
+      const newMsg = await channel.send({ embeds, files });
+      attachMsgIds[idx] = newMsg.id;
+      return;
     }
+    if (!hasContent) {
+      const msg = await channel.messages.fetch(attachMsgId);
+      await msg.delete().catch(() => {});
+      attachMsgIds[idx] = null;
+      return;
+    }
+    const msg = await channel.messages.fetch(attachMsgId);
+    const { embeds, files } = await buildAttachmentEmbedsAndFiles(ccList, dcList);
+    await msg.edit({ embeds, files });
   } catch (err) {
     console.error('Failed to update attachment message for DC:', err);
   }
@@ -1903,6 +1914,7 @@ async function refreshAllGameComponents(game, client) {
   const p1DcList = game.p1DcList || [];
   const p2DcList = game.p2DcList || [];
   for (let i = 0; i < p1CompanionIds.length; i++) {
+    if (!p1CompanionIds[i]) continue;
     const dcName = p1DcList[i]?.dcName;
     if (!dcName) continue;
     try {
@@ -1915,6 +1927,7 @@ async function refreshAllGameComponents(game, client) {
     }
   }
   for (let i = 0; i < p2CompanionIds.length; i++) {
+    if (!p2CompanionIds[i]) continue;
     const dcName = p2DcList[i]?.dcName;
     if (!dcName) continue;
     try {
@@ -3234,15 +3247,17 @@ async function populatePlayAreas(game, client) {
     const p1Components = getDcPlayAreaComponents(msg.id, false, game, dcName);
     await msg.edit({ components: p1Components });
     game.p1DcMessageIds.push(msg.id);
-    const attachMsg = await p1PlayArea.send({
-      embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
-    });
-    game.p1DcAttachmentMessageIds.push(attachMsg.id);
+    // Attachments: only create when DC has attachments; create on demand in updateAttachmentMessageForDc
+    game.p1DcAttachmentMessageIds.push(null);
     const p1CompanionDesc = getCompanionDescriptionForDc(dcName);
-    const companionMsg = await p1PlayArea.send({
-      embeds: [new EmbedBuilder().setTitle('Companion').setDescription(p1CompanionDesc).setColor(0x2f3136)],
-    });
-    game.p1DcCompanionMessageIds.push(companionMsg.id);
+    if (p1CompanionDesc !== '*None*') {
+      const companionMsg = await p1PlayArea.send({
+        embeds: [new EmbedBuilder().setTitle('Companion').setDescription(p1CompanionDesc).setColor(0x2f3136)],
+      });
+      game.p1DcCompanionMessageIds.push(companionMsg.id);
+    } else {
+      game.p1DcCompanionMessageIds.push(null);
+    }
   }
   for (const { dcName, displayName, healthState } of p2Dcs) {
     const { embed, files } = await buildDcEmbedAndFiles(dcName, false, displayName, healthState);
@@ -3254,15 +3269,17 @@ async function populatePlayAreas(game, client) {
     const p2Components = getDcPlayAreaComponents(msg.id, false, game, dcName);
     await msg.edit({ components: p2Components });
     game.p2DcMessageIds.push(msg.id);
-    const attachMsg = await p2PlayArea.send({
-      embeds: [new EmbedBuilder().setTitle('📎 Attachments').setDescription('*None*').setColor(0x2f3136)],
-    });
-    game.p2DcAttachmentMessageIds.push(attachMsg.id);
+    // Attachments: only create when DC has attachments; create on demand in updateAttachmentMessageForDc
+    game.p2DcAttachmentMessageIds.push(null);
     const p2CompanionDesc = getCompanionDescriptionForDc(dcName);
-    const companionMsg = await p2PlayArea.send({
-      embeds: [new EmbedBuilder().setTitle('Companion').setDescription(p2CompanionDesc).setColor(0x2f3136)],
-    });
-    game.p2DcCompanionMessageIds.push(companionMsg.id);
+    if (p2CompanionDesc !== '*None*') {
+      const companionMsg = await p2PlayArea.send({
+        embeds: [new EmbedBuilder().setTitle('Companion').setDescription(p2CompanionDesc).setColor(0x2f3136)],
+      });
+      game.p2DcCompanionMessageIds.push(companionMsg.id);
+    } else {
+      game.p2DcCompanionMessageIds.push(null);
+    }
   }
 
 }
