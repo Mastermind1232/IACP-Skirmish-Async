@@ -149,6 +149,12 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'afteryouresolveattacktargetingfigure':
       // Field Promotion, Shoot the Messenger: playable after you resolve an attack targeting a figure (honor: play when attack just resolved)
       return ctx.duringAttack;
+    case 'whenhostilefigurewithin3spacesdefeated':
+      // Paid in Beskar: play when you defeat a hostile within 3 spaces (honor system)
+      return ctx.duringActivation;
+    case 'whileattackingbeforedefenderrerolls':
+      // Rapid Recalibration: play while attacking, before defender rerolls
+      return ctx.duringAttack && ctx.isAttacker;
     case 'other':
       // Disarm, Dying Lunge: playable during your activation (honor system: play at actual trigger)
       return ctx.duringActivation;

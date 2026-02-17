@@ -929,6 +929,21 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: attackAccuracyBonus + attackBonusPierce (Sniper Configuration) — both in one branch so both apply
+  if (entry.type === 'ccEffect' && typeof entry.attackAccuracyBonus === 'number' && typeof entry.attackBonusPierce === 'number') {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play while attacking (as the attacker).' };
+    }
+    if (entry.attackAccuracyBonus > 0) cbt.bonusAccuracy = (cbt.bonusAccuracy || 0) + entry.attackAccuracyBonus;
+    if (entry.attackBonusPierce > 0) cbt.bonusPierce = (cbt.bonusPierce || 0) + entry.attackBonusPierce;
+    return {
+      applied: true,
+      logMessage: `+${entry.attackAccuracyBonus} Accuracy and +${entry.attackBonusPierce} Pierce added to this attack.`,
+    };
+  }
+
   // ccEffect: attackBonusPierce — +N Pierce to this attack; attacker only
   if (entry.type === 'ccEffect' && typeof entry.attackBonusPierce === 'number' && entry.attackBonusPierce > 0) {
     const { game, playerNum, combat } = context;
@@ -1870,6 +1885,92 @@ export function resolveAbility(abilityId, context) {
       applied: true,
       logMessage: `You cannot suffer Damage or receive conditions until your next activation. At the start of your next activation, gain ${entry.nextActivationMpBonus || 0} movement points.`,
     };
+  }
+
+  // ccEffect: rebelGraffitiVp (Rebel Graffiti) — end of activation: gain 2 VP (honor: only when no adjacent hostiles)
+  if (entry.type === 'ccEffect' && typeof entry.rebelGraffitiVp === 'number' && entry.rebelGraffitiVp > 0) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[vpKey].total = (game[vpKey].total ?? 0) + entry.rebelGraffitiVp;
+    return { applied: true, logMessage: `Gained ${entry.rebelGraffitiVp} VP (end of activation; honor: no adjacent hostiles).` };
+  }
+
+  // ccEffect: shuffleHandIntoDeckThenDraw (Strategic Shift) — chosen player shuffles hand into deck, then draws N; choiceIndex 0 = P1, 1 = P2
+  if (entry.type === 'ccEffect' && typeof entry.shuffleHandIntoDeckThenDraw === 'number' && entry.shuffleHandIntoDeckThenDraw > 0) {
+    const { game, playerNum, choiceIndex } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const targetNum = choiceIndex === 0 ? 1 : choiceIndex === 1 ? 2 : null;
+    if (targetNum === null) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: ['Player 1', 'Player 2'],
+        choiceCount: 2,
+        manualMessage: 'Choose which player shuffles their hand into their deck, then draws 2.',
+      };
+    }
+    const deckKey = targetNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const handKey = targetNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const hand = (game[handKey] || []).slice();
+    const deck = (game[deckKey] || []).slice();
+    const combined = [...hand, ...deck];
+    for (let i = combined.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [combined[i], combined[j]] = [combined[j], combined[i]];
+    }
+    game[deckKey] = combined;
+    game[handKey] = [];
+    const drew = drawCcCards(game, targetNum, entry.shuffleHandIntoDeckThenDraw);
+    return {
+      applied: true,
+      drewCards: drew,
+      logMessage: `Player ${targetNum} shuffled hand into deck and drew ${drew.length} card(s).`,
+    };
+  }
+
+  // ccEffect: roundUtinniJawaBuffs (Utinni!)
+  if (entry.type === 'ccEffect' && entry.roundUtinniJawaBuffs) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundUtinniJawaBuffs = true;
+    return { applied: true, logMessage: 'This round, each friendly Jawa Scavenger gains +1 Speed, +1 Accuracy, and Surge: gain 1 VP when attacking a figure.' };
+  }
+
+  // ccEffect: whenDefeatHostileWithin3GainBlockTokens (Paid in Beskar)
+  if (entry.type === 'ccEffect' && typeof entry.whenDefeatHostileWithin3GainBlockTokens === 'number') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.whenDefeatHostileWithin3GainBlockTokens = { playerNum, tokens: entry.whenDefeatHostileWithin3GainBlockTokens };
+    return { applied: true, logMessage: `When you defeat a hostile figure within 3 spaces, gain ${entry.whenDefeatHostileWithin3GainBlockTokens} Block tokens.` };
+  }
+
+  // ccEffect: overrunThisActivation (Overrun) — keyed by activation msgId
+  if (entry.type === 'ccEffect' && entry.overrunThisActivation) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually: play at start of activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.overrunThisActivation = game.overrunThisActivation || {};
+    game.overrunThisActivation[msgId] = true;
+    return { applied: true, logMessage: 'This activation, when you enter a hostile figure\'s space, that figure suffers 2 Damage (limit once per hostile).' };
+  }
+
+  // ccEffect: squadSwarmPlayerNum (Squad Swarm)
+  if (entry.type === 'ccEffect' && entry.squadSwarmPlayerNum) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.squadSwarmPlayerNum = playerNum;
+    return { applied: true, logMessage: 'You may immediately activate another ready group with the same name (combined cost of both groups cannot exceed 15).' };
+  }
+
+  // ccEffect: roundSmugglersTricksPlayerNum (Smuggler's Tricks)
+  if (entry.type === 'ccEffect' && entry.roundSmugglersTricksPlayerNum) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundSmugglersTricksPlayerNum = playerNum;
+    return { applied: true, logMessage: 'Choose a tile or token you are on or adjacent to; until start of next round, opponent counts 1 fewer figure on or adjacent to it.' };
   }
 
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };

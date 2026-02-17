@@ -1529,7 +1529,8 @@
       "playableBy": "VEHICLE",
       "timing": "startOfActivation",
       "effect": "Use at the start of your activation. During this activation, when you enter a hostile figure's space, that figure suffers 2 Damage. Limit once per hostile figure.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Overrun"
     },
     "Overwhelming Impact": {
       "cost": 3,
@@ -1551,7 +1552,8 @@
       "playableBy": "HUNTER",
       "timing": "whenHostileFigureWithin3SpacesDefeated",
       "effect": "Use when a hostile figure within 3 spaces is defeated to gain 2 Block tokens.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Paid in Beskar"
     },
     "Parry": {
       "cost": 0,
@@ -1695,7 +1697,8 @@
       "playableBy": "DROID",
       "timing": "whileAttackingBeforeDefenderRerolls",
       "effect": "Use while attacking, before the defender performs rerolls. Choose 1 attack die and turn that die to any side.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Rapid Recalibration"
     },
     "Reactive Loyalties": {
       "cost": 1,
@@ -1710,7 +1713,8 @@
       "playableBy": "REBEL",
       "timing": "endOfActivation",
       "effect": "Use at the end of your activation, if there are no adjacent hostile figures, to gain 2 VPs. Then, if you are \"Sabine Wren\", you may re-draw this card.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Rebel Graffiti"
     },
     "Recovery": {
       "cost": 0,
@@ -1932,14 +1936,16 @@
       "playableBy": "SMUGGLER",
       "timing": "duringActivation",
       "effect": "Special Action: Choose a tile or token you are on or adjacent to. Until the start of the next round, your opponent counts as having 1 fewer figure on or adjacent to that tile or token.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Smuggler's Tricks"
     },
     "Sniper Configuration": {
       "cost": 1,
       "playableBy": "Cassian Andor",
       "timing": "specialAction",
       "effect": "Special Action: Perform an attack. You may draw line of sight from any friendly figure, but still measure range from this figure. Apply +2 Accuracy and Pierce 2 to the attack results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Sniper Configuration"
     },
     "Son of Skywalker": {
       "cost": 3,
@@ -1968,7 +1974,8 @@
       "playableBy": "Any Figure",
       "timing": "afterYouResolveGroupsActivation",
       "effect": "Use after activating a group. You may immediately activate another ready group with the same name. The combined cost of both groups cannot exceed 15.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Squad Swarm"
     },
     "Stall for Time": {
       "cost": 0,
@@ -2019,7 +2026,8 @@
       "playableBy": "SPY",
       "timing": "specialAction",
       "effect": "Special Action: A player of your choice shuffles his hand of Command cards into his deck. Then, that player draws 2 cards.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Strategic Shift"
     },
     "Strength in Numbers": {
       "cost": 1,
@@ -2081,7 +2089,8 @@
       "playableBy": "DROID or HEAVY WEAPON",
       "timing": "duringAttack",
       "effect": "Use while attacking to reroll 1 attack die. \n\nPassive (Discard pile): While this card is in your discard pile, your DROIDS gain: \n- Surge: Re-draw this card.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Targeting Network"
     },
     "Technician": {
       "cost": null,
@@ -2198,7 +2207,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. During this round, each friendly Jawa Scavenger gains +1 Speed, +1 Accuracy, and \n- Surge: If you are attacking a figure, gain 1 VP.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Utinni!"
     },
     "Vanish": {
       "cost": 2,

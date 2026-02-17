@@ -134,6 +134,11 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.strengthInNumbersPlayerNum = null;
   game.provokeNextActivation = null;
   game.roundAttackSurgeBonus = {};
+  game.roundUtinniJawaBuffs = null;
+  game.roundSmugglersTricksPlayerNum = null;
+  game.squadSwarmPlayerNum = null;
+  game.whenDefeatHostileWithin3GainBlockTokens = null;
+  game.overrunThisActivation = {};
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client });
   }
