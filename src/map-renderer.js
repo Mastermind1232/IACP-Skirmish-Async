@@ -394,19 +394,30 @@ export async function renderMap(mapId, options = {}) {
   const drawDoorSpan = async (items) => {
     if (!items?.length) return;
     const { horizontalBoundary } = items[0];
-    const cols = [...new Set(items.map((x) => x.col))].sort((a, b) => a - b);
-    const minCol = cols[0];
-    const maxCol = cols[cols.length - 1];
-    const boundaryRow = Math.min(parseCoord(items[0].edge[0]).row, parseCoord(items[0].edge[1]).row);
+    // Derive column/row range from actual edge coords (grouping used row as "col" for vertical doors)
+    const allCols = new Set();
+    const allRows = new Set();
+    for (const item of items) {
+      const p0 = parseCoord(item.edge[0]);
+      const p1 = parseCoord(item.edge[1]);
+      allCols.add(p0.col).add(p1.col);
+      allRows.add(p0.row).add(p1.row);
+    }
+    const minCol = Math.min(...allCols);
+    const maxCol = Math.max(...allCols);
+    const minRow = Math.min(...allRows);
+    const maxRow = Math.max(...allRows);
+    const boundaryRow = minRow;
+    const boundaryCol = minCol;
     const leftX = sx0 + minCol * sdx;
     const rightX = sx0 + (maxCol + 1) * sdx;
-    const topY = sy0 + boundaryRow * sdy;
-    const bottomY = sy0 + (boundaryRow + 1) * sdy;
-    // Place door on the grid line (boundary), not at cell center — fixes 0.5-cell offset
-    const midX = horizontalBoundary ? (leftX + rightX) / 2 : rightX;
+    const topY = sy0 + minRow * sdy;
+    const bottomY = sy0 + (maxRow + 1) * sdy;
+    // Place door on the grid line (boundary): horizontal = bottom of row; vertical = between the two columns
+    const midX = horizontalBoundary ? (leftX + rightX) / 2 : leftX + sdx;
     const midY = horizontalBoundary ? bottomY : (topY + bottomY) / 2;
     const spanWidth = (maxCol - minCol + 1) * sdx;
-    const spanHeight = sdy;
+    const spanHeight = (maxRow - minRow + 1) * sdy;
     const doorW = horizontalBoundary ? spanWidth : spanHeight;
     const doorH = horizontalBoundary ? spanHeight : spanWidth;
     const dw = Math.round(doorW);
