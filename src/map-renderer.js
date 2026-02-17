@@ -428,10 +428,16 @@ export async function renderMap(mapId, options = {}) {
         const tokenImg = await loadImage(imgPath);
         const tw = tokenImg.width;
         const th = tokenImg.height;
-        const tScale = Math.min(dw / tw, backfillH / th);
+        // Scale to cover so door graphic fills the white block (image may have internal padding)
+        const tScale = Math.max(dw / tw, backfillH / th);
         const iw = Math.round(tw * tScale);
         const ih = Math.round(th * tScale);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(-hw, -hhBf, dw, backfillH);
+        ctx.clip();
         ctx.drawImage(tokenImg, -iw / 2, -ih / 2, iw, ih);
+        ctx.restore();
       } catch (err) {
         console.error('Door image load failed:', imageFilename, err);
         ctx.fillStyle = 'rgba(101,67,33,0.95)';
