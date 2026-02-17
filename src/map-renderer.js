@@ -300,11 +300,14 @@ export async function renderMap(mapId, options = {}) {
   const tc = getTokenImagesConfig();
   const imagesDir = join(rootDir, 'vassal_extracted', 'images');
 
-  const drawTokenAt = async (coord, imageFilename, fallbackStyle, fallbackShape = 'square', label = null) => {
+  const CRATE_LABEL_SIZE_SCALE = 0.95; // crates + label ~5% smaller
+
+  const drawTokenAt = async (coord, imageFilename, fallbackStyle, fallbackShape = 'square', label = null, sizeScale = 1) => {
     const { col, row } = parseCoord(coord);
     if (col < 0 || row < 0 || col >= numCols || row >= numRows) return;
     const cx = sx0 + col * sdx + sdx / 2;
     const cy = sy0 + row * sdy + sdy / 2;
+    const size = tokenSize * sizeScale;
     const resolved = imageFilename ? resolveImagePath(join('vassal_extracted', 'images', imageFilename), 'tokens') : null;
     const imgPath = resolved ? join(rootDir, resolved) : null;
     if (imgPath && existsSync(imgPath)) {
@@ -312,7 +315,7 @@ export async function renderMap(mapId, options = {}) {
         const tokenImg = await loadImage(imgPath);
         const tw = tokenImg.width;
         const th = tokenImg.height;
-        const tScale = Math.min(tokenSize / tw, tokenSize / th);
+        const tScale = Math.min(size / tw, size / th);
         const dw = Math.round(tw * tScale);
         const dh = Math.round(th * tScale);
         ctx.drawImage(tokenImg, cx - dw / 2, cy - dh / 2, dw, dh);
@@ -323,12 +326,12 @@ export async function renderMap(mapId, options = {}) {
         ctx.lineWidth = 1;
         if (fallbackShape === 'circle') {
           ctx.beginPath();
-          ctx.arc(cx, cy, tokenSize / 2, 0, Math.PI * 2);
+          ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
         } else {
-          ctx.fillRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
-          ctx.strokeRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
+          ctx.fillRect(cx - size / 2, cy - size / 2, size, size);
+          ctx.strokeRect(cx - size / 2, cy - size / 2, size, size);
         }
       }
     } else {
@@ -337,25 +340,25 @@ export async function renderMap(mapId, options = {}) {
       ctx.lineWidth = 1;
       if (fallbackShape === 'circle') {
         ctx.beginPath();
-        ctx.arc(cx, cy, tokenSize / 2, 0, Math.PI * 2);
+        ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
       } else {
-        ctx.fillRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
-        ctx.strokeRect(cx - tokenSize / 2, cy - tokenSize / 2, tokenSize, tokenSize);
+        ctx.fillRect(cx - size / 2, cy - size / 2, size, size);
+        ctx.strokeRect(cx - size / 2, cy - size / 2, size, size);
       }
     }
     if (label) {
-      const fontSize = Math.max(9, Math.round(11 * scale));
+      const fontSize = Math.max(9, Math.round(11 * scale * sizeScale));
       ctx.font = `bold ${fontSize}px "${FONT_FAMILY}"`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const paddingH = Math.max(4, Math.round(6 * scale));
-      const paddingV = Math.max(2, Math.round(3 * scale));
+      const paddingH = Math.max(4, Math.round(6 * scale * sizeScale));
+      const paddingV = Math.max(2, Math.round(3 * scale * sizeScale));
       const metrics = ctx.measureText(label);
       const boxW = metrics.width + paddingH * 2;
       const boxH = fontSize + paddingV * 2;
-      const labelY = cy + tokenSize / 2 - boxH / 2;
+      const labelY = cy + size / 2 - boxH / 2;
       const boxX = cx - boxW / 2;
       const boxY = labelY - boxH / 2;
       ctx.fillStyle = '#000000';
@@ -369,10 +372,10 @@ export async function renderMap(mapId, options = {}) {
     await drawTokenAt(coord, tc.terminals, 'rgba(79,195,247,0.8)', 'square');
   }
   for (const coord of tokens.missionA || []) {
-    await drawTokenAt(coord, tc.missionA, 'rgba(120,120,120,0.9)', 'circle', 'Panel');
+    await drawTokenAt(coord, tc.missionA, 'rgba(120,120,120,0.9)', 'circle', 'Panel', CRATE_LABEL_SIZE_SCALE);
   }
   for (const coord of tokens.missionB || []) {
-    await drawTokenAt(coord, tc.missionB, 'rgba(255,183,77,0.8)', 'square', 'Contraband');
+    await drawTokenAt(coord, tc.missionB, 'rgba(255,183,77,0.8)', 'square', 'Contraband', CRATE_LABEL_SIZE_SCALE);
   }
 
   const doorEdges = tokens.doors || [];
