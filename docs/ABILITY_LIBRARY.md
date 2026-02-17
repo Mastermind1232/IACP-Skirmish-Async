@@ -11,6 +11,18 @@ The bot resolves abilities from a central **ability library** (`data/ability-lib
 
 If the entry is missing or has no such property, the bot returns "Resolve manually". To count unwired CCs, derive the list from the library + code logic (or use a script that mirrors `resolveAbility`’s branching), not from `effectType` in cc-effects.json.
 
+### wiredStatus tag (discovery and filtering)
+
+Each CC effect entry in `ability-library.json` can include **`wiredStatus`** with one of:
+
+| Value      | Meaning |
+|-----------|--------|
+| **wired** | The bot fully resolves the effect; no manual steps required. |
+| **partial** | The bot applies some effects (e.g. draw, MP, log message) but the player must resolve other parts manually (e.g. "choose target", "honor system"). |
+| **unwired** | No automation; player resolves entirely manually (e.g. informational/logMessage only, or no library implementation). |
+
+This field is for **discovery and filtering only** (e.g. "which CCs are unwired?"). The game does not read it at runtime. Keep it in sync when wiring new effects or when changing automation in `resolveAbility()`. You can (re)compute it with `node scripts/set-cc-wired-status.js`.
+
 ## Data: ability-library.json
 
 - **Format:** `{ "source": "...", "abilities": { "id": { "type", ... } } }`.
