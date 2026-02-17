@@ -1032,6 +1032,55 @@ const DEFAULT_DECK_IMPERIAL = {
   ccCount: 15,
 };
 
+/** Per-scenario viability requirements. Run before every testready launch to ensure the test can be performed. */
+const TESTREADY_SCENARIO_REQUIREMENTS = {
+  smoke_grenade: {
+    p1DcTraits: ['trooper', 'technician'],
+    p1CcSwap: [{ card: 'Smoke Grenade', swapFor: 'Force Push' }],
+  },
+};
+
+/** DCs that satisfy a trait, by affiliation (for retooling when default deck lacks required trait). */
+const TESTREADY_DC_BY_TRAIT = {
+  rebel: { trooper: ['Rebel Trooper (Elite)', 'Rebel Trooper (Regular)'], technician: [] },
+  scum: { trooper: ['Hired Gun (Elite)'], technician: ['Ugnaught Tinkerer (Elite)'] },
+};
+
+/** Check and retool decks so the scenario is viable (e.g. unit can play the CC, adjacency, combat). Runs before every testready launch. */
+function retoolDecksForScenario(p1Deck, p2Deck, scenarioId) {
+  const req = TESTREADY_SCENARIO_REQUIREMENTS[scenarioId];
+  if (!req) return { p1Deck, p2Deck };
+
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const hasTrait = (dc, traits) => traits.some((t) => new RegExp(t, 'i').test(dc));
+
+  if (req.p1DcTraits && req.p1DcTraits.length > 0) {
+    const p1DcList = p1Deck.dcList || [];
+    if (!p1DcList.some((dc) => hasTrait(dc, req.p1DcTraits))) {
+      const p1Eligibles = req.p1DcTraits.flatMap((t) => TESTREADY_DC_BY_TRAIT.rebel?.[t] || []).filter(Boolean);
+      if (p1Eligibles.length > 0) p1Deck.dcList[0] = pick(p1Eligibles);
+    }
+  }
+  if (req.p2DcTraits && req.p2DcTraits.length > 0) {
+    const dcList = p2Deck.dcList || [];
+    if (!dcList.some((dc) => hasTrait(dc, req.p2DcTraits))) {
+      const p2Eligibles = req.p2DcTraits.flatMap((t) => TESTREADY_DC_BY_TRAIT.scum?.[t] || []).filter(Boolean);
+      if (p2Eligibles.length > 0) p2Deck.dcList[0] = pick(p2Eligibles);
+    }
+  }
+  for (const { card, swapFor } of req.p1CcSwap || []) {
+    const idx = (p1Deck.ccList || []).findIndex((c) => c === swapFor);
+    if (idx >= 0) p1Deck.ccList[idx] = card;
+    else if ((p1Deck.ccList || []).length > 0) p1Deck.ccList[0] = card;
+  }
+  for (const { card, swapFor } of req.p2CcSwap || []) {
+    const idx = (p2Deck.ccList || []).findIndex((c) => c === swapFor);
+    if (idx >= 0) p2Deck.ccList[idx] = card;
+    else if ((p2Deck.ccList || []).length > 0) p2Deck.ccList[0] = card;
+  }
+  return { p1Deck, p2Deck };
+}
+
 const CHANNELS = {
   announcements: { name: 'announcements', parent: 'general', type: ChannelType.GuildText },
   rulesAndFaq: { name: 'rules-and-faq', parent: 'general', type: ChannelType.GuildText },
@@ -2104,18 +2153,11 @@ async function runDraftRandom(game, client, options = {}) {
     game.p2HandId = p2HandChannel.id;
   }
 
-  // One side Rebels, one side Scum. Testready: load sample deck and retool for scenario (e.g. smoke_grenade needs Trooper/Technician + Smoke Grenade CC)
+  // One side Rebels, one side Scum. Testready: load sample deck, then run viability check and retool before every launch
   let p1Deck = { ...DEFAULT_DECK_REBELS, dcList: [...(DEFAULT_DECK_REBELS.dcList || [])], ccList: [...(DEFAULT_DECK_REBELS.ccList || [])] };
   let p2Deck = { ...DEFAULT_DECK_SCUM, dcList: [...(DEFAULT_DECK_SCUM.dcList || [])], ccList: [...(DEFAULT_DECK_SCUM.ccList || [])] };
-  if (scenarioId === 'smoke_grenade') {
-    const trooperOrTech = (dc) => /trooper|technician/i.test(dc);
-    if (!(p1Deck.dcList || []).some(trooperOrTech)) {
-      const trooper = Math.random() < 0.5 ? 'Rebel Trooper (Elite)' : 'Rebel Trooper (Regular)';
-      p1Deck.dcList[0] = trooper;
-    }
-    const idx = p1Deck.ccList.findIndex((c) => c === 'Force Push');
-    if (idx >= 0) p1Deck.ccList[idx] = 'Smoke Grenade';
-    else p1Deck.ccList[0] = 'Smoke Grenade';
+  if (scenarioId) {
+    ({ p1Deck, p2Deck } = retoolDecksForScenario(p1Deck, p2Deck, scenarioId));
   }
   await applySquadSubmission(game, true, p1Deck, client);
   await applySquadSubmission(game, false, p2Deck, client);
