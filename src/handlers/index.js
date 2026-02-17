@@ -51,6 +51,7 @@ import {
   handleCcCloseDiscard,
   handleCcDiscard,
   handleCcChoice,
+  handleCcSpacePick,
   handleSquadSelect,
   handleIllegalCcIgnore,
   handleIllegalCcUnplay,
