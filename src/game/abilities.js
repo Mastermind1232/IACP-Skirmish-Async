@@ -95,6 +95,14 @@ export function resolveAbility(abilityId, context) {
     entry = { type: 'ccEffect', ...chosen };
   }
 
+  // ccEffect: logOnly — display message only (script-friendly wired tag)
+  if (entry.type === 'ccEffect' && entry.logOnly) {
+    return {
+      applied: true,
+      logMessage: entry.logMessage || entry.label || 'Resolve manually (see rules).',
+    };
+  }
+
   // ccEffect: informational / log-only (e.g. Collect Intel — look at opponent hand)
   if (entry.type === 'ccEffect' && entry.informational && (entry.logMessage != null || entry.label)) {
     return {
@@ -941,6 +949,20 @@ export function resolveAbility(abilityId, context) {
     game.nextAttackBonusSurgeAbilities[pnum] = entry.nextAttackBonusSurgeAbilities;
     const labels = entry.nextAttackBonusSurgeAbilities.join(', ');
     return { applied: true, logMessage: `Your next attack gains surge abilities: ${labels}.` };
+  }
+
+  // ccEffect: nextAttackBonusPierce (Expose Weakness) — next attack gains +N Pierce; consumed when combat declared
+  if (entry.type === 'ccEffect' && typeof entry.nextAttackBonusPierce === 'number' && entry.nextAttackBonusPierce > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.nextAttackBonusPierce = game.nextAttackBonusPierce || {};
+    game.nextAttackBonusPierce[playerNum] = entry.nextAttackBonusPierce;
+    return {
+      applied: true,
+      logMessage: `Your next attack gains +${entry.nextAttackBonusPierce} Pierce (honor: use vs the chosen adjacent hostile).`,
+    };
   }
 
   // ccEffect: nextAttacksBonusHits (Beatdown) — +N Hit to next M attacks by this player

@@ -107,6 +107,7 @@ export async function handleAttackTarget(interaction, ctx) {
     components: [readyRow],
   });
   const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
+  const nextPierce = game.nextAttackBonusPierce?.[attackerPlayerNum] || 0;
   game.pendingCombat = {
     gameId: game.gameId,
     attackerPlayerNum,
@@ -114,6 +115,7 @@ export async function handleAttackTarget(interaction, ctx) {
     attackerMsgId: msgId,
     attackerDcName: meta.dcName,
     bonusSurgeAbilities: [...nextSurge],
+    bonusPierce: nextPierce,
     attackerDisplayName,
     attackerFigureIndex: figureIndex,
     target: { ...target },
@@ -134,6 +136,7 @@ export async function handleAttackTarget(interaction, ctx) {
     attackTargetMsgId: interaction.message.id,
   };
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
+  if (nextPierce) delete game.nextAttackBonusPierce?.[attackerPlayerNum];
 
   await interaction.message.edit({
     content: `**Combat declared** — See thread in Game Log.`,
