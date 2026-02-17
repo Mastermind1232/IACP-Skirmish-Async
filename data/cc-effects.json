@@ -1513,7 +1513,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. During this round, each of your DROIDS may suffer 2 Damage during its activation to perform 1 additional action. Limit once per DROID.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Overdrive"
     },
     "Overheated": {
       "cost": 1,
@@ -1579,7 +1580,8 @@
       "playableBy": "TECHNICIAN",
       "timing": "duringActivation",
       "effect": "Use during your activation to gain 1 Evade Token. While defending during this round, apply +1 Block to your defense results for each Evade result.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Personal Energy Shield"
     },
     "Pickpocket": {
       "cost": 1,
@@ -1674,7 +1676,8 @@
       "playableBy": "Kayn Somos",
       "timing": "specialAction",
       "effect": "Special Action: Choose another friendly TROOPER within 3 spaces. Ready that figure's Deployment card.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Rally the Troops"
     },
     "Rank and File": {
       "cost": 1,
@@ -1749,7 +1752,8 @@
       "playableBy": "LEADER",
       "timing": "specialAction",
       "effect": "Special Action: Choose a SMALL friendly figure within 3 spaces. Push that figure up to 3 spaces.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Reposition"
     },
     "Rest in Peace": {
       "cost": 0,
@@ -1787,14 +1791,16 @@
       "playableBy": "WOOKIEE or CREATURE",
       "timing": "specialAction",
       "effect": "Special Action: If you have suffered 3 or more damage, choose up to 3 adjacent hostile figures. Those figures become Stunned.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Roar"
     },
     "Run for Cover": {
       "cost": 2,
       "playableBy": "SMUGGLER",
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when an attack targeting you is declared. Choose 1 die and remove it from the attack pool.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Run for Cover"
     },
     "Sarlacc Sweep": {
       "cost": 2,
@@ -1808,7 +1814,8 @@
       "playableBy": "CREATURE",
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when an attack targeting you is declared. The attacker chooses 2 attack dice and removes the rest from the attack pool.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Savage Vigor"
     },
     "Second Chance": {
       "cost": 2,
@@ -1845,7 +1852,8 @@
       "playableBy": "Any Figure",
       "timing": "specialAction",
       "effect": "Special Action: Perform an attack. If the target would suffer 1 or more Damage, reduce the Damage suffered to 0. Then, the target becomes Stunned.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Set for Stun"
     },
     "Set the Charges": {
       "cost": 2,
@@ -1881,14 +1889,16 @@
       "playableBy": "Any Figure",
       "timing": "startOfActivation",
       "effect": "Use at the start of your activation. You may use the same special action up to twice during this activation.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Single Purpose"
     },
     "Sit Tight": {
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. You do not activate any groups this round until you have more ready Deployment cards than your opponent.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Sit Tight"
     },
     "Slippery Target": {
       "cost": 2,

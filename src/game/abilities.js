@@ -1112,7 +1112,7 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: roundDefenseBonusBlock / roundDefenseBonusEvade (Take Position, Survival Instincts, Cavalry Charge) — until end of round
-  if (entry.type === 'ccEffect' && ((typeof entry.roundDefenseBonusBlock === 'number' && entry.roundDefenseBonusBlock > 0) || (typeof entry.roundDefenseBonusEvade === 'number' && entry.roundDefenseBonusEvade > 0))) {
+  if (entry.type === 'ccEffect' && ((typeof entry.roundDefenseBonusBlock === 'number' && entry.roundDefenseBonusBlock > 0) || (typeof entry.roundDefenseBonusEvade === 'number' && entry.roundDefenseBonusEvade > 0)) && !entry.roundDefenderBonusBlockPerEvade) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.roundDefenseBonusBlock = game.roundDefenseBonusBlock || {};
@@ -1127,6 +1127,29 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: `Until end of round, apply ${parts.join(' and ')} when defending.`,
+    };
+  }
+
+  // ccEffect: roundDefenderBonusBlockPerEvade + optional evadeTokenGain (Personal Energy Shield)
+  if (entry.type === 'ccEffect' && typeof entry.roundDefenderBonusBlockPerEvade === 'number' && entry.roundDefenderBonusBlockPerEvade > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundDefenderBonusBlockPerEvade = game.roundDefenderBonusBlockPerEvade || {};
+    game.roundDefenderBonusBlockPerEvade[playerNum] = (game.roundDefenderBonusBlockPerEvade[playerNum] || 0) + entry.roundDefenderBonusBlockPerEvade;
+    if (entry.evadeTokenGain && dcMessageMeta) {
+      const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      if (msgId) {
+        const meta = dcMessageMeta.get(msgId);
+        const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+        game.figureEvadeTokens = game.figureEvadeTokens || {};
+        for (const fk of figureKeys) {
+          game.figureEvadeTokens[fk] = (game.figureEvadeTokens[fk] || 0) + entry.evadeTokenGain;
+        }
+      }
+    }
+    return {
+      applied: true,
+      logMessage: `Gained ${entry.evadeTokenGain || 0} Evade Token(s). Until end of round, when defending apply +${entry.roundDefenderBonusBlockPerEvade} Block per Evade result.`,
     };
   }
 
@@ -1612,6 +1635,120 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: `Next time one of your non-unique figures is defeated, that figure is worth ${entry.nextDefeatedFriendlyVpReduction} fewer VP.`,
+    };
+  }
+
+  // ccEffect: attackPoolRemoveMax (Run for Cover) — when defending, remove up to N dice from attack pool
+  if (entry.type === 'ccEffect' && typeof entry.attackPoolRemoveMax === 'number' && entry.attackPoolRemoveMax > 0) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play when an attack targeting you is declared.' };
+    cbt.attackPoolRemoveMax = (cbt.attackPoolRemoveMax || 0) + entry.attackPoolRemoveMax;
+    return { applied: true, logMessage: 'Choose 1 attack die and remove it from the attack pool.' };
+  }
+
+  // ccEffect: attackPoolKeepMax (Savage Vigor) — attacker keeps only N dice
+  if (entry.type === 'ccEffect' && typeof entry.attackPoolKeepMax === 'number' && entry.attackPoolKeepMax > 0) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play when an attack targeting you is declared.' };
+    cbt.attackPoolKeepMax = Math.min(cbt.attackPoolKeepMax ?? 99, entry.attackPoolKeepMax);
+    return { applied: true, logMessage: `Attacker chooses ${entry.attackPoolKeepMax} attack dice and removes the rest.` };
+  }
+
+  // ccEffect: attackResultReplaceWithStun (Set for Stun)
+  if (entry.type === 'ccEffect' && entry.attackResultReplaceWithStun) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play when declaring a Special Action attack.' };
+    cbt.attackResultReplaceWithStun = true;
+    return { applied: true, logMessage: 'If this attack would deal 1+ Damage, reduce to 0 and target becomes Stunned.' };
+  }
+
+  // ccEffect: roundDroidExtraActionCostDamage (Overdrive)
+  if (entry.type === 'ccEffect' && typeof entry.roundDroidExtraActionCostDamage === 'number') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundDroidExtraActionCostDamage = { playerNum, damage: entry.roundDroidExtraActionCostDamage };
+    return {
+      applied: true,
+      logMessage: `Until end of round, each of your DROIDs may suffer ${entry.roundDroidExtraActionCostDamage} Damage during its activation to perform 1 additional action (once per DROID).`,
+    };
+  }
+
+  // ccEffect: sitTightPlayerNum (Sit Tight)
+  if (entry.type === 'ccEffect' && entry.sitTightPlayerNum) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.sitTightPlayerNum = playerNum;
+    return {
+      applied: true,
+      logMessage: "You do not activate any groups this round until you have more ready Deployment cards than your opponent.",
+    };
+  }
+
+  // ccEffect: activationDoubleSpecialAction (Single Purpose)
+  if (entry.type === 'ccEffect' && entry.activationDoubleSpecialAction) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play at start of your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.activationDoubleSpecialAction = game.activationDoubleSpecialAction || {};
+    game.activationDoubleSpecialAction[msgId] = true;
+    return {
+      applied: true,
+      logMessage: 'You may use the same special action up to twice during this activation.',
+    };
+  }
+
+  // ccEffect: applyStunToUpToNAdjacentHostiles (Roar) — only if suffered damage >= N
+  if (entry.type === 'ccEffect' && typeof entry.applyStunToUpToNAdjacentHostiles === 'number' && entry.applyStunToUpToNAdjacentHostiles > 0) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, stunnedFigureKeys } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    if (typeof entry.onlyIfSufferedDamageGte === 'number') {
+      const healthState = dcHealthState?.get(msgId) || [];
+      const totalDamage = healthState.reduce((s, e) => s + (e?.damage ?? 0), 0);
+      if (totalDamage < entry.onlyIfSufferedDamageGte) {
+        return { applied: false, manualMessage: `Roar: you must have suffered ${entry.onlyIfSufferedDamageGte}+ Damage (you have suffered ${totalDamage}).` };
+      }
+    }
+    if (!Array.isArray(stunnedFigureKeys) || stunnedFigureKeys.length === 0) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceTarget: 'applyStunToAdjacentHostiles',
+        choiceCount: Math.min(entry.applyStunToUpToNAdjacentHostiles, 3),
+        manualMessage: `Choose up to ${entry.applyStunToUpToNAdjacentHostiles} adjacent hostile figures to become Stunned.`,
+      };
+    }
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of stunnedFigureKeys.slice(0, entry.applyStunToUpToNAdjacentHostiles)) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Stun')) game.figureConditions[fk] = [...existing, 'Stun'];
+    }
+    return {
+      applied: true,
+      logMessage: `${stunnedFigureKeys.length} adjacent hostile figure(s) became Stunned.`,
+    };
+  }
+
+  // ccEffect: pushFriendlyWithin3Spaces (Reposition)
+  if (entry.type === 'ccEffect' && typeof entry.pushFriendlyWithin3Spaces === 'number' && entry.pushFriendlyWithin3Spaces > 0) {
+    const { game, playerNum, repositionFriendlyDcName } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (!repositionFriendlyDcName) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceTarget: 'pushFriendlyWithin3Spaces',
+        manualMessage: `Choose a SMALL friendly figure within 3 spaces to push up to ${entry.pushFriendlyWithin3Spaces} spaces.`,
+      };
+    }
+    return {
+      applied: true,
+      logMessage: `Push **${repositionFriendlyDcName}** up to ${entry.pushFriendlyWithin3Spaces} spaces (resolve movement).`,
     };
   }
 

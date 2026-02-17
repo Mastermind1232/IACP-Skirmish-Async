@@ -249,8 +249,12 @@ export async function handleCombatRoll(interaction, ctx) {
     const bonusDice = combat.attackBonusDice || 0;
     const bonusColors = combat.attackBonusDiceColors || [];
     const primaryColor = baseDice[0] || 'red';
-    const dice = [...baseDice];
+    let dice = [...baseDice];
     for (let i = 0; i < bonusDice; i++) dice.push(bonusColors[i] ?? primaryColor);
+    const removeMax = combat.attackPoolRemoveMax || 0;
+    if (removeMax > 0) dice = dice.slice(0, Math.max(0, dice.length - removeMax));
+    const keepMax = combat.attackPoolKeepMax;
+    if (typeof keepMax === 'number' && keepMax > 0 && dice.length > keepMax) dice = dice.slice(0, keepMax);
     combat.attackRoll = rollAttackDice(dice);
     await interaction.deferUpdate();
     await thread.send(`**Attack roll** — ${combat.attackRoll.acc} accuracy, ${combat.attackRoll.dmg} damage, ${combat.attackRoll.surge} surge`);

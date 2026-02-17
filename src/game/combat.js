@@ -90,6 +90,13 @@ export function computeCombatResult(combat) {
   let damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits + perDefDieDamage - effectiveBlock) : 0;
   if (combat.maxDamageToDefender != null && damage > combat.maxDamageToDefender) damage = combat.maxDamageToDefender;
   const allConds = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
+  if (combat.attackResultReplaceWithStun && damage > 0) {
+    damage = 0;
+    if (!(combat.bonusConditions || []).includes('Stun')) {
+      combat.bonusConditions = combat.bonusConditions || [];
+      combat.bonusConditions.push('Stun');
+    }
+  }
   const conditionsText = allConds.length ? ` (${allConds.join(', ')})` : '';
   const bonusBlast = combat.bonusBlast || 0;
   const totalBlastDisplay = (combat.surgeBlast || 0) + bonusBlast;
@@ -111,6 +118,7 @@ export function computeCombatResult(combat) {
   }
   if (!hit) resultText += ' → **Miss**';
   else resultText += ` → **${damage} damage**${conditionsText}`;
+  if (combat.attackResultReplaceWithStun) resultText += ' (Set for Stun: 0 damage, Stunned)';
 
   return { hit, damage, effectiveBlock, resultText };
 }
