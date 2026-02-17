@@ -2,6 +2,7 @@
  * Combat handlers: attack_target_, combat_ready_, combat_roll_, combat_surge_, combat_resolve_ready_ (F10), cleave_target_ (F6)
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { canActAsPlayer } from '../utils/can-act-as-player.js';
 
 /** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after. */
 async function sendReadyToResolveRolls(thread, gameId) {
@@ -60,8 +61,7 @@ export async function handleAttackTarget(interaction, ctx) {
     return;
   }
   const attackerPlayerNum = meta.playerNum;
-  const ownerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
-  if (interaction.user.id !== ownerId) {
+  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
     await interaction.reply({ content: 'Only the owner can attack.', ephemeral: true }).catch(() => {});
     return;
   }
@@ -171,7 +171,11 @@ export async function handleCombatReady(interaction, ctx) {
     await interaction.reply({ content: 'Only players in this game can indicate ready.', ephemeral: true }).catch(() => {});
     return;
   }
-  const playerNum = clickerIsP1 ? 1 : 2;
+  // In test games, human (P1) can click for both sides; first click = P1, second = P2
+  let playerNum = clickerIsP1 ? 1 : 2;
+  if (game.isTestGame && clickerIsP1) {
+    playerNum = combat.p1Ready ? 2 : 1;
+  }
   if (playerNum === 1) combat.p1Ready = true;
   else combat.p2Ready = true;
   await interaction.deferUpdate();
@@ -231,9 +235,7 @@ export async function handleCombatRoll(interaction, ctx) {
     await interaction.reply({ content: 'No pending combat.', ephemeral: true }).catch(() => {});
     return;
   }
-  const clickerIsP1 = interaction.user.id === game.player1Id;
-  const clickerIsP2 = interaction.user.id === game.player2Id;
-  if (!clickerIsP1 && !clickerIsP2) {
+  if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
     await interaction.reply({ content: 'Only players in this game can roll.', ephemeral: true }).catch(() => {});
     return;
   }
@@ -242,12 +244,8 @@ export async function handleCombatRoll(interaction, ctx) {
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
 
   if (!combat.attackRoll) {
-    if (!clickerIsP1 && attackerPlayerNum === 1) {
-      await interaction.reply({ content: 'Only the attacker (P1) may roll attack dice.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (!clickerIsP2 && attackerPlayerNum === 2) {
-      await interaction.reply({ content: 'Only the attacker (P2) may roll attack dice.', ephemeral: true }).catch(() => {});
+    if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
+      await interaction.reply({ content: `Only the attacker (P${attackerPlayerNum}) may roll attack dice.`, ephemeral: true }).catch(() => {});
       return;
     }
     const baseDice = combat.attackInfo?.dice || [];
@@ -274,12 +272,8 @@ export async function handleCombatRoll(interaction, ctx) {
   }
 
   if (!combat.defenseRoll) {
-    if (!clickerIsP1 && defenderPlayerNum === 1) {
-      await interaction.reply({ content: 'Only the defender (P1) may roll defense dice.', ephemeral: true }).catch(() => {});
-      return;
-    }
-    if (!clickerIsP2 && defenderPlayerNum === 2) {
-      await interaction.reply({ content: 'Only the defender (P2) may roll defense dice.', ephemeral: true }).catch(() => {});
+    if (!canActAsPlayer(game, interaction.user.id, defenderPlayerNum)) {
+      await interaction.reply({ content: `Only the defender (P${defenderPlayerNum}) may roll defense dice.`, ephemeral: true }).catch(() => {});
       return;
     }
     const baseColor = combat.targetStats.defense || 'white';
@@ -375,9 +369,7 @@ export async function handleCombatResolveReady(interaction, ctx) {
     await interaction.reply({ content: 'No pending combat to resolve.', ephemeral: true }).catch(() => {});
     return;
   }
-  const isP1 = interaction.user.id === game.player1Id;
-  const isP2 = interaction.user.id === game.player2Id;
-  if (!isP1 && !isP2) {
+  if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
     await interaction.reply({ content: 'Only players in this game can confirm.', ephemeral: true }).catch(() => {});
     return;
   }
@@ -420,8 +412,7 @@ export async function handleCombatSurge(interaction, ctx) {
     return;
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
-  const ownerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
-  if (interaction.user.id !== ownerId) {
+  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
     await interaction.reply({ content: 'Only the attacker may spend surge.', ephemeral: true }).catch(() => {});
     return;
   }

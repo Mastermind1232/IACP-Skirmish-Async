@@ -3,6 +3,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration } from 'discord.js';
 import { truncateLabel } from '../discord/components.js';
+import { canActAsPlayer } from '../utils/can-act-as-player.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -38,11 +39,11 @@ export async function handleDcActivate(interaction, ctx) {
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
-  if (interaction.user.id !== ownerId) {
+  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
     await interaction.reply({ content: 'Only the owner of this Play Area can activate their DCs.', ephemeral: true }).catch(() => {});
     return;
   }
+  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
   const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
   const dc = dcList[dcIndex];
   if (!dc) {
@@ -152,11 +153,11 @@ export async function handleDcUnactivate(interaction, ctx) {
     await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
     return;
   }
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
-  if (interaction.user.id !== ownerId) {
+  if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
     await interaction.reply({ content: 'Only the owner can un-activate.', ephemeral: true }).catch(() => {});
     return;
   }
+  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
   const wasExhausted = dcExhaustedState.get(msgId) ?? false;
   if (!wasExhausted) {
     await interaction.reply({ content: 'DC is not activated.', ephemeral: true }).catch(() => {});
@@ -248,11 +249,11 @@ export async function handleDcToggle(interaction, ctx) {
     await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
     return;
   }
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
-  if (interaction.user.id !== ownerId) {
+  if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
     await interaction.reply({ content: 'Only the owner of this Play Area can toggle their DCs.', ephemeral: true }).catch(() => {});
     return;
   }
+  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
   const wasExhausted = dcExhaustedState.get(msgId) ?? false;
   const nowExhausted = !wasExhausted;
   const healthState = dcHealthState.get(msgId) ?? [[null, null]];
@@ -403,11 +404,11 @@ export async function handleDcDeplete(interaction, ctx) {
     await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
     return;
   }
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
-  if (interaction.user.id !== ownerId) {
+  if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
     await interaction.reply({ content: 'Only the owner of this Play Area can Deplete their upgrade.', ephemeral: true }).catch(() => {});
     return;
   }
+  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
   if (isDepletedRemovedFromGame(game, msgId)) {
     await interaction.reply({ content: 'This upgrade was already depleted and removed from the game.', ephemeral: true }).catch(() => {});
     return;
@@ -467,11 +468,11 @@ export async function handleDcCcSpecial(interaction, ctx) {
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
-  if (interaction.user.id !== ownerId) {
+  if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
     await interaction.reply({ content: 'Only the owner of this activation can play a CC here.', ephemeral: true }).catch(() => {});
     return;
   }
+  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
   const playable = getPlayableCcSpecialsForDc(game, meta.playerNum, meta.dcName, meta.displayName);
   const card = playable[idx];
   const handKey = meta.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
@@ -671,11 +672,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
-  if (interaction.user.id !== ownerId) {
+  if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
     await interaction.reply({ content: 'Only the owner of this Play Area can use these actions.', ephemeral: true }).catch(() => {});
     return;
   }
+  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
   const actionsData = game.dcActionsData?.[msgId];
   const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
   if (actionsRemaining <= 0) {

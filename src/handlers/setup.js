@@ -216,17 +216,17 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     }
     const p1Hand = await client.channels.fetch(game.p1HandId);
     const p2Hand = await client.channels.fetch(game.p2HandId);
-    const isTest = game.player1Id === game.player2Id;
+    const isTest = game.isTestGame;
     const p1Id = game.player1Id;
     const p2Id = game.player2Id;
     await p1Hand.send({
-      content: `<@${p1Id}>, this is your hand — pick your squad below!${isTest ? ' *(Test — use Select Squad or Default deck buttons for each side.)*' : ''}`,
+      content: `<@${p1Id}>, this is your hand — pick your squad below!${isTest ? ' *(Test — you play as P1 vs the bot as P2. Use Select Squad or Default deck for each side.)*' : ''}`,
       allowedMentions: { users: [p1Id] },
       embeds: [getHandTooltipEmbed(game, 1), getSquadSelectEmbed(1, null)],
       components: [getHandSquadButtons(game.gameId, 1)],
     });
     await p2Hand.send({
-      content: `<@${p2Id}>, this is your hand — pick your squad below!${isTest ? ' *(Test — use Select Squad or Default deck buttons for each side.)*' : ''}`,
+      content: `<@${p2Id}>, this is your hand — pick your squad below!${isTest ? ' *(Test — P2 (bot) hand. Use Select Squad or Default deck for the bot\'s side.)*' : ''}`,
       allowedMentions: { users: [p2Id] },
       embeds: [getHandTooltipEmbed(game, 2), getSquadSelectEmbed(2, null)],
       components: [getHandSquadButtons(game.gameId, 2)],

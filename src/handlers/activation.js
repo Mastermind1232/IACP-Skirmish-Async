@@ -2,6 +2,7 @@
  * Activation handlers: status_phase_, pass_activation_turn_, end_turn_, confirm_activate_, cancel_activate_
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { canActAsPlayer } from '../utils/can-act-as-player.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -27,7 +28,7 @@ export async function handleStatusPhase(interaction, ctx) {
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
+  if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
     await interaction.reply({ content: 'Only players in this game can end the activation phase.', ephemeral: true }).catch(() => {});
     return;
   }
@@ -48,8 +49,15 @@ export async function handleStatusPhase(interaction, ctx) {
   const clickerIsP1 = interaction.user.id === game.player1Id;
   game.p1ActivationPhaseEnded = game.p1ActivationPhaseEnded || false;
   game.p2ActivationPhaseEnded = game.p2ActivationPhaseEnded || false;
-  if (clickerIsP1) game.p1ActivationPhaseEnded = true;
-  else game.p2ActivationPhaseEnded = true;
+  // In test games, human (P1) clicks for both sides; first click = P1, second = P2
+  if (game.isTestGame && clickerIsP1) {
+    if (!game.p1ActivationPhaseEnded) game.p1ActivationPhaseEnded = true;
+    else game.p2ActivationPhaseEnded = true;
+  } else if (clickerIsP1) {
+    game.p1ActivationPhaseEnded = true;
+  } else {
+    game.p2ActivationPhaseEnded = true;
+  }
   const bothEnded = game.p1ActivationPhaseEnded && game.p2ActivationPhaseEnded;
   if (!bothEnded) {
     const waiting = !game.p1ActivationPhaseEnded ? 'P1' : 'P2';
@@ -112,7 +120,8 @@ export async function handlePassActivationTurn(interaction, ctx) {
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
-  if (interaction.user.id !== turnPlayerId) {
+  const turnPlayerNum = turnPlayerId === game.player1Id ? 1 : 2;
+  if (!canActAsPlayer(game, interaction.user.id, turnPlayerNum)) {
     await interaction.reply({ content: "It's not your turn to pass.", ephemeral: true }).catch(() => {});
     return;
   }

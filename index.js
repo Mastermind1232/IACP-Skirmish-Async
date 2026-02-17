@@ -1403,14 +1403,15 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
   }
   testGameCreationInProgress.add(userId);
   try {
+    const botId = client.user.id;
     const { gameId, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel } =
-      await createGameChannels(guild, userId, userId, { createPlayAreas: false, createHandChannels: false });
+      await createGameChannels(guild, userId, botId, { createPlayAreas: false, createHandChannels: false });
     const game = {
       gameId,
       version: CURRENT_GAME_VERSION,
       gameCategoryId: generalChannel.parentId,
       player1Id: userId,
-      player2Id: userId,
+      player2Id: botId,
       generalId: generalChannel.id,
       chatId: chatChannel.id,
       boardId: boardChannel.id,
@@ -1446,12 +1447,12 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
     } else {
       // No scenario (or unimplemented scenario): show map selection as usual
       const setupMsg = await generalChannel.send({
-        content: `<@${userId}> — **Test game** created. You are both players. Map Selection below — Hand channels will appear after map selection. Use **General chat** for notes.`,
+        content: `<@${userId}> — **Test game** created. You are P1, the bot is P2. Map Selection below — Hand channels will appear after map selection. Use **General chat** for notes.`,
         allowedMentions: { users: [userId] },
         embeds: [
           new EmbedBuilder()
             .setTitle('Game Setup (Test)')
-            .setDescription('**Test game** — Select the map below. Hand channels will then appear; use them to pick decks (Select Squad or Default Rebels / Scum / Imperial) for each "side".')
+            .setDescription('**Test game** — You play as P1 vs the bot as P2. Select the map below. Hand channels will then appear; use them to pick decks (Select Squad or Default Rebels / Scum / Imperial) for each side.')
             .setColor(0x2f3136),
         ],
         components: [getGeneralSetupButtons(game)],

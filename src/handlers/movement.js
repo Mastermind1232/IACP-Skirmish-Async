@@ -2,6 +2,7 @@
  * Movement handlers: move_mp_, move_adjust_mp_, move_pick_
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { canActAsPlayer } from '../utils/can-act-as-player.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
@@ -48,8 +49,7 @@ export async function handleMoveMp(interaction, ctx) {
     return;
   }
   const { figureKey, playerNum, mpRemaining, displayName } = moveState;
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
-  if (interaction.user.id !== ownerId) {
+  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
     await interaction.reply({ content: 'Only the owner can move.', ephemeral: true }).catch(() => {});
     return;
   }
@@ -155,8 +155,7 @@ export async function handleMoveAdjustMp(interaction, ctx) {
     return;
   }
   const { playerNum, mpRemaining } = moveState;
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
-  if (interaction.user.id !== ownerId) {
+  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
     await interaction.reply({ content: 'Only the owner can adjust.', ephemeral: true }).catch(() => {});
     return;
   }
@@ -222,8 +221,7 @@ export async function handleMovePick(interaction, ctx) {
     return;
   }
   const { figureKey, playerNum, mpRemaining, displayName } = moveState;
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
-  if (interaction.user.id !== ownerId) {
+  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
     await interaction.reply({ content: 'Only the owner can move.', ephemeral: true }).catch(() => {});
     return;
   }
