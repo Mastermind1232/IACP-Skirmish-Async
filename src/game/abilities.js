@@ -95,14 +95,6 @@ export function resolveAbility(abilityId, context) {
     entry = { type: 'ccEffect', ...chosen };
   }
 
-  // ccEffect: logOnly — display message only (script-friendly wired tag)
-  if (entry.type === 'ccEffect' && entry.logOnly) {
-    return {
-      applied: true,
-      logMessage: entry.logMessage || entry.label || 'Resolve manually (see rules).',
-    };
-  }
-
   // ccEffect: informational / log-only (e.g. Collect Intel — look at opponent hand)
   if (entry.type === 'ccEffect' && entry.informational && (entry.logMessage != null || entry.label)) {
     return {
