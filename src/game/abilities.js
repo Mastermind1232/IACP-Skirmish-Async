@@ -142,9 +142,33 @@ export function resolveAbility(abilityId, context) {
       return { requiresSpaceChoice: true, validSpaces };
     }
     const spaceUpper = String(chosenSpace).toUpperCase();
+    game.ancillaryTokens = game.ancillaryTokens || {};
+    game.ancillaryTokens.smoke = [...(game.ancillaryTokens.smoke || []), chosenSpace];
+    const mpLabel = entry.mpBonus ? `; choose a friendly figure within 2 of that space to gain ${entry.mpBonus} MP` : '';
     return {
       applied: true,
-      logMessage: `Chose space **${spaceUpper}**. Place energy shield there; choose a friendly figure within 2 of that space to gain 2 MP (place shield and apply MP manually).`,
+      logMessage: `Chose space **${spaceUpper}**. Placed smoke token there${mpLabel}.`,
+      refreshBoard: true,
+    };
+  }
+
+  // ccEffect: placeRubbleOnTargetAndAdjacent (Reduce to Rubble — after attack that hit)
+  if (entry.type === 'ccEffect' && entry.placeRubbleOnTargetAndAdjacent) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const spaces = game.lastAttackTargetSpacesForRubble;
+    const attackerNum = game.lastAttackAttackerPlayerNum;
+    if (!spaces?.length || playerNum !== attackerNum) {
+      return { applied: false, manualMessage: 'Play Reduce to Rubble after you resolve an attack that did not miss. No recent attack target stored.' };
+    }
+    game.ancillaryTokens = game.ancillaryTokens || {};
+    game.ancillaryTokens.rubble = [...(game.ancillaryTokens.rubble || []), ...spaces];
+    delete game.lastAttackTargetSpacesForRubble;
+    delete game.lastAttackAttackerPlayerNum;
+    return {
+      applied: true,
+      logMessage: `Placed rubble tokens on target space and adjacent spaces (${spaces.length} total).`,
+      refreshBoard: true,
     };
   }
 

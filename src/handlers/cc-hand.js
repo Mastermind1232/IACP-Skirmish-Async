@@ -355,6 +355,15 @@ export async function handleCcPlaySelect(interaction, ctx) {
         if (result.refreshHand) await updateHandVisualMessage(game, playerNum, interaction.client);
         if (result.refreshDiscard) await updateDiscardPileMessage(game, playerNum, interaction.client);
       }
+      if (result.refreshBoard && game.boardId && game.selectedMap && ctx.buildBoardMapPayload) {
+        try {
+          const boardChannel = await interaction.client.channels.fetch(game.boardId);
+          const payload = await ctx.buildBoardMapPayload(gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
+        } catch (err) {
+          console.error('Failed to refresh board after token placement:', err);
+        }
+      }
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
       saveGames();
       return;
@@ -511,7 +520,7 @@ export async function handleCcSpacePick(interaction, ctx) {
   }
   const [, gameId, space] = match;
   const chosenSpace = String(space).toLowerCase();
-  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, client, saveGames } = ctx;
+  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildBoardMapPayload, client, saveGames } = ctx;
   const game = getGame(gameId);
   if (!game) {
     await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
@@ -558,6 +567,15 @@ export async function handleCcSpacePick(interaction, ctx) {
   if (result.applied && result.refreshDcEmbed && result.refreshDcEmbedMsgIds?.length) {
     for (const msgId of result.refreshDcEmbedMsgIds) {
       await updateDcActionsMessage(game, msgId, client).catch(() => {});
+    }
+  }
+  if (result.applied && result.refreshBoard && game.boardId && game.selectedMap && buildBoardMapPayload) {
+    try {
+      const boardChannel = await client.channels.fetch(game.boardId);
+      const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+      await boardChannel.send(payload);
+    } catch (err) {
+      console.error('Failed to refresh board after token placement:', err);
     }
   }
   try {

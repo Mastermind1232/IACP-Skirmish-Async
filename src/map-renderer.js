@@ -378,6 +378,23 @@ export async function renderMap(mapId, options = {}) {
     await drawTokenAt(coord, tc.missionB, 'rgba(255,183,77,0.8)', 'square', 'Contraband', CRATE_LABEL_SIZE_SCALE);
   }
 
+  const anc = tc.ancillary || {};
+  for (const coord of tokens.smoke || []) {
+    await drawTokenAt(coord, anc.smoke, 'rgba(150,150,150,0.7)', 'circle');
+  }
+  for (const coord of tokens.rubble || []) {
+    await drawTokenAt(coord, anc.rubble, 'rgba(100,80,60,0.9)', 'square');
+  }
+  for (const coord of tokens.energyShield || []) {
+    await drawTokenAt(coord, anc.energyShield, 'rgba(100,200,255,0.7)', 'circle');
+  }
+  for (const coord of tokens.device || []) {
+    await drawTokenAt(coord, anc.device, 'rgba(80,120,180,0.9)', 'square');
+  }
+  for (const coord of tokens.napalm || []) {
+    await drawTokenAt(coord, anc.napalm, 'rgba(200,80,40,0.9)', 'circle');
+  }
+
   const doorEdges = tokens.doors || [];
   const grouped = new Map();
   for (const edge of doorEdges) {

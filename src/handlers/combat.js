@@ -137,6 +137,8 @@ export async function handleAttackTarget(interaction, ctx) {
   };
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
   if (nextPierce) delete game.nextAttackBonusPierce?.[attackerPlayerNum];
+  delete game.lastAttackTargetSpacesForRubble;
+  delete game.lastAttackAttackerPlayerNum;
 
   await interaction.message.edit({
     content: `**Combat declared** — See thread in Game Log.`,

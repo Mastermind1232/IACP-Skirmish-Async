@@ -1090,7 +1090,7 @@
       "cost": 1,
       "playableBy": "TROOPER or TECHNICIAN",
       "timing": "specialAction",
-      "effect": "Special Action: Choose a space within 2 spaces. Place 1 energy shield in that space, then a friendly figure within 2 spaces of the chosen space gains 2 movement points. Discard that energy shield at the end of the next round.",
+      "effect": "Special Action: Choose a space within 2 spaces. Place 1 smoke token in that space, then a friendly figure within 2 spaces of the chosen space gains 2 movement points. Discard that smoke token at the end of the next round.",
       "abilityId": "Smoke Grenade"
     },
     "Take Cover": {

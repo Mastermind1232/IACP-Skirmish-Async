@@ -5,6 +5,15 @@
   "missionA": "Mission Token--Neutral GRAY.gif",
   "missionB": "Counter--Crate Blue.gif",
   "doors": "Token--Door.png",
+  "ancillary": {
+    "smoke": "Token-Smoke.gif",
+    "rubble": "Token--Rubble.gif",
+    "energyShield": "Token--Energy Shield.gif",
+    "bombardment": "Token--Bombardment.gif",
+    "napalm": "Token--Napalm.gif",
+    "device": "Token--Device Token.png",
+    "deWannaWanga": "Token--De Wanna Wanga.gif"
+  },
   "powerTokens": {
     "Hit": "Power Token--Hit.gif",
     "Surge": "Power Token--Surge.gif",

@@ -1697,10 +1697,10 @@ function getFiguresForRender(game) {
   return figures;
 }
 
-/** Get map tokens (terminals + mission-specific + closed doors) for renderMap. */
-function getMapTokensForRender(mapId, missionVariant, openedDoors = []) {
+/** Get map tokens (terminals + mission-specific + closed doors + ancillary) for renderMap. */
+function getMapTokensForRender(mapId, missionVariant, openedDoors = [], ancillaryTokens = null) {
   const mapData = getMapTokensData()[mapId];
-  if (!mapData) return { terminals: [], missionA: [], missionB: [], doors: [] };
+  if (!mapData) return { terminals: [], missionA: [], missionB: [], doors: [], smoke: [], rubble: [], energyShield: [], device: [], napalm: [] };
   const terminals = mapData.terminals || [];
   const missionA = mapData.missionA?.launchPanels || [];
   const missionB = mapData.missionB?.contraband || mapData.missionB?.crates || [];
@@ -1711,11 +1711,17 @@ function getMapTokensForRender(mapId, missionVariant, openedDoors = []) {
     const ek = edgeKey(edge[0], edge[1]);
     return !openedSet.has(ek);
   });
+  const anc = ancillaryTokens || {};
   return {
     terminals,
     missionA: missionVariant === 'a' ? missionA : [],
     missionB: missionVariant === 'b' ? missionB : [],
     doors,
+    smoke: anc.smoke || [],
+    rubble: anc.rubble || [],
+    energyShield: anc.energyShield || [],
+    device: anc.device || [],
+    napalm: anc.napalm || [],
   };
 }
 
@@ -1756,7 +1762,7 @@ async function getActivationMinimapAttachment(game, msgId) {
   if (cropCoords.length === 0) return null;
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens);
     const buffer = await renderMap(map.id, {
       figures,
       tokens,
@@ -1799,7 +1805,7 @@ async function getMovementMinimapAttachment(game, msgId, figureKey, spacesAtCost
   const labelCoords = spacesAtCost.map((s) => String(s).toLowerCase());
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens);
     const buffer = await renderMap(map.id, {
       figures,
       tokens,
@@ -1822,7 +1828,7 @@ async function getMapAttachmentForSpaces(game, validSpaces) {
   if (!map?.id || !validSpaces?.length) return null;
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens);
     const labelCoords = validSpaces.map((s) => String(s).toLowerCase());
     const buffer = await renderMap(map.id, {
       figures,
@@ -1846,7 +1852,7 @@ async function getDeploymentMapAttachment(game, zone) {
   if (!map?.id) return null;
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens);
     const zoneSpaces = zone && getDeploymentZones()[map.id]?.[zone] ? getDeploymentZones()[map.id][zone] : null;
     const occupiedSet = toLowerSet(getOccupiedSpacesForMovement(game) || []);
     const validLabelCoords =
@@ -2030,9 +2036,10 @@ async function buildBoardMapPayload(gameId, map, game) {
   const components = [getBoardButtons(gameId, { game })];
   const embeds = game ? [buildScorecardEmbed(game)] : [];
   const figures = game ? getFiguresForRender(game) : [];
-  const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors);
+  const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens);
   const hasFigures = figures.length > 0;
-  const hasTokens = tokens.terminals?.length > 0 || tokens.missionA?.length > 0 || tokens.missionB?.length > 0 || tokens.doors?.length > 0;
+  const hasAncillary = (tokens.smoke?.length || 0) + (tokens.rubble?.length || 0) + (tokens.energyShield?.length || 0) + (tokens.device?.length || 0) + (tokens.napalm?.length || 0) > 0;
+  const hasTokens = tokens.terminals?.length > 0 || tokens.missionA?.length > 0 || tokens.missionB?.length > 0 || tokens.doors?.length > 0 || hasAncillary;
   const resolvedMapPath = map.imagePath ? resolveAssetPath(map.imagePath, 'maps') : null;
   const imagePath = resolvedMapPath ? join(rootDir, resolvedMapPath) : null;
   const pdfPath = join(rootDir, 'data', 'map-pdfs', `${map.id}.pdf`);
@@ -2499,6 +2506,24 @@ async function resolveCombatAfterRolls(game, combat, client) {
   const { hit, damage, resultText } = computeCombatResult(combat);
   const totalBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
   const attackerPlayerNum = combat.attackerPlayerNum;
+  // Store target + adjacent spaces for Reduce to Rubble (only when attack hit)
+  if (hit && game.selectedMap?.id) {
+    const targetCoord = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+    if (targetCoord) {
+      const board = getBoardStateForMovement(game, null);
+      if (board?.adjacency) {
+        const targetDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+        const targetSize = game.figureOrientations?.[combat.target.figureKey] || getFigureSize(targetDcName);
+        const targetCells = getFootprintCells(targetCoord, targetSize || '1x1').map((c) => normalizeCoord(c));
+        const rubbleSet = new Set(targetCells);
+        for (const c of targetCells) {
+          for (const n of board.adjacency[c] || []) rubbleSet.add(normalizeCoord(n));
+        }
+        game.lastAttackTargetSpacesForRubble = [...rubbleSet];
+        game.lastAttackAttackerPlayerNum = attackerPlayerNum;
+      }
+    }
+  }
   const ownerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
   const targetMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, combat.target.figureKey);
   const tm = combat.target.figureKey.match(/-(\d+)-(\d+)$/);
@@ -4178,6 +4203,7 @@ client.on('interactionCreate', async (interaction) => {
       getBoardStateForMovement,
       getSpaceChoiceRows,
       getMapAttachmentForSpaces,
+      buildBoardMapPayload,
     };
     if (selectKey === 'cc_attach_to_') await handleCcAttachTo(interaction, ccHandSelectContext);
     else if (selectKey === 'cc_play_select_') await handleCcPlaySelect(interaction, ccHandSelectContext);
@@ -4223,6 +4249,7 @@ client.on('interactionCreate', async (interaction) => {
       buildDcEmbedAndFiles,
       getConditionsForDcMessage,
       getDcPlayAreaComponents,
+      buildBoardMapPayload,
     };
     if (buttonKey === 'deck_illegal_play_') await handleDeckIllegalPlay(interaction, ccHandButtonContext);
     else if (buttonKey === 'deck_illegal_redo_') await handleDeckIllegalRedo(interaction, ccHandButtonContext);
