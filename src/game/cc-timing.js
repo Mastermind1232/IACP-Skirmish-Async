@@ -122,6 +122,9 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'afteractivationresolves':
       // Blaze of Glory: playable after an activation resolves (honor system: play when activation just ended)
       return ctx.duringActivation;
+    case 'afterspecial':
+      // To the Limit: playable after you resolve a Special Action during your activation
+      return ctx.duringActivation;
     case 'whenattackdeclaredonadjacentfriendly':
       // Bodyguard: playable when attack declared on adjacent friendly (honor system: play when attack declared on adjacent friendly)
       return ctx.duringActivation;

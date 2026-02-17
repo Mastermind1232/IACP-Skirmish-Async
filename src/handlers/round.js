@@ -130,6 +130,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.roundDefenderBonusBlockPerEvade = {};
   game.roundDroidExtraActionCostDamage = null;
   game.sitTightPlayerNum = null;
+  game.roundInTheShadowsPlayerNum = null;
+  game.strengthInNumbersPlayerNum = null;
+  game.provokeNextActivation = null;
   game.roundAttackSurgeBonus = {};
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client });

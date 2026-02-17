@@ -2328,6 +2328,25 @@ async function resolveCombatAfterRolls(game, combat, client) {
         if (i >= 0 && dcL?.[i]) dcL[i].healthState = [...attHS];
       }
     }
+    if (combat.superchargeStrainAfterAttackCount > 0 && combat.attackerMsgId != null) {
+      const attMsgId = combat.attackerMsgId;
+      const attIdx = combat.attackerFigureIndex ?? 0;
+      const attHS = dcHealthState.get(attMsgId) || [];
+      const attEntry = attHS[attIdx];
+      if (attEntry) {
+        const [c, m] = attEntry;
+        const maxVal = m ?? c ?? 99;
+        const strain = combat.superchargeStrainAfterAttackCount || 0;
+        const newCur = Math.max(0, (c ?? maxVal) - strain);
+        attHS[attIdx] = [newCur, maxVal];
+        dcHealthState.set(attMsgId, attHS);
+        const attP = combat.attackerPlayerNum;
+        const dcIds = attP === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcL = attP === 1 ? game.p1DcList : game.p2DcList;
+        const i = (dcIds || []).indexOf(attMsgId);
+        if (i >= 0 && dcL?.[i]) dcL[i].healthState = [...attHS];
+      }
+    }
     if (totalBlast > 0 && hit && game.selectedMap?.id) {
       const adjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
       const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';

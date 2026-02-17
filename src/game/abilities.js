@@ -1752,6 +1752,126 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: opponentHandRandomToDeckTop (Stall for Time)
+  if (entry.type === 'ccEffect' && typeof entry.opponentHandRandomToDeckTop === 'number' && entry.opponentHandRandomToDeckTop > 0) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const handKey = oppNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const deckKey = oppNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const hand = (game[handKey] || []).slice();
+    const deck = (game[deckKey] || []).slice();
+    const n = Math.min(entry.opponentHandRandomToDeckTop, hand.length);
+    if (n === 0) return { applied: true, logMessage: "Opponent's hand is empty; no card placed on deck." };
+    const picked = [];
+    for (let i = 0; i < n; i++) {
+      const idx = Math.floor(Math.random() * hand.length);
+      picked.push(hand.splice(idx, 1)[0]);
+    }
+    game[handKey] = hand;
+    deck.unshift(...picked);
+    game[deckKey] = deck;
+    return {
+      applied: true,
+      logMessage: `Opponent placed ${n} random card(s) from hand on top of their Command deck: ${picked.map((c) => `**${c}**`).join(', ')}.`,
+      refreshOpponentHand: true,
+    };
+  }
+
+  // ccEffect: roundInTheShadowsPlayerNum (In the Shadows)
+  if (entry.type === 'ccEffect' && entry.roundInTheShadowsPlayerNum) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundInTheShadowsPlayerNum = playerNum;
+    return { applied: true, logMessage: 'Until end of round, hostiles 4+ spaces away do not have line of sight to you.' };
+  }
+
+  // ccEffect: activationExtraActionThenStun (To the Limit)
+  if (entry.type === 'ccEffect' && entry.activationExtraActionThenStun) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play after resolving a Special Action during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.activationExtraActionThenStun = game.activationExtraActionThenStun || {};
+    game.activationExtraActionThenStun[msgId] = true;
+    return { applied: true, logMessage: 'Perform 1 additional action; then you become Stunned.' };
+  }
+
+  // ccEffect: pickpocketVpByAccuracy (Pickpocket) — choiceIndex 0–3 = green die Accuracy result
+  if (entry.type === 'ccEffect' && entry.pickpocketVpByAccuracy) {
+    const { game, playerNum, choiceIndex } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const accuracy = choiceIndex != null && choiceIndex >= 0 && choiceIndex <= 3 ? choiceIndex : null;
+    if (accuracy === null) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: ['0 (miss)', '1', '2', '3'],
+        choiceCount: 4,
+        manualMessage: 'Roll 1 green die; enter the Accuracy result (0–3). Opponent loses that many VP and you gain that many VP.',
+      };
+    }
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const yourVpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    const oppVpKey = oppNum === 1 ? 'player1VP' : 'player2VP';
+    game[yourVpKey] = game[yourVpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[oppVpKey] = game[oppVpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[yourVpKey].total = (game[yourVpKey].total ?? 0) + accuracy;
+    game[oppVpKey].total = Math.max(0, (game[oppVpKey].total ?? 0) - accuracy);
+    return { applied: true, logMessage: `Green die Accuracy ${accuracy}: you gain ${accuracy} VP, opponent loses ${accuracy} VP.` };
+  }
+
+  // ccEffect: attackPoolAddYellowUntilTotal + superchargeStrainAfterAttack (Supercharge)
+  if (entry.type === 'ccEffect' && typeof entry.attackPoolAddYellowUntilTotal === 'number' && entry.attackPoolAddYellowUntilTotal > 0) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play when declaring a Special Action attack.' };
+    cbt.attackPoolAddYellowUntilTotal = entry.attackPoolAddYellowUntilTotal;
+    if (entry.superchargeStrainAfterAttack) cbt.superchargeStrainAfterAttack = true;
+    return { applied: true, logMessage: `Add yellow dice to attack pool until ${entry.attackPoolAddYellowUntilTotal} total; after attack resolve, suffer Strain equal to dice added.` };
+  }
+
+  // ccEffect: strengthInNumbersPlayerNum (Strength in Numbers)
+  if (entry.type === 'ccEffect' && entry.strengthInNumbersPlayerNum) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.strengthInNumbersPlayerNum = playerNum;
+    return { applied: true, logMessage: 'You may immediately activate another group (combined deployment cost of the two groups cannot exceed 12).' };
+  }
+
+  // ccEffect: provokeNextActivation (Provoke)
+  if (entry.type === 'ccEffect' && entry.provokeNextActivation) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.provokeNextActivation = { playerNum };
+    return { applied: true, logMessage: "Choose a hostile figure adjacent to your TROOPER or GUARDIAN; that figure's group must activate next if able." };
+  }
+
+  // ccEffect: pummelTwoAttacksThisActivation (Pummel)
+  if (entry.type === 'ccEffect' && entry.pummelTwoAttacksThisActivation) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation (Special Action).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.pummelTwoAttacksThisActivation = game.pummelTwoAttacksThisActivation || {};
+    game.pummelTwoAttacksThisActivation[msgId] = true;
+    return { applied: true, logMessage: 'If you have MELEE attack type, perform 2 attacks.' };
+  }
+
+  // ccEffect: vanishImmunityUntilNextActivation + nextActivationMpBonus (Vanish)
+  if (entry.type === 'ccEffect' && entry.vanishImmunityUntilNextActivation) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation (Special Action).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.vanishImmunityUntilNextActivation = game.vanishImmunityUntilNextActivation || {};
+    game.vanishImmunityUntilNextActivation[playerNum] = { msgId, nextMp: entry.nextActivationMpBonus || 0 };
+    return {
+      applied: true,
+      logMessage: `You cannot suffer Damage or receive conditions until your next activation. At the start of your next activation, gain ${entry.nextActivationMpBonus || 0} movement points.`,
+    };
+  }
+
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
 }
 

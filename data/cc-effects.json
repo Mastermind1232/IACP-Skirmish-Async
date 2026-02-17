@@ -1329,7 +1329,8 @@
       "playableBy": "SMUGGLER or HUNTER",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Until the end of the round, hostile figures 4 or more spaces away from you do not have line of sight to you. You do not block line of sight for those figures.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "In the Shadows"
     },
     "Induce Rage": {
       "cost": 1,
@@ -1588,7 +1589,8 @@
       "playableBy": "SMUGGLER",
       "timing": "duringActivation",
       "effect": "Use during your activation while adjacent to a hostile figure to roll 1 green die. Your opponent loses VPs and you gain VPs equal to the Accuracy result.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Pickpocket"
     },
     "Planning": {
       "cost": 0,
@@ -1654,14 +1656,16 @@
       "playableBy": "Any Figure",
       "timing": "afterYouResolveGroupsActivation",
       "effect": "Use after you resolve an activation to choose a hostile figure adjacent to one of your TROOPERS or GUARDIANS. That figure's group must activate next if able.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Provoke"
     },
     "Pummel": {
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "doubleActionSpecial",
       "effect": "Special Action: If you have the MELEE attack type, perform 2 attacks.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Pummel"
     },
     "Rally": {
       "cost": 0,
@@ -1971,7 +1975,8 @@
       "playableBy": "LEADER or SPY",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Your opponent places 1 random Command card from his hand on top of his Command deck.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Stall for Time"
     },
     "Static Pulse": {
       "cost": 1,
@@ -2021,7 +2026,8 @@
       "playableBy": "Any Figure",
       "timing": "afterYouResolveGroupsActivation",
       "effect": "Use after you resolve a group's activation. You may immediately activate another group. The combined deployment cost of these groups cannot exceed 12.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Strength in Numbers"
     },
     "Stroke of Brilliance": {
       "cost": 0,
@@ -2036,7 +2042,8 @@
       "playableBy": "TECHNICIAN",
       "timing": "specialAction",
       "effect": "Special Action: Perform an attack. As you roll dice, add yellow dice to the attack pool until there are 4 attack dice total. After the attack resolves, you suffer Strain equal to the number of dice added this way.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Supercharge"
     },
     "Support Specialist": {
       "cost": 2,
@@ -2058,7 +2065,8 @@
       "playableBy": "Gideon Argus",
       "timing": "specialAction",
       "effect": "Special Action: Choose an adjacent friendly figure. That figure performs an attack. Apply +2 Hits to the attack results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Take it Down"
     },
     "Take Position": {
       "cost": 0,
@@ -2124,7 +2132,8 @@
       "playableBy": "Any Figure",
       "timing": "afterSpecial",
       "effect": "Use after you resolve a Special Action during your activation to perform 1 additional action. Then you become Stunned.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "To the Limit"
     },
     "Tools for the Job": {
       "cost": 2,
@@ -2196,7 +2205,8 @@
       "playableBy": "Davith Elso",
       "timing": "specialAction",
       "effect": "Special Action: You cannot suffer Damage or receive conditions until your next activation. At the start of your next activation, gain 4 movement points.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Vanish"
     },
     "Vehicle": {
       "cost": null,

@@ -255,6 +255,12 @@ export async function handleCombatRoll(interaction, ctx) {
     if (removeMax > 0) dice = dice.slice(0, Math.max(0, dice.length - removeMax));
     const keepMax = combat.attackPoolKeepMax;
     if (typeof keepMax === 'number' && keepMax > 0 && dice.length > keepMax) dice = dice.slice(0, keepMax);
+    const addYellowUntil = combat.attackPoolAddYellowUntilTotal;
+    if (typeof addYellowUntil === 'number' && addYellowUntil > 0 && dice.length < addYellowUntil) {
+      const toAdd = addYellowUntil - dice.length;
+      for (let i = 0; i < toAdd; i++) dice.push('yellow');
+      if (combat.superchargeStrainAfterAttack) combat.superchargeStrainAfterAttackCount = toAdd;
+    }
     combat.attackRoll = rollAttackDice(dice);
     await interaction.deferUpdate();
     await thread.send(`**Attack roll** — ${combat.attackRoll.acc} accuracy, ${combat.attackRoll.dmg} damage, ${combat.attackRoll.surge} surge`);
