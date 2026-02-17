@@ -261,28 +261,32 @@
       "playableBy": "Any Figure",
       "timing": "afterYouResolveGroupsActivation",
       "effect": "Use after you resolve a group's activation. Exhaust 1 of your Deployment cards to ready 1 other Deployment card of equal or lower Deployment cost that shares at least 1 trait.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Change of Plans"
     },
     "Chaotic Force": {
       "cost": 2,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if your affiliation is SCUM. Each player chooses up to 3 figures. Roll 1 green die. Each of those figures suffers Strain equal to the Accuracy result.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Chaotic Force"
     },
     "Cheat to Win": {
       "cost": 1,
       "playableBy": "Lando Calrissian",
       "timing": "useWhenYouUseGambit",
       "effect": "Use when you use \"Gambit\", after rolling the new die. You may change that die's result to another result of your choice on that die.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Cheat to Win"
     },
     "Choose a Side": {
       "cost": 1,
       "playableBy": "Gar Saxon",
       "timing": "duringActivation",
       "effect": "Use during your activation. During this round, other friendly Mobile figures gain the following abilities based on your army affiliation: \nSCUM: \"Personal Combat Shield\"\nIMPERIAL: \"Gar Saxon's Flamethrower\"",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Choose a Side"
     },
     "Cloned Reinforcements": {
       "cost": 2,
@@ -320,7 +324,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if you have 1 or more SPIES on the map. Look at your opponent's hand of Command cards.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Collect Intel"
     },
     "Combat Resupply": {
       "cost": 1,
@@ -356,7 +361,8 @@
       "playableBy": "IMPERIAL",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if your affiliation is IMPERIAL. Each player chooses up to 3 figures. Roll 1 blue die. Each of those figures suffers Damage equal to the Hit results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Corrupting Force"
     },
     "Counter Attack": {
       "cost": 2,
@@ -402,14 +408,16 @@
       "playableBy": "SPY",
       "timing": "startOfStatusPhase",
       "effect": "Use at the start of a Status Phase. Players cannot draw Command cards during this round.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Cut Lines"
     },
     "Dangerous Bargains": {
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if you have 30 or fewer VPs. You and your opponent each gain 3 VPs.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Dangerous Bargains"
     },
     "Dangerous Prey": {
       "cost": 1,
@@ -563,7 +571,8 @@
       "playableBy": "SMUGGLER",
       "timing": "duringAttack",
       "effect": "Use while attacking to choose a die. That die's controller rerolls it. If the rerolled result has the same number of symbols as the original roll, you may double or cancel its results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Double or Nothing"
     },
     "Draw!": {
       "cost": 1,
@@ -678,7 +687,8 @@
       "playableBy": "Any Figure",
       "timing": "duringActivation",
       "effect": "Use during your activation to choose an adjacent hostile figure. The next attack targeting that figure gains Pierce 3.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Expose Weakness"
     },
     "Extra Protection": {
       "cost": 1,
@@ -849,7 +859,8 @@
       "playableBy": "FORCE USER",
       "timing": "duringActivation",
       "effect": "Use during your activation. Choose another SMALL figure within 3 spaces. Push that figure up to 2 spaces.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Force Push"
     },
     "Force Rush": {
       "cost": 0,
@@ -966,7 +977,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Until the end of the round, figures on exterior spaces apply -1 Evade to their defense results, and figures not on exterior spaces apply +1 Block to their defense results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Harsh Environment"
     },
     "Heart of Freedom": {
       "cost": 2,
@@ -1176,7 +1188,8 @@
       "playableBy": "Any Figure",
       "timing": "beforeDeclaringRangedAttack",
       "effect": "Use before declaring a Ranged attack. Figures do not block line of sight for this attack.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Marksman"
     },
     "Ready Weapons": {
       "cost": 0,

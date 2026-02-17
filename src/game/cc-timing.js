@@ -125,6 +125,15 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'whenattackdeclaredonadjacentfriendly':
       // Bodyguard: playable when attack declared on adjacent friendly (honor system: play when attack declared on adjacent friendly)
       return ctx.duringActivation;
+    case 'afteryouresolvegroupsactivation':
+      // Change of Plans: playable after you resolve a group's activation (honor system)
+      return ctx.duringActivation;
+    case 'usewhenyouusegambit':
+      // Cheat to Win: playable when you use Gambit (honor system: play when Gambit used)
+      return ctx.duringActivation;
+    case 'beforedeclaringrangedattack':
+      // Marksman: playable before declaring a Ranged attack (honor system: play when about to declare ranged attack)
+      return ctx.duringActivation;
     case 'other':
       // Disarm, Dying Lunge: playable during your activation (honor system: play at actual trigger)
       return ctx.duringActivation;
