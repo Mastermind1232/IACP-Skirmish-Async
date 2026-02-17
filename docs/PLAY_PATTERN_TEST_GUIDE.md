@@ -66,7 +66,15 @@ We build **one scenario per flow** (or per critical moment) so we can test each 
 | 4 | move_pick | Movement destination | All moves |
 | 5 | (TBD) | End round, etc. | — |
 
-**How to run a scenario:** Type `testgame smoke_grenade` (or `testgame blaze`, etc.) in #lfg. The game is created with that scenario flag; after you pick map and decks and draw, the scenario seeds the state so you can trigger the flow (e.g. P1 hand has Smoke Grenade; you activate, play it, get the space grid).
+**How to run a scenario (recommended: Discord #lfg):**
+
+Type in **#lfg**: `testgame smoke_grenade` (or `testgame blaze`, etc.). The bot **skips setup entirely** — map, decks, deploy, and draw are all applied automatically. You land straight in Round 1 with the scenario state ready: for `smoke_grenade`, P1 already has Smoke Grenade in hand, figures deployed, activation phase started. Go to your **Hand channel**, **activate a DC** in your Play Area, then **play Smoke Grenade** to test the pick-a-space flow.
+
+Type **`testready`** in #lfg to get a **random scenario** with `status: "testready"` — useful for checking scenarios off one by one.
+
+Type `testgame` (no scenario) for a normal test game where you pick map and decks manually.
+
+*Optional (local only):* If the bot is running locally and `DISCORD_GUILD_ID` is set, you can also trigger creation via `POST http://127.0.0.1:3999/testgame` with body `{ "scenarioId": "smoke_grenade" }`. Not needed when using the bot on Railway.
 
 ---
 

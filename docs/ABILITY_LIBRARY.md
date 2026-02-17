@@ -15,13 +15,15 @@ If the entry is missing or has no such property, the bot returns "Resolve manual
 
 Each CC effect entry in `ability-library.json` can include **`wiredStatus`** with one of:
 
-| Value      | Meaning |
-|-----------|--------|
-| **wired** | The bot fully resolves the effect; no manual steps required. |
+| Value        | Meaning |
+|-------------|--------|
+| **gameready** | Fully wired **and** officially tested in Discord via the testgame flow; guaranteed to work as intended. Set manually after you run the scenario and confirm. |
+| **testready** | Wired **and** covered by a scenario in `data/test-scenarios.json` with `status: "testready"`. Ready for Discord testing — type `testready` in #lfg to get a random testready scenario. |
+| **wired**   | The bot fully resolves the effect; no manual steps required. |
 | **partial** | The bot applies some effects (e.g. draw, MP, log message) but the player must resolve other parts manually (e.g. "choose target", "honor system"). |
 | **unwired** | No automation; player resolves entirely manually (e.g. informational/logMessage only, or no library implementation). |
 
-This field is for **discovery and filtering only** (e.g. "which CCs are unwired?"). The game does not read it at runtime. Keep it in sync when wiring new effects or when changing automation in `resolveAbility()`. You can (re)compute it with `node scripts/set-cc-wired-status.js`.
+This field is for **discovery and filtering only** (e.g. "which CCs are unwired?", "which are gameready?"). The game does not read it at runtime. Keep it in sync when wiring new effects or when changing automation in `resolveAbility()`. Run `node scripts/set-cc-wired-status.js` to (re)compute wired/partial/unwired/testready from heuristics + `data/test-scenarios.json`. **gameready** is never set by the script — set it manually after testing a card in Discord (e.g. `testgame smoke_grenade` → play Smoke Grenade → confirm flow → set that card’s `wiredStatus` to `gameready`).
 
 ### Wiring effort: backend vs Discord UI
 

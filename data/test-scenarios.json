@@ -1,0 +1,10 @@
+{
+  "source": "Scenario registry for testready/testgame. status: testready = built, ready to test; gameready = tested and confirmed.",
+  "scenarios": {
+    "smoke_grenade": {
+      "status": "testready",
+      "pattern": "pick_a_space",
+      "cards": ["Smoke Grenade", "Cloned Reinforcements", "Force Push", "Jump Jets"]
+    }
+  }
+}

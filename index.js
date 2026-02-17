@@ -21,6 +21,7 @@ import {
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { createServer } from 'http';
 import 'dotenv/config';
 import { parseVsav, parseIacpListPaste } from './src/vsav-parser.js';
 import {
@@ -934,6 +935,22 @@ const testGameCreationInProgress = new Set();
 const processedTestGameMessageIds = new Set();
 let gameIdCounter = 1;
 
+/** Pick a random scenario with status "testready" and implemented in runDraftRandom. Returns scenario id or null. */
+function getRandomTestreadyScenario() {
+  try {
+    const path = join(rootDir, 'data', 'test-scenarios.json');
+    const data = JSON.parse(readFileSync(path, 'utf8'));
+    const scenarios = data.scenarios || {};
+    const testready = Object.entries(scenarios).filter(
+      ([id, s]) => s && s.status === 'testready' && IMPLEMENTED_SCENARIOS.includes(id)
+    );
+    if (testready.length === 0) return null;
+    return testready[Math.floor(Math.random() * testready.length)][0];
+  } catch {
+    return null;
+  }
+}
+
 /** Count active (non-ended) games the player is in. */
 function countActiveGamesForPlayer(playerId) {
   if (!playerId) return 0;
@@ -1274,6 +1291,100 @@ async function createGameChannels(guild, player1Id, player2Id, options = {}) {
   }
 
   return { gameCategory, gameId, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel };
+}
+
+/**
+ * Create a test game (shared by #lfg message handler and HTTP POST /testgame).
+ * @param {import('discord.js').Client} client
+ * @param {import('discord.js').Guild} guild
+ * @param {string} userId - Discord user ID (P1 and P2 for test)
+ * @param {string|null} scenarioId - e.g. 'smoke_grenade'
+ * @param {import('discord.js').TextChannel} feedbackChannel - where to send "Test game #X created" (or editMessageInstead)
+ * @param {{ editMessageInstead?: import('discord.js').Message }} [options] - if set, edit this message on success instead of sending new
+ * @returns {Promise<{ gameId: string }>}
+ */
+const IMPLEMENTED_SCENARIOS = ['smoke_grenade'];
+
+async function createTestGame(client, guild, userId, scenarioId, feedbackChannel, options = {}) {
+  if (testGameCreationInProgress.has(userId)) {
+    throw new Error('A test game is already being created. Please wait.');
+  }
+  if (countActiveGamesForPlayer(userId) >= MAX_ACTIVE_GAMES_PER_PLAYER) {
+    throw new Error(`You are already in **${MAX_ACTIVE_GAMES_PER_PLAYER}** active games. Finish or leave a game before creating another.`);
+  }
+  testGameCreationInProgress.add(userId);
+  try {
+    const { gameId, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel } =
+      await createGameChannels(guild, userId, userId, { createPlayAreas: false, createHandChannels: false });
+    const game = {
+      gameId,
+      version: CURRENT_GAME_VERSION,
+      gameCategoryId: generalChannel.parentId,
+      player1Id: userId,
+      player2Id: userId,
+      generalId: generalChannel.id,
+      chatId: chatChannel.id,
+      boardId: boardChannel.id,
+      p1HandId: p1HandChannel?.id ?? null,
+      p2HandId: p2HandChannel?.id ?? null,
+      p1PlayAreaId: p1PlayAreaChannel?.id ?? null,
+      p2PlayAreaId: p2PlayAreaChannel?.id ?? null,
+      player1Squad: null,
+      player2Squad: null,
+      player1VP: { total: 0, kills: 0, objectives: 0 },
+      player2VP: { total: 0, kills: 0, objectives: 0 },
+      isTestGame: true,
+      testScenario: scenarioId || undefined,
+      ended: false,
+    };
+    setGame(gameId, game);
+
+    const scenarioImplemented = scenarioId && IMPLEMENTED_SCENARIOS.includes(scenarioId);
+    if (scenarioImplemented) {
+      // Apply scenario: run full setup (map, decks, deploy, draw) — user goes straight to test point
+      await runDraftRandom(game, client, { scenarioId });
+      const scenarioDoneText = scenarioId === 'smoke_grenade'
+        ? `Test game **IA Game #${gameId}** ready! Go to **Game Log** for Round 1. Your **Hand channel** has Smoke Grenade — activate a DC, then play it to test pick-a-space.`
+        : `Test game **IA Game #${gameId}** ready! Go to **Game Log** for Round 1. Scenario: **${scenarioId}**.`;
+      if (options.editMessageInstead) {
+        await options.editMessageInstead.edit(scenarioDoneText).catch(() => {});
+      } else {
+        await feedbackChannel.send({
+          content: `<@${userId}> — ${scenarioDoneText}`,
+          allowedMentions: { users: [userId] },
+        }).catch(() => {});
+      }
+    } else {
+      // No scenario (or unimplemented scenario): show map selection as usual
+      const setupMsg = await generalChannel.send({
+        content: `<@${userId}> — **Test game** created. You are both players. Map Selection below — Hand channels will appear after map selection. Use **General chat** for notes.`,
+        allowedMentions: { users: [userId] },
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('Game Setup (Test)')
+            .setDescription('**Test game** — Select the map below. Hand channels will then appear; use them to pick decks (Select Squad or Default Rebels / Scum / Imperial) for each "side".')
+            .setColor(0x2f3136),
+        ],
+        components: [getGeneralSetupButtons(game)],
+      });
+      game.generalSetupMessageId = setupMsg.id;
+      const doneText = scenarioId && !scenarioImplemented
+        ? `Scenario **${scenarioId}** is not yet implemented. Test game **IA Game #${gameId}** created with standard setup — select the map in Game Log.`
+        : `Test game **IA Game #${gameId}** is ready! Select the map in Game Log — Hand channels will appear after map selection.`;
+      if (options.editMessageInstead) {
+        await options.editMessageInstead.edit(doneText).catch(() => {});
+      } else {
+        await feedbackChannel.send({
+          content: `<@${userId}> — ${doneText}`,
+          allowedMentions: { users: [userId] },
+        }).catch(() => {});
+      }
+    }
+    saveGames();
+    return { gameId };
+  } finally {
+    testGameCreationInProgress.delete(userId);
+  }
 }
 
 function extractGameIdFromInteraction(interaction) {
@@ -1942,7 +2053,14 @@ async function finishSetupAttachments(game, client) {
   }
 }
 
-async function runDraftRandom(game, client) {
+/**
+ * Run full Draft Random setup: map, hand channels, squads, initiative, deploy, draw.
+ * @param {object} game
+ * @param {import('discord.js').Client} client
+ * @param {{ scenarioId?: string }} [options] - When scenarioId (e.g. 'smoke_grenade'), use scenario decks and seed P1 hand
+ */
+async function runDraftRandom(game, client, options = {}) {
+  const { scenarioId } = options;
   const generalChannel = await client.channels.fetch(game.generalId);
 
   // Map selection
@@ -1973,10 +2091,17 @@ async function runDraftRandom(game, client) {
     game.p2HandId = p2HandChannel.id;
   }
 
-  // One side Rebels, one side Scum (fixed for Draft Random)
-  const p1Deck = DEFAULT_DECK_REBELS;
+  // One side Rebels, one side Scum (fixed for Draft Random). Scenario may override P1 deck (e.g. smoke_grenade needs Smoke Grenade)
+  let p1Deck = { ...DEFAULT_DECK_REBELS };
+  if (scenarioId === 'smoke_grenade') {
+    const ccList = [...(DEFAULT_DECK_REBELS.ccList || [])];
+    const idx = ccList.findIndex((c) => c === 'Force Push');
+    if (idx >= 0) ccList[idx] = 'Smoke Grenade';
+    else ccList[0] = 'Smoke Grenade';
+    p1Deck = { ...DEFAULT_DECK_REBELS, ccList };
+  }
   const p2Deck = DEFAULT_DECK_SCUM;
-  await applySquadSubmission(game, true, { ...p1Deck }, client);
+  await applySquadSubmission(game, true, p1Deck, client);
   await applySquadSubmission(game, false, { ...p2Deck }, client);
 
   // Initiative + deployment zone
@@ -2054,6 +2179,8 @@ async function runDraftRandom(game, client) {
   game.initiativePlayerDeployed = true;
   game.nonInitiativePlayerDeployed = true;
   game.currentRound = 1;
+  game.currentActivationTurnPlayerId = game.initiativePlayerId;
+  game.draftRandomUsed = true;
 
   if (game.boardId && game.selectedMap) {
     const boardChannel = await client.channels.fetch(game.boardId);
@@ -2061,13 +2188,18 @@ async function runDraftRandom(game, client) {
     await boardChannel.send(payload);
   }
 
-  // Shuffle + draw starting 3 CCs
+  // Shuffle + draw starting 3 CCs. Scenario may seed P1 hand (e.g. smoke_grenade forces Smoke Grenade)
   const drawStartingHand = async (playerNum) => {
     const squad = playerNum === 1 ? game.player1Squad : game.player2Squad;
     const ccList = squad?.ccList || [];
     const deck = [...ccList];
     shuffleArray(deck);
-    const hand = deck.splice(0, 3);
+    let hand = deck.splice(0, 3);
+    if (scenarioId === 'smoke_grenade' && playerNum === 1 && !hand.includes('Smoke Grenade')) {
+      const replaced = hand[0];
+      hand = ['Smoke Grenade', hand[1], hand[2]].filter(Boolean);
+      if (replaced) deck.push(replaced);
+    }
     const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
     const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
     const drawnKey = playerNum === 1 ? 'player1CcDrawn' : 'player2CcDrawn';
@@ -3322,6 +3454,55 @@ client.once('ready', async () => {
       console.error(`Setup failed for ${guild.name}:`, err);
     }
   }
+
+  // Local HTTP endpoint to create a test game from Cursor/terminal (no need to type in #lfg)
+  const guildId = process.env.DISCORD_GUILD_ID;
+  const port = Number(process.env.TESTGAME_PORT) || 3999;
+  if (guildId) {
+    createServer((req, res) => {
+      if (req.method !== 'POST' || req.url !== '/testgame') {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      let body = '';
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', async () => {
+        try {
+          const data = body ? JSON.parse(body) : {};
+          const userId = data.userId || process.env.TESTGAME_USER_ID;
+          const scenarioId = data.scenarioId || null;
+          if (!userId) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Missing userId (set in body or TESTGAME_USER_ID)' }));
+            return;
+          }
+          const guild = await client.guilds.fetch(guildId).catch(() => null);
+          if (!guild) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Guild not found' }));
+            return;
+          }
+          await guild.channels.fetch();
+          const lfg = guild.channels.cache.find((c) => c.type === ChannelType.GuildText && c.name === 'lfg');
+          if (!lfg) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: '#lfg channel not found' }));
+            return;
+          }
+          const { gameId } = await createTestGame(client, guild, userId, scenarioId, lfg);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ gameId, message: 'Test game created. Check #lfg in Discord.' }));
+        } catch (err) {
+          console.error('POST /testgame error:', err);
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message || 'Test game creation failed' }));
+        }
+      });
+    }).listen(port, '127.0.0.1', () => {
+      console.log(`Testgame HTTP: POST http://127.0.0.1:${port}/testgame (body: { "userId?", "scenarioId?" }, or set TESTGAME_USER_ID)`);
+    });
+  }
 });
 
 const requestsWithButtons = new Set();
@@ -3384,8 +3565,39 @@ client.on('messageCreate', async (message) => {
 
   const content = message.content.toLowerCase().trim();
 
-  const isTestGameCmd = content.startsWith('testgame') && message.channel?.name === 'lfg';
+  const channelNameLc = message.channel?.name?.toLowerCase();
+  if (content.startsWith('testready') && channelNameLc === 'lfg') {
+    if (!message.guild) {
+      await message.reply('This command must be used in a server channel.').catch(() => {});
+      return;
+    }
+    const scenarioId = getRandomTestreadyScenario();
+    if (!scenarioId) {
+      await message.reply('No testready scenarios. Add scenarios with `status: "testready"` in `data/test-scenarios.json` and implement them in runDraftRandom.').catch(() => {});
+      return;
+    }
+    const msgId = message.id;
+    if (processedTestGameMessageIds.has(msgId)) return;
+    processedTestGameMessageIds.add(msgId);
+    if (processedTestGameMessageIds.size > 500) processedTestGameMessageIds.clear();
+    const userId = message.author.id;
+    const creatingMsg = await message.reply(`Creating test game (random testready scenario: **${scenarioId}**)...`);
+    try {
+      await createTestGame(message.client, message.guild, userId, scenarioId, message.channel, { editMessageInstead: creatingMsg });
+    } catch (err) {
+      console.error('Test game creation error:', err);
+      await logGameErrorToBotLogs(message.client, message.guild, null, err, 'test_game_create');
+      await creatingMsg.edit(`Failed to create test game: ${err.message}`).catch(() => {});
+    }
+    return;
+  }
+
+  const isTestGameCmd = content.startsWith('testgame') && channelNameLc === 'lfg';
   if (isTestGameCmd) {
+    if (!message.guild) {
+      await message.reply('This command must be used in a server channel.').catch(() => {});
+      return;
+    }
     const parts = content.split(/\s+/);
     const scenarioId = parts[1] && parts[1].toLowerCase() || null; // e.g. 'smoke_grenade', 'blaze'
     const msgId = message.id;
@@ -3393,69 +3605,13 @@ client.on('messageCreate', async (message) => {
     processedTestGameMessageIds.add(msgId);
     if (processedTestGameMessageIds.size > 500) processedTestGameMessageIds.clear();
     const userId = message.author.id;
-    if (testGameCreationInProgress.has(userId)) {
-      await message.reply('A test game is already being created. Please wait.');
-      return;
-    }
-    if (countActiveGamesForPlayer(userId) >= MAX_ACTIVE_GAMES_PER_PLAYER) {
-      await message.reply(`You are already in **${MAX_ACTIVE_GAMES_PER_PLAYER}** active games. Finish or leave a game before creating another.`);
-      return;
-    }
-    testGameCreationInProgress.add(userId);
     const creatingMsg = await message.reply(scenarioId ? `Creating test game (scenario: **${scenarioId}**)...` : 'Creating test game (you as both players)...');
     try {
-      const guild = message.guild;
-      const { gameId, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel } =
-        await createGameChannels(guild, userId, userId, { createPlayAreas: false, createHandChannels: false });
-      const game = {
-        gameId,
-        version: CURRENT_GAME_VERSION,
-        gameCategoryId: generalChannel.parentId,
-        player1Id: userId,
-        player2Id: userId,
-        generalId: generalChannel.id,
-        chatId: chatChannel.id,
-        boardId: boardChannel.id,
-        p1HandId: p1HandChannel?.id ?? null,
-        p2HandId: p2HandChannel?.id ?? null,
-        p1PlayAreaId: p1PlayAreaChannel?.id ?? null,
-        p2PlayAreaId: p2PlayAreaChannel?.id ?? null,
-        player1Squad: null,
-        player2Squad: null,
-        player1VP: { total: 0, kills: 0, objectives: 0 },
-        player2VP: { total: 0, kills: 0, objectives: 0 },
-        isTestGame: true,
-        testScenario: scenarioId || undefined,
-        ended: false,
-      };
-      setGame(gameId, game);
-
-      const scenarioHint = scenarioId === 'smoke_grenade'
-        ? '\n\n**Scenario: smoke_grenade** — After you draw your starting hand as P1, Smoke Grenade will be in your hand so you can test the pick-a-space flow.'
-        : scenarioId ? `\n\n**Scenario: ${scenarioId}** — (seed behavior may be added for this scenario.)` : '';
-      const setupMsg = await generalChannel.send({
-        content: `<@${userId}> — **Test game** created. You are both players. Map Selection below — Hand channels will appear after map selection. Use **General chat** for notes.`,
-        allowedMentions: { users: [userId] },
-        embeds: [
-          new EmbedBuilder()
-            .setTitle('Game Setup (Test)')
-            .setDescription(
-              '**Test game** — Select the map below. Hand channels will then appear; use them to pick decks (Select Squad or Default Rebels / Scum / Imperial) for each "side".'
-              + scenarioHint
-            )
-            .setColor(0x2f3136),
-        ],
-        components: [getGeneralSetupButtons(game)],
-      });
-      game.generalSetupMessageId = setupMsg.id;
-      await creatingMsg.edit(`Test game **IA Game #${gameId}** is ready! Select the map in Game Log — Hand channels will appear after map selection.${scenarioId ? ` Scenario: **${scenarioId}**.` : ''}`);
-      saveGames();
+      await createTestGame(message.client, message.guild, userId, scenarioId, message.channel, { editMessageInstead: creatingMsg });
     } catch (err) {
       console.error('Test game creation error:', err);
       await logGameErrorToBotLogs(message.client, message.guild, null, err, 'test_game_create');
       await creatingMsg.edit(`Failed to create test game: ${err.message}`).catch(() => {});
-    } finally {
-      testGameCreationInProgress.delete(userId);
     }
     return;
   }
