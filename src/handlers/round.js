@@ -195,9 +195,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   const generalChannel = await client.channels.fetch(game.generalId);
   const drawDesc = hadCutLines
     ? 'No Command card draw this round (Cut Lines).'
-    : (p1Terminals > 0 || p2Terminals > 0
-      ? `Draw 1 CC each (P1 +${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''}, P2 +${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''}).`
-      : 'Draw 1 command card each.');
+    : `P1 drew ${p1DrawCount} card${p1DrawCount !== 1 ? 's' : ''} (${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''} controlled). P2 drew ${p2DrawCount} card${p2DrawCount !== 1 ? 's' : ''} (${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''} controlled). ✓`;
   const initZone = getInitiativePlayerZoneLabel(game);
   const initNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
   await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
@@ -277,16 +275,11 @@ export async function handleEndStartOfRound(interaction, ctx) {
         .setStyle(ButtonStyle.Secondary)
     ));
   }
-  const p1Terminals = game.selectedMap?.id ? countTerminalsControlledByPlayer(game, 1, game.selectedMap.id) : 0;
-  const p2Terminals = game.selectedMap?.id ? countTerminalsControlledByPlayer(game, 2, game.selectedMap.id) : 0;
-  const drawRule = (p1Terminals > 0 || p2Terminals > 0)
-    ? 'Draw 1 CC (+1 per controlled terminal). '
-    : 'Draw 1 CC. ';
   const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
   const passHint = otherRem > initRem && initRem > 0 ? ' You may pass back (opponent has more activations).' : '';
   const content = showBtn
-    ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Both players: click **End R${game.currentRound} Activation Phase** when you've used all activations and any end-of-activation effects.${passHint}`
-    : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. ${drawRule}Use all activations and actions. The **End R${game.currentRound} Activation Phase** button will appear when both players have done so.${passHint}`;
+    ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. Both players: click **End R${game.currentRound} Activation Phase** when you've used all activations and any end-of-activation effects.${passHint}`
+    : `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. Use all activations and actions. The **End R${game.currentRound} Activation Phase** button will appear when both players have done so.${passHint}`;
   const sent = await generalChannel.send({
     content,
     embeds: [roundEmbed],
