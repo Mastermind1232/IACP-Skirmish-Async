@@ -280,11 +280,14 @@ export async function handleCombatRoll(interaction, ctx) {
       evade += r.evade;
     }
     combat.defenseRoll = { block, evade };
+    combat.defenseDiceCount = diceToRoll.length;
     await interaction.deferUpdate();
     await thread.send(`**Defense roll** — ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade`);
     const roll = combat.attackRoll;
     const defRoll = combat.defenseRoll;
-    const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[combat.attackerPlayerNum] || 0);
+    const defenseDiceCount = combat.defenseDiceCount ?? 1;
+    const perDefDieSurge = (combat.bonusSurgePerDefenseDie || 0) * defenseDiceCount;
+    const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[combat.attackerPlayerNum] || 0) + perDefDieSurge;
     const totalSurge = roll.surge + surgeBonus;
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const getAbility = ctx.getAbility || (() => null);

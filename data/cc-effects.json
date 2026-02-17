@@ -720,7 +720,8 @@
       "playableBy": "Murne Rin",
       "timing": "startOfActivation",
       "effect": "Use at the start of your activation. When you use \"False Orders\" this round, you may choose a figure with a figure cost of 5 or less within 5 spaces.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Fatal Deception"
     },
     "Feint": {
       "cost": 1,
@@ -948,7 +949,8 @@
       "playableBy": "GUARDIAN",
       "timing": "whileAdjacentFriendlyFigureDefending",
       "effect": "Use while an adjacent friendly figure is defending. Reroll 1 or more attack or defense dice.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Guardian Stance"
     },
     "Guerilla Warfare": {
       "cost": 1,
@@ -1094,7 +1096,8 @@
       "playableBy": "Han Solo",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Your player claims the initiative token, and Han Solo must activate first this round.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "I Make My Own Luck"
     },
     "Iron Will": {
       "cost": 3,
@@ -1311,7 +1314,8 @@
       "playableBy": "Obi-Wan Kenobi",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Until the end of the round, hostile figures cannot declare attacks targeting you unless they are within 3 spaces of you.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "I Must Go Alone"
     },
     "Improvised Weapons": {
       "cost": 0,
@@ -1347,7 +1351,8 @@
       "playableBy": "SPY",
       "timing": "duringActivation",
       "effect": "Use during your activation to look at your opponent's hand. You may choose and discard a Command card from it. Then, you suffer Strain equal to that card's cost.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Intelligence Leak"
     },
     "Leader": {
       "cost": null,
@@ -1400,7 +1405,8 @@
       "playableBy": "HUNTER",
       "timing": "specialAction",
       "effect": "Special Action: Choose an adjacent hostile figure. That figure's player may discard 2 cards from the top of his Command deck. If he does not, your player gains 3 VPs.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Merciless"
     },
     "Miracle Worker": {
       "cost": 2,
@@ -1430,21 +1436,24 @@
       "playableBy": "LEADER",
       "timing": "doubleActionSpecial",
       "effect": "Special Action: Choose 1 adjacent friendly figure. Ready that figure's Deployment card.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "New Orders"
     },
     "No Cheating": {
       "cost": 1,
       "playableBy": "Asajj Ventress",
       "timing": "atStartOfActivationOfHostileFigureInYourLineOfSight",
       "effect": "Use at the start of the activation of a hostile figure in your line of sight. During this round, that figure's attack becomes Melee, and when it declares an attack, it removes one attack die from its attack pool.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "No Cheating"
     },
     "Of No Importance": {
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "whenOneOfYourFiguresDefeated",
       "effect": "Use when one of your non-unique figures is defeated. That figure is worth 4 fewer VPs, to a minimum of 0.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Of No Importance"
     },
     "Officer's Training": {
       "cost": 0,
@@ -1525,7 +1534,8 @@
       "playableBy": "HEAVY WEAPON or WOOKIEE",
       "timing": "duringAttack",
       "effect": "Use while attacking. For each defense die rolled, apply +1 Damage and +1 Surge to the attack results. During this attack, ignore all defense results that are not on the defense dice.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Overwhelming Impact"
     },
     "Pack Alpha": {
       "cost": 1,

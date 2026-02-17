@@ -1296,6 +1296,18 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `Distributed ${totalToAdd} Hit Token(s) among figures in your group.` };
   }
 
+  // ccEffect: claimInitiative only (I Make My Own Luck) — optional firstActivationFigureName
+  if (entry.type === 'ccEffect' && entry.claimInitiative && !entry.exhaustOneDeploymentCard) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.initiativePlayerNum = playerNum;
+    if (entry.firstActivationFigureName) game.firstActivationFigureName = entry.firstActivationFigureName;
+    return {
+      applied: true,
+      logMessage: `Claimed the initiative token.${entry.firstActivationFigureName ? ` ${entry.firstActivationFigureName} must activate first this round.` : ''}`,
+    };
+  }
+
   // ccEffect: claimInitiative + exhaustOneDeploymentCard (Take Initiative)
   if (entry.type === 'ccEffect' && entry.claimInitiative && entry.exhaustOneDeploymentCard) {
     const { game, playerNum } = context;
@@ -1358,6 +1370,68 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: opponentDiscardFromHandChoice + selfStrainFromDiscardedCost (Intelligence Leak) — choiceIndex = index in opponent hand
+  if (entry.type === 'ccEffect' && entry.opponentDiscardFromHandChoice && entry.selfStrainFromDiscardedCost) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppHandKey = oppNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const oppDiscardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const oppHand = (game[oppHandKey] || []).slice();
+    const choiceIndex = context.choiceIndex;
+    if (oppHand.length === 0) return { applied: false, manualMessage: "Opponent's hand is empty." };
+    if (choiceIndex == null || choiceIndex < 0 || choiceIndex >= oppHand.length) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: oppHand.map((c, i) => `${i + 1}. ${c}`),
+        choiceCount: oppHand.length,
+        manualMessage: "Choose a card from opponent's hand to discard (you will suffer Strain equal to its cost).",
+      };
+    }
+    const discarded = oppHand.splice(choiceIndex, 1)[0];
+    game[oppHandKey] = oppHand;
+    game[oppDiscardKey] = (game[oppDiscardKey] || []).concat(discarded);
+    const eff = getCcEffect(discarded);
+    const cost = typeof eff?.cost === 'number' ? eff.cost : 0;
+    game.figureStrain = game.figureStrain || {};
+    const msgId = context.msgId;
+    const strainKey = msgId ? `msg:${msgId}` : `p${playerNum}`;
+    game.figureStrain[strainKey] = (game.figureStrain[strainKey] || 0) + cost;
+    return {
+      applied: true,
+      logMessage: `Discarded **${discarded}** from opponent's hand; you suffer ${cost} Strain.`,
+      refreshOpponentHand: true,
+    };
+  }
+
+  // ccEffect: readyAdjacentFriendlyDeploymentCard (New Orders) — context.readyAdjacentFriendlyDcName from handler
+  if (entry.type === 'ccEffect' && entry.readyAdjacentFriendlyDeploymentCard) {
+    const { game, playerNum, readyAdjacentFriendlyDcName } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (!readyAdjacentFriendlyDcName) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceTarget: 'readyAdjacentFriendlyDeploymentCard',
+        manualMessage: 'Choose 1 adjacent friendly figure to ready its Deployment card.',
+      };
+    }
+    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const nameLower = String(readyAdjacentFriendlyDcName).toLowerCase().trim();
+    for (let i = 0; i < dcList.length; i++) {
+      const dc = dcList[i];
+      const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+      const displayName = typeof dc === 'object' ? dc.displayName : dcName;
+      const matchName = (displayName || dcName || '').toLowerCase();
+      if (!matchName || (!matchName.includes(nameLower) && !nameLower.includes(matchName))) continue;
+      if (typeof dc === 'object') dcList[i] = { ...dc, exhausted: false };
+      else dcList[i] = { dcName, displayName: dcName, exhausted: false };
+      return { applied: true, logMessage: `Readied **${displayName || dcName}**'s Deployment card.` };
+    }
+    return { applied: false, manualMessage: `Could not find Deployment card matching "${readyAdjacentFriendlyDcName}".` };
+  }
+
   // ccEffect: shuffleOneFromDiscardIntoDeck (De Wanna Wanga) — choiceIndex = index in discard to shuffle in
   if (entry.type === 'ccEffect' && entry.shuffleOneFromDiscardIntoDeck) {
     const { game, playerNum, cardName } = context;
@@ -1392,15 +1466,36 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: opponentDiscardDeckTop (Shoot the Messenger) — when defender was defeated
+  // ccEffect: opponentDiscardDeckTop (Shoot the Messenger) — when defender was defeated; or with elseGainVp (Merciless) — no defender required
   if (entry.type === 'ccEffect' && typeof entry.opponentDiscardDeckTop === 'number' && entry.opponentDiscardDeckTop > 0) {
     const { game, playerNum, defenderDefeated } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    if (!defenderDefeated) return { applied: false, manualMessage: 'Shoot the Messenger: defender was not defeated.' };
     const oppNum = playerNum === 1 ? 2 : 1;
     const deckKey = oppNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
     const discardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
     const deck = (game[deckKey] || []).slice();
+    if (entry.elseGainVp != null) {
+      // Merciless: opponent may discard 2 from deck; if not (or deck has < 2), you gain 3 VP
+      if (deck.length >= entry.opponentDiscardDeckTop) {
+        const n = entry.opponentDiscardDeckTop;
+        const removed = deck.splice(0, n);
+        game[deckKey] = deck;
+        game[discardKey] = (game[discardKey] || []).concat(removed);
+        return {
+          applied: true,
+          logMessage: `Opponent discarded top ${n} card(s) of their Command deck.`,
+          refreshOpponentDiscard: true,
+        };
+      }
+      const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+      game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+      game[vpKey].total = (game[vpKey].total ?? 0) + entry.elseGainVp;
+      return {
+        applied: true,
+        logMessage: `Opponent had fewer than ${entry.opponentDiscardDeckTop} cards in deck; you gained ${entry.elseGainVp} VP.`,
+      };
+    }
+    if (!defenderDefeated) return { applied: false, manualMessage: 'Shoot the Messenger: defender was not defeated.' };
     const n = Math.min(entry.opponentDiscardDeckTop, deck.length);
     const removed = deck.splice(0, n);
     game[deckKey] = deck;
@@ -1439,6 +1534,26 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'You may reroll 1 attack die.' };
   }
 
+  // ccEffect: defenderRerollDiceMax (Guardian Stance) — while adjacent friendly is defending
+  if (entry.type === 'ccEffect' && typeof entry.defenderRerollDiceMax === 'number' && entry.defenderRerollDiceMax > 0) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play while adjacent friendly is defending.' };
+    cbt.defenderRerollDiceMax = (cbt.defenderRerollDiceMax || 0) + entry.defenderRerollDiceMax;
+    return { applied: true, logMessage: `You may reroll up to ${entry.defenderRerollDiceMax} attack or defense die.` };
+  }
+
+  // ccEffect: bonusDamagePerDefenseDie + bonusSurgePerDefenseDie + ignoreDefenseResultsNotOnDice (Overwhelming Impact)
+  if (entry.type === 'ccEffect' && (typeof entry.bonusDamagePerDefenseDie === 'number' || typeof entry.bonusSurgePerDefenseDie === 'number' || entry.ignoreDefenseResultsNotOnDice)) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play while attacking.' };
+    if (typeof entry.bonusDamagePerDefenseDie === 'number') cbt.bonusDamagePerDefenseDie = (cbt.bonusDamagePerDefenseDie || 0) + entry.bonusDamagePerDefenseDie;
+    if (typeof entry.bonusSurgePerDefenseDie === 'number') cbt.bonusSurgePerDefenseDie = (cbt.bonusSurgePerDefenseDie || 0) + entry.bonusSurgePerDefenseDie;
+    if (entry.ignoreDefenseResultsNotOnDice) cbt.ignoreDefenseResultsNotOnDice = true;
+    return { applied: true, logMessage: 'This attack: +1 Damage and +1 Surge per defense die; ignore defense results not on dice.' };
+  }
+
   // ccEffect: celebrationVp + increaseArmyCostBy (Field Promotion)
   if (entry.type === 'ccEffect' && typeof entry.celebrationVp === 'number' && typeof entry.increaseArmyCostBy === 'number') {
     const { game, playerNum, defenderDefeated } = context;
@@ -1464,6 +1579,39 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: `Until end of round, friendly figures may reroll up to ${entry.roundAttackRerollDice} attack die when attacking.`,
+    };
+  }
+
+  // ccEffect: roundDefenderCannotBeTargetedUnlessWithinSpaces (I Must Go Alone)
+  if (entry.type === 'ccEffect' && typeof entry.roundDefenderCannotBeTargetedUnlessWithinSpaces === 'number') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundDefenderCannotBeTargetedUnlessWithinSpaces = { playerNum, spaces: entry.roundDefenderCannotBeTargetedUnlessWithinSpaces };
+    return {
+      applied: true,
+      logMessage: `Until end of round, hostiles cannot attack you unless within ${entry.roundDefenderCannotBeTargetedUnlessWithinSpaces} spaces.`,
+    };
+  }
+
+  // ccEffect: roundDebuffNextHostileActivation (No Cheating)
+  if (entry.type === 'ccEffect' && entry.roundDebuffNextHostileActivation) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundDebuffNextHostileActivation = { playerNum, ...entry.roundDebuffNextHostileActivation };
+    return {
+      applied: true,
+      logMessage: 'Next hostile activation in your LOS: that figure\'s attack becomes Melee and removes 1 attack die this round.',
+    };
+  }
+
+  // ccEffect: nextDefeatedFriendlyVpReduction (Of No Importance)
+  if (entry.type === 'ccEffect' && typeof entry.nextDefeatedFriendlyVpReduction === 'number') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.nextDefeatedFriendlyVpReduction = { playerNum, amount: entry.nextDefeatedFriendlyVpReduction };
+    return {
+      applied: true,
+      logMessage: `Next time one of your non-unique figures is defeated, that figure is worth ${entry.nextDefeatedFriendlyVpReduction} fewer VP.`,
     };
   }
 

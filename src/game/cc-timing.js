@@ -125,6 +125,15 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'whenattackdeclaredonadjacentfriendly':
       // Bodyguard: playable when attack declared on adjacent friendly (honor system: play when attack declared on adjacent friendly)
       return ctx.duringActivation;
+    case 'whileadjacentfriendlyfiguredefending':
+      // Guardian Stance: playable while defending when adjacent friendly is defender (honor: play when you are defending with adjacent friendly)
+      return ctx.duringAttack && ctx.isDefender;
+    case 'atstartofactivationofhostilefigureinyourlineofsight':
+      // No Cheating: playable at start of hostile activation in your LOS (honor: play when hostile in LOS starts activation)
+      return ctx.duringActivation;
+    case 'whenoneofyourfiguresdefeated':
+      // Of No Importance: playable when your non-unique figure is defeated (honor: play when your figure defeated)
+      return ctx.duringActivation;
     case 'afteryouresolvegroupsactivation':
       // Change of Plans: playable after you resolve a group's activation (honor system)
       return ctx.duringActivation;
