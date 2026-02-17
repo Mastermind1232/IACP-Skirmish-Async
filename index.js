@@ -125,6 +125,7 @@ import {
   handleCcCloseDiscard,
   handleCcDiscard,
   handleCcChoice,
+  handleCcSpacePick,
   handleSquadSelect,
   handleIllegalCcIgnore,
   handleIllegalCcUnplay,
@@ -205,6 +206,7 @@ import {
   getDcPlayAreaComponents as getDcPlayAreaComponentsFromDiscord,
   getMoveMpButtonRows,
   getMoveSpaceGridRows,
+  getSpaceChoiceRows,
   getDeployFigureLabelsFromDiscord,
   getDeployButtonRowsFromDiscord,
   getDeploySpaceGridRows,
@@ -1610,6 +1612,30 @@ async function getMovementMinimapAttachment(game, msgId, figureKey, spacesAtCost
     return new AttachmentBuilder(buffer, { name: 'move-destinations.png' });
   } catch (err) {
     console.error('Movement minimap render error:', err);
+    return null;
+  }
+}
+
+/** Returns AttachmentBuilder for CC/DC space choice (zoomed to validSpaces, labels on those coords). */
+async function getMapAttachmentForSpaces(game, validSpaces) {
+  const map = game?.selectedMap;
+  if (!map?.id || !validSpaces?.length) return null;
+  try {
+    const figures = getFiguresForRender(game);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors);
+    const labelCoords = validSpaces.map((s) => String(s).toLowerCase());
+    const buffer = await renderMap(map.id, {
+      figures,
+      tokens,
+      showGrid: true,
+      maxWidth: 800,
+      cropToZone: validSpaces,
+      gridStyle: 'black',
+      showGridOnlyOnCoords: labelCoords,
+    });
+    return new AttachmentBuilder(buffer, { name: 'space-choice.png' });
+  } catch (err) {
+    console.error('Map for space choice error:', err);
     return null;
   }
 }
@@ -3358,7 +3384,10 @@ client.on('messageCreate', async (message) => {
 
   const content = message.content.toLowerCase().trim();
 
-  if (content === 'testgame' && message.channel?.name === 'lfg') {
+  const isTestGameCmd = content.startsWith('testgame') && message.channel?.name === 'lfg';
+  if (isTestGameCmd) {
+    const parts = content.split(/\s+/);
+    const scenarioId = parts[1] && parts[1].toLowerCase() || null; // e.g. 'smoke_grenade', 'blaze'
     const msgId = message.id;
     if (processedTestGameMessageIds.has(msgId)) return; // dedupe: Discord sometimes fires messageCreate twice
     processedTestGameMessageIds.add(msgId);
@@ -3373,7 +3402,7 @@ client.on('messageCreate', async (message) => {
       return;
     }
     testGameCreationInProgress.add(userId);
-    const creatingMsg = await message.reply('Creating test game (you as both players)...');
+    const creatingMsg = await message.reply(scenarioId ? `Creating test game (scenario: **${scenarioId}**)...` : 'Creating test game (you as both players)...');
     try {
       const guild = message.guild;
       const { gameId, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel } =
@@ -3396,10 +3425,14 @@ client.on('messageCreate', async (message) => {
         player1VP: { total: 0, kills: 0, objectives: 0 },
         player2VP: { total: 0, kills: 0, objectives: 0 },
         isTestGame: true,
+        testScenario: scenarioId || undefined,
         ended: false,
       };
       setGame(gameId, game);
 
+      const scenarioHint = scenarioId === 'smoke_grenade'
+        ? '\n\n**Scenario: smoke_grenade** — After you draw your starting hand as P1, Smoke Grenade will be in your hand so you can test the pick-a-space flow.'
+        : scenarioId ? `\n\n**Scenario: ${scenarioId}** — (seed behavior may be added for this scenario.)` : '';
       const setupMsg = await generalChannel.send({
         content: `<@${userId}> — **Test game** created. You are both players. Map Selection below — Hand channels will appear after map selection. Use **General chat** for notes.`,
         allowedMentions: { users: [userId] },
@@ -3408,13 +3441,14 @@ client.on('messageCreate', async (message) => {
             .setTitle('Game Setup (Test)')
             .setDescription(
               '**Test game** — Select the map below. Hand channels will then appear; use them to pick decks (Select Squad or Default Rebels / Scum / Imperial) for each "side".'
+              + scenarioHint
             )
             .setColor(0x2f3136),
         ],
         components: [getGeneralSetupButtons(game)],
       });
       game.generalSetupMessageId = setupMsg.id;
-      await creatingMsg.edit(`Test game **IA Game #${gameId}** is ready! Select the map in Game Log — Hand channels will appear after map selection.`);
+      await creatingMsg.edit(`Test game **IA Game #${gameId}** is ready! Select the map in Game Log — Hand channels will appear after map selection.${scenarioId ? ` Scenario: **${scenarioId}**.` : ''}`);
       saveGames();
     } catch (err) {
       console.error('Test game creation error:', err);
@@ -3899,6 +3933,9 @@ client.on('interactionCreate', async (interaction) => {
       client,
       resolveAbility,
       pushUndo,
+      getBoardStateForMovement,
+      getSpaceChoiceRows,
+      getMapAttachmentForSpaces,
     };
     if (selectKey === 'cc_attach_to_') await handleCcAttachTo(interaction, ccHandSelectContext);
     else if (selectKey === 'cc_play_select_') await handleCcPlaySelect(interaction, ccHandSelectContext);
@@ -3910,11 +3947,12 @@ client.on('interactionCreate', async (interaction) => {
   const buttonKey = getHandlerKey(interaction.customId, 'button');
   if (!buttonKey) return;
 
-    if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'cc_choice_' || buttonKey === 'squad_select_' || buttonKey === 'illegal_cc_ignore_' || buttonKey === 'illegal_cc_unplay_' || buttonKey === 'negation_play_' || buttonKey === 'negation_let_resolve_' || buttonKey === 'celebration_play_' || buttonKey === 'celebration_pass_') {
+    if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'cc_choice_' || buttonKey === 'cc_space_' || buttonKey === 'squad_select_' || buttonKey === 'illegal_cc_ignore_' || buttonKey === 'illegal_cc_unplay_' || buttonKey === 'negation_play_' || buttonKey === 'negation_let_resolve_' || buttonKey === 'celebration_play_' || buttonKey === 'celebration_pass_') {
     const ccHandButtonContext = {
       getGame,
       dcMessageMeta,
       dcHealthState,
+      dcExhaustedState,
       saveGames,
       pushUndo,
       client,
@@ -3940,6 +3978,9 @@ client.on('interactionCreate', async (interaction) => {
       getPlayableCcFromHand,
       resolveAbility,
       updateDcActionsMessage,
+      buildDcEmbedAndFiles,
+      getConditionsForDcMessage,
+      getDcPlayAreaComponents,
     };
     if (buttonKey === 'deck_illegal_play_') await handleDeckIllegalPlay(interaction, ccHandButtonContext);
     else if (buttonKey === 'deck_illegal_redo_') await handleDeckIllegalRedo(interaction, ccHandButtonContext);
@@ -3950,6 +3991,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'cc_close_discard_') await handleCcCloseDiscard(interaction, ccHandButtonContext);
     else if (buttonKey === 'cc_discard_') await handleCcDiscard(interaction, ccHandButtonContext);
     else if (buttonKey === 'cc_choice_') await handleCcChoice(interaction, ccHandButtonContext);
+    else if (buttonKey === 'cc_space_') await handleCcSpacePick(interaction, ccHandButtonContext);
     else if (buttonKey === 'squad_select_') await handleSquadSelect(interaction, ccHandButtonContext);
     else if (buttonKey === 'illegal_cc_ignore_') await handleIllegalCcIgnore(interaction, ccHandButtonContext);
     else if (buttonKey === 'illegal_cc_unplay_') await handleIllegalCcUnplay(interaction, ccHandButtonContext);

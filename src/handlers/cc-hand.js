@@ -284,6 +284,44 @@ export async function handleCcPlaySelect(interaction, ctx) {
       saveGames();
       return;
     }
+    if (result.requiresSpaceChoice && Array.isArray(result.validSpaces) && result.validSpaces.length > 0) {
+      // Space choice required: commit play, then send space grid + map (reusable pick-a-space pattern).
+      const { getBoardStateForMovement, getSpaceChoiceRows, getMapAttachmentForSpaces } = ctx;
+      if (!getBoardStateForMovement || !getSpaceChoiceRows || !getMapAttachmentForSpaces) {
+        await interaction.reply({ content: 'Space choice not supported (missing helpers). Resolve manually.', ephemeral: true }).catch(() => {});
+        return;
+      }
+      await interaction.deferUpdate();
+      hand.splice(idx, 1);
+      game[handKey] = hand;
+      game[discardKey] = game[discardKey] || [];
+      game[discardKey].push(card);
+      const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
+      const handMessages = await handChannel.messages.fetch({ limit: 20 });
+      const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
+      const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+      if (handMsg) {
+        const handPayload = buildHandDisplayPayload(game[handKey], deck, gameId, game, playerNum);
+        const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
+        handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
+        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(() => {});
+      }
+      await interaction.message.delete().catch(() => {});
+      await updateHandVisualMessage(game, playerNum, interaction.client);
+      await updateDiscardPileMessage(game, playerNum, interaction.client);
+      await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+      if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
+      game.pendingCcSpaceChoice = { abilityId, gameId, playerNum, card, validSpaces: result.validSpaces };
+      const boardState = getBoardStateForMovement(game, null);
+      const mapSpaces = boardState?.mapSpaces || { spaces: result.validSpaces };
+      const { rows } = getSpaceChoiceRows(`cc_space_${gameId}_`, result.validSpaces, mapSpaces);
+      const mapAttachment = await getMapAttachmentForSpaces(game, result.validSpaces);
+      const payload = { content: `**Pick a space** (for **${card}**):`, components: rows.slice(0, 5), fetchReply: true };
+      if (mapAttachment) payload.files = [mapAttachment];
+      await handChannel.send(payload).catch(() => {});
+      saveGames();
+      return;
+    }
     if (result.applied) {
       // Effect applied: resolveAbility already mutated game (e.g. drew cards); remove played card from current hand and add to discard.
       await interaction.deferUpdate();
@@ -464,6 +502,70 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
   }
 }
 
+/** @param {import('discord.js').ButtonInteraction} interaction — space button for pick-a-space CC (e.g. Smoke Grenade, placement). */
+export async function handleCcSpacePick(interaction, ctx) {
+  const match = interaction.customId.match(/^cc_space_([^_]+)_(.+)$/);
+  if (!match) {
+    await interaction.reply({ content: 'Invalid space choice.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const [, gameId, space] = match;
+  const chosenSpace = String(space).toLowerCase();
+  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, client, saveGames } = ctx;
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const pending = game.pendingCcSpaceChoice;
+  if (!pending || pending.gameId !== gameId) {
+    await interaction.reply({ content: 'No pending space choice for this game.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const playerNum = pending.playerNum;
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== playerId) {
+    await interaction.reply({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const validLower = (pending.validSpaces || []).map((s) => String(s).toLowerCase());
+  if (!validLower.includes(chosenSpace)) {
+    await interaction.reply({ content: 'That space is not a valid choice.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  const result = resolveAbility(pending.abilityId, {
+    game,
+    playerNum,
+    dcMessageMeta,
+    dcHealthState,
+    chosenSpace,
+    combat: game.combat || game.pendingCombat,
+  });
+  delete game.pendingCcSpaceChoice;
+  if (result.applied && result.drewCards?.length) {
+    await updateHandVisualMessage(game, 1, client);
+    await updateHandVisualMessage(game, 2, client);
+    const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
+    await logGameAction(game, client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
+  } else if (result.applied && result.logMessage) {
+    await logGameAction(game, client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
+  }
+  if (result.applied && (result.refreshHand || result.refreshDiscard)) {
+    if (result.refreshHand) await updateHandVisualMessage(game, playerNum, client);
+    if (result.refreshDiscard) await updateDiscardPileMessage(game, playerNum, client);
+  }
+  if (result.applied && result.refreshDcEmbed && result.refreshDcEmbedMsgIds?.length) {
+    for (const msgId of result.refreshDcEmbedMsgIds) {
+      await updateDcActionsMessage(game, msgId, client).catch(() => {});
+    }
+  }
+  try {
+    await interaction.message.edit({ content: 'Space chosen.', components: [] }).catch(() => {});
+  } catch {}
+  saveGames();
+}
+
 /** @param {import('discord.js').ButtonInteraction} interaction — choice button for choose-one CC (e.g. Retaliation). */
 export async function handleCcChoice(interaction, ctx) {
   const match = interaction.customId.match(/^cc_choice_(.+)_(\d+)$/);
@@ -473,7 +575,7 @@ export async function handleCcChoice(interaction, ctx) {
   }
   const [, gameId, choiceIndexStr] = match;
   const choiceIndex = parseInt(choiceIndexStr, 10);
-  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, client, saveGames } = ctx;
+  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents, client, saveGames } = ctx;
   const game = getGame(gameId);
   if (!game) {
     await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
@@ -494,6 +596,7 @@ export async function handleCcChoice(interaction, ctx) {
     await interaction.reply({ content: 'Invalid option.', ephemeral: true }).catch(() => {});
     return;
   }
+  const chosenOption = pending.choiceOptions?.[choiceIndex];
   await interaction.deferUpdate();
   const result = resolveAbility(pending.abilityId, {
     game,
@@ -501,9 +604,29 @@ export async function handleCcChoice(interaction, ctx) {
     dcMessageMeta,
     dcHealthState,
     choiceIndex,
+    chosenOption,
     combat: game.combat || game.pendingCombat,
   });
   delete game.pendingCcChoice;
+  if (result.applied && result.readyDcMsgIds?.length && dcExhaustedState) {
+    for (const msgId of result.readyDcMsgIds) {
+      dcExhaustedState.set(msgId, false);
+      const meta = dcMessageMeta.get(msgId);
+      if (meta && buildDcEmbedAndFiles && getDcPlayAreaComponents) {
+        try {
+          const chId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+          const ch = await client.channels.fetch(chId);
+          const msg = await ch.messages.fetch(msgId);
+          const healthState = dcHealthState.get(msgId) || [];
+          const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta));
+          const components = getDcPlayAreaComponents(msgId, false, game, meta.dcName);
+          await msg.edit({ embeds: [embed], files, components }).catch(() => {});
+        } catch (err) {
+          console.error('Failed to update DC embed after ready:', err);
+        }
+      }
+    }
+  }
   if (result.applied && result.drewCards?.length) {
     await updateHandVisualMessage(game, 1, client);
     await updateHandVisualMessage(game, 2, client);
@@ -516,8 +639,9 @@ export async function handleCcChoice(interaction, ctx) {
     if (result.refreshHand) await updateHandVisualMessage(game, playerNum, client);
     if (result.refreshDiscard) await updateDiscardPileMessage(game, playerNum, client);
   }
-  if (result.applied && result.refreshDcEmbed && result.refreshDcEmbedMsgIds?.length) {
-    for (const msgId of result.refreshDcEmbedMsgIds) {
+  if (result.applied && result.refreshDcEmbed && (result.refreshDcEmbedMsgIds?.length || result.readyDcMsgIds?.length)) {
+    const msgIds = result.refreshDcEmbedMsgIds || result.readyDcMsgIds || [];
+    for (const msgId of msgIds) {
       await updateDcActionsMessage(game, msgId, client).catch(() => {});
     }
   }
@@ -886,9 +1010,15 @@ export async function handleCcShuffleDraw(interaction, ctx) {
   const placed = (game[attachKey] && Object.values(game[attachKey]).flat()) || [];
   const deck = ccList.filter((c) => !placed.includes(c));
   shuffleArray(deck);
-  const hand = deck.splice(0, 3);
+  let hand = deck.splice(0, 3);
   const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
   const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  // Test scenario: seed P1 hand so we can test a pattern (e.g. smoke_grenade = pick-a-space)
+  if (game.testScenario === 'smoke_grenade' && playerNum === 1 && !hand.includes('Smoke Grenade')) {
+    const replaced = hand[0];
+    hand = ['Smoke Grenade', hand[1], hand[2]].filter(Boolean);
+    if (replaced) deck.push(replaced);
+  }
   game[deckKey] = deck;
   game[handKey] = hand;
   game[drawnKey] = true;

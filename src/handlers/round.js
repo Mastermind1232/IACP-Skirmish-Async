@@ -67,6 +67,31 @@ export async function handleEndEndOfRound(interaction, ctx) {
   await interaction.deferUpdate();
   game.dcFinishedPinged = {};
   game.pendingEndTurn = {};
+  // Apply end-of-round self damage (e.g. Blaze of Glory)
+  const eorSelfDamage = game.endOfRoundSelfDamage;
+  if (eorSelfDamage && typeof eorSelfDamage === 'object') {
+    for (const playerNum of [1, 2]) {
+      const entry = eorSelfDamage[playerNum];
+      if (!entry || typeof entry.damage !== 'number') continue;
+      const msgId = entry.msgId;
+      if (!msgId || !dcMessageMeta.get(msgId)) continue;
+      const healthState = dcHealthState.get(msgId);
+      if (healthState && Array.isArray(healthState[0])) {
+        const [cur, max] = healthState[0];
+        const newCur = Math.max(0, (cur ?? max ?? 0) - entry.damage);
+        healthState[0] = [newCur, max ?? cur];
+        dcHealthState.set(msgId, healthState);
+        const meta = dcMessageMeta.get(msgId);
+        const dcMessageIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const idx = (dcMessageIds || []).indexOf(msgId);
+        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+        const displayName = meta?.displayName || meta?.dcName || 'Figure';
+        await logGameAction(game, client, `**End of round:** ${displayName} suffered ${entry.damage} Damage (e.g. Blaze of Glory).`, { phase: 'ROUND', icon: 'round' });
+      }
+    }
+    game.endOfRoundSelfDamage = {};
+  }
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId) continue;
     if (isDepletedRemovedFromGame(game, msgId)) continue;

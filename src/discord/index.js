@@ -35,6 +35,7 @@ export {
   getCleaveTargetButtons,
   getMoveMpButtonRows,
   getMoveSpaceGridRows,
+  getSpaceChoiceRows,
   getDeployFigureLabels as getDeployFigureLabelsFromDiscord,
   getDeployButtonRows as getDeployButtonRowsFromDiscord,
   getDeploySpaceGridRows,

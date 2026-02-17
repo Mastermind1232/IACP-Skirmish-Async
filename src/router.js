@@ -56,6 +56,7 @@ const BUTTON_PREFIXES = [
   'cc_close_discard_',
   'cc_discard_',
   'cc_choice_',
+  'cc_space_',
   'illegal_cc_ignore_',
   'illegal_cc_unplay_',
   'negation_play_',

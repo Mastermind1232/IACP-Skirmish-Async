@@ -131,6 +131,7 @@ register('cc_search_discard_', handleCcSearchDiscard);
 register('cc_close_discard_', handleCcCloseDiscard);
 register('cc_discard_', handleCcDiscard);
 register('cc_choice_', handleCcChoice);
+register('cc_space_', handleCcSpacePick);
 register('squad_select_', handleSquadSelect);
 register('illegal_cc_ignore_', handleIllegalCcIgnore);
 register('illegal_cc_unplay_', handleIllegalCcUnplay);
@@ -213,6 +214,7 @@ export {
   handleNegationLetResolve,
   handleCelebrationPlay,
   handleCelebrationPass,
+  handleCcSpacePick,
 } from './cc-hand.js';
 export {
   handleBotmenuArchive,

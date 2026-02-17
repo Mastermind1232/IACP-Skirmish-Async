@@ -492,6 +492,14 @@ export function getMoveMpButtonRows(msgId, figureIndex, mpRemaining) {
 
 /** Action rows for movement space selection: move_pick_${msgId}_${figureIndex}_${space}. */
 export function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces) {
+  return getSpaceChoiceRows(`move_pick_${msgId}_${figureIndex}_`, validSpaces, mapSpaces);
+}
+
+/**
+ * Generic space choice rows (reusable for CC/DC "pick a space").
+ * Buttons: ${customIdPrefix}${space}. Returns { rows, available }.
+ */
+export function getSpaceChoiceRows(customIdPrefix, validSpaces, mapSpaces) {
   const available = (validSpaces || []).map((s) => normalizeCoord(s));
   const orderMap = new Map(
     (mapSpaces?.spaces || []).map((coord, idx) => [normalizeCoord(coord), idx])
@@ -521,7 +529,7 @@ export function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces)
         new ActionRowBuilder().addComponents(
           chunk.map((space) =>
             new ButtonBuilder()
-              .setCustomId(`move_pick_${msgId}_${figureIndex}_${space}`)
+              .setCustomId(`${customIdPrefix}${space}`)
               .setLabel(space.toUpperCase())
               .setStyle(ButtonStyle.Success)
           )

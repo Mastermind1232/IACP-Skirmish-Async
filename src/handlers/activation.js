@@ -215,6 +215,8 @@ export async function handleEndTurn(interaction, ctx) {
   const otherPlayerNum = meta.playerNum === 1 ? 2 : 1;
   game.dcFinishedPinged = game.dcFinishedPinged || {};
   game.dcFinishedPinged[dcMsgId] = true;
+  game.lastActivationMsgIdByPlayer = game.lastActivationMsgIdByPlayer || {};
+  game.lastActivationMsgIdByPlayer[meta.playerNum] = dcMsgId;
   delete game.pendingEndTurn[dcMsgId];
   if (pending.messageId) {
     try {

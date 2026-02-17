@@ -14,7 +14,7 @@ function getStatsForDc(dcName) {
   })();
 }
 import { parseSurgeEffect } from './combat.js';
-import { getFiguresAdjacentToTarget } from './movement.js';
+import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces } from './movement.js';
 
 /** Get ability metadata by id. Returns { type, surgeCost?, label?, ... } or null. */
 export function getAbility(id) {
@@ -111,6 +111,40 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: 'Players cannot draw Command cards during this round.',
+    };
+  }
+
+  // ccEffect: chooseSpaceWithin2OfActivating (Smoke Grenade) — first call: return validSpaces; second call: apply with chosenSpace
+  if (entry.type === 'ccEffect' && entry.chooseSpaceWithin2OfActivating) {
+    const { game, playerNum, dcMessageMeta, chosenSpace } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (!chosenSpace) {
+      const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
+      const meta = dcMessageMeta.get(msgId);
+      if (!meta?.dcName) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+      const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+      if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+      const boardState = getBoardStateForMovement(game, null);
+      if (!boardState?.mapSpaces) return { applied: false, manualMessage: 'Resolve manually: map data missing.' };
+      const validSet = new Set();
+      for (const fk of figureKeys) {
+        const pos = game.figurePositions?.[playerNum]?.[fk];
+        if (!pos) continue;
+        const profile = getMovementProfile(meta.dcName, fk, game);
+        const occ = boardState.occupiedSet;
+        const occArr = occ instanceof Set ? [...occ] : (occ || []);
+        const cells = getReachableSpaces(pos, 2, boardState.mapSpaces, occArr);
+        for (const c of cells) validSet.add(String(c).toLowerCase());
+      }
+      const validSpaces = [...validSet];
+      if (validSpaces.length === 0) return { applied: false, manualMessage: 'No spaces within 2 to choose.' };
+      return { requiresSpaceChoice: true, validSpaces };
+    }
+    const spaceUpper = String(chosenSpace).toUpperCase();
+    return {
+      applied: true,
+      logMessage: `Chose space **${spaceUpper}**. Place energy shield there; choose a friendly figure within 2 of that space to gain 2 MP (place shield and apply MP manually).`,
     };
   }
 
@@ -1579,6 +1613,58 @@ export function resolveAbility(abilityId, context) {
       return { applied: true, logMessage: `Readied **${displayName || dcName}**'s Deployment card.` };
     }
     return { applied: false, manualMessage: `Could not find Deployment card matching "${readyAdjacentFriendlyDcName}".` };
+  }
+
+  // ccEffect: readyOwnDeploymentCard + endOfRoundSelfDamage (Blaze of Glory) — choiceOptions = your DCs; chosenOption = displayName to ready
+  if (entry.type === 'ccEffect' && entry.readyOwnDeploymentCard && typeof entry.endOfRoundSelfDamage === 'number') {
+    const { game, playerNum, dcMessageMeta, chosenOption } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (!chosenOption) {
+      const choiceOptions = [];
+      for (const [, meta] of dcMessageMeta) {
+        if (meta.gameId !== game.gameId || meta.playerNum !== playerNum) continue;
+        const name = meta.displayName || meta.dcName;
+        if (name) choiceOptions.push(name);
+      }
+      if (choiceOptions.length === 0) return { applied: false, manualMessage: 'No Deployment cards to ready.' };
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions,
+        choiceCount: choiceOptions.length,
+        manualMessage: 'Choose which Deployment card to ready.',
+      };
+    }
+    const nameLower = String(chosenOption).toLowerCase().trim();
+    let targetMsgId = null;
+    for (const [msgId, meta] of dcMessageMeta) {
+      if (meta.gameId !== game.gameId || meta.playerNum !== playerNum) continue;
+      const displayName = meta.displayName || meta.dcName || '';
+      if ((displayName || '').toLowerCase() === nameLower || displayName.toLowerCase().includes(nameLower) || nameLower.includes(displayName.toLowerCase())) {
+        targetMsgId = msgId;
+        break;
+      }
+    }
+    if (!targetMsgId) return { applied: false, manualMessage: `Could not find Deployment card matching "${chosenOption}".` };
+    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const idx = dcMessageIds.indexOf(targetMsgId);
+    if (idx >= 0 && dcList[idx]) {
+      const dc = dcList[idx];
+      dcList[idx] = typeof dc === 'object' ? { ...dc, exhausted: false } : { dcName: dc, displayName: dc, exhausted: false };
+    }
+    game.endOfRoundSelfDamage = game.endOfRoundSelfDamage || {};
+    game.endOfRoundSelfDamage[playerNum] = {
+      damage: entry.endOfRoundSelfDamage,
+      msgId: game.lastActivationMsgIdByPlayer?.[playerNum] ?? targetMsgId,
+    };
+    return {
+      applied: true,
+      logMessage: `Readied your Deployment card. At end of round you will suffer ${entry.endOfRoundSelfDamage} Damage.`,
+      readyDcMsgIds: [targetMsgId],
+      refreshDcEmbed: true,
+      refreshDcEmbedMsgIds: [targetMsgId],
+    };
   }
 
   // ccEffect: shuffleOneFromDiscardIntoDeck (De Wanna Wanga) — choiceIndex = index in discard to shuffle in
