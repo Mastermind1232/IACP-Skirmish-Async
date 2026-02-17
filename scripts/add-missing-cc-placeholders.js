@@ -23,7 +23,6 @@ const placeholder = {
   playableBy: 'Any Figure',
   timing: 'other',
   effect: '',
-  effectType: 'manual',
 };
 
 let added = 0;

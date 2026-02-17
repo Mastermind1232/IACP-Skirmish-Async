@@ -2,6 +2,15 @@
 
 The bot resolves abilities from a central **ability library** (`data/ability-library.json`) and code in `src/game/abilities.js`. Surge abilities are fully wired (F2); DC specials and CC effects use the library and fall back to "Resolve manually" until implemented (F3/F4).
 
+## Wired vs unwired (source of truth)
+
+**Do not use `effectType` in `data/cc-effects.json` to count wired/unwired.** The game never reads that field. A CC is **wired** only if:
+
+1. Its `abilityId` has an entry in `ability-library.json` with `type: "ccEffect"`, and  
+2. That entry has at least one property that is implemented in `resolveAbility()` in `src/game/abilities.js` (e.g. `draw`, `mpBonus`, `applyFocus`, `claimInitiative`, etc.).
+
+If the entry is missing or has no such property, the bot returns "Resolve manually". To count unwired CCs, derive the list from the library + code logic (or use a script that mirrors `resolveAbility`’s branching), not from `effectType` in cc-effects.json.
+
 ## Data: ability-library.json
 
 - **Format:** `{ "source": "...", "abilities": { "id": { "type", ... } } }`.

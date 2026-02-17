@@ -305,7 +305,6 @@
         playableBy: normalizePlayableBy(playableBy.value.trim()) || 'Any Figure',
         timing: timing.value || 'other',
         effect: normalizeEffectText(effect.value.trim()) || '',
-        effectType: 'manual',
       };
       render();
       const nextOpt = cardSelect.options[1];
@@ -330,7 +329,6 @@
         playableBy: normalizePlayableBy(playableBy.value.trim()) || 'Any Figure',
         timing: timing.value || 'other',
         effect: normalizeEffectText(effect.value.trim()) || '',
-        effectType: 'manual',
       };
       verified.add(name);
       saveVerified();

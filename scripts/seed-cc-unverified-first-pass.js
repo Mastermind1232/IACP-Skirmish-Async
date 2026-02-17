@@ -92,7 +92,7 @@ const DEFAULT_PLACEHOLDER = 'First pass – verify effect from card.';
 let updated = 0;
 for (const name of unverifiedNames) {
   const data = firstPass[name];
-  if (!cards[name]) cards[name] = { cost: null, playableBy: 'Any Figure', timing: 'other', effect: '', effectType: 'manual' };
+  if (!cards[name]) cards[name] = { cost: null, playableBy: 'Any Figure', timing: 'other', effect: '' };
   const entry = cards[name];
   if (data) {
     if (data.cost != null) entry.cost = data.cost;

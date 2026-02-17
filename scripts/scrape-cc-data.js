@@ -164,7 +164,6 @@ async function main() {
         cost: parsed.cost,
         playableBy: parsed.playableBy,
         effect: parsed.effect,
-        effectType: 'manual',
         imagePath: imagePath,
       };
     } catch (err) {
@@ -179,7 +178,7 @@ async function main() {
 
   for (const { name } of cards) {
     if (!(name in results)) {
-      results[name] = { cost: null, playableBy: 'Any Figure', effect: null, effectType: 'manual', imagePath: null };
+      results[name] = { cost: null, playableBy: 'Any Figure', effect: null, imagePath: null };
     }
   }
 
