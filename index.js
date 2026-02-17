@@ -1032,52 +1032,81 @@ const DEFAULT_DECK_IMPERIAL = {
   ccCount: 15,
 };
 
-/** Per-scenario viability requirements. Run before every testready launch to ensure the test can be performed. */
-const TESTREADY_SCENARIO_REQUIREMENTS = {
-  smoke_grenade: {
-    p1DcTraits: ['trooper', 'technician'],
-    p1CcSwap: [{ card: 'Smoke Grenade', swapFor: 'Force Push' }],
-  },
-};
+/** Parse playableBy from cc-effects into traits (e.g. "TROOPER or TECHNICIAN" → ["trooper","technician"]). "Any Figure" → []. */
+function parsePlayableByToTraits(playableBy) {
+  if (!playableBy || typeof playableBy !== 'string') return [];
+  const s = playableBy.trim().toLowerCase();
+  if (s === 'any figure') return [];
+  return s.split(/\s+or\s+|\s+and\s+/i).map((t) => t.trim()).filter(Boolean);
+}
 
-/** DCs that satisfy a trait, by affiliation (for retooling when default deck lacks required trait). */
-const TESTREADY_DC_BY_TRAIT = {
-  rebel: { trooper: ['Rebel Trooper (Elite)', 'Rebel Trooper (Regular)'], technician: [] },
-  scum: { trooper: ['Hired Gun (Elite)'], technician: ['Ugnaught Tinkerer (Elite)'] },
-};
+/** Build DC_BY_TRAIT from dc-effects: affiliation → trait → [dcNames]. */
+let _dcByTraitCache = null;
+function getDcByTrait() {
+  if (_dcByTraitCache) return _dcByTraitCache;
+  const effects = getDcEffects() || {};
+  const byTrait = { rebel: {}, scum: {}, imperial: {} };
+  for (const [dcName, card] of Object.entries(effects)) {
+    if (!card || typeof card !== 'object') continue;
+    const affil = (card.affiliation || '').toLowerCase();
+    if (affil !== 'rebel' && affil !== 'scum' && affil !== 'imperial') continue;
+    const keywords = card.keywords || [];
+    for (const kw of keywords) {
+      const t = String(kw).toLowerCase().trim();
+      if (!t) continue;
+      if (!byTrait[affil][t]) byTrait[affil][t] = [];
+      byTrait[affil][t].push(dcName);
+    }
+    const nameKey = (dcName || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (nameKey && (!byTrait[affil][nameKey] || !byTrait[affil][nameKey].includes(dcName))) {
+      if (!byTrait[affil][nameKey]) byTrait[affil][nameKey] = [];
+      byTrait[affil][nameKey].push(dcName);
+    }
+  }
+  _dcByTraitCache = byTrait;
+  return byTrait;
+}
 
-/** Check and retool decks so the scenario is viable (e.g. unit can play the CC, adjacency, combat). Runs before every testready launch. */
+/** Check and retool decks so the scenario is viable. Dynamically infers requirements from scenario cards + cc-effects playableBy. Runs before every testready launch. */
 function retoolDecksForScenario(p1Deck, p2Deck, scenarioId) {
-  const req = TESTREADY_SCENARIO_REQUIREMENTS[scenarioId];
-  if (!req) return { p1Deck, p2Deck };
-
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-  const hasTrait = (dc, traits) => traits.some((t) => new RegExp(t, 'i').test(dc));
+  const hasTrait = (dc, traits) => traits.some((t) => new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(dc));
 
-  if (req.p1DcTraits && req.p1DcTraits.length > 0) {
+  let primaryCard = null;
+  let scenarioCards = [];
+  try {
+    const path = join(rootDir, 'data', 'test-scenarios.json');
+    const data = JSON.parse(readFileSync(path, 'utf8'));
+    const scenario = (data.scenarios || {})[scenarioId];
+    if (scenario && Array.isArray(scenario.cards) && scenario.cards.length > 0) {
+      scenarioCards = scenario.cards;
+      primaryCard = scenario.primaryCard || scenario.cards[0];
+    }
+  } catch {}
+
+  const ccEffect = primaryCard ? getCcEffect(primaryCard) : null;
+  const traits = ccEffect ? parsePlayableByToTraits(ccEffect.playableBy) : [];
+  const byTrait = getDcByTrait();
+
+  if (traits.length > 0) {
     const p1DcList = p1Deck.dcList || [];
-    if (!p1DcList.some((dc) => hasTrait(dc, req.p1DcTraits))) {
-      const p1Eligibles = req.p1DcTraits.flatMap((t) => TESTREADY_DC_BY_TRAIT.rebel?.[t] || []).filter(Boolean);
-      if (p1Eligibles.length > 0) p1Deck.dcList[0] = pick(p1Eligibles);
+    if (!p1DcList.some((dc) => hasTrait(dc, traits))) {
+      const eligibles = traits.flatMap((t) => byTrait.rebel?.[t] || []).filter(Boolean);
+      if (eligibles.length > 0) p1Deck.dcList[0] = pick(eligibles);
     }
   }
-  if (req.p2DcTraits && req.p2DcTraits.length > 0) {
-    const dcList = p2Deck.dcList || [];
-    if (!dcList.some((dc) => hasTrait(dc, req.p2DcTraits))) {
-      const p2Eligibles = req.p2DcTraits.flatMap((t) => TESTREADY_DC_BY_TRAIT.scum?.[t] || []).filter(Boolean);
-      if (p2Eligibles.length > 0) p2Deck.dcList[0] = pick(p2Eligibles);
+
+  if (primaryCard && !(p1Deck.ccList || []).includes(primaryCard)) {
+    const swapTarget = scenarioCards.find((c) => c !== primaryCard && (p1Deck.ccList || []).includes(c)) || (p1Deck.ccList || [])[0];
+    if (swapTarget) {
+      const idx = (p1Deck.ccList || []).indexOf(swapTarget);
+      if (idx >= 0) p1Deck.ccList[idx] = primaryCard;
+      else p1Deck.ccList[0] = primaryCard;
+    } else if ((p1Deck.ccList || []).length > 0) {
+      p1Deck.ccList[0] = primaryCard;
     }
   }
-  for (const { card, swapFor } of req.p1CcSwap || []) {
-    const idx = (p1Deck.ccList || []).findIndex((c) => c === swapFor);
-    if (idx >= 0) p1Deck.ccList[idx] = card;
-    else if ((p1Deck.ccList || []).length > 0) p1Deck.ccList[0] = card;
-  }
-  for (const { card, swapFor } of req.p2CcSwap || []) {
-    const idx = (p2Deck.ccList || []).findIndex((c) => c === swapFor);
-    if (idx >= 0) p2Deck.ccList[idx] = card;
-    else if ((p2Deck.ccList || []).length > 0) p2Deck.ccList[0] = card;
-  }
+
   return { p1Deck, p2Deck };
 }
 
