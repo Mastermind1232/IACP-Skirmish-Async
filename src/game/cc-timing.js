@@ -119,6 +119,12 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'whenattackdeclaredtargetingfriendlysmallfigurecost10orlesswithin3spaces':
       // Get Behind Me!: playable during your activation (honor system: play when attack declared on friendly small figure cost ≤10 within 3)
       return ctx.duringActivation;
+    case 'afteractivationresolves':
+      // Blaze of Glory: playable after an activation resolves (honor system: play when activation just ended)
+      return ctx.duringActivation;
+    case 'whenattackdeclaredonadjacentfriendly':
+      // Bodyguard: playable when attack declared on adjacent friendly (honor system: play when attack declared on adjacent friendly)
+      return ctx.duringActivation;
     case 'other':
       // Disarm, Dying Lunge: playable during your activation (honor system: play at actual trigger)
       return ctx.duringActivation;

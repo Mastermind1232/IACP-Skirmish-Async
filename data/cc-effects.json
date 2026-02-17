@@ -84,7 +84,8 @@
       "playableBy": "BT-1",
       "timing": "duringActivation",
       "effect": "Use during your activation. Place this card on your Deployment card as an Attachment.\n----------------\nAttachment: Exhaust this card before you declare an attack. Figures do not block line of sight during this attack.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Ballistics Matrix"
     },
     "Battle Scars": {
       "cost": 0,
@@ -98,7 +99,8 @@
       "playableBy": "LEADER",
       "timing": "afterAttackDice",
       "effect": "Use after another friendly figure within 3 spaces rolls any number of dice to reroll 1 of those dice.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Battlefield Awareness"
     },
     "Beatdown": {
       "cost": 0,
@@ -112,7 +114,8 @@
       "playableBy": "SPY",
       "timing": "duringActivation",
       "effect": "Use during your activation while in your opponents deployment zone to look at the top 3 cards of their Command deck and return those cards in any order.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Behind Enemy Lines"
     },
     "Black Market Prices": {
       "cost": 1,
@@ -133,7 +136,8 @@
       "playableBy": "IG-88",
       "timing": "afterActivationResolves",
       "effect": "Use after an activation resolves to ready your Deployment card. At the end of this round, you suffer 3 Damage.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Blaze of Glory"
     },
     "Blend In": {
       "cost": 2,
@@ -163,7 +167,8 @@
       "playableBy": "GUARDIAN",
       "timing": "whenAttackDeclaredOnAdjacentFriendly",
       "effect": "Use when an attack targeting an adjacent friendly figure is declared. If you could be the target of the attack, the attack targets you instead.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Bodyguard"
     },
     "Brace for Impact": {
       "cost": 1,
@@ -200,7 +205,8 @@
       "playableBy": "Cal Kestis",
       "timing": "duringActivation",
       "effect": "Use during your activation to deploy the BD-1 Companion figure to your space or an adjacent space. For the rest of the mission, it activates at the start or end of your activation.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Cal's Buddy"
     },
     "Call the Vanguard": {
       "cost": 2,
@@ -223,7 +229,8 @@
       "playableBy": "Any Figure",
       "timing": "duringAttack",
       "effect": "Use while attacking to choose 1 die. The player that rolled that die must reroll that die.\n\nPassive (Discard Pile): When a hostile figure with a HARMFUL condition gains another HARMFUL condition, you may re-draw this card.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Capitalize"
     },
     "Capture the Weary": {
       "cost": 1,
@@ -320,7 +327,8 @@
       "playableBy": "IMPERIAL",
       "timing": "duringActivation",
       "effect": "Use during your activation. Distribute Hit tokens equal to the current round number to friendly figures within 3 spaces.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Combat Resupply"
     },
     "Comm Disruption": {
       "cost": 2,
@@ -445,7 +453,8 @@
       "playableBy": "IMPERIAL FORCE USER",
       "timing": "startOfActivation",
       "effect": "Use at the start of your activation. While attacking during this round, apply -1 Dodge to the defense results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Deadly Precision"
     },
     "Deathblow": {
       "cost": 1,
@@ -593,7 +602,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Until the end of the round, each of your figures ignores additional movement point costs for difficult terrain and hostile figures.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Efficient Travel"
     },
     "Element of Surprise": {
       "cost": 0,
@@ -608,7 +618,8 @@
       "playableBy": "SPY",
       "timing": "whileDefending",
       "effect": "Use while defending to choose 1 attack die and remove all symbols on the chosen die from the attack results. Then, remove all symbols on a defense die from the defense results.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Elusive"
     },
     "Emergency Aid": {
       "cost": 2,
@@ -759,7 +770,8 @@
       "playableBy": "Zuckuss",
       "timing": "startOfRound",
       "effect": "Use at the start of a round to choose one of your opponent's groups. When your opponent activates that group during this round, you may interrupt to perform a move or an attack.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Findsman Meditation"
     },
     "Fleet Footed": {
       "cost": 0,
@@ -946,7 +958,8 @@
       "playableBy": "Any Figure",
       "timing": "whileDefending",
       "effect": "Use while defending to reroll 1 defense die.",
-      "effectType": "manual"
+      "effectType": "manual",
+      "abilityId": "Hard to Hit"
     },
     "Harsh Environment": {
       "cost": 0,
