@@ -402,8 +402,9 @@ export async function renderMap(mapId, options = {}) {
     const rightX = sx0 + (maxCol + 1) * sdx;
     const topY = sy0 + boundaryRow * sdy;
     const bottomY = sy0 + (boundaryRow + 1) * sdy;
-    const midX = (leftX + rightX) / 2;
-    const midY = (topY + bottomY) / 2;
+    // Place door on the grid line (boundary), not at cell center — fixes 0.5-cell offset
+    const midX = horizontalBoundary ? (leftX + rightX) / 2 : rightX;
+    const midY = horizontalBoundary ? bottomY : (topY + bottomY) / 2;
     const spanWidth = (maxCol - minCol + 1) * sdx;
     const spanHeight = sdy;
     const doorW = horizontalBoundary ? spanWidth : spanHeight;
