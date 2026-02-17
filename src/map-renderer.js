@@ -413,9 +413,9 @@ export async function renderMap(mapId, options = {}) {
     const rightX = sx0 + (maxCol + 1) * sdx;
     const topY = sy0 + minRow * sdy;
     const bottomY = sy0 + (maxRow + 1) * sdy;
-    // Place door on the grid line (boundary): horizontal = bottom of row; vertical = between the two columns
+    // Place door on the grid line (boundary): horizontal = line between the two rows; vertical = between the two columns
     const midX = horizontalBoundary ? (leftX + rightX) / 2 : leftX + sdx;
-    const midY = horizontalBoundary ? bottomY : (topY + bottomY) / 2;
+    const midY = horizontalBoundary ? topY + sdy : (topY + bottomY) / 2;
     const spanWidth = (maxCol - minCol + 1) * sdx;
     const spanHeight = (maxRow - minRow + 1) * sdy;
     const doorW = horizontalBoundary ? spanWidth : spanHeight;
