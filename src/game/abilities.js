@@ -767,6 +767,41 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: defenderStrain (Escalating Hostility) — after attack, defender suffers N Strain (strain applied as damage to health)
+  if (entry.type === 'ccEffect' && typeof entry.defenderStrain === 'number' && entry.defenderStrain > 0) {
+    const { game, playerNum, combat, dcMessageMeta, dcHealthState } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !cbt?.target?.figureKey) return { applied: false, manualMessage: 'Resolve manually: play after an attack (defender must be the target).' };
+    const defenderPlayerNum = cbt.defenderPlayerNum ?? (cbt.attackerPlayerNum === 1 ? 2 : 1);
+    const targetFk = cbt.target.figureKey;
+    if (!dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
+    const targetMsgId = findMsgIdForFigureKey(game, defenderPlayerNum, targetFk, dcMessageMeta);
+    if (!targetMsgId) return { applied: false, manualMessage: 'Resolve manually: could not find defender.' };
+    const targetMeta = dcMessageMeta.get(targetMsgId);
+    if (!targetMeta) return { applied: false, manualMessage: 'Resolve manually: could not find defender deployment.' };
+    const targetKeys = getFigureKeysForDcMsg(game, defenderPlayerNum, targetMeta);
+    const targetIdx = targetKeys.indexOf(targetFk);
+    if (targetIdx < 0) return { applied: false, manualMessage: 'Resolve manually: could not find defender figure index.' };
+    const healthState = dcHealthState.get(targetMsgId) || [];
+    const entry_ = healthState[targetIdx];
+    if (!Array.isArray(entry_) || entry_.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for defender.' };
+    const n = entry.defenderStrain;
+    const [cur, max] = entry_;
+    const newCur = Math.max(0, (cur ?? max ?? 0) - n);
+    healthState[targetIdx] = [newCur, max];
+    dcHealthState.set(targetMsgId, healthState);
+    const dcMessageIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+    const idx = (dcMessageIds || []).indexOf(targetMsgId);
+    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    return {
+      applied: true,
+      logMessage: `Defender suffered ${n} Strain.`,
+      refreshDcEmbed: true,
+      refreshDcEmbedMsgIds: [targetMsgId],
+    };
+  }
+
   // ccEffect: applyFocus + attackBonusHits combo (Primary Target) — both Focus and +N Hit
   if (entry.type === 'ccEffect' && entry.applyFocus && typeof entry.attackBonusHits === 'number') {
     const { game, playerNum, combat, dcMessageMeta } = context;
@@ -873,6 +908,24 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Became Focused.' };
   }
 
+  // ccEffect: applyHide only (Hide in Plain Sight, Guerilla Warfare) — apply Hide to activating figures during activation
+  if (entry.type === 'ccEffect' && entry.applyHide && !entry.applyFocus) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found for activation.' };
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of figureKeys) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Hide')) game.figureConditions[fk] = [...existing, 'Hide'];
+    }
+    return { applied: true, logMessage: 'Became Hidden.' };
+  }
+
   // ccEffect: nextAttackBonusSurgeAbilities (Cruel Strike) — next attack gains surge options; consumed when combat starts
   if (entry.type === 'ccEffect' && Array.isArray(entry.nextAttackBonusSurgeAbilities) && entry.nextAttackBonusSurgeAbilities.length > 0) {
     const { game, playerNum, dcMessageMeta } = context;
@@ -970,6 +1023,21 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: `This attack gains Blast ${entry.attackBonusBlast}.`,
+    };
+  }
+
+  // ccEffect: attackAccuracyBonus + attackBonusPierce (Sniper Configuration) — both in one branch so both apply
+  if (entry.type === 'ccEffect' && typeof entry.attackAccuracyBonus === 'number' && typeof entry.attackBonusPierce === 'number') {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play while attacking (as the attacker).' };
+    }
+    if (entry.attackAccuracyBonus > 0) cbt.bonusAccuracy = (cbt.bonusAccuracy || 0) + entry.attackAccuracyBonus;
+    if (entry.attackBonusPierce > 0) cbt.bonusPierce = (cbt.bonusPierce || 0) + entry.attackBonusPierce;
+    return {
+      applied: true,
+      logMessage: `+${entry.attackAccuracyBonus} Accuracy and +${entry.attackBonusPierce} Pierce added to this attack.`,
     };
   }
 
@@ -1156,7 +1224,7 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: roundDefenseBonusBlock / roundDefenseBonusEvade (Take Position, Survival Instincts, Cavalry Charge) — until end of round
-  if (entry.type === 'ccEffect' && ((typeof entry.roundDefenseBonusBlock === 'number' && entry.roundDefenseBonusBlock > 0) || (typeof entry.roundDefenseBonusEvade === 'number' && entry.roundDefenseBonusEvade > 0))) {
+  if (entry.type === 'ccEffect' && ((typeof entry.roundDefenseBonusBlock === 'number' && entry.roundDefenseBonusBlock > 0) || (typeof entry.roundDefenseBonusEvade === 'number' && entry.roundDefenseBonusEvade > 0)) && !entry.roundDefenderBonusBlockPerEvade) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.roundDefenseBonusBlock = game.roundDefenseBonusBlock || {};
@@ -1171,6 +1239,29 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: `Until end of round, apply ${parts.join(' and ')} when defending.`,
+    };
+  }
+
+  // ccEffect: roundDefenderBonusBlockPerEvade + optional evadeTokenGain (Personal Energy Shield)
+  if (entry.type === 'ccEffect' && typeof entry.roundDefenderBonusBlockPerEvade === 'number' && entry.roundDefenderBonusBlockPerEvade > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundDefenderBonusBlockPerEvade = game.roundDefenderBonusBlockPerEvade || {};
+    game.roundDefenderBonusBlockPerEvade[playerNum] = (game.roundDefenderBonusBlockPerEvade[playerNum] || 0) + entry.roundDefenderBonusBlockPerEvade;
+    if (entry.evadeTokenGain && dcMessageMeta) {
+      const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      if (msgId) {
+        const meta = dcMessageMeta.get(msgId);
+        const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+        game.figureEvadeTokens = game.figureEvadeTokens || {};
+        for (const fk of figureKeys) {
+          game.figureEvadeTokens[fk] = (game.figureEvadeTokens[fk] || 0) + entry.evadeTokenGain;
+        }
+      }
+    }
+    return {
+      applied: true,
+      logMessage: `Gained ${entry.evadeTokenGain || 0} Evade Token(s). Until end of round, when defending apply +${entry.roundDefenderBonusBlockPerEvade} Block per Evade result.`,
     };
   }
 
@@ -1314,6 +1405,669 @@ export function resolveAbility(abilityId, context) {
       refreshDcEmbed: true,
       refreshDcEmbedMsgIds: [targetMsgId],
     };
+  }
+
+  // ccEffect: powerTokenGainToGroup (Ready Weapons) — distribute up to N tokens among figures in activating group (max 2 per figure)
+  if (entry.type === 'ccEffect' && typeof entry.powerTokenGainToGroup === 'number' && entry.powerTokenGainToGroup > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress (play as Special Action during your activation).' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures in group.' };
+    const totalToAdd = Math.min(entry.powerTokenGainToGroup, figureKeys.length * 2);
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    let remaining = totalToAdd;
+    for (const fk of figureKeys) {
+      if (remaining <= 0) break;
+      const current = (game.figurePowerTokens[fk] || []).length;
+      const cap = 2 - current;
+      const toAdd = Math.min(remaining, Math.max(0, cap));
+      for (let i = 0; i < toAdd; i++) (game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || []).push('Wild');
+      remaining -= toAdd;
+    }
+    return { applied: true, logMessage: `Distributed ${totalToAdd} Hit Token(s) among figures in your group.` };
+  }
+
+  // ccEffect: claimInitiative only (I Make My Own Luck) — optional firstActivationFigureName
+  if (entry.type === 'ccEffect' && entry.claimInitiative && !entry.exhaustOneDeploymentCard) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.initiativePlayerNum = playerNum;
+    if (entry.firstActivationFigureName) game.firstActivationFigureName = entry.firstActivationFigureName;
+    return {
+      applied: true,
+      logMessage: `Claimed the initiative token.${entry.firstActivationFigureName ? ` ${entry.firstActivationFigureName} must activate first this round.` : ''}`,
+    };
+  }
+
+  // ccEffect: claimInitiative + exhaustOneDeploymentCard (Take Initiative)
+  if (entry.type === 'ccEffect' && entry.claimInitiative && entry.exhaustOneDeploymentCard) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.initiativePlayerNum = playerNum;
+    const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    let exhausted = false;
+    for (let i = 0; i < (dcList || []).length; i++) {
+      const dc = dcList[i];
+      const isExhausted = typeof dc === 'object' && dc.exhausted;
+      if (!isExhausted) {
+        if (typeof dc === 'object') dcList[i] = { ...dc, exhausted: true };
+        exhausted = true;
+        break;
+        // Exhaust first non-exhausted DC
+      }
+    }
+    return {
+      applied: true,
+      logMessage: `Claimed the initiative token.${exhausted ? ' Exhausted 1 Deployment card.' : ' (No non-exhausted DC to exhaust.)'}`,
+    };
+  }
+
+  // ccEffect: discardRandomFromHand + opponentDiscardRandomFromHand (Hostile Negotiation)
+  if (entry.type === 'ccEffect' && typeof entry.discardRandomFromHand === 'number' && typeof entry.opponentDiscardRandomFromHand === 'number') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppHandKey = oppNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const oppDiscardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const hand = (game[handKey] || []).slice();
+    const oppHand = (game[oppHandKey] || []).slice();
+    const n1 = Math.min(entry.discardRandomFromHand, hand.length);
+    const n2 = Math.min(entry.opponentDiscardRandomFromHand, oppHand.length);
+    const discarded1 = [];
+    for (let i = 0; i < n1; i++) {
+      const idx = Math.floor(Math.random() * hand.length);
+      discarded1.push(hand.splice(idx, 1)[0]);
+    }
+    const discarded2 = [];
+    for (let i = 0; i < n2; i++) {
+      const idx = Math.floor(Math.random() * oppHand.length);
+      discarded2.push(oppHand.splice(idx, 1)[0]);
+    }
+    game[handKey] = hand;
+    game[discardKey] = (game[discardKey] || []).concat(discarded1);
+    game[oppHandKey] = oppHand;
+    game[oppDiscardKey] = (game[oppDiscardKey] || []).concat(discarded2);
+    const parts = [];
+    if (discarded1.length) parts.push(`You discarded ${discarded1.map((c) => `**${c}**`).join(', ')}`);
+    if (discarded2.length) parts.push(`opponent discarded ${discarded2.length} card(s)`);
+    return {
+      applied: true,
+      logMessage: parts.join('; ') + '.',
+      refreshHand: true,
+      refreshDiscard: true,
+    };
+  }
+
+  // ccEffect: opponentDiscardFromHandChoice + selfStrainFromDiscardedCost (Intelligence Leak) — choiceIndex = index in opponent hand
+  if (entry.type === 'ccEffect' && entry.opponentDiscardFromHandChoice && entry.selfStrainFromDiscardedCost) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppHandKey = oppNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const oppDiscardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const oppHand = (game[oppHandKey] || []).slice();
+    const choiceIndex = context.choiceIndex;
+    if (oppHand.length === 0) return { applied: false, manualMessage: "Opponent's hand is empty." };
+    if (choiceIndex == null || choiceIndex < 0 || choiceIndex >= oppHand.length) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: oppHand.map((c, i) => `${i + 1}. ${c}`),
+        choiceCount: oppHand.length,
+        manualMessage: "Choose a card from opponent's hand to discard (you will suffer Strain equal to its cost).",
+      };
+    }
+    const discarded = oppHand.splice(choiceIndex, 1)[0];
+    game[oppHandKey] = oppHand;
+    game[oppDiscardKey] = (game[oppDiscardKey] || []).concat(discarded);
+    const eff = getCcEffect(discarded);
+    const cost = typeof eff?.cost === 'number' ? eff.cost : 0;
+    game.figureStrain = game.figureStrain || {};
+    const msgId = context.msgId;
+    const strainKey = msgId ? `msg:${msgId}` : `p${playerNum}`;
+    game.figureStrain[strainKey] = (game.figureStrain[strainKey] || 0) + cost;
+    return {
+      applied: true,
+      logMessage: `Discarded **${discarded}** from opponent's hand; you suffer ${cost} Strain.`,
+      refreshOpponentHand: true,
+    };
+  }
+
+  // ccEffect: readyAdjacentFriendlyDeploymentCard (New Orders) — context.readyAdjacentFriendlyDcName from handler
+  if (entry.type === 'ccEffect' && entry.readyAdjacentFriendlyDeploymentCard) {
+    const { game, playerNum, readyAdjacentFriendlyDcName } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (!readyAdjacentFriendlyDcName) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceTarget: 'readyAdjacentFriendlyDeploymentCard',
+        manualMessage: 'Choose 1 adjacent friendly figure to ready its Deployment card.',
+      };
+    }
+    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const nameLower = String(readyAdjacentFriendlyDcName).toLowerCase().trim();
+    for (let i = 0; i < dcList.length; i++) {
+      const dc = dcList[i];
+      const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+      const displayName = typeof dc === 'object' ? dc.displayName : dcName;
+      const matchName = (displayName || dcName || '').toLowerCase();
+      if (!matchName || (!matchName.includes(nameLower) && !nameLower.includes(matchName))) continue;
+      if (typeof dc === 'object') dcList[i] = { ...dc, exhausted: false };
+      else dcList[i] = { dcName, displayName: dcName, exhausted: false };
+      return { applied: true, logMessage: `Readied **${displayName || dcName}**'s Deployment card.` };
+    }
+    return { applied: false, manualMessage: `Could not find Deployment card matching "${readyAdjacentFriendlyDcName}".` };
+  }
+
+  // ccEffect: shuffleOneFromDiscardIntoDeck (De Wanna Wanga) — choiceIndex = index in discard to shuffle in
+  if (entry.type === 'ccEffect' && entry.shuffleOneFromDiscardIntoDeck) {
+    const { game, playerNum, cardName } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const discard = (game[discardKey] || []).slice();
+    const deck = (game[deckKey] || []).slice();
+    const choiceIndex = context.choiceIndex;
+    if (discard.length === 0) return { applied: false, manualMessage: 'No cards in discard to shuffle into deck.' };
+    if (choiceIndex == null || choiceIndex < 0 || choiceIndex >= discard.length) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: discard.map((c, i) => `${i + 1}. ${c}`),
+        choiceCount: discard.length,
+        manualMessage: 'Choose which card to shuffle into your deck (by index).',
+      };
+    }
+    const card = discard.splice(choiceIndex, 1)[0];
+    deck.push(card);
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    game[discardKey] = discard;
+    game[deckKey] = deck;
+    return {
+      applied: true,
+      logMessage: `Shuffled **${card}** from discard into your Command deck.`,
+      refreshDiscard: true,
+    };
+  }
+
+  // ccEffect: opponentDiscardDeckTop (Shoot the Messenger) — when defender was defeated; or with elseGainVp (Merciless) — no defender required
+  if (entry.type === 'ccEffect' && typeof entry.opponentDiscardDeckTop === 'number' && entry.opponentDiscardDeckTop > 0) {
+    const { game, playerNum, defenderDefeated } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const deckKey = oppNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const discardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const deck = (game[deckKey] || []).slice();
+    if (entry.elseGainVp != null) {
+      // Merciless: opponent may discard 2 from deck; if not (or deck has < 2), you gain 3 VP
+      if (deck.length >= entry.opponentDiscardDeckTop) {
+        const n = entry.opponentDiscardDeckTop;
+        const removed = deck.splice(0, n);
+        game[deckKey] = deck;
+        game[discardKey] = (game[discardKey] || []).concat(removed);
+        return {
+          applied: true,
+          logMessage: `Opponent discarded top ${n} card(s) of their Command deck.`,
+          refreshOpponentDiscard: true,
+        };
+      }
+      const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+      game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+      game[vpKey].total = (game[vpKey].total ?? 0) + entry.elseGainVp;
+      return {
+        applied: true,
+        logMessage: `Opponent had fewer than ${entry.opponentDiscardDeckTop} cards in deck; you gained ${entry.elseGainVp} VP.`,
+      };
+    }
+    if (!defenderDefeated) return { applied: false, manualMessage: 'Shoot the Messenger: defender was not defeated.' };
+    const n = Math.min(entry.opponentDiscardDeckTop, deck.length);
+    const removed = deck.splice(0, n);
+    game[deckKey] = deck;
+    game[discardKey] = (game[discardKey] || []).concat(removed);
+    return {
+      applied: true,
+      logMessage: `Defender was defeated. Opponent discarded top ${n} card(s) of their Command deck.`,
+      refreshOpponentDiscard: n > 0,
+    };
+  }
+
+  // ccEffect: maxDamageFromAttack (Iron Will) — store on combat; defender cannot suffer more than N from this attack
+  if (entry.type === 'ccEffect' && typeof entry.maxDamageFromAttack === 'number' && entry.maxDamageFromAttack > 0) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play when an attack targeting you is declared.' };
+    cbt.maxDamageToDefender = Math.min(cbt.maxDamageToDefender ?? 999, entry.maxDamageFromAttack);
+    return { applied: true, logMessage: `You cannot suffer more than ${entry.maxDamageFromAttack} Damage from this attack.` };
+  }
+
+  // ccEffect: defenderIgnorePierce (Heavy Armor)
+  if (entry.type === 'ccEffect' && entry.defenderIgnorePierce) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play while defending.' };
+    cbt.defenderIgnorePierce = true;
+    return { applied: true, logMessage: 'During this attack, Pierce has no effect.' };
+  }
+
+  // ccEffect: rerollOneAttackDie (Mitigate)
+  if (entry.type === 'ccEffect' && entry.rerollOneAttackDie) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play while attacking.' };
+    cbt.rerollOneAttackDie = (cbt.rerollOneAttackDie || 0) + 1;
+    return { applied: true, logMessage: 'You may reroll 1 attack die.' };
+  }
+
+  // ccEffect: defenderRerollDiceMax (Guardian Stance) — while adjacent friendly is defending
+  if (entry.type === 'ccEffect' && typeof entry.defenderRerollDiceMax === 'number' && entry.defenderRerollDiceMax > 0) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play while adjacent friendly is defending.' };
+    cbt.defenderRerollDiceMax = (cbt.defenderRerollDiceMax || 0) + entry.defenderRerollDiceMax;
+    return { applied: true, logMessage: `You may reroll up to ${entry.defenderRerollDiceMax} attack or defense die.` };
+  }
+
+  // ccEffect: bonusDamagePerDefenseDie + bonusSurgePerDefenseDie + ignoreDefenseResultsNotOnDice (Overwhelming Impact)
+  if (entry.type === 'ccEffect' && (typeof entry.bonusDamagePerDefenseDie === 'number' || typeof entry.bonusSurgePerDefenseDie === 'number' || entry.ignoreDefenseResultsNotOnDice)) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play while attacking.' };
+    if (typeof entry.bonusDamagePerDefenseDie === 'number') cbt.bonusDamagePerDefenseDie = (cbt.bonusDamagePerDefenseDie || 0) + entry.bonusDamagePerDefenseDie;
+    if (typeof entry.bonusSurgePerDefenseDie === 'number') cbt.bonusSurgePerDefenseDie = (cbt.bonusSurgePerDefenseDie || 0) + entry.bonusSurgePerDefenseDie;
+    if (entry.ignoreDefenseResultsNotOnDice) cbt.ignoreDefenseResultsNotOnDice = true;
+    return { applied: true, logMessage: 'This attack: +1 Damage and +1 Surge per defense die; ignore defense results not on dice.' };
+  }
+
+  // ccEffect: celebrationVp + increaseArmyCostBy (Field Promotion)
+  if (entry.type === 'ccEffect' && typeof entry.celebrationVp === 'number' && typeof entry.increaseArmyCostBy === 'number') {
+    const { game, playerNum, defenderDefeated } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (!defenderDefeated) return { applied: false, manualMessage: 'Field Promotion: defender was not defeated.' };
+    const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[vpKey].total = (game[vpKey].total ?? 0) + entry.celebrationVp;
+    const costKey = playerNum === 1 ? 'player1ArmyCostModifier' : 'player2ArmyCostModifier';
+    game[costKey] = (game[costKey] || 0) + entry.increaseArmyCostBy;
+    return {
+      applied: true,
+      logMessage: `Defender defeated. Gained ${entry.celebrationVp} VP and increased your figure cost by ${entry.increaseArmyCostBy}.`,
+    };
+  }
+
+  // ccEffect: roundAttackRerollDice (Just Business) — until end of round, may reroll 1 attack die when attacking
+  if (entry.type === 'ccEffect' && typeof entry.roundAttackRerollDice === 'number' && entry.roundAttackRerollDice > 0) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundAttackRerollDice = game.roundAttackRerollDice || {};
+    game.roundAttackRerollDice[playerNum] = (game.roundAttackRerollDice[playerNum] || 0) + entry.roundAttackRerollDice;
+    return {
+      applied: true,
+      logMessage: `Until end of round, friendly figures may reroll up to ${entry.roundAttackRerollDice} attack die when attacking.`,
+    };
+  }
+
+  // ccEffect: roundDefenderCannotBeTargetedUnlessWithinSpaces (I Must Go Alone)
+  if (entry.type === 'ccEffect' && typeof entry.roundDefenderCannotBeTargetedUnlessWithinSpaces === 'number') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundDefenderCannotBeTargetedUnlessWithinSpaces = { playerNum, spaces: entry.roundDefenderCannotBeTargetedUnlessWithinSpaces };
+    return {
+      applied: true,
+      logMessage: `Until end of round, hostiles cannot attack you unless within ${entry.roundDefenderCannotBeTargetedUnlessWithinSpaces} spaces.`,
+    };
+  }
+
+  // ccEffect: roundDebuffNextHostileActivation (No Cheating)
+  if (entry.type === 'ccEffect' && entry.roundDebuffNextHostileActivation) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundDebuffNextHostileActivation = { playerNum, ...entry.roundDebuffNextHostileActivation };
+    return {
+      applied: true,
+      logMessage: 'Next hostile activation in your LOS: that figure\'s attack becomes Melee and removes 1 attack die this round.',
+    };
+  }
+
+  // ccEffect: nextDefeatedFriendlyVpReduction (Of No Importance)
+  if (entry.type === 'ccEffect' && typeof entry.nextDefeatedFriendlyVpReduction === 'number') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.nextDefeatedFriendlyVpReduction = { playerNum, amount: entry.nextDefeatedFriendlyVpReduction };
+    return {
+      applied: true,
+      logMessage: `Next time one of your non-unique figures is defeated, that figure is worth ${entry.nextDefeatedFriendlyVpReduction} fewer VP.`,
+    };
+  }
+
+  // ccEffect: attackPoolRemoveMax (Run for Cover) — when defending, remove up to N dice from attack pool
+  if (entry.type === 'ccEffect' && typeof entry.attackPoolRemoveMax === 'number' && entry.attackPoolRemoveMax > 0) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play when an attack targeting you is declared.' };
+    cbt.attackPoolRemoveMax = (cbt.attackPoolRemoveMax || 0) + entry.attackPoolRemoveMax;
+    return { applied: true, logMessage: 'Choose 1 attack die and remove it from the attack pool.' };
+  }
+
+  // ccEffect: attackPoolKeepMax (Savage Vigor) — attacker keeps only N dice
+  if (entry.type === 'ccEffect' && typeof entry.attackPoolKeepMax === 'number' && entry.attackPoolKeepMax > 0) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play when an attack targeting you is declared.' };
+    cbt.attackPoolKeepMax = Math.min(cbt.attackPoolKeepMax ?? 99, entry.attackPoolKeepMax);
+    return { applied: true, logMessage: `Attacker chooses ${entry.attackPoolKeepMax} attack dice and removes the rest.` };
+  }
+
+  // ccEffect: attackResultReplaceWithStun (Set for Stun)
+  if (entry.type === 'ccEffect' && entry.attackResultReplaceWithStun) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play when declaring a Special Action attack.' };
+    cbt.attackResultReplaceWithStun = true;
+    return { applied: true, logMessage: 'If this attack would deal 1+ Damage, reduce to 0 and target becomes Stunned.' };
+  }
+
+  // ccEffect: roundDroidExtraActionCostDamage (Overdrive)
+  if (entry.type === 'ccEffect' && typeof entry.roundDroidExtraActionCostDamage === 'number') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundDroidExtraActionCostDamage = { playerNum, damage: entry.roundDroidExtraActionCostDamage };
+    return {
+      applied: true,
+      logMessage: `Until end of round, each of your DROIDs may suffer ${entry.roundDroidExtraActionCostDamage} Damage during its activation to perform 1 additional action (once per DROID).`,
+    };
+  }
+
+  // ccEffect: sitTightPlayerNum (Sit Tight)
+  if (entry.type === 'ccEffect' && entry.sitTightPlayerNum) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.sitTightPlayerNum = playerNum;
+    return {
+      applied: true,
+      logMessage: "You do not activate any groups this round until you have more ready Deployment cards than your opponent.",
+    };
+  }
+
+  // ccEffect: activationDoubleSpecialAction (Single Purpose)
+  if (entry.type === 'ccEffect' && entry.activationDoubleSpecialAction) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play at start of your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.activationDoubleSpecialAction = game.activationDoubleSpecialAction || {};
+    game.activationDoubleSpecialAction[msgId] = true;
+    return {
+      applied: true,
+      logMessage: 'You may use the same special action up to twice during this activation.',
+    };
+  }
+
+  // ccEffect: applyStunToUpToNAdjacentHostiles (Roar) — only if suffered damage >= N
+  if (entry.type === 'ccEffect' && typeof entry.applyStunToUpToNAdjacentHostiles === 'number' && entry.applyStunToUpToNAdjacentHostiles > 0) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, stunnedFigureKeys } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    if (typeof entry.onlyIfSufferedDamageGte === 'number') {
+      const healthState = dcHealthState?.get(msgId) || [];
+      const totalDamage = healthState.reduce((s, e) => s + (e?.damage ?? 0), 0);
+      if (totalDamage < entry.onlyIfSufferedDamageGte) {
+        return { applied: false, manualMessage: `Roar: you must have suffered ${entry.onlyIfSufferedDamageGte}+ Damage (you have suffered ${totalDamage}).` };
+      }
+    }
+    if (!Array.isArray(stunnedFigureKeys) || stunnedFigureKeys.length === 0) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceTarget: 'applyStunToAdjacentHostiles',
+        choiceCount: Math.min(entry.applyStunToUpToNAdjacentHostiles, 3),
+        manualMessage: `Choose up to ${entry.applyStunToUpToNAdjacentHostiles} adjacent hostile figures to become Stunned.`,
+      };
+    }
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of stunnedFigureKeys.slice(0, entry.applyStunToUpToNAdjacentHostiles)) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Stun')) game.figureConditions[fk] = [...existing, 'Stun'];
+    }
+    return {
+      applied: true,
+      logMessage: `${stunnedFigureKeys.length} adjacent hostile figure(s) became Stunned.`,
+    };
+  }
+
+  // ccEffect: pushFriendlyWithin3Spaces (Reposition)
+  if (entry.type === 'ccEffect' && typeof entry.pushFriendlyWithin3Spaces === 'number' && entry.pushFriendlyWithin3Spaces > 0) {
+    const { game, playerNum, repositionFriendlyDcName } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (!repositionFriendlyDcName) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceTarget: 'pushFriendlyWithin3Spaces',
+        manualMessage: `Choose a SMALL friendly figure within 3 spaces to push up to ${entry.pushFriendlyWithin3Spaces} spaces.`,
+      };
+    }
+    return {
+      applied: true,
+      logMessage: `Push **${repositionFriendlyDcName}** up to ${entry.pushFriendlyWithin3Spaces} spaces (resolve movement).`,
+    };
+  }
+
+  // ccEffect: opponentHandRandomToDeckTop (Stall for Time)
+  if (entry.type === 'ccEffect' && typeof entry.opponentHandRandomToDeckTop === 'number' && entry.opponentHandRandomToDeckTop > 0) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const handKey = oppNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const deckKey = oppNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const hand = (game[handKey] || []).slice();
+    const deck = (game[deckKey] || []).slice();
+    const n = Math.min(entry.opponentHandRandomToDeckTop, hand.length);
+    if (n === 0) return { applied: true, logMessage: "Opponent's hand is empty; no card placed on deck." };
+    const picked = [];
+    for (let i = 0; i < n; i++) {
+      const idx = Math.floor(Math.random() * hand.length);
+      picked.push(hand.splice(idx, 1)[0]);
+    }
+    game[handKey] = hand;
+    deck.unshift(...picked);
+    game[deckKey] = deck;
+    return {
+      applied: true,
+      logMessage: `Opponent placed ${n} random card(s) from hand on top of their Command deck: ${picked.map((c) => `**${c}**`).join(', ')}.`,
+      refreshOpponentHand: true,
+    };
+  }
+
+  // ccEffect: roundInTheShadowsPlayerNum (In the Shadows)
+  if (entry.type === 'ccEffect' && entry.roundInTheShadowsPlayerNum) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundInTheShadowsPlayerNum = playerNum;
+    return { applied: true, logMessage: 'Until end of round, hostiles 4+ spaces away do not have line of sight to you.' };
+  }
+
+  // ccEffect: activationExtraActionThenStun (To the Limit)
+  if (entry.type === 'ccEffect' && entry.activationExtraActionThenStun) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play after resolving a Special Action during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.activationExtraActionThenStun = game.activationExtraActionThenStun || {};
+    game.activationExtraActionThenStun[msgId] = true;
+    return { applied: true, logMessage: 'Perform 1 additional action; then you become Stunned.' };
+  }
+
+  // ccEffect: pickpocketVpByAccuracy (Pickpocket) — choiceIndex 0–3 = green die Accuracy result
+  if (entry.type === 'ccEffect' && entry.pickpocketVpByAccuracy) {
+    const { game, playerNum, choiceIndex } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const accuracy = choiceIndex != null && choiceIndex >= 0 && choiceIndex <= 3 ? choiceIndex : null;
+    if (accuracy === null) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: ['0 (miss)', '1', '2', '3'],
+        choiceCount: 4,
+        manualMessage: 'Roll 1 green die; enter the Accuracy result (0–3). Opponent loses that many VP and you gain that many VP.',
+      };
+    }
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const yourVpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    const oppVpKey = oppNum === 1 ? 'player1VP' : 'player2VP';
+    game[yourVpKey] = game[yourVpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[oppVpKey] = game[oppVpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[yourVpKey].total = (game[yourVpKey].total ?? 0) + accuracy;
+    game[oppVpKey].total = Math.max(0, (game[oppVpKey].total ?? 0) - accuracy);
+    return { applied: true, logMessage: `Green die Accuracy ${accuracy}: you gain ${accuracy} VP, opponent loses ${accuracy} VP.` };
+  }
+
+  // ccEffect: attackPoolAddYellowUntilTotal + superchargeStrainAfterAttack (Supercharge)
+  if (entry.type === 'ccEffect' && typeof entry.attackPoolAddYellowUntilTotal === 'number' && entry.attackPoolAddYellowUntilTotal > 0) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play when declaring a Special Action attack.' };
+    cbt.attackPoolAddYellowUntilTotal = entry.attackPoolAddYellowUntilTotal;
+    if (entry.superchargeStrainAfterAttack) cbt.superchargeStrainAfterAttack = true;
+    return { applied: true, logMessage: `Add yellow dice to attack pool until ${entry.attackPoolAddYellowUntilTotal} total; after attack resolve, suffer Strain equal to dice added.` };
+  }
+
+  // ccEffect: strengthInNumbersPlayerNum (Strength in Numbers)
+  if (entry.type === 'ccEffect' && entry.strengthInNumbersPlayerNum) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.strengthInNumbersPlayerNum = playerNum;
+    return { applied: true, logMessage: 'You may immediately activate another group (combined deployment cost of the two groups cannot exceed 12).' };
+  }
+
+  // ccEffect: provokeNextActivation (Provoke)
+  if (entry.type === 'ccEffect' && entry.provokeNextActivation) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.provokeNextActivation = { playerNum };
+    return { applied: true, logMessage: "Choose a hostile figure adjacent to your TROOPER or GUARDIAN; that figure's group must activate next if able." };
+  }
+
+  // ccEffect: pummelTwoAttacksThisActivation (Pummel)
+  if (entry.type === 'ccEffect' && entry.pummelTwoAttacksThisActivation) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation (Special Action).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.pummelTwoAttacksThisActivation = game.pummelTwoAttacksThisActivation || {};
+    game.pummelTwoAttacksThisActivation[msgId] = true;
+    return { applied: true, logMessage: 'If you have MELEE attack type, perform 2 attacks.' };
+  }
+
+  // ccEffect: vanishImmunityUntilNextActivation + nextActivationMpBonus (Vanish)
+  if (entry.type === 'ccEffect' && entry.vanishImmunityUntilNextActivation) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation (Special Action).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.vanishImmunityUntilNextActivation = game.vanishImmunityUntilNextActivation || {};
+    game.vanishImmunityUntilNextActivation[playerNum] = { msgId, nextMp: entry.nextActivationMpBonus || 0 };
+    return {
+      applied: true,
+      logMessage: `You cannot suffer Damage or receive conditions until your next activation. At the start of your next activation, gain ${entry.nextActivationMpBonus || 0} movement points.`,
+    };
+  }
+
+  // ccEffect: rebelGraffitiVp (Rebel Graffiti) — end of activation: gain 2 VP (honor: only when no adjacent hostiles)
+  if (entry.type === 'ccEffect' && typeof entry.rebelGraffitiVp === 'number' && entry.rebelGraffitiVp > 0) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[vpKey].total = (game[vpKey].total ?? 0) + entry.rebelGraffitiVp;
+    return { applied: true, logMessage: `Gained ${entry.rebelGraffitiVp} VP (end of activation; honor: no adjacent hostiles).` };
+  }
+
+  // ccEffect: shuffleHandIntoDeckThenDraw (Strategic Shift) — chosen player shuffles hand into deck, then draws N; choiceIndex 0 = P1, 1 = P2
+  if (entry.type === 'ccEffect' && typeof entry.shuffleHandIntoDeckThenDraw === 'number' && entry.shuffleHandIntoDeckThenDraw > 0) {
+    const { game, playerNum, choiceIndex } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const targetNum = choiceIndex === 0 ? 1 : choiceIndex === 1 ? 2 : null;
+    if (targetNum === null) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: ['Player 1', 'Player 2'],
+        choiceCount: 2,
+        manualMessage: 'Choose which player shuffles their hand into their deck, then draws 2.',
+      };
+    }
+    const deckKey = targetNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const handKey = targetNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const hand = (game[handKey] || []).slice();
+    const deck = (game[deckKey] || []).slice();
+    const combined = [...hand, ...deck];
+    for (let i = combined.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [combined[i], combined[j]] = [combined[j], combined[i]];
+    }
+    game[deckKey] = combined;
+    game[handKey] = [];
+    const drew = drawCcCards(game, targetNum, entry.shuffleHandIntoDeckThenDraw);
+    return {
+      applied: true,
+      drewCards: drew,
+      logMessage: `Player ${targetNum} shuffled hand into deck and drew ${drew.length} card(s).`,
+    };
+  }
+
+  // ccEffect: roundUtinniJawaBuffs (Utinni!)
+  if (entry.type === 'ccEffect' && entry.roundUtinniJawaBuffs) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundUtinniJawaBuffs = true;
+    return { applied: true, logMessage: 'This round, each friendly Jawa Scavenger gains +1 Speed, +1 Accuracy, and Surge: gain 1 VP when attacking a figure.' };
+  }
+
+  // ccEffect: whenDefeatHostileWithin3GainBlockTokens (Paid in Beskar)
+  if (entry.type === 'ccEffect' && typeof entry.whenDefeatHostileWithin3GainBlockTokens === 'number') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.whenDefeatHostileWithin3GainBlockTokens = { playerNum, tokens: entry.whenDefeatHostileWithin3GainBlockTokens };
+    return { applied: true, logMessage: `When you defeat a hostile figure within 3 spaces, gain ${entry.whenDefeatHostileWithin3GainBlockTokens} Block tokens.` };
+  }
+
+  // ccEffect: overrunThisActivation (Overrun) — keyed by activation msgId
+  if (entry.type === 'ccEffect' && entry.overrunThisActivation) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually: play at start of activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    game.overrunThisActivation = game.overrunThisActivation || {};
+    game.overrunThisActivation[msgId] = true;
+    return { applied: true, logMessage: 'This activation, when you enter a hostile figure\'s space, that figure suffers 2 Damage (limit once per hostile).' };
+  }
+
+  // ccEffect: squadSwarmPlayerNum (Squad Swarm)
+  if (entry.type === 'ccEffect' && entry.squadSwarmPlayerNum) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.squadSwarmPlayerNum = playerNum;
+    return { applied: true, logMessage: 'You may immediately activate another ready group with the same name (combined cost of both groups cannot exceed 15).' };
+  }
+
+  // ccEffect: roundSmugglersTricksPlayerNum (Smuggler's Tricks)
+  if (entry.type === 'ccEffect' && entry.roundSmugglersTricksPlayerNum) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundSmugglersTricksPlayerNum = playerNum;
+    return { applied: true, logMessage: 'Choose a tile or token you are on or adjacent to; until start of next round, opponent counts 1 fewer figure on or adjacent to it.' };
   }
 
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };

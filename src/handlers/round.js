@@ -133,7 +133,18 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.currentRound = (game.currentRound || 1) + 1;
   game.roundDefenseBonusBlock = {};
   game.roundDefenseBonusEvade = {};
+  game.roundDefenderBonusBlockPerEvade = {};
+  game.roundDroidExtraActionCostDamage = null;
+  game.sitTightPlayerNum = null;
+  game.roundInTheShadowsPlayerNum = null;
+  game.strengthInNumbersPlayerNum = null;
+  game.provokeNextActivation = null;
   game.roundAttackSurgeBonus = {};
+  game.roundUtinniJawaBuffs = null;
+  game.roundSmugglersTricksPlayerNum = null;
+  game.squadSwarmPlayerNum = null;
+  game.whenDefeatHostileWithin3GainBlockTokens = null;
+  game.overrunThisActivation = {};
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client });
   }

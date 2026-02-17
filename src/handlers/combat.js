@@ -249,8 +249,18 @@ export async function handleCombatRoll(interaction, ctx) {
     const bonusDice = combat.attackBonusDice || 0;
     const bonusColors = combat.attackBonusDiceColors || [];
     const primaryColor = baseDice[0] || 'red';
-    const dice = [...baseDice];
+    let dice = [...baseDice];
     for (let i = 0; i < bonusDice; i++) dice.push(bonusColors[i] ?? primaryColor);
+    const removeMax = combat.attackPoolRemoveMax || 0;
+    if (removeMax > 0) dice = dice.slice(0, Math.max(0, dice.length - removeMax));
+    const keepMax = combat.attackPoolKeepMax;
+    if (typeof keepMax === 'number' && keepMax > 0 && dice.length > keepMax) dice = dice.slice(0, keepMax);
+    const addYellowUntil = combat.attackPoolAddYellowUntilTotal;
+    if (typeof addYellowUntil === 'number' && addYellowUntil > 0 && dice.length < addYellowUntil) {
+      const toAdd = addYellowUntil - dice.length;
+      for (let i = 0; i < toAdd; i++) dice.push('yellow');
+      if (combat.superchargeStrainAfterAttack) combat.superchargeStrainAfterAttackCount = toAdd;
+    }
     combat.attackRoll = rollAttackDice(dice);
     await interaction.deferUpdate();
     await thread.send(`**Attack roll** — ${combat.attackRoll.acc} accuracy, ${combat.attackRoll.dmg} damage, ${combat.attackRoll.surge} surge`);
@@ -280,11 +290,14 @@ export async function handleCombatRoll(interaction, ctx) {
       evade += r.evade;
     }
     combat.defenseRoll = { block, evade };
+    combat.defenseDiceCount = diceToRoll.length;
     await interaction.deferUpdate();
     await thread.send(`**Defense roll** — ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade`);
     const roll = combat.attackRoll;
     const defRoll = combat.defenseRoll;
-    const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[combat.attackerPlayerNum] || 0);
+    const defenseDiceCount = combat.defenseDiceCount ?? 1;
+    const perDefDieSurge = (combat.bonusSurgePerDefenseDie || 0) * defenseDiceCount;
+    const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[combat.attackerPlayerNum] || 0) + perDefDieSurge;
     const totalSurge = roll.surge + surgeBonus;
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const getAbility = ctx.getAbility || (() => null);

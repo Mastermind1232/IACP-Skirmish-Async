@@ -552,7 +552,21 @@ export async function handleDcCcSpecial(interaction, ctx) {
   if (ctx.resolveAbility) {
     const abilityId = effectData?.abilityId ?? card;
     const result = ctx.resolveAbility(abilityId, { game, playerNum: meta.playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, msgId });
-    if (result.applied && result.drewCards?.length) {
+    if (result.requiresChoice && result.choiceOptions?.length > 0) {
+      game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId: game.gameId, playerNum: meta.playerNum };
+      const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = await import('discord.js');
+      const rows = [];
+      const maxPerRow = 5;
+      for (let i = 0; i < result.choiceOptions.length; i++) {
+        if (i % maxPerRow === 0) rows.push(new ActionRowBuilder());
+        const label = String(result.choiceOptions[i]).slice(0, 80);
+        rows[rows.length - 1].addComponents(
+          new ButtonBuilder().setCustomId(`cc_choice_${game.gameId}_${i}`).setLabel(label).setStyle(ButtonStyle.Secondary)
+        );
+      }
+      const handChannel = await interaction.client.channels.fetch(handChannelId);
+      await handChannel.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(() => {});
+    } else if (result.applied && result.drewCards?.length) {
       await updateHandVisualMessage(game, meta.playerNum, interaction.client);
       const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
       await logGameAction(game, interaction.client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });

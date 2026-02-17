@@ -84,9 +84,80 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'afterattack':
     case 'afterattackdice':
       return ctx.duringAttack;
+    case 'afteryouresolveattackthatdidnotmissduetoaccuracy':
+      // Reduce to Rubble: playable during/after attack (honor: only when attack did not miss due to accuracy)
+      return ctx.duringAttack;
     case 'afterattacktargetingyouresolved':
       return ctx.duringAttack && ctx.isDefender;
+    case 'whenyouhavesuffereddamageequaltoyourhealth':
+      // Preservation Protocol: playable during your activation (honor system: only when at 0 health)
+      return ctx.duringActivation;
+    case 'whenhostilefigureentersspacewithin3spaces':
+      // Disengage: playable during your activation (honor system: play when hostile entered)
+      return ctx.duringActivation;
+    case 'whenhostilefigureentersadjacentspace':
+      // Self-Defense, Slippery Target, Dirty Trick: playable during your activation (honor system: play when hostile entered adjacent)
+      return ctx.duringActivation;
+    case 'whenfriendlyfigurewithin2spacessuffers3plusdamage':
+      // Extra Protection: playable during your activation (honor system: play when friendly within 2 suffered 3+ Damage)
+      return ctx.duringActivation;
+    case 'whenfriendlyfigurewithin3spaceswouldbedefeated':
+      // Final Stand: playable during your activation (honor system: play when friendly at 0 health)
+      return ctx.duringActivation;
+    case 'whenyouendmovementinspaceswithotherfigures':
+      // Crush: playable during your activation (honor system: play when you end movement in space with figures)
+      return ctx.duringActivation;
+    case 'whenhostilefigureinyourlineofsightattacking':
+      // Force Illusion: playable while defending (honor system: play when hostile in LOS is attacking)
+      return ctx.duringAttack && ctx.isDefender;
+    case 'whenyoudeclarelightsaberthrow':
+      // Hunt Them Down: playable during your activation (honor system: play when declaring Lightsaber Throw)
+      return ctx.duringActivation;
+    case 'afterdamage':
+      // Disorient: playable during your activation (honor system: play after hostile with BENEFICIAL suffered damage)
+      return ctx.duringActivation;
+    case 'whenattackdeclaredtargetingfriendlysmallfigurecost10orlesswithin3spaces':
+      // Get Behind Me!: playable during your activation (honor system: play when attack declared on friendly small figure cost ≤10 within 3)
+      return ctx.duringActivation;
+    case 'afteractivationresolves':
+      // Blaze of Glory: playable after an activation resolves (honor system: play when activation just ended)
+      return ctx.duringActivation;
+    case 'afterspecial':
+      // To the Limit: playable after you resolve a Special Action during your activation
+      return ctx.duringActivation;
+    case 'whenattackdeclaredonadjacentfriendly':
+      // Bodyguard: playable when attack declared on adjacent friendly (honor system: play when attack declared on adjacent friendly)
+      return ctx.duringActivation;
+    case 'whileadjacentfriendlyfiguredefending':
+      // Guardian Stance: playable while defending when adjacent friendly is defender (honor: play when you are defending with adjacent friendly)
+      return ctx.duringAttack && ctx.isDefender;
+    case 'atstartofactivationofhostilefigureinyourlineofsight':
+      // No Cheating: playable at start of hostile activation in your LOS (honor: play when hostile in LOS starts activation)
+      return ctx.duringActivation;
+    case 'whenoneofyourfiguresdefeated':
+      // Of No Importance: playable when your non-unique figure is defeated (honor: play when your figure defeated)
+      return ctx.duringActivation;
+    case 'afteryouresolvegroupsactivation':
+      // Change of Plans: playable after you resolve a group's activation (honor system)
+      return ctx.duringActivation;
+    case 'usewhenyouusegambit':
+      // Cheat to Win: playable when you use Gambit (honor system: play when Gambit used)
+      return ctx.duringActivation;
+    case 'beforedeclaringrangedattack':
+      // Marksman: playable before declaring a Ranged attack (honor system: play when about to declare ranged attack)
+      return ctx.duringActivation;
+    case 'afteryouresolveattacktargetingfigure':
+      // Field Promotion, Shoot the Messenger: playable after you resolve an attack targeting a figure (honor: play when attack just resolved)
+      return ctx.duringAttack;
+    case 'whenhostilefigurewithin3spacesdefeated':
+      // Paid in Beskar: play when you defeat a hostile within 3 spaces (honor system)
+      return ctx.duringActivation;
+    case 'whileattackingbeforedefenderrerolls':
+      // Rapid Recalibration: play while attacking, before defender rerolls
+      return ctx.duringAttack && ctx.isAttacker;
     case 'other':
+      // Disarm, Dying Lunge: playable during your activation (honor system: play at actual trigger)
+      return ctx.duringActivation;
     default:
       return false;
   }

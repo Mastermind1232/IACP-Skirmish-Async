@@ -82,9 +82,21 @@ export function computeCombatResult(combat) {
   const bonusBlock = combat.bonusBlock || 0;
   const bonusEvade = combat.bonusEvade || 0;
   const hit = (roll.acc + surgeA + bonusAcc) >= (defRoll.evade + bonusEvade);
-  const effectiveBlock = Math.max(0, (defRoll.block + bonusBlock) - totalPierce);
-  const damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits - effectiveBlock) : 0;
+  const pierceToUse = combat.defenderIgnorePierce ? 0 : totalPierce;
+  const blockForCalc = combat.ignoreDefenseResultsNotOnDice ? defRoll.block : (defRoll.block + bonusBlock);
+  const effectiveBlock = Math.max(0, blockForCalc - pierceToUse);
+  const defenseDiceCount = combat.defenseDiceCount ?? 1;
+  const perDefDieDamage = (combat.bonusDamagePerDefenseDie || 0) * defenseDiceCount;
+  let damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits + perDefDieDamage - effectiveBlock) : 0;
+  if (combat.maxDamageToDefender != null && damage > combat.maxDamageToDefender) damage = combat.maxDamageToDefender;
   const allConds = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
+  if (combat.attackResultReplaceWithStun && damage > 0) {
+    damage = 0;
+    if (!(combat.bonusConditions || []).includes('Stun')) {
+      combat.bonusConditions = combat.bonusConditions || [];
+      combat.bonusConditions.push('Stun');
+    }
+  }
   const conditionsText = allConds.length ? ` (${allConds.join(', ')})` : '';
   const bonusBlast = combat.bonusBlast || 0;
   const totalBlastDisplay = (combat.surgeBlast || 0) + bonusBlast;
@@ -94,8 +106,9 @@ export function computeCombatResult(combat) {
 
   let resultText = `**Result:** Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
   if (bonusAcc) resultText += ` | CC bonus: +${bonusAcc} acc`;
-  if (bonusHits) resultText += ` | CC bonus: +${bonusHits} Hit`;
-  if (bonusBlock) resultText += ` | CC bonus: +${bonusBlock} Block`;
+  if (bonusHits || perDefDieDamage) resultText += ` | CC bonus: +${(bonusHits || 0) + perDefDieDamage} Hit`;
+  if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) resultText += ` | CC bonus: +${bonusBlock} Block`;
+  if (combat.ignoreDefenseResultsNotOnDice) resultText += ' | CC: ignore defense not on dice';
   if (bonusEvade) resultText += ` | CC bonus: +${bonusEvade} Evade`;
   if (bonusPierce) resultText += ` | CC bonus: +${bonusPierce} pierce`;
   if (bonusBlast) resultText += ` | CC bonus: Blast ${bonusBlast}`;
@@ -105,6 +118,7 @@ export function computeCombatResult(combat) {
   }
   if (!hit) resultText += ' → **Miss**';
   else resultText += ` → **${damage} damage**${conditionsText}`;
+  if (combat.attackResultReplaceWithStun) resultText += ' (Set for Stun: 0 damage, Stunned)';
 
   return { hit, damage, effectiveBlock, resultText };
 }

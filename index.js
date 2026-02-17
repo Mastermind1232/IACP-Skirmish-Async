@@ -2249,6 +2249,8 @@ async function resolveCombatAfterRolls(game, combat, client) {
   const roundEvade = game.roundDefenseBonusEvade?.[defenderPlayerNum] || 0;
   if (roundBlock) combat.bonusBlock = (combat.bonusBlock || 0) + roundBlock;
   if (roundEvade) combat.bonusEvade = (combat.bonusEvade || 0) + roundEvade;
+  const perEvade = game.roundDefenderBonusBlockPerEvade?.[defenderPlayerNum] || 0;
+  if (perEvade && combat.defenseRoll) combat.bonusBlock = (combat.bonusBlock || 0) + (combat.defenseRoll.evade || 0) * perEvade;
   const { hit, damage, resultText } = computeCombatResult(combat);
   const totalBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
   const attackerPlayerNum = combat.attackerPlayerNum;
@@ -2317,6 +2319,25 @@ async function resolveCombatAfterRolls(game, combat, client) {
         const [c, m] = attEntry;
         const maxVal = m ?? c ?? 99;
         const newCur = Math.min((c ?? maxVal) + (combat.surgeRecover || 0), maxVal);
+        attHS[attIdx] = [newCur, maxVal];
+        dcHealthState.set(attMsgId, attHS);
+        const attP = combat.attackerPlayerNum;
+        const dcIds = attP === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcL = attP === 1 ? game.p1DcList : game.p2DcList;
+        const i = (dcIds || []).indexOf(attMsgId);
+        if (i >= 0 && dcL?.[i]) dcL[i].healthState = [...attHS];
+      }
+    }
+    if (combat.superchargeStrainAfterAttackCount > 0 && combat.attackerMsgId != null) {
+      const attMsgId = combat.attackerMsgId;
+      const attIdx = combat.attackerFigureIndex ?? 0;
+      const attHS = dcHealthState.get(attMsgId) || [];
+      const attEntry = attHS[attIdx];
+      if (attEntry) {
+        const [c, m] = attEntry;
+        const maxVal = m ?? c ?? 99;
+        const strain = combat.superchargeStrainAfterAttackCount || 0;
+        const newCur = Math.max(0, (c ?? maxVal) - strain);
         attHS[attIdx] = [newCur, maxVal];
         dcHealthState.set(attMsgId, attHS);
         const attP = combat.attackerPlayerNum;

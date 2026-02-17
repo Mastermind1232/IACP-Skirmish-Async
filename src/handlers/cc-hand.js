@@ -505,7 +505,8 @@ export async function handleCcChoice(interaction, ctx) {
   });
   delete game.pendingCcChoice;
   if (result.applied && result.drewCards?.length) {
-    await updateHandVisualMessage(game, playerNum, client);
+    await updateHandVisualMessage(game, 1, client);
+    await updateHandVisualMessage(game, 2, client);
     const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
     await logGameAction(game, client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
   } else if (result.applied && result.logMessage) {
