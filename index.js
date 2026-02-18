@@ -1238,8 +1238,30 @@ function buildHandDisplayPayload(hand, deck, gameId, game = null, playerNum = 1)
   };
 }
 
+/** Sanitize a display name for use in Discord channel names (lowercase, alphanumeric + hyphens, max 16 chars). */
+function channelSafeName(displayName) {
+  return (displayName || 'player')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 16) || 'player';
+}
+
+/** Get a short channel-safe display name for a user ID. */
+async function getPlayerChannelName(guild, userId) {
+  try {
+    const member = await guild.members.fetch(userId);
+    return channelSafeName(member.displayName);
+  } catch {
+    return channelSafeName(userId.slice(-6));
+  }
+}
+
 /** Create p1 and p2 Hand channels (called when map is selected). */
 async function createHandChannels(guild, gameCategory, prefix, player1Id, player2Id) {
+  const p1Name = await getPlayerChannelName(guild, player1Id);
+  const p2Name = await getPlayerChannelName(guild, player2Id);
   const p1Only = [
     { id: guild.roles.everyone.id, deny: PermissionFlagsBits.ViewChannel },
     { id: player1Id, allow: PermissionFlagsBits.ViewChannel },
@@ -1251,13 +1273,13 @@ async function createHandChannels(guild, gameCategory, prefix, player1Id, player
     { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel },
   ];
   const p1 = await guild.channels.create({
-    name: `${prefix} p1-hand`,
+    name: `${prefix} ${p1Name}-hand`,
     type: ChannelType.GuildText,
     parent: gameCategory.id,
     permissionOverwrites: p1Only,
   });
   const p2 = await guild.channels.create({
-    name: `${prefix} p2-hand`,
+    name: `${prefix} ${p2Name}-hand`,
     type: ChannelType.GuildText,
     parent: gameCategory.id,
     permissionOverwrites: p2Only,
@@ -1267,6 +1289,8 @@ async function createHandChannels(guild, gameCategory, prefix, player1Id, player
 
 /** Create p1 and p2 Play Area channels (called when both squads are ready). */
 async function createPlayAreaChannels(guild, gameCategory, prefix, player1Id, player2Id) {
+  const p1Name = await getPlayerChannelName(guild, player1Id);
+  const p2Name = await getPlayerChannelName(guild, player2Id);
   const playAreaPerms = [
     { id: guild.roles.everyone.id, deny: PermissionFlagsBits.ViewChannel },
     { id: player1Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
@@ -1274,13 +1298,13 @@ async function createPlayAreaChannels(guild, gameCategory, prefix, player1Id, pl
     { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.CreatePublicThreads | PermissionFlagsBits.ManageThreads },
   ];
   const p1 = await guild.channels.create({
-    name: `${prefix} p1-play-area`,
+    name: `${prefix} ${p1Name}-play-area`,
     type: ChannelType.GuildText,
     parent: gameCategory.id,
     permissionOverwrites: playAreaPerms,
   });
   const p2 = await guild.channels.create({
-    name: `${prefix} p2-play-area`,
+    name: `${prefix} ${p2Name}-play-area`,
     type: ChannelType.GuildText,
     parent: gameCategory.id,
     permissionOverwrites: playAreaPerms,
@@ -1366,17 +1390,19 @@ async function createGameChannels(guild, player1Id, player2Id, options = {}) {
     parent: gameCategory.id,
     permissionOverwrites: playerPerms,
   });
+  const p1Name = await getPlayerChannelName(guild, player1Id);
+  const p2Name = await getPlayerChannelName(guild, player2Id);
   let p1HandChannel = null;
   let p2HandChannel = null;
   if (createHandChannels) {
     p1HandChannel = await guild.channels.create({
-      name: `${prefix} p1-hand`,
+      name: `${prefix} ${p1Name}-hand`,
       type: ChannelType.GuildText,
       parent: gameCategory.id,
       permissionOverwrites: p1Only,
     });
     p2HandChannel = await guild.channels.create({
-      name: `${prefix} p2-hand`,
+      name: `${prefix} ${p2Name}-hand`,
       type: ChannelType.GuildText,
       parent: gameCategory.id,
       permissionOverwrites: p2Only,
@@ -1386,13 +1412,13 @@ async function createGameChannels(guild, player1Id, player2Id, options = {}) {
   let p2PlayAreaChannel = null;
   if (createPlayAreas) {
     p1PlayAreaChannel = await guild.channels.create({
-      name: `${prefix} p1-play-area`,
+      name: `${prefix} ${p1Name}-play-area`,
       type: ChannelType.GuildText,
       parent: gameCategory.id,
       permissionOverwrites: playAreaPerms,
     });
     p2PlayAreaChannel = await guild.channels.create({
-      name: `${prefix} p2-play-area`,
+      name: `${prefix} ${p2Name}-play-area`,
       type: ChannelType.GuildText,
       parent: gameCategory.id,
       permissionOverwrites: playAreaPerms,
