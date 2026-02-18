@@ -1141,22 +1141,30 @@ const CARDBACKS_DIR = join(IMAGES_DIR, 'cardbacks');
 /** Resolve command card image path. Looks in cc/ subfolder first, then root. Tries C card--Name, IACP variants. Returns cardback path if not found. */
 function getCommandCardImagePath(cardName) {
   if (!cardName || typeof cardName !== 'string') return null;
+  const clean = cardName.replace(/[':]/g, '').replace(/\s+/g, ' ').trim();
+  const iacp = `${cardName} (IACP)`;
+  const cleanIacp = `${clean} (IACP)`;
   const candidates = [];
   if (cardName.trim().toLowerCase() === 'smoke grenade') {
     candidates.push('Smoke Grenade Final.png', '003 Smoke Grenade Final.png');
   }
-  candidates.push(
-    `C card--${cardName}.jpg`,
-    `C card--${cardName}.png`,
-    `IACP_C card--${cardName}.png`,
-    `IACP_C card--${cardName}.jpg`,
-    `IACP9_C card--${cardName}.png`,
-    `IACP9_C card--${cardName}.jpg`,
-    `IACP10_C card--${cardName}.png`,
-    `IACP10_C card--${cardName}.jpg`,
-    `IACP11_C card--${cardName}.png`,
-    `IACP11_C card--${cardName}.jpg`
-  );
+  for (const base of [iacp, cleanIacp, cardName, clean]) {
+    candidates.push(`${base}.jpg`, `${base}.png`);
+  }
+  for (const base of [cardName, clean]) {
+    candidates.push(
+      `C card--${base}.jpg`,
+      `C card--${base}.png`,
+      `IACP_C card--${base}.png`,
+      `IACP_C card--${base}.jpg`,
+      `IACP9_C card--${base}.png`,
+      `IACP9_C card--${base}.jpg`,
+      `IACP10_C card--${base}.png`,
+      `IACP10_C card--${base}.jpg`,
+      `IACP11_C card--${base}.png`,
+      `IACP11_C card--${base}.jpg`,
+    );
+  }
   for (const c of candidates) {
     const inCc = join(CC_DIR, c);
     if (existsSync(inCc)) return inCc;
@@ -1404,7 +1412,7 @@ async function createGameChannels(guild, player1Id, player2Id, options = {}) {
  * @param {{ editMessageInstead?: import('discord.js').Message }} [options] - if set, edit this message on success instead of sending new
  * @returns {Promise<{ gameId: string }>}
  */
-const IMPLEMENTED_SCENARIOS = ['smoke_grenade', 'focus', 'blitz', 'smuggled_supplies', 'negation'];
+const IMPLEMENTED_SCENARIOS = ['smoke_grenade', 'focus', 'blitz', 'smuggled_supplies', 'dangerous_bargains'];
 
 async function createTestGame(client, guild, userId, scenarioId, feedbackChannel, options = {}) {
   if (testGameCreationInProgress.has(userId)) {

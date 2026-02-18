@@ -25,11 +25,11 @@
       "primaryCard": "Smuggled Supplies",
       "cards": ["Smuggled Supplies", "Hostile Negotiation"]
     },
-    "negation": {
+    "dangerous_bargains": {
       "status": "testready",
-      "pattern": "reactive",
-      "primaryCard": "Negation",
-      "cards": ["Negation", "Brace Yourself"]
+      "pattern": "start_of_round",
+      "primaryCard": "Dangerous Bargains",
+      "cards": ["Dangerous Bargains", "Covering Fire"]
     }
   }
 }
