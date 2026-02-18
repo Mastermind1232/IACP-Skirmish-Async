@@ -4,7 +4,32 @@
     "smoke_grenade": {
       "status": "testready",
       "pattern": "pick_a_space",
+      "primaryCard": "Smoke Grenade",
       "cards": ["Smoke Grenade", "Cloned Reinforcements", "Force Push", "Jump Jets"]
+    },
+    "focus": {
+      "status": "testready",
+      "pattern": "immediate_apply",
+      "primaryCard": "Focus",
+      "cards": ["Focus", "Planning", "Take Initiative"]
+    },
+    "blitz": {
+      "status": "testready",
+      "pattern": "during_attack",
+      "primaryCard": "Blitz",
+      "cards": ["Blitz", "Deadeye", "Camouflage"]
+    },
+    "smuggled_supplies": {
+      "status": "testready",
+      "pattern": "choice_from_list",
+      "primaryCard": "Smuggled Supplies",
+      "cards": ["Smuggled Supplies", "Hostile Negotiation"]
+    },
+    "negation": {
+      "status": "testready",
+      "pattern": "reactive",
+      "primaryCard": "Negation",
+      "cards": ["Negation", "Brace Yourself"]
     }
   }
 }

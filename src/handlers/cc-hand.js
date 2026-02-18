@@ -1021,10 +1021,9 @@ export async function handleCcShuffleDraw(interaction, ctx) {
   let hand = deck.splice(0, 3);
   const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
   const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-  // Test scenario: seed P1 hand so we can test a pattern (e.g. smoke_grenade = pick-a-space)
-  if (game.testScenario === 'smoke_grenade' && playerNum === 1 && !hand.includes('Smoke Grenade')) {
+  if (game.testScenarioPrimaryCard && playerNum === 1 && !hand.includes(game.testScenarioPrimaryCard)) {
     const replaced = hand[0];
-    hand = ['Smoke Grenade', hand[1], hand[2]].filter(Boolean);
+    hand = [game.testScenarioPrimaryCard, hand[1], hand[2]].filter(Boolean);
     if (replaced) deck.push(replaced);
   }
   game[deckKey] = deck;

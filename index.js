@@ -962,6 +962,18 @@ function getRandomTestreadyScenario() {
   }
 }
 
+/** Read primaryCard for a scenario from test-scenarios.json. Returns card name or null. */
+function getScenarioPrimaryCard(scenarioId) {
+  try {
+    const path = join(rootDir, 'data', 'test-scenarios.json');
+    const data = JSON.parse(readFileSync(path, 'utf8'));
+    const scenario = (data.scenarios || {})[scenarioId];
+    return (scenario && scenario.primaryCard) || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Count active (non-ended) games the player is in. */
 function countActiveGamesForPlayer(playerId) {
   if (!playerId) return 0;
@@ -1392,7 +1404,7 @@ async function createGameChannels(guild, player1Id, player2Id, options = {}) {
  * @param {{ editMessageInstead?: import('discord.js').Message }} [options] - if set, edit this message on success instead of sending new
  * @returns {Promise<{ gameId: string }>}
  */
-const IMPLEMENTED_SCENARIOS = ['smoke_grenade'];
+const IMPLEMENTED_SCENARIOS = ['smoke_grenade', 'focus', 'blitz', 'smuggled_supplies', 'negation'];
 
 async function createTestGame(client, guild, userId, scenarioId, feedbackChannel, options = {}) {
   if (testGameCreationInProgress.has(userId)) {
@@ -1425,6 +1437,7 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
       player2VP: { total: 0, kills: 0, objectives: 0 },
       isTestGame: true,
       testScenario: scenarioId || undefined,
+      testScenarioPrimaryCard: scenarioId ? getScenarioPrimaryCard(scenarioId) : undefined,
       ended: false,
     };
     setGame(gameId, game);
@@ -1433,8 +1446,9 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
     if (scenarioImplemented) {
       // Apply scenario: run full setup (map, decks, deploy, draw) — user goes straight to test point
       await runDraftRandom(game, client, { scenarioId });
-      const scenarioDoneText = scenarioId === 'smoke_grenade'
-        ? `Test game **IA Game #${gameId}** ready! Go to **Game Log** for Round 1. Your **Hand channel** has Smoke Grenade — activate a DC, then play it to test pick-a-space.`
+      const scenarioPrimaryCard = getScenarioPrimaryCard(scenarioId);
+      const scenarioDoneText = scenarioPrimaryCard
+        ? `Test game **IA Game #${gameId}** ready! Go to **Game Log** for Round 1. Your **Hand channel** has **${scenarioPrimaryCard}** — activate a DC, then play it to test the **${scenarioId}** scenario.`
         : `Test game **IA Game #${gameId}** ready! Go to **Game Log** for Round 1. Scenario: **${scenarioId}**.`;
       if (options.editMessageInstead) {
         await options.editMessageInstead.edit(scenarioDoneText).catch(() => {});
@@ -2290,10 +2304,13 @@ async function runDraftRandom(game, client, options = {}) {
     const deck = [...ccList];
     shuffleArray(deck);
     let hand = deck.splice(0, 3);
-    if (scenarioId === 'smoke_grenade' && playerNum === 1 && !hand.includes('Smoke Grenade')) {
-      const replaced = hand[0];
-      hand = ['Smoke Grenade', hand[1], hand[2]].filter(Boolean);
-      if (replaced) deck.push(replaced);
+    if (scenarioId && playerNum === 1) {
+      const primaryCard = getScenarioPrimaryCard(scenarioId);
+      if (primaryCard && !hand.includes(primaryCard)) {
+        const replaced = hand[0];
+        hand = [primaryCard, hand[1], hand[2]].filter(Boolean);
+        if (replaced) deck.push(replaced);
+      }
     }
     const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
     const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
