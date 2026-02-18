@@ -1406,10 +1406,10 @@ async function createGameChannels(guild, player1Id, player2Id, options = {}) {
  * Create a test game (shared by #lfg message handler and HTTP POST /testgame).
  * @param {import('discord.js').Client} client
  * @param {import('discord.js').Guild} guild
- * @param {string} userId - Discord user ID (P1 and P2 for test)
+ * @param {string} userId - Discord user ID (P1)
  * @param {string|null} scenarioId - e.g. 'smoke_grenade'
  * @param {import('discord.js').TextChannel} feedbackChannel - where to send "Test game #X created" (or editMessageInstead)
- * @param {{ editMessageInstead?: import('discord.js').Message }} [options] - if set, edit this message on success instead of sending new
+ * @param {{ editMessageInstead?: import('discord.js').Message, player2Id?: string }} [options]
  * @returns {Promise<{ gameId: string }>}
  */
 const IMPLEMENTED_SCENARIOS = ['smoke_grenade', 'focus', 'blitz', 'smuggled_supplies', 'dangerous_bargains'];
@@ -1424,14 +1424,16 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
   testGameCreationInProgress.add(userId);
   try {
     const botId = client.user.id;
+    const p2Id = options.player2Id || botId;
+    const p2IsBot = p2Id === botId;
     const { gameId, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel } =
-      await createGameChannels(guild, userId, botId, { createPlayAreas: false, createHandChannels: false });
+      await createGameChannels(guild, userId, p2Id, { createPlayAreas: false, createHandChannels: false });
     const game = {
       gameId,
       version: CURRENT_GAME_VERSION,
       gameCategoryId: generalChannel.parentId,
       player1Id: userId,
-      player2Id: botId,
+      player2Id: p2Id,
       generalId: generalChannel.id,
       chatId: chatChannel.id,
       boardId: boardChannel.id,
@@ -1444,6 +1446,7 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
       player1VP: { total: 0, kills: 0, objectives: 0 },
       player2VP: { total: 0, kills: 0, objectives: 0 },
       isTestGame: true,
+      testP2IsBot: p2IsBot,
       testScenario: scenarioId || undefined,
       testScenarioPrimaryCard: scenarioId ? getScenarioPrimaryCard(scenarioId) : undefined,
       ended: false,
@@ -1451,30 +1454,33 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
     setGame(gameId, game);
 
     const scenarioImplemented = scenarioId && IMPLEMENTED_SCENARIOS.includes(scenarioId);
+    const p2Label = p2IsBot ? 'the bot' : `<@${p2Id}>`;
+    const mentionUsers = p2IsBot ? [userId] : [userId, p2Id];
     if (scenarioImplemented) {
-      // Apply scenario: run full setup (map, decks, deploy, draw) — user goes straight to test point
       await runDraftRandom(game, client, { scenarioId });
       const scenarioPrimaryCard = getScenarioPrimaryCard(scenarioId);
       const scenarioDoneText = scenarioPrimaryCard
-        ? `Test game **IA Game #${gameId}** ready! Go to **Game Log** for Round 1. Your **Hand channel** has **${scenarioPrimaryCard}** — activate a DC, then play it to test the **${scenarioId}** scenario.`
-        : `Test game **IA Game #${gameId}** ready! Go to **Game Log** for Round 1. Scenario: **${scenarioId}**.`;
+        ? `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. P1's **Hand channel** has **${scenarioPrimaryCard}** — activate a DC, then play it to test the **${scenarioId}** scenario.`
+        : `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. Scenario: **${scenarioId}**.`;
       if (options.editMessageInstead) {
-        await options.editMessageInstead.edit(scenarioDoneText).catch(() => {});
+        await options.editMessageInstead.edit({ content: scenarioDoneText, allowedMentions: { users: mentionUsers } }).catch(() => {});
       } else {
         await feedbackChannel.send({
-          content: `<@${userId}> — ${scenarioDoneText}`,
-          allowedMentions: { users: [userId] },
+          content: scenarioDoneText,
+          allowedMentions: { users: mentionUsers },
         }).catch(() => {});
       }
     } else {
-      // No scenario (or unimplemented scenario): show map selection as usual
+      const setupDesc = p2IsBot
+        ? '**Test game** — You play as P1 vs the bot as P2. Select the map below. Hand channels will then appear; use them to pick decks (Select Squad or Default Rebels / Scum / Imperial) for each side.'
+        : `**Test game** — <@${userId}> is P1, <@${p2Id}> is P2. Select the map below. Hand channels will then appear; use them to pick decks.`;
       const setupMsg = await generalChannel.send({
-        content: `<@${userId}> — **Test game** created. You are P1, the bot is P2. Map Selection below — Hand channels will appear after map selection. Use **General chat** for notes.`,
-        allowedMentions: { users: [userId] },
+        content: `<@${userId}> — **Test game** created. You are P1, P2 is ${p2Label}. Map Selection below — Hand channels will appear after map selection.`,
+        allowedMentions: { users: mentionUsers },
         embeds: [
           new EmbedBuilder()
             .setTitle('Game Setup (Test)')
-            .setDescription('**Test game** — You play as P1 vs the bot as P2. Select the map below. Hand channels will then appear; use them to pick decks (Select Squad or Default Rebels / Scum / Imperial) for each side.')
+            .setDescription(setupDesc)
             .setColor(0x2f3136),
         ],
         components: [getGeneralSetupButtons(game)],
@@ -1482,13 +1488,13 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
       game.generalSetupMessageId = setupMsg.id;
       const doneText = scenarioId && !scenarioImplemented
         ? `Scenario **${scenarioId}** is not yet implemented. Test game **IA Game #${gameId}** created with standard setup — select the map in Game Log.`
-        : `Test game **IA Game #${gameId}** is ready! Select the map in Game Log — Hand channels will appear after map selection.`;
+        : `Test game **IA Game #${gameId}** is ready (P1 <@${userId}> vs P2 ${p2Label})! Select the map in Game Log — Hand channels will appear after map selection.`;
       if (options.editMessageInstead) {
-        await options.editMessageInstead.edit(doneText).catch(() => {});
+        await options.editMessageInstead.edit({ content: doneText, allowedMentions: { users: mentionUsers } }).catch(() => {});
       } else {
         await feedbackChannel.send({
-          content: `<@${userId}> — ${doneText}`,
-          allowedMentions: { users: [userId] },
+          content: doneText,
+          allowedMentions: { users: mentionUsers },
         }).catch(() => {});
       }
     }
@@ -3627,7 +3633,8 @@ client.once('ready', async () => {
             res.end(JSON.stringify({ error: '#lfg channel not found' }));
             return;
           }
-          const { gameId } = await createTestGame(client, guild, userId, scenarioId, lfg);
+          const player2Id = data.player2Id || undefined;
+          const { gameId } = await createTestGame(client, guild, userId, scenarioId, lfg, { player2Id });
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ gameId, message: 'Test game created. Check #lfg in Discord.' }));
         } catch (err) {
@@ -3637,7 +3644,7 @@ client.once('ready', async () => {
         }
       });
     }).listen(port, '127.0.0.1', () => {
-      console.log(`Testgame HTTP: POST http://127.0.0.1:${port}/testgame (body: { "userId?", "scenarioId?" }, or set TESTGAME_USER_ID)`);
+      console.log(`Testgame HTTP: POST http://127.0.0.1:${port}/testgame (body: { "userId?", "scenarioId?", "player2Id?" }, or set TESTGAME_USER_ID)`);
     });
   }
 });
@@ -3718,9 +3725,12 @@ client.on('messageCreate', async (message) => {
     processedTestGameMessageIds.add(msgId);
     if (processedTestGameMessageIds.size > 500) processedTestGameMessageIds.clear();
     const userId = message.author.id;
-    const creatingMsg = await message.reply(`Creating test game (random testready scenario: **${scenarioId}**)...`);
+    const mentionedP2 = message.mentions.users.first();
+    const player2Id = mentionedP2 && mentionedP2.id !== userId ? mentionedP2.id : undefined;
+    const p2Desc = player2Id ? ` vs <@${player2Id}>` : '';
+    const creatingMsg = await message.reply(`Creating test game (random testready scenario: **${scenarioId}**${p2Desc})...`);
     try {
-      await createTestGame(message.client, message.guild, userId, scenarioId, message.channel, { editMessageInstead: creatingMsg });
+      await createTestGame(message.client, message.guild, userId, scenarioId, message.channel, { editMessageInstead: creatingMsg, player2Id });
     } catch (err) {
       console.error('Test game creation error:', err);
       await logGameErrorToBotLogs(message.client, message.guild, null, err, 'test_game_create');
@@ -3735,16 +3745,22 @@ client.on('messageCreate', async (message) => {
       await message.reply('This command must be used in a server channel.').catch(() => {});
       return;
     }
-    const parts = content.split(/\s+/);
-    const scenarioId = parts[1] && parts[1].toLowerCase() || null; // e.g. 'smoke_grenade', 'blaze'
+    const parts = message.content.trim().split(/\s+/);
+    let scenarioId = null;
+    for (let i = 1; i < parts.length; i++) {
+      if (!parts[i].startsWith('<@')) { scenarioId = parts[i].toLowerCase(); break; }
+    }
+    const mentionedP2 = message.mentions.users.first();
+    const player2Id = mentionedP2 && mentionedP2.id !== message.author.id ? mentionedP2.id : undefined;
     const msgId = message.id;
-    if (processedTestGameMessageIds.has(msgId)) return; // dedupe: Discord sometimes fires messageCreate twice
+    if (processedTestGameMessageIds.has(msgId)) return;
     processedTestGameMessageIds.add(msgId);
     if (processedTestGameMessageIds.size > 500) processedTestGameMessageIds.clear();
     const userId = message.author.id;
-    const creatingMsg = await message.reply(scenarioId ? `Creating test game (scenario: **${scenarioId}**)...` : 'Creating test game (you as both players)...');
+    const p2Desc = player2Id ? ` vs <@${player2Id}>` : '';
+    const creatingMsg = await message.reply(scenarioId ? `Creating test game (scenario: **${scenarioId}**${p2Desc})...` : `Creating test game${player2Id ? p2Desc : ' (you as both players)'}...`);
     try {
-      await createTestGame(message.client, message.guild, userId, scenarioId, message.channel, { editMessageInstead: creatingMsg });
+      await createTestGame(message.client, message.guild, userId, scenarioId, message.channel, { editMessageInstead: creatingMsg, player2Id });
     } catch (err) {
       console.error('Test game creation error:', err);
       await logGameErrorToBotLogs(message.client, message.guild, null, err, 'test_game_create');
