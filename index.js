@@ -2350,6 +2350,8 @@ async function runDraftRandom(game, client, options = {}) {
         const replaced = hand[0];
         hand = [primaryCard, hand[1], hand[2]].filter(Boolean);
         if (replaced) deck.push(replaced);
+        const pcIdx = deck.indexOf(primaryCard);
+        if (pcIdx >= 0) deck.splice(pcIdx, 1);
       }
     }
     const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';

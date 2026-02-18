@@ -1025,6 +1025,8 @@ export async function handleCcShuffleDraw(interaction, ctx) {
     const replaced = hand[0];
     hand = [game.testScenarioPrimaryCard, hand[1], hand[2]].filter(Boolean);
     if (replaced) deck.push(replaced);
+    const pcIdx = deck.indexOf(game.testScenarioPrimaryCard);
+    if (pcIdx >= 0) deck.splice(pcIdx, 1);
   }
   game[deckKey] = deck;
   game[handKey] = hand;
