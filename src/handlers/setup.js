@@ -190,11 +190,11 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
       const payload = await buildBoardMapPayload(game.gameId, map, game);
       await boardChannel.send(payload);
     } catch (err) {
-      console.error('Failed to post map to Board channel:', err);
+      console.error('Failed to post map to Map Updates channel:', err);
     }
   }
   const mapName = map?.name ?? 'Map';
-  await logGameAction(game, client, `Map selected: **${mapName}** — View in Board channel.`, { phase: 'SETUP', icon: 'map' });
+  await logGameAction(game, client, `Map selected: **${mapName}** — View in Map Updates channel.`, { phase: 'SETUP', icon: 'map' });
   if (game.generalSetupMessageId) {
     try {
       const generalChannel = await client.channels.fetch(game.generalId);
@@ -215,6 +215,13 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
       );
       game.p1PlayAreaId = p1PlayAreaChannel.id;
       game.p2PlayAreaId = p2PlayAreaChannel.id;
+      // Move Map Updates channel to the end so it appears below play areas
+      if (game.boardId) {
+        try {
+          const boardCh = await client.channels.fetch(game.boardId);
+          await boardCh.setPosition(99);
+        } catch { /* ignore positioning errors */ }
+      }
     }
     if (!game.p1HandId || !game.p2HandId) {
       await createHandThreads(client, game);

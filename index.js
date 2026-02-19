@@ -29,8 +29,14 @@ import {
   deleteGameFromDb,
   insertCompletedGame,
   getStatsSummary,
+  getStatsSummaryForPlayer,
   getAffiliationWinRates,
+  getAffiliationWinRatesPersonal,
+  getAffiliationPickRates,
+  getAffiliationPickRatesPersonal,
   getDcWinRates,
+  getDcWinRatesPersonal,
+  getLeaderboard,
 } from './src/db.js';
 import {
   getGame,
@@ -1482,11 +1488,17 @@ async function createGameChannels(guild, player1Id, player2Id) {
     parent: gameCategory.id,
     permissionOverwrites: gameLogPerms,
   });
+  const boardPerms = [
+    { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
+    { id: player1Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
+    { id: player2Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
+    { id: botId, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ManageMessages },
+  ];
   const boardChannel = await guild.channels.create({
-    name: `${prefix} Board`,
+    name: `${prefix} Map Updates`,
     type: ChannelType.GuildText,
     parent: gameCategory.id,
-    permissionOverwrites: playerPerms,
+    permissionOverwrites: boardPerms,
   });
   return { gameCategory, gameId, generalChannel, chatChannel, boardChannel };
 }
@@ -2389,7 +2401,7 @@ async function runDraftRandom(game, client, options = {}) {
       const payload = await buildBoardMapPayload(game.gameId, map, game);
       await boardChannel.send(payload);
     }
-    await logGameAction(game, client, `Map selected: **${map.name}** — View in Board channel.`, { phase: 'SETUP', icon: 'map' });
+    await logGameAction(game, client, `Map selected: **${map.name}** — View in Map Updates channel.`, { phase: 'SETUP', icon: 'map' });
   }
 
   // Play areas first (hand threads live inside them)
@@ -2402,6 +2414,13 @@ async function runDraftRandom(game, client, options = {}) {
     );
     game.p1PlayAreaId = p1PlayAreaChannel.id;
     game.p2PlayAreaId = p2PlayAreaChannel.id;
+    // Move Map Updates channel to appear after play area channels
+    if (game.boardId) {
+      try {
+        const boardCh = await client.channels.fetch(game.boardId);
+        await boardCh.setPosition(99);
+      } catch { /* ignore */ }
+    }
   }
 
   // Hand = private thread inside each player's play area
@@ -3356,22 +3375,10 @@ async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState,
   if (imagePath) {
     const fullPath = join(rootDir, imagePath);
     if (existsSync(fullPath)) {
-      const attachName = 'dc-thumb.png';
-      if (exhausted) {
-        const buffer = await rotateImage90(imagePath);
-        if (buffer) {
-          files.push(new AttachmentBuilder(buffer, { name: attachName }));
-          embed.setThumbnail(`attachment://${attachName}`);
-        } else {
-          files.push(new AttachmentBuilder(fullPath, { name: attachName }));
-          embed.setThumbnail(`attachment://${attachName}`);
-        }
-      } else {
-        const ext = imagePath.split('.').pop() || 'png';
-        const name = `dc-thumb.${ext}`;
-        files.push(new AttachmentBuilder(fullPath, { name }));
-        embed.setThumbnail(`attachment://${name}`);
-      }
+      const ext = imagePath.split('.').pop() || 'png';
+      const attachName = `dc-card.${ext}`;
+      files.push(new AttachmentBuilder(fullPath, { name: attachName }));
+      embed.setImage(`attachment://${attachName}`);
     }
   }
   return { embed, files };
@@ -3656,6 +3663,13 @@ async function applySquadSubmission(game, isP1, squad, client) {
         );
         game.p1PlayAreaId = p1PlayAreaChannel.id;
         game.p2PlayAreaId = p2PlayAreaChannel.id;
+        // Move Map Updates channel to appear after play area channels
+        if (game.boardId) {
+          try {
+            const boardCh = await client.channels.fetch(game.boardId);
+            await boardCh.setPosition(99);
+          } catch { /* ignore */ }
+        }
       }
       await populatePlayAreas(game, client);
     } catch (err) {
@@ -3730,17 +3744,35 @@ client.once('ready', async () => {
       .setDescription('Open Bot Stuff menu (Archive, Kill Game). Use in the Game Log channel of a game.');
     const statcheck = new SlashCommandBuilder()
       .setName('statcheck')
-      .setDescription('Show completed games summary (total, draws). Use in #statistics.');
-    const affiliation = new SlashCommandBuilder()
-      .setName('affiliation')
-      .setDescription('Win rate by affiliation (Imperial, Rebel, Scum). Use in #statistics.');
-    const dcwinrate = new SlashCommandBuilder()
-      .setName('dcwinrate')
-      .setDescription('Win rate by Deployment Card (top N by games played). Use in #statistics.')
+      .setDescription('Show completed games summary, or a specific player\'s record. Use in #statistics.')
+      .addUserOption((o) => o.setName('player').setDescription('Show stats for this player (optional)').setRequired(false));
+    const affiliationwinrateglobal = new SlashCommandBuilder()
+      .setName('affiliationwinrateglobal')
+      .setDescription('Win rate by affiliation across all completed games. Use in #statistics.');
+    const affiliationwinratepersonal = new SlashCommandBuilder()
+      .setName('affiliationwinratepersonal')
+      .setDescription('Your win rate by affiliation. Use in #statistics.');
+    const affiliationpickrateglobal = new SlashCommandBuilder()
+      .setName('affiliationpickrateglobal')
+      .setDescription('Pick rate by affiliation across all completed games. Use in #statistics.');
+    const affiliationpickratepersonal = new SlashCommandBuilder()
+      .setName('affiliationpickratepersonal')
+      .setDescription('Your pick rate by affiliation. Use in #statistics.');
+    const dcwinrateglobaltopten = new SlashCommandBuilder()
+      .setName('dcwinrateglobaltopten')
+      .setDescription('Win rate by Deployment Card (top N by games played, global). Use in #statistics.')
       .addIntegerOption((o) => o.setName('limit').setDescription('Max number of DCs to show (default 20)').setMinValue(5).setMaxValue(50));
+    const dcwinratepersonaltopten = new SlashCommandBuilder()
+      .setName('dcwinratepersonaltopten')
+      .setDescription('Your win rate by Deployment Card (top N by games played). Use in #statistics.')
+      .addIntegerOption((o) => o.setName('limit').setDescription('Max number of DCs to show (default 20)').setMinValue(5).setMaxValue(50));
+    const leaderboard = new SlashCommandBuilder()
+      .setName('leaderboard')
+      .setDescription('Top players by wins across all completed games. Use in #statistics.')
+      .addIntegerOption((o) => o.setName('limit').setDescription('Number of players to show (default 20)').setMinValue(5).setMaxValue(50));
     const powertoken = new SlashCommandBuilder()
       .setName('power-token')
-      .setDescription('Add or remove a Power Token on a figure. Use in Game Log / Board channel.')
+      .setDescription('Add or remove a Power Token on a figure. Use in Game Log / Map Updates channel.')
       .addSubcommand((s) =>
         s
           .setName('add')
@@ -3769,9 +3801,15 @@ client.once('ready', async () => {
           .setDescription('List figures with Power Tokens')
       );
     await rest.put(Routes.applicationCommands(client.user.id), {
-      body: [botmenu.toJSON(), statcheck.toJSON(), affiliation.toJSON(), dcwinrate.toJSON(), powertoken.toJSON()],
+      body: [
+        botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(),
+        affiliationwinrateglobal.toJSON(), affiliationwinratepersonal.toJSON(),
+        affiliationpickrateglobal.toJSON(), affiliationpickratepersonal.toJSON(),
+        dcwinrateglobaltopten.toJSON(), dcwinratepersonaltopten.toJSON(),
+        leaderboard.toJSON(),
+      ],
     });
-    console.log('Slash commands registered: /botmenu, /statcheck, /affiliation, /dcwinrate, /power-token');
+    console.log('Slash commands registered: /botmenu, /statcheck, /power-token, /affiliationwinrateglobal, /affiliationwinratepersonal, /affiliationpickrateglobal, /affiliationpickratepersonal, /dcwinrateglobaltopten, /dcwinratepersonaltopten, /leaderboard');
   } catch (err) {
     console.error('Failed to register slash commands:', err.message);
   }
@@ -4087,7 +4125,7 @@ client.on('messageCreate', async (message) => {
       const newTotal = vp.total;
       const side = isP1 ? 'Player 1' : 'Player 2';
       await message.reply(`✓ **${side}** VP adjusted ${actualDelta >= 0 ? '+' : ''}${actualDelta}. Total is now **${newTotal}** VP.`).catch(() => {});
-      // Update scorecard embed in Board channel if present
+      // Update scorecard embed in Map Updates channel if present
       if (game.boardId && game.selectedMap) {
         try {
           const boardChannel = await message.client.channels.fetch(game.boardId);
@@ -4318,7 +4356,8 @@ client.on('interactionCreate', async (interaction) => {
     }
     // Stats commands: only in #statistics channel; require DB
     const statsChannelName = (interaction.channel?.name || '').toLowerCase();
-    if (['statcheck', 'affiliation', 'dcwinrate'].includes(cmd)) {
+    const statsCmds = ['statcheck', 'affiliationwinrateglobal', 'affiliationwinratepersonal', 'affiliationpickrateglobal', 'affiliationpickratepersonal', 'dcwinrateglobaltopten', 'dcwinratepersonaltopten', 'leaderboard'];
+    if (statsCmds.includes(cmd)) {
       if (statsChannelName !== 'statistics') {
         await interaction.reply({
           content: 'Use this command in the **#statistics** channel.',
@@ -4336,24 +4375,69 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.deferReply({ ephemeral: false }).catch(() => {});
       try {
         if (cmd === 'statcheck') {
-          const { totalGames, draws } = await getStatsSummary();
-          await interaction.editReply({
-            content: `**Completed games:** ${totalGames}\n**Draws:** ${draws}`,
-          }).catch(() => {});
-        } else if (cmd === 'affiliation') {
+          const targetUser = interaction.options.getUser('player');
+          if (targetUser) {
+            const s = await getStatsSummaryForPlayer(targetUser.id);
+            await interaction.editReply({
+              content: `**Stats for ${targetUser.username}**\nGames: **${s.games}** | Wins: **${s.wins}** | Losses: **${s.losses}** | Draws: **${s.draws}** | Win rate: **${s.winRate}%**`,
+            }).catch(() => {});
+          } else {
+            const { totalGames, draws } = await getStatsSummary();
+            await interaction.editReply({
+              content: `**Completed games:** ${totalGames}\n**Draws:** ${draws}`,
+            }).catch(() => {});
+          }
+        } else if (cmd === 'affiliationwinrateglobal') {
           const rows = await getAffiliationWinRates();
           const lines = rows.length
             ? rows.map((r) => `${r.affiliation}: **${r.wins}** / **${r.games}** (${r.winRate}% win rate)`).join('\n')
             : 'No completed games with affiliation data yet.';
-          await interaction.editReply({ content: `**Win rate by affiliation**\n${lines}` }).catch(() => {});
-        } else if (cmd === 'dcwinrate') {
+          await interaction.editReply({ content: `**Win rate by affiliation (global)**\n${lines}` }).catch(() => {});
+        } else if (cmd === 'affiliationwinratepersonal') {
+          const rows = await getAffiliationWinRatesPersonal(interaction.user.id);
+          const lines = rows.length
+            ? rows.map((r) => `${r.affiliation}: **${r.wins}** / **${r.games}** (${r.winRate}% win rate)`).join('\n')
+            : 'No completed games with affiliation data for you yet.';
+          await interaction.editReply({ content: `**Your win rate by affiliation**\n${lines}` }).catch(() => {});
+        } else if (cmd === 'affiliationpickrateglobal') {
+          const rows = await getAffiliationPickRates();
+          const lines = rows.length
+            ? rows.map((r) => `${r.affiliation}: **${r.picks}** picks / **${r.totalArmies}** armies (${r.pickRate}%)`).join('\n')
+            : 'No completed games with affiliation data yet.';
+          await interaction.editReply({ content: `**Pick rate by affiliation (global)**\n${lines}` }).catch(() => {});
+        } else if (cmd === 'affiliationpickratepersonal') {
+          const rows = await getAffiliationPickRatesPersonal(interaction.user.id);
+          const lines = rows.length
+            ? rows.map((r) => `${r.affiliation}: **${r.picks}** picks / **${r.totalArmies}** armies (${r.pickRate}%)`).join('\n')
+            : 'No completed games with affiliation data for you yet.';
+          await interaction.editReply({ content: `**Your pick rate by affiliation**\n${lines}` }).catch(() => {});
+        } else if (cmd === 'dcwinrateglobaltopten') {
           const limit = interaction.options.getInteger('limit') ?? 20;
           const rows = await getDcWinRates(limit);
           const lines = rows.length
             ? rows.map((r) => `${r.dcName}: **${r.wins}** / **${r.games}** (${r.winRate}%)`).join('\n')
             : 'No completed games with army data yet.';
           await interaction.editReply({
-            content: `**Win rate by Deployment Card** (top ${limit} by games played)\n${lines}`,
+            content: `**Win rate by Deployment Card** (top ${limit} by games played, global)\n${lines}`,
+          }).catch(() => {});
+        } else if (cmd === 'dcwinratepersonaltopten') {
+          const limit = interaction.options.getInteger('limit') ?? 20;
+          const rows = await getDcWinRatesPersonal(interaction.user.id, limit);
+          const lines = rows.length
+            ? rows.map((r) => `${r.dcName}: **${r.wins}** / **${r.games}** (${r.winRate}%)`).join('\n')
+            : 'No completed games with army data for you yet.';
+          await interaction.editReply({
+            content: `**Your win rate by Deployment Card** (top ${limit} by games played)\n${lines}`,
+          }).catch(() => {});
+        } else if (cmd === 'leaderboard') {
+          const limit = interaction.options.getInteger('limit') ?? 20;
+          const rows = await getLeaderboard(limit);
+          const lines = rows.length
+            ? rows.map((r, i) => `**${i + 1}.** <@${r.playerId}> — **${r.wins}**W / **${r.losses}**L / **${r.draws}**D (${r.winRate}% over ${r.games} games)`).join('\n')
+            : 'No completed games yet.';
+          await interaction.editReply({
+            content: `**Leaderboard** (top ${limit} by wins)\n${lines}`,
+            allowedMentions: { users: [] },
           }).catch(() => {});
         }
       } catch (err) {
