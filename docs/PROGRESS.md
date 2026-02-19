@@ -1,6 +1,6 @@
 # IACP Skirmish — Master Progress Tracker
 *Goal: Fully playable, 100% in-Discord automated skirmish experience.*
-*Last updated: Feb 19 2026 (post full audit).*
+*Last updated: Jul 2026 (post full codebase read — every line of every file audited).*
 
 ---
 
@@ -9,26 +9,26 @@
 Scores are **effort-weighted** — a checkbox that fixes one return statement is not worth the same as wiring surge abilities for 223 deployment cards. Each category carries a weight reflecting its total implementation cost. The percentage is derived from `(points earned) / (total points)`.
 
 ```
-████████████░░░░░░░░  ~62%  effort-weighted
+████████████░░░░░░░░  ~64%  effort-weighted
 ```
 
 | Category | Weight | Score | % | Notes |
 |---|---|---|---|---|
-| 🏗️ Infrastructure | 10 | 8.5 | 85% | Atomic saves + migration logic open |
-| 🔄 Game Flow & Rounds | 12 | 8.5 | 71% | Reinforcement missing; pass button works but no server block |
+| 🏗️ Infrastructure | 10 | 8.7 | 87% | Atomic saves + migration logic open; undo scope wider than previously noted |
+| 🔄 Game Flow & Rounds | 12 | 8.8 | 73% | Reinforcement missing; door system + setup attachments now tracked |
 | ⚔️ Combat System | 15 | 12.5 | 83% | Full sequence works; LOS + figures-as-blockers gap |
 | 🏃 Movement & LOS | 10 | 8.5 | 85% | Engine solid; reinforce entry points missing |
-| 🃏 CC Automation | 20 | 15.0 | 75% | ~248 / 297 cards in library; ~49 still return manual message |
-| 🤖 DC Core Gameplay | 12 | 9.5 | 79% | Attack/health/conditions work; DC specials are stubs |
+| 🃏 CC Automation | 20 | 15.5 | 78% | Negation + Celebration confirmed wired; ~49 still return manual message |
+| 🤖 DC Core Gameplay | 12 | 9.7 | 81% | DC specials wired via resolveAbility; gap is data, not code |
 | ⚡ DC Surge Automation | 15 | 0.5 | **3%** | Only 2 / 223 DCs have surge data in dc-effects.json |
 | 🗺️ Map Data | 15 | 9.5 | 63% | 3/3 tournament maps + 2 extras built; dev-facility broken |
-| 📜 Mission Rules Engine | 8 | 5.0 | 63% | Engine works for 5 maps; dev-facility empty |
+| 📜 Mission Rules Engine | 8 | 5.2 | 65% | Door tracking via openedDoors across all maps |
 | 🔁 Reinforcement | 8 | 0.0 | **0%** | Not implemented — breaks every third/fourth round |
-| 📊 Stats & Analytics | 10 | 7.0 | 70% | 3 slash commands live; missing zone/leaderboard/end-game embed |
-| **Total** | **135** | **84.0** | **~62%** | |
+| 📊 Stats & Analytics | 10 | 7.5 | 75% | End-game scorecard embed confirmed posted; leaderboard/zone queries missing |
+| **Total** | **135** | **86.4** | **~64%** | |
 
 > ⚠️ **DC Surge Automation** and **Reinforcement** are the two biggest effort gaps.
-> The previous draft under-counted Stats (commands are live) and over-stated some game flow gaps.
+> Previous audits under-counted several fully-implemented features: Negation, Celebration, door system, CC play undo, end-game scorecard, setup attachment phase.
 
 ---
 
@@ -48,26 +48,32 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 
 ---
 
-## 🔄 Game Flow & Rounds — weight: 12 pts — score: 8.5 / 12 (71%)
+## 🔄 Game Flow & Rounds — weight: 12 pts — score: 8.8 / 12 (73%)
 
-- [x] Win/loss detection: 40 VP threshold + full elimination
+- [x] Win/loss detection: 40 VP threshold + full elimination; draw on mutual elimination
 - [x] Activation counter reset at end of round
 - [x] Activated DC indices reset at end of round
-- [x] `mission-rules.js` return bug fixed (game end stops further rule execution) *(fixed this session)*
+- [x] `mission-rules.js` return bug fixed (game end stops further rule execution)
 - [x] Mission A & B objectives run via data-driven `runEndOfRoundRules`
 - [x] Defeated groups filtered from Activate list
 - [x] Activations decremented when group wiped mid-round
 - [x] Attachment CCs cleaned up when DC is defeated
 - [x] CC timing validation (`isCcPlayableNow`, `isCcPlayLegalByRestriction`)
-- [x] **Pass turn button** — `pass_activation_turn_` handler is fully implemented; shows when opponent has strictly more activations; undoable
+- [x] **Pass turn button** — `pass_activation_turn_` handler fully implemented; shows when opponent has strictly more activations; undoable
+- [x] **End Turn button** — per-DC "End Turn" prompt after 0 actions remain; `handleEndTurn` passes turn to opponent
+- [x] **Skirmish Upgrade setup attachment phase** — after both players deploy, attachment selection phase before CC shuffle; fully gated and sequential
+- [x] **Door system** — doors present on map, removed from render when opened via interact; `game.openedDoors` persisted
+- [x] **Ancillary token tracking** — smoke, rubble, energyShield, device, napalm tracked in `game.ancillaryTokens` and rendered on board
+- [x] **Manual VP edit** — `/editvp +N` or `/editvp -N` typed in Game Log; per-player adjustment; triggers win condition check and refreshes scorecard
+- [x] **Supercharge strain** — `superchargeStrainAfterAttackCount` applies strain to attacker's figure after attack resolves
 - [ ] **Reinforcement** — non-unique defeated figures can redeploy at end of round *(not implemented)*
-- [ ] **End-of-activation CC auto-prompt** — `endofactivation` timing exists in `cc-timing.js` but nothing auto-triggers at end of activation; players must manually play from hand
-- [ ] **Server-side activation block** — `p1/p2ActivationsRemaining` is decremented but nothing prevents a player from clicking Activate on a DC when their count is already 0
+- [ ] **End-of-activation CC auto-prompt** — `endofactivation` timing exists in `cc-timing.js` but nothing auto-triggers; players must manually notice and play
+- [ ] **Server-side activation block** — `p1/p2ActivationsRemaining` is decremented but nothing prevents clicking Activate on a DC when count is already 0
 - [ ] **Free action tracking** — abilities that grant free actions still decrement the action counter
 
 ---
 
-## 🃏 CC Automation — weight: 20 pts — score: 15.0 / 20 (75%)
+## 🃏 CC Automation — weight: 20 pts — score: 15.5 / 20 (78%)
 
 > **Coverage: 248 / 297 CC cards (~83%) have entries in `ability-library.json`.**
 > ~49 cards return "Resolve manually" reminder text; no game state change.
@@ -87,27 +93,38 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] VP manipulation CCs (Dangerous Bargains, Field Promotion, Black Market Prices, etc.)
 - [x] Initiative manipulation CCs (I Make My Own Luck, Take Initiative)
 - [x] Complex CCs: Apex Predator, Blaze of Glory, Overrun, Provoke, Vanish wired
+- [x] **Negation** — fully wired: cost-0 CC plays trigger opponent Negation window (Play Negation / Let it resolve); DC Special CC path also triggers Negation
+- [x] **Celebration** — fully wired: on unique hostile defeat, attacker is prompted to play Celebration for +4 VP; both `celebration_play_` and `celebration_pass_` handlers live in `cc-hand.js`
+- [x] **CC discard pile search** — thread-based; open/close/view fully implemented
+- [x] **CC play from DC activation thread** (`dc_cc_special_`) — Special Action timing; cost-0 triggers Negation window
+- [x] **CC play undo** — undoStack records `cc_play` and `cc_play_dc` types; hand/discard/attachment state restored
+- [x] **25 CC test scenarios** implemented and launchable via `testready` / `testgame` — TIMING_TEST_REQUIREMENTS covers all 10 timing categories
 - [ ] **~49 CC cards still return manual reminder** — not wired to game state
 - [ ] **`pendingCcConfirmation` stale** — confirmation state leaks if player acts without confirming
 
 ---
 
-## 🤖 DC Core Gameplay — weight: 12 pts — score: 9.5 / 12 (79%)
+## 🤖 DC Core Gameplay — weight: 12 pts — score: 9.7 / 12 (81%)
 
-- [x] Activation buttons: Attack, Move, Special, Rest, End Activation
+- [x] Activation buttons: Attack, Move, Special, Interact, End Activation
 - [x] Health tracking per figure across damage events
-- [x] Conditions on DCs (Focus, Hide, Stun, Weaken, Bleed)
+- [x] Conditions on DCs (Focus, Hide, Stun, Weaken, Bleed) — stored per figureKey
 - [x] Exhaustion state reset at end of round
 - [x] Movement point bank per activation
-- [x] Deploy area embed updates on health change
-- [x] Defeat detection + removal from game
+- [x] Deploy area embed updates on health change (DC thumbnail rotated 90° when exhausted)
+- [x] Defeat detection + removal from game; win condition check on defeat
 - [x] DC activation index tracking (which groups have activated)
-- [x] Multi-figure groups tracked as one deployment
-- [x] Power Token system — `/power-token add/remove/list` slash command wired to `game.figurePowerTokens`
-- [x] Undo — works for **move, pass turn, and deploy actions** (undoStack with game log message deletion)
-- [ ] **DC special actions are stubs** — `special.js handleSpecialDone` just marks "✓ Resolved"; no game state change; all DC specials are manual
-- [ ] **DC keyword traits** — `Sharpshooter`, `Charging Assault`, and others read from data but not enforced in combat
-- [ ] **Undo scope gap** — undo does NOT work for combat, CC plays, health changes, conditions, or VP changes
+- [x] Multi-figure groups tracked as one deployment card
+- [x] Power Token system — `/power-token add/remove/list` slash command; stored in `game.figurePowerTokens`; rendered on board minimap
+- [x] **DC specials wired via `resolveAbility`** — `dc-play-area.js handleDcAction(Special)` calls `resolveAbility(specialAbilityIds[idx])` from `dc-effects.json`; if `specialAbilityIds` is populated for a DC, its special IS automated. Gap is missing data, not missing code
+- [x] **Door system** — `open_door_{edge}` interact option tracked in `game.openedDoors`; doors removed from map render when opened; undo-supported
+- [x] **Skirmish Upgrade setup attachment** — `handleSetupAttachTo` places Skirmish Upgrade on DC during setup; stored in `p1DcAttachments` / `p2DcAttachments`; Deplete button + CC attachment embeds update accordingly
+- [x] **Companion embed** — DCs with a `companion` field in `dc-effects.json` get a Companion embed posted in Play Area; updates on Refresh All
+- [x] **Interact: terminals, doors, contraband, launch panels** — `getLegalInteractOptions` returns mission-specific (blue) + standard (grey) options; fully tracked with undo
+- [x] **Undo** — works for: move, pass turn, deploy, interact, cc_play (hand), cc_play_dc (Special from thread)
+- [ ] **DC specials data gap** — most DCs have no `specialAbilityIds` in `dc-effects.json`; those fall back to `manualMessage` + Done button (purely manual)
+- [ ] **DC keyword traits** — `Sharpshooter`, `Charging Assault`, and others read from `dc-keywords.json` but not enforced in combat resolution
+- [ ] **Undo scope gap** — undo does NOT work for: combat outcomes, health changes, conditions, VP awards, or group defeats
 
 ---
 
@@ -156,16 +173,18 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 
 ---
 
-## 📜 Mission Rules Engine — weight: 8 pts — score: 5.0 / 8 (63%)
+## 📜 Mission Rules Engine — weight: 8 pts — score: 5.2 / 8 (65%)
 
 - [x] `runEndOfRoundRules` — data-driven VP rule engine
 - [x] `runStartOfRoundRules` — start-of-round effects
-- [x] Flip panel mechanic (Mos Eisley A)
-- [x] Contraband carry mechanic (Mos Eisley B, -2 Speed, zone scoring)
-- [x] VP scoring per controlled terminal (Corellian, Chopper Base, etc.)
+- [x] Flip panel mechanic (Mos Eisley A) — `launch_panel_{coord}_{side}` interact; `launchPanelState` tracked; undo-supported; per-round flip gate
+- [x] Contraband carry mechanic (Mos Eisley B) — `retrieve_contraband` interact; `game.figureContraband` tracked; -2 Speed applied via `getEffectiveSpeed`; zone scoring
+- [x] VP scoring per controlled terminal — `countTerminalsControlledByPlayer` at end of round
+- [x] **Door system wired globally** — `game.openedDoors` persists across all maps; door edges filtered from map render; `open_door_` interact available wherever `map-tokens.json` has `doors` entries
+- [x] **Ancillary tokens on board** — smoke, rubble, energyShield, device, napalm tracked in `game.ancillaryTokens` and passed to `renderMap`
 - [ ] **development-facility mission rules** — mission card data is entirely empty
 - [ ] **Reinforcement spawn points** — mission data could include reinforcement positions; unused
-- [ ] **Named areas / control tracking** — getNamedAreaController exists but untested on all maps
+- [ ] **Named areas / control tracking** — `getNamedAreaController` exists but untested on all maps; no generic area-control scoring rule
 
 ---
 
@@ -184,7 +203,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 
 ---
 
-## 🏗️ Infrastructure — weight: 10 pts — score: 8.5 / 10 (85%)
+## 🏗️ Infrastructure — weight: 10 pts — score: 8.7 / 10 (87%)
 
 - [x] Game state module (`src/game-state.js`)
 - [x] Data loaders (`src/data-loader.js`)
@@ -194,35 +213,40 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] Discord helpers (`src/discord/*`)
 - [x] Headless simulation test (`tests/simulate-game.js`, 742 lines) — runs full game loop without Discord, validates state integrity
 - [x] Unit tests for game logic (`abilities.test.js`, `combat.test.js`, `movement.test.js`, `coords.test.js`)
-- [x] Error handling + Discord retry
+- [x] CLI movement test suite — `node index.js --test-movement` runs 10+ BFS tests with pass/fail report
+- [x] Error handling + Discord retry (`replyOrFollowUpWithRetry`)
 - [x] `completed_games` DB table written on game end (`insertCompletedGame`)
 - [x] DB indexes (`idx_games_updated_at`, `idx_games_ended`)
 - [x] Game versioning scaffold (`CURRENT_GAME_VERSION`, `migrateGame`)
 - [x] Save chain queued (parallel interactions serialize via `savePromise`)
-- [x] Critical JSON validation on startup
+- [x] Critical JSON validation on startup (`validateCriticalData`)
 - [x] Local HTTP `/testgame` endpoint for quick test game creation without Discord UI
+- [x] **Undo system** — `undoStack` with game log message deletion; 6 undo types: `move`, `pass_turn`, `deploy_pick`, `interact`, `cc_play`, `cc_play_dc`
+- [x] **25 implemented test scenarios** — `IMPLEMENTED_SCENARIOS` list; `createTestGame` auto-deploys + seeds P1 hand + posts timed test instructions
+- [x] **`reloadGameData()`** — hot-reloads all JSON files + clears map renderer cache on "Refresh All"
 - [ ] **Atomic saves** — no temp-file swap; crash mid-write can corrupt game state (#13)
 - [ ] **`migrateGame()` does nothing** — version field exists but the function is a no-op (#24)
-- [ ] **Auto-cleanup on game end** — channels + roles persist until manual deletion (#25)
+- [ ] **Auto-cleanup on game end** — channels persist until manual deletion (#25)
 - [ ] **`pendingIllegalSquad` memory leak** — `Map` entry never removed on rejection (#26)
 - [ ] **No max undo depth** — `undoStack` grows unbounded; memory leak in long games
 
 ---
 
-## 📊 Stats & Analytics — weight: 10 pts — score: 7.0 / 10 (70%)
+## 📊 Stats & Analytics — weight: 10 pts — score: 7.5 / 10 (75%)
 
 > **Three slash commands are live and working.** `/statcheck`, `/affiliation`, and `/dcwinrate` all call into `src/db.js` and post results in `#statistics`. The DB backend is complete. Gaps are niche analytics not yet built.
 
 - [x] `completed_games` table schema: winner, affiliations, army JSON, map, mission, deployment zone, round count
-- [x] `insertCompletedGame()` called on every game end
+- [x] `insertCompletedGame()` called on every game end (`postGameOver`)
 - [x] `/statcheck` slash command — total games + draws, working
 - [x] `/affiliation` slash command — win% per affiliation (Imperial/Rebel/Scum), working
 - [x] `/dcwinrate [limit]` slash command — win% per DC from army JSON, working
-- [x] `getStatsSummary()`, `getAffiliationWinRates()`, `getDcWinRates()` all implemented in `src/db.js`
-- [ ] **No win-rate-by-deployment-zone query** — SQL not written; `deployment_zone_winner` is stored but unused
+- [x] `getStatsSummary()`, `getAffiliationWinRates()`, `getDcWinRates()` implemented in `src/db.js`
+- [x] **End-of-game scorecard embed** — `postGameOver` posts `buildScorecardEmbed(game)` with VP totals on game end
+- [ ] **No win-rate-by-deployment-zone query** — SQL not written; `deployment_zone_winner` stored but unused
 - [ ] **No leaderboard / player win record** — no per-player query
-- [ ] **No end-of-game stats embed** — winner is announced but no summary card posted (VPs, round count, etc.)
-- [ ] **No DC pick rate** — the data exists to compute %; not built
+- [ ] **No round count or detailed narrative in game-over message** — scorecard shows VP only; no "8 rounds, 3 objectives" summary
+- [ ] **No DC pick rate** — data exists to compute; not built
 
 ---
 
@@ -230,15 +254,16 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 
 | Priority | Item | Effort | Why it matters |
 |---|---|---|---|
-| 🔴 Critical | **Reinforcement** | Large | Core rule, completely unimplemented; breaks every third/fourth round |
-| 🔴 Critical | **DC surge data** (221 DCs) | Large | Players can't pick surge options on nearly all DCs — must resolve manually |
-| 🟡 High | **DC special actions** | Large | All DC specials are stubs; `handleSpecialDone` just prints "Resolved" |
+| 🔴 Critical | **Reinforcement** | Large | Core rule, completely unimplemented; every non-unique defeat should allow re-deploy |
+| 🔴 Critical | **DC surge data** (221 DCs) | Large | Players can't pick surge options on nearly all DCs — must resolve manually every combat |
+| 🟡 High | **DC special action data** (`specialAbilityIds`) | Large | Code wired; gap is missing `dc-effects.json` entries — populate to unlock automation per DC |
 | 🟡 High | **End-of-activation CC triggers** | Medium | `endofactivation` timing exists but nothing auto-fires; players must notice and play manually |
 | 🟡 High | **development-facility data** | Small | Spaces exist but deployment zones + mission card data are empty |
-| 🟡 Medium | **~49 remaining CC cards** | Medium | Still return "Resolve manually" message |
-| 🟡 Medium | **Server-side activation block** | Small | No guard prevents clicking Activate on a DC with 0 activations remaining |
-| 🟢 Low | **End-of-game stats embed** | Small | Data exists; just need a summary card on game end |
-| 🟢 Low | **Undo scope** | Medium | Only move/pass/deploy are undoable; combat and CC plays are not |
-| 🟢 Low | **Atomic saves + migration** | Medium | Reliability + upgrade path for long-running games |
-| 🟢 Low | **Auto-cleanup on game end** | Small | Channels persist manually after game ends |
-| 🟢 Low | **`pendingCcConfirmation` / `pendingIllegalSquad` leaks** | Small | Minor state leaks |
+| 🟡 Medium | **~49 remaining CC cards** | Medium | Still return "Resolve manually" message; no game state change |
+| 🟡 Medium | **Server-side activation block** | Small | No guard prevents clicking Activate on a DC when `ActivationsRemaining` is already 0 |
+| 🟡 Medium | **DC keyword trait enforcement** | Medium | `Sharpshooter`/`Charging Assault` etc. read from `dc-keywords.json` but not enforced in combat |
+| 🟢 Low | **Undo for combat/HP/VP** | Medium | Current undo misses: combat outcomes, health changes, conditions, VP awards |
+| 🟢 Low | **Detailed game-over summary** | Small | Scorecard embed posts; but no "8 rounds, X kills" narrative |
+| 🟢 Low | **Atomic saves + migration** | Medium | Reliability + upgrade path for games spanning bot restarts |
+| 🟢 Low | **Auto-cleanup on game end** | Small | Channels persist until manual deletion after game ends |
+| 🟢 Low | **`pendingIllegalSquad` / `pendingCcConfirmation` leaks** | Small | Minor state Map entries never cleaned up |
