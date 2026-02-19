@@ -9,7 +9,7 @@
 Scores are **effort-weighted** — a checkbox that fixes one return statement is not worth the same as wiring surge abilities for 223 deployment cards. Each category carries a weight reflecting its total implementation cost. The percentage is derived from `(points earned) / (total points)`.
 
 ```
-████████████░░░░░░░░  ~64%  effort-weighted
+███████████████░░░░░  ~73%  effort-weighted
 ```
 
 | Category | Weight | Score | % | Notes |
@@ -20,15 +20,16 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 | 🏃 Movement & LOS | 10 | 8.5 | 85% | Engine solid; reinforce entry points missing |
 | 🃏 CC Automation | 20 | 15.5 | 78% | Negation + Celebration confirmed wired; ~49 still return manual message |
 | 🤖 DC Core Gameplay | 12 | 9.7 | 81% | DC specials wired via resolveAbility; gap is data, not code |
-| ⚡ DC Surge Automation | 15 | 0.5 | **3%** | Only 2 / 223 DCs have surge data in dc-effects.json |
+| ⚡ DC Surge Automation | 15 | 12.5 | **83%** | 165/165 attacking DCs have surgeAbilities; parseSurgeEffect fully handles all types |
 | 🗺️ Map Data | 15 | 9.5 | 63% | 3/3 tournament maps + 2 extras built; dev-facility broken |
 | 📜 Mission Rules Engine | 8 | 5.2 | 65% | Door tracking via openedDoors across all maps |
 | 🔁 Reinforcement | 8 | 0.0 | **0%** | Not implemented — breaks every third/fourth round |
 | 📊 Stats & Analytics | 10 | 7.5 | 75% | End-game scorecard embed confirmed posted; leaderboard/zone queries missing |
-| **Total** | **135** | **86.4** | **~64%** | |
+| **Total** | **135** | **98.4** | **~73%** | |
 
-> ⚠️ **DC Surge Automation** and **Reinforcement** are the two biggest effort gaps.
-> Previous audits under-counted several fully-implemented features: Negation, Celebration, door system, CC play undo, end-game scorecard, setup attachment phase.
+> ⚠️ **Reinforcement** is now the single biggest unimplemented core rule.
+> Previous "3% DC Surge" stat was stale — data was already populated for all 165 attacking DCs.
+> Previous audits also under-counted: Negation, Celebration, door system, CC play undo, end-game scorecard, setup attachment phase.
 
 ---
 
@@ -128,16 +129,19 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 
 ---
 
-## ⚡ DC Surge Automation — weight: 15 pts — score: 0.5 / 15 (**3%**)
+## ⚡ DC Surge Automation — weight: 15 pts — score: 12.5 / 15 (83%)
 
-> **This is the biggest single gap in combat accuracy.**
-> `dc-effects.json` has only **2 / 223 DCs** with `surgeAbilities` defined.
-> For all other DCs, no surge options appear when attacking — players resolve surges manually.
-> `parseSurgeEffect(string)` in `combat.js` works correctly — the data just isn't populated.
+> All 165 attacking DCs have `surgeAbilities` populated in `dc-effects.json`.
+> The 14 figure DCs without surge data are all non-combat figures (`NO ATTACK` in dc-stats.json): C-3PO, Jabba, The Child, Cam Droid, Pit Droid, BD-1, etc.
+> `parseSurgeEffect` handles every known surge text format.
 
-- [x] `parseSurgeEffect` parser handles all text surge formats (`damage N`, `pierce N`, `stun`, etc.)
-- [x] Surge UI buttons shown when `surgeAbilities` array is present for a DC
-- [ ] **221 / 223 DCs have no surge data** — populate `dc-effects.json` for each to unlock automation
+- [x] `parseSurgeEffect` parser handles all surge formats: `damage N`, `pierce N`, `accuracy N`, `blast N`, `recover N`, `cleave N`, `stun`, `weaken`, `bleed`, `hide`, `focus`, and comma-separated combos
+- [x] Surge UI buttons shown during combat from `surgeAbilities` data
+- [x] Multi-surge costs (`surgeCost > 1`) supported via `doubleSurgeAbilities`
+- [x] **165 / 165 attacking DCs have `surgeAbilities` populated** — surge is fully automated
+- [x] Bonus surge abilities from CCs (e.g. Spinning Kick → `combat.bonusSurgeAbilities`) merged at resolve time
+- [ ] **Clawdite Shapeshifter / Purge Trooper** use Form/Loadout card swap — their stats and surges come from a card mechanic not yet implemented
+- [ ] **Salacious B. Crumb `Swipe`** — damage on movement into space is not a standard attack; handled as manual
 
 ---
 
@@ -255,7 +259,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 | Priority | Item | Effort | Why it matters |
 |---|---|---|---|
 | 🔴 Critical | **Reinforcement** | Large | Core rule, completely unimplemented; every non-unique defeat should allow re-deploy |
-| 🔴 Critical | **DC surge data** (221 DCs) | Large | Players can't pick surge options on nearly all DCs — must resolve manually every combat |
+| ~~🔴 Critical~~ | ~~**DC surge data**~~ | ~~Done~~ | Surge data already populated for all 165 attacking DCs — previously misstated as 3% |
 | 🟡 High | **DC special action data** (`specialAbilityIds`) | Large | Code wired; gap is missing `dc-effects.json` entries — populate to unlock automation per DC |
 | 🟡 High | **End-of-activation CC triggers** | Medium | `endofactivation` timing exists but nothing auto-fires; players must notice and play manually |
 | 🟡 High | **development-facility data** | Small | Spaces exist but deployment zones + mission card data are empty |
