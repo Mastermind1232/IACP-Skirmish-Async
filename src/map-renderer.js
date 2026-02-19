@@ -371,11 +371,17 @@ export async function renderMap(mapId, options = {}) {
   for (const coord of tokens.terminals || []) {
     await drawTokenAt(coord, tc.terminals, 'rgba(79,195,247,0.8)', 'square');
   }
-  for (const coord of tokens.missionA || []) {
-    await drawTokenAt(coord, tc.missionA, 'rgba(120,120,120,0.9)', 'circle', 'Panel', CRATE_LABEL_SIZE_SCALE);
+  for (const token of tokens.missionA || []) {
+    const coord = typeof token === 'string' ? token : token.coord;
+    const label = typeof token === 'string' ? 'Panel' : (token.label || 'Panel');
+    const image = (typeof token === 'object' && token.image) || tc.missionA;
+    await drawTokenAt(coord, image, 'rgba(120,120,120,0.9)', 'circle', label, CRATE_LABEL_SIZE_SCALE);
   }
-  for (const coord of tokens.missionB || []) {
-    await drawTokenAt(coord, tc.missionB, 'rgba(255,183,77,0.8)', 'square', 'Contraband', CRATE_LABEL_SIZE_SCALE);
+  for (const token of tokens.missionB || []) {
+    const coord = typeof token === 'string' ? token : token.coord;
+    const label = typeof token === 'string' ? 'Contraband' : (token.label || 'Contraband');
+    const image = (typeof token === 'object' && token.image) || tc.missionB;
+    await drawTokenAt(coord, image, 'rgba(255,183,77,0.8)', 'square', label, CRATE_LABEL_SIZE_SCALE);
   }
 
   const anc = tc.ancillary || {};

@@ -1774,13 +1774,34 @@ function getFiguresForRender(game) {
   return figures;
 }
 
+/** Build rich token array from tokenTypes + positions. Returns [{coord, label, image}]. Falls back to flat coord array with default label. */
+function buildMissionTokens(missionData, fallbackLabel) {
+  if (!missionData) return [];
+  const tokenTypes = missionData.tokenTypes;
+  const positions = missionData.positions;
+  if (Array.isArray(tokenTypes) && positions && typeof positions === 'object') {
+    const typeMap = {};
+    for (const t of tokenTypes) typeMap[t.id] = t;
+    const result = [];
+    for (const [typeId, coords] of Object.entries(positions)) {
+      const tDef = typeMap[typeId] || {};
+      for (const coord of Array.isArray(coords) ? coords : [coords]) {
+        result.push({ coord, label: tDef.label || fallbackLabel, image: tDef.image || null });
+      }
+    }
+    return result;
+  }
+  const flat = missionData.launchPanels || missionData.contraband || missionData.crates || [];
+  return flat.map((coord) => ({ coord, label: fallbackLabel, image: null }));
+}
+
 /** Get map tokens (terminals + mission-specific + closed doors + ancillary) for renderMap. */
 function getMapTokensForRender(mapId, missionVariant, openedDoors = [], ancillaryTokens = null) {
   const mapData = getMapTokensData()[mapId];
   if (!mapData) return { terminals: [], missionA: [], missionB: [], doors: [], smoke: [], rubble: [], energyShield: [], device: [], napalm: [] };
   const terminals = mapData.terminals || [];
-  const missionA = mapData.missionA?.launchPanels || [];
-  const missionB = mapData.missionB?.contraband || mapData.missionB?.crates || [];
+  const missionA = buildMissionTokens(mapData.missionA, 'Panel');
+  const missionB = buildMissionTokens(mapData.missionB, 'Contraband');
   const doorEdges = mapData.doors || [];
   const openedSet = new Set((openedDoors || []).map((k) => String(k).toLowerCase()));
   const doors = doorEdges.filter((edge) => {
