@@ -365,10 +365,10 @@ export async function handleDcToggle(interaction, ctx) {
     }
   }
   saveGames();
-  const actionIcon = nowExhausted ? 'activate' : 'ready';
-  const pLabel = `P${meta.playerNum}`;
-  const actionText = nowExhausted ? `**${pLabel}:** <@${playerId}> activated **${displayName}**!` : `**${pLabel}:** <@${playerId}> readied **${displayName}**`;
-  await logGameAction(game, client, actionText, { allowedMentions: { users: [playerId] }, icon: actionIcon });
+  if (!nowExhausted) {
+    const pLabel = `P${meta.playerNum}`;
+    await logGameAction(game, client, `**${pLabel}:** <@${playerId}> readied **${displayName}**`, { allowedMentions: { users: [playerId] }, icon: 'ready' });
+  }
   const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, nowExhausted, displayName, healthState, getConditionsForDcMessage?.(game, meta));
   const components = getDcPlayAreaComponents(msgId, nowExhausted, game, meta.dcName);
   await interaction.update({

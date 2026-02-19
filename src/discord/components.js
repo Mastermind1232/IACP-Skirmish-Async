@@ -636,7 +636,7 @@ export function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces
 }
 
 /**
- * Action rows for DC: [Move][Attack][Interact] per figure, then specials, then CC specials. Max 5 rows.
+ * Action rows for DC: figure dropdown (multi-fig) + [Move][Attack][Interact] for selected figure, then specials, then CC specials. Max 5 rows.
  * @param {object} [helpers] - { getDcStats(dcName), getPlayerNumForMsgId(msgId), getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName) }
  */
 export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRemaining = 2, game = null, helpers = {}) {
@@ -650,16 +650,39 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const specialsUsed = Array.isArray(actionsData.specialsUsed) ? actionsData.specialsUsed : [];
   const noActions = (actionsRemaining ?? 2) <= 0;
   const playerNum = game ? (getPlayerNumForMsgId(msgId) ?? 1) : 1;
+  const selectedFigure = actionsData.selectedFigure ?? null;
   const rows = [];
-  for (let f = 0; f < figures && rows.length < 5; f++) {
-    const suffix = figures <= 1 ? '' : ` ${dgIndex}${FIGURE_LETTERS[f]}`;
+
+  if (figures > 1) {
+    const options = [];
+    for (let f = 0; f < figures; f++) {
+      const label = `Figure ${dgIndex}${FIGURE_LETTERS[f]}`;
+      options.push({ label, value: String(f), default: selectedFigure === f });
+    }
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`dc_fig_select_${msgId}`)
+      .setPlaceholder('Select a figure to act with…')
+      .addOptions(options);
+    rows.push(new ActionRowBuilder().addComponents(selectMenu));
+
+    if (selectedFigure != null && selectedFigure < figures) {
+      const suffix = ` ${dgIndex}${FIGURE_LETTERS[selectedFigure]}`;
+      const comps = [
+        new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(`Move${suffix}`).setStyle(ButtonStyle.Success).setDisabled(noActions),
+        new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noActions),
+        new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noActions),
+      ];
+      rows.push(new ActionRowBuilder().addComponents(...comps));
+    }
+  } else {
     const comps = [
-      new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${f}`).setLabel(`Move${suffix}`).setStyle(ButtonStyle.Success).setDisabled(noActions),
-      new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${f}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noActions),
-      new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${f}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noActions),
+      new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel('Move').setStyle(ButtonStyle.Success).setDisabled(noActions),
+      new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noActions),
+      new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noActions),
     ];
     rows.push(new ActionRowBuilder().addComponents(...comps));
   }
+
   if (specials.length > 0 && rows.length < 5) {
     const specialBtns = specials.slice(0, 5).map((name, idx) => {
       const alreadyUsed = specialsUsed.includes(idx);
@@ -679,7 +702,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
         new ButtonBuilder()
           .setCustomId(`dc_cc_special_${msgId}_${idx}`)
           .setLabel(`CC: ${ccName}`.slice(0, 80))
-          .setStyle(ButtonStyle.Primary)
+          .setStyle(ButtonStyle.Secondary)
           .setDisabled(noActions)
       );
       rows.push(new ActionRowBuilder().addComponents(...ccBtns));

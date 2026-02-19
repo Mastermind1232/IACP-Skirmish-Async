@@ -50,6 +50,7 @@ import { rotateImage90 } from './src/dc-image-utils.js';
 import { renderMap } from './src/map-renderer.js';
 import { getHandlerKey } from './src/router.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
+import { canActAsPlayer } from './src/utils/can-act-as-player.js';
 import { MAX_ACTIVE_GAMES_PER_PLAYER, PENDING_ILLEGAL_TTL_MS } from './src/constants.js';
 import {
   getLobby,
@@ -4190,6 +4191,22 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isStringSelectMenu()) {
     const selectKey = getHandlerKey(interaction.customId, 'select');
     if (!selectKey) return;
+    if (selectKey === 'dc_fig_select_') {
+      const msgId = interaction.customId.replace('dc_fig_select_', '');
+      const selectedFigure = parseInt(interaction.values[0], 10);
+      const meta = dcMessageMeta.get(msgId);
+      if (!meta) { await interaction.reply({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
+      const game = getGame(meta.gameId);
+      if (!game) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+      if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) { await interaction.reply({ content: 'Only the owner can pick a figure.', ephemeral: true }).catch(() => {}); return; }
+      await interaction.deferUpdate().catch(() => {});
+      game.dcActionsData = game.dcActionsData || {};
+      game.dcActionsData[msgId] = game.dcActionsData[msgId] || {};
+      game.dcActionsData[msgId].selectedFigure = selectedFigure;
+      saveGames();
+      await updateDcActionsMessage(game, msgId, interaction.client);
+      return;
+    }
     if (selectKey === 'map_selection_menu_' || selectKey === 'map_selection_draw_' || selectKey === 'map_selection_pick_') {
       const setupChoiceContext = {
         getGame,
