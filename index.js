@@ -1488,19 +1488,25 @@ async function createGameChannels(guild, player1Id, player2Id) {
     parent: gameCategory.id,
     permissionOverwrites: gameLogPerms,
   });
+  return { gameCategory, gameId, generalChannel, chatChannel };
+}
+
+/** Create the Map Updates channel for a game. Call AFTER play area channels so it appears last. */
+async function createBoardChannel(guild, gameCategory, prefix, player1Id, player2Id) {
+  const everyoneRole = guild.roles.everyone;
+  const botId = guild.client.user.id;
   const boardPerms = [
     { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
     { id: player1Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
     { id: player2Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
     { id: botId, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ManageMessages },
   ];
-  const boardChannel = await guild.channels.create({
+  return await guild.channels.create({
     name: `${prefix} Map Updates`,
     type: ChannelType.GuildText,
     parent: gameCategory.id,
     permissionOverwrites: boardPerms,
   });
-  return { gameCategory, gameId, generalChannel, chatChannel, boardChannel };
 }
 
 /**
@@ -2396,11 +2402,6 @@ async function runDraftRandom(game, client, options = {}) {
     game.selectedMap = { id: map.id, name: map.name, imagePath: map.imagePath };
     game.mapSelected = true;
     await postMissionCardAfterMapSelection(game, client, map);
-    if (game.boardId) {
-      const boardChannel = await client.channels.fetch(game.boardId);
-      const payload = await buildBoardMapPayload(game.gameId, map, game);
-      await boardChannel.send(payload);
-    }
     await logGameAction(game, client, `Map selected: **${map.name}** — View in Map Updates channel.`, { phase: 'SETUP', icon: 'map' });
   }
 
@@ -2414,16 +2415,26 @@ async function runDraftRandom(game, client, options = {}) {
     );
     game.p1PlayAreaId = p1PlayAreaChannel.id;
     game.p2PlayAreaId = p2PlayAreaChannel.id;
-    // Move Map Updates channel to appear after play area channels
-    if (game.boardId) {
+  }
+
+  // Map Updates channel created AFTER play areas so it appears last in the category
+  if (!game.boardId) {
+    const guild = generalChannel.guild;
+    const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
+    const prefix = `IA${game.gameId}`;
+    const boardChannel = await createBoardChannel(guild, gameCategory, prefix, game.player1Id, game.player2Id);
+    game.boardId = boardChannel.id;
+    if (game.selectedMap) {
       try {
-        const boardCh = await client.channels.fetch(game.boardId);
-        await boardCh.setPosition(99);
-      } catch { /* ignore */ }
+        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+        await boardChannel.send(payload);
+      } catch (err) {
+        console.error('runDraftRandom: failed to post map to Map Updates:', err);
+      }
     }
   }
 
-  // Hand = private thread inside each player's play area
+  // Hand threads live inside each player's play area
   if (!game.p1HandId || !game.p2HandId) {
     await createHandThreads(client, game);
   }
@@ -3663,12 +3674,21 @@ async function applySquadSubmission(game, isP1, squad, client) {
         );
         game.p1PlayAreaId = p1PlayAreaChannel.id;
         game.p2PlayAreaId = p2PlayAreaChannel.id;
-        // Move Map Updates channel to appear after play area channels
-        if (game.boardId) {
-          try {
-            const boardCh = await client.channels.fetch(game.boardId);
-            await boardCh.setPosition(99);
-          } catch { /* ignore */ }
+      }
+      // Map Updates channel created AFTER play areas so it appears last
+      if (!game.boardId) {
+        try {
+          const guild = generalChannel.guild;
+          const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
+          const prefix = `IA${game.gameId}`;
+          const boardChannel = await createBoardChannel(guild, gameCategory, prefix, game.player1Id, game.player2Id);
+          game.boardId = boardChannel.id;
+          if (game.selectedMap) {
+            const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+            await boardChannel.send(payload).catch(() => {});
+          }
+        } catch (err) {
+          console.error('Failed to create Map Updates channel:', err);
         }
       }
       await populatePlayAreas(game, client);
@@ -4515,6 +4535,7 @@ client.on('interactionCreate', async (interaction) => {
         logGameAction,
         getGeneralSetupButtons,
         createPlayAreaChannels,
+        createBoardChannel,
         createHandThreads,
         getHandTooltipEmbed,
         getSquadSelectEmbed,
@@ -4907,6 +4928,7 @@ client.on('interactionCreate', async (interaction) => {
       logGameAction,
       getGeneralSetupButtons,
       createPlayAreaChannels,
+      createBoardChannel,
       createHandThreads,
       getHandTooltipEmbed,
       getSquadSelectEmbed,

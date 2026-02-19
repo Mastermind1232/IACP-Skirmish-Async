@@ -169,7 +169,7 @@ export async function handleMapSelectionChoice(interaction, ctx) {
  * Shared post-map-selection: post to board, log, update setup message, create play areas + hand threads.
  * @param {object} game
  * @param {import('discord.js').Client} client
- * @param {object} ctx - buildBoardMapPayload, logGameAction, getGeneralSetupButtons, createPlayAreaChannels, createHandThreads, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, saveGames
+ * @param {object} ctx - buildBoardMapPayload, logGameAction, getGeneralSetupButtons, createPlayAreaChannels, createBoardChannel, createHandThreads, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, saveGames
  */
 async function finishMapSelectionAfterChoice(game, client, ctx) {
   const {
@@ -177,6 +177,7 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     logGameAction,
     getGeneralSetupButtons,
     createPlayAreaChannels,
+    createBoardChannel,
     createHandThreads,
     getHandTooltipEmbed,
     getSquadSelectEmbed,
@@ -184,15 +185,6 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     saveGames,
   } = ctx;
   const map = game.selectedMap;
-  if (game.boardId && map) {
-    try {
-      const boardChannel = await client.channels.fetch(game.boardId);
-      const payload = await buildBoardMapPayload(game.gameId, map, game);
-      await boardChannel.send(payload);
-    } catch (err) {
-      console.error('Failed to post map to Map Updates channel:', err);
-    }
-  }
   const mapName = map?.name ?? 'Map';
   await logGameAction(game, client, `Map selected: **${mapName}** — View in Map Updates channel.`, { phase: 'SETUP', icon: 'map' });
   if (game.generalSetupMessageId) {
@@ -215,12 +207,31 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
       );
       game.p1PlayAreaId = p1PlayAreaChannel.id;
       game.p2PlayAreaId = p2PlayAreaChannel.id;
-      // Move Map Updates channel to the end so it appears below play areas
-      if (game.boardId) {
+    }
+    // Map Updates channel created AFTER play areas so it appears last in the category
+    if (!game.boardId) {
+      const generalCh = await client.channels.fetch(game.generalId);
+      const guild = generalCh.guild;
+      const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalCh.parentId);
+      const prefix = `IA${game.gameId}`;
+      const boardChannel = await createBoardChannel(guild, gameCategory, prefix, game.player1Id, game.player2Id);
+      game.boardId = boardChannel.id;
+      if (map) {
         try {
-          const boardCh = await client.channels.fetch(game.boardId);
-          await boardCh.setPosition(99);
-        } catch { /* ignore positioning errors */ }
+          const payload = await buildBoardMapPayload(game.gameId, map, game);
+          await boardChannel.send(payload);
+        } catch (err) {
+          console.error('Failed to post map to Map Updates channel:', err);
+        }
+      }
+    } else if (map) {
+      // Board channel already exists (re-entry); post the map to it
+      try {
+        const boardChannel = await client.channels.fetch(game.boardId);
+        const payload = await buildBoardMapPayload(game.gameId, map, game);
+        await boardChannel.send(payload);
+      } catch (err) {
+        console.error('Failed to post map to Map Updates channel:', err);
       }
     }
     if (!game.p1HandId || !game.p2HandId) {
