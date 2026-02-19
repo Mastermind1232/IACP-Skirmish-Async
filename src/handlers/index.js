@@ -101,6 +101,7 @@ register('combat_resolve_ready_', handleCombatResolveReady);
   register('combat_ready_', handleCombatReady);
   register('combat_roll_', handleCombatRoll);
   register('combat_surge_', handleCombatSurge);
+  register('combat_reroll_', handleCombatReroll);
 register('status_phase_', handleStatusPhase);
 register('pass_activation_turn_', handlePassActivationTurn);
 register('end_turn_', handleEndTurn);

@@ -2646,7 +2646,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
   if (roundEvade) combat.bonusEvade = (combat.bonusEvade || 0) + roundEvade;
   const perEvade = game.roundDefenderBonusBlockPerEvade?.[defenderPlayerNum] || 0;
   if (perEvade && combat.defenseRoll) combat.bonusBlock = (combat.bonusBlock || 0) + (combat.defenseRoll.evade || 0) * perEvade;
-  const { hit, damage, resultText } = computeCombatResult(combat);
+  let { hit, damage, resultText } = computeCombatResult(combat);
   const totalBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
   const attackerPlayerNum = combat.attackerPlayerNum;
   // Store target + adjacent spaces for Reduce to Rubble (only when attack hit)

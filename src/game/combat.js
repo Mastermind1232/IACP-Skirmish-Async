@@ -20,10 +20,11 @@ export function rollAttackDice(diceColors) {
 }
 
 export function rollDefenseDice(defenseType) {
-  const faces = getDiceData().defense?.[(defenseType || 'white').toLowerCase()];
-  if (!faces?.length) return { block: 0, evade: 0, dodge: false };
+  const color = defenseType || 'white';
+  const faces = getDiceData().defense?.[color.toLowerCase()];
+  if (!faces?.length) return { color, block: 0, evade: 0, dodge: false };
   const face = faces[Math.floor(Math.random() * faces.length)];
-  return { color: defenseType || 'white', block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge };
+  return { color, block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge };
 }
 
 /** Roll a single attack die by color. Returns individual face result. */
@@ -130,7 +131,6 @@ export function computeCombatResult(combat) {
   const bonusHits = combat.bonusHits || 0;
   const bonusBlock = combat.bonusBlock || 0;
   const bonusEvade = combat.bonusEvade || 0;
-  const totalEvade = defRoll.evade + bonusEvade;
   const evadeCancelled = combat.evadeCancelledSurge || 0;
   const totalAccuracy = roll.acc + surgeA + bonusAcc;
   let hit = true;

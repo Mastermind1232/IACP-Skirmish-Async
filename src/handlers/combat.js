@@ -330,6 +330,15 @@ export async function handleCombatRoll(interaction, ctx) {
   saveGames();
 }
 
+/** Chunk buttons into ActionRows of up to 5 (Discord limit). Max 5 rows = 25 buttons. */
+function buildActionRows(buttons) {
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 5) {
+    rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+  }
+  return rows.slice(0, 5);
+}
+
 /** Format individual dice for display in reroll UI */
 function formatAttackDie(d, i) {
   return `${d.color} #${i + 1}: ${d.acc}acc/${d.dmg}dmg/${d.surge}surge`;
@@ -353,25 +362,25 @@ async function sendRerollUI(thread, game, combat, phase) {
       return;
     }
     const dice = combat.attackDiceResults || [];
-    const rows = [];
-    for (let i = 0; i < dice.length && rows.length < 4; i++) {
-      rows.push(
+    const buttons = [];
+    for (let i = 0; i < dice.length; i++) {
+      buttons.push(
         new ButtonBuilder()
           .setCustomId(`combat_reroll_${gameId}_atk_${i}`)
           .setLabel(`Reroll ${formatAttackDie(dice[i], i)}`)
           .setStyle(ButtonStyle.Secondary)
       );
     }
-    rows.push(
+    buttons.push(
       new ButtonBuilder()
         .setCustomId(`combat_reroll_${gameId}_atk_done`)
         .setLabel('Done (no rerolls)')
         .setStyle(ButtonStyle.Primary)
     );
-    const row = new ActionRowBuilder().addComponents(rows.slice(0, 5));
+    const actionRows = buildActionRows(buttons);
     await thread.send({
       content: `**Reroll Window (Attacker)** — ${remaining} reroll${remaining > 1 ? 's' : ''} available. Choose an attack die to reroll, or Done.`,
-      components: [row],
+      components: actionRows,
     });
   } else {
     const remaining = combat.defenderRerollsRemaining || 0;
@@ -380,25 +389,25 @@ async function sendRerollUI(thread, game, combat, phase) {
       return;
     }
     const dice = combat.defenseDiceResults || [];
-    const rows = [];
-    for (let i = 0; i < dice.length && rows.length < 4; i++) {
-      rows.push(
+    const buttons = [];
+    for (let i = 0; i < dice.length; i++) {
+      buttons.push(
         new ButtonBuilder()
           .setCustomId(`combat_reroll_${gameId}_def_${i}`)
           .setLabel(`Reroll ${formatDefenseDie(dice[i], i)}`)
           .setStyle(ButtonStyle.Secondary)
       );
     }
-    rows.push(
+    buttons.push(
       new ButtonBuilder()
         .setCustomId(`combat_reroll_${gameId}_def_done`)
         .setLabel('Done (no rerolls)')
         .setStyle(ButtonStyle.Primary)
     );
-    const row = new ActionRowBuilder().addComponents(rows.slice(0, 5));
+    const actionRows = buildActionRows(buttons);
     await thread.send({
       content: `**Reroll Window (Defender)** — ${remaining} reroll${remaining > 1 ? 's' : ''} available. Choose a defense die to reroll, or Done.`,
-      components: [row],
+      components: actionRows,
     });
   }
 }
@@ -417,6 +426,11 @@ export async function handleCombatReroll(interaction, ctx) {
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId || !combat.rerollPhase) {
     await interaction.reply({ content: 'No reroll phase active.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const expectedPhase = side === 'atk' ? 'attacker' : 'defender';
+  if (combat.rerollPhase !== expectedPhase) {
+    await interaction.reply({ content: `It's the ${combat.rerollPhase}'s turn to reroll.`, ephemeral: true }).catch(() => {});
     return;
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
