@@ -308,7 +308,14 @@ export async function handleMovePick(interaction, ctx) {
     await logGameAction(game, client, `**${pLabel}: ${shortName}** has taken control of a terminal!`, { phase: 'ROUND', icon: 'deploy' });
   }
   if (newMp <= 0) {
-    await editDistanceMessage(moveState, interaction.channel, `✓ Moved **${displayName}** to **${destDisplay}**.`, []);
+    // Delete all "Pick a destination" messages — grid messages already cleared above;
+    // now also delete the distance message itself so nothing lingers.
+    if (moveState.distanceMessageId) {
+      try {
+        const distMsg = await interaction.channel.messages.fetch(moveState.distanceMessageId);
+        await distMsg.delete();
+      } catch { /* already gone */ }
+    }
     delete game.moveInProgress[moveKey];
   } else {
     const nextBoard = getBoardStateForMovement(game, figureKey);
