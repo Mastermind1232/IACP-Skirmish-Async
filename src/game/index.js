@@ -47,6 +47,11 @@ export {
 export {
   rollAttackDice,
   rollDefenseDice,
+  rollSingleAttackDie,
+  rollSingleDefenseDie,
+  recalcAttackTotals,
+  recalcDefenseTotals,
+  getInnateRerolls,
   SURGE_LABELS,
   getAttackerSurgeAbilities,
   parseSurgeEffect,

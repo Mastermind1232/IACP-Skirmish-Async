@@ -28,6 +28,7 @@ const BUTTON_PREFIXES = [
   'combat_ready_',
   'combat_roll_',
   'combat_surge_',
+  'combat_reroll_',
   'status_phase_',
   'end_end_of_round_',
   'end_start_of_round_',

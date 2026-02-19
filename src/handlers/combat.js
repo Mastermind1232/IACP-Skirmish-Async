@@ -228,6 +228,7 @@ export async function handleCombatRoll(interaction, ctx) {
     resolveCombatAfterRolls,
     saveGames,
   } = ctx;
+  const getInnateRerolls = ctx.getInnateRerolls || (() => ({ attackReroll: 0, defenseReroll: 0 }));
   const gameId = interaction.customId.replace('combat_roll_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -269,9 +270,12 @@ export async function handleCombatRoll(interaction, ctx) {
       for (let i = 0; i < toAdd; i++) dice.push('yellow');
       if (combat.superchargeStrainAfterAttack) combat.superchargeStrainAfterAttackCount = toAdd;
     }
-    combat.attackRoll = rollAttackDice(dice);
+    const result = rollAttackDice(dice);
+    combat.attackRoll = { acc: result.acc, dmg: result.dmg, surge: result.surge };
+    combat.attackDiceResults = result.dice;
     await interaction.deferUpdate();
-    await thread.send(`**Attack roll** — ${combat.attackRoll.acc} accuracy, ${combat.attackRoll.dmg} damage, ${combat.attackRoll.surge} surge`);
+    const diceDetail = result.dice.map((d, i) => `${d.color}(${d.acc}a/${d.dmg}d/${d.surge}s)`).join(', ');
+    await thread.send(`**Attack roll** — ${result.acc} accuracy, ${result.dmg} damage, ${result.surge} surge  [${diceDetail}]`);
     saveGames();
     return;
   }
@@ -287,89 +291,276 @@ export async function handleCombatRoll(interaction, ctx) {
     const removeMax = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
     const removeCount = Math.min(removeMax, pool.length);
     const diceToRoll = pool.slice(0, pool.length - removeCount);
+    const defDiceResults = [];
     let block = 0, evade = 0, dodge = false;
     for (const color of diceToRoll) {
       const r = rollDefenseDice(color);
+      defDiceResults.push(r);
       block += r.block;
       evade += r.evade;
       if (r.dodge) dodge = true;
     }
     combat.defenseRoll = { block, evade, dodge };
+    combat.defenseDiceResults = defDiceResults;
     combat.defenseDiceCount = diceToRoll.length;
     await interaction.deferUpdate();
+    const diceDetail = defDiceResults.map((d) => `${d.color}(${d.block}b/${d.evade}e${d.dodge ? '/dodge' : ''})`).join(', ');
     const dodgeText = dodge ? ' **DODGE!**' : '';
-    await thread.send(`**Defense roll** — ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade${dodgeText}`);
-    if (dodge) {
-      await thread.send('**The attack misses!** Dodge negates all damage and effects.');
-      await sendReadyToResolveRolls(thread, game.gameId);
+    await thread.send(`**Defense roll** — ${block} block, ${evade} evade${dodgeText}  [${diceDetail}]`);
+
+    // --- Enter reroll window ---
+    const atkInnate = getInnateRerolls(combat.attackerDcName);
+    const defenderDcName = combat.target?.figureKey?.replace(/-\d+-\d+$/, '') || '';
+    const defInnate = getInnateRerolls(defenderDcName);
+    const atkRerolls = (combat.rerollOneAttackDie || 0) + (game.roundAttackRerollDice?.[attackerPlayerNum] || 0) + atkInnate.attackReroll;
+    const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll;
+    if (atkRerolls > 0 || defRerolls > 0) {
+      combat.rerollPhase = 'attacker';
+      combat.attackerRerollsRemaining = atkRerolls;
+      combat.defenderRerollsRemaining = defRerolls;
+      await sendRerollUI(thread, game, combat, 'attacker');
       saveGames();
       return;
     }
-    const roll = combat.attackRoll;
-    const defRoll = combat.defenseRoll;
-    const defenseDiceCount = combat.defenseDiceCount ?? 1;
-    const perDefDieSurge = (combat.bonusSurgePerDefenseDie || 0) * defenseDiceCount;
-    const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[combat.attackerPlayerNum] || 0) + perDefDieSurge;
-    const rawSurge = roll.surge + surgeBonus;
-    const defPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
-    const roundEvade = game.roundDefenseBonusEvade?.[defPlayerNum] || 0;
-    const totalEvade = defRoll.evade + (combat.bonusEvade || 0) + roundEvade;
-    const evadeCancelled = Math.min(rawSurge, totalEvade);
-    const totalSurge = rawSurge - evadeCancelled;
-    combat.evadeCancelledSurge = evadeCancelled;
-    if (evadeCancelled > 0) {
-      await thread.send(`**Evade cancels surge:** ${evadeCancelled} evade cancelled ${evadeCancelled} surge → **${totalSurge}** surge remaining`);
-    }
-    const surgeAbilities = getAttackerSurgeAbilities(combat);
-    const getAbility = ctx.getAbility || (() => null);
-    const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS && ctx.SURGE_LABELS[id]) || id);
-    const remaining = totalSurge;
-    const affordable = surgeAbilities.filter((key) => (getAbility(key)?.surgeCost ?? 1) <= remaining);
-    const hasSurgeStep = totalSurge > 0 && affordable.length > 0;
-    if (hasSurgeStep) {
-      combat.surgeRemaining = totalSurge;
-      combat.surgeDamage = 0;
-      combat.surgePierce = 0;
-      combat.surgeAccuracy = 0;
-      combat.surgeConditions = [];
-      const surgeRows = [];
-      for (let i = 0; i < surgeAbilities.length; i++) {
-        const key = surgeAbilities[i];
-        const cost = getAbility(key)?.surgeCost ?? 1;
-        if (cost > remaining) continue;
-        const label = (getSurgeLabel(key) || key).slice(0, 80);
-        const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
-        surgeRows.push(
-          new ButtonBuilder()
-            .setCustomId(`combat_surge_${game.gameId}_${i}`)
-            .setLabel(btnLabel.slice(0, 80))
-            .setStyle(ButtonStyle.Secondary)
-        );
-      }
-      surgeRows.push(
-        new ButtonBuilder()
-          .setCustomId(`combat_surge_${game.gameId}_done`)
-          .setLabel('Done (no more surge)')
-          .setStyle(ButtonStyle.Primary)
-      );
-      const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
-      const roundSurge = game.roundAttackSurgeBonus?.[combat.attackerPlayerNum] || 0;
-      const ccSurge = (combat.surgeBonus || 0);
-      const surgeDisplay = (ccSurge > 0 || roundSurge > 0)
-        ? `${roll.surge}${ccSurge ? ` + ${ccSurge} (CC)` : ''}${roundSurge ? ` + ${roundSurge} (round)` : ''} = **${totalSurge}**`
-        : `**${totalSurge}**`;
-      await thread.send({
-        content: `**Spend surge?** You have ${surgeDisplay} surge. Choose an ability or Done.`,
-        components: [surgeRow],
-      });
-      saveGames();
-      return;
-    }
-    await sendReadyToResolveRolls(thread, game.gameId);
+    // No rerolls available — proceed directly
+    await proceedAfterRerolls(thread, game, combat, ctx);
     saveGames();
     return;
   }
   saveGames();
+}
+
+/** Format individual dice for display in reroll UI */
+function formatAttackDie(d, i) {
+  return `${d.color} #${i + 1}: ${d.acc}acc/${d.dmg}dmg/${d.surge}surge`;
+}
+function formatDefenseDie(d, i) {
+  return `${d.color} #${i + 1}: ${d.block}blk/${d.evade}evd${d.dodge ? '/DODGE' : ''}`;
+}
+
+/** Show reroll UI for the current phase (attacker or defender) */
+async function sendRerollUI(thread, game, combat, phase) {
+  const gameId = game.gameId;
+  if (phase === 'attacker') {
+    const remaining = combat.attackerRerollsRemaining || 0;
+    if (remaining <= 0) {
+      combat.rerollPhase = 'defender';
+      if ((combat.defenderRerollsRemaining || 0) > 0) {
+        await sendRerollUI(thread, game, combat, 'defender');
+        return;
+      }
+      combat.rerollPhase = null;
+      return;
+    }
+    const dice = combat.attackDiceResults || [];
+    const rows = [];
+    for (let i = 0; i < dice.length && rows.length < 4; i++) {
+      rows.push(
+        new ButtonBuilder()
+          .setCustomId(`combat_reroll_${gameId}_atk_${i}`)
+          .setLabel(`Reroll ${formatAttackDie(dice[i], i)}`)
+          .setStyle(ButtonStyle.Secondary)
+      );
+    }
+    rows.push(
+      new ButtonBuilder()
+        .setCustomId(`combat_reroll_${gameId}_atk_done`)
+        .setLabel('Done (no rerolls)')
+        .setStyle(ButtonStyle.Primary)
+    );
+    const row = new ActionRowBuilder().addComponents(rows.slice(0, 5));
+    await thread.send({
+      content: `**Reroll Window (Attacker)** — ${remaining} reroll${remaining > 1 ? 's' : ''} available. Choose an attack die to reroll, or Done.`,
+      components: [row],
+    });
+  } else {
+    const remaining = combat.defenderRerollsRemaining || 0;
+    if (remaining <= 0) {
+      combat.rerollPhase = null;
+      return;
+    }
+    const dice = combat.defenseDiceResults || [];
+    const rows = [];
+    for (let i = 0; i < dice.length && rows.length < 4; i++) {
+      rows.push(
+        new ButtonBuilder()
+          .setCustomId(`combat_reroll_${gameId}_def_${i}`)
+          .setLabel(`Reroll ${formatDefenseDie(dice[i], i)}`)
+          .setStyle(ButtonStyle.Secondary)
+      );
+    }
+    rows.push(
+      new ButtonBuilder()
+        .setCustomId(`combat_reroll_${gameId}_def_done`)
+        .setLabel('Done (no rerolls)')
+        .setStyle(ButtonStyle.Primary)
+    );
+    const row = new ActionRowBuilder().addComponents(rows.slice(0, 5));
+    await thread.send({
+      content: `**Reroll Window (Defender)** — ${remaining} reroll${remaining > 1 ? 's' : ''} available. Choose a defense die to reroll, or Done.`,
+      components: [row],
+    });
+  }
+}
+
+/**
+ * Handle reroll button clicks (combat_reroll_{gameId}_{atk|def}_{index|done})
+ */
+export async function handleCombatReroll(interaction, ctx) {
+  const { getGame, replyIfGameEnded, rollSingleAttackDie, rollSingleDefenseDie, recalcAttackTotals, recalcDefenseTotals, saveGames } = ctx;
+  const match = interaction.customId.match(/^combat_reroll_([^_]+)_(atk|def)_(done|\d+)$/);
+  if (!match) return;
+  const [, gameId, side, choice] = match;
+  const game = getGame(gameId);
+  if (!game) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId || !combat.rerollPhase) {
+    await interaction.reply({ content: 'No reroll phase active.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const attackerPlayerNum = combat.attackerPlayerNum;
+  const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
+  const expectedPlayer = side === 'atk' ? attackerPlayerNum : defenderPlayerNum;
+  if (!canActAsPlayer(game, interaction.user.id, expectedPlayer)) {
+    await interaction.reply({ content: `Only P${expectedPlayer} can reroll ${side === 'atk' ? 'attack' : 'defense'} dice.`, ephemeral: true }).catch(() => {});
+    return;
+  }
+  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  await interaction.deferUpdate().catch(() => {});
+
+  if (choice !== 'done') {
+    const idx = parseInt(choice, 10);
+    if (side === 'atk') {
+      const dice = combat.attackDiceResults || [];
+      if (idx >= 0 && idx < dice.length && combat.attackerRerollsRemaining > 0) {
+        const oldDie = dice[idx];
+        const newDie = rollSingleAttackDie(oldDie.color);
+        dice[idx] = newDie;
+        combat.attackDiceResults = dice;
+        const totals = recalcAttackTotals(dice);
+        combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
+        combat.attackerRerollsRemaining -= 1;
+        await thread.send(`**Rerolled** attack ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
+      }
+    } else {
+      const dice = combat.defenseDiceResults || [];
+      if (idx >= 0 && idx < dice.length && combat.defenderRerollsRemaining > 0) {
+        const oldDie = dice[idx];
+        const newDie = rollSingleDefenseDie(oldDie.color);
+        dice[idx] = newDie;
+        combat.defenseDiceResults = dice;
+        const totals = recalcDefenseTotals(dice);
+        combat.defenseRoll = { block: totals.block, evade: totals.evade, dodge: totals.dodge };
+        combat.defenderRerollsRemaining -= 1;
+        const dodgeTag = newDie.dodge ? '/DODGE' : '';
+        await thread.send(`**Rerolled** defense ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
+      }
+    }
+  }
+
+  // Check if current side is done (clicked done or exhausted rerolls)
+  if (side === 'atk' && (choice === 'done' || combat.attackerRerollsRemaining <= 0)) {
+    combat.rerollPhase = 'defender';
+    if ((combat.defenderRerollsRemaining || 0) > 0) {
+      await sendRerollUI(thread, game, combat, 'defender');
+      saveGames();
+      return;
+    }
+    combat.rerollPhase = null;
+    await proceedAfterRerolls(thread, game, combat, ctx);
+    saveGames();
+    return;
+  }
+  if (side === 'def' && (choice === 'done' || combat.defenderRerollsRemaining <= 0)) {
+    combat.rerollPhase = null;
+    await proceedAfterRerolls(thread, game, combat, ctx);
+    saveGames();
+    return;
+  }
+
+  // Still has rerolls — show updated UI
+  await sendRerollUI(thread, game, combat, combat.rerollPhase);
+  saveGames();
+}
+
+/**
+ * After rerolls are complete: check dodge, evade cancellation, surge spending, or ready-to-resolve.
+ * This is the continuation of the defense roll path.
+ */
+async function proceedAfterRerolls(thread, game, combat, ctx) {
+  const { getAttackerSurgeAbilities, SURGE_LABELS, saveGames } = ctx;
+  const getAbility = ctx.getAbility || (() => null);
+  const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (SURGE_LABELS && SURGE_LABELS[id]) || id);
+  const defRoll = combat.defenseRoll;
+
+  // Dodge check (now AFTER rerolls, so rerolls can potentially remove dodge)
+  if (defRoll.dodge) {
+    await thread.send('**DODGE!** The attack misses — all damage and effects negated.');
+    await sendReadyToResolveRolls(thread, game.gameId);
+    return;
+  }
+
+  // Evade cancels surge
+  const roll = combat.attackRoll;
+  const defenseDiceCount = combat.defenseDiceCount ?? 1;
+  const attackerPlayerNum = combat.attackerPlayerNum;
+  const defPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
+  const perDefDieSurge = (combat.bonusSurgePerDefenseDie || 0) * defenseDiceCount;
+  const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0) + perDefDieSurge;
+  const rawSurge = roll.surge + surgeBonus;
+  const roundEvade = game.roundDefenseBonusEvade?.[defPlayerNum] || 0;
+  const totalEvade = defRoll.evade + (combat.bonusEvade || 0) + roundEvade;
+  const evadeCancelled = Math.min(rawSurge, totalEvade);
+  const totalSurge = rawSurge - evadeCancelled;
+  combat.evadeCancelledSurge = evadeCancelled;
+  if (evadeCancelled > 0) {
+    await thread.send(`**Evade cancels surge:** ${evadeCancelled} evade cancelled ${evadeCancelled} surge → **${totalSurge}** surge remaining`);
+  }
+
+  // Surge spending
+  const surgeAbilities = getAttackerSurgeAbilities(combat);
+  const remaining = totalSurge;
+  const affordable = surgeAbilities.filter((key) => (getAbility(key)?.surgeCost ?? 1) <= remaining);
+  if (totalSurge > 0 && affordable.length > 0) {
+    combat.surgeRemaining = totalSurge;
+    combat.surgeDamage = 0;
+    combat.surgePierce = 0;
+    combat.surgeAccuracy = 0;
+    combat.surgeConditions = [];
+    const surgeRows = [];
+    for (let i = 0; i < surgeAbilities.length; i++) {
+      const key = surgeAbilities[i];
+      const cost = getAbility(key)?.surgeCost ?? 1;
+      if (cost > remaining) continue;
+      const label = (getSurgeLabel(key) || key).slice(0, 80);
+      const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
+      surgeRows.push(
+        new ButtonBuilder()
+          .setCustomId(`combat_surge_${game.gameId}_${i}`)
+          .setLabel(btnLabel.slice(0, 80))
+          .setStyle(ButtonStyle.Secondary)
+      );
+    }
+    surgeRows.push(
+      new ButtonBuilder()
+        .setCustomId(`combat_surge_${game.gameId}_done`)
+        .setLabel('Done (no more surge)')
+        .setStyle(ButtonStyle.Primary)
+    );
+    const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
+    const roundSurge = game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0;
+    const ccSurge = (combat.surgeBonus || 0);
+    const surgeDisplay = (ccSurge > 0 || roundSurge > 0)
+      ? `${roll.surge}${ccSurge ? ` + ${ccSurge} (CC)` : ''}${roundSurge ? ` + ${roundSurge} (round)` : ''} = **${totalSurge}**`
+      : `**${totalSurge}**`;
+    await thread.send({
+      content: `**Spend surge?** You have ${surgeDisplay} surge. Choose an ability or Done.`,
+      components: [surgeRow],
+    });
+    return;
+  }
+  await sendReadyToResolveRolls(thread, game.gameId);
 }
 
 /**

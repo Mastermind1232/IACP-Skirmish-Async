@@ -14,8 +14,8 @@
 - [x] **#4 — Blast/Cleave trigger on 0 damage** ✅ FIXED
   Added `damage > 0` gate to both Blast damage path and Cleave trigger. A fully blocked hit no longer triggers splash damage.
 
-- [ ] **#5 — Attack sequence out of order**
-  Correct: Roll → Reroll → Apply Modifiers (evade cancels surge) → Spend Surges → Check Accuracy → Calculate Damage. Code applies modifiers after surge spending. Reroll step missing.
+- [x] **#5 — Attack sequence out of order** ✅ FIXED
+  Added full reroll phase between dice rolling and surge spending. `rollAttackDice`/`rollDefenseDice` now return individual die results. New `handleCombatReroll` handler lets attacker/defender reroll specific dice using CC-granted charges, round bonuses, and innate DC abilities (auto-parsed from ability text). Dodge check moved AFTER reroll window so rerolls can potentially remove dodge. Combat flow: Roll → Reroll Window (CC timing) → Dodge Check → Evade Cancels Surge → Spend Surges → Ready to Resolve → Calculate Damage.
 
 - [ ] **#6 — LOS is advisory, not enforced**
   LOS check only posts a warning. Attack proceeds regardless.

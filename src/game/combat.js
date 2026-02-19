@@ -4,23 +4,72 @@
 import { getDiceData, getDcEffects } from '../data-loader.js';
 
 export function rollAttackDice(diceColors) {
+  const dice = [];
   let acc = 0, dmg = 0, surge = 0;
   for (const color of diceColors || []) {
     const faces = getDiceData().attack?.[color.toLowerCase()];
     if (!faces?.length) continue;
     const face = faces[Math.floor(Math.random() * faces.length)];
-    acc += face.acc ?? 0;
-    dmg += face.dmg ?? 0;
-    surge += face.surge ?? 0;
+    const result = { color, acc: face.acc ?? 0, dmg: face.dmg ?? 0, surge: face.surge ?? 0 };
+    dice.push(result);
+    acc += result.acc;
+    dmg += result.dmg;
+    surge += result.surge;
   }
-  return { acc, dmg, surge };
+  return { acc, dmg, surge, dice };
 }
 
 export function rollDefenseDice(defenseType) {
   const faces = getDiceData().defense?.[(defenseType || 'white').toLowerCase()];
   if (!faces?.length) return { block: 0, evade: 0, dodge: false };
   const face = faces[Math.floor(Math.random() * faces.length)];
-  return { block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge };
+  return { color: defenseType || 'white', block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge };
+}
+
+/** Roll a single attack die by color. Returns individual face result. */
+export function rollSingleAttackDie(color) {
+  const faces = getDiceData().attack?.[color.toLowerCase()];
+  if (!faces?.length) return { color, acc: 0, dmg: 0, surge: 0 };
+  const face = faces[Math.floor(Math.random() * faces.length)];
+  return { color, acc: face.acc ?? 0, dmg: face.dmg ?? 0, surge: face.surge ?? 0 };
+}
+
+/** Roll a single defense die by color. Returns individual face result. */
+export function rollSingleDefenseDie(color) {
+  const faces = getDiceData().defense?.[(color || 'white').toLowerCase()];
+  if (!faces?.length) return { color, block: 0, evade: 0, dodge: false };
+  const face = faces[Math.floor(Math.random() * faces.length)];
+  return { color, block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge };
+}
+
+/** Recalculate attack totals from individual dice results. */
+export function recalcAttackTotals(dice) {
+  let acc = 0, dmg = 0, surge = 0;
+  for (const d of dice) { acc += d.acc ?? 0; dmg += d.dmg ?? 0; surge += d.surge ?? 0; }
+  return { acc, dmg, surge };
+}
+
+/** Recalculate defense totals from individual dice results. */
+export function recalcDefenseTotals(dice) {
+  let block = 0, evade = 0, dodge = false;
+  for (const d of dice) { block += d.block ?? 0; evade += d.evade ?? 0; if (d.dodge) dodge = true; }
+  return { block, evade, dodge };
+}
+
+/**
+ * Determine innate reroll counts from DC ability text.
+ * Parses common patterns: "you may reroll N attack/defense di(c)e"
+ */
+export function getInnateRerolls(dcName) {
+  const card = getDcEffects()[dcName] || getDcEffects()[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const text = (card?.abilityText || '').toLowerCase();
+  let attackReroll = 0, defenseReroll = 0;
+  const atkMatch = text.match(/while attacking.*?reroll\s+(?:up to\s+)?(\d+)\s+attack\s+di/);
+  if (atkMatch) attackReroll = parseInt(atkMatch[1], 10) || 1;
+  else if (/professional/i.test(text)) attackReroll = 1;
+  const defMatch = text.match(/while defending.*?reroll\s+(?:up to\s+)?(\d+)\s+defense?\s+di/);
+  if (defMatch) defenseReroll = parseInt(defMatch[1], 10) || 1;
+  return { attackReroll, defenseReroll };
 }
 
 /** Display labels for surge abilities (subset; raw key used if missing). */

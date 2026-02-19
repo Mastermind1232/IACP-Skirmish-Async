@@ -9,6 +9,11 @@ import {
   SURGE_LABELS,
   rollAttackDice,
   rollDefenseDice,
+  rollSingleAttackDie,
+  rollSingleDefenseDie,
+  recalcAttackTotals,
+  recalcDefenseTotals,
+  getInnateRerolls,
 } from './combat.js';
 
 const emptyMod = { damage: 0, pierce: 0, accuracy: 0, conditions: [], blast: 0, recover: 0, cleave: 0 };
@@ -205,17 +210,27 @@ test('SURGE_LABELS has expected keys', () => {
   assert.strictEqual(SURGE_LABELS['stun'], 'Stun');
 });
 
-test('rollAttackDice returns shape and bounds', () => {
-  const r = rollAttackDice(['red']);
+test('rollAttackDice returns shape, bounds, and individual dice', () => {
+  const r = rollAttackDice(['red', 'green']);
   assert.ok(typeof r.acc === 'number' && r.acc >= 0);
   assert.ok(typeof r.dmg === 'number' && r.dmg >= 0);
   assert.ok(typeof r.surge === 'number' && r.surge >= 0);
+  assert.ok(Array.isArray(r.dice));
+  assert.strictEqual(r.dice.length, 2);
+  assert.strictEqual(r.dice[0].color, 'red');
+  assert.strictEqual(r.dice[1].color, 'green');
+  const recalc = recalcAttackTotals(r.dice);
+  assert.strictEqual(recalc.acc, r.acc);
+  assert.strictEqual(recalc.dmg, r.dmg);
+  assert.strictEqual(recalc.surge, r.surge);
 });
 
-test('rollDefenseDice returns shape', () => {
+test('rollDefenseDice returns shape with color', () => {
   const r = rollDefenseDice('white');
   assert.ok(typeof r.block === 'number' && r.block >= 0);
   assert.ok(typeof r.evade === 'number' && r.evade >= 0);
+  assert.strictEqual(r.color, 'white');
+  assert.ok(typeof r.dodge === 'boolean');
 });
 
 test('rollAttackDice empty colors', () => {
@@ -223,4 +238,49 @@ test('rollAttackDice empty colors', () => {
   assert.strictEqual(r.acc, 0);
   assert.strictEqual(r.dmg, 0);
   assert.strictEqual(r.surge, 0);
+  assert.strictEqual(r.dice.length, 0);
+});
+
+test('rollSingleAttackDie returns individual result', () => {
+  const r = rollSingleAttackDie('blue');
+  assert.strictEqual(r.color, 'blue');
+  assert.ok(typeof r.acc === 'number');
+  assert.ok(typeof r.dmg === 'number');
+  assert.ok(typeof r.surge === 'number');
+});
+
+test('rollSingleDefenseDie returns individual result', () => {
+  const r = rollSingleDefenseDie('white');
+  assert.strictEqual(r.color, 'white');
+  assert.ok(typeof r.block === 'number');
+  assert.ok(typeof r.evade === 'number');
+  assert.ok(typeof r.dodge === 'boolean');
+});
+
+test('recalcAttackTotals matches rollAttackDice', () => {
+  const r = rollAttackDice(['blue', 'red', 'green']);
+  const totals = recalcAttackTotals(r.dice);
+  assert.strictEqual(totals.acc, r.acc);
+  assert.strictEqual(totals.dmg, r.dmg);
+  assert.strictEqual(totals.surge, r.surge);
+});
+
+test('recalcDefenseTotals aggregates correctly', () => {
+  const dice = [
+    { color: 'white', block: 1, evade: 0, dodge: false },
+    { color: 'black', block: 2, evade: 1, dodge: false },
+  ];
+  const totals = recalcDefenseTotals(dice);
+  assert.strictEqual(totals.block, 3);
+  assert.strictEqual(totals.evade, 1);
+  assert.strictEqual(totals.dodge, false);
+});
+
+test('recalcDefenseTotals propagates dodge', () => {
+  const dice = [
+    { color: 'white', block: 0, evade: 0, dodge: true },
+    { color: 'black', block: 2, evade: 0, dodge: false },
+  ];
+  const totals = recalcDefenseTotals(dice);
+  assert.strictEqual(totals.dodge, true);
 });
