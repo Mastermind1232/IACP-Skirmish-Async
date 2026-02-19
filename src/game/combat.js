@@ -18,9 +18,9 @@ export function rollAttackDice(diceColors) {
 
 export function rollDefenseDice(defenseType) {
   const faces = getDiceData().defense?.[(defenseType || 'white').toLowerCase()];
-  if (!faces?.length) return { block: 0, evade: 0 };
+  if (!faces?.length) return { block: 0, evade: 0, dodge: false };
   const face = faces[Math.floor(Math.random() * faces.length)];
-  return { block: face.block ?? 0, evade: face.evade ?? 0 };
+  return { block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge };
 }
 
 /** Display labels for surge abilities (subset; raw key used if missing). */
@@ -86,7 +86,10 @@ export function computeCombatResult(combat) {
   const totalAccuracy = roll.acc + surgeA + bonusAcc;
   let hit = true;
   let missReason = '';
-  if (combat.isRanged && combat.distanceToTarget != null) {
+  if (defRoll.dodge) {
+    hit = false;
+    missReason = 'Dodge';
+  } else if (combat.isRanged && combat.distanceToTarget != null) {
     if (totalAccuracy < combat.distanceToTarget) {
       hit = false;
       missReason = `insufficient accuracy (${totalAccuracy} < ${combat.distanceToTarget} distance)`;

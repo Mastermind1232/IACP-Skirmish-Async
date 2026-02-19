@@ -287,16 +287,24 @@ export async function handleCombatRoll(interaction, ctx) {
     const removeMax = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
     const removeCount = Math.min(removeMax, pool.length);
     const diceToRoll = pool.slice(0, pool.length - removeCount);
-    let block = 0, evade = 0;
+    let block = 0, evade = 0, dodge = false;
     for (const color of diceToRoll) {
       const r = rollDefenseDice(color);
       block += r.block;
       evade += r.evade;
+      if (r.dodge) dodge = true;
     }
-    combat.defenseRoll = { block, evade };
+    combat.defenseRoll = { block, evade, dodge };
     combat.defenseDiceCount = diceToRoll.length;
     await interaction.deferUpdate();
-    await thread.send(`**Defense roll** — ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade`);
+    const dodgeText = dodge ? ' **DODGE!**' : '';
+    await thread.send(`**Defense roll** — ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade${dodgeText}`);
+    if (dodge) {
+      await thread.send('**The attack misses!** Dodge negates all damage and effects.');
+      await sendReadyToResolveRolls(thread, game.gameId);
+      saveGames();
+      return;
+    }
     const roll = combat.attackRoll;
     const defRoll = combat.defenseRoll;
     const defenseDiceCount = combat.defenseDiceCount ?? 1;

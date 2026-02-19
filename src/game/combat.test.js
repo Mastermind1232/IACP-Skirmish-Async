@@ -152,6 +152,17 @@ test('computeCombatResult ranged attack hit with enough accuracy', () => {
   assert.strictEqual(r.damage, 3);
 });
 
+test('computeCombatResult dodge causes miss regardless of damage', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 5, dmg: 10, surge: 3 },
+    defenseRoll: { block: 0, evade: 0, dodge: true },
+    surgeDamage: 5,
+  });
+  assert.strictEqual(r.hit, false);
+  assert.strictEqual(r.damage, 0);
+  assert.ok(r.resultText.includes('Dodge'));
+});
+
 test('computeCombatResult melee attack ignores accuracy', () => {
   const r = computeCombatResult({
     attackRoll: { acc: 0, dmg: 5, surge: 0 },

@@ -8,8 +8,8 @@
 - [x] **#2 — Accuracy vs Distance never checked** ✅ FIXED
   Distance stored on target at selection time. `isRanged` determined from attack range (`minRange >= 2 || maxRange >= 3`). After surge spending, `computeCombatResult` checks `totalAccuracy >= distanceToTarget` for ranged attacks. Melee attacks skip accuracy check.
 
-- [ ] **#3 — Dodge results don't exist**
-  White defense die has a dodge face (attack misses entirely). `rollDefenseDice` only returns block and evade. Dodge is never rolled.
+- [x] **#3 — Dodge results don't exist** ✅ FIXED
+  White die face 6 was `{block:2, evade:0}` (wrong — no such face). Changed to `{dodge:true}`. `rollDefenseDice` now returns `dodge`. Dodge skips surge step entirely and auto-misses in `computeCombatResult`. Combat thread shows "DODGE!" on defense roll.
 
 - [ ] **#4 — Blast/Cleave trigger on 0 damage**
   Rules: Blast/Cleave only if target suffers >= 1 damage. Code checks `hit` but not `damage > 0`.

@@ -41,7 +41,7 @@
       { "block": 1, "evade": 0 },
       { "block": 0, "evade": 1 },
       { "block": 1, "evade": 1 },
-      { "block": 2, "evade": 0 }
+      { "block": 0, "evade": 0, "dodge": true }
     ],
     "black": [
       { "block": 0, "evade": 0 },
