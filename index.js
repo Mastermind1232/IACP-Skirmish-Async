@@ -949,15 +949,18 @@ const testGameCreationInProgress = new Set();
 const processedTestGameMessageIds = new Set();
 let gameIdCounter = 1;
 
-/** Pick a random scenario with status "testready" and implemented in runDraftRandom. Returns scenario id or null. */
-function getRandomTestreadyScenario() {
+/** Pick a random scenario with status "testready" and implemented in runDraftRandom. Skips opponent-required scenarios when p2IsBot. */
+function getRandomTestreadyScenario(p2IsBot = true) {
   try {
     const path = join(rootDir, 'data', 'test-scenarios.json');
     const data = JSON.parse(readFileSync(path, 'utf8'));
     const scenarios = data.scenarios || {};
     const testready = Object.entries(scenarios).filter(
       ([id, s]) => s && s.status === 'testready' && IMPLEMENTED_SCENARIOS.includes(id)
-    );
+    ).filter(([id]) => {
+      const v = validateTestreadyScenario(id, p2IsBot);
+      return v.valid;
+    });
     if (testready.length === 0) return null;
     return testready[Math.floor(Math.random() * testready.length)][0];
   } catch {
@@ -1381,6 +1384,59 @@ async function createGameChannels(guild, player1Id, player2Id) {
  * @param {{ editMessageInstead?: import('discord.js').Message, player2Id?: string }} [options]
  * @returns {Promise<{ gameId: string }>}
  */
+/**
+ * Timing → test requirements. Each timing describes what game state is needed to trigger the card,
+ * whether P2 must be a real player, and what the test prompt should tell the user.
+ */
+const TIMING_TEST_REQUIREMENTS = {
+  specialAction:                  { needsOpponent: false, category: 'selfAction',    prompt: 'Activate a DC, then use it as one of your actions.' },
+  doubleActionSpecial:            { needsOpponent: false, category: 'selfAction',    prompt: 'Activate a DC — this costs both actions. Make sure you have 2 remaining.' },
+  duringActivation:               { needsOpponent: false, category: 'selfAction',    prompt: 'Activate a DC. The card can be played during that activation.' },
+  startOfActivation:              { needsOpponent: false, category: 'selfAction',    prompt: 'Activate a DC. A prompt should appear at the start of activation.' },
+  endOfActivation:                { needsOpponent: false, category: 'selfAction',    prompt: 'Activate a DC and use your actions. The card triggers at the end of activation.' },
+  whenYouDeclareAttack:           { needsOpponent: false, category: 'selfAttack',    prompt: 'Activate a DC and choose Attack. The card triggers when you declare the attack.' },
+  duringAttack:                   { needsOpponent: false, category: 'selfAttack',    prompt: 'Activate a DC and choose Attack on a target. The card triggers during the attack.' },
+  afterAttacking:                 { needsOpponent: false, category: 'selfAttack',    prompt: 'Activate a DC, Attack a target, and resolve. The card triggers after combat resolves.' },
+  whileDefending:                 { needsOpponent: true,  category: 'opponentAttack', prompt: 'Switch to P2, activate a P2 DC, and Attack one of P1\'s figures. The card triggers during defense.' },
+  whenAttackDeclaredOnYou:        { needsOpponent: true,  category: 'opponentAttack', prompt: 'Switch to P2, activate a P2 DC, and Attack one of P1\'s figures. The card triggers when the attack is declared.' },
+  afterAttackTargetingYouResolved:{ needsOpponent: true,  category: 'opponentAttack', prompt: 'Switch to P2, Attack one of P1\'s figures, and resolve combat. The card triggers after the attack resolves.' },
+  startOfRound:                   { needsOpponent: false, category: 'roundPhase',    prompt: 'The card triggers at the start of a round. Check the Game Log for the prompt.' },
+  endOfRound:                     { needsOpponent: false, category: 'roundPhase',    prompt: 'End the round (both players pass/finish all activations). The card triggers at end of round.' },
+  startOfStatusPhase:             { needsOpponent: false, category: 'roundPhase',    prompt: 'End the round so the Status Phase begins. The card triggers at the start of the Status Phase.' },
+  afterUniqueHostileDefeated:     { needsOpponent: false, category: 'eventBased',    prompt: 'Defeat a unique hostile figure (Attack until one is eliminated). The card triggers after the defeat.' },
+  whenCcPlayed:                   { needsOpponent: true,  category: 'eventBased',    prompt: 'Have the opponent play a CC first. This card reacts to an opponent\'s CC being played.' },
+  immediate:                      { needsOpponent: false, category: 'immediate',     prompt: 'Play the card — its effect resolves immediately.' },
+};
+
+/** Get timing-aware test instructions for a CC. Returns { needsOpponent, prompt, category } or a fallback. */
+function getTimingTestInfo(ccName) {
+  const effect = getCcEffect(ccName);
+  if (!effect) return { needsOpponent: false, prompt: 'Activate a DC, then play the card.', category: 'unknown' };
+  const timing = (effect.timing || '').trim();
+  const req = TIMING_TEST_REQUIREMENTS[timing];
+  if (req) return req;
+  return { needsOpponent: false, prompt: 'Activate a DC, then play the card.', category: 'unknown' };
+}
+
+/** Validate whether a testready scenario can actually be tested. Returns { valid, reason, needsOpponent }. */
+function validateTestreadyScenario(scenarioId, p2IsBot = true) {
+  try {
+    const path = join(rootDir, 'data', 'test-scenarios.json');
+    const data = JSON.parse(readFileSync(path, 'utf8'));
+    const scenario = (data.scenarios || {})[scenarioId];
+    if (!scenario) return { valid: false, reason: 'Scenario not found.' };
+    const primaryCard = scenario.primaryCard;
+    if (!primaryCard) return { valid: false, reason: 'No primaryCard defined.' };
+    const info = getTimingTestInfo(primaryCard);
+    if (info.needsOpponent && p2IsBot) {
+      return { valid: false, reason: `"${primaryCard}" has timing that requires an opponent (${info.category}). Use \`testready @player2\` to test with a real P2.`, needsOpponent: true };
+    }
+    return { valid: true, reason: null, needsOpponent: info.needsOpponent };
+  } catch {
+    return { valid: false, reason: 'Failed to read scenario data.' };
+  }
+}
+
 const IMPLEMENTED_SCENARIOS = [
   'smoke_grenade', 'focus', 'blitz', 'smuggled_supplies', 'dangerous_bargains',
   'recovery', 'take_initiative', 'positioning_advantage', 'rally', 'brace_yourself',
@@ -1442,13 +1498,16 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
       const timingText = ccEffectData?.timing || '';
       const costText = ccEffectData?.cost != null ? `Cost: ${ccEffectData.cost}` : '';
       const cardDetails = [costText, timingText].filter(Boolean).join(' · ');
+      const timingInfo = scenarioPrimaryCard ? getTimingTestInfo(scenarioPrimaryCard) : null;
+      const howToTest = timingInfo?.prompt || 'Activate a DC, then play the card.';
+      const opponentNote = timingInfo?.needsOpponent ? '\n⚠️ **This card requires P2 to act.** Switch to your P2 account when instructed.' : '';
       const testPrompt = scenarioPrimaryCard
-        ? `🧪 <@${userId}> — **Testing: ${scenarioPrimaryCard}** (scenario: \`${scenarioId}\`)\n${cardDetails ? `*${cardDetails}*\n` : ''}> *${effectText}*\n\nThe card is in your **Your Hand** thread. Activate a DC, then play it!`
+        ? `🧪 <@${userId}> — **Testing: ${scenarioPrimaryCard}** (scenario: \`${scenarioId}\`)\n${cardDetails ? `*${cardDetails}*\n` : ''}> *${effectText}*\n\n**How to test:** ${howToTest}${opponentNote}\nThe card is in P1's **Your Hand** thread (inside Play Area).`
         : `🧪 <@${userId}> — **Testing scenario: \`${scenarioId}\`**`;
       await generalChannel.send({ content: testPrompt, allowedMentions: { users: [userId] } }).catch(() => {});
       await generalChannel.send({ content: `Done testing? Kill the game here:`, components: [killRow] }).catch(() => {});
       const scenarioDoneText = scenarioPrimaryCard
-        ? `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. P1's **Your Hand** thread (inside Play Area) has **${scenarioPrimaryCard}** — activate a DC, then play it to test the **${scenarioId}** scenario.`
+        ? `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. P1's **Your Hand** thread (inside Play Area) has **${scenarioPrimaryCard}**. **How to test:** ${howToTest}`
         : `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. Scenario: **${scenarioId}**.`;
       if (options.editMessageInstead) {
         await options.editMessageInstead.edit({ content: scenarioDoneText, allowedMentions: { users: mentionUsers } }).catch(() => {});
@@ -3724,18 +3783,20 @@ client.on('messageCreate', async (message) => {
       await message.reply('This command must be used in a server channel.').catch(() => {});
       return;
     }
-    const scenarioId = getRandomTestreadyScenario();
+    const userId = message.author.id;
+    const mentionedP2 = message.mentions.users.first();
+    const player2Id = mentionedP2 && mentionedP2.id !== userId ? mentionedP2.id : undefined;
+    const p2IsBot = !player2Id;
+    const scenarioId = getRandomTestreadyScenario(p2IsBot);
     if (!scenarioId) {
-      await message.reply('No testready scenarios. Add scenarios with `status: "testready"` in `data/test-scenarios.json` and implement them in runDraftRandom.').catch(() => {});
+      const hint = p2IsBot ? ' Some scenarios require a real P2 — try `testready @player2`.' : '';
+      await message.reply(`No testready scenarios available.${hint}`).catch(() => {});
       return;
     }
     const msgId = message.id;
     if (processedTestGameMessageIds.has(msgId)) return;
     processedTestGameMessageIds.add(msgId);
     if (processedTestGameMessageIds.size > 500) processedTestGameMessageIds.clear();
-    const userId = message.author.id;
-    const mentionedP2 = message.mentions.users.first();
-    const player2Id = mentionedP2 && mentionedP2.id !== userId ? mentionedP2.id : undefined;
     const p2Desc = player2Id ? ` vs <@${player2Id}>` : '';
     const creatingMsg = await message.reply(`Creating test game (random testready scenario: **${scenarioId}**${p2Desc})...`);
     try {
