@@ -2759,7 +2759,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
         if (i >= 0 && dcL?.[i]) dcL[i].healthState = [...attHS];
       }
     }
-    if (totalBlast > 0 && hit && game.selectedMap?.id) {
+    if (totalBlast > 0 && hit && damage > 0 && game.selectedMap?.id) {
       const adjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
       const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
       for (const { figureKey: blastFigureKey, playerNum: blastPlayerNum } of adjacent) {
@@ -2834,7 +2834,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
     }
   }
   // F6 Cleave: attacker may choose one other figure in melee (adjacent to attacker) to apply cleave damage
-  if (hit && (combat.surgeCleave || 0) > 0 && game.selectedMap?.id) {
+  if (hit && damage > 0 && (combat.surgeCleave || 0) > 0 && game.selectedMap?.id) {
     const attMeta = combat.attackerMsgId ? dcMessageMeta.get(combat.attackerMsgId) : null;
     const attDg = (attMeta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const attackerFigureKey = attMeta ? `${attMeta.dcName}-${attDg}-${combat.attackerFigureIndex ?? 0}` : null;

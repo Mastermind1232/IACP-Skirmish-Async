@@ -112,6 +112,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
   }
   game.p1ActivationsRemaining = game.p1ActivationsTotal ?? 0;
   game.p2ActivationsRemaining = game.p2ActivationsTotal ?? 0;
+  game.p1ActivatedDcIndices = [];
+  game.p2ActivatedDcIndices = [];
   const mapId = game.selectedMap?.id;
   const p1Terminals = mapId ? countTerminalsControlledByPlayer(game, 1, mapId) : 0;
   const p2Terminals = mapId ? countTerminalsControlledByPlayer(game, 2, mapId) : 0;

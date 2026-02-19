@@ -11,8 +11,8 @@
 - [x] **#3 — Dodge results don't exist** ✅ FIXED
   White die face 6 was `{block:2, evade:0}` (wrong — no such face). Changed to `{dodge:true}`. `rollDefenseDice` now returns `dodge`. Dodge skips surge step entirely and auto-misses in `computeCombatResult`. Combat thread shows "DODGE!" on defense roll.
 
-- [ ] **#4 — Blast/Cleave trigger on 0 damage**
-  Rules: Blast/Cleave only if target suffers >= 1 damage. Code checks `hit` but not `damage > 0`.
+- [x] **#4 — Blast/Cleave trigger on 0 damage** ✅ FIXED
+  Added `damage > 0` gate to both Blast damage path and Cleave trigger. A fully blocked hit no longer triggers splash damage.
 
 - [ ] **#5 — Attack sequence out of order**
   Correct: Roll → Reroll → Apply Modifiers (evade cancels surge) → Spend Surges → Check Accuracy → Calculate Damage. Code applies modifiers after surge spending. Reroll step missing.
@@ -25,8 +25,8 @@
 
 ## HIGH — Game Flow Bugs
 
-- [ ] **#8 — Activated DC indices never reset at end of round**
-  `p1ActivatedDcIndices`/`p2ActivatedDcIndices` never cleared in `handleEndEndOfRound`. Groups can't activate after round 1.
+- [x] **#8 — Activated DC indices never reset at end of round** ✅ FIXED
+  Added `game.p1ActivatedDcIndices = []; game.p2ActivatedDcIndices = [];` in `handleEndEndOfRound` after activation counts are restored.
 
 - [ ] **#9 — Attachment CCs double-counted (discard + attached)**
   `handleCcAttachTo` adds CC to discard pile AND attachments. Card exists in two places; gets shuffled back while still attached.
