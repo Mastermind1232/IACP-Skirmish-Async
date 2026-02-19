@@ -169,9 +169,9 @@ export async function handleCcAttachTo(interaction, ctx) {
   saveGames();
 }
 
-/** @param {import('discord.js').StringSelectMenuInteraction} interaction */
+/** After dropdown selection: show card preview + PLAY CARD / DO SOMETHING ELSE confirmation. */
 export async function handleCcPlaySelect(interaction, ctx) {
-  const { getGame, getCcEffect, isCcAttachment, isCcPlayableNow, isCcPlayLegalByRestriction, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames, getIllegalCcPlayButtons, client } = ctx;
+  const { getGame, getCommandCardImagePath, saveGames } = ctx;
   const gameId = interaction.customId.replace('cc_play_select_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -180,26 +180,73 @@ export async function handleCcPlaySelect(interaction, ctx) {
   }
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
-  const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && channelId !== game.p2HandId) {
     await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
-  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-  const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
-  const hand = game[handKey] || [];
+  const hand = game[playerNum === 1 ? 'player1CcHand' : 'player2CcHand'] || [];
   const card = interaction.values[0];
-  const idx = hand.indexOf(card);
-  if (idx < 0) {
+  if (!hand.includes(card)) {
     await interaction.reply({ content: "That card isn't in your hand.", ephemeral: true }).catch(() => {});
     return;
   }
+  game.pendingCcConfirmation = { playerNum, card };
+  saveGames();
+  const { existsSync } = await import('fs');
+  const { AttachmentBuilder } = await import('discord.js');
+  const embed = new EmbedBuilder().setTitle(card).setDescription(`Play **${card}**?`).setColor(0x2f3136);
+  const files = [];
+  if (getCommandCardImagePath) {
+    const imgPath = getCommandCardImagePath(card);
+    if (imgPath && existsSync(imgPath)) {
+      const ext = imgPath.toLowerCase().endsWith('.png') ? 'png' : 'jpg';
+      const fileName = `cc-confirm-${(card || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
+      files.push(new AttachmentBuilder(imgPath, { name: fileName }));
+      embed.setImage(`attachment://${fileName}`);
+    }
+  }
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`cc_confirm_play_${gameId}`).setLabel('PLAY CARD').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`cc_cancel_play_${gameId}`).setLabel('DO SOMETHING ELSE').setStyle(ButtonStyle.Danger),
+  );
+  await interaction.deferUpdate().catch(() => {});
+  await interaction.message.delete().catch(() => {});
+  const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+  const handChannel = await interaction.client.channels.fetch(handId);
+  await handChannel.send({ embeds: [embed], files, components: [row] });
+}
+
+/** PLAY CARD confirmed — execute the actual play. */
+export async function handleCcConfirmPlay(interaction, ctx) {
+  const { getGame, getCcEffect, isCcAttachment, isCcPlayableNow, isCcPlayLegalByRestriction, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames, getIllegalCcPlayButtons, client } = ctx;
+  const gameId = interaction.customId.replace('cc_confirm_play_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (!game.pendingCcConfirmation) {
+    await interaction.reply({ content: 'No card pending. Try playing again.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const { playerNum, card } = game.pendingCcConfirmation;
+  delete game.pendingCcConfirmation;
+  const isP1Hand = playerNum === 1;
+  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const hand = game[handKey] || [];
+  const idx = hand.indexOf(card);
+  if (idx < 0) {
+    await interaction.reply({ content: "That card isn't in your hand anymore.", ephemeral: true }).catch(() => {});
+    await interaction.message.delete().catch(() => {});
+    saveGames();
+    return;
+  }
   if (!isCcPlayableNow(game, playerNum, card)) {
-    await interaction.reply({
-      content: "That card can't be played right now (wrong timing).",
-      ephemeral: true,
-    }).catch(() => {});
+    await interaction.reply({ content: "That card can't be played right now (wrong timing).", ephemeral: true }).catch(() => {});
+    await interaction.message.delete().catch(() => {});
+    saveGames();
     return;
   }
   const restriction = isCcPlayLegalByRestriction(game, playerNum, card);
@@ -268,7 +315,8 @@ export async function handleCcPlaySelect(interaction, ctx) {
       await interaction.message.delete().catch(() => {});
       await updateHandVisualMessage(game, playerNum, interaction.client);
       await updateDiscardPileMessage(game, playerNum, interaction.client);
-      await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+      const effectDesc = effectData?.effect ? `\n> *${effectData.effect}*` : '';
+      await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
       game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId, playerNum };
       const rows = [];
@@ -309,7 +357,8 @@ export async function handleCcPlaySelect(interaction, ctx) {
       await interaction.message.delete().catch(() => {});
       await updateHandVisualMessage(game, playerNum, interaction.client);
       await updateDiscardPileMessage(game, playerNum, interaction.client);
-      await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+      const effectDesc2 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
+      await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc2}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
       game.pendingCcSpaceChoice = { abilityId, gameId, playerNum, card, validSpaces: result.validSpaces };
       const boardState = getBoardStateForMovement(game, null);
@@ -343,13 +392,14 @@ export async function handleCcPlaySelect(interaction, ctx) {
       await interaction.message.delete().catch(() => {});
       await updateHandVisualMessage(game, playerNum, interaction.client);
       await updateDiscardPileMessage(game, playerNum, interaction.client);
-      const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+      const effectDesc3 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
+      const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc3}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       if (result.drewCards?.length) {
         await updateHandVisualMessage(game, playerNum, interaction.client);
         const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
-        await ctx.logGameAction(game, interaction.client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
+        await ctx.logGameAction(game, interaction.client, `CC resolved: Drew ${drewList}.`, { icon: 'card' });
       } else if (result.logMessage) {
-        await ctx.logGameAction(game, interaction.client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
+        await ctx.logGameAction(game, interaction.client, `CC resolved: ${result.logMessage}`, { icon: 'card' });
       }
       if (result.refreshHand || result.refreshDiscard) {
         if (result.refreshHand) await updateHandVisualMessage(game, playerNum, interaction.client);
@@ -409,7 +459,8 @@ export async function handleCcPlaySelect(interaction, ctx) {
   await interaction.message.delete().catch(() => {});
   await updateHandVisualMessage(game, playerNum, interaction.client);
   await updateDiscardPileMessage(game, playerNum, interaction.client);
-  const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  const effectDesc4 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
+  const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc4}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   if (cost === 0 && ctx.getNegationResponseButtons) {
     game.pendingNegation = { playedBy: playerNum, card, fromDc: false };
     const oppNum = playerNum === 1 ? 2 : 1;
@@ -432,11 +483,11 @@ export async function handleCcPlaySelect(interaction, ctx) {
     if (result.applied && result.drewCards?.length) {
       await updateHandVisualMessage(game, playerNum, interaction.client);
       const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
-      await ctx.logGameAction(game, interaction.client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
+      await ctx.logGameAction(game, interaction.client, `CC resolved: Drew ${drewList}.`, { icon: 'card' });
     } else if (result.applied && result.logMessage) {
-      await ctx.logGameAction(game, interaction.client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
+      await ctx.logGameAction(game, interaction.client, `CC resolved: ${result.logMessage}`, { icon: 'card' });
     } else if (!result.applied && result.manualMessage) {
-      await ctx.logGameAction(game, interaction.client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
+      await ctx.logGameAction(game, interaction.client, `CC resolved: ${result.manualMessage}`, { icon: 'card' });
     }
     if (result.applied && (result.refreshHand || result.refreshDiscard)) {
       if (result.refreshHand) await updateHandVisualMessage(game, playerNum, interaction.client);
@@ -446,6 +497,21 @@ export async function handleCcPlaySelect(interaction, ctx) {
   if (ctx.pushUndo) {
     ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
   }
+  saveGames();
+}
+
+/** DO SOMETHING ELSE — cancel the pending play. */
+export async function handleCcCancelPlay(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  const gameId = interaction.customId.replace('cc_cancel_play_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  delete game.pendingCcConfirmation;
+  await interaction.deferUpdate().catch(() => {});
+  await interaction.message.delete().catch(() => {});
   saveGames();
 }
 
@@ -485,7 +551,8 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
   }
   await updateHandVisualMessage(game, playerNum, client);
   await updateDiscardPileMessage(game, playerNum, client);
-  await logGameAction(game, client, `Played command card **${card}**.`, { phase: 'ACTION', icon: 'card' });
+  const effectDesc = effectData?.effect ? `\n> *${effectData.effect}*` : '';
+  await logGameAction(game, client, `Played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card' });
   if (resolveAbility) {
     const abilityId = effectData?.abilityId ?? card;
     const result = resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat });
@@ -501,12 +568,12 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
       if (result.refreshDiscard) await updateDiscardPileMessage(game, playerNum, client);
     }
     if (result.applied && result.logMessage) {
-      await logGameAction(game, client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
+      await logGameAction(game, client, `CC resolved: ${result.logMessage}`, { icon: 'card' });
     } else if (result.applied && result.drewCards?.length) {
       const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
-      await logGameAction(game, client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
+      await logGameAction(game, client, `CC resolved: Drew ${drewList}.`, { icon: 'card' });
     } else if (!result.applied && result.manualMessage) {
-      await logGameAction(game, client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
+      await logGameAction(game, client, `CC resolved: ${result.manualMessage}`, { icon: 'card' });
     }
   }
 }

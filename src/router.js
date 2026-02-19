@@ -50,6 +50,8 @@ const BUTTON_PREFIXES = [
   'deploy_pick_',
   'deployment_done_',
   'cc_shuffle_draw_',
+  'cc_confirm_play_',
+  'cc_cancel_play_',
   'cc_play_',
   'cc_draw_',
   'cc_search_discard_',

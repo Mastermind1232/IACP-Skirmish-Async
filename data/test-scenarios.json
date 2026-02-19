@@ -26,7 +26,7 @@
       "cards": ["Smuggled Supplies", "Hostile Negotiation"]
     },
     "dangerous_bargains": {
-      "status": "testready",
+      "status": "gameready",
       "pattern": "start_of_round",
       "primaryCard": "Dangerous Bargains",
       "cards": ["Dangerous Bargains", "Covering Fire"]

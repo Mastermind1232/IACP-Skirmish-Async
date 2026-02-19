@@ -625,7 +625,7 @@ export function resolveAbility(abilityId, context) {
     const oppKey = playerNum === 1 ? 'player2VP' : 'player1VP';
     const selfVP = (game[selfKey]?.total ?? 0);
     if (entry.vpCondition?.selfHasAtMost != null && selfVP > entry.vpCondition.selfHasAtMost) {
-      return { applied: true, logMessage: 'Condition not met (you have more than 30 VP). No effect.' };
+      return { applied: true, logMessage: `Condition not met — player has ${selfVP} VP (must have ${entry.vpCondition.selfHasAtMost} or fewer). No VP gained.` };
     }
     game[selfKey] = game[selfKey] || { total: 0, kills: 0, objectives: 0 };
     game[oppKey] = game[oppKey] || { total: 0, kills: 0, objectives: 0 };
@@ -633,7 +633,7 @@ export function resolveAbility(abilityId, context) {
     game[oppKey].total = (game[oppKey].total ?? 0) + entry.vpGainOpponent;
     return {
       applied: true,
-      logMessage: `You and your opponent each gained VP (you +${entry.vpGainSelf}, opponent +${entry.vpGainOpponent}).`,
+      logMessage: `Both players gained ${entry.vpGainSelf} VP! (Player: ${game[selfKey].total} VP total, Opponent: ${game[oppKey].total} VP total)`,
     };
   }
 

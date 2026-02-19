@@ -116,6 +116,8 @@ import {
   handleDeployModal,
   handleCcAttachTo,
   handleCcPlaySelect,
+  handleCcConfirmPlay,
+  handleCcCancelPlay,
   handleCcDiscardSelect,
   handleDeckIllegalPlay,
   handleDeckIllegalRedo,
@@ -1422,12 +1424,16 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
     const scenarioImplemented = scenarioId && IMPLEMENTED_SCENARIOS.includes(scenarioId);
     const p2Label = p2IsBot ? 'the bot' : `<@${p2Id}>`;
     const mentionUsers = p2IsBot ? [userId] : [userId, p2Id];
+    const killRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`kill_game_${gameId}`).setLabel('Kill Test Game').setStyle(ButtonStyle.Danger),
+    );
     if (scenarioImplemented) {
       await runDraftRandom(game, client, { scenarioId });
       const scenarioPrimaryCard = getScenarioPrimaryCard(scenarioId);
       const scenarioDoneText = scenarioPrimaryCard
         ? `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. P1's **Your Hand** thread (inside Play Area) has **${scenarioPrimaryCard}** — activate a DC, then play it to test the **${scenarioId}** scenario.`
         : `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. Scenario: **${scenarioId}**.`;
+      await generalChannel.send({ content: `🧪 **Test Game #${gameId}** — done? Kill it here:`, components: [killRow] }).catch(() => {});
       if (options.editMessageInstead) {
         await options.editMessageInstead.edit({ content: scenarioDoneText, allowedMentions: { users: mentionUsers } }).catch(() => {});
       } else {
@@ -1452,6 +1458,7 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
         components: [getGeneralSetupButtons(game)],
       });
       game.generalSetupMessageId = setupMsg.id;
+      await generalChannel.send({ content: `🧪 **Test Game #${gameId}** — done? Kill it here:`, components: [killRow] }).catch(() => {});
       const doneText = scenarioId && !scenarioImplemented
         ? `Scenario **${scenarioId}** is not yet implemented. Test game **IA Game #${gameId}** created with standard setup — select the map in Game Log.`
         : `Test game **IA Game #${gameId}** is ready (P1 <@${userId}> vs P2 ${p2Label})! Select the map in Game Log — Play Areas (with **Your Hand** threads) will appear after map selection.`;
@@ -4202,6 +4209,7 @@ client.on('interactionCreate', async (interaction) => {
       dcMessageMeta,
       dcHealthState,
       getCcEffect,
+      getCommandCardImagePath,
       buildHandDisplayPayload,
       updateAttachmentMessageForDc,
       updateHandVisualMessage,
@@ -4231,7 +4239,7 @@ client.on('interactionCreate', async (interaction) => {
   const buttonKey = getHandlerKey(interaction.customId, 'button');
   if (!buttonKey) return;
 
-    if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'cc_choice_' || buttonKey === 'cc_space_' || buttonKey === 'squad_select_' || buttonKey === 'illegal_cc_ignore_' || buttonKey === 'illegal_cc_unplay_' || buttonKey === 'negation_play_' || buttonKey === 'negation_let_resolve_' || buttonKey === 'celebration_play_' || buttonKey === 'celebration_pass_') {
+    if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_confirm_play_' || buttonKey === 'cc_cancel_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'cc_choice_' || buttonKey === 'cc_space_' || buttonKey === 'squad_select_' || buttonKey === 'illegal_cc_ignore_' || buttonKey === 'illegal_cc_unplay_' || buttonKey === 'negation_play_' || buttonKey === 'negation_let_resolve_' || buttonKey === 'celebration_play_' || buttonKey === 'celebration_pass_') {
     const ccHandButtonContext = {
       getGame,
       dcMessageMeta,
@@ -4258,6 +4266,10 @@ client.on('interactionCreate', async (interaction) => {
       updateDiscardPileMessage,
       getCcEffect,
       isCcAttachment,
+      isCcPlayableNow,
+      isCcPlayLegalByRestriction,
+      getIllegalCcPlayButtons,
+      getNegationResponseButtons,
       updateAttachmentMessageForDc,
       getPlayableCcFromHand,
       resolveAbility,
@@ -4266,11 +4278,16 @@ client.on('interactionCreate', async (interaction) => {
       getConditionsForDcMessage,
       getDcPlayAreaComponents,
       buildBoardMapPayload,
+      getBoardStateForMovement,
+      getSpaceChoiceRows,
+      getMapAttachmentForSpaces,
     };
     if (buttonKey === 'deck_illegal_play_') await handleDeckIllegalPlay(interaction, ccHandButtonContext);
     else if (buttonKey === 'deck_illegal_redo_') await handleDeckIllegalRedo(interaction, ccHandButtonContext);
     else if (buttonKey === 'cc_shuffle_draw_') await handleCcShuffleDraw(interaction, ccHandButtonContext);
     else if (buttonKey === 'cc_play_') await handleCcPlay(interaction, ccHandButtonContext);
+    else if (buttonKey === 'cc_confirm_play_') await handleCcConfirmPlay(interaction, ccHandButtonContext);
+    else if (buttonKey === 'cc_cancel_play_') await handleCcCancelPlay(interaction, ccHandButtonContext);
     else if (buttonKey === 'cc_draw_') await handleCcDraw(interaction, ccHandButtonContext);
     else if (buttonKey === 'cc_search_discard_') await handleCcSearchDiscard(interaction, ccHandButtonContext);
     else if (buttonKey === 'cc_close_discard_') await handleCcCloseDiscard(interaction, ccHandButtonContext);
