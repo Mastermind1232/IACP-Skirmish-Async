@@ -519,7 +519,7 @@ function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
     const missionSide = variant === 'a' ? 'missionA' : 'missionB';
     const tokenCoords = getMissionTokenCoords(mapData[missionSide]);
     const flippedThisRound = playerNum === 1 ? game.p1LaunchPanelFlippedThisRound : game.p2LaunchPanelFlippedThisRound;
-    if (tokenCoords.length && !(mech.flipLimitPerRound && flippedThisRound)) {
+    if (tokenCoords.length && !(mech?.flipLimitPerRound && flippedThisRound)) {
       const panelSet = toLowerSet(tokenCoords);
       const adjacent = getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, panelSet);
       for (const coord of adjacent) {

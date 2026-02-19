@@ -793,7 +793,8 @@ export async function handleNegationPlay(interaction, ctx) {
   await updateHandVisualMessage(game, oppNum, client);
   await updateDiscardPileMessage(game, oppNum, client);
   await interaction.message.edit({ content: `**Negation** cancelled **${card}**.`, components: [] }).catch(() => {});
-  await logGameAction(game, client, `<@${playerId}> played **Negation** — cancelled **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [playerId] } });
+  const negPlayerId = oppNum === 1 ? game.player1Id : game.player2Id;
+  await logGameAction(game, client, `<@${negPlayerId}> played **Negation** — cancelled **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [negPlayerId] } });
   saveGames();
 }
 
@@ -887,7 +888,8 @@ export async function handleCelebrationPlay(interaction, ctx) {
   await updateHandVisualMessage(game, attackerPlayerNum, client);
   await updateDiscardPileMessage(game, attackerPlayerNum, client);
   await interaction.message.edit({ content: `**Celebration** — +4 VP.`, components: [] }).catch(() => {});
-  await logGameAction(game, client, `<@${playerId}> played **Celebration** — gained 4 VP.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [playerId] } });
+  const celPlayerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+  await logGameAction(game, client, `<@${celPlayerId}> played **Celebration** — gained 4 VP.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [celPlayerId] } });
   saveGames();
 }
 

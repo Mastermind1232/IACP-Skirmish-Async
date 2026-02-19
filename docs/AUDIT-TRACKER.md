@@ -28,17 +28,17 @@
 - [x] **#8 — Activated DC indices never reset at end of round** ✅ FIXED
   Added `game.p1ActivatedDcIndices = []; game.p2ActivatedDcIndices = [];` in `handleEndEndOfRound` after activation counts are restored.
 
-- [ ] **#9 — Attachment CCs double-counted (discard + attached)**
-  `handleCcAttachTo` adds CC to discard pile AND attachments. Card exists in two places; gets shuffled back while still attached.
+- [x] **#9 — Attachment CCs double-counted (discard + attached)** ✅ FIXED
+  Removed discard push in `handleCcAttachTo`; only tracked as attachment now.
 
-- [ ] **#10 — `handleNegationPlay` uses undefined `playerId`**
-  Line ~798 of `cc-hand.js` references `playerId` which doesn't exist in scope. ReferenceError on Negation play.
+- [x] **#10 — `handleNegationPlay` uses undefined `playerId`** ✅ FIXED
+  Derived `negPlayerId` from `oppNum` → `game.player1Id`/`game.player2Id`.
 
-- [ ] **#11 — `handleCelebrationPlay` uses undefined `playerId`**
-  Same issue — `playerId` not in scope. ReferenceError on Celebration play.
+- [x] **#11 — `handleCelebrationPlay` uses undefined `playerId`** ✅ FIXED
+  Derived `celPlayerId` from `attackerPlayerNum` → `game.player1Id`/`game.player2Id`.
 
-- [ ] **#12 — Missing optional chaining crashes old games**
-  `index.js` line ~522 accesses `mech.flipLimitPerRound` without `?.`. Games without `mechanics` field crash.
+- [x] **#12 — Missing optional chaining crashes old games** ✅ FIXED
+  Added `?.` to `mech?.flipLimitPerRound`. (Already guarded by `mech?.type` check, but defensive fix.)
 
 - [ ] **#13 — File-based saves not atomic**
   `writeFileSync` directly. Crash mid-write corrupts save file. No recovery, no backups.
