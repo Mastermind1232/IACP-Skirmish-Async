@@ -1592,7 +1592,7 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
     const botId = client.user.id;
     const p2Id = options.player2Id || botId;
     const p2IsBot = p2Id === botId;
-    const { gameId, generalChannel, chatChannel, boardChannel } =
+    const { gameId, generalChannel, chatChannel } =
       await createGameChannels(guild, userId, p2Id);
     const game = {
       gameId,
@@ -1602,7 +1602,7 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
       player2Id: p2Id,
       generalId: generalChannel.id,
       chatId: chatChannel.id,
-      boardId: boardChannel.id,
+      boardId: null,
       p1HandId: null,
       p2HandId: null,
       p1PlayAreaId: null,
