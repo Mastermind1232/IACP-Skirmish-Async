@@ -524,7 +524,7 @@ export async function handleDcCcSpecial(interaction, ctx) {
   await updateDcActionsMessage(game, msgId, interaction.client);
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}** (Special Action).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   if (enteringNegation) {
-    game.pendingNegation = { playedBy: meta.playerNum, card, fromDc: true, msgId, wasAttachment: isCcAttachment(card) };
+    game.pendingNegation = { playedBy: meta.playerNum, card, fromDc: true, msgId, wasAttachment: isCcAttachment(card), handChannelId };
     const oppNum = meta.playerNum === 1 ? 2 : 1;
     const oppHandId = oppNum === 1 ? game.p1HandId : game.p2HandId;
     const oppHandChannel = await interaction.client.channels.fetch(oppHandId).catch(() => null);
@@ -536,6 +536,10 @@ export async function handleDcCcSpecial(interaction, ctx) {
         allowedMentions: { users: [oppId] },
       }).catch(() => {});
     }
+    const waitingMsg = await handChannel.send({
+      content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
+    }).catch(() => null);
+    if (waitingMsg) game.pendingNegation.waitingMsgId = waitingMsg.id;
     if (ctx.pushUndo) {
       ctx.pushUndo(game, {
         type: 'cc_play_dc',

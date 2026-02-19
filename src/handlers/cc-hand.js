@@ -460,7 +460,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   const effectDesc4 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc4}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   if (cost === 0 && ctx.getNegationResponseButtons) {
-    game.pendingNegation = { playedBy: playerNum, card, fromDc: false };
+    game.pendingNegation = { playedBy: playerNum, card, fromDc: false, handChannelId: handChannel.id };
     const oppNum = playerNum === 1 ? 2 : 1;
     const oppHandId = oppNum === 1 ? game.p1HandId : game.p2HandId;
     const oppHandChannel = await interaction.client.channels.fetch(oppHandId).catch(() => null);
@@ -472,9 +472,10 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         allowedMentions: { users: [oppId] },
       }).catch(() => {});
     }
-    await handChannel.send({
-      content: `**${card}** played — waiting for opponent to respond (Negation window). Effect will resolve once they confirm.`,
-    }).catch(() => {});
+    const waitingMsg = await handChannel.send({
+      content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
+    }).catch(() => null);
+    if (waitingMsg) game.pendingNegation.waitingMsgId = waitingMsg.id;
     if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
     saveGames();
     return;
@@ -773,7 +774,7 @@ export async function handleNegationPlay(interaction, ctx) {
     await interaction.reply({ content: 'No pending play to negate.', ephemeral: true }).catch(() => {});
     return;
   }
-  const { playedBy, card } = game.pendingNegation;
+  const { playedBy, card, waitingMsgId, handChannelId } = game.pendingNegation;
   const oppNum = playedBy === 1 ? 2 : 1;
   if (!canActAsPlayer(game, interaction.user.id, oppNum)) {
     await interaction.reply({ content: 'Only the opponent can play Negation.', ephemeral: true }).catch(() => {});
@@ -798,6 +799,15 @@ export async function handleNegationPlay(interaction, ctx) {
   await interaction.message.edit({ content: `**Negation** cancelled **${card}**.`, components: [] }).catch(() => {});
   const negPlayerId = oppNum === 1 ? game.player1Id : game.player2Id;
   await logGameAction(game, client, `<@${negPlayerId}> played **Negation** — cancelled **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [negPlayerId] } });
+  // Notify the player whose card was cancelled
+  if (waitingMsgId && handChannelId) {
+    const playingHandChannel = await client.channels.fetch(handChannelId).catch(() => null);
+    if (playingHandChannel) {
+      const waitingMsg = await playingHandChannel.messages.fetch(waitingMsgId).catch(() => null);
+      const playedById = playedBy === 1 ? game.player1Id : game.player2Id;
+      if (waitingMsg) await waitingMsg.edit({ content: `❌ Your **${card}** was cancelled by your opponent's **Negation**. <@${playedById}>` }).catch(() => {});
+    }
+  }
   saveGames();
 }
 
@@ -810,7 +820,7 @@ export async function handleNegationLetResolve(interaction, ctx) {
     await interaction.reply({ content: 'No pending play to resolve.', ephemeral: true }).catch(() => {});
     return;
   }
-  const { playedBy, card, fromDc, msgId, wasAttachment } = game.pendingNegation;
+  const { playedBy, card, fromDc, msgId, wasAttachment, waitingMsgId, handChannelId } = game.pendingNegation;
   const oppNum = playedBy === 1 ? 2 : 1;
   if (!canActAsPlayer(game, interaction.user.id, oppNum)) {
     await interaction.reply({ content: 'Only the opponent can choose to let it resolve.', ephemeral: true }).catch(() => {});
@@ -851,6 +861,15 @@ export async function handleNegationLetResolve(interaction, ctx) {
       await updateDiscardPileMessage(game, opp, client);
     } else if (!result.applied && result.manualMessage) {
       await logGameAction(game, client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
+    }
+  }
+  // Notify the player whose card resolved
+  if (waitingMsgId && handChannelId) {
+    const playingHandChannel = await client.channels.fetch(handChannelId).catch(() => null);
+    if (playingHandChannel) {
+      const waitingMsg = await playingHandChannel.messages.fetch(waitingMsgId).catch(() => null);
+      const playedById = playedBy === 1 ? game.player1Id : game.player2Id;
+      if (waitingMsg) await waitingMsg.edit({ content: `✅ **${card}** resolved! <@${playedById}>` }).catch(() => {});
     }
   }
   saveGames();
