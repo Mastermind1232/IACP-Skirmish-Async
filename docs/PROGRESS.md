@@ -1,6 +1,6 @@
 # IACP Skirmish — Master Progress Tracker
 *Goal: Fully playable, 100% in-Discord automated skirmish experience.*
-*Last updated: Feb 19 2026.*
+*Last updated: Feb 19 2026 (post full audit).*
 
 ---
 
@@ -9,26 +9,26 @@
 Scores are **effort-weighted** — a checkbox that fixes one return statement is not worth the same as wiring surge abilities for 223 deployment cards. Each category carries a weight reflecting its total implementation cost. The percentage is derived from `(points earned) / (total points)`.
 
 ```
-██████████░░░░░░░░░░  ~52%  effort-weighted
+████████████░░░░░░░░  ~62%  effort-weighted
 ```
 
 | Category | Weight | Score | % | Notes |
 |---|---|---|---|---|
-| 🏗️ Infrastructure | 10 | 8.5 | 85% | Atomic saves + race conditions open |
-| 🔄 Game Flow & Rounds | 12 | 8.0 | 67% | Reinforcement, pass enforcement, EoA hooks missing |
-| ⚔️ Combat System | 15 | 12.5 | 83% | Full sequence works; minor edge cases |
-| 🏃 Movement & LOS | 10 | 8.5 | 85% | Engine solid; reinforcement entry points missing |
-| 🃏 CC Automation | 20 | 15.0 | 75% | 248 / 297 cards wired in library (~83%); ~49 still manual |
-| 🤖 DC Core Gameplay | 12 | 9.5 | 79% | Attack/health/conditions work; no DC surge selection wired |
+| 🏗️ Infrastructure | 10 | 8.5 | 85% | Atomic saves + migration logic open |
+| 🔄 Game Flow & Rounds | 12 | 8.5 | 71% | Reinforcement missing; pass button works but no server block |
+| ⚔️ Combat System | 15 | 12.5 | 83% | Full sequence works; LOS + figures-as-blockers gap |
+| 🏃 Movement & LOS | 10 | 8.5 | 85% | Engine solid; reinforce entry points missing |
+| 🃏 CC Automation | 20 | 15.0 | 75% | ~248 / 297 cards in library; ~49 still return manual message |
+| 🤖 DC Core Gameplay | 12 | 9.5 | 79% | Attack/health/conditions work; DC specials are stubs |
 | ⚡ DC Surge Automation | 15 | 0.5 | **3%** | Only 2 / 223 DCs have surge data in dc-effects.json |
-| 🗺️ Map Data | 15 | 9.5 | 63% | 3/3 tournament maps built; 5 total complete; dev-facility broken |
+| 🗺️ Map Data | 15 | 9.5 | 63% | 3/3 tournament maps + 2 extras built; dev-facility broken |
 | 📜 Mission Rules Engine | 8 | 5.0 | 63% | Engine works for 5 maps; dev-facility empty |
 | 🔁 Reinforcement | 8 | 0.0 | **0%** | Not implemented — breaks every third/fourth round |
-| 📊 Stats & Analytics | 10 | 3.0 | 30% | DB backend written; zero Discord commands to surface data |
-| **Total** | **135** | **79.5** | **~59%** | |
+| 📊 Stats & Analytics | 10 | 7.0 | 70% | 3 slash commands live; missing zone/leaderboard/end-game embed |
+| **Total** | **135** | **84.0** | **~62%** | |
 
-> ⚠️ **DC Surge Automation** and **Reinforcement** are the two biggest gaps by effort weight.
-> They drag overall completion from an apparent ~77% down to the real ~59%.
+> ⚠️ **DC Surge Automation** and **Reinforcement** are the two biggest effort gaps.
+> The previous draft under-counted Stats (commands are live) and over-stated some game flow gaps.
 
 ---
 
@@ -48,7 +48,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 
 ---
 
-## 🔄 Game Flow & Rounds — weight: 12 pts — score: 8.0 / 12 (67%)
+## 🔄 Game Flow & Rounds — weight: 12 pts — score: 8.5 / 12 (71%)
 
 - [x] Win/loss detection: 40 VP threshold + full elimination
 - [x] Activation counter reset at end of round
@@ -58,10 +58,11 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] Defeated groups filtered from Activate list
 - [x] Activations decremented when group wiped mid-round
 - [x] Attachment CCs cleaned up when DC is defeated
-- [x] CC timing validation (`isCcPlayableNow`, `getPlayableCcFromHand`)
+- [x] CC timing validation (`isCcPlayableNow`, `isCcPlayLegalByRestriction`)
+- [x] **Pass turn button** — `pass_activation_turn_` handler is fully implemented; shows when opponent has strictly more activations; undoable
 - [ ] **Reinforcement** — non-unique defeated figures can redeploy at end of round *(not implemented)*
-- [ ] **End-of-activation CC auto-prompt** — cards with `endOfActivation` timing are never auto-triggered
-- [ ] **Pass enforcement** — players at 0 activations not server-side forced to pass
+- [ ] **End-of-activation CC auto-prompt** — `endofactivation` timing exists in `cc-timing.js` but nothing auto-triggers at end of activation; players must manually play from hand
+- [ ] **Server-side activation block** — `p1/p2ActivationsRemaining` is decremented but nothing prevents a player from clicking Activate on a DC when their count is already 0
 - [ ] **Free action tracking** — abilities that grant free actions still decrement the action counter
 
 ---
@@ -102,8 +103,11 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] Defeat detection + removal from game
 - [x] DC activation index tracking (which groups have activated)
 - [x] Multi-figure groups tracked as one deployment
-- [ ] **DC specials — only button UI wired; `resolveAbility` has 0 `dcSpecial` branches** — all DC special actions prompt manual resolve
+- [x] Power Token system — `/power-token add/remove/list` slash command wired to `game.figurePowerTokens`
+- [x] Undo — works for **move, pass turn, and deploy actions** (undoStack with game log message deletion)
+- [ ] **DC special actions are stubs** — `special.js handleSpecialDone` just marks "✓ Resolved"; no game state change; all DC specials are manual
 - [ ] **DC keyword traits** — `Sharpshooter`, `Charging Assault`, and others read from data but not enforced in combat
+- [ ] **Undo scope gap** — undo does NOT work for combat, CC plays, health changes, conditions, or VP changes
 
 ---
 
@@ -188,34 +192,37 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] Handlers split by domain (`src/handlers/*`)
 - [x] Game logic modules (`src/game/*`)
 - [x] Discord helpers (`src/discord/*`)
-- [x] Test suite (`npm test`)
-- [x] Error handling + Discord retry (`src/error-handling.js`)
+- [x] Headless simulation test (`tests/simulate-game.js`, 742 lines) — runs full game loop without Discord, validates state integrity
+- [x] Unit tests for game logic (`abilities.test.js`, `combat.test.js`, `movement.test.js`, `coords.test.js`)
+- [x] Error handling + Discord retry
 - [x] `completed_games` DB table written on game end (`insertCompletedGame`)
 - [x] DB indexes (`idx_games_updated_at`, `idx_games_ended`)
 - [x] Game versioning scaffold (`CURRENT_GAME_VERSION`, `migrateGame`)
 - [x] Save chain queued (parallel interactions serialize via `savePromise`)
 - [x] Critical JSON validation on startup
+- [x] Local HTTP `/testgame` endpoint for quick test game creation without Discord UI
 - [ ] **Atomic saves** — no temp-file swap; crash mid-write can corrupt game state (#13)
 - [ ] **`migrateGame()` does nothing** — version field exists but the function is a no-op (#24)
 - [ ] **Auto-cleanup on game end** — channels + roles persist until manual deletion (#25)
 - [ ] **`pendingIllegalSquad` memory leak** — `Map` entry never removed on rejection (#26)
+- [ ] **No max undo depth** — `undoStack` grows unbounded; memory leak in long games
 
 ---
 
-## 📊 Stats & Analytics — weight: 10 pts — score: 3.0 / 10 (30%)
+## 📊 Stats & Analytics — weight: 10 pts — score: 7.0 / 10 (70%)
 
-> **DB backend is written.** `src/db.js` already has `getStatsSummary()`, `getAffiliationWinRates()`, and `getDcWinRates(limit)`. Game results are stored on every game end. The missing piece is Discord commands to surface this data.
+> **Three slash commands are live and working.** `/statcheck`, `/affiliation`, and `/dcwinrate` all call into `src/db.js` and post results in `#statistics`. The DB backend is complete. Gaps are niche analytics not yet built.
 
 - [x] `completed_games` table schema: winner, affiliations, army JSON, map, mission, deployment zone, round count
 - [x] `insertCompletedGame()` called on every game end
-- [x] `getStatsSummary()` — total games + draws query
-- [x] `getAffiliationWinRates()` — win% per affiliation SQL written
-- [x] `getDcWinRates(limit)` — win% per DC computed in JS from army JSON
-- [ ] **No `/stats` Discord command** — functions exist but nothing calls them
-- [ ] **No win-rate-by-deployment-zone query** — SQL not written
-- [ ] **No play rate / meta diversity output** — pick rate not computed
-- [ ] **No leaderboard command** — player win records not queried
-- [ ] **No in-game summary embed on game end** — winner announced, stats not shown
+- [x] `/statcheck` slash command — total games + draws, working
+- [x] `/affiliation` slash command — win% per affiliation (Imperial/Rebel/Scum), working
+- [x] `/dcwinrate [limit]` slash command — win% per DC from army JSON, working
+- [x] `getStatsSummary()`, `getAffiliationWinRates()`, `getDcWinRates()` all implemented in `src/db.js`
+- [ ] **No win-rate-by-deployment-zone query** — SQL not written; `deployment_zone_winner` is stored but unused
+- [ ] **No leaderboard / player win record** — no per-player query
+- [ ] **No end-of-game stats embed** — winner is announced but no summary card posted (VPs, round count, etc.)
+- [ ] **No DC pick rate** — the data exists to compute %; not built
 
 ---
 
@@ -223,13 +230,15 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 
 | Priority | Item | Effort | Why it matters |
 |---|---|---|---|
-| 🔴 Critical | **Reinforcement** | Large | Core rule, broken every round without it |
-| 🔴 Critical | **DC surge data** (221 DCs) | Large | Players can't pick surge options on nearly all DCs |
-| 🟡 High | **End-of-activation CC triggers** | Medium | Timing-sensitive cards silently never fire |
-| 🟡 High | **development-facility data** | Small | Broken map in the registry |
-| 🟡 High | **`/stats` Discord command** | Medium | Backend exists; just needs a handler + embed |
-| 🟡 Medium | **Pass enforcement** | Small | Rules correctness; players can stall |
-| 🟡 Medium | **~49 remaining CC cards** | Medium | Full automation goal |
-| 🟢 Low | **Atomic saves + race conditions** | Medium | Reliability under concurrent use |
-| 🟢 Low | **`pendingCcConfirmation` leak** | Small | Minor state leak |
-| 🟢 Low | **Auto-cleanup on game end** | Small | Quality of life |
+| 🔴 Critical | **Reinforcement** | Large | Core rule, completely unimplemented; breaks every third/fourth round |
+| 🔴 Critical | **DC surge data** (221 DCs) | Large | Players can't pick surge options on nearly all DCs — must resolve manually |
+| 🟡 High | **DC special actions** | Large | All DC specials are stubs; `handleSpecialDone` just prints "Resolved" |
+| 🟡 High | **End-of-activation CC triggers** | Medium | `endofactivation` timing exists but nothing auto-fires; players must notice and play manually |
+| 🟡 High | **development-facility data** | Small | Spaces exist but deployment zones + mission card data are empty |
+| 🟡 Medium | **~49 remaining CC cards** | Medium | Still return "Resolve manually" message |
+| 🟡 Medium | **Server-side activation block** | Small | No guard prevents clicking Activate on a DC with 0 activations remaining |
+| 🟢 Low | **End-of-game stats embed** | Small | Data exists; just need a summary card on game end |
+| 🟢 Low | **Undo scope** | Medium | Only move/pass/deploy are undoable; combat and CC plays are not |
+| 🟢 Low | **Atomic saves + migration** | Medium | Reliability + upgrade path for long-running games |
+| 🟢 Low | **Auto-cleanup on game end** | Small | Channels persist manually after game ends |
+| 🟢 Low | **`pendingCcConfirmation` / `pendingIllegalSquad` leaks** | Small | Minor state leaks |
