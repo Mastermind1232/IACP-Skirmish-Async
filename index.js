@@ -396,41 +396,54 @@ function getPlayerOccupiedCells(game, playerNum) {
   return cells;
 }
 
-/** Mission B: True if figure is adjacent to or on a contraband space. */
-function isFigureAdjacentOrOnContraband(game, playerNum, figureKey, mapId) {
-  if (game?.selectedMission?.variant !== 'b') return false;
+/** Extract flat coordinate array from a missionA/missionB token data block (generic — no hardcoded key names). */
+function getMissionTokenCoords(missionTokenData) {
+  if (!missionTokenData) return [];
+  if (missionTokenData.positions && typeof missionTokenData.positions === 'object') {
+    return Object.values(missionTokenData.positions).flat();
+  }
+  for (const val of Object.values(missionTokenData)) {
+    if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'string') return val;
+  }
+  return [];
+}
+
+/** True if figure is adjacent to or on a mission token space (for the given mission side). */
+function isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, mapId, missionSide) {
   const mapData = getMapTokensData()[mapId];
-  const contraband = mapData?.missionB?.contraband || mapData?.missionB?.crates || [];
-  if (!contraband.length) return false;
+  const coords = getMissionTokenCoords(mapData?.[missionSide]);
+  if (!coords.length) return false;
   const rawMapSpaces = getMapSpaces(mapId);
   if (!rawMapSpaces?.adjacency) return false;
   const mapDef = getMapRegistry().find((m) => m.id === mapId);
   const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
   const adjacency = mapSpaces.adjacency || {};
-  const contrabandSet = toLowerSet(contraband);
+  const tokenSet = toLowerSet(coords);
   const pos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!pos) return false;
   const dcName = figureKey.replace(/-\d+-\d+$/, '');
   const footprint = getFootprintCells(pos, game.figureOrientations?.[figureKey] || getFigureSize(dcName));
   for (const c of footprint) {
     const n = normalizeCoord(c);
-    if (contrabandSet.has(n)) return true;
+    if (tokenSet.has(n)) return true;
     for (const adj of adjacency[n] || []) {
-      if (contrabandSet.has(normalizeCoord(adj))) return true;
+      if (tokenSet.has(normalizeCoord(adj))) return true;
     }
   }
   return false;
 }
 
-/** Mission B: Effective speed (base - 2 when carrying contraband). */
+/** Effective speed, accounting for mission-defined carry penalty (if active). */
 function getEffectiveSpeed(dcName, figureKey, game) {
   const base = getDcStats(dcName).speed ?? 4;
-  if (game?.selectedMission?.variant !== 'b') return base;
-  if (game.figureContraband?.[figureKey]) return Math.max(0, base - 2);
+  const mech = game?.selectedMission?.mechanics;
+  if (mech?.type === 'carry' && mech.speedPenalty && game.figureContraband?.[figureKey]) {
+    return Math.max(0, base + mech.speedPenalty);
+  }
   return base;
 }
 
-/** Mission B: True if figure is in player's deployment zone. */
+/** True if figure is in player's deployment zone. */
 function isFigureInDeploymentZone(game, playerNum, figureKey, mapId) {
   const zoneData = getDeploymentZones()[mapId];
   if (!zoneData) return false;
@@ -473,6 +486,18 @@ function getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, coord
   return [...result];
 }
 
+/** Get the mission-specific token label for the current game (from selectedMission.tokenLabel or mission-cards.json fallback). */
+function getMissionTokenLabel(game) {
+  if (game?.selectedMission?.tokenLabel) return game.selectedMission.tokenLabel;
+  const mapId = game?.selectedMap?.id;
+  const variant = game?.selectedMission?.variant;
+  if (mapId && variant) {
+    const missionData = getMissionCardsData()?.[mapId]?.[variant];
+    if (missionData?.tokenLabel) return missionData.tokenLabel;
+  }
+  return 'Mission Token';
+}
+
 /** Returns legal interact options for a figure. Mission-specific first (blue), standard (grey). */
 function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
   const options = [];
@@ -480,23 +505,27 @@ function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
   if (!mapData) return options;
 
   const variant = game?.selectedMission?.variant;
+  const interactLabel = game?.selectedMission?.interactLabel;
+  const mech = game?.selectedMission?.mechanics;
 
-  if (variant === 'b') {
-    if (!game.figureContraband?.[figureKey] && isFigureAdjacentOrOnContraband(game, playerNum, figureKey, mapId)) {
-      options.push({ id: 'retrieve_contraband', label: 'Retrieve Contraband', missionSpecific: true });
+  if (interactLabel && mech?.type === 'carry') {
+    const missionSide = variant === 'a' ? 'missionA' : 'missionB';
+    if (!game.figureContraband?.[figureKey] && isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, mapId, missionSide)) {
+      options.push({ id: 'retrieve_contraband', label: interactLabel, missionSpecific: true });
     }
   }
 
-  if (variant === 'a') {
-    const launchPanels = mapData.missionA?.launchPanels || [];
+  if (interactLabel && mech?.type === 'flip') {
+    const missionSide = variant === 'a' ? 'missionA' : 'missionB';
+    const tokenCoords = getMissionTokenCoords(mapData[missionSide]);
     const flippedThisRound = playerNum === 1 ? game.p1LaunchPanelFlippedThisRound : game.p2LaunchPanelFlippedThisRound;
-    if (launchPanels.length && !flippedThisRound) {
-      const panelSet = toLowerSet(launchPanels);
+    if (tokenCoords.length && !(mech.flipLimitPerRound && flippedThisRound)) {
+      const panelSet = toLowerSet(tokenCoords);
       const adjacent = getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, panelSet);
       for (const coord of adjacent) {
         const upper = String(coord).toUpperCase();
-        options.push({ id: `launch_panel_${coord}_colored`, label: `Launch Panel (${upper}) → Colored`, missionSpecific: true });
-        options.push({ id: `launch_panel_${coord}_gray`, label: `Launch Panel (${upper}) → Gray`, missionSpecific: true });
+        options.push({ id: `launch_panel_${coord}_colored`, label: `${interactLabel} (${upper}) → Colored`, missionSpecific: true });
+        options.push({ id: `launch_panel_${coord}_gray`, label: `${interactLabel} (${upper}) → Gray`, missionSpecific: true });
       }
     }
   }
@@ -1622,7 +1651,7 @@ async function postMissionCardAfterMapSelection(game, client, map) {
   const mission = missions[variant];
   const mapName = map.name || map.id;
   const fullName = `${mapName} — ${mission.name}`;
-  game.selectedMission = { variant, name: mission.name, fullName };
+  game.selectedMission = { variant, name: mission.name, fullName, tokenLabel: mission.tokenLabel || '', interactLabel: mission.interactLabel || '', mechanics: mission.mechanics || {} };
   await postPinnedMissionCardFromGameState(game, client);
 }
 
@@ -1774,7 +1803,7 @@ function getFiguresForRender(game) {
   return figures;
 }
 
-/** Build rich token array from tokenTypes + positions. Returns [{coord, label, image}]. Falls back to flat coord array with default label. */
+/** Build rich token array from tokenTypes + positions. Returns [{coord, label, image}]. Falls back to flat coord array with fallbackLabel. */
 function buildMissionTokens(missionData, fallbackLabel) {
   if (!missionData) return [];
   const tokenTypes = missionData.tokenTypes;
@@ -1791,17 +1820,17 @@ function buildMissionTokens(missionData, fallbackLabel) {
     }
     return result;
   }
-  const flat = missionData.launchPanels || missionData.contraband || missionData.crates || [];
+  const flat = getMissionTokenCoords(missionData);
   return flat.map((coord) => ({ coord, label: fallbackLabel, image: null }));
 }
 
 /** Get map tokens (terminals + mission-specific + closed doors + ancillary) for renderMap. */
-function getMapTokensForRender(mapId, missionVariant, openedDoors = [], ancillaryTokens = null) {
+function getMapTokensForRender(mapId, missionVariant, openedDoors = [], ancillaryTokens = null, tokenLabel = 'Token') {
   const mapData = getMapTokensData()[mapId];
   if (!mapData) return { terminals: [], missionA: [], missionB: [], doors: [], smoke: [], rubble: [], energyShield: [], device: [], napalm: [] };
   const terminals = mapData.terminals || [];
-  const missionA = buildMissionTokens(mapData.missionA, 'Panel');
-  const missionB = buildMissionTokens(mapData.missionB, 'Contraband');
+  const missionA = buildMissionTokens(mapData.missionA, tokenLabel);
+  const missionB = buildMissionTokens(mapData.missionB, tokenLabel);
   const doorEdges = mapData.doors || [];
   const openedSet = new Set((openedDoors || []).map((k) => String(k).toLowerCase()));
   const doors = doorEdges.filter((edge) => {
@@ -1860,7 +1889,7 @@ async function getActivationMinimapAttachment(game, msgId) {
   if (cropCoords.length === 0) return null;
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
     const buffer = await renderMap(map.id, {
       figures,
       tokens,
@@ -1903,7 +1932,7 @@ async function getMovementMinimapAttachment(game, msgId, figureKey, spacesAtCost
   const labelCoords = spacesAtCost.map((s) => String(s).toLowerCase());
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
     const buffer = await renderMap(map.id, {
       figures,
       tokens,
@@ -1926,7 +1955,7 @@ async function getMapAttachmentForSpaces(game, validSpaces) {
   if (!map?.id || !validSpaces?.length) return null;
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
     const labelCoords = validSpaces.map((s) => String(s).toLowerCase());
     const buffer = await renderMap(map.id, {
       figures,
@@ -1950,7 +1979,7 @@ async function getDeploymentMapAttachment(game, zone) {
   if (!map?.id) return null;
   try {
     const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens);
+    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
     const zoneSpaces = zone && getDeploymentZones()[map.id]?.[zone] ? getDeploymentZones()[map.id][zone] : null;
     const occupiedSet = toLowerSet(getOccupiedSpacesForMovement(game) || []);
     const validLabelCoords =
@@ -2134,7 +2163,7 @@ async function buildBoardMapPayload(gameId, map, game) {
   const components = [getBoardButtons(gameId, { game })];
   const embeds = game ? [buildScorecardEmbed(game)] : [];
   const figures = game ? getFiguresForRender(game) : [];
-  const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens);
+  const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
   const hasFigures = figures.length > 0;
   const hasAncillary = (tokens.smoke?.length || 0) + (tokens.rubble?.length || 0) + (tokens.energyShield?.length || 0) + (tokens.device?.length || 0) + (tokens.napalm?.length || 0) > 0;
   const hasTokens = tokens.terminals?.length > 0 || tokens.missionA?.length > 0 || tokens.missionB?.length > 0 || tokens.doors?.length > 0 || hasAncillary;
@@ -4742,6 +4771,7 @@ client.on('interactionCreate', async (interaction) => {
       logGameAction,
       saveGames,
       pushUndo,
+      getMissionTokenLabel,
     };
     await handleInteractChoice(interaction, interactContext);
     return;

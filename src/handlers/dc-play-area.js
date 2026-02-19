@@ -857,7 +857,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     }
     const options = mapId ? getLegalInteractOptions(game, playerNum, figureKey, mapId) : [];
     if (options.length === 0) {
-      await interaction.reply({ content: 'No valid interact options (must be on or adjacent to terminal, door, contraband, or launch panel).', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: 'No valid interact options (must be on or adjacent to a terminal, door, or mission token).', ephemeral: true }).catch(() => {});
       return;
     }
     const missionOpts = options.filter((o) => o.missionSpecific);

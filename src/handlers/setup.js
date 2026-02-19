@@ -146,7 +146,7 @@ export async function handleMapSelectionChoice(interaction, ctx) {
     }
     map = { id: mapDef.id, name: mapDef.name, imagePath: mapDef.imagePath };
     game.selectedMap = map;
-    game.selectedMission = { variant: variant || 'a', name: missionData.name, fullName: `${map.name} — ${missionData.name}` };
+    game.selectedMission = { variant: variant || 'a', name: missionData.name, fullName: `${map.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {} };
     game.mapSelected = true;
     await interaction.deferUpdate();
     await postPinnedMissionCardFromGameState(game, client);
@@ -257,7 +257,7 @@ function applyMissionToGame(game, missionId, getMapRegistry, getMissionCardsData
   const missionData = getMissionCardsData?.()[mapId]?.[v];
   if (!mapDef || !missionData) return false;
   game.selectedMap = { id: mapDef.id, name: mapDef.name, imagePath: mapDef.imagePath };
-  game.selectedMission = { variant: v, name: missionData.name, fullName: `${mapDef.name} — ${missionData.name}` };
+  game.selectedMission = { variant: v, name: missionData.name, fullName: `${mapDef.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {} };
   game.mapSelected = true;
   return true;
 }

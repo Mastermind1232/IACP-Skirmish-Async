@@ -100,11 +100,13 @@ export async function handleInteractChoice(interaction, ctx) {
   const figLabel = (stats.figures ?? 1) > 1 ? `${shortName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : shortName;
   const pLabel = `P${playerNum}`;
 
+  const tokenLabel = typeof ctx.getMissionTokenLabel === 'function' ? ctx.getMissionTokenLabel(game) : 'Mission Token';
+
   let logMsg = null;
   if (optionId === 'retrieve_contraband') {
     game.figureContraband = game.figureContraband || {};
     game.figureContraband[figureKey] = true;
-    logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** retrieved contraband!`, { phase: 'ROUND', icon: 'deploy' });
+    logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** retrieved **${tokenLabel}**!`, { phase: 'ROUND', icon: 'deploy' });
   } else if (optionId.startsWith('launch_panel_')) {
     const parts = optionId.replace('launch_panel_', '').split('_');
     const coord = parts[0];
@@ -114,7 +116,7 @@ export async function handleInteractChoice(interaction, ctx) {
     if (playerNum === 1) game.p1LaunchPanelFlippedThisRound = true;
     else game.p2LaunchPanelFlippedThisRound = true;
     const upper = String(coord).toUpperCase();
-    logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** flipped Launch Panel (${upper}) to **${side}**.`, { phase: 'ROUND', icon: 'deploy' });
+    logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** flipped **${tokenLabel}** (${upper}) to **${side}**.`, { phase: 'ROUND', icon: 'deploy' });
   } else if (optionId === 'use_terminal') {
     logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** used terminal.`, { phase: 'ROUND', icon: 'deploy' });
   } else if (optionId.startsWith('open_door_')) {
