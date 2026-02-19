@@ -45,7 +45,7 @@ export async function handleSquadModal(interaction, ctx) {
   const validation = validateDeckLegal(squad);
   if (!validation.legal) {
     await sendDeckIllegalAlert(game, isP1, squad, validation, interaction.client);
-    await interaction.reply({ content: 'Your deck did not pass validation. Check your Hand channel for details and choose **PLAY IT ANYWAY** or **REDO**.', ephemeral: true });
+    await interaction.reply({ content: 'Your deck did not pass validation. Check your **Your Hand** thread for details and choose **PLAY IT ANYWAY** or **REDO**.', ephemeral: true });
     return;
   }
   await applySquadSubmission(game, isP1, squad, interaction.client);
@@ -121,7 +121,7 @@ export async function handleCcAttachTo(interaction, ctx) {
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if ((isP1Hand && playerNum !== 1) || (isP2Hand && playerNum !== 2)) {
-    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
     return;
   }
   const dcMsgId = interaction.values[0];
@@ -182,7 +182,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && channelId !== game.p2HandId) {
-    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
@@ -884,7 +884,7 @@ export async function handleCcDiscardSelect(interaction, ctx) {
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && channelId !== game.p2HandId) {
-    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
@@ -1002,7 +1002,7 @@ export async function handleCcShuffleDraw(interaction, ctx) {
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && !isP2Hand) {
-    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
@@ -1061,7 +1061,7 @@ export async function handleCcPlay(interaction, ctx) {
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && !isP2Hand) {
-    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
@@ -1102,7 +1102,7 @@ export async function handleCcDraw(interaction, ctx) {
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && !isP2Hand) {
-    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
@@ -1250,7 +1250,7 @@ export async function handleCcDiscard(interaction, ctx) {
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && !isP2Hand) {
-    await interaction.reply({ content: 'Use this in your Hand channel.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;

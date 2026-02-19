@@ -116,8 +116,8 @@ export async function handleLobbyStart(interaction, ctx) {
   let gameId;
   try {
     const guild = interaction.guild;
-    const { gameId: gid, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel } =
-      await createGameChannels(guild, lobby.creatorId, lobby.joinedId, { createPlayAreas: false, createHandChannels: false });
+    const { gameId: gid, generalChannel, chatChannel, boardChannel } =
+      await createGameChannels(guild, lobby.creatorId, lobby.joinedId);
     gameId = gid;
     const game = {
       gameId,
@@ -128,10 +128,10 @@ export async function handleLobbyStart(interaction, ctx) {
       generalId: generalChannel.id,
       chatId: chatChannel.id,
       boardId: boardChannel.id,
-      p1HandId: p1HandChannel?.id ?? null,
-      p2HandId: p2HandChannel?.id ?? null,
-      p1PlayAreaId: p1PlayAreaChannel?.id ?? null,
-      p2PlayAreaId: p2PlayAreaChannel?.id ?? null,
+      p1HandId: null,
+      p2HandId: null,
+      p1PlayAreaId: null,
+      p2PlayAreaId: null,
       player1Squad: null,
       player2Squad: null,
       player1VP: { total: 0, kills: 0, objectives: 0 },
@@ -142,15 +142,15 @@ export async function handleLobbyStart(interaction, ctx) {
     setGame(gameId, game);
 
     const setupMsg = await generalChannel.send({
-      content: `<@${game.player1Id}> <@${game.player2Id}> — Game created. Map Selection below — Hand channels will appear after map selection. Use **General chat** to talk with your opponent.`,
+      content: `<@${game.player1Id}> <@${game.player2Id}> — Game created. Map Selection below — Play Areas (with **Your Hand** threads) will appear after map selection. Use **General chat** to talk with your opponent.`,
       allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
       embeds: [
         new EmbedBuilder()
           .setTitle(isTestGame ? 'Game Setup (Test)' : 'Game Setup')
           .setDescription(
             isTestGame
-              ? '**Test game** — Complete **MAP SELECTION** first (button below). This will randomly select a Map and its A or B mission variant. Hand channels will then appear for picking decks.'
-              : 'Complete **MAP SELECTION** first (button below). This will randomly select a Map and its A or B mission variant. Hand channels will appear — both players pick their deck there (Select Squad or default deck buttons).'
+              ? '**Test game** — Complete **MAP SELECTION** first (button below). This will randomly select a Map and its A or B mission variant. Play Areas with **Your Hand** threads will then appear for picking decks.'
+              : 'Complete **MAP SELECTION** first (button below). This will randomly select a Map and its A or B mission variant. Play Areas will appear — pick your deck in the **Your Hand** thread (Select Squad or default deck buttons).'
           )
           .setColor(0x2f3136),
       ],
@@ -158,7 +158,7 @@ export async function handleLobbyStart(interaction, ctx) {
     });
     game.generalSetupMessageId = setupMsg.id;
     await interaction.followUp({
-      content: `Game **IA Game #${gameId}** is ready!${isTestGame ? ' (Test)' : ''} Select the map in Game Log — Hand channels will appear after map selection.`,
+      content: `Game **IA Game #${gameId}** is ready!${isTestGame ? ' (Test)' : ''} Select the map in Game Log — Play Areas (with **Your Hand** threads) will appear after map selection.`,
       ephemeral: true,
     });
     await updateThreadName(interaction.channel, lobby);

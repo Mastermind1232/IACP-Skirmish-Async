@@ -1258,44 +1258,15 @@ async function getPlayerChannelName(guild, userId) {
   }
 }
 
-/** Create p1 and p2 Hand channels (called when map is selected). */
-async function createHandChannels(guild, gameCategory, prefix, player1Id, player2Id) {
-  const p1Name = await getPlayerChannelName(guild, player1Id);
-  const p2Name = await getPlayerChannelName(guild, player2Id);
-  const p1Only = [
-    { id: guild.roles.everyone.id, deny: PermissionFlagsBits.ViewChannel },
-    { id: player1Id, allow: PermissionFlagsBits.ViewChannel },
-    { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel },
-  ];
-  const p2Only = [
-    { id: guild.roles.everyone.id, deny: PermissionFlagsBits.ViewChannel },
-    { id: player2Id, allow: PermissionFlagsBits.ViewChannel },
-    { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel },
-  ];
-  const p1 = await guild.channels.create({
-    name: `${prefix} ${p1Name}-hand`,
-    type: ChannelType.GuildText,
-    parent: gameCategory.id,
-    permissionOverwrites: p1Only,
-  });
-  const p2 = await guild.channels.create({
-    name: `${prefix} ${p2Name}-hand`,
-    type: ChannelType.GuildText,
-    parent: gameCategory.id,
-    permissionOverwrites: p2Only,
-  });
-  return { p1HandChannel: p1, p2HandChannel: p2 };
-}
-
-/** Create p1 and p2 Play Area channels (called when both squads are ready). */
+/** Create p1 and p2 Play Area channels. */
 async function createPlayAreaChannels(guild, gameCategory, prefix, player1Id, player2Id) {
   const p1Name = await getPlayerChannelName(guild, player1Id);
   const p2Name = await getPlayerChannelName(guild, player2Id);
   const playAreaPerms = [
     { id: guild.roles.everyone.id, deny: PermissionFlagsBits.ViewChannel },
-    { id: player1Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
-    { id: player2Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
-    { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.CreatePublicThreads | PermissionFlagsBits.ManageThreads },
+    { id: player1Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages },
+    { id: player2Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages },
+    { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.CreatePublicThreads | PermissionFlagsBits.CreatePrivateThreads | PermissionFlagsBits.ManageThreads | PermissionFlagsBits.SendMessagesInThreads },
   ];
   const p1 = await guild.channels.create({
     name: `${prefix} ${p1Name}-play-area`,
@@ -1312,8 +1283,30 @@ async function createPlayAreaChannels(guild, gameCategory, prefix, player1Id, pl
   return { p1PlayAreaChannel: p1, p2PlayAreaChannel: p2 };
 }
 
-async function createGameChannels(guild, player1Id, player2Id, options = {}) {
-  const { createPlayAreas = false, createHandChannels = false } = options;
+/** Create private hand threads inside each player's play area channel. */
+async function createHandThreads(client, game) {
+  const p1PlayArea = await client.channels.fetch(game.p1PlayAreaId);
+  const p2PlayArea = await client.channels.fetch(game.p2PlayAreaId);
+  const p1Thread = await p1PlayArea.threads.create({
+    name: 'Your Hand',
+    autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+    type: ChannelType.PrivateThread,
+    invitable: false,
+  });
+  await p1Thread.members.add(game.player1Id).catch(() => {});
+  const p2Thread = await p2PlayArea.threads.create({
+    name: 'Your Hand',
+    autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+    type: ChannelType.PrivateThread,
+    invitable: false,
+  });
+  await p2Thread.members.add(game.player2Id).catch(() => {});
+  game.p1HandId = p1Thread.id;
+  game.p2HandId = p2Thread.id;
+  return { p1HandThread: p1Thread, p2HandThread: p2Thread };
+}
+
+async function createGameChannels(guild, player1Id, player2Id) {
   // Scan for existing IA Game #XXXXX categories (active, archived, completed) so we never reuse an ID
   await guild.channels.fetch();
   const gameCategories = guild.channels.cache.filter(
@@ -1350,24 +1343,6 @@ async function createGameChannels(guild, player1Id, player2Id, options = {}) {
     position,
   });
 
-  const p1Only = [
-    { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
-    { id: player1Id, allow: PermissionFlagsBits.ViewChannel },
-    { id: botId, allow: PermissionFlagsBits.ViewChannel },
-  ];
-  const p2Only = [
-    { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
-    { id: player2Id, allow: PermissionFlagsBits.ViewChannel },
-    { id: botId, allow: PermissionFlagsBits.ViewChannel },
-  ];
-  // Play Area: both players can view, but only bot can send (static channel; DCs get threads)
-  const playAreaPerms = [
-    { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
-    { id: player1Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
-    { id: player2Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
-    { id: botId, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.CreatePublicThreads | PermissionFlagsBits.ManageThreads },
-  ];
-
   const chatChannel = await guild.channels.create({
     name: `${prefix} General chat`,
     type: ChannelType.GuildText,
@@ -1390,42 +1365,7 @@ async function createGameChannels(guild, player1Id, player2Id, options = {}) {
     parent: gameCategory.id,
     permissionOverwrites: playerPerms,
   });
-  const p1Name = await getPlayerChannelName(guild, player1Id);
-  const p2Name = await getPlayerChannelName(guild, player2Id);
-  let p1HandChannel = null;
-  let p2HandChannel = null;
-  if (createHandChannels) {
-    p1HandChannel = await guild.channels.create({
-      name: `${prefix} ${p1Name}-hand`,
-      type: ChannelType.GuildText,
-      parent: gameCategory.id,
-      permissionOverwrites: p1Only,
-    });
-    p2HandChannel = await guild.channels.create({
-      name: `${prefix} ${p2Name}-hand`,
-      type: ChannelType.GuildText,
-      parent: gameCategory.id,
-      permissionOverwrites: p2Only,
-    });
-  }
-  let p1PlayAreaChannel = null;
-  let p2PlayAreaChannel = null;
-  if (createPlayAreas) {
-    p1PlayAreaChannel = await guild.channels.create({
-      name: `${prefix} ${p1Name}-play-area`,
-      type: ChannelType.GuildText,
-      parent: gameCategory.id,
-      permissionOverwrites: playAreaPerms,
-    });
-    p2PlayAreaChannel = await guild.channels.create({
-      name: `${prefix} ${p2Name}-play-area`,
-      type: ChannelType.GuildText,
-      parent: gameCategory.id,
-      permissionOverwrites: playAreaPerms,
-    });
-  }
-
-  return { gameCategory, gameId, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel };
+  return { gameCategory, gameId, generalChannel, chatChannel, boardChannel };
 }
 
 /**
@@ -1452,8 +1392,8 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
     const botId = client.user.id;
     const p2Id = options.player2Id || botId;
     const p2IsBot = p2Id === botId;
-    const { gameId, generalChannel, chatChannel, boardChannel, p1HandChannel, p2HandChannel, p1PlayAreaChannel, p2PlayAreaChannel } =
-      await createGameChannels(guild, userId, p2Id, { createPlayAreas: false, createHandChannels: false });
+    const { gameId, generalChannel, chatChannel, boardChannel } =
+      await createGameChannels(guild, userId, p2Id);
     const game = {
       gameId,
       version: CURRENT_GAME_VERSION,
@@ -1463,10 +1403,10 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
       generalId: generalChannel.id,
       chatId: chatChannel.id,
       boardId: boardChannel.id,
-      p1HandId: p1HandChannel?.id ?? null,
-      p2HandId: p2HandChannel?.id ?? null,
-      p1PlayAreaId: p1PlayAreaChannel?.id ?? null,
-      p2PlayAreaId: p2PlayAreaChannel?.id ?? null,
+      p1HandId: null,
+      p2HandId: null,
+      p1PlayAreaId: null,
+      p2PlayAreaId: null,
       player1Squad: null,
       player2Squad: null,
       player1VP: { total: 0, kills: 0, objectives: 0 },
@@ -1486,7 +1426,7 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
       await runDraftRandom(game, client, { scenarioId });
       const scenarioPrimaryCard = getScenarioPrimaryCard(scenarioId);
       const scenarioDoneText = scenarioPrimaryCard
-        ? `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. P1's **Hand channel** has **${scenarioPrimaryCard}** — activate a DC, then play it to test the **${scenarioId}** scenario.`
+        ? `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. P1's **Your Hand** thread (inside Play Area) has **${scenarioPrimaryCard}** — activate a DC, then play it to test the **${scenarioId}** scenario.`
         : `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. Scenario: **${scenarioId}**.`;
       if (options.editMessageInstead) {
         await options.editMessageInstead.edit({ content: scenarioDoneText, allowedMentions: { users: mentionUsers } }).catch(() => {});
@@ -1498,10 +1438,10 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
       }
     } else {
       const setupDesc = p2IsBot
-        ? '**Test game** — You play as P1 vs the bot as P2. Select the map below. Hand channels will then appear; use them to pick decks (Select Squad or Default Rebels / Scum / Imperial) for each side.'
-        : `**Test game** — <@${userId}> is P1, <@${p2Id}> is P2. Select the map below. Hand channels will then appear; use them to pick decks.`;
+        ? '**Test game** — You play as P1 vs the bot as P2. Select the map below. Play Areas with **Your Hand** threads will then appear; use them to pick decks (Select Squad or Default Rebels / Scum / Imperial) for each side.'
+        : `**Test game** — <@${userId}> is P1, <@${p2Id}> is P2. Select the map below. Play Areas with **Your Hand** threads will then appear; use them to pick decks.`;
       const setupMsg = await generalChannel.send({
-        content: `<@${userId}> — **Test game** created. You are P1, P2 is ${p2Label}. Map Selection below — Hand channels will appear after map selection.`,
+        content: `<@${userId}> — **Test game** created. You are P1, P2 is ${p2Label}. Map Selection below — Play Areas (with **Your Hand** threads) will appear after map selection.`,
         allowedMentions: { users: mentionUsers },
         embeds: [
           new EmbedBuilder()
@@ -1514,7 +1454,7 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
       game.generalSetupMessageId = setupMsg.id;
       const doneText = scenarioId && !scenarioImplemented
         ? `Scenario **${scenarioId}** is not yet implemented. Test game **IA Game #${gameId}** created with standard setup — select the map in Game Log.`
-        : `Test game **IA Game #${gameId}** is ready (P1 <@${userId}> vs P2 ${p2Label})! Select the map in Game Log — Hand channels will appear after map selection.`;
+        : `Test game **IA Game #${gameId}** is ready (P1 <@${userId}> vs P2 ${p2Label})! Select the map in Game Log — Play Areas (with **Your Hand** threads) will appear after map selection.`;
       if (options.editMessageInstead) {
         await options.editMessageInstead.edit({ content: doneText, allowedMentions: { users: mentionUsers } }).catch(() => {});
       } else {
@@ -2174,7 +2114,7 @@ async function finishSetupAttachments(game, client) {
   game.currentRound = 1;
   const generalChannel = await client.channels.fetch(game.generalId);
   const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-  const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in your Hand channel. Round 1 will begin when both have drawn.`;
+  const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
   await generalChannel.send({
     content: deployContent,
     allowedMentions: { users: [game.initiativePlayerId] },
@@ -2232,16 +2172,21 @@ async function runDraftRandom(game, client, options = {}) {
     await logGameAction(game, client, `Map selected: **${map.name}** — View in Board channel.`, { phase: 'SETUP', icon: 'map' });
   }
 
-  // Hand channels
-  if (!game.p1HandId || !game.p2HandId) {
+  // Play areas first (hand threads live inside them)
+  if (!game.p1PlayAreaId || !game.p2PlayAreaId) {
     const guild = generalChannel.guild;
     const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
     const prefix = `IA${game.gameId}`;
-    const { p1HandChannel, p2HandChannel } = await createHandChannels(
+    const { p1PlayAreaChannel, p2PlayAreaChannel } = await createPlayAreaChannels(
       guild, gameCategory, prefix, game.player1Id, game.player2Id
     );
-    game.p1HandId = p1HandChannel.id;
-    game.p2HandId = p2HandChannel.id;
+    game.p1PlayAreaId = p1PlayAreaChannel.id;
+    game.p2PlayAreaId = p2PlayAreaChannel.id;
+  }
+
+  // Hand = private thread inside each player's play area
+  if (!game.p1HandId || !game.p2HandId) {
+    await createHandThreads(client, game);
   }
 
   // One side Rebels, one side Scum. Testready: load sample deck, then run viability check and retool before every launch
@@ -4224,7 +4169,8 @@ client.on('interactionCreate', async (interaction) => {
         buildBoardMapPayload,
         logGameAction,
         getGeneralSetupButtons,
-        createHandChannels,
+        createPlayAreaChannels,
+        createHandThreads,
         getHandTooltipEmbed,
         getSquadSelectEmbed,
         getHandSquadButtons,
@@ -4598,7 +4544,8 @@ client.on('interactionCreate', async (interaction) => {
       buildBoardMapPayload,
       logGameAction,
       getGeneralSetupButtons,
-      createHandChannels,
+      createPlayAreaChannels,
+      createHandThreads,
       getHandTooltipEmbed,
       getSquadSelectEmbed,
       getHandSquadButtons,

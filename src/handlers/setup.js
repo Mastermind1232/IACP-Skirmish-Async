@@ -68,7 +68,7 @@ export async function handleMapSelection(interaction, ctx) {
 /**
  * F17: Apply map/mission choice (Random, Competitive, or "Not yet implemented" for Select Draw / Selection).
  * @param {import('discord.js').StringSelectMenuInteraction} interaction
- * @param {object} ctx - getGame, getPlayReadyMaps, getTournamentRotation, getMissionCardsData, getMapRegistry, getMissionSelectDrawMenu, getMissionSelectionPickMenu, postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState, buildBoardMapPayload, logGameAction, getGeneralSetupButtons, createHandChannels, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, client, saveGames
+ * @param {object} ctx - getGame, getPlayReadyMaps, getTournamentRotation, getMissionCardsData, getMapRegistry, getMissionSelectDrawMenu, getMissionSelectionPickMenu, postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState, buildBoardMapPayload, logGameAction, getGeneralSetupButtons, createPlayAreaChannels, createHandThreads, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, client, saveGames
  */
 export async function handleMapSelectionChoice(interaction, ctx) {
   const {
@@ -84,7 +84,8 @@ export async function handleMapSelectionChoice(interaction, ctx) {
     buildBoardMapPayload,
     logGameAction,
     getGeneralSetupButtons,
-    createHandChannels,
+    createPlayAreaChannels,
+    createHandThreads,
     getHandTooltipEmbed,
     getSquadSelectEmbed,
     getHandSquadButtons,
@@ -165,17 +166,18 @@ export async function handleMapSelectionChoice(interaction, ctx) {
 }
 
 /**
- * Shared post-map-selection: post to board, log, update setup message, create/populate hand channels.
+ * Shared post-map-selection: post to board, log, update setup message, create play areas + hand threads.
  * @param {object} game
  * @param {import('discord.js').Client} client
- * @param {object} ctx - buildBoardMapPayload, logGameAction, getGeneralSetupButtons, createHandChannels, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, saveGames
+ * @param {object} ctx - buildBoardMapPayload, logGameAction, getGeneralSetupButtons, createPlayAreaChannels, createHandThreads, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, saveGames
  */
 async function finishMapSelectionAfterChoice(game, client, ctx) {
   const {
     buildBoardMapPayload,
     logGameAction,
     getGeneralSetupButtons,
-    createHandChannels,
+    createPlayAreaChannels,
+    createHandThreads,
     getHandTooltipEmbed,
     getSquadSelectEmbed,
     getHandSquadButtons,
@@ -203,16 +205,19 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     }
   }
   try {
-    if (!game.p1HandId || !game.p2HandId) {
+    if (!game.p1PlayAreaId || !game.p2PlayAreaId) {
       const generalCh = await client.channels.fetch(game.generalId);
       const guild = generalCh.guild;
       const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalCh.parentId);
       const prefix = `IA${game.gameId}`;
-      const { p1HandChannel, p2HandChannel } = await createHandChannels(
+      const { p1PlayAreaChannel, p2PlayAreaChannel } = await createPlayAreaChannels(
         guild, gameCategory, prefix, game.player1Id, game.player2Id
       );
-      game.p1HandId = p1HandChannel.id;
-      game.p2HandId = p2HandChannel.id;
+      game.p1PlayAreaId = p1PlayAreaChannel.id;
+      game.p2PlayAreaId = p2PlayAreaChannel.id;
+    }
+    if (!game.p1HandId || !game.p2HandId) {
+      await createHandThreads(client, game);
     }
     const p1Hand = await client.channels.fetch(game.p1HandId);
     const p2Hand = await client.channels.fetch(game.p2HandId);
@@ -232,7 +237,7 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
       components: [getHandSquadButtons(game.gameId, 2)],
     });
   } catch (err) {
-    console.error('Failed to create/populate Hand channels:', err);
+    console.error('Failed to create/populate Hand threads:', err);
   }
   saveGames();
 }
@@ -890,7 +895,7 @@ export async function handleDeploymentDone(interaction, ctx) {
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && !isP2Hand) {
-    await interaction.reply({ content: 'Use the Deployment Completed button in your Hand channel.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use the Deployment Completed button in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
     return;
   }
   const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
@@ -1015,7 +1020,7 @@ export async function handleDeploymentDone(interaction, ctx) {
     game.setupAttachmentPending = { 1: p1SetupAttachments.map((e) => resolveDcName(e)), 2: p2SetupAttachments.map((e) => resolveDcName(e)) };
     const generalChannel = await client.channels.fetch(game.generalId);
     await generalChannel.send({
-      content: '**Both players have deployed.** Place your Skirmish Upgrade card(s) on your Deployment cards (see your Hand channel). When everyone has placed them, shuffle and draw your starting hands.',
+      content: '**Both players have deployed.** Place your Skirmish Upgrade card(s) on your Deployment cards (see the **Your Hand** thread in your Play Area). When everyone has placed them, shuffle and draw your starting hands.',
     });
     for (const pn of [1, 2]) {
       const pending = game.setupAttachmentPending[pn];
@@ -1044,7 +1049,7 @@ export async function handleDeploymentDone(interaction, ctx) {
   game.currentRound = 1;
   const generalChannel = await client.channels.fetch(game.generalId);
   const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-  const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in your Hand channel. Round 1 will begin when both have drawn.`;
+  const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
   await generalChannel.send({
     content: deployContent,
     allowedMentions: { users: [game.initiativePlayerId] },

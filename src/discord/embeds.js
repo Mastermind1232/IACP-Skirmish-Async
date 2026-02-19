@@ -96,12 +96,12 @@ export function getPlayAreaTooltipEmbed(game, playerNum) {
     .setColor(0x5865f2);
 }
 
-/** Tooltip embed for Hand channel. */
+/** Tooltip embed for Hand thread. */
 export function getHandTooltipEmbed(game, playerNum) {
   return new EmbedBuilder()
     .setTitle('Your Hand')
     .setDescription(
-      'Your private channel for **Command Cards** and squad selection. Only you can see this channel.\n\n' +
+      'Your private thread for **Command Cards** and squad selection. Only you can see this thread.\n\n' +
       '• Select your squad below (form), **upload a .vsav file**, or **copy-paste** your list from the IACP builder Share button\n' +
       '• During the game, your hand is shown here — played cards will show up in the **Game Log**'
     )
