@@ -397,7 +397,7 @@ export async function getDcWinRatesPersonal(userId, limit = 20) {
 }
 
 /** Leaderboard: top players by win count. Returns [{ playerId, wins, losses, draws, games, winRate }]. */
-export async function getLeaderboard(limit = 20) {
+export async function getLeaderboard(limit = 10) {
   if (!pool) return [];
   try {
     const res = await pool.query(`
@@ -406,7 +406,8 @@ export async function getLeaderboard(limit = 20) {
         SUM(won)::int AS wins,
         SUM(lost)::int AS losses,
         SUM(draw)::int AS draws,
-        COUNT(*)::int AS games
+        COUNT(*)::int AS games,
+        ROUND(100.0 * SUM(won) / NULLIF(COUNT(*) - SUM(draw), 0), 1) AS win_rate
       FROM (
         SELECT player1_id AS player_id,
           (winner_id = player1_id)::int AS won,
@@ -421,24 +422,18 @@ export async function getLeaderboard(limit = 20) {
         FROM completed_games
       ) t
       GROUP BY player_id
-      ORDER BY wins DESC, losses ASC
+      HAVING COUNT(*) > 5
+      ORDER BY win_rate DESC NULLS LAST, wins DESC
       LIMIT $1
     `, [limit]);
-    return res.rows.map((r) => {
-      const wins = Number(r.wins ?? 0);
-      const losses = Number(r.losses ?? 0);
-      const draws = Number(r.draws ?? 0);
-      const games = Number(r.games ?? 0);
-      const decisive = games - draws;
-      return {
-        playerId: r.player_id,
-        wins,
-        losses,
-        draws,
-        games,
-        winRate: decisive > 0 ? Math.round((100.0 * wins) / decisive * 10) / 10 : 0,
-      };
-    });
+    return res.rows.map((r) => ({
+      playerId: r.player_id,
+      wins: Number(r.wins ?? 0),
+      losses: Number(r.losses ?? 0),
+      draws: Number(r.draws ?? 0),
+      games: Number(r.games ?? 0),
+      winRate: r.win_rate != null ? Number(r.win_rate) : 0,
+    }));
   } catch (err) {
     console.error('[DB] getLeaderboard failed:', err.message);
     return [];

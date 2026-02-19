@@ -3768,8 +3768,8 @@ client.once('ready', async () => {
       .addIntegerOption((o) => o.setName('limit').setDescription('Max number of DCs to show (default 20)').setMinValue(5).setMaxValue(50));
     const leaderboard = new SlashCommandBuilder()
       .setName('leaderboard')
-      .setDescription('Top players by wins across all completed games. Use in #statistics.')
-      .addIntegerOption((o) => o.setName('limit').setDescription('Number of players to show (default 20)').setMinValue(5).setMaxValue(50));
+      .setDescription('Top players by win rate (min. 5 completed games). Use in #statistics.')
+      .addIntegerOption((o) => o.setName('limit').setDescription('Number of players to show (default 10)').setMinValue(3).setMaxValue(50));
     const powertoken = new SlashCommandBuilder()
       .setName('power-token')
       .setDescription('Add or remove a Power Token on a figure. Use in Game Log / Map Updates channel.')
@@ -4430,13 +4430,13 @@ client.on('interactionCreate', async (interaction) => {
             content: `**Your win rate by Deployment Card** (top ${limit} by games played)\n${lines}`,
           }).catch(() => {});
         } else if (cmd === 'leaderboard') {
-          const limit = interaction.options.getInteger('limit') ?? 20;
+          const limit = interaction.options.getInteger('limit') ?? 10;
           const rows = await getLeaderboard(limit);
           const lines = rows.length
-            ? rows.map((r, i) => `**${i + 1}.** <@${r.playerId}> — **${r.wins}**W / **${r.losses}**L / **${r.draws}**D (${r.winRate}% over ${r.games} games)`).join('\n')
-            : 'No completed games yet.';
+            ? rows.map((r, i) => `**${i + 1}.** <@${r.playerId}> — **${r.winRate}%** (${r.wins}W / ${r.losses}L / ${r.draws}D over ${r.games} games)`).join('\n')
+            : 'No player has completed their 5 preliminary games yet.';
           await interaction.editReply({
-            content: `**Leaderboard** (top ${limit} by wins)\n${lines}`,
+            content: `**Leaderboard** (top ${limit} by win rate, min. 5 games)\n${lines}`,
             allowedMentions: { users: [] },
           }).catch(() => {});
         }
