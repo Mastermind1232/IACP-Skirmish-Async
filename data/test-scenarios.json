@@ -30,6 +30,66 @@
       "pattern": "start_of_round",
       "primaryCard": "Dangerous Bargains",
       "cards": ["Dangerous Bargains", "Covering Fire"]
+    },
+    "recovery": {
+      "status": "testready",
+      "pattern": "immediate_apply",
+      "primaryCard": "Recovery",
+      "cards": ["Recovery", "Emergency Aid"]
+    },
+    "take_initiative": {
+      "status": "testready",
+      "pattern": "start_of_round",
+      "primaryCard": "Take Initiative",
+      "cards": ["Take Initiative", "I Make My Own Luck"]
+    },
+    "positioning_advantage": {
+      "status": "testready",
+      "pattern": "during_attack",
+      "primaryCard": "Positioning Advantage",
+      "cards": ["Positioning Advantage", "Deadeye"]
+    },
+    "rally": {
+      "status": "testready",
+      "pattern": "start_of_activation",
+      "primaryCard": "Rally",
+      "cards": ["Rally", "Regroup"]
+    },
+    "brace_yourself": {
+      "status": "testready",
+      "pattern": "when_attacked",
+      "primaryCard": "Brace Yourself",
+      "cards": ["Brace Yourself", "Parry", "Stealth Tactics"]
+    },
+    "strategic_shift": {
+      "status": "testready",
+      "pattern": "hand_cycling",
+      "primaryCard": "Strategic Shift",
+      "cards": ["Strategic Shift", "Planning"]
+    },
+    "inspiring_speech": {
+      "status": "testready",
+      "pattern": "multi_target_buff",
+      "primaryCard": "Inspiring Speech",
+      "cards": ["Inspiring Speech", "Ready Weapons"]
+    },
+    "wild_attack": {
+      "status": "testready",
+      "pattern": "when_declare_attack",
+      "primaryCard": "Wild Attack",
+      "cards": ["Wild Attack", "Explosive Weaponry"]
+    },
+    "stimulants": {
+      "status": "testready",
+      "pattern": "self_damage_combo",
+      "primaryCard": "Stimulants",
+      "cards": ["Stimulants", "To the Limit"]
+    },
+    "hit_and_run": {
+      "status": "testready",
+      "pattern": "post_attack_mp",
+      "primaryCard": "Hit and Run",
+      "cards": ["Hit and Run", "Fleet Footed"]
     }
   }
 }

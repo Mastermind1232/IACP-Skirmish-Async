@@ -1380,7 +1380,11 @@ async function createGameChannels(guild, player1Id, player2Id) {
  * @param {{ editMessageInstead?: import('discord.js').Message, player2Id?: string }} [options]
  * @returns {Promise<{ gameId: string }>}
  */
-const IMPLEMENTED_SCENARIOS = ['smoke_grenade', 'focus', 'blitz', 'smuggled_supplies', 'dangerous_bargains'];
+const IMPLEMENTED_SCENARIOS = [
+  'smoke_grenade', 'focus', 'blitz', 'smuggled_supplies', 'dangerous_bargains',
+  'recovery', 'take_initiative', 'positioning_advantage', 'rally', 'brace_yourself',
+  'strategic_shift', 'inspiring_speech', 'wild_attack', 'stimulants', 'hit_and_run',
+];
 
 async function createTestGame(client, guild, userId, scenarioId, feedbackChannel, options = {}) {
   if (testGameCreationInProgress.has(userId)) {
@@ -1430,10 +1434,19 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
     if (scenarioImplemented) {
       await runDraftRandom(game, client, { scenarioId });
       const scenarioPrimaryCard = getScenarioPrimaryCard(scenarioId);
+      const ccEffectData = scenarioPrimaryCard ? getCcEffect(scenarioPrimaryCard) : null;
+      const effectText = ccEffectData?.effect || '';
+      const timingText = ccEffectData?.timing || '';
+      const costText = ccEffectData?.cost != null ? `Cost: ${ccEffectData.cost}` : '';
+      const cardDetails = [costText, timingText].filter(Boolean).join(' · ');
+      const testPrompt = scenarioPrimaryCard
+        ? `🧪 <@${userId}> — **Testing: ${scenarioPrimaryCard}** (scenario: \`${scenarioId}\`)\n${cardDetails ? `*${cardDetails}*\n` : ''}> *${effectText}*\n\nThe card is in your **Your Hand** thread. Activate a DC, then play it!`
+        : `🧪 <@${userId}> — **Testing scenario: \`${scenarioId}\`**`;
+      await generalChannel.send({ content: testPrompt, allowedMentions: { users: [userId] } }).catch(() => {});
+      await generalChannel.send({ content: `Done testing? Kill the game here:`, components: [killRow] }).catch(() => {});
       const scenarioDoneText = scenarioPrimaryCard
         ? `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. P1's **Your Hand** thread (inside Play Area) has **${scenarioPrimaryCard}** — activate a DC, then play it to test the **${scenarioId}** scenario.`
         : `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. Scenario: **${scenarioId}**.`;
-      await generalChannel.send({ content: `🧪 **Test Game #${gameId}** — done? Kill it here:`, components: [killRow] }).catch(() => {});
       if (options.editMessageInstead) {
         await options.editMessageInstead.edit({ content: scenarioDoneText, allowedMentions: { users: mentionUsers } }).catch(() => {});
       } else {
@@ -2833,6 +2846,19 @@ function getDcStats(dcName) {
   if (key) {
     const base = map[key];
     return { ...base, figures: isFigurelessDc(dcName) ? 0 : (base.figures ?? 1) };
+  }
+  const effects = getDcEffects();
+  const eff = effects[dcName] || (typeof dcName === 'string' && !dcName.startsWith('[') ? effects[`[${dcName}]`] : null);
+  if (eff && (eff.health != null || eff.figures != null)) {
+    return {
+      health: eff.health ?? null,
+      figures: isFigurelessDc(dcName) ? 0 : (eff.figures ?? 1),
+      speed: eff.speed ?? null,
+      cost: eff.cost ?? null,
+      attack: eff.attack ?? null,
+      defense: eff.defense ?? null,
+      specials: [],
+    };
   }
   return { health: null, figures: isFigurelessDc(dcName) ? 0 : 1, specials: [] };
 }
