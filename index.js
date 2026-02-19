@@ -607,35 +607,117 @@ function getRange(coord1, coord2) {
   return Math.abs(a.col - b.col) + Math.abs(a.row - b.row);
 }
 
-/** Line-of-sight: true if no blocking terrain or solid walls on line. Dotted red (movementBlockingEdges) do NOT block LOS. */
+/**
+ * Convert an impassable edge (pair of coord strings for adjacent spaces) to its
+ * geometric wall segment — the shared boundary line between the two spaces.
+ */
+function impassableEdgeToWallSegment(c1, c2) {
+  const a = parseCoord(String(c1).toLowerCase());
+  const b = parseCoord(String(c2).toLowerCase());
+  if (a.col < 0 || b.col < 0) return null;
+  const dc = b.col - a.col;
+  const dr = b.row - a.row;
+  if (Math.abs(dc) + Math.abs(dr) !== 1) return null; // non-adjacent, skip
+  if (dr === 0) {
+    // Horizontal neighbors → vertical wall between them
+    const x = Math.min(a.col, b.col) + 0.5;
+    return { x1: x, y1: a.row - 0.5, x2: x, y2: a.row + 0.5 };
+  } else {
+    // Vertical neighbors → horizontal wall between them
+    const y = Math.min(a.row, b.row) + 0.5;
+    return { x1: a.col - 0.5, y1: y, x2: a.col + 0.5, y2: y };
+  }
+}
+
+/** Check if two line segments strictly intersect (not at endpoints). */
+function segmentsStrictlyIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+  const d1x = x2 - x1, d1y = y2 - y1;
+  const d2x = x4 - x3, d2y = y4 - y3;
+  const denom = d1x * d2y - d1y * d2x;
+  if (Math.abs(denom) < 1e-10) return false; // parallel
+  const t = ((x3 - x1) * d2y - (y3 - y1) * d2x) / denom;
+  const u = ((x3 - x1) * d1y - (y3 - y1) * d1x) / denom;
+  const EPS = 1e-6;
+  return t > EPS && t < 1 - EPS && u > EPS && u < 1 - EPS;
+}
+
+/**
+ * Collect all grid cells (col, row) whose interior a line segment passes through.
+ * Samples every 0.25 units along the line — fine enough for 1-unit cells.
+ */
+function getCellsAlongLine(x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const seen = new Set();
+  const result = [];
+  const steps = Math.max(Math.ceil(len * 4), 1);
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const col = Math.round(x1 + t * dx);
+    const row = Math.round(y1 + t * dy);
+    const key = `${col},${row}`;
+    if (!seen.has(key)) { seen.add(key); result.push([col, row]); }
+  }
+  return result;
+}
+
+/**
+ * Line-of-sight: corner-to-corner tracing per IA rules.
+ * LOS exists if ANY line from a corner of coord1's space to a corner of coord2's space
+ * is unobstructed by blocking terrain or solid walls (impassable edges).
+ * Dotted red movementBlockingEdges do NOT block LOS.
+ */
 function hasLineOfSight(coord1, coord2, mapSpaces) {
-  const blocking = new Set((mapSpaces?.blocking || []).map((s) => String(s).toLowerCase()));
-  const impSet = new Set((mapSpaces?.impassableEdges || []).map((e) => edgeKey(e[0], e[1])));
+  const blockingSet = new Set((mapSpaces?.blocking || []).map((s) => String(s).toLowerCase()));
+  const impassableEdges = mapSpaces?.impassableEdges || [];
   const a = parseCoord(coord1);
   const b = parseCoord(coord2);
   if (a.col < 0 || a.row < 0 || b.col < 0 || b.row < 0) return false;
-  const steps = Math.max(Math.abs(b.col - a.col), Math.abs(b.row - a.row), 1);
-  let prev = null;
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const col = Math.round(a.col + t * (b.col - a.col));
-    const row = Math.round(a.row + t * (b.row - a.row));
-    const c = colRowToCoord(col, row);
-    if (blocking.has(c)) return false;
-    if (prev && prev !== c) {
-      const p = parseCoord(prev);
-      const dc = Math.abs(col - p.col), dr = Math.abs(row - p.row);
-      if (dc === 1 && dr === 0 && impSet.has(edgeKey(prev, c))) return false;
-      if (dc === 0 && dr === 1 && impSet.has(edgeKey(prev, c))) return false;
-      if (dc === 1 && dr === 1) {
-        const mid1 = colRowToCoord(p.col, row);
-        const mid2 = colRowToCoord(col, p.row);
-        if (impSet.has(edgeKey(prev, mid1)) || impSet.has(edgeKey(prev, mid2))) return false;
-      }
-    }
-    prev = c;
+  if (a.col === b.col && a.row === b.row) return true;
+
+  // Pre-build wall segments from impassable edges
+  const walls = [];
+  for (const edge of impassableEdges) {
+    const seg = impassableEdgeToWallSegment(edge[0], edge[1]);
+    if (seg) walls.push(seg);
   }
-  return true;
+
+  // 4 corners of a space, slightly inset so exact corner touches don't count
+  const INSET = 0.49;
+  const corners = (col, row) => [
+    [col - INSET, row - INSET],
+    [col + INSET, row - INSET],
+    [col - INSET, row + INSET],
+    [col + INSET, row + INSET],
+  ];
+
+  const aCorners = corners(a.col, a.row);
+  const bCorners = corners(b.col, b.row);
+
+  // LOS exists if ANY corner-to-corner pair has a clear line
+  for (const [ax, ay] of aCorners) {
+    for (const [bx, by] of bCorners) {
+      // 1. Check wall crossings
+      let wallBlocked = false;
+      for (const w of walls) {
+        if (segmentsStrictlyIntersect(ax, ay, bx, by, w.x1, w.y1, w.x2, w.y2)) {
+          wallBlocked = true;
+          break;
+        }
+      }
+      if (wallBlocked) continue;
+      // 2. Check for blocking spaces along the path (skip attacker and target cells)
+      const cells = getCellsAlongLine(ax, ay, bx, by);
+      let spaceBlocked = false;
+      for (const [col, row] of cells) {
+        if (col === a.col && row === a.row) continue;
+        if (col === b.col && row === b.row) continue;
+        if (blockingSet.has(colRowToCoord(col, row))) { spaceBlocked = true; break; }
+      }
+      if (!spaceBlocked) return true; // this corner pair is clear
+    }
+  }
+  return false;
 }
 
 async function clearMoveGridMessages(game, moveKey, channel) {

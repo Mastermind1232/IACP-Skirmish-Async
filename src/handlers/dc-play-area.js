@@ -828,10 +828,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         new ActionRowBuilder().addComponents(
           chunk.map((t, idx) => {
             const targetIndex = i + idx;
+            const noLOS = t.hasLOS === false;
             return new ButtonBuilder()
               .setCustomId(`attack_target_${msgId}_${figureIndex}_${targetIndex}`)
-              .setLabel(`${t.label} (${t.coord.toUpperCase()})`.slice(0, 80))
-              .setStyle(ButtonStyle.Danger);
+              .setLabel(`${t.label} (${t.coord.toUpperCase()})${noLOS ? ' [No LOS]' : ''}`.slice(0, 80))
+              .setStyle(noLOS ? ButtonStyle.Secondary : ButtonStyle.Danger)
+              .setDisabled(noLOS);
           })
         )
       );

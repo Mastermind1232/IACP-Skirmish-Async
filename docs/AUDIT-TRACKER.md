@@ -17,11 +17,11 @@
 - [x] **#5 — Attack sequence out of order** ✅ FIXED
   Added full reroll phase between dice rolling and surge spending. `rollAttackDice`/`rollDefenseDice` now return individual die results. New `handleCombatReroll` handler lets attacker/defender reroll specific dice using CC-granted charges, round bonuses, and innate DC abilities (auto-parsed from ability text). Dodge check moved AFTER reroll window so rerolls can potentially remove dodge. Combat flow: Roll → Reroll Window (CC timing) → Dodge Check → Evade Cancels Surge → Spend Surges → Ready to Resolve → Calculate Damage.
 
-- [ ] **#6 — LOS is advisory, not enforced**
-  LOS check only posts a warning. Attack proceeds regardless.
+- [x] **#6 — LOS is advisory, not enforced** ✅ FIXED
+  Target buttons with no LOS are now disabled (`[No LOS]` label, greyed out). Server-side: `attack_target_` handler blocks attack with ephemeral error if `hasLOS === false` (before `deferUpdate`). Old advisory warning removed.
 
-- [ ] **#7 — LOS algorithm is wrong**
-  Uses center-to-center interpolation. Rules require corner-to-corner tracing.
+- [x] **#7 — LOS algorithm is wrong** ✅ FIXED
+  Replaced center-to-center interpolation with corner-to-corner tracing per IA rules. Added `impassableEdgeToWallSegment` (converts edge pairs to geometric wall segments), `segmentsStrictlyIntersect` (parametric segment intersection), and `getCellsAlongLine` (fine-grid traversal). LOS exists if ANY of the 16 corner pairs (4 attacker × 4 target, slightly inset at ±0.49) has a clear line — not crossing a wall segment and not passing through a blocking space (excluding attacker/target cells).
 
 ## HIGH — Game Flow Bugs
 
@@ -69,8 +69,8 @@
 - [x] **#21 — 9 trait placeholder cards in `cc-effects.json`**
   "Heavy Weapon", "Hunter", "Leader", "Smuggler", "Spy", "Technician", "Trooper", "Vehicle", "Wookiee" — empty effects, null costs. Deleted.
 
-- [ ] **#22 — Inconsistent return pattern in `mission-rules.js`**
-  Line ~147 sets `gameEnded = true` instead of `return { gameEnded: true }`. Subsequent rules execute on finished game.
+- [x] **#22 — Inconsistent return pattern in `mission-rules.js`** ✅ FIXED
+  Line ~147 sets `gameEnded = true` instead of `return { gameEnded: true }`. Changed to `return { gameEnded: true }` so subsequent rules no longer execute on a finished game.
 
 ## LOW — Quality Issues
 

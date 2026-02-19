@@ -144,7 +144,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
         const msg = vpMessage ? vpMessage.replace('{vp}', String(p2Vp)) : `mission objective`;
         await logGameAction(game, client, `<@${game.player2Id}> gained **${p2Vp} VP** — ${msg}.`, { allowedMentions: { users: [game.player2Id] }, phase: 'ROUND', icon: 'round' });
         await checkWinConditions(game, client);
-        if (game.ended) gameEnded = true;
+        if (game.ended) return { gameEnded: true };
       }
     }
   }

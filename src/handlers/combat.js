@@ -65,6 +65,10 @@ export async function handleAttackTarget(interaction, ctx) {
     await interaction.reply({ content: 'Only the owner can attack.', ephemeral: true }).catch(() => {});
     return;
   }
+  if (target.hasLOS === false) {
+    await interaction.reply({ content: '🚫 No line of sight to that target. You cannot attack through blocking terrain or solid walls.', ephemeral: true }).catch(() => {});
+    return;
+  }
   await interaction.deferUpdate();
   delete game.attackTargets[`${msgId}_${figureIndex}`];
   const actionsData = game.dcActionsData?.[msgId];
@@ -87,11 +91,6 @@ export async function handleAttackTarget(interaction, ctx) {
     content: `${ACTION_ICONS.attack || '⚔️'} <t:${Math.floor(Date.now() / 1000)}:t> — ${combatDeclare}`,
     allowedMentions: { users: [game.player1Id, game.player2Id] },
   });
-  if (target && target.hasLOS === false) {
-    await generalChannel.send({
-      content: '⚠️ *The bot thinks you do not have line of sight to this target. If that\'s wrong, ignore this and continue.*',
-    }).catch(() => {});
-  }
   const thread = await declareMsg.startThread({
     name: `Combat: P${attackerPlayerNum} vs P${defenderPlayerNum}`,
     autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
