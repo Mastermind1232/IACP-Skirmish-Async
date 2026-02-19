@@ -472,6 +472,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         allowedMentions: { users: [oppId] },
       }).catch(() => {});
     }
+    await handChannel.send({
+      content: `**${card}** played — waiting for opponent to respond (Negation window). Effect will resolve once they confirm.`,
+    }).catch(() => {});
     if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
     saveGames();
     return;

@@ -172,20 +172,6 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: claimInitiative (Take Initiative — you become the initiative player; exhaust 1 DC manual)
-  if (entry.type === 'ccEffect' && entry.claimInitiative) {
-    const { game, playerNum } = context;
-    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
-    if (playerId) {
-      game.initiativePlayerId = playerId;
-    }
-    return {
-      applied: true,
-      logMessage: 'You claimed the initiative token. Exhaust one of your Deployment cards (use Exhaust on the DC).',
-    };
-  }
-
   // ccEffect: selfDamageThenMpAndFocus (Stimulants — you suffer N damage, then gain MP and Focus)
   if (entry.type === 'ccEffect' && entry.selfDamageThenMpAndFocus) {
     const { game, playerNum, dcMessageMeta, dcHealthState } = context;
@@ -1507,7 +1493,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.claimInitiative && !entry.exhaustOneDeploymentCard) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.initiativePlayerNum = playerNum;
+    game.initiativePlayerId = playerNum === 1 ? game.player1Id : game.player2Id;
     if (entry.firstActivationFigureName) game.firstActivationFigureName = entry.firstActivationFigureName;
     return {
       applied: true,
@@ -1519,23 +1505,10 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.claimInitiative && entry.exhaustOneDeploymentCard) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.initiativePlayerNum = playerNum;
-    const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-    let exhausted = false;
-    for (let i = 0; i < (dcList || []).length; i++) {
-      const dc = dcList[i];
-      const isExhausted = typeof dc === 'object' && dc.exhausted;
-      if (!isExhausted) {
-        if (typeof dc === 'object') dcList[i] = { ...dc, exhausted: true };
-        exhausted = true;
-        break;
-        // Exhaust first non-exhausted DC
-      }
-    }
+    game.initiativePlayerId = playerNum === 1 ? game.player1Id : game.player2Id;
     return {
       applied: true,
-      logMessage: `Claimed the initiative token.${exhausted ? ' Exhausted 1 Deployment card.' : ' (No non-exhausted DC to exhaust.)'}`,
+      logMessage: 'Claimed the initiative token. Exhaust one of your Deployment cards (use the Exhaust button on your DC).',
     };
   }
 
