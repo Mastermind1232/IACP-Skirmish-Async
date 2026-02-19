@@ -108,6 +108,9 @@ export async function handleAttackTarget(interaction, ctx) {
   });
   const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
   const nextPierce = game.nextAttackBonusPierce?.[attackerPlayerNum] || 0;
+  const [minRange, maxRange] = attackInfo.range || [1, 3];
+  const isRanged = minRange >= 2 || maxRange >= 3;
+  const distanceToTarget = target.dist ?? 1;
   game.pendingCombat = {
     gameId: game.gameId,
     attackerPlayerNum,
@@ -126,6 +129,8 @@ export async function handleAttackTarget(interaction, ctx) {
       figures: targetStats.figures ?? 1,
     },
     attackInfo,
+    isRanged,
+    distanceToTarget,
     combatThreadId: thread.id,
     combatDeclareMsgId: declareMsg.id,
     combatPreMsgId: preCombatMsg.id,
@@ -297,7 +302,16 @@ export async function handleCombatRoll(interaction, ctx) {
     const defenseDiceCount = combat.defenseDiceCount ?? 1;
     const perDefDieSurge = (combat.bonusSurgePerDefenseDie || 0) * defenseDiceCount;
     const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[combat.attackerPlayerNum] || 0) + perDefDieSurge;
-    const totalSurge = roll.surge + surgeBonus;
+    const rawSurge = roll.surge + surgeBonus;
+    const defPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+    const roundEvade = game.roundDefenseBonusEvade?.[defPlayerNum] || 0;
+    const totalEvade = defRoll.evade + (combat.bonusEvade || 0) + roundEvade;
+    const evadeCancelled = Math.min(rawSurge, totalEvade);
+    const totalSurge = rawSurge - evadeCancelled;
+    combat.evadeCancelledSurge = evadeCancelled;
+    if (evadeCancelled > 0) {
+      await thread.send(`**Evade cancels surge:** ${evadeCancelled} evade cancelled ${evadeCancelled} surge → **${totalSurge}** surge remaining`);
+    }
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const getAbility = ctx.getAbility || (() => null);
     const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS && ctx.SURGE_LABELS[id]) || id);
@@ -491,6 +505,7 @@ export async function handleCleaveTarget(interaction, ctx) {
     checkWinConditions,
     finishCombatResolution,
     updateActivationsMessage,
+    updateAttachmentMessageForDc,
     saveGames,
     client,
   } = ctx;
@@ -558,6 +573,11 @@ export async function handleCleaveTarget(interaction, ctx) {
             if (cleavePlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
             else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
             await updateActivationsMessage(game, cleavePlayerNum, client);
+          }
+          const cleaveCcAttachKey = cleavePlayerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+          if (game[cleaveCcAttachKey]?.[cleaveMsgId]?.length) {
+            delete game[cleaveCcAttachKey][cleaveMsgId];
+            if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, cleavePlayerNum, cleaveMsgId, client);
           }
         }
         await checkWinConditions(game, client);

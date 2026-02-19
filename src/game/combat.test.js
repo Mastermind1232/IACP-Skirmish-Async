@@ -44,17 +44,17 @@ test('computeCombatResult hit and damage', () => {
   assert.ok(r.resultText.includes('2 damage'));
 });
 
-test('computeCombatResult miss', () => {
+test('computeCombatResult evade no longer causes miss (cancels surge instead)', () => {
   const r = computeCombatResult({
     attackRoll: { acc: 0, dmg: 5, surge: 0 },
     defenseRoll: { block: 0, evade: 1 },
     surgeDamage: 0,
     surgePierce: 0,
     surgeAccuracy: 0,
+    evadeCancelledSurge: 0,
   });
-  assert.strictEqual(r.hit, false);
-  assert.strictEqual(r.damage, 0);
-  assert.ok(r.resultText.includes('Miss'));
+  assert.strictEqual(r.hit, true);
+  assert.strictEqual(r.damage, 5);
 });
 
 test('computeCombatResult surge modifiers', () => {
@@ -116,20 +116,63 @@ test('computeCombatResult bonusBlock (Brace Yourself)', () => {
   assert.ok(r.resultText.includes('CC bonus: +2 Block'));
 });
 
-test('computeCombatResult bonusEvade (Stroke of Brilliance)', () => {
+test('computeCombatResult bonusEvade display and surge cancellation', () => {
   const r = computeCombatResult({
-    attackRoll: { acc: 1, dmg: 3, surge: 0 },
+    attackRoll: { acc: 1, dmg: 3, surge: 2 },
     defenseRoll: { block: 0, evade: 0 },
     bonusEvade: 1,
+    evadeCancelledSurge: 1,
   });
-  assert.strictEqual(r.hit, true); // 1 acc >= 0 + 1 evade
-  const r2 = computeCombatResult({
-    attackRoll: { acc: 0, dmg: 3, surge: 0 },
-    defenseRoll: { block: 0, evade: 0 },
-    bonusEvade: 1,
-  });
-  assert.strictEqual(r2.hit, false); // 0 acc < 1 evade
+  assert.strictEqual(r.hit, true);
   assert.ok(r.resultText.includes('CC bonus: +1 Evade'));
+  assert.ok(r.resultText.includes('Evade cancelled 1 surge'));
+});
+
+test('computeCombatResult ranged attack miss on insufficient accuracy', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 5, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    isRanged: true,
+    distanceToTarget: 4,
+  });
+  assert.strictEqual(r.hit, false);
+  assert.strictEqual(r.damage, 0);
+  assert.ok(r.resultText.includes('Miss'));
+  assert.ok(r.resultText.includes('insufficient accuracy'));
+});
+
+test('computeCombatResult ranged attack hit with enough accuracy', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 3, dmg: 4, surge: 0 },
+    defenseRoll: { block: 1, evade: 0 },
+    isRanged: true,
+    distanceToTarget: 3,
+  });
+  assert.strictEqual(r.hit, true);
+  assert.strictEqual(r.damage, 3);
+});
+
+test('computeCombatResult melee attack ignores accuracy', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 0, dmg: 5, surge: 0 },
+    defenseRoll: { block: 1, evade: 0 },
+    isRanged: false,
+    distanceToTarget: 1,
+  });
+  assert.strictEqual(r.hit, true);
+  assert.strictEqual(r.damage, 4);
+});
+
+test('computeCombatResult surge accuracy saves ranged attack', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 1, dmg: 4, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    isRanged: true,
+    distanceToTarget: 3,
+    surgeAccuracy: 2,
+  });
+  assert.strictEqual(r.hit, true);
+  assert.strictEqual(r.damage, 4);
 });
 
 test('computeCombatResult surge conditions in text', () => {

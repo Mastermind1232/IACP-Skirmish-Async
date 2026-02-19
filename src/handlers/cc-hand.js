@@ -138,8 +138,6 @@ export async function handleCcAttachTo(interaction, ctx) {
   await interaction.deferUpdate();
   hand.splice(idx, 1);
   game[handKey] = hand;
-  game[discardKey] = game[discardKey] || [];
-  game[discardKey].push(card);
   const attachKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
   game[attachKey] = game[attachKey] || {};
   if (!Array.isArray(game[attachKey][dcMsgId])) game[attachKey][dcMsgId] = [];

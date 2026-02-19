@@ -81,7 +81,17 @@ export function computeCombatResult(combat) {
   const bonusHits = combat.bonusHits || 0;
   const bonusBlock = combat.bonusBlock || 0;
   const bonusEvade = combat.bonusEvade || 0;
-  const hit = (roll.acc + surgeA + bonusAcc) >= (defRoll.evade + bonusEvade);
+  const totalEvade = defRoll.evade + bonusEvade;
+  const evadeCancelled = combat.evadeCancelledSurge || 0;
+  const totalAccuracy = roll.acc + surgeA + bonusAcc;
+  let hit = true;
+  let missReason = '';
+  if (combat.isRanged && combat.distanceToTarget != null) {
+    if (totalAccuracy < combat.distanceToTarget) {
+      hit = false;
+      missReason = `insufficient accuracy (${totalAccuracy} < ${combat.distanceToTarget} distance)`;
+    }
+  }
   const pierceToUse = combat.defenderIgnorePierce ? 0 : totalPierce;
   const blockForCalc = combat.ignoreDefenseResultsNotOnDice ? defRoll.block : (defRoll.block + bonusBlock);
   const effectiveBlock = Math.max(0, blockForCalc - pierceToUse);
@@ -109,6 +119,7 @@ export function computeCombatResult(combat) {
   if (bonusHits || perDefDieDamage) resultText += ` | CC bonus: +${(bonusHits || 0) + perDefDieDamage} Hit`;
   if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) resultText += ` | CC bonus: +${bonusBlock} Block`;
   if (combat.ignoreDefenseResultsNotOnDice) resultText += ' | CC: ignore defense not on dice';
+  if (evadeCancelled > 0) resultText += ` | Evade cancelled ${evadeCancelled} surge`;
   if (bonusEvade) resultText += ` | CC bonus: +${bonusEvade} Evade`;
   if (bonusPierce) resultText += ` | CC bonus: +${bonusPierce} pierce`;
   if (bonusBlast) resultText += ` | CC bonus: Blast ${bonusBlast}`;
@@ -116,7 +127,10 @@ export function computeCombatResult(combat) {
   if (surgeD || surgeP || surgeA || conditionsText || blastText || recoverText || cleaveText) {
     resultText += ` | Surge: +${surgeD} dmg, +${surgeP} pierce, +${surgeA} acc${conditionsText}${blastText}${recoverText}${cleaveText}`;
   }
-  if (!hit) resultText += ' → **Miss**';
+  if (combat.isRanged && combat.distanceToTarget != null) {
+    resultText += ` | Accuracy: ${totalAccuracy} vs ${combat.distanceToTarget} distance`;
+  }
+  if (!hit) resultText += missReason ? ` → **Miss** (${missReason})` : ' → **Miss**';
   else resultText += ` → **${damage} damage**${conditionsText}`;
   if (combat.attackResultReplaceWithStun) resultText += ' (Set for Stun: 0 damage, Stunned)';
 

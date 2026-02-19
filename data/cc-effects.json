@@ -1156,18 +1156,6 @@
       "effect": "Use after you resolve an attack targeting a figure. If the defender was defeated, your opponent discards the top 3 cards of their Command deck.",
       "abilityId": "Shoot the Messenger"
     },
-    "Heavy Weapon": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": ""
-    },
-    "Hunter": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": ""
-    },
     "I Must Go Alone": {
       "cost": 1,
       "playableBy": "Obi-Wan Kenobi",
@@ -1207,12 +1195,6 @@
       "timing": "duringActivation",
       "effect": "Use during your activation to look at your opponent's hand. You may choose and discard a Command card from it. Then, you suffer Strain equal to that card's cost.",
       "abilityId": "Intelligence Leak"
-    },
-    "Leader": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": ""
     },
     "Looking for a Fight": {
       "cost": 0,
@@ -1708,12 +1690,6 @@
       "effect": "Use at the start of your activation to recover 2 Damage, apply +1 Surge to your attack results until the end of the round, or apply +1 Evade to your defense results until the end of the round.",
       "abilityId": "Smuggled Supplies"
     },
-    "Smuggler": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": ""
-    },
     "Smuggler's Tricks": {
       "cost": 1,
       "playableBy": "SMUGGLER",
@@ -1740,12 +1716,6 @@
       "timing": "duringAttack",
       "effect": "Use while attacking. This attack gains Cleave 1 and Cleave 2.",
       "abilityId": "Spinning Kick"
-    },
-    "Spy": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": ""
     },
     "Squad Swarm": {
       "cost": 2,
@@ -1855,12 +1825,6 @@
       "effect": "Use while attacking to reroll 1 attack die. \n\nPassive (Discard pile): While this card is in your discard pile, your DROIDS gain: \n- Surge: Re-draw this card.",
       "abilityId": "Targeting Network"
     },
-    "Technician": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": ""
-    },
     "Telekinetic Throw": {
       "cost": 1,
       "playableBy": "FORCE USER",
@@ -1939,12 +1903,6 @@
       "timing": "specialAction",
       "effect": "Special Action: Up to 3 friendly DROIDS each move up to 1 space. Then choose a hostile figure within 5 spaces and line of sight. It suffers Damage equal to the number of those friendly DROIDS who have line of sight to it."
     },
-    "Trooper": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": ""
-    },
     "Unlimited Power": {
       "cost": 2,
       "playableBy": "Emperor Palpatine",
@@ -1964,12 +1922,6 @@
       "timing": "specialAction",
       "effect": "Special Action: You cannot suffer Damage or receive conditions until your next activation. At the start of your next activation, gain 4 movement points.",
       "abilityId": "Vanish"
-    },
-    "Vehicle": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": ""
     },
     "Veteran Instincts": {
       "cost": 1,
@@ -2011,12 +1963,6 @@
       "playableBy": "Doctor Aphra",
       "timing": "whenCommandCardDiscardedFromHandOrDeck",
       "effect": "Use when a Command card is discarded from your hand or deck. You gain VPs equal to that card's cost. When this card is discarded from your hand or deck, gain 1 VP."
-    },
-    "Wookiee": {
-      "cost": null,
-      "playableBy": "Any Figure",
-      "timing": "other",
-      "effect": ""
     },
     "Worth Every Credit": {
       "cost": 2,

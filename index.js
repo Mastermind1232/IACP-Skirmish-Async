@@ -2703,6 +2703,11 @@ async function resolveCombatAfterRolls(game, combat, client) {
             else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
             await updateActivationsMessage(game, defenderPlayerNum, client);
           }
+          const ccAttachKey = defenderPlayerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+          if (game[ccAttachKey]?.[targetMsgId]?.length) {
+            delete game[ccAttachKey][targetMsgId];
+            await updateAttachmentMessageForDc(game, defenderPlayerNum, targetMsgId, client);
+          }
         }
         await checkWinConditions(game, client);
         // Celebration: after unique hostile defeated, offer attacker a chance to play it
@@ -2792,6 +2797,11 @@ async function resolveCombatAfterRolls(game, combat, client) {
               if (blastPlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
               else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
               await updateActivationsMessage(game, blastPlayerNum, client);
+            }
+            const blastCcAttachKey = blastPlayerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+            if (game[blastCcAttachKey]?.[blastMsgId]?.length) {
+              delete game[blastCcAttachKey][blastMsgId];
+              await updateAttachmentMessageForDc(game, blastPlayerNum, blastMsgId, client);
             }
           }
           await checkWinConditions(game, client);
@@ -4592,6 +4602,7 @@ client.on('interactionCreate', async (interaction) => {
       getDcEffects,
       updateDcActionsMessage,
       updateActivationsMessage,
+      updateAttachmentMessageForDc,
       logGameAction,
       isGroupDefeated,
       checkWinConditions,

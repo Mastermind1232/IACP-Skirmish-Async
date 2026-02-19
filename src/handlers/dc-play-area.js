@@ -494,13 +494,14 @@ export async function handleDcCcSpecial(interaction, ctx) {
   const enteringNegation = cost === 0 && ctx.getNegationResponseButtons;
   hand.splice(hand.indexOf(card), 1);
   game[handKey] = hand;
-  game[discardKey] = game[discardKey] || [];
-  game[discardKey].push(card);
   if (isCcAttachment(card) && !enteringNegation) {
     game[attachKey] = game[attachKey] || {};
     if (!Array.isArray(game[attachKey][msgId])) game[attachKey][msgId] = [];
     game[attachKey][msgId].push(card);
     await updateAttachmentMessageForDc(game, meta.playerNum, msgId, client);
+  } else {
+    game[discardKey] = game[discardKey] || [];
+    game[discardKey].push(card);
   }
   const handChannelId = meta.playerNum === 1 ? game.p1HandId : game.p2HandId;
   const handChannel = await interaction.client.channels.fetch(handChannelId);
@@ -812,7 +813,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const fi = m ? parseInt(m[2], 10) : 0;
       const figCount = getDcStats(dcName).figures ?? 1;
       const label = figCount > 1 ? `${dg}${FIGURE_LETTERS[fi] || 'a'}` : (totals[dcName] > 1 ? `${dcName} [DG ${dg}]` : dcName);
-      targets.push({ figureKey: k, coord, label, hasLOS: los });
+      targets.push({ figureKey: k, coord, label, hasLOS: los, dist });
     }
     if (targets.length === 0) {
       await interaction.reply({ content: 'No valid targets in range.', ephemeral: true }).catch(() => {});
