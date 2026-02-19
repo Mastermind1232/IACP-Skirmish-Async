@@ -90,6 +90,66 @@
       "pattern": "post_attack_mp",
       "primaryCard": "Hit and Run",
       "cards": ["Hit and Run", "Fleet Footed"]
+    },
+    "brace_for_impact": {
+      "status": "testready",
+      "pattern": "while_defending",
+      "primaryCard": "Brace for Impact",
+      "cards": ["Brace for Impact", "Heavy Armor"]
+    },
+    "against_the_odds": {
+      "status": "testready",
+      "pattern": "end_of_round",
+      "primaryCard": "Against the Odds",
+      "cards": ["Against the Odds", "Desperate Escape"]
+    },
+    "force_surge": {
+      "status": "testready",
+      "pattern": "end_of_activation",
+      "primaryCard": "Force Surge",
+      "cards": ["Force Surge", "Rebel Graffiti"]
+    },
+    "counter_attack": {
+      "status": "testready",
+      "pattern": "after_attack_on_you",
+      "primaryCard": "Counter Attack",
+      "cards": ["Counter Attack", "Dangerous Prey"]
+    },
+    "negation": {
+      "status": "testready",
+      "pattern": "when_cc_played",
+      "primaryCard": "Negation",
+      "cards": ["Negation", "Celebration"]
+    },
+    "celebration": {
+      "status": "testready",
+      "pattern": "after_unique_defeated",
+      "primaryCard": "Celebration",
+      "cards": ["Celebration", "Of No Importance"]
+    },
+    "flurry_of_blades": {
+      "status": "testready",
+      "pattern": "double_action_special",
+      "primaryCard": "Flurry of Blades",
+      "cards": ["Flurry of Blades", "Pummel"]
+    },
+    "cut_lines": {
+      "status": "testready",
+      "pattern": "start_of_status_phase",
+      "primaryCard": "Cut Lines",
+      "cards": ["Cut Lines", "Stall for Time"]
+    },
+    "battle_scars": {
+      "status": "testready",
+      "pattern": "power_token",
+      "primaryCard": "Battle Scars",
+      "cards": ["Battle Scars", "Prepared for Battle"]
+    },
+    "shoot_the_messenger": {
+      "status": "testready",
+      "pattern": "opponent_deck_manipulation",
+      "primaryCard": "Shoot the Messenger",
+      "cards": ["Shoot the Messenger", "Merciless"]
     }
   }
 }

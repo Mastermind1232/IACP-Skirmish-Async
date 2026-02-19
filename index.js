@@ -1384,6 +1384,8 @@ const IMPLEMENTED_SCENARIOS = [
   'smoke_grenade', 'focus', 'blitz', 'smuggled_supplies', 'dangerous_bargains',
   'recovery', 'take_initiative', 'positioning_advantage', 'rally', 'brace_yourself',
   'strategic_shift', 'inspiring_speech', 'wild_attack', 'stimulants', 'hit_and_run',
+  'brace_for_impact', 'against_the_odds', 'force_surge', 'counter_attack', 'negation',
+  'celebration', 'flurry_of_blades', 'cut_lines', 'battle_scars', 'shoot_the_messenger',
 ];
 
 async function createTestGame(client, guild, userId, scenarioId, feedbackChannel, options = {}) {
