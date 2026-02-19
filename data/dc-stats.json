@@ -5,7 +5,7 @@
     "Stormtrooper (Elite)": { "health": 5, "figures": 3, "speed": 4, "cost": 7, "specials": [], "attack": { "dice": ["red"], "range": [2, 4] }, "defense": "white" },
     "Stormtrooper (Regular)": { "health": 4, "figures": 3, "speed": 4, "cost": 5, "specials": [], "attack": { "dice": ["red"], "range": [2, 4] }, "defense": "white" },
     "Luke Skywalker": { "health": 10, "figures": 1, "speed": 5, "cost": 11, "specials": ["Saber Strike"], "attack": { "dice": ["yellow", "green"], "range": [1, 2] }, "defense": "white" },
-    "Rebel Trooper (Elite)": { "health": 5, "figures": 3, "speed": 4, "cost": 7, "specials": [], "attack": { "dice": ["red"], "range": [2, 4] }, "defense": "white" },
+    "Rebel Trooper (Elite)": { "health": 5, "figures": 3, "speed": 4, "cost": 7, "specials": ["Get into Position"], "specialCosts": [2], "attack": { "dice": ["red"], "range": [2, 4] }, "defense": "white" },
     "Rebel Trooper (Regular)": { "health": 4, "figures": 3, "speed": 4, "cost": 5, "specials": [], "attack": { "dice": ["red"], "range": [2, 4] }, "defense": "white" },
     "Wookiee Warrior (Elite)": { "health": 13, "figures": 2, "speed": 4, "cost": 11, "specials": ["Fury"], "attack": { "dice": ["red", "yellow"], "range": [1, 2] }, "defense": "black" },
     "Wookiee Warrior (Regular)": { "health": 11, "figures": 2, "speed": 4, "cost": 8, "specials": ["Fury"], "attack": { "dice": ["red", "yellow"], "range": [1, 2] }, "defense": "black" },

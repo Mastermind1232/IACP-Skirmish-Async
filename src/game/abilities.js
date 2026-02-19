@@ -952,6 +952,27 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Became Focused.' };
   }
 
+  // dcSpecial: mpBonus + applyFocus (e.g. Get into Position — gain MP and become Focused)
+  if (entry.type === 'dcSpecial' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0 && entry.applyFocus) {
+    const { game, msgId, meta } = context;
+    if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const playerNum = meta.playerNum;
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    // Add MP to movement bank
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    bank.total = (bank.total ?? 0) + entry.mpBonus;
+    bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
+    game.movementBank[msgId] = bank;
+    // Apply Focus to all figures in group
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of figureKeys) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+    }
+    return { applied: true, logMessage: `Gained ${entry.mpBonus} movement point${entry.mpBonus !== 1 ? 's' : ''}. Became Focused.` };
+  }
+
   // ccEffect: applyHide only (Hide in Plain Sight, Guerilla Warfare) — apply Hide to activating figures during activation
   if (entry.type === 'ccEffect' && entry.applyHide && !entry.applyFocus) {
     const { game, playerNum, dcMessageMeta } = context;

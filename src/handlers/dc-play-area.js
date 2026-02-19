@@ -696,6 +696,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await interaction.reply({ content: "That special has already been used this activation (each special once per activation unless a card says otherwise).", ephemeral: true }).catch(() => {});
       return;
     }
+    const specialCosts = getDcStats(meta.dcName).specialCosts || [];
+    const actionCost = specialCosts[specialIdx] ?? 1;
+    if (actionsRemaining < actionCost) {
+      await interaction.reply({ content: `**${action}** costs both actions — you only have ${actionsRemaining} action(s) remaining this activation.`, ephemeral: true }).catch(() => {});
+      return;
+    }
     if (!Array.isArray(actionsData.specialsUsed)) actionsData.specialsUsed = [];
     actionsData.specialsUsed.push(specialIdx);
   }
@@ -903,7 +909,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   }
 
   if (actionsData) {
-    actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+    const actionCost = buttonKey === 'dc_special_' ? (getDcStats(meta.dcName).specialCosts?.[specialIdx] ?? 1) : 1;
+    actionsData.remaining = Math.max(0, actionsData.remaining - actionCost);
     await updateDcActionsMessage(game, msgId, client);
   }
   const displayName = meta.displayName || meta.dcName;

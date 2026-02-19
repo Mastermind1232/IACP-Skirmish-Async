@@ -4358,7 +4358,8 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": ["rtel_get_into_position"]
     },
     "Rebel Trooper (Regular)": {
       "abilityText": "Aim: If you have not exited your space during this activation, apply +1 Hit and +2 Accuracy to your attack results.",

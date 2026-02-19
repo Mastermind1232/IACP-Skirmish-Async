@@ -644,6 +644,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   const specials = stats.specials || [];
+  const specialCosts = stats.specialCosts || [];
   const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const actionsData = typeof actionsDataOrRemaining === 'object' && actionsDataOrRemaining != null ? actionsDataOrRemaining : { remaining: actionsDataOrRemaining, specialsUsed: [] };
   const actionsRemaining = actionsData.remaining ?? 2;
@@ -686,11 +687,14 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   if (specials.length > 0 && rows.length < 5) {
     const specialBtns = specials.slice(0, 5).map((name, idx) => {
       const alreadyUsed = specialsUsed.includes(idx);
+      const cost = specialCosts[idx] ?? 1;
+      const needsDoubleAction = cost >= 2;
+      const label = needsDoubleAction ? `${name} (2 Actions)`.slice(0, 80) : name.slice(0, 80);
       return new ButtonBuilder()
         .setCustomId(`dc_special_${idx}_${msgId}`)
-        .setLabel(name.slice(0, 80))
+        .setLabel(label)
         .setStyle(ButtonStyle.Primary)
-        .setDisabled(noActions || alreadyUsed);
+        .setDisabled(alreadyUsed || (actionsRemaining ?? 2) < cost);
     });
     rows.push(new ActionRowBuilder().addComponents(...specialBtns));
   }
