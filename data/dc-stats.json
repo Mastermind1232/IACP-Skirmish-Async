@@ -9,8 +9,8 @@
     "Rebel Trooper (Regular)": { "health": 4, "figures": 3, "speed": 4, "cost": 5, "specials": [], "attack": { "dice": ["red"], "range": [2, 4] }, "defense": "white" },
     "Wookiee Warrior (Elite)": { "health": 13, "figures": 2, "speed": 4, "cost": 11, "specials": ["Fury"], "attack": { "dice": ["red", "yellow"], "range": [1, 2] }, "defense": "black" },
     "Wookiee Warrior (Regular)": { "health": 11, "figures": 2, "speed": 4, "cost": 8, "specials": ["Fury"], "attack": { "dice": ["red", "yellow"], "range": [1, 2] }, "defense": "black" },
-    "Trandoshan Hunter": { "health": 7, "figures": 2, "speed": 4, "cost": 8, "specials": ["Frenzy"], "attack": { "dice": ["red"], "range": [1, 3] }, "defense": "white" },
-    "Trandoshan Hunter (Elite)": { "health": 7, "figures": 2, "speed": 4, "cost": 8, "specials": ["Frenzy"], "attack": { "dice": ["red"], "range": [1, 3] }, "defense": "white" },
+    "Trandoshan Hunter": { "health": 7, "figures": 2, "speed": 4, "cost": 8, "specials": [], "attack": { "dice": ["red"], "range": [1, 3] }, "defense": "white" },
+    "Trandoshan Hunter (Elite)": { "health": 7, "figures": 2, "speed": 4, "cost": 8, "specials": [], "attack": { "dice": ["red"], "range": [1, 3] }, "defense": "white" },
     "Trandoshan Hunter (Regular)": { "health": 6, "figures": 2, "speed": 4, "cost": 6, "specials": [], "attack": { "dice": ["red"], "range": [1, 3] }, "defense": "white" },
     "Weequay Pirate": { "health": 4, "figures": 2, "speed": 4, "cost": 5, "specials": [], "attack": { "dice": ["red"], "range": [1, 3] }, "defense": "white" },
     "Weequay Pirate (Elite)": { "health": 5, "figures": 2, "speed": 4, "cost": 6, "specials": ["Prowl"], "attack": { "dice": ["red"], "range": [1, 3] }, "defense": "white" },
@@ -29,6 +29,6 @@
     "Echo Base Trooper (Regular)": { "health": 5, "figures": 1, "speed": 4, "cost": 6, "specials": [], "attack": { "dice": ["red", "blue", "green"], "range": [2, 4] }, "defense": "black" },
     "Fennec Shand": { "health": 8, "figures": 1, "speed": 5, "cost": 5, "specials": [], "attack": { "dice": ["blue", "blue", "blue"], "range": [2, 5] }, "defense": "white" },
     "Gamorrean Guard (Elite)": { "health": 8, "figures": 1, "speed": 4, "cost": 7, "specials": [], "attack": { "dice": ["red", "red"], "range": [1, 2] }, "defense": "white" },
-    "Murne Rin": { "health": 9, "figures": 1, "speed": 4, "cost": 4, "specials": ["False Orders", "Field Report", "Figurehead"], "attack": { "dice": ["blue", "yellow"], "range": [2, 4] }, "defense": "black" }
+    "Murne Rin": { "health": 9, "figures": 1, "speed": 4, "cost": 4, "specials": ["False Orders", "Field Report"], "attack": { "dice": ["blue", "yellow"], "range": [2, 4] }, "defense": "black" }
   }
 }
