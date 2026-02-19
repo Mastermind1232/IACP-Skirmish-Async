@@ -6,7 +6,8 @@
         "ConvertFrom-Json": true,
         "ForEach-Object": true,
         "ConvertTo-Json": true,
-        "Get-Member": true
+        "Get-Member": true,
+        "Get-Command": true
     },
     "chat.agent.maxRequests": 2500
 }
