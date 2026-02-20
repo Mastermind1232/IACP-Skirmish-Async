@@ -1472,12 +1472,6 @@ async function createGameChannels(guild, player1Id, player2Id) {
     position,
   });
 
-  const chatChannel = await guild.channels.create({
-    name: `${prefix} General chat`,
-    type: ChannelType.GuildText,
-    parent: gameCategory.id,
-    permissionOverwrites: playerPerms,
-  });
   const gameLogPerms = [
     ...playerPerms.filter((p) => p.id !== botId),
     { id: botId, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ManageMessages },
@@ -1488,7 +1482,7 @@ async function createGameChannels(guild, player1Id, player2Id) {
     parent: gameCategory.id,
     permissionOverwrites: gameLogPerms,
   });
-  return { gameCategory, gameId, generalChannel, chatChannel };
+  return { gameCategory, gameId, generalChannel };
 }
 
 /** Create the Map Updates channel for a game. Call AFTER play area channels so it appears last. */
@@ -1592,7 +1586,7 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
     const botId = client.user.id;
     const p2Id = options.player2Id || botId;
     const p2IsBot = p2Id === botId;
-    const { gameId, generalChannel, chatChannel } =
+    const { gameId, generalChannel } =
       await createGameChannels(guild, userId, p2Id);
     const game = {
       gameId,
@@ -1601,7 +1595,7 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
       player1Id: userId,
       player2Id: p2Id,
       generalId: generalChannel.id,
-      chatId: chatChannel.id,
+      chatId: null,
       boardId: null,
       p1HandId: null,
       p2HandId: null,

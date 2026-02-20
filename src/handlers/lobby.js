@@ -116,7 +116,7 @@ export async function handleLobbyStart(interaction, ctx) {
   let gameId;
   try {
     const guild = interaction.guild;
-    const { gameId: gid, generalChannel, chatChannel } =
+    const { gameId: gid, generalChannel } =
       await createGameChannels(guild, lobby.creatorId, lobby.joinedId);
     gameId = gid;
     const game = {
@@ -126,7 +126,7 @@ export async function handleLobbyStart(interaction, ctx) {
       player1Id: lobby.creatorId,
       player2Id: lobby.joinedId,
       generalId: generalChannel.id,
-      chatId: chatChannel.id,
+      chatId: null,
       boardId: null,
       p1HandId: null,
       p2HandId: null,
@@ -142,7 +142,7 @@ export async function handleLobbyStart(interaction, ctx) {
     setGame(gameId, game);
 
     const setupMsg = await generalChannel.send({
-      content: `<@${game.player1Id}> <@${game.player2Id}> — Game created. Map Selection below — Play Areas (with **Your Hand** threads) will appear after map selection. Use **General chat** to talk with your opponent.`,
+      content: `<@${game.player1Id}> <@${game.player2Id}> — Game created. Map Selection below — Play Areas (with **Your Hand** threads) will appear after map selection.`,
       allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
       embeds: [
         new EmbedBuilder()
