@@ -19,7 +19,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 | ⚔️ Combat System | 15 | 12.5 | 83% | Full sequence works; LOS + figures-as-blockers gap |
 | 🏃 Movement & LOS | 10 | 8.5 | 85% | Engine solid; large figure occupancy gap |
 | 🃏 CC Automation | 20 | 15.5 | 78% | Negation + Celebration confirmed wired; ~49 still return manual message |
-| 🤖 DC Core Gameplay | 12 | 9.7 | 81% | DC specials wired via resolveAbility; gap is data, not code |
+| 🤖 DC Core Gameplay | 12 | 9.7 | 81% | DC specials wired via resolveAbility; `abilityText` filled for 233/235 cards; gap is `specialAbilityIds` automation (code, not data entry) |
 | ⚡ DC Surge Automation | 15 | 12.5 | **83%** | 165/165 attacking DCs have surgeAbilities; parseSurgeEffect fully handles all types |
 | 🗺️ Map Data | 15 | 9.5 | 63% | 3/3 tournament maps + 2 extras built; dev-facility broken |
 | 📜 Mission Rules Engine | 8 | 5.2 | 65% | Door tracking via openedDoors across all maps |
@@ -116,13 +116,14 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] DC activation index tracking (which groups have activated)
 - [x] Multi-figure groups tracked as one deployment card
 - [x] Power Token system — `/power-token add/remove/list` slash command; stored in `game.figurePowerTokens`; rendered on board minimap
-- [x] **DC specials wired via `resolveAbility`** — `dc-play-area.js handleDcAction(Special)` calls `resolveAbility(specialAbilityIds[idx])` from `dc-effects.json`; if `specialAbilityIds` is populated for a DC, its special IS automated. Gap is missing data, not missing code
+- [x] **DC specials wired via `resolveAbility`** — `dc-play-area.js handleDcAction(Special)` calls `resolveAbility(specialAbilityIds[idx])` from `dc-effects.json`; if `specialAbilityIds` is populated for a DC, its special IS automated
+- [x] **`abilityText` filled for 233/235 DCs** — human-readable ability text entered via DC effect editor; displayed as reminder in Special embed. This is complete.
 - [x] **Door system** — `open_door_{edge}` interact option tracked in `game.openedDoors`; doors removed from map render when opened; undo-supported
 - [x] **Skirmish Upgrade setup attachment** — `handleSetupAttachTo` places Skirmish Upgrade on DC during setup; stored in `p1DcAttachments` / `p2DcAttachments`; Deplete button + CC attachment embeds update accordingly
 - [x] **Companion embed** — DCs with a `companion` field in `dc-effects.json` get a Companion embed posted in Play Area; updates on Refresh All
 - [x] **Interact: terminals, doors, contraband, launch panels** — `getLegalInteractOptions` returns mission-specific (blue) + standard (grey) options; fully tracked with undo
 - [x] **Undo** — works for: move, pass turn, deploy, interact, cc_play (hand), cc_play_dc (Special from thread)
-- [ ] **DC specials data gap** — most DCs have no `specialAbilityIds` in `dc-effects.json`; those fall back to `manualMessage` + Done button (purely manual)
+- [ ] **DC specials automation gap** — `abilityText` is fully populated (233/235 ✅); but `specialAbilityIds` (the array that triggers `resolveAbility` for bot-automated execution) is populated for only 1 DC. Remaining DCs show ability text reminder + Done button (manual). This is a code-writing problem per ability, not a data entry problem.
 - [ ] **DC keyword traits** — `Sharpshooter`, `Charging Assault`, and others read from `dc-keywords.json` but not enforced in combat resolution
 - [ ] **Undo scope gap** — undo does NOT work for: combat outcomes, health changes, conditions, VP awards, or group defeats
 
@@ -252,7 +253,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 |---|---|---|---|
 | ~~🔴 Critical~~ | ~~**Reinforcement**~~ | ~~N/A~~ | Campaign-only mechanic — does not apply in skirmish. Removed. |
 | ~~🔴 Critical~~ | ~~**DC surge data**~~ | ~~Done~~ | Surge data already populated for all 165 attacking DCs — previously misstated as 3% |
-| 🟡 High | **DC special action data** (`specialAbilityIds`) | Large | Code wired; gap is missing `dc-effects.json` entries — populate to unlock automation per DC |
+| 🟡 High | **DC special action automation** (`specialAbilityIds`) | Large | `abilityText` fully entered ✅; gap is writing code paths in `ability-library.json` per ability and linking via `specialAbilityIds`. Most DCs degrade gracefully to manual + reminder text. |
 | 🟡 High | **End-of-activation CC triggers** | Medium | `endofactivation` timing exists but nothing auto-fires; players must notice and play manually |
 | 🟡 High | **development-facility data** | Small | Spaces exist but deployment zones + mission card data are empty |
 | 🟡 Medium | **~49 remaining CC cards** | Medium | Still return "Resolve manually" message; no game state change |
