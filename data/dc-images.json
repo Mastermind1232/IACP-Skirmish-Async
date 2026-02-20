@@ -1,6 +1,12 @@
 {
-  "source": "Vassal buildFile.xml",
-  "extractedAt": "2026-02-05T01:47:17.672Z",
+  "[Explosive Armaments]": "vassal_extracted/images/DC Skirmish Upgrades/Explosive Armaments.png",
+  "[Imperial Retrofitting]": "vassal_extracted/images/DC Skirmish Upgrades/Imperial Retrofitting.png",
+  "[Overwatch]": "vassal_extracted/images/DC Skirmish Upgrades/Overwatch.png",
+  "[Punishing Strike]": "vassal_extracted/images/DC Skirmish Upgrades/Punishing Strike.jpg",
+  "[Rogue One]": "vassal_extracted/images/DC Skirmish Upgrades/Rogue One.png",
+  "[The Darksaber]": "vassal_extracted/images/DC Skirmish Upgrades/The Darksaber.jpg",
+  "[The General's Ranks]": "vassal_extracted/images/DC Skirmish Upgrades/The General's Ranks.jpg",
+  "[Vader's Finest]": "vassal_extracted/images/DC Skirmish Upgrades/Vader's Finest.png",
   "count": 226,
   "dcImages": {
     "0-0-0": "vassal_extracted/images/dc-figures/0-0-0.png",
@@ -217,7 +223,8 @@
     "[Feeding Frenzy]": "vassal_extracted/images/DC Skirmish Upgrades/Feeding Frenzy.jpg",
     "[Heavy Fire]": "vassal_extracted/images/DC Skirmish Upgrades/Heavy Fire.png",
     "[Lie in Ambush]": "vassal_extracted/images/DC Skirmish Upgrades/Lie in Ambush.png",
-    "[Motivation]": "vassal_extracted/images/DC Skirmish Upgrades/Motivation.jpg","[Nemik's Manifesto]": "vassal_extracted/images/DC Skirmish Upgrades/Nemik's Manifesto.png",
+    "[Motivation]": "vassal_extracted/images/DC Skirmish Upgrades/Motivation.jpg",
+    "[Nemik's Manifesto]": "vassal_extracted/images/DC Skirmish Upgrades/Nemik's Manifesto.png",
     "[Orbital Bombardment]": "vassal_extracted/images/DC Skirmish Upgrades/Orbital Bombardment.png",
     "[Scavenged Weaponry]": "vassal_extracted/images/DC Skirmish Upgrades/Scavenged Weaponry.jpg",
     "[Smuggling Compartment]": "vassal_extracted/images/DC Skirmish Upgrades/Smuggling Compartment.png",
@@ -228,5 +235,7 @@
     "[Trusted Ally]": "vassal_extracted/images/DC Skirmish Upgrades/Trusted Ally.jpg",
     "[Unshakable]": "vassal_extracted/images/DC Skirmish Upgrades/Unshakable.jpg"
   },
+  "extractedAt": "2026-02-05T01:47:17.672Z",
+  "source": "Vassal buildFile.xml",
   "updatedAt": "2026-02-06T21:15:27.462Z"
 }
