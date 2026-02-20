@@ -9,7 +9,7 @@
 Scores are **effort-weighted** — a checkbox that fixes one return statement is not worth the same as wiring surge abilities for 223 deployment cards. Each category carries a weight reflecting its total implementation cost. The percentage is derived from `(points earned) / (total points)`.
 
 ```
-███████████████░░░░░  ~73%  effort-weighted
+████████████████░░░░  ~77%  effort-weighted
 ```
 
 | Category | Weight | Score | % | Notes |
@@ -17,17 +17,17 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 | 🏗️ Infrastructure | 10 | 8.7 | 87% | Atomic saves + migration logic open; undo scope wider than previously noted |
 | 🔄 Game Flow & Rounds | 12 | 8.8 | 73% | Reinforcement missing; door system + setup attachments now tracked |
 | ⚔️ Combat System | 15 | 12.5 | 83% | Full sequence works; LOS + figures-as-blockers gap |
-| 🏃 Movement & LOS | 10 | 8.5 | 85% | Engine solid; reinforce entry points missing |
+| 🏃 Movement & LOS | 10 | 8.5 | 85% | Engine solid; large figure occupancy gap |
 | 🃏 CC Automation | 20 | 15.5 | 78% | Negation + Celebration confirmed wired; ~49 still return manual message |
 | 🤖 DC Core Gameplay | 12 | 9.7 | 81% | DC specials wired via resolveAbility; gap is data, not code |
 | ⚡ DC Surge Automation | 15 | 12.5 | **83%** | 165/165 attacking DCs have surgeAbilities; parseSurgeEffect fully handles all types |
 | 🗺️ Map Data | 15 | 9.5 | 63% | 3/3 tournament maps + 2 extras built; dev-facility broken |
 | 📜 Mission Rules Engine | 8 | 5.2 | 65% | Door tracking via openedDoors across all maps |
-| 🔁 Reinforcement | 8 | 0.0 | **0%** | Not implemented — breaks every third/fourth round |
+| 🔁 Reinforcement | ~~8~~ | N/A | **N/A** | Campaign-only mechanic — does NOT apply in skirmish. Figure deaths are permanent in skirmish (except specific CC/DC effects). Row removed from weighting. |
 | 📊 Stats & Analytics | 10 | 7.5 | 75% | End-game scorecard embed confirmed posted; leaderboard/zone queries missing |
-| **Total** | **135** | **98.4** | **~73%** | |
+| **Total** | **127** | **98.4** | **~77%** | *(Reinforcement row removed from weight — campaign-only)* |
 
-> ⚠️ **Reinforcement** is now the single biggest unimplemented core rule.
+> ✅ **Reinforcement is a campaign-only mechanic.** Figure deaths are permanent in skirmish. The only exceptions are specific CC/DC special effects that explicitly return a figure — those are handled per-ability, not globally.
 > Previous "3% DC Surge" stat was stale — data was already populated for all 165 attacking DCs.
 > Previous audits also under-counted: Negation, Celebration, door system, CC play undo, end-game scorecard, setup attachment phase.
 
@@ -67,7 +67,6 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] **Ancillary token tracking** — smoke, rubble, energyShield, device, napalm tracked in `game.ancillaryTokens` and rendered on board
 - [x] **Manual VP edit** — `/editvp +N` or `/editvp -N` typed in Game Log; per-player adjustment; triggers win condition check and refreshes scorecard
 - [x] **Supercharge strain** — `superchargeStrainAfterAttackCount` applies strain to attacker's figure after attack resolves
-- [ ] **Reinforcement** — non-unique defeated figures can redeploy at end of round *(not implemented)*
 - [ ] **End-of-activation CC auto-prompt** — `endofactivation` timing exists in `cc-timing.js` but nothing auto-triggers; players must manually notice and play
 - [ ] **Server-side activation block** — `p1/p2ActivationsRemaining` is decremented but nothing prevents clicking Activate on a DC when count is already 0
 - [ ] **Free action tracking** — abilities that grant free actions still decrement the action counter
@@ -153,7 +152,6 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] LOS corner-to-corner algorithm (4×4 inset corner pairs, impassable edge detection)
 - [x] Wall segment extraction from space edge data
 - [x] Difficult terrain (costs extra MP)
-- [ ] **Reinforcement deployment** — no entry point for placing figures after defeat
 - [ ] **Large figure LOS** — multi-space figures not accounted for in occupancy check
 
 ---
@@ -187,23 +185,17 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] **Door system wired globally** — `game.openedDoors` persists across all maps; door edges filtered from map render; `open_door_` interact available wherever `map-tokens.json` has `doors` entries
 - [x] **Ancillary tokens on board** — smoke, rubble, energyShield, device, napalm tracked in `game.ancillaryTokens` and passed to `renderMap`
 - [ ] **development-facility mission rules** — mission card data is entirely empty
-- [ ] **Reinforcement spawn points** — mission data could include reinforcement positions; unused
 - [ ] **Named areas / control tracking** — `getNamedAreaController` exists but untested on all maps; no generic area-control scoring rule
 
 ---
 
-## 🔁 Reinforcement — weight: 8 pts — score: 0.0 / 8 (**0%**)
+## 🔁 Reinforcement — NOT A SKIRMISH MECHANIC
 
-> Non-unique defeated figures can return to the board at the end of a round.
-> This is a **core rule** that applies every round and is **completely absent** from the codebase.
-> The round end handler (`src/handlers/round.js`) has no reinforcement logic.
+> **Reinforcement is campaign-only.** In skirmish, figure defeats are permanent.
+> The only exceptions are specific CC or DC special effects (e.g. abilities that explicitly state a figure returns). Those are handled per-ability via `resolveAbility`, not as a global end-of-round hook.
+> This category has been removed from the effort-weighted score.
 
-- [ ] Detect non-unique defeated DCs at end of round
-- [ ] Prompt owning player: deploy reinforcement to valid deployment zone space
-- [ ] Award opponent 1 VP per figure that returns
-- [ ] Decrement deployment cost from total army cost tracking
-- [ ] Re-add figure to active DC list (restore health to full)
-- [ ] Handle edge case: no valid deployment spaces available
+- N/A — no global reinforcement logic needed in skirmish
 
 ---
 
@@ -258,7 +250,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 
 | Priority | Item | Effort | Why it matters |
 |---|---|---|---|
-| 🔴 Critical | **Reinforcement** | Large | Core rule, completely unimplemented; every non-unique defeat should allow re-deploy |
+| ~~🔴 Critical~~ | ~~**Reinforcement**~~ | ~~N/A~~ | Campaign-only mechanic — does not apply in skirmish. Removed. |
 | ~~🔴 Critical~~ | ~~**DC surge data**~~ | ~~Done~~ | Surge data already populated for all 165 attacking DCs — previously misstated as 3% |
 | 🟡 High | **DC special action data** (`specialAbilityIds`) | Large | Code wired; gap is missing `dc-effects.json` entries — populate to unlock automation per DC |
 | 🟡 High | **End-of-activation CC triggers** | Medium | `endofactivation` timing exists but nothing auto-fires; players must notice and play manually |
