@@ -12,12 +12,10 @@ const rootDir = join(__dirname, '..');
 let dcImages = {};
 let figureImages = {};
 let figureSizes = {};
-let dcStats = {};
 let mapRegistry = [];
 let deploymentZones = {};
 let mapSpacesData = {};
 let dcEffects = {};
-let dcKeywords = {};
 let diceData = { attack: {}, defense: {} };
 let missionCardsData = {};
 let mapTokensData = {};
@@ -39,10 +37,6 @@ function loadAll() {
     figureSizes = szData.figureSizes || {};
   } catch {}
   try {
-    const statsData = JSON.parse(readFileSync(join(rootDir, 'data', 'dc-stats.json'), 'utf8'));
-    dcStats = statsData.dcStats || {};
-  } catch {}
-  try {
     const mapData = JSON.parse(readFileSync(join(rootDir, 'data', 'map-registry.json'), 'utf8'));
     mapRegistry = mapData.maps || [];
   } catch {}
@@ -57,10 +51,6 @@ function loadAll() {
   try {
     const effData = JSON.parse(readFileSync(join(rootDir, 'data', 'dc-effects.json'), 'utf8'));
     dcEffects = effData.cards || {};
-  } catch {}
-  try {
-    const kwData = JSON.parse(readFileSync(join(rootDir, 'data', 'dc-keywords.json'), 'utf8'));
-    dcKeywords = kwData.keywords || {};
   } catch {}
   try {
     const dData = JSON.parse(readFileSync(join(rootDir, 'data', 'dice.json'), 'utf8'));
@@ -94,14 +84,6 @@ function validateCriticalData() {
   const warnings = [];
   if (!dcEffects || typeof dcEffects !== 'object') {
     warnings.push('dc-effects (dcEffects): expected object');
-  }
-  if (!dcStats || typeof dcStats !== 'object') {
-    warnings.push('dc-stats (dcStats): expected object');
-  } else {
-    const firstKey = Object.keys(dcStats)[0];
-    if (firstKey && (typeof dcStats[firstKey] !== 'object' || dcStats[firstKey] === null)) {
-      warnings.push('dc-stats: each entry should be an object (e.g. cost, figures, attack)');
-    }
   }
   if (!mapSpacesData || typeof mapSpacesData !== 'object') {
     warnings.push('map-spaces (mapSpacesData): expected object');
@@ -216,8 +198,13 @@ export function isExteriorSpace(mapSpaces, coord) {
 export function getDcEffects() {
   return dcEffects;
 }
+/** Returns a map of dcName → keywords[], derived from dc-effects.json (single source of truth). */
 export function getDcKeywords() {
-  return dcKeywords;
+  const out = {};
+  for (const [name, card] of Object.entries(dcEffects)) {
+    if (Array.isArray(card.keywords)) out[name] = card.keywords;
+  }
+  return out;
 }
 export function getDiceData() {
   return diceData;

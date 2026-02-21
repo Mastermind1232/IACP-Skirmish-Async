@@ -1231,7 +1231,12 @@ function retoolDecksForScenario(p1Deck, p2Deck, scenarioId) {
   if (traits.length > 0) {
     const p1DcList = p1Deck.dcList || [];
     if (!p1DcList.some((dc) => hasTrait(dc, traits))) {
-      const eligibles = traits.flatMap((t) => byTrait.rebel?.[t] || []).filter(Boolean);
+      // Search all affiliations — required DC may be Imperial or Scum
+      const eligibles = traits.flatMap((t) => [
+        ...(byTrait.rebel?.[t] || []),
+        ...(byTrait.imperial?.[t] || []),
+        ...(byTrait.scum?.[t] || []),
+      ]).filter(Boolean);
       if (eligibles.length > 0) p1Deck.dcList[0] = pick(eligibles);
     }
   }
