@@ -2,11 +2,11 @@
  * F1 Ability library: lookup by id, resolve surge (code-per-ability). No Discord.
  * Surge resolution uses combat.parseSurgeEffect; DCs still reference keys in dc-effects (surgeAbilities array).
  */
-import { getAbilityLibrary, getDcStats, getDcEffects, getCcEffect } from '../data-loader.js';
+import { getAbilityLibrary, getDcEffects, getCcEffect } from '../data-loader.js';
 
 /** Look up DC stats by name (handles display variants). */
 function getStatsForDc(dcName) {
-  const map = getDcStats() || {};
+  const map = getDcEffects() || {};
   const base = (dcName || '').replace(/\s*\[.*\]\s*$/, '').trim();
   return map[base] || map[dcName] || (() => {
     const key = Object.keys(map).find((k) => k.toLowerCase() === (base || dcName || '').toLowerCase());

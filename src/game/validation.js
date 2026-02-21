@@ -1,7 +1,7 @@
 /**
  * Game validation (deck legal, etc.). No Discord; uses data-loader for card data.
  */
-import { getDcStats, getCcEffect } from '../data-loader.js';
+import { getDcEffects, getCcEffect } from '../data-loader.js';
 
 export const DC_POINTS_LEGAL = 40;
 export const CC_CARDS_LEGAL = 15;
@@ -23,7 +23,7 @@ export function validateDeckLegal(squad) {
   const dcList = squad?.dcList || [];
   for (const entry of dcList) {
     const name = resolveDcName(entry);
-    const stats = getDcStats()[name];
+    const stats = getDcEffects()[name];
     const cost = stats?.cost;
     if (cost == null) {
       errors.push(`Unknown Deployment Card: "${name}" (cost not found).`);

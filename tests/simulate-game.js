@@ -10,7 +10,6 @@ import {
   getDeploymentZones,
   getMapSpaces,
   getDcEffects,
-  getDcKeywords,
   getDiceData,
   getMissionCardsData,
   getMissionRules,
