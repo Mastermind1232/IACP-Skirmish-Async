@@ -1486,7 +1486,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specials": [
+        "Slam"
+      ]
     },
     "Chirrut Imwe": {
       "abilityText": "Devout: You may use Rebel FORCE USER Command cards.\n\nI'm One With the Force: At the start of a hostile figure's activation, you may move up to 2 spaces to a space adjacent to a hostile figure. Limit once per round.\n\nThe Force is With Me: When a Ranged attack targeting you is declared, choose an adjacent hostile figure. If you do, apply -1 Hit to the attack results and the chosen figure suffers 1 Damage.",
@@ -1663,7 +1666,11 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specials": [
+        "Force Choke",
+        "Brutality"
+      ]
     },
     "Davith Elso": {
       "abilityText": "Stealthy: At the start of the mission, become Hidden.\n\nCut and Run: When you exit a space containing a hostile figure, that figure suffers 1 Damage. Limit once per figure per round.\n\nSurge (Fell Swoop): After this attack resolves, become Hidden, move up to 2 spaces, then perform an attack. Limit once per round.",
@@ -2162,7 +2169,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specials": [
+        "Force Lightning"
+      ]
     },
     "Ewok Warrior (Elite)": {
       "abilityText": "Ambush: After you are deployed, you become Hidden.\n\nForest Fighters: While performing a Melee attack, apply +1 Hit to the attack results if you are Hidden.\n\nSpecial Action (Sling Barrage): Perform a Ranged attack using your printed attack pool. During this attack, you may reroll up to 1 attack die for each other figure in your group with line of sight to the defender.",
@@ -2947,7 +2957,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "specials": [
+        "Relentless"
+      ]
     },
     "Imperial Officer (Elite)": {
       "abilityText": "Special Action (Executive Order): Choose another friendly Imperial figure within 2 spaces. That figure may interrupt to perform a move or attack.",
@@ -3698,7 +3711,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specials": [
+        "Saber Strike"
+      ]
     },
     "Luke Skywalker (Jedi Knight)": {
       "abilityText": "Deflect: After a Ranged attack targeting you or an adjacent friendly figure resolves, a hostile figure of your choice in your line of sight suffers 1 Damage.\n\nHeroic: Once during your activation, you may perform an attack without spending an action.",
@@ -3928,7 +3944,11 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specials": [
+        "False Orders",
+        "Field Report"
+      ]
     },
     "Nexu (Elite)": {
       "abilityText": "Special Action (Pounce): Place your figure in an empty space within 3 spaces. Then, you may perform an attack.\n\nCunning: While defending, apply +1 Block to the defense results for each Evade result.\n\nNon-Sentient: You cannot interact.",
@@ -3960,7 +3980,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "specials": [
+        "Pounce"
+      ]
     },
     "Nexu (Regular)": {
       "abilityText": "Special Action (Pounce): Place your figure in an empty space within 3 spaces. Then, you may perform an attack.\n\nCunning: While defending, apply +1 Block to the defense results for each Evade result.\n\nNon-Sentient: You cannot interact.",
@@ -3991,7 +4014,10 @@
         "cleave 1"
       ],
       "attachment": false,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "specials": [
+        "Pounce"
+      ]
     },
     "Obi-Wan Kenobi": {
       "abilityText": "Alter Mind: Hostile figures with a figure cost of 9 or less within 3 spaces of you cannot interact and are not counted for the purposes of control.\n\nStrike Me Down: When an attack targeting you is declared, you may reduce your figure cost by 3. If you do, you are then defeated.\n\nInto the Force: When you are defeated, choose another friendly figure. That figure becomes Focused.",
@@ -4170,7 +4196,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specials": [
+        "On the Hunt"
+      ]
     },
     "R2-D2": {
       "abilityText": "Special Action (Scomp Link): If you are adjacent to a terminal, your player draws 1 Command card.\n\nSpecial Action (Service): You or an adjacent friendly DROID or VEHICLE recovers 1 Damage.\n\nLucky: While defending, if you roll a blank result, add +1 Dodge to the defense results.",
@@ -4367,6 +4396,12 @@
       "affiliation": "Rebel",
       "specialAbilityIds": [
         "get_into_position"
+      ],
+      "specials": [
+        "Get into Position"
+      ],
+      "specialCosts": [
+        2
       ]
     },
     "Rebel Trooper (Regular)": {
@@ -4552,7 +4587,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specials": [
+        "Brutality"
+      ]
     },
     "Sabine Wren": {
       "abilityText": "Special Action (Evasive Maneuver): Move up to 2 spaces, then recover 2 Damage.\n\nParting Gift: Once during your activation, you may choose a space within 3 spaces and roll 1 green die. Each other figure and object on or adjacent to that space suffers Damage equal to the Hit results.",
@@ -5545,6 +5583,9 @@
       "affiliation": "Scum",
       "specialAbilityIds": [
         "prowl"
+      ],
+      "specials": [
+        "Prowl"
       ]
     },
     "Weequay Pirate (Regular)": {
@@ -5663,7 +5704,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specials": [
+        "Fury"
+      ]
     },
     "Wookiee Warrior (Regular)": {
       "abilityText": "Fury: While attacking, if you have suffered 5 or more Damage, apply +1 Surge to the attack results.",
@@ -5692,7 +5736,10 @@
         "cleave 2"
       ],
       "attachment": false,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specials": [
+        "Fury"
+      ]
     },
     "Yoda": {
       "abilityText": "Calming Presence: At the start of a friendly REBEL figure's activation, that figure may remove one HARMFUL condition and suffer 1 Strain. Limit once per round.\n\nWisdom: At the start of your activation, you may draw 1 Command card. If you do, place 1 card from your hand on the bottom of your deck.\n\nSpecial Action (Do or Do Not): Choose another friendly REBEL FORCE USER within 4 spaces. That figure becomes Focused.\n\nForce Deflection: After an attack targeting you or an adjacent friendly REBEL figure resolves, you may have the attacking figure suffer Damage equal to the number of attack dice rolled. Limit once per round.",
@@ -5970,6 +6017,62 @@
       "attachment": false,
       "companion": true,
       "unique": true
+    },
+    "Trandoshan Hunter": {
+      "health": 7,
+      "figures": 2,
+      "speed": 4,
+      "cost": 8,
+      "attack": {
+        "dice": [
+          "red"
+        ],
+        "range": [
+          1,
+          3
+        ]
+      },
+      "defense": "white",
+      "specials": [],
+      "specialCosts": []
+    },
+    "Weequay Pirate": {
+      "health": 4,
+      "figures": 2,
+      "speed": 4,
+      "cost": 5,
+      "attack": {
+        "dice": [
+          "red"
+        ],
+        "range": [
+          1,
+          3
+        ]
+      },
+      "defense": "white",
+      "specials": [],
+      "specialCosts": []
+    },
+    "Nexu": {
+      "health": 6,
+      "figures": 1,
+      "speed": 5,
+      "cost": 6,
+      "attack": {
+        "dice": [
+          "yellow"
+        ],
+        "range": [
+          1,
+          2
+        ]
+      },
+      "defense": "white",
+      "specials": [
+        "Pounce"
+      ],
+      "specialCosts": []
     }
   }
 }

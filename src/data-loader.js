@@ -189,8 +189,9 @@ export function getFigureSize(dcName) {
   return key2 ? sizes[key2] : '1x1';
 }
 
+/** Returns the full dc-effects map — single source of truth for all DC card data. */
 export function getDcStats() {
-  return dcStats;
+  return dcEffects;
 }
 export function getMapRegistry() {
   return mapRegistry;

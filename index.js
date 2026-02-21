@@ -265,7 +265,6 @@ import {
   getFigureImages,
   getFigureSizes,
   getFigureSize,
-  getDcStats as getDcStatsMap,
   getMapRegistry,
   getDeploymentZones,
   getMapSpacesData,
@@ -1872,10 +1871,11 @@ function getFiguresForRender(game) {
       let figureCount = getDcStats(dcName).figures ?? 1;
       if (figureCount <= 1 && dcName) {
         const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-        const key = Object.keys(getDcStatsMap() || {}).find(
+        const allEffects = getDcEffects();
+        const key = Object.keys(allEffects).find(
           (k) => k.toLowerCase().startsWith(base.toLowerCase() + ' ') || k.toLowerCase() === base.toLowerCase()
         );
-        if (key) figureCount = getDcStatsMap()[key]?.figures ?? figureCount;
+        if (key) figureCount = allEffects[key]?.figures ?? figureCount;
       }
       const dcCopies = totals[dcName] ?? 1;
       let label = null;
@@ -3072,18 +3072,14 @@ function getCompanionDescriptionForDc(dcName) {
 }
 
 function getDcStats(dcName) {
-  const map = getDcStatsMap();
-  const exact = map[dcName];
-  if (exact) return { ...exact, figures: isFigurelessDc(dcName) ? 0 : (exact.figures ?? 1) };
-  const lower = dcName?.toLowerCase?.() || '';
-  const key = Object.keys(map).find((k) => k.toLowerCase() === lower);
-  if (key) {
-    const base = map[key];
-    return { ...base, figures: isFigurelessDc(dcName) ? 0 : (base.figures ?? 1) };
-  }
   const effects = getDcEffects();
-  const eff = effects[dcName] || (typeof dcName === 'string' && !dcName.startsWith('[') ? effects[`[${dcName}]`] : null);
-  if (eff && (eff.health != null || eff.figures != null)) {
+  const lower = dcName?.toLowerCase?.() || '';
+  const ciKey = Object.keys(effects).find((k) => k.toLowerCase() === lower);
+  const eff =
+    effects[dcName] ||
+    (ciKey ? effects[ciKey] : null) ||
+    (typeof dcName === 'string' && !dcName.startsWith('[') ? effects[`[${dcName}]`] : null);
+  if (eff) {
     return {
       health: eff.health ?? null,
       figures: isFigurelessDc(dcName) ? 0 : (eff.figures ?? 1),
@@ -3091,10 +3087,11 @@ function getDcStats(dcName) {
       cost: eff.cost ?? null,
       attack: eff.attack ?? null,
       defense: eff.defense ?? null,
-      specials: [],
+      specials: eff.specials || [],
+      specialCosts: eff.specialCosts || [],
     };
   }
-  return { health: null, figures: isFigurelessDc(dcName) ? 0 : 1, specials: [] };
+  return { health: null, figures: isFigurelessDc(dcName) ? 0 : 1, specials: [], specialCosts: [] };
 }
 
 function getDeckIllegalPlayCustomId(gameId, playerNum) {
