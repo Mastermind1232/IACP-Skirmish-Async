@@ -973,6 +973,71 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `Gained ${entry.mpBonus} movement point${entry.mpBonus !== 1 ? 's' : ''}. Became Focused.` };
   }
 
+  // dcSpecial: applySelfCondition — apply Focus or Hide to own activating figures (e.g. Prowl, Inform-self)
+  if (entry.type === 'dcSpecial' && entry.applySelfCondition) {
+    const { game, msgId, meta } = context;
+    if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, meta.playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found for this activation.' };
+    const cond = entry.applySelfCondition;
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of figureKeys) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes(cond)) game.figureConditions[fk] = [...existing, cond];
+    }
+    return { applied: true, logMessage: `Became ${cond}.` };
+  }
+
+  // dcSpecial: recoverSelf — recover N damage from own activating figure(s)
+  if (entry.type === 'dcSpecial' && typeof entry.recoverSelf === 'number' && entry.recoverSelf > 0) {
+    const { game, msgId, meta, dcHealthState } = context;
+    if (!game || !msgId || !meta || !dcHealthState) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const healthState = dcHealthState.get(msgId);
+    if (!healthState?.length || !Array.isArray(healthState[0])) return { applied: false, manualMessage: 'Resolve manually: no health state found for this figure.' };
+    let remaining = entry.recoverSelf;
+    let totalRecovered = 0;
+    for (let i = 0; i < healthState.length && remaining > 0; i++) {
+      const [cur, max] = healthState[i];
+      if (cur == null || max == null) continue;
+      const healed = Math.min(max - cur, remaining);
+      healthState[i] = [cur + healed, max];
+      totalRecovered += healed;
+      remaining -= healed;
+    }
+    dcHealthState.set(msgId, healthState);
+    const dcMessageIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcList = meta.playerNum === 1 ? game.p1DcList : game.p2DcList;
+    const idx = (dcMessageIds || []).indexOf(msgId);
+    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    const freeMovePart = entry.freeMoveBonus > 0 ? ` Gained ${entry.freeMoveBonus} free movement point${entry.freeMoveBonus !== 1 ? 's' : ''} — use the Move button.` : '';
+    if (entry.freeMoveBonus > 0) {
+      game.movementBank = game.movementBank || {};
+      const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+      bank.total = (bank.total ?? 0) + entry.freeMoveBonus;
+      bank.remaining = (bank.remaining ?? 0) + entry.freeMoveBonus;
+      game.movementBank[msgId] = bank;
+    }
+    return {
+      applied: true,
+      logMessage: totalRecovered > 0 ? `Recovered ${totalRecovered} Damage.${freeMovePart}` : `Already at full health.${freeMovePart}`,
+      refreshDcEmbed: true,
+    };
+  }
+
+  // dcSpecial: drawCCIfAdjacentTerminal — player draws N CC (adjacency check is on-honour; if condition not met, undo manually)
+  if (entry.type === 'dcSpecial' && typeof entry.drawCCIfAdjacentTerminal === 'number' && entry.drawCCIfAdjacentTerminal > 0) {
+    const { game, meta } = context;
+    if (!game || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const n = entry.drawCCIfAdjacentTerminal;
+    const drew = drawCards(game, meta.playerNum, n);
+    if (!drew.length) return { applied: false, manualMessage: 'No Command cards left in deck to draw.' };
+    return {
+      applied: true,
+      logMessage: `Drew ${drew.length} Command card${drew.length !== 1 ? 's' : ''}. *(Only valid if adjacent to a terminal — undo if not.)*`,
+      drewCards: drew,
+    };
+  }
+
   // ccEffect: applyHide only (Hide in Plain Sight, Guerilla Warfare) — apply Hide to activating figures during activation
   if (entry.type === 'ccEffect' && entry.applyHide && !entry.applyFocus) {
     const { game, playerNum, dcMessageMeta } = context;

@@ -3857,7 +3857,10 @@
       ],
       "attachment": false,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "mhd19_medical_loadout"
+      ]
     },
     "Migs Mayfeld": {
       "abilityText": "Locked and Loaded: You may have up to 3 Power Tokens. After you resolve an attack, gain 2 Power Tokens.\n\nDroid Arm: Before you declare an attack, you may discard a Power Token to draw line of sight to the target from a space adjacent to you.\n\nReturn Fire: After an attack targeting you is resolved, you can interrupt to perform an attack targeting that attacker. Limit once per round.",
@@ -4200,7 +4203,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "r2d2_scomp_link"
+      ]
     },
     "Rancor": {
       "abilityText": "Special Action (Crippling Blow): Perform an attack. After the attack resolves, if it did not miss, the defender becomes Stunned.\n\nTrained: While attacking, you may suffer 1 Strain to reroll 1 attack die.\n\nVoracious: At the start of another figure's activation, you may defeat a friendly non-companion figure within 2 spaces to recover 2 Damage and ready your Deployment card. Limit once per round.",
@@ -4359,7 +4365,9 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Rebel",
-      "specialAbilityIds": ["rtel_get_into_position"]
+      "specialAbilityIds": [
+        "rtel_get_into_position"
+      ]
     },
     "Rebel Trooper (Regular)": {
       "abilityText": "Aim: If you have not exited your space during this activation, apply +1 Hit and +2 Accuracy to your attack results.",
@@ -4578,7 +4586,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "sabine_evasive_maneuver"
+      ]
     },
     "Saska Teft": {
       "abilityText": "Shady Contacts: You may include up to 1 non-upgrade SCUM Deployment card in your army.\n\nUnstable Devices: Once during your activation, a friendly figure in your line of sight may gain 1 Device token.\n\nPower Converter: Once per round, while a friendly figure with a Device token is attacking, it may reroll 1 attack die. Before rerolling, you may replace that die with another attack die of any color. It is considered rerolled.",
@@ -5531,7 +5542,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "specialAbilityIds": [
+        "weequay_pirate_prowl"
+      ]
     },
     "Weequay Pirate (Regular)": {
       "abilityText": "Raider: While attacking, you may choose 1 die. The player that rolled that die must reroll that die.",

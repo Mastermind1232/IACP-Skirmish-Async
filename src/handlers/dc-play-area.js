@@ -924,7 +924,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const ids = effectEntry?.specialAbilityIds;
     abilityId = Array.isArray(ids) && ids[specialIdx] != null ? ids[specialIdx] : `dc_special:${meta.dcName}:${specialIdx}`;
   }
-  const resolveResult = resolveAbility ? resolveAbility(abilityId, { game, msgId, meta, specialLabel: action }) : { applied: false, manualMessage: 'Resolve manually (see rules).' };
+  const resolveResult = resolveAbility ? resolveAbility(abilityId, { game, msgId, meta, playerNum: meta.playerNum, dcMessageMeta, dcHealthState: ctx.dcHealthState, specialLabel: action }) : { applied: false, manualMessage: 'Resolve manually (see rules).' };
   const manualMsg = resolveResult.manualMessage || 'Resolve manually (see rules).';
   const doneRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
