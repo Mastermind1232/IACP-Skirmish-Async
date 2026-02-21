@@ -161,54 +161,54 @@
       "label": "Adrenaline",
       "wiredStatus": "unwired"
     },
-    "dv_force_choke": {
+    "force_choke": {
       "type": "dcSpecial",
       "label": "Force Choke: Choose a hostile figure in your line of sight. That figure suffers 2 Damage and 1 Strain."
     },
-    "dv_brutality": {
+    "brutality": {
       "type": "dcSpecial",
       "label": "Brutality: Perform 2 attacks. Each attack must have a different target."
     },
-    "luke_saber_strike": {
+    "saber_strike": {
       "type": "dcSpecial",
       "label": "Saber Strike: Perform a melee attack using 1 red and 1 yellow die. This attack gains Pierce 3."
     },
-    "rtel_get_into_position": {
+    "get_into_position": {
       "type": "dcSpecial",
       "label": "Get into Position: Gain 4 movement points and become Focused.",
       "mpBonus": 4,
       "applyFocus": true
     },
-    "weequay_pirate_prowl": {
+    "prowl": {
       "type": "dcSpecial",
       "label": "Prowl: You become Hidden.",
       "applySelfCondition": "Hide"
     },
-    "sabine_evasive_maneuver": {
+    "evasive_maneuver": {
       "type": "dcSpecial",
       "label": "Evasive Maneuver: Move up to 2 spaces, then recover 2 Damage.",
       "recoverSelf": 2,
       "freeMoveBonus": 2
     },
-    "mhd19_medical_loadout": {
+    "medical_loadout": {
       "type": "dcSpecial",
       "label": "Medical Loadout: You recover 3 Damage. (To heal an adjacent figure instead, use manual resolve.)",
       "recoverSelf": 3
     },
-    "r2d2_scomp_link": {
+    "scomp_link": {
       "type": "dcSpecial",
       "label": "Scomp Link: If adjacent to a terminal, draw 1 Command card.",
       "drawCCIfAdjacentTerminal": 1
     },
-    "bd1_stim_canister": {
+    "stim_canister": {
       "type": "dcSpecial",
       "label": "Stim Canister: An adjacent friendly figure recovers 2 Health. (Resolve manually  target must be chosen.)"
     },
-    "c3po_inform": {
+    "inform": {
       "type": "dcSpecial",
       "label": "Inform: Choose an adjacent friendly figure. That figure becomes Focused. (Resolve manually  target must be chosen.)"
     },
-    "the_child_force_heal": {
+    "force_heal": {
       "type": "dcSpecial",
       "label": "Force Heal: An adjacent friendly figure recovers 1 Damage and discards a HARMFUL condition. (Resolve manually  target must be chosen.)"
     },

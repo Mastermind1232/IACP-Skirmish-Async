@@ -3859,7 +3859,7 @@
       "unique": true,
       "affiliation": "Rebel",
       "specialAbilityIds": [
-        "mhd19_medical_loadout"
+        "medical_loadout"
       ]
     },
     "Migs Mayfeld": {
@@ -4205,7 +4205,7 @@
       "unique": true,
       "affiliation": "Rebel",
       "specialAbilityIds": [
-        "r2d2_scomp_link"
+        "scomp_link"
       ]
     },
     "Rancor": {
@@ -4366,7 +4366,7 @@
       "elite": true,
       "affiliation": "Rebel",
       "specialAbilityIds": [
-        "rtel_get_into_position"
+        "get_into_position"
       ]
     },
     "Rebel Trooper (Regular)": {
@@ -4588,7 +4588,7 @@
       "unique": true,
       "affiliation": "Rebel",
       "specialAbilityIds": [
-        "sabine_evasive_maneuver"
+        "evasive_maneuver"
       ]
     },
     "Saska Teft": {
@@ -5544,7 +5544,7 @@
       "elite": true,
       "affiliation": "Scum",
       "specialAbilityIds": [
-        "weequay_pirate_prowl"
+        "prowl"
       ]
     },
     "Weequay Pirate (Regular)": {
