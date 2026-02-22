@@ -67,6 +67,15 @@ export async function handleEndEndOfRound(interaction, ctx) {
   await interaction.deferUpdate();
   game.dcFinishedPinged = {};
   game.pendingEndTurn = {};
+  // Clear per-activation conditions (Stun, Weaken) from all figures at end of round.
+  // Rules: Stun/Weaken removed at end of that figure's activation; each figure activates once per round,
+  // so clearing at end of round is equivalent.
+  if (game.figureConditions) {
+    for (const fk of Object.keys(game.figureConditions)) {
+      game.figureConditions[fk] = game.figureConditions[fk].filter((c) => c !== 'Stun' && c !== 'Weaken');
+      if (game.figureConditions[fk].length === 0) delete game.figureConditions[fk];
+    }
+  }
   // Apply end-of-round self damage (e.g. Blaze of Glory)
   const eorSelfDamage = game.endOfRoundSelfDamage;
   if (eorSelfDamage && typeof eorSelfDamage === 'object') {

@@ -2799,6 +2799,13 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
   return null;
 }
 
+/** Remove a specific condition from a figure. No-op if figure or condition not found. */
+function filterCondition(game, figureKey, cond) {
+  if (!game.figureConditions?.[figureKey]) return;
+  game.figureConditions[figureKey] = game.figureConditions[figureKey].filter((c) => c !== cond);
+  if (game.figureConditions[figureKey].length === 0) delete game.figureConditions[figureKey];
+}
+
 /** Resolve combat after rolls (and optional surge). Applies damage, VP, updates embeds/board, clears pendingCombat. */
 async function resolveCombatAfterRolls(game, combat, client) {
   // Beatdown / nextAttacksBonusHits: consume one charge and add bonus to this attack
@@ -3014,8 +3021,34 @@ async function resolveCombatAfterRolls(game, combat, client) {
   } else if (damage > 0) {
     await logGameAction(game, client, `<@${ownerId}> dealt **${damage}** damage to **${combat.target.label}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
   }
+  // Discard consumed conditions post-combat
+  if (combat.attackerFigureKey) {
+    filterCondition(game, combat.attackerFigureKey, 'Focus');  // Focus consumed after attacking
+    filterCondition(game, combat.attackerFigureKey, 'Hide');   // Attacker breaks stealth by attacking
+  }
+  filterCondition(game, combat.target.figureKey, 'Hide');      // Defender's Hide removed when attacked
   const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
+  // Bleed: attacker suffers 1 damage (ignore armor) after their Attack action
+  if (combat.attackerConds?.includes('Bleed') && combat.attackerMsgId != null) {
+    const attMsgId = combat.attackerMsgId;
+    const attFigIdx = combat.attackerFigureIndex ?? 0;
+    const attHS = dcHealthState.get(attMsgId) || [];
+    const attEntry = attHS[attFigIdx];
+    if (attEntry) {
+      const [aC, aM] = attEntry;
+      const aNew = Math.max(0, (aC ?? aM) - 1);
+      attHS[attFigIdx] = [aNew, aM ?? aNew];
+      dcHealthState.set(attMsgId, attHS);
+      const attP = combat.attackerPlayerNum;
+      const bleedDcIds = attP === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const bleedDcList = attP === 1 ? game.p1DcList : game.p2DcList;
+      const bIdx = (bleedDcIds || []).indexOf(attMsgId);
+      if (bIdx >= 0 && bleedDcList?.[bIdx]) bleedDcList[bIdx].healthState = [...attHS];
+      embedRefreshMsgIds.add(attMsgId);
+      await logGameAction(game, client, `**${combat.attackerDisplayName}** suffered 1 damage from Bleeding.`, { phase: 'ROUND', icon: 'attack' });
+    }
+  }
   // Deflection: if defender took 0 damage (attack hit but was fully blocked), attacker suffers N damage
   const deflectDmg = game.deflectionPending?.[defenderPlayerNum];
   if (deflectDmg && deflectDmg > 0 && hit && damage === 0) {

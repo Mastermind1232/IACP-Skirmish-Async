@@ -146,10 +146,20 @@ export function computeCombatResult(combat) {
   }
   const pierceToUse = combat.defenderIgnorePierce ? 0 : totalPierce;
   const blockForCalc = combat.ignoreDefenseResultsNotOnDice ? defRoll.block : (defRoll.block + bonusBlock);
-  const effectiveBlock = Math.max(0, blockForCalc - pierceToUse);
+  let effectiveBlock = Math.max(0, blockForCalc - pierceToUse);
+  // Weakened on defender: -1 from their block result
+  const defenderWeakened = combat.defenderConds?.includes('Weaken');
+  if (defenderWeakened) {
+    effectiveBlock = Math.max(0, effectiveBlock - 1);
+  }
   const defenseDiceCount = combat.defenseDiceCount ?? 1;
   const perDefDieDamage = (combat.bonusDamagePerDefenseDie || 0) * defenseDiceCount;
   let damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits + perDefDieDamage - effectiveBlock) : 0;
+  // Weakened on attacker: -1 to their final damage output
+  const attackerWeakened = combat.attackerConds?.includes('Weaken');
+  if (attackerWeakened && damage > 0) {
+    damage = Math.max(0, damage - 1);
+  }
   if (combat.maxDamageToDefender != null && damage > combat.maxDamageToDefender) damage = combat.maxDamageToDefender;
   const allConds = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
   if (combat.attackResultReplaceWithStun && damage > 0) {
@@ -182,6 +192,8 @@ export function computeCombatResult(combat) {
   if (combat.isRanged && combat.distanceToTarget != null) {
     resultText += ` | Accuracy: ${totalAccuracy} vs ${combat.distanceToTarget} distance`;
   }
+  if (attackerWeakened) resultText += ` | **Weakened** (attacker -1 dmg)`;
+  if (defenderWeakened) resultText += ` | **Weakened** (defender -1 block)`;
   if (!hit) resultText += missReason ? ` → **Miss** (${missReason})` : ' → **Miss**';
   else resultText += ` → **${damage} damage**${conditionsText}`;
   if (combat.attackResultReplaceWithStun) resultText += ' (Set for Stun: 0 damage, Stunned)';

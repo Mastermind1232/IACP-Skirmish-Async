@@ -722,6 +722,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     try {
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
       const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+      // Stunned figures cannot Move
+      const moveFigureConds = game.figureConditions?.[figureKey] || [];
+      if (moveFigureConds.includes('Stun')) {
+        await interaction.reply({ content: `**${meta.displayName || meta.dcName}** is **Stunned** and cannot Move or Attack this activation.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        return;
+      }
       const playerNum = meta.playerNum;
       const pos = game.figurePositions?.[playerNum]?.[figureKey];
       if (!pos) {
@@ -829,6 +835,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   if (action === 'Attack') {
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
     const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+    // Stunned figures cannot Attack
+    const attackFigureConds = game.figureConditions?.[figureKey] || [];
+    if (attackFigureConds.includes('Stun')) {
+      await interaction.reply({ content: `**${meta.displayName || meta.dcName}** is **Stunned** and cannot Move or Attack this activation.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
     const playerNum = meta.playerNum;
     const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
     if (!attackerPos) {
@@ -838,6 +850,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const stats = getDcStats(meta.dcName);
     const attackInfo = stats.attack || { dice: ['red'], range: [1, 3] };
     const [minRange, maxRange] = attackInfo.range || [1, 3];
+    // Reach: melee figure can target 1–2 spaces away; no accuracy check (still counts as melee)
+    const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
+    const hasReach = attackerKws.includes('REACH');
+    const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
     const ms = getMapSpaces(game.selectedMap?.id);
     if (!ms) {
       await interaction.reply({ content: 'Map spaces not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -850,11 +867,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const totals = {};
     for (const d of dcList) totals[d] = (totals[d] || 0) + 1;
     for (const [k, coord] of Object.entries(poses)) {
+      // Hidden figures cannot be declared as attack targets
+      const targetCondsList = game.figureConditions?.[k] || [];
+      if (targetCondsList.includes('Hide')) continue;
       const dcName = k.replace(/-\d+-\d+$/, '');
       const size = game.figureOrientations?.[k] || getFigureSize(dcName);
       const cells = getFootprintCells(coord, size);
       const dist = Math.min(...cells.map((c) => getRange(attackerPos, c)));
-      if (dist < minRange || dist > maxRange) continue;
+      if (dist < minRange || dist > effectiveMaxRange) continue;
       const los = hasLineOfSight(attackerPos, coord, ms);
       const m = k.match(/-(\d+)-(\d+)$/);
       const dg = m ? parseInt(m[1], 10) : 1;

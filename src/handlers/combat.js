@@ -78,11 +78,19 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   const attackerStats = getDcStats(meta.dcName);
-  const attackInfo = attackerStats.attack || { dice: ['red'], range: [1, 3] };
+  let attackInfo = attackerStats.attack || { dice: ['red'], range: [1, 3] };
   const targetDcName = target.figureKey.replace(/-\d+-\d+$/, '');
   const targetStats = getDcStats(targetDcName);
   const targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName.replace(/\s*\[.*\]\s*$/, '')];
   const attackerDisplayName = meta.displayName || meta.dcName;
+  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const attackerFigureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+  const attackerConds = game.figureConditions?.[attackerFigureKey] || [];
+  const defenderConds = game.figureConditions?.[target.figureKey] || [];
+  // Focus: attacker gains 1 green die on their next attack; consumed after attacking
+  if (attackerConds.includes('Focus')) {
+    attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'green'] };
+  }
   const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
   const combatDeclare = `**P${attackerPlayerNum}:** "${attackerDisplayName}" is attacking **P${defenderPlayerNum}:** "${target.label}"!`;
 
@@ -120,6 +128,9 @@ export async function handleAttackTarget(interaction, ctx) {
     bonusPierce: nextPierce,
     attackerDisplayName,
     attackerFigureIndex: figureIndex,
+    attackerFigureKey,
+    attackerConds,
+    defenderConds,
     target: { ...target },
     targetStats: {
       defense: targetStats.defense || 'white',
