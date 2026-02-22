@@ -532,7 +532,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: +N MP (Fleet Footed, Force Rush, etc.) — requires active activation
+  // ccEffect: +N MP (Fleet Footed, Rank and File, etc.) — requires active activation
   if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
@@ -544,7 +544,29 @@ export function resolveAbility(abilityId, context) {
     bank.total = (bank.total ?? 0) + n;
     bank.remaining = (bank.remaining ?? 0) + n;
     game.movementBank[msgId] = bank;
-    const msg = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
+    let msg = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
+    // Rank and File: each other friendly TROOPER also gains N MP immediately
+    if (entry.trooperMpBonusRound) {
+      const bonus = entry.trooperMpBonusRound;
+      const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      let trooperCount = 0;
+      for (let i = 0; i < dcMsgIds.length; i++) {
+        const dMsgId = dcMsgIds[i];
+        if (dMsgId === msgId) continue;
+        const dc = dcList[i];
+        if (!dc?.dcName) continue;
+        const eff = getDcEffects()?.[dc.dcName] || getDcEffects()?.[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+        const kws = (eff?.keywords || []).map((k) => String(k).toUpperCase());
+        if (!kws.includes('TROOPER')) continue;
+        const dBank = game.movementBank[dMsgId] || { total: 0, remaining: 0 };
+        dBank.total = (dBank.total ?? 0) + bonus;
+        dBank.remaining = (dBank.remaining ?? 0) + bonus;
+        game.movementBank[dMsgId] = dBank;
+        trooperCount++;
+      }
+      if (trooperCount > 0) msg += ` Each of ${trooperCount} other friendly TROOPER(s) also gained ${bonus} MP.`;
+    }
     return { applied: true, logMessage: msg };
   }
 
@@ -1419,6 +1441,23 @@ export function resolveAbility(abilityId, context) {
     const parts = [];
     if (block) parts.push(`+${block} Block`);
     if (evade) parts.push(`+${evade} Evade`);
+    // Cavalry Charge: friendly TROOPERs get +N Hit when attacking this round
+    if (entry.trooperRoundAttackHitBonus) {
+      game.roundTrooperAttackHitBonus = game.roundTrooperAttackHitBonus || {};
+      game.roundTrooperAttackHitBonus[playerNum] = (game.roundTrooperAttackHitBonus[playerNum] || 0) + entry.trooperRoundAttackHitBonus;
+      parts.push(`+${entry.trooperRoundAttackHitBonus} Hit for friendly TROOPERs attacking`);
+    }
+    // Fuel Upgrade: friendly VEHICLEs get +N Speed this round
+    if (entry.vehicleSpeedBonusRound) {
+      game.roundVehicleSpeedBonus = game.roundVehicleSpeedBonus || {};
+      game.roundVehicleSpeedBonus[playerNum] = (game.roundVehicleSpeedBonus[playerNum] || 0) + entry.vehicleSpeedBonusRound;
+      parts.push(`+${entry.vehicleSpeedBonusRound} Speed for friendly VEHICLEs`);
+    }
+    // Deflection: if defender takes 0 damage this round, attacker suffers N damage after combat
+    if (entry.deflectionCounterDamage) {
+      game.deflectionPending = game.deflectionPending || {};
+      game.deflectionPending[playerNum] = (game.deflectionPending[playerNum] || 0) + entry.deflectionCounterDamage;
+    }
     return {
       applied: true,
       logMessage: `Until end of round, apply ${parts.join(' and ')} when defending.`,

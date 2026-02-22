@@ -729,7 +729,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         return;
       }
       const stats = getDcStats(meta.dcName);
-      const speed = getEffectiveSpeed(meta.dcName, figureKey, game);
+      const speed = getEffectiveSpeed(meta.dcName, figureKey, game, playerNum);
       const bank = game.movementBank?.[msgId];
       const currentMp = bank?.remaining ?? 0;
       const mpRemaining = currentMp + speed;

@@ -316,8 +316,9 @@
     },
     "Rank and File": {
       "type": "ccEffect",
-      "label": "Gain 1 MP; each friendly TROOPER within 2 also gains 1 MP (apply to their embeds)",
+      "label": "Gain 1 MP; each other friendly TROOPER also gains 1 MP",
       "mpBonus": 1,
+      "trooperMpBonusRound": 1,
       "wiredStatus": "wired"
     },
     "Urgency": {
@@ -508,8 +509,9 @@
     },
     "Cavalry Charge": {
       "type": "ccEffect",
-      "label": "Until end of round: +1 Block when defending; friendly TROOPERs within 3 also get +1 Hit when attacking (apply to their rolls)",
+      "label": "Until end of round: +1 Block when defending; friendly TROOPERs get +1 Hit when attacking",
       "roundDefenseBonusBlock": 1,
+      "trooperRoundAttackHitBonus": 1,
       "wiredStatus": "wired"
     },
     "Foresee": {
@@ -946,8 +948,9 @@
     },
     "Deflection": {
       "type": "ccEffect",
-      "label": "Until end of round: +2 Evade when defending; if you take no Damage, attacker suffers 2 Damage (resolve after combat)",
+      "label": "Until end of round: +2 Evade when defending; if you take no Damage, attacker suffers 2 Damage (auto-applied)",
       "roundDefenseBonusEvade": 2,
+      "deflectionCounterDamage": 2,
       "wiredStatus": "wired"
     },
     "Ambush": {
@@ -1134,8 +1137,9 @@
     },
     "Fuel Upgrade": {
       "type": "ccEffect",
-      "label": "Until end of round: +1 Evade when defending (VEHICLES only); +1 Speed for VEHICLES (apply to their embeds)",
+      "label": "Until end of round: +1 Evade when defending (VEHICLES only); +1 Speed for VEHICLES",
       "roundDefenseBonusEvade": 1,
+      "vehicleSpeedBonusRound": 1,
       "wiredStatus": "wired"
     },
     "Collateral Damage": {

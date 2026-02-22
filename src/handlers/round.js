@@ -176,6 +176,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.roundDefenseBonusBlock = {};
   game.roundDefenseBonusEvade = {};
   game.roundDefenderBonusBlockPerEvade = {};
+  game.roundTrooperAttackHitBonus = {};
+  game.roundVehicleSpeedBonus = {};
+  game.deflectionPending = {};
   game.roundDroidExtraActionCostDamage = null;
   game.sitTightPlayerNum = null;
   game.roundInTheShadowsPlayerNum = null;

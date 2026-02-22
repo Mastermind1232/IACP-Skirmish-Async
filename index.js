@@ -468,12 +468,18 @@ function isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, mapId, mis
   return false;
 }
 
-/** Effective speed, accounting for mission-defined carry penalty (if active). */
-function getEffectiveSpeed(dcName, figureKey, game) {
-  const base = getDcStats(dcName).speed ?? 4;
+/** Effective speed, accounting for mission-defined carry penalty and round bonuses (Fuel Upgrade, etc.). */
+function getEffectiveSpeed(dcName, figureKey, game, playerNum) {
+  let base = getDcStats(dcName).speed ?? 4;
   const mech = game?.selectedMission?.mechanics;
   if (mech?.type === 'carry' && mech.speedPenalty && game.figureContraband?.[figureKey]) {
-    return Math.max(0, base + mech.speedPenalty);
+    base = Math.max(0, base + mech.speedPenalty);
+  }
+  // Fuel Upgrade: round VEHICLE speed bonus
+  if (playerNum && game?.roundVehicleSpeedBonus?.[playerNum]) {
+    const eff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const keywords = (eff?.keywords || []).map((k) => String(k).toUpperCase());
+    if (keywords.includes('VEHICLE')) base += game.roundVehicleSpeedBonus[playerNum];
   }
   return base;
 }
@@ -2001,7 +2007,7 @@ async function getActivationMinimapAttachment(game, msgId) {
     }
   }
   if (!figureKey || !pos) return null;
-  const speed = getEffectiveSpeed(dcName, figureKey, game);
+  const speed = getEffectiveSpeed(dcName, figureKey, game, playerNum);
   const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName);
   const { col: tlCol, row: tlRow } = parseCoord(pos);
   const [cols = 1, rows = 1] = String(size || '1x1').split('x').map(Number);
@@ -2043,7 +2049,7 @@ async function getMovementMinimapAttachment(game, msgId, figureKey, spacesAtCost
   const pos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!pos) return null;
   const dcName = figureKey.replace(/-\d+-\d+$/, '');
-  const speed = getEffectiveSpeed(dcName, figureKey, game);
+  const speed = getEffectiveSpeed(dcName, figureKey, game, playerNum);
   const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName);
   const { col: tlCol, row: tlRow } = parseCoord(pos);
   const [cols = 1, rows = 1] = String(size || '1x1').split('x').map(Number);
@@ -2802,6 +2808,13 @@ async function resolveCombatAfterRolls(game, combat, client) {
   if (roundEvade) combat.bonusEvade = (combat.bonusEvade || 0) + roundEvade;
   const perEvade = game.roundDefenderBonusBlockPerEvade?.[defenderPlayerNum] || 0;
   if (perEvade && combat.defenseRoll) combat.bonusBlock = (combat.bonusBlock || 0) + (combat.defenseRoll.evade || 0) * perEvade;
+  // Cavalry Charge: round TROOPER attack hit bonus
+  const trooperHitBonus = game.roundTrooperAttackHitBonus?.[combat.attackerPlayerNum] || 0;
+  if (trooperHitBonus) {
+    const attackerEff = getDcEffects()?.[combat.attackerDcName] || getDcEffects()?.[combat.attackerDcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const attackerKws = (attackerEff?.keywords || []).map((k) => String(k).toUpperCase());
+    if (attackerKws.includes('TROOPER')) combat.bonusHits = (combat.bonusHits || 0) + trooperHitBonus;
+  }
   let { hit, damage, resultText } = computeCombatResult(combat);
   const totalBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
   const attackerPlayerNum = combat.attackerPlayerNum;
@@ -2988,6 +3001,30 @@ async function resolveCombatAfterRolls(game, combat, client) {
   }
   const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
+  // Deflection: if defender took 0 damage (attack hit but was fully blocked), attacker suffers N damage
+  const deflectDmg = game.deflectionPending?.[defenderPlayerNum];
+  if (deflectDmg && deflectDmg > 0 && hit && damage === 0) {
+    delete game.deflectionPending[defenderPlayerNum];
+    const attMsgId = combat.attackerMsgId;
+    const attFigIdx = combat.attackerFigureIndex ?? 0;
+    if (attMsgId) {
+      const attHS = dcHealthState.get(attMsgId) || [];
+      const attEntry = attHS[attFigIdx];
+      if (attEntry) {
+        const [aC, aM] = attEntry;
+        const aNew = Math.max(0, (aC ?? aM) - deflectDmg);
+        attHS[attFigIdx] = [aNew, aM ?? aNew];
+        dcHealthState.set(attMsgId, attHS);
+        const attDcIds = attackerPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const attDcList = attackerPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+        const attDcIdx = (attDcIds || []).indexOf(attMsgId);
+        if (attDcIdx >= 0 && attDcList?.[attDcIdx]) attDcList[attDcIdx].healthState = [...attHS];
+        embedRefreshMsgIds.add(attMsgId);
+        const defOwnerId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
+        await logGameAction(game, client, `<@${defOwnerId}> **Deflection** — Attacker suffers **${deflectDmg} Damage** (you took no damage).`, { allowedMentions: { users: [defOwnerId] }, phase: 'ROUND', icon: 'card' });
+      }
+    }
+  }
   if (totalBlast > 0 && hit && game.selectedMap?.id) {
     const blastAdjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
     for (const { figureKey: bk, playerNum: bp } of blastAdjacent) {
