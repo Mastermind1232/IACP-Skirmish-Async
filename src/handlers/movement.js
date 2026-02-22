@@ -286,10 +286,11 @@ export async function handleMovePick(interaction, ctx) {
   const shortName = (displayName || meta.displayName || '').replace(/\s*\[(?:DG|Group) \d+\]$/, '') || displayName;
   const pLabel = `P${playerNum}`;
   const path = getMovementPath(cache, startCoord, newTopLeft, newSize, profile);
+  const startDisplay = startCoord.toUpperCase();
   const pathStr = path.length > 1
-    ? ` (path: ${path.map((c) => String(c).toUpperCase()).join(' → ')})`
+    ? ` via ${path.map((c) => String(c).toUpperCase()).join(' → ')}`
     : '';
-  const moveLogMsg = await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** to **${destDisplay}**${pathStr}`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
+  const moveLogMsg = await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** from **${startDisplay}** → **${destDisplay}** (**${cost} MP**${pathStr})`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
   pushUndo(game, {
     type: 'move',
     gameId: game.gameId,

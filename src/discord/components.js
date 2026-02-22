@@ -492,14 +492,15 @@ export function getMoveMpButtonRows(msgId, figureIndex, mpRemaining) {
 
 /** Action rows for movement space selection: move_pick_${msgId}_${figureIndex}_${space}. */
 export function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces) {
-  return getSpaceChoiceRows(`move_pick_${msgId}_${figureIndex}_`, validSpaces, mapSpaces);
+  // Pass Infinity so all reachable cells get buttons; overflow is sent across multiple messages in movement.js
+  return getSpaceChoiceRows(`move_pick_${msgId}_${figureIndex}_`, validSpaces, mapSpaces, Infinity);
 }
 
 /**
  * Generic space choice rows (reusable for CC/DC "pick a space").
  * Buttons: ${customIdPrefix}${space}. Returns { rows, available }.
  */
-export function getSpaceChoiceRows(customIdPrefix, validSpaces, mapSpaces) {
+export function getSpaceChoiceRows(customIdPrefix, validSpaces, mapSpaces, maxRows = MAX_ROWS_PER_MESSAGE) {
   const available = (validSpaces || []).map((s) => normalizeCoord(s));
   const orderMap = new Map(
     (mapSpaces?.spaces || []).map((coord, idx) => [normalizeCoord(coord), idx])
@@ -537,7 +538,7 @@ export function getSpaceChoiceRows(customIdPrefix, validSpaces, mapSpaces) {
       );
     }
   }
-  return { rows: rows.slice(0, MAX_ROWS_PER_MESSAGE), available };
+  return { rows: rows.slice(0, maxRows), available };
 }
 
 /** Per-figure deploy labels; helpers = { resolveDcName, isFigurelessDc, getDcStats }. */

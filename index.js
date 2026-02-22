@@ -3858,16 +3858,21 @@ client.once('ready', async () => {
           .setName('list')
           .setDescription('List figures with Power Tokens')
       );
+    const movefigure = new SlashCommandBuilder()
+      .setName('move-figure')
+      .setDescription('Manually move a figure to any coordinate (bypasses movement rules). Use in Game Log channel.')
+      .addStringOption((o) => o.setName('figure').setDescription('Figure key, e.g. Nexu (Regular)-1-0').setRequired(true))
+      .addStringOption((o) => o.setName('coord').setDescription('Destination coordinate, e.g. m10').setRequired(true));
     await rest.put(Routes.applicationCommands(client.user.id), {
       body: [
-        botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(),
+        botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(), movefigure.toJSON(),
         affiliationwinrateglobal.toJSON(), affiliationwinratepersonal.toJSON(),
         affiliationpickrateglobal.toJSON(), affiliationpickratepersonal.toJSON(),
         dcwinrateglobaltopten.toJSON(), dcwinratepersonaltopten.toJSON(),
         leaderboard.toJSON(),
       ],
     });
-    console.log('Slash commands registered: /botmenu, /statcheck, /power-token, /affiliationwinrateglobal, /affiliationwinratepersonal, /affiliationpickrateglobal, /affiliationpickratepersonal, /dcwinrateglobaltopten, /dcwinratepersonaltopten, /leaderboard');
+    console.log('Slash commands registered: /botmenu, /statcheck, /power-token, /move-figure, /affiliationwinrateglobal, /affiliationwinratepersonal, /affiliationpickrateglobal, /affiliationpickratepersonal, /dcwinrateglobaltopten, /dcwinratepersonaltopten, /leaderboard');
   } catch (err) {
     console.error('Failed to register slash commands:', err.message);
   }
@@ -4410,6 +4415,46 @@ client.on('interactionCreate', async (interaction) => {
           console.error('Power token: refresh map failed', e);
         }
       }
+      return;
+    }
+    if (cmd === 'move-figure') {
+      const channelId = interaction.channelId;
+      let game = null;
+      for (const [, g] of getGamesMap()) {
+        if (g.generalId === channelId || g.boardId === channelId || g.chatId === channelId) { game = g; break; }
+      }
+      if (!game) {
+        await interaction.reply({ content: 'Use /move-figure in the **Game Log** or **Board** channel of an active game.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        return;
+      }
+      if (await replyIfGameEnded(game, interaction)) return;
+      const figureKey = interaction.options.getString('figure');
+      const coordRaw = interaction.options.getString('coord').trim().toLowerCase();
+      const poses = game.figurePositions || { 1: {}, 2: {} };
+      let playerNum = null;
+      let fk = null;
+      for (const pNum of [1, 2]) {
+        const keys = Object.keys(poses[pNum] || {});
+        const match = keys.find((k) => k.toLowerCase() === figureKey.toLowerCase());
+        if (match) { playerNum = pNum; fk = match; break; }
+      }
+      if (!fk) {
+        const allKeys = [...Object.keys(poses[1] || {}), ...Object.keys(poses[2] || {})];
+        await interaction.reply({ content: `Figure **${figureKey}** not found on map. On-map keys: ${allKeys.slice(0, 10).join(', ')}${allKeys.length > 10 ? '...' : ''}`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        return;
+      }
+      const prevCoord = poses[playerNum][fk];
+      game.figurePositions[playerNum][fk] = coordRaw;
+      saveGames();
+      await logGameAction(game, interaction.client, `🔧 **Manual move**: **${fk}** from **${String(prevCoord).toUpperCase()}** → **${coordRaw.toUpperCase()}** (by <@${interaction.user.id}>)`, { phase: 'ROUND', icon: 'move' });
+      if (game.boardId && game.selectedMap) {
+        try {
+          const boardChannel = await interaction.client.channels.fetch(game.boardId);
+          const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+          await boardChannel.send(payload);
+        } catch (e) { console.error('move-figure: refresh map failed', e); }
+      }
+      await interaction.reply({ content: `Moved **${fk}** to **${coordRaw.toUpperCase()}**.`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     // Stats commands: only in #statistics channel; require DB
