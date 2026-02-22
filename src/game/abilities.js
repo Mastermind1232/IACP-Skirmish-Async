@@ -70,7 +70,8 @@ function drawCcCards(game, playerNum, n) {
  * F3/F4: Resolve a non-surge ability by id (DC special or CC effect). Code-per-ability; most return manual.
  * @param {string|null|undefined} abilityId - Library id or synthetic key (e.g. dc_special:DCName:0 or CC card name).
  * @param {object} context - { game, ... } plus optional msgId, meta, playerNum, cardName, specialLabel.
- * @returns {{ applied: boolean, manualMessage?: string, drewCards?: string[] }}
+ * @returns {{ applied: boolean, manualMessage?: string, drewCards?: string[], freeAction?: boolean, grantsAction?: boolean, requiresSpaceChoice?: boolean, validSpaces?: string[] }}
+ *   freeAction: true — ability costs no action; the caller will restore the action point that was decremented.
  */
 export function resolveAbility(abilityId, context) {
   let entry = abilityId ? getAbility(abilityId) : null;

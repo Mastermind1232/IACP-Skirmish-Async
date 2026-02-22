@@ -9,12 +9,12 @@
 Scores are **effort-weighted** — a checkbox that fixes one return statement is not worth the same as wiring surge abilities for 223 deployment cards. Each category carries a weight reflecting its total implementation cost. The percentage is derived from `(points earned) / (total points)`.
 
 ```
-████████████████░░░░  ~78%  effort-weighted
+████████████████░░░░  ~79%  effort-weighted
 ```
 
 | Category | Weight | Score | % | Notes |
 |---|---|---|---|---|
-| 🏗️ Infrastructure | 10 | 8.7 | 87% | Atomic saves + migration logic open; undo scope wider than previously noted |
+| 🏗️ Infrastructure | 10 | 9.3 | 93% | Atomic saves + migration logic open; undo cap, health sync, CC confirmation TTL, free action mechanism all done |
 | 🔄 Game Flow & Rounds | 12 | 9.1 | 76% | Reinforcement missing; door system + setup attachments now tracked; EoA CC auto-prompt done |
 | ⚔️ Combat System | 15 | 12.5 | 83% | Full sequence works; LOS + figures-as-blockers gap |
 | 🏃 Movement & LOS | 10 | 8.5 | 85% | Engine solid; large figure occupancy gap |
@@ -25,7 +25,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 | 📜 Mission Rules Engine | 8 | 5.2 | 65% | Door tracking via openedDoors across all maps |
 | 🔁 Reinforcement | ~~8~~ | N/A | **N/A** | Campaign-only mechanic — does NOT apply in skirmish. Figure deaths are permanent in skirmish (except specific CC/DC effects). Row removed from weighting. |
 | 📊 Stats & Analytics | 10 | 7.5 | 75% | End-game scorecard embed confirmed posted; leaderboard/zone queries missing |
-| **Total** | **127** | **99.2** | **~78%** | *(Reinforcement row removed from weight — campaign-only)* |
+| **Total** | **127** | **99.8** | **~79%** | *(Reinforcement row removed from weight — campaign-only)* |
 
 > ✅ **Reinforcement is a campaign-only mechanic.** Figure deaths are permanent in skirmish. The only exceptions are specific CC/DC special effects that explicitly return a figure — those are handled per-ability, not globally.
 > Previous "3% DC Surge" stat was stale — data was already populated for all 165 attacking DCs.
@@ -227,8 +227,12 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [ ] **Atomic saves** — no temp-file swap; crash mid-write can corrupt game state (#13)
 - [ ] **`migrateGame()` does nothing** — version field exists but the function is a no-op (#24)
 - [ ] **Auto-cleanup on game end** — channels persist until manual deletion (#25)
-- [ ] **`pendingIllegalSquad` memory leak** — `Map` entry never removed on rejection (#26)
-- [ ] **No max undo depth** — `undoStack` grows unbounded; memory leak in long games
+- [x] **`pendingIllegalSquad` memory leak fixed** — `postGameOver` now deletes both player entries on natural game end
+- [x] **`pendingCcConfirmation` stale state fixed** — timestamp added; `handleCcConfirmPlay` rejects confirmations older than 10 min
+- [x] **Undo depth cap** — `MAX_UNDO_DEPTH = 50`; `pushUndo` trims oldest entry when exceeded
+- [x] **DC health persistence** — `syncHealthStateToGames()` runs before every `saveGames()`; live `dcHealthState` Map always flushed to `p1DcList/p2DcList[idx].healthState`
+- [x] **Free action mechanism** — `resolveAbility` can return `freeAction: true`; `handleDcAction` restores the decremented action if set; wired abilities can use this going forward
+- [x] **460 empty catch blocks replaced with `console.error('[discord]', ...)` logging** (see prior commit)
 
 ---
 

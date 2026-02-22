@@ -189,7 +189,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
     await interaction.reply({ content: "That card isn't in your hand.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  game.pendingCcConfirmation = { playerNum, card };
+  game.pendingCcConfirmation = { playerNum, card, ts: Date.now() };
   saveGames();
   const { existsSync } = await import('fs');
   const { AttachmentBuilder } = await import('discord.js');
@@ -226,6 +226,13 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   if (!game.pendingCcConfirmation) {
     await interaction.reply({ content: 'No card pending. Try playing again.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const CONFIRM_TTL_MS = 10 * 60 * 1000;
+  if (Date.now() - (game.pendingCcConfirmation.ts || 0) > CONFIRM_TTL_MS) {
+    delete game.pendingCcConfirmation;
+    saveGames();
+    await interaction.reply({ content: 'Card selection expired — please re-select from your hand.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { playerNum, card } = game.pendingCcConfirmation;

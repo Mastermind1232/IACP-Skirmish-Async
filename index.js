@@ -57,7 +57,7 @@ import { renderMap } from './src/map-renderer.js';
 import { getHandlerKey } from './src/router.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
 import { canActAsPlayer } from './src/utils/can-act-as-player.js';
-import { MAX_ACTIVE_GAMES_PER_PLAYER, PENDING_ILLEGAL_TTL_MS } from './src/constants.js';
+import { MAX_ACTIVE_GAMES_PER_PLAYER, PENDING_ILLEGAL_TTL_MS, MAX_UNDO_DEPTH } from './src/constants.js';
 import {
   getLobby,
   setLobby,
@@ -2622,10 +2622,11 @@ async function runDraftRandom(game, client, options = {}) {
   saveGames();
 }
 
-/** F14: Push one undo step. No cap on stack size so undo works after bot restart. */
+/** F14: Push one undo step. Trims to MAX_UNDO_DEPTH to prevent unbounded growth. */
 function pushUndo(game, entry) {
   game.undoStack = game.undoStack || [];
   game.undoStack.push({ ...entry, ts: Date.now() });
+  if (game.undoStack.length > MAX_UNDO_DEPTH) game.undoStack.shift();
 }
 
 function getSquadSelectEmbed(playerNum, squad) {

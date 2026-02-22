@@ -55,8 +55,25 @@ export function deleteGame(gameId) {
   games.delete(gameId);
 }
 
+/** Sync live dcHealthState Map back into game objects so persisted health is always current. */
+function syncHealthStateToGames() {
+  for (const [msgId, healthState] of dcHealthState) {
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) continue;
+    const game = games.get(meta.gameId);
+    if (!game || game.ended) continue;
+    const dcMessageIds = meta.playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const dcList = meta.playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const idx = dcMessageIds.indexOf(msgId);
+    if (idx >= 0 && dcList[idx]) {
+      dcList[idx].healthState = [...healthState];
+    }
+  }
+}
+
 /** Persist all games to DB or file. */
 export function saveGames() {
+  syncHealthStateToGames();
   if (isDbConfigured()) {
     void saveGamesToDb(games);
     return;

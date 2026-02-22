@@ -956,6 +956,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       return;
     }
   }
+  // If the resolved ability grants a free action, restore the action cost we decremented above
+  if (resolveResult.freeAction && actionsData) {
+    actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
+    await updateDcActionsMessage(game, msgId, client);
+  }
   const manualMsg = resolveResult.manualMessage || 'Resolve manually (see rules).';
   const doneRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
