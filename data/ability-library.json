@@ -1405,7 +1405,7 @@
       "informational": true,
       "label": "Battlefield Awareness",
       "logMessage": "**Battlefield Awareness** — After a friendly figure within 3 spaces rolls dice, choose 1 of those dice and reroll it. Announce before the roll resolves.",
-      "wiredStatus": "wired"
+      "wiredStatus": "unwired"
     },
     "Behind Enemy Lines": {
       "type": "ccEffect",
@@ -1479,7 +1479,7 @@
       "informational": true,
       "label": "Change of Plans",
       "logMessage": "**Change of Plans** — After you resolve a group's activation, choose 1 of your Deployment cards; exhaust it to ready another DC that shares a trait with it. Resolve manually.",
-      "wiredStatus": "wired"
+      "wiredStatus": "unwired"
     },
     "Chaotic Force": {
       "type": "ccEffect",
@@ -1564,7 +1564,7 @@
       "informational": true,
       "label": "Double or Nothing",
       "logMessage": "**Double or Nothing** — During an attack, choose any die. Its controller rerolls it. If the same number of symbols appear, double that die's results; otherwise cancel all results on it. Resolve manually.",
-      "wiredStatus": "wired"
+      "wiredStatus": "unwired"
     },
     "Expose Weakness": {
       "type": "ccEffect",
@@ -1577,7 +1577,7 @@
       "informational": true,
       "label": "Force Push",
       "logMessage": "**Force Push** — Choose another SMALL figure within 3 spaces. Push that figure up to 2 spaces in a straight line (each space must be empty). Resolve manually.",
-      "wiredStatus": "wired"
+      "wiredStatus": "unwired"
     },
     "Harsh Environment": {
       "type": "ccEffect",
@@ -1592,7 +1592,7 @@
       "informational": true,
       "label": "Marksman",
       "logMessage": "**Marksman** — During this Ranged attack, figures do not block line of sight. Announce to opponent before declaring the attack.",
-      "wiredStatus": "wired"
+      "wiredStatus": "unwired"
     },
     "Ready Weapons": {
       "type": "ccEffect",
@@ -2094,7 +2094,6 @@
     },
     "Signal Jammer": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Place in play: cancels the next CC played; then discards itself",
       "logMessage": "**Signal Jammer** — Place this card in your Play Area. When any player next plays a Command card, cancel its effects and discard both cards. **Notify your opponent that Signal Jammer is now active.**",
       "wiredStatus": "wired",
@@ -2102,7 +2101,6 @@
     },
     "Son of Skywalker": {
       "type": "ccEffect",
-      "informational": true,
       "label": "After any figure resolves an activation, ready your Deployment card",
       "logMessage": "**Son of Skywalker** — After a figure resolves its activation, ready your Deployment card. Use Refresh All on your DC embed to reset it to READIED.",
       "wiredStatus": "wired",
@@ -2138,7 +2136,6 @@
     },
     "Terminal Network": {
       "type": "ccEffect",
-      "informational": true,
       "label": "While adjacent to a terminal: control all terminals until next round",
       "logMessage": "**Terminal Network** — Until the start of next round, you control all terminals regardless of adjacency. Applies to mission objectives. Announce to opponent.",
       "wiredStatus": "wired",
