@@ -1,0 +1,80 @@
+/**
+ * One-time script: add ability-library.json entries for all 45 missing CC cards.
+ * Run: node scripts/add-missing-cc-abilities.js
+ */
+import { readFileSync, writeFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const root = join(__dirname, '..');
+const path = join(root, 'data', 'ability-library.json');
+const lib = JSON.parse(readFileSync(path, 'utf8'));
+const a = lib.abilities;
+
+const U = 'unwired';
+const W = 'wired';
+const P = 'partial';
+
+const entries = {
+  // --- Existing handlers cover these ---
+  'cc:fleet_footed': { type: 'ccEffect', mpBonus: 1, label: 'Gain 1 movement point', wiredStatus: W },
+  'cc:against_the_odds': { type: 'ccEffect', focusGainToUpToNFigures: 3, vpCondition: { opponentHasAtLeastMore: 8 }, label: 'Focus up to 3 of your figures if opponent has ≥8 more VP', wiredStatus: W },
+
+  // --- New handler: Shadow Ops ---
+  'Shadow Ops': { type: 'ccEffect', opponentCannotPlayCCsThisRound: true, label: 'Opponent cannot play Command cards this round', wiredStatus: W },
+
+  // --- Informational: cc:-prefixed abilityIds ---
+  'cc:adrenaline': { type: 'ccEffect', informational: true, label: '+5 Health to each WOOKIE this round', logMessage: '**Adrenaline** — Apply +5 Health to each of your WOOKIEs for this round (manual HP increase; reset at round end).', wiredStatus: U },
+  'cc:advance_warning': { type: 'ccEffect', informational: true, label: 'You and an adjacent friendly figure each gain 1 MP', logMessage: '**Advance Warning** — You and an adjacent friendly figure each gain 1 MP. Apply +1 MP to each DC embed manually.', wiredStatus: U },
+
+  // --- Informational: card-name keys ---
+  'Cripple': { type: 'ccEffect', informational: true, label: 'Adjacent hostile cannot voluntarily exit its space this round', logMessage: '**Cripple** — Choose an adjacent hostile figure. Until end of round, that figure cannot voluntarily exit its space. Track on honor system.', wiredStatus: U },
+  'Disable': { type: 'ccEffect', informational: true, label: 'Adjacent hostile cannot use Surge abilities or Special actions this round', logMessage: '**Disable** — Choose an adjacent hostile figure. Until end of round, that figure cannot use Surge abilities or Special actions. Track on honor system.', wiredStatus: U },
+  'Etiquette and Protocol': { type: 'ccEffect', informational: true, label: 'Block attacks between 1 hostile and 1 friendly figure in LOS this round', logMessage: '**Etiquette and Protocol** — Choose 1 hostile and 1 friendly figure both in your LOS. Until end of round, these figures cannot declare attacks targeting each other.', wiredStatus: U },
+  'Evacuate': { type: 'ccEffect', informational: true, label: 'Defeat a friendly figure within 2 spaces; opponent gains only half VP', logMessage: '**Evacuate** — Choose a friendly figure within 2 spaces. That figure is defeated. Opponent gains only half the VPs they would normally gain (rounded down). Resolve manually.', wiredStatus: U },
+  'Ferocity': { type: 'ccEffect', informational: true, label: 'Choose a CREATURE — it performs 1 attack', logMessage: "**Ferocity** — Choose 1 of your or your opponent's CREATUREs. That figure performs 1 attack. Resolve manually using the Attack button.", wiredStatus: U },
+  'Hold Ground': { type: 'ccEffect', informational: true, label: 'SMALL hostile figures cannot voluntarily exit spaces adjacent to you this round', logMessage: '**Hold Ground** — Until end of round, SMALL hostile figures cannot voluntarily exit spaces adjacent to you. Track on honor system.', wiredStatus: U },
+  'Improvised Weapons': { type: 'ccEffect', informational: true, label: 'Ranged attack using 1 green + 1 yellow die (no abilities)', logMessage: '**Improvised Weapons** — Perform a Ranged attack using 1 green and 1 yellow die. No abilities allowed during this attack. Use the Attack button and resolve manually.', wiredStatus: U },
+  'Induce Rage': { type: 'ccEffect', informational: true, label: 'Up to 2 figures: discard all conditions; gain 1 Hit Token per condition discarded', logMessage: '**Induce Rage** — Choose up to 2 figures. Each discards all conditions, then gains 1 Hit Token per condition discarded. Resolve manually.', wiredStatus: U },
+  'Learn by Example': { type: 'ccEffect', informational: true, label: 'Play as a copy of a FORCE USER CC in any discard pile', logMessage: "**Learn by Example** — Play as a copy of a FORCE USER Command card from any discard pile, ignoring faction restrictions. Announce which card you're copying and resolve its effect manually.", wiredStatus: U },
+  'Mandalorian Steel': { type: 'ccEffect', informational: true, label: 'After attack on friendly: if they spent a Block Token, recover 1 Damage', logMessage: '**Mandalorian Steel** — This round, after an attack resolves targeting a friendly figure, if that figure spent a Block Token during that attack, it recovers 1 Damage. Track manually.', wiredStatus: U },
+  'Navigation Upgrade': { type: 'ccEffect', informational: true, label: 'Strain 1, place as attachment; exhaust to give DROID 1 MP per activation', logMessage: "**Navigation Upgrade** — Take 1 Strain. Place this card in your Play Area as an Attachment. During a friendly DROID's activation, exhaust it to give that figure +1 MP. Resolve manually.", wiredStatus: U },
+  'Optimal Bombardment': { type: 'ccEffect', informational: true, label: 'Up to 3 adjacent VEHICLES/DROIDS/HEAVY WEAPONs each attack with Blast 1', logMessage: '**Optimal Bombardment** — Choose up to 3 VEHICLES, DROIDS, or HEAVY WEAPONs adjacent to you. Each may interrupt to perform an attack with Blast 1. Resolve each attack manually.', wiredStatus: U },
+  'Overcharged Weapons': { type: 'ccEffect', informational: true, label: 'Interrupt when hostile activates: attack with Pierce 2; then exhaust + Weaken', logMessage: '**Overcharged Weapons** — When a hostile figure activates, interrupt to attack it (gains Pierce 2). Then exhaust your Deployment card and become Weakened. Resolve manually.', wiredStatus: U },
+  'Overheated': { type: 'ccEffect', informational: true, label: 'Strain 4; if Ranged: 2 attacks with -1 Hit; attack type becomes Melee', logMessage: '**Overheated** — Strain 4. If you have the Ranged attack type, perform 2 attacks (apply -1 Hit to results). Then your attack type becomes Melee. Resolve manually.', wiredStatus: U },
+  'Pack Alpha': { type: 'ccEffect', informational: true, label: 'Move up to 3 friendly CREATUREs 3 spaces; damage hostile = # adjacent to it', logMessage: '**Pack Alpha** — Up to 3 friendly CREATUREs within 3 spaces each move up to 3 spaces. Then choose a hostile figure — it suffers Damage equal to the number of those figures now adjacent to it. Resolve manually.', wiredStatus: U },
+  'Parting Blow': { type: 'ccEffect', informational: true, label: 'Interrupt: attack hostile exiting adjacent space; you become Stunned', logMessage: '**Parting Blow** — Interrupt when a hostile exits an adjacent space. Before it moves, perform an attack targeting that figure. Then you become Stunned. Resolve manually.', wiredStatus: U },
+  'Price on Their Heads': { type: 'ccEffect', informational: true, label: 'Place bounty on hostile DC: +4 VP when that group is defeated', logMessage: '**Price on Their Heads** — Place on a hostile Deployment card. When the last figure in that group is defeated, you gain +4 VP. Use `/editvp +4` when triggered; track manually.', wiredStatus: U },
+  'Protect the Old Ways': { type: 'ccEffect', informational: true, label: '+X Block when a figure within 3 spaces defends (X = 1 + FORCE USER CCs in discard)', logMessage: '**Protect the Old Ways** — While a friendly figure within 3 spaces is defending, apply +X Block (X = 1 + number of FORCE USER CCs in your discard pile). Resolve manually during the defense roll.', wiredStatus: U },
+  'Reinforcements': { type: 'ccEffect', informational: true, label: 'Return a defeated TROOPER (reinforcement cost ≤3) adjacent to its group', logMessage: '**Reinforcements** — Choose 1 of your defeated TROOPERs with reinforcement cost ≤3. Place that figure adjacent to any other figure of its group. Notify opponent and resolve manually.', wiredStatus: U },
+  'Reverse Engineer': { type: 'ccEffect', informational: true, label: "Attack using the defender's DC abilities instead of your own; +1 Surge", logMessage: "**Reverse Engineer** — Perform an attack. During this attack, use abilities on the defender's Deployment card instead of your own. Apply +1 Surge to the results. Resolve manually.", wiredStatus: U },
+  'Sarlacc Sweep': { type: 'ccEffect', informational: true, label: 'Perform 2 attacks, each targeting a different figure', logMessage: '**Sarlacc Sweep** — Perform 2 attacks, each targeting a different figure. Use the Attack button twice, targeting different figures each time.', wiredStatus: P },
+  'Self-Augmentation': { type: 'ccEffect', informational: true, label: 'Attachment: gain DROID trait; reroll 1 attack die while attacking', logMessage: '**Self-Augmentation** — Place on your DC as an Attachment. You gain the DROID trait. While attacking, you may reroll one attack die. Resolve manually.', wiredStatus: U },
+  'Set a Trap': { type: 'ccEffect', informational: true, label: 'Choose a tile; at round end a figure on that tile may interrupt to attack a hostile on it', logMessage: '**Set a Trap** — Choose a map tile. At end of round, choose one of your figures on that tile to interrupt to perform an attack targeting a hostile on that tile. Track manually.', wiredStatus: U },
+  'Set the Charges': { type: 'ccEffect', informational: true, label: 'Roll blue die: open adjacent doors; Hit+Surge Damage to figures on/adjacent to chosen space', logMessage: '**Set the Charges** — Choose a space within 3 spaces. Roll a blue die. Open any unlocked doors adjacent to that space. Each figure/object on or adjacent to it suffers Damage equal to Hit+Surge results. Resolve manually.', wiredStatus: U },
+  'Signal Jammer': { type: 'ccEffect', informational: true, label: 'Place in play: cancels the next CC played; then discards itself', logMessage: '**Signal Jammer** — Place this card in your Play Area. When any player next plays a Command card, cancel its effects and discard both cards. **Notify your opponent that Signal Jammer is now active.**', wiredStatus: U },
+  'Son of Skywalker': { type: 'ccEffect', informational: true, label: 'After any figure resolves an activation, ready your Deployment card', logMessage: '**Son of Skywalker** — After a figure resolves its activation, ready your Deployment card. Use Refresh All on your DC embed to reset it to READIED.', wiredStatus: U },
+  'Static Pulse': { type: 'ccEffect', informational: true, label: "For each hostile adjacent to Dio: Strain 2 or Weaken; if Dio not in play, place Dio", logMessage: "**Static Pulse** — For each hostile adjacent to 'Dio': choose — it suffers 2 Strain or becomes Weakened. If Dio is not in play, place Dio in your space instead. Resolve manually.", wiredStatus: U },
+  'Stay Down': { type: 'ccEffect', informational: true, label: 'After Close and Personal: if target survived, attack again; you become Stunned', logMessage: '**Stay Down** — After resolving **Close and Personal**, if the target was not defeated, perform an additional attack on the same target. Then you become Stunned. Resolve manually.', wiredStatus: U },
+  'Still Faster Than You': { type: 'ccEffect', informational: true, label: 'At start of hostile activation: interrupt to move 2 spaces + attack a different hostile', logMessage: "**Still Faster Than You** — At the start of a hostile figure's activation, interrupt to move 2 spaces and perform an attack targeting a DIFFERENT hostile figure. Resolve manually.", wiredStatus: U },
+  'Support Specialist': { type: 'ccEffect', informational: true, label: 'Choose a friendly DROID/TECHNICIAN/TROOPER within 3 spaces — it performs an action', logMessage: '**Support Specialist** — Choose a friendly DROID, TECHNICIAN, or TROOPER within 3 spaces. That figure interrupts to perform an action. Trigger the action from their DC thread manually.', wiredStatus: U },
+  'Terminal Network': { type: 'ccEffect', informational: true, label: 'While adjacent to a terminal: control all terminals until next round', logMessage: '**Terminal Network** — Until the start of next round, you control all terminals regardless of adjacency. Applies to mission objectives. Announce to opponent.', wiredStatus: U },
+  'Terminal Protocol': { type: 'ccEffect', informational: true, label: 'Roll green die: Damage equal to Hit results to all figures/objects in/adjacent to your space; then defeated', logMessage: '**Terminal Protocol** — Roll 1 green die. Each figure and object in or adjacent to your space suffers Damage equal to the Damage results. Then you are defeated. Resolve manually.', wiredStatus: U },
+  'There Is No Try': { type: 'ccEffect', informational: true, label: 'When a friendly REBEL FORCE USER rolls dice: set 1 die to any side + convert Dodge results', logMessage: '**There Is No Try** — When a friendly REBEL FORCE USER within 4 spaces rolls dice, choose one die and turn it to any side. On that die, convert each Dodge to 2 Blocks + 1 Evade. Resolve manually during the roll.', wiredStatus: U },
+  'Tough Luck': { type: 'ccEffect', informational: true, label: 'After opponent rerolls a die: remove that die from the results', logMessage: "**Tough Luck** — After your opponent rerolls a die, remove that die's result entirely from the results. Announce before they reroll. Resolve manually during combat.", wiredStatus: U },
+  'Transmit the Plans': { type: 'ccEffect', informational: true, label: 'Distribute 2 Hit Tokens among friendly figures; if adjacent terminal, gain 2 VP', logMessage: '**Transmit the Plans** — Distribute 2 Hit Tokens among your friendly figures (track manually). If adjacent to a terminal, gain 2 VP — use `/editvp +2`.', wiredStatus: P },
+  'Triangulate': { type: 'ccEffect', informational: true, label: 'Move up to 3 friendly DROIDs 1 space; damage hostile = # DROIDs with LOS to it', logMessage: '**Triangulate** — Up to 3 friendly DROIDs each move up to 1 space. Then choose a hostile within 5 spaces and LOS — it suffers Damage equal to the number of those DROIDs with LOS to it. Resolve manually.', wiredStatus: U },
+  'Unlimited Power': { type: 'ccEffect', informational: true, label: 'When using Emperor: choose any friendly figure on the map instead of within 4 spaces', logMessage: '**Unlimited Power** — When you use **Emperor**, you may choose any friendly figure on the map instead of one within 4 spaces. Play alongside Emperor; resolve targeting manually.', wiredStatus: U },
+  'Windfall': { type: 'ccEffect', informational: true, label: 'When CCs discarded from hand/deck: gain VP equal to their cost', logMessage: '**Windfall** — When a Command card is discarded from your hand or deck, gain VPs equal to its cost (use `/editvp +N`). When Windfall itself is discarded, gain 1 VP. Track manually.', wiredStatus: U },
+  'Wreak Vengeance': { type: 'ccEffect', informational: true, label: 'When using Dual-Bladed Fury: choose both effects instead of 1', logMessage: '**Wreak Vengeance** — When using **Dual-Bladed Fury**, choose both effects instead of only 1. Play alongside Dual-Bladed Fury; resolve manually.', wiredStatus: U },
+  'You Will Not Deny Me': { type: 'ccEffect', informational: true, label: "Fifth Brother cannot be defeated; ignores conditions; recover 2 Damage on each hostile defeat", logMessage: "**You Will Not Deny Me** — Place on Fifth Brother. He cannot be defeated and ignores Harmful conditions. When a hostile figure is defeated, he recovers 2 Damage and this card returns to the game box. Resolve manually.", wiredStatus: U },
+};
+
+let added = 0;
+for (const [key, val] of Object.entries(entries)) {
+  if (!a[key]) { a[key] = val; added++; }
+  else console.log('SKIPPED (already exists):', key);
+}
+writeFileSync(path, JSON.stringify(lib, null, 2));
+console.log(`Done. Added ${added} entries. Total abilities: ${Object.keys(a).length}`);

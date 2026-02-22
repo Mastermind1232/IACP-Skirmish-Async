@@ -125,6 +125,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     p2DrawCount = 0;
     game.noCommandDrawThisRound = false;
   }
+  if (game.shadowOpsBlockedPlayer) game.shadowOpsBlockedPlayer = null;
   const p1Deck = game.player1CcDeck || [];
   const p2Deck = game.player2CcDeck || [];
   const p1Drawn = [];

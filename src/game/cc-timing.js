@@ -54,6 +54,8 @@ const SPECIAL_ACTION_TIMING = new Set([
  * @returns {boolean}
  */
 export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffect) {
+  // Shadow Ops: opponent cannot play Command cards this round
+  if (game?.shadowOpsBlockedPlayer === playerNum) return false;
   const effect = getEffect(cardName);
   if (!effect || !effect.timing) return false;
   const timing = String(effect.timing).toLowerCase().trim();

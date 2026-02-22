@@ -114,6 +114,17 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: opponentCannotPlayCCsThisRound (Shadow Ops — opponent cannot play any CCs this round)
+  if (entry.type === 'ccEffect' && entry.opponentCannotPlayCCsThisRound) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.shadowOpsBlockedPlayer = playerNum === 1 ? 2 : 1;
+    return {
+      applied: true,
+      logMessage: 'Shadow Ops active — opponent cannot play Command cards this round.',
+    };
+  }
+
   // ccEffect: chooseSpaceWithin2OfActivating (Smoke Grenade) — first call: return validSpaces; second call: apply with chosenSpace
   if (entry.type === 'ccEffect' && entry.chooseSpaceWithin2OfActivating) {
     const { game, playerNum, dcMessageMeta, chosenSpace } = context;
