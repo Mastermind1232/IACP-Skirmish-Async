@@ -2506,10 +2506,14 @@ async function runDraftRandom(game, client, options = {}) {
   if (!game.figurePositions[2]) game.figurePositions[2] = {};
   game.figureOrientations = game.figureOrientations || {};
 
-  const deployForPlayer = (playerNum, zone) => {
+  const deployForPlayer = (playerNum, zone, opponentZone) => {
     const squad = playerNum === 1 ? game.player1Squad : game.player2Squad;
     const dcList = squad?.dcList || [];
     const { metadata } = getDeployFigureLabels(dcList);
+    // Compute centroid of opponent zone to rank spaces by proximity to the "entrance"
+    const oppZoneCoords = (zones?.[opponentZone] || []).map((s) => parseCoord(String(s).toLowerCase()));
+    const oppCx = oppZoneCoords.length ? oppZoneCoords.reduce((s, c) => s + c.col, 0) / oppZoneCoords.length : 0;
+    const oppCy = oppZoneCoords.length ? oppZoneCoords.reduce((s, c) => s + c.row, 0) / oppZoneCoords.length : 0;
     for (const meta of metadata) {
       const figureKey = `${meta.dcName}-${meta.dgIndex}-${meta.figureIndex}`;
       const occupied = [];
@@ -2525,7 +2529,14 @@ async function runDraftRandom(game, client, options = {}) {
       const zoneSpaces = (zones?.[zone] || []).map((s) => String(s).toLowerCase());
       const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, size);
       if (!validSpaces.length) throw new Error(`No valid deploy spaces for ${meta.dcName} in ${zone} zone.`);
-      const space = validSpaces[Math.floor(Math.random() * validSpaces.length)];
+      // Sort by Manhattan distance to opponent zone centroid (ascending = closest to enemy entrance first)
+      validSpaces.sort((a, b) => {
+        const pa = parseCoord(a), pb = parseCoord(b);
+        const da = Math.abs(pa.col - oppCx) + Math.abs(pa.row - oppCy);
+        const db = Math.abs(pb.col - oppCx) + Math.abs(pb.row - oppCy);
+        return da - db;
+      });
+      const space = validSpaces[0];
       game.figurePositions[playerNum][figureKey] = space;
       if (baseSize === '2x3') {
         game.figureOrientations[figureKey] = size;
@@ -2537,8 +2548,8 @@ async function runDraftRandom(game, client, options = {}) {
   const nonInitiativePlayerNum = initiativePlayerNum === 1 ? 2 : 1;
   const zone = game.deploymentZoneChosen;
   const otherZone = zone === 'red' ? 'blue' : 'red';
-  deployForPlayer(initiativePlayerNum, zone);
-  deployForPlayer(nonInitiativePlayerNum, otherZone);
+  deployForPlayer(initiativePlayerNum, zone, otherZone);
+  deployForPlayer(nonInitiativePlayerNum, otherZone, zone);
 
   game.initiativePlayerDeployed = true;
   game.nonInitiativePlayerDeployed = true;
