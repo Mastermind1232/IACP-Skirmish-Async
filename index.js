@@ -2309,9 +2309,26 @@ async function buildBoardMapPayload(gameId, map, game) {
   const pdfPath = join(rootDir, 'data', 'map-pdfs', `${map.id}.pdf`);
 
   const allowedMentions = game ? { users: [...new Set([game.player1Id, game.player2Id])] } : undefined;
+  // Player labels: Discord names over each player's deployment zone
+  const playerLabels = [];
+  if (game?.deploymentZoneChosen && game?.player1Id && game?.player2Id) {
+    const zoneData = getDeploymentZones()[map.id] || {};
+    const initZone = game.deploymentZoneChosen;
+    const otherZone = initZone === 'red' ? 'blue' : 'red';
+    const p1IsInit = game.player1Id === game.initiativePlayerId;
+    const p1ZoneCells = zoneData[p1IsInit ? initZone : otherZone] || [];
+    const p2ZoneCells = zoneData[p1IsInit ? otherZone : initZone] || [];
+    const p1User = client.users.cache.get(game.player1Id);
+    const p2User = client.users.cache.get(game.player2Id);
+    const p1Name = p1User?.globalName || p1User?.username || 'P1';
+    const p2Name = p2User?.globalName || p2User?.username || 'P2';
+    if (p1ZoneCells.length > 0) playerLabels.push({ label: p1Name, zone: p1ZoneCells });
+    if (p2ZoneCells.length > 0) playerLabels.push({ label: p2Name, zone: p2ZoneCells });
+  }
+
   if ((hasFigures || hasTokens) && imagePath && existsSync(imagePath)) {
     try {
-      const buffer = await renderMap(map.id, { figures, tokens, showGrid: false, maxWidth: 1200 });
+      const buffer = await renderMap(map.id, { figures, tokens, showGrid: false, maxWidth: 1200, playerLabels });
       return {
         content: `**Game map: ${map.name}** — Refresh to update figure positions.`,
         files: [new AttachmentBuilder(buffer, { name: 'map-with-figures.png' })],

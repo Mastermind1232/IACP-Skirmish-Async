@@ -505,6 +505,50 @@ export async function renderMap(mapId, options = {}) {
     await drawDoorSpan(span);
   }
 
+  // Player zone labels: draw player Discord names over their deployment zones
+  const playerLabels = options.playerLabels || [];
+  for (const { label, zone } of playerLabels) {
+    if (!label || !zone || zone.length === 0) continue;
+    const parsed = zone.map(parseCoord).filter((p) => p.col >= 0 && p.row >= 0);
+    if (parsed.length === 0) continue;
+
+    // Compute centroid of all zone cell centers
+    let cx = 0;
+    let cy = 0;
+    for (const p of parsed) {
+      cx += sx0 + p.col * sdx + sdx / 2;
+      cy += sy0 + p.row * sdy + sdy / 2;
+    }
+    cx /= parsed.length;
+    cy /= parsed.length;
+
+    // Font sized to ~2.5 cells wide for typical name
+    const fontSize = Math.round(Math.min(sdx, sdy) * 0.55);
+    const displayLabel = label.length > 12 ? label.slice(0, 11) + '\u2026' : label;
+    ctx.font = `bold ${fontSize}px "${FONT_FAMILY}"`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const metrics = ctx.measureText(displayLabel);
+    const padH = Math.max(6, Math.round(fontSize * 0.3));
+    const padV = Math.max(4, Math.round(fontSize * 0.2));
+    const boxW = metrics.width + padH * 2;
+    const boxH = fontSize + padV * 2;
+    const boxX = cx - boxW / 2;
+    const boxY = cy - boxH / 2;
+
+    // Semi-transparent dark background
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+
+    // Yellow text with black outline
+    ctx.lineWidth = Math.max(2, Math.round(fontSize * 0.1));
+    ctx.strokeStyle = '#000000';
+    ctx.strokeText(displayLabel, cx, cy);
+    ctx.fillStyle = '#FFE033';
+    ctx.fillText(displayLabel, cx, cy);
+  }
+
   // Optionally crop to deployment zone for zoomed-in view
   if (cropToZone && Array.isArray(cropToZone) && cropToZone.length > 0) {
     const parsed = cropToZone.map((c) => parseCoord(c)).filter((p) => p.col >= 0 && p.row >= 0);
