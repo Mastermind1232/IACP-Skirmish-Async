@@ -2608,41 +2608,6 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: setsMarksman (Marksman) — figures do not block LOS for this Ranged attack
-  if (entry.type === 'ccEffect' && entry.setsMarksman) {
-    const { game, playerNum } = context;
-    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    return { applied: true, logMessage: entry.logMessage };
-  }
-
-  // ccEffect: forcePushEffect (Force Push) — push SMALL figure up to 2 spaces; resolve manually
-  if (entry.type === 'ccEffect' && entry.forcePushEffect) {
-    const { game, playerNum } = context;
-    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    return { applied: true, logMessage: entry.logMessage };
-  }
-
-  // ccEffect: clonesReinforcements (Cloned Reinforcements) — place defeated TROOPER adjacent to its group
-  if (entry.type === 'ccEffect' && entry.clonesReinforcements) {
-    const { game, playerNum } = context;
-    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    return { applied: true, logMessage: entry.logMessage };
-  }
-
-  // ccEffect: setBattlefieldAwareness (Battlefield Awareness) — reroll 1 die after friendly figure within 3 rolls
-  if (entry.type === 'ccEffect' && entry.setBattlefieldAwareness) {
-    const { game, playerNum } = context;
-    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    return { applied: true, logMessage: entry.logMessage };
-  }
-
-  // ccEffect: coordinatedAttackEffect (Coordinated Attack) — you and a friendly within 3 each attack the same target
-  if (entry.type === 'ccEffect' && entry.coordinatedAttackEffect) {
-    const { game, playerNum } = context;
-    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    return { applied: true, logMessage: entry.logMessage };
-  }
-
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
 }
 

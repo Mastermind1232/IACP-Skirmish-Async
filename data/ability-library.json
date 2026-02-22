@@ -316,9 +316,9 @@
     },
     "Rank and File": {
       "type": "ccEffect",
-      "label": "Gain 1 movement point (you; adjacent TROOPERS resolve manually)",
+      "label": "Gain 1 MP; each friendly TROOPER within 2 also gains 1 MP (apply to their embeds)",
       "mpBonus": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Urgency": {
       "type": "ccEffect",
@@ -508,9 +508,9 @@
     },
     "Cavalry Charge": {
       "type": "ccEffect",
-      "label": "Until end of round: +1 Block when defending; +1 Hit when friendly TROOPER within 3 attacks (apply manually)",
+      "label": "Until end of round: +1 Block when defending; friendly TROOPERs within 3 also get +1 Hit when attacking (apply to their rolls)",
       "roundDefenseBonusBlock": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Foresee": {
       "type": "ccEffect",
@@ -705,9 +705,9 @@
     },
     "Take Position": {
       "type": "ccEffect",
-      "label": "Until end of round, +1 Block when defending (push immunity manual)",
+      "label": "Until end of round, +1 Block when defending; push immunity per standard rules",
       "roundDefenseBonusBlock": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Survival Instincts": {
       "type": "ccEffect",
@@ -946,9 +946,9 @@
     },
     "Deflection": {
       "type": "ccEffect",
-      "label": "-2 Accuracy when defending (if no damage to you, attacker suffers 2 manual)",
+      "label": "Until end of round: +2 Evade when defending; if you take no Damage, attacker suffers 2 Damage (resolve after combat)",
       "roundDefenseBonusEvade": 2,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Ambush": {
       "type": "ccEffect",
@@ -1134,9 +1134,9 @@
     },
     "Fuel Upgrade": {
       "type": "ccEffect",
-      "label": "Until end of round VEHICLES +1 Evade (+1 Speed manual)",
+      "label": "Until end of round: +1 Evade when defending (VEHICLES only); +1 Speed for VEHICLES (apply to their embeds)",
       "roundDefenseBonusEvade": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Collateral Damage": {
       "type": "ccEffect",
@@ -1405,8 +1405,7 @@
       "informational": true,
       "label": "Battlefield Awareness",
       "logMessage": "**Battlefield Awareness** — After a friendly figure within 3 spaces rolls dice, choose 1 of those dice and reroll it. Announce before the roll resolves.",
-      "setBattlefieldAwareness": true,
-      "wiredStatus": "wired"
+      "wiredStatus": "unwired"
     },
     "Behind Enemy Lines": {
       "type": "ccEffect",
@@ -1536,9 +1535,8 @@
       "type": "ccEffect",
       "label": "You and a friendly within 3 each perform an attack (same target)",
       "informational": true,
-      "logMessage": "**Coordinated Attack** — You and a friendly figure within 3 spaces each perform an attack targeting the same figure. Use the Attack button for each attack.",
-      "coordinatedAttackEffect": true,
-      "wiredStatus": "wired"
+      "logMessage": "Resolve manually: you and a friendly figure within 3 spaces each perform an attack targeting the same figure.",
+      "wiredStatus": "unwired"
     },
     "Data Theft": {
       "type": "ccEffect",
@@ -1551,9 +1549,8 @@
       "type": "ccEffect",
       "label": "Special: place defeated friendly non-DROID non-unique TROOPER cost ≤4 in empty adjacent space",
       "informational": true,
-      "logMessage": "**Cloned Reinforcements** — Choose a defeated friendly non-DROID, non-unique TROOPER with figure cost 4 or less. Place it in an empty space adjacent to any other figure in its group.",
-      "clonesReinforcements": true,
-      "wiredStatus": "testready"
+      "logMessage": "Resolve manually: choose a defeated friendly non-DROID, non-unique TROOPER with figure cost 4 or less; place in empty adjacent space.",
+      "wiredStatus": "unwired"
     },
     "Endless Reserves": {
       "type": "ccEffect",
@@ -1580,8 +1577,7 @@
       "informational": true,
       "label": "Force Push",
       "logMessage": "**Force Push** — Choose another SMALL figure within 3 spaces. Push that figure up to 2 spaces in a straight line (each space must be empty). Resolve manually.",
-      "forcePushEffect": true,
-      "wiredStatus": "testready"
+      "wiredStatus": "unwired"
     },
     "Harsh Environment": {
       "type": "ccEffect",
@@ -1596,8 +1592,7 @@
       "informational": true,
       "label": "Marksman",
       "logMessage": "**Marksman** — During this Ranged attack, figures do not block line of sight. Announce to opponent before declaring the attack.",
-      "setsMarksman": true,
-      "wiredStatus": "wired"
+      "wiredStatus": "unwired"
     },
     "Ready Weapons": {
       "type": "ccEffect",
