@@ -295,6 +295,11 @@ function evaluateMovementStep(current, neighbor, board, profile) {
   }
   const prevFootprint = current.footprint;
   const prevSet = new Set(prevFootprint);
+  // Large figures must keep at least half their footprint in previously occupied cells each step
+  if (profile.isLarge) {
+    const overlapCount = nextFootprint.filter((c) => prevSet.has(c)).length;
+    if (overlapCount < Math.ceil(nextFootprint.length / 2)) return null;
+  }
   if (neighbor.type === 'rotate') {
     const overlapping = nextFootprint.some((c) => board.occupiedSet.has(c));
     if (overlapping && !profile.canEndOnOccupied) return null;
