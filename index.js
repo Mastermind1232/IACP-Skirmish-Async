@@ -138,6 +138,7 @@ import {
   handleCcDiscard,
   handleCcChoice,
   handleCcSpacePick,
+  handlePounceSpacePick,
   handleSquadSelect,
   handleIllegalCcIgnore,
   handleIllegalCcUnplay,
@@ -4692,7 +4693,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_') {
+  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_') {
     const dcPlayAreaContext = {
       getGame,
       replyIfGameEnded,
@@ -4750,6 +4751,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'dc_deplete_') await handleDcDeplete(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_cc_special_') await handleDcCcSpecial(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_cc_eoa_') await handleDcCcEndOfActivation(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'pounce_space_') await handlePounceSpacePick(interaction, dcPlayAreaContext);
     else await handleDcAction(interaction, dcPlayAreaContext, buttonKey);
     return;
   }

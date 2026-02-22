@@ -34,7 +34,9 @@ import {
   handleDcToggle,
   handleDcDeplete,
   handleDcCcSpecial,
+  handleDcCcEndOfActivation,
   handleDcAction,
+  handlePounceSpacePick,
 } from './dc-play-area.js';
 import {
   handleSquadModal,
@@ -123,6 +125,7 @@ register('dc_toggle_', handleDcToggle);
 register('dc_deplete_', handleDcDeplete);
 register('dc_cc_special_', handleDcCcSpecial);
 register('dc_cc_eoa_', handleDcCcEndOfActivation);
+register('pounce_space_', handlePounceSpacePick);
 register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'));
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'));
 register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'));
@@ -197,6 +200,7 @@ export {
   handleDcCcSpecial,
   handleDcCcEndOfActivation,
   handleDcAction,
+  handlePounceSpacePick,
 } from './dc-play-area.js';
 export {
   handleSquadModal,

@@ -2188,6 +2188,12 @@
       "label": "Fifth Brother cannot be defeated; ignores conditions; recover 2 Damage on each hostile defeat",
       "logMessage": "**You Will Not Deny Me** — Place on Fifth Brother. He cannot be defeated and ignores Harmful conditions. When a hostile figure is defeated, he recovers 2 Damage and this card returns to the game box. Resolve manually.",
       "wiredStatus": "unwired"
+    },
+    "dc_pounce": {
+      "type": "dcSpecial",
+      "label": "Pounce: place figure in empty space within 3, then may perform an attack (free)",
+      "pounceRange": 3,
+      "wiredStatus": "wired"
     }
   }
 }

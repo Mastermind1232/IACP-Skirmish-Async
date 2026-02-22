@@ -2264,6 +2264,48 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Choose a tile or token you are on or adjacent to; until start of next round, opponent counts 1 fewer figure on or adjacent to it.' };
   }
 
+  // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free
+  if (entry.type === 'dcSpecial' && entry.pounceRange) {
+    const { game, playerNum, dcMessageMeta, chosenSpace } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = context.msgId || findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: 'Resolve manually: no activation meta.' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (!figureKeys.length) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const fk = figureKeys[0];
+    if (!chosenSpace) {
+      // First call: compute valid empty spaces within pounceRange (path through open spaces, ignore occupancy for traversal)
+      const pos = game.figurePositions?.[playerNum]?.[fk];
+      if (!pos) return { applied: false, manualMessage: 'Figure has no position (deploy first).' };
+      const boardState = getBoardStateForMovement(game, fk);
+      if (!boardState?.mapSpaces) return { applied: false, manualMessage: 'Map data missing.' };
+      // Travel path ignores other figures (place effect); collect all occupied spaces as blocked destinations only
+      const allReachable = getReachableSpaces(pos, entry.pounceRange, boardState.mapSpaces, []);
+      const occupied = new Set();
+      for (const pNum of [1, 2]) {
+        for (const coord of Object.values(game.figurePositions?.[pNum] || {})) {
+          if (coord) occupied.add(String(coord).toLowerCase());
+        }
+      }
+      const validSpaces = allReachable.filter((s) => !occupied.has(String(s).toLowerCase()));
+      if (!validSpaces.length) return { applied: false, manualMessage: 'No empty spaces within 3 to pounce to.' };
+      return { requiresSpaceChoice: true, validSpaces };
+    }
+    // Second call: teleport figure to chosen space, grant free pounce attack
+    game.figurePositions = game.figurePositions || {};
+    game.figurePositions[playerNum] = game.figurePositions[playerNum] || {};
+    game.figurePositions[playerNum][fk] = chosenSpace;
+    game.pounceAttackPending = game.pounceAttackPending || {};
+    game.pounceAttackPending[msgId] = { figureKey: fk, figureIndex: 0 };
+    return {
+      applied: true,
+      logMessage: `**Pounce**: placed at **${String(chosenSpace).toUpperCase()}**. May now perform an attack (free — use Attack button).`,
+      refreshBoard: true,
+    };
+  }
+
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
 }
 

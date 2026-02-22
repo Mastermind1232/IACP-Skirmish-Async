@@ -3983,6 +3983,9 @@
       "affiliation": "Scum",
       "specials": [
         "Pounce"
+      ],
+      "specialAbilityIds": [
+        "dc_pounce"
       ]
     },
     "Nexu (Regular)": {
@@ -4017,6 +4020,9 @@
       "affiliation": "Scum",
       "specials": [
         "Pounce"
+      ],
+      "specialAbilityIds": [
+        "dc_pounce"
       ]
     },
     "Obi-Wan Kenobi": {

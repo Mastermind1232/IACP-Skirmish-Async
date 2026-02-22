@@ -646,6 +646,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     logGameErrorToBotLogs,
     extractGameIdFromInteraction,
     resolveAbility,
+    getSpaceChoiceRows,
+    getMapAttachmentForSpaces,
   } = ctx;
 
   let msgId, action, figureIndex = 0, specialIdx = -1;
@@ -916,9 +918,15 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   }
 
   if (actionsData) {
-    const actionCost = buttonKey === 'dc_special_' ? (getDcStats(meta.dcName).specialCosts?.[specialIdx] ?? 1) : 1;
-    actionsData.remaining = Math.max(0, actionsData.remaining - actionCost);
-    await updateDcActionsMessage(game, msgId, client);
+    // Free pounce attack: Pounce special grants one free attack (already paid as special action)
+    const isPounceAttack = action === 'Attack' && game.pounceAttackPending?.[msgId] != null;
+    if (isPounceAttack) {
+      delete game.pounceAttackPending[msgId];
+    } else {
+      const actionCost = buttonKey === 'dc_special_' ? (getDcStats(meta.dcName).specialCosts?.[specialIdx] ?? 1) : 1;
+      actionsData.remaining = Math.max(0, actionsData.remaining - actionCost);
+      await updateDcActionsMessage(game, msgId, client);
+    }
   }
   const displayName = meta.displayName || meta.dcName;
   const pLabel = `P${meta.playerNum}`;
@@ -932,6 +940,22 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     abilityId = Array.isArray(ids) && ids[specialIdx] != null ? ids[specialIdx] : `dc_special:${meta.dcName}:${specialIdx}`;
   }
   const resolveResult = resolveAbility ? resolveAbility(abilityId, { game, msgId, meta, playerNum: meta.playerNum, dcMessageMeta, dcHealthState: ctx.dcHealthState, specialLabel: action }) : { applied: false, manualMessage: 'Resolve manually (see rules).' };
+  // Handle space-choice abilities (e.g. Pounce teleport destination)
+  if (resolveResult.requiresSpaceChoice && Array.isArray(resolveResult.validSpaces) && resolveResult.validSpaces.length > 0) {
+    if (getSpaceChoiceRows && getMapAttachmentForSpaces) {
+      const boardState = ctx.getBoardStateForMovement ? ctx.getBoardStateForMovement(game, null) : null;
+      const mapSpaces = boardState?.mapSpaces || { spaces: resolveResult.validSpaces };
+      const { rows } = getSpaceChoiceRows(`pounce_space_${game.gameId}_${msgId}_${figureIndex}_`, resolveResult.validSpaces, mapSpaces);
+      const mapAttachment = await getMapAttachmentForSpaces(game, resolveResult.validSpaces);
+      game.pendingPounceSpaceChoice = game.pendingPounceSpaceChoice || {};
+      game.pendingPounceSpaceChoice[msgId] = { gameId: game.gameId, playerNum: meta.playerNum, figureIndex, msgId, abilityId, validSpaces: resolveResult.validSpaces };
+      const payload = { content: `**Pounce** — Pick a space to place your figure:`, components: rows.slice(0, 5), ephemeral: false, fetchReply: true };
+      if (mapAttachment) payload.files = [mapAttachment];
+      await interaction.reply(payload).catch(() => {});
+      saveGames();
+      return;
+    }
+  }
   const manualMsg = resolveResult.manualMessage || 'Resolve manually (see rules).';
   const doneRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -944,5 +968,74 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     components: [doneRow],
     ephemeral: false,
   }).catch(() => {});
+  saveGames();
+}
+
+/**
+ * Handle pounce_space_ button: completes Nexu Pounce placement after space is chosen.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handlePounceSpacePick(interaction, ctx) {
+  // pounce_space_{gameId}_{msgId}_{figureIndex}_{space}
+  const match = interaction.customId.match(/^pounce_space_([^_]+)_([^_]+)_(\d+)_(.+)$/);
+  if (!match) {
+    await interaction.reply({ content: 'Invalid pounce space choice.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const [, gameId, msgId, figureIndexStr, space] = match;
+  const chosenSpace = String(space).toLowerCase();
+  const { getGame, dcMessageMeta, resolveAbility, logGameAction, updateDcActionsMessage, buildBoardMapPayload, client, saveGames } = ctx;
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const pending = game.pendingPounceSpaceChoice?.[msgId];
+  if (!pending || pending.gameId !== gameId) {
+    await interaction.reply({ content: 'No pending pounce space choice.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const { playerNum, abilityId, validSpaces } = pending;
+  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.reply({ content: 'Only the activating player can choose the pounce destination.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const validLower = (validSpaces || []).map((s) => String(s).toLowerCase());
+  if (!validLower.includes(chosenSpace)) {
+    await interaction.reply({ content: 'That space is not a valid pounce destination.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate();
+  const meta = dcMessageMeta.get(msgId);
+  const result = resolveAbility(abilityId, { game, msgId, meta, playerNum, dcMessageMeta, chosenSpace });
+  delete game.pendingPounceSpaceChoice[msgId];
+  if (result.applied) {
+    if (result.logMessage) {
+      await logGameAction(game, client, result.logMessage, { phase: 'ROUND', icon: 'move' }).catch(() => {});
+    }
+    if (result.refreshBoard && game.boardId && game.selectedMap && buildBoardMapPayload) {
+      try {
+        const boardChannel = await client.channels.fetch(game.boardId);
+        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+        await boardChannel.send(payload);
+      } catch (err) {
+        console.error('Pounce board refresh failed:', err);
+      }
+    }
+    await updateDcActionsMessage(game, msgId, client).catch(() => {});
+    const doneRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`special_done_${gameId}_${msgId}`)
+        .setLabel('Done')
+        .setStyle(ButtonStyle.Success)
+    );
+    await interaction.message.edit({
+      content: `**Pounce**: placed at **${String(chosenSpace).toUpperCase()}**. Use the **Attack** button for your free pounce attack (no action cost), or press **Done** to skip.`,
+      components: [doneRow],
+    }).catch(() => {});
+  } else {
+    await interaction.message.edit({ content: `Pounce failed: ${result.manualMessage}`, components: [] }).catch(() => {});
+  }
   saveGames();
 }
