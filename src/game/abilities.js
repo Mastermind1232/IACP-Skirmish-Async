@@ -2373,6 +2373,75 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: disablesFigure (Disable — chosen hostile cannot use Surge or Special Actions this round)
+  if (entry.type === 'ccEffect' && entry.disablesFigure) {
+    const { game, playerNum, chosenOption } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppDcList = playerNum === 1 ? (game.p2DcList || []) : (game.p1DcList || []);
+    if (chosenOption == null) {
+      const options = oppDcList.filter((dc) => dc && !dc.defeated).map((dc) => dc.displayName || dc.dcName).filter(Boolean);
+      if (options.length === 0) return { applied: false, manualMessage: 'No active hostile figures to disable.' };
+      return { requiresChoice: true, choiceOptions: options };
+    }
+    game.disabledFigures = game.disabledFigures || [];
+    if (!game.disabledFigures.includes(chosenOption)) game.disabledFigures.push(chosenOption);
+    return {
+      applied: true,
+      logMessage: `**${chosenOption}** is Disabled — cannot use Surge abilities or Special Actions this round (honor).`,
+    };
+  }
+
+  // ccEffect: setsHoldGround (Hold Ground — SMALL hostiles cannot voluntarily exit spaces adjacent to player's figures)
+  if (entry.type === 'ccEffect' && entry.setsHoldGround) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.holdGroundPlayerNum = playerNum;
+    return {
+      applied: true,
+      logMessage: 'This round, SMALL hostile figures cannot voluntarily exit spaces adjacent to your figures (honor).',
+    };
+  }
+
+  // ccEffect: setsWindfall (Windfall — gain VP equal to cost when CCs are discarded from hand)
+  if (entry.type === 'ccEffect' && entry.setsWindfall) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.windfallActive = { playerNum };
+    return {
+      applied: true,
+      logMessage: '**Windfall** active — each time a Command card is played, you gain VP equal to its cost.',
+    };
+  }
+
+  // ccEffect: setsBounty (Price on Their Heads — +4 VP when chosen hostile group is defeated)
+  if (entry.type === 'ccEffect' && entry.setsBounty) {
+    const { game, playerNum, chosenOption } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppDcList = playerNum === 1 ? (game.p2DcList || []) : (game.p1DcList || []);
+    if (chosenOption == null) {
+      const options = oppDcList.filter((dc) => dc && !dc.defeated).map((dc) => dc.displayName || dc.dcName).filter(Boolean);
+      if (options.length === 0) return { applied: false, manualMessage: 'No active hostile figures to place a bounty on.' };
+      return { requiresChoice: true, choiceOptions: options };
+    }
+    game.priceBounties = game.priceBounties || {};
+    game.priceBounties[chosenOption] = (game.priceBounties[chosenOption] || 0) + 4;
+    return {
+      applied: true,
+      logMessage: `Bounty on **${chosenOption}**: +4 VP when that group is defeated — apply via **/editvp** when it happens.`,
+    };
+  }
+
+  // ccEffect: setsWreakVengeance (Wreak Vengeance — use both Dual-Bladed Fury effects instead of 1)
+  if (entry.type === 'ccEffect' && entry.setsWreakVengeance) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.wreakVengeanceActive = { playerNum };
+    return {
+      applied: true,
+      logMessage: '**Wreak Vengeance** active — when using Dual-Bladed Fury this activation, choose both effects instead of 1.',
+    };
+  }
+
   // ccEffect: revealsOpponentHand (Collect Intel) — ephemeral reveal of opponent's CC hand
   if (entry.type === 'ccEffect' && entry.revealsOpponentHand) {
     const { game, playerNum } = context;

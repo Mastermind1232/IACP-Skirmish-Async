@@ -446,6 +446,14 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       if (result.revealToPlayer) {
         await interaction.followUp({ content: result.revealToPlayer, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
+      // Windfall: award VP to windfall owner when a cost > 0 card is played (skip when Windfall itself is played)
+      if (game.windfallActive && cost > 0 && card !== 'Windfall') {
+        const wfNum = game.windfallActive.playerNum;
+        const wfKey = wfNum === 1 ? 'player1VP' : 'player2VP';
+        game[wfKey] = game[wfKey] || { total: 0, kills: 0, objectives: 0 };
+        game[wfKey].total = (game[wfKey].total || 0) + cost;
+        await logGameAction(game, interaction.client, `**Windfall**: P${wfNum} gains +${cost} VP.`, { icon: 'card' });
+      }
       saveGames();
       return;
     }
@@ -531,6 +539,14 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     if (result.applied && result.revealToPlayer) {
       await interaction.followUp({ content: result.revealToPlayer, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
+  }
+  // Windfall: award VP to windfall owner when a cost > 0 card is played (skip when Windfall itself is played)
+  if (game.windfallActive && cost > 0 && card !== 'Windfall') {
+    const wfNum = game.windfallActive.playerNum;
+    const wfKey = wfNum === 1 ? 'player1VP' : 'player2VP';
+    game[wfKey] = game[wfKey] || { total: 0, kills: 0, objectives: 0 };
+    game[wfKey].total = (game[wfKey].total || 0) + cost;
+    await logGameAction(game, interaction.client, `**Windfall**: P${wfNum} gains +${cost} VP.`, { icon: 'card' });
   }
   if (ctx.pushUndo) {
     ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });

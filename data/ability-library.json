@@ -1933,10 +1933,10 @@
     },
     "Disable": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Adjacent hostile cannot use Surge abilities or Special actions this round",
       "logMessage": "**Disable** — Choose an adjacent hostile figure. Until end of round, that figure cannot use Surge abilities or Special actions. Track on honor system.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "disablesFigure": true
     },
     "Etiquette and Protocol": {
       "type": "ccEffect",
@@ -1961,10 +1961,10 @@
     },
     "Hold Ground": {
       "type": "ccEffect",
-      "informational": true,
       "label": "SMALL hostile figures cannot voluntarily exit spaces adjacent to you this round",
       "logMessage": "**Hold Ground** — Until end of round, SMALL hostile figures cannot voluntarily exit spaces adjacent to you. Track on honor system.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "setsHoldGround": true
     },
     "Improvised Weapons": {
       "type": "ccEffect",
@@ -2038,10 +2038,10 @@
     },
     "Price on Their Heads": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Place bounty on hostile DC: +4 VP when that group is defeated",
       "logMessage": "**Price on Their Heads** — Place on a hostile Deployment card. When the last figure in that group is defeated, you gain +4 VP. Use `/editvp +4` when triggered; track manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "setsBounty": true
     },
     "Protect the Old Ways": {
       "type": "ccEffect",
@@ -2185,17 +2185,17 @@
     },
     "Windfall": {
       "type": "ccEffect",
-      "informational": true,
       "label": "When CCs discarded from hand/deck: gain VP equal to their cost",
       "logMessage": "**Windfall** — When a Command card is discarded from your hand or deck, gain VPs equal to its cost (use `/editvp +N`). When Windfall itself is discarded, gain 1 VP. Track manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "setsWindfall": true
     },
     "Wreak Vengeance": {
       "type": "ccEffect",
-      "informational": true,
       "label": "When using Dual-Bladed Fury: choose both effects instead of 1",
       "logMessage": "**Wreak Vengeance** — When using **Dual-Bladed Fury**, choose both effects instead of only 1. Play alongside Dual-Bladed Fury; resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "setsWreakVengeance": true
     },
     "You Will Not Deny Me": {
       "type": "ccEffect",
