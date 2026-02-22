@@ -2734,6 +2734,11 @@ function resolveAssetPath(relPath, subfolder) {
   const filename = relPath.split(/[/\\]/).pop() || relPath;
   const inSub = `vassal_extracted/images/${subfolder}/${filename}`;
   if (existsSync(join(rootDir, inSub))) return inSub;
+  // figure-tokens/ is the physical folder for Vassal figure GIFs (figure-images.json stores paths as figures/)
+  if (subfolder === 'figures') {
+    const inTokens = `vassal_extracted/images/figure-tokens/${filename}`;
+    if (existsSync(join(rootDir, inTokens))) return inTokens;
+  }
   if (existsSync(join(rootDir, relPath))) return relPath;
   return relPath;
 }
