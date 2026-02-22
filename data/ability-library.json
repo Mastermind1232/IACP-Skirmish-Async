@@ -1144,7 +1144,7 @@
       "chooseAdjacentHostileThen": {
         "damage": 2
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Escalating Hostility": {
       "type": "ccEffect",
@@ -1343,7 +1343,7 @@
       "type": "ccEffect",
       "label": "Reroll defense/attack die or 1 VP (Focus honor)",
       "applyFocus": true,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Lightbow": {
       "type": "ccEffect",
@@ -1387,7 +1387,7 @@
       "type": "ccEffect",
       "label": "After attack on you: if suffered 3+ ready deployment (Focus honor)",
       "applyFocus": true,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Blood Feud": {
       "type": "ccEffect",
@@ -1570,7 +1570,7 @@
       "type": "ccEffect",
       "label": "Choose adjacent hostile: next attack targeting that figure gains Pierce 3 (honor which figure)",
       "nextAttackBonusPierce": 3,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Force Push": {
       "type": "ccEffect",
@@ -1694,7 +1694,7 @@
       "type": "ccEffect",
       "label": "Start of activation: become Focused; when you use False Orders this round may choose figure cost 5 or less within 5 (manual)",
       "applyFocus": true,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "I Must Go Alone": {
       "type": "ccEffect",
