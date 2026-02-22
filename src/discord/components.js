@@ -640,7 +640,7 @@ export function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces
  * @param {object} [helpers] - { getDcStats(dcName), getPlayerNumForMsgId(msgId), getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName) }
  */
 export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRemaining = 2, game = null, helpers = {}) {
-  const { getDcStats = () => ({}), getPlayerNumForMsgId = () => 1, getPlayableCcSpecialsForDc = () => [] } = helpers;
+  const { getDcStats = () => ({}), getPlayerNumForMsgId = () => 1, getPlayableCcSpecialsForDc = () => [], getPlayableCcEndOfActivationForDc = () => [] } = helpers;
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   const specials = stats.specials || [];
@@ -710,6 +710,21 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
           .setDisabled(noActions)
       );
       rows.push(new ActionRowBuilder().addComponents(...ccBtns));
+    }
+  }
+  // End-of-Activation CCs: shown and enabled only when all actions are spent
+  if (game && noActions && rows.length < 5) {
+    const playableEoa = getPlayableCcEndOfActivationForDc(game, playerNum, dcName, displayName);
+    const eoaCards = playableEoa.slice(0, 5);
+    if (eoaCards.length > 0) {
+      const eoaBtns = eoaCards.map((ccName, idx) =>
+        new ButtonBuilder()
+          .setCustomId(`dc_cc_eoa_${msgId}_${idx}`)
+          .setLabel(`CC (End of Act.): ${ccName}`.slice(0, 80))
+          .setStyle(ButtonStyle.Success)
+          .setDisabled(false)
+      );
+      rows.push(new ActionRowBuilder().addComponents(...eoaBtns));
     }
   }
   return rows;

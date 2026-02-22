@@ -14,6 +14,7 @@ const BUTTON_PREFIXES = [
   'dc_toggle_',
   'dc_deplete_',
   'dc_cc_special_',
+  'dc_cc_eoa_',
   'dc_move_',
   'dc_attack_',
   'dc_interact_',

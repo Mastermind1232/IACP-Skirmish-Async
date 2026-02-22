@@ -119,6 +119,7 @@ import {
   handleDcToggle,
   handleDcDeplete,
   handleDcCcSpecial,
+  handleDcCcEndOfActivation,
   handleDcAction,
   handleSquadModal,
   handleDeployModal,
@@ -391,6 +392,26 @@ function isCcPlayableByDc(ccName, dcName, displayName) {
 function getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName) {
   const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
   return hand.filter((ccName) => isCcPlayableByDc(ccName, dcName, displayName));
+}
+
+/** CC names in hand that are End-of-Activation timing and legally playable by this DC. */
+function getPlayableCcEndOfActivationForDc(game, playerNum, dcName, displayName) {
+  const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+  return hand.filter((ccName) => {
+    const effect = getCcEffect(ccName);
+    if (!effect || (effect.timing || '').toLowerCase() !== 'endofactivation') return false;
+    const playableBy = (effect.playableBy || '').trim();
+    if (!playableBy || playableBy.toLowerCase() === 'any figure') return true;
+    const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+    const displayBase = (displayName || dcBase).replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+    const p = playableBy.toLowerCase();
+    const d = dcBase.toLowerCase();
+    const disp = displayBase.toLowerCase();
+    if (d.includes(p) || p.includes(d) || disp.includes(p) || p.includes(disp)) return true;
+    const keywords = getDcKeywords()[dcName] || getDcKeywords()[dcBase];
+    if (keywords && Array.isArray(keywords) && keywords.some((k) => String(k).toLowerCase() === p)) return true;
+    return false;
+  });
 }
 
 /** Get set of normalized coords occupied by a player's figures. */
@@ -3292,6 +3313,7 @@ function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRemaining =
     getDcStats,
     getPlayerNumForMsgId: (id) => dcMessageMeta.get(id)?.playerNum ?? 1,
     getPlayableCcSpecialsForDc,
+    getPlayableCcEndOfActivationForDc,
   });
 }
 
@@ -4659,7 +4681,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_') {
+  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_') {
     const dcPlayAreaContext = {
       getGame,
       replyIfGameEnded,
@@ -4685,6 +4707,7 @@ client.on('interactionCreate', async (interaction) => {
       logGameAction,
       isDepletedRemovedFromGame,
       getPlayableCcSpecialsForDc,
+      getPlayableCcEndOfActivationForDc,
       getCcEffect,
       isCcAttachment,
       updateAttachmentMessageForDc,
@@ -4715,6 +4738,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'dc_toggle_') await handleDcToggle(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_deplete_') await handleDcDeplete(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_cc_special_') await handleDcCcSpecial(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'dc_cc_eoa_') await handleDcCcEndOfActivation(interaction, dcPlayAreaContext);
     else await handleDcAction(interaction, dcPlayAreaContext, buttonKey);
     return;
   }

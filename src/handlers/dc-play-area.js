@@ -436,11 +436,18 @@ export async function handleDcDeplete(interaction, ctx) {
  * @param {object} ctx
  */
 export async function handleDcCcSpecial(interaction, ctx) {
+  return _playCcFromDcThread(interaction, ctx, 'dc_cc_special_', ctx.getPlayableCcSpecialsForDc, 'Special Action');
+}
+
+export async function handleDcCcEndOfActivation(interaction, ctx) {
+  return _playCcFromDcThread(interaction, ctx, 'dc_cc_eoa_', ctx.getPlayableCcEndOfActivationForDc, 'End of Activation');
+}
+
+async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timingLabel) {
   const {
     getGame,
     replyIfGameEnded,
     dcMessageMeta,
-    getPlayableCcSpecialsForDc,
     getCcEffect,
     resolveAbility,
     isCcAttachment,
@@ -453,7 +460,7 @@ export async function handleDcCcSpecial(interaction, ctx) {
     saveGames,
     client,
   } = ctx;
-  const rest = interaction.customId.replace('dc_cc_special_', '');
+  const rest = interaction.customId.replace(idPrefix, '');
   const lastUnderscore = rest.lastIndexOf('_');
   const msgId = rest.slice(0, lastUnderscore);
   const idx = parseInt(rest.slice(lastUnderscore + 1), 10);
@@ -473,7 +480,7 @@ export async function handleDcCcSpecial(interaction, ctx) {
     return;
   }
   const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
-  const playable = getPlayableCcSpecialsForDc(game, meta.playerNum, meta.dcName, meta.displayName);
+  const playable = getCardList(game, meta.playerNum, meta.dcName, meta.displayName);
   const card = playable[idx];
   const handKey = meta.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
   const discardKey = meta.playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
@@ -511,7 +518,7 @@ export async function handleDcCcSpecial(interaction, ctx) {
   if (handMsg) {
     const handPayload = buildHandDisplayPayload(hand, deck, game.gameId, game, meta.playerNum);
     const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
-    handPayload.content = `**Command Cards** — Played **${card}** (Special Action).${effectReminder}\n\n` + (handPayload.content || '');
+    handPayload.content = `**Command Cards** — Played **${card}** (${timingLabel}).${effectReminder}\n\n` + (handPayload.content || '');
     await handMsg.edit({
       content: handPayload.content,
       embeds: handPayload.embeds || [],
@@ -522,7 +529,7 @@ export async function handleDcCcSpecial(interaction, ctx) {
   await updateHandVisualMessage(game, meta.playerNum, interaction.client);
   await updateDiscardPileMessage(game, meta.playerNum, interaction.client);
   await updateDcActionsMessage(game, msgId, interaction.client);
-  const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}** (Special Action).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}** (${timingLabel}).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   if (enteringNegation) {
     game.pendingNegation = { playedBy: meta.playerNum, card, fromDc: true, msgId, wasAttachment: isCcAttachment(card), handChannelId };
     const oppNum = meta.playerNum === 1 ? 2 : 1;
