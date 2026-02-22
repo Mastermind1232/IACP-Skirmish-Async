@@ -245,11 +245,19 @@ function canMoveDiagonally(start, dx, dy, board) {
   const { col, row } = parseCoord(startLower);
   const intermediateA = colRowToCoord(col + dx, row);
   const intermediateB = colRowToCoord(col, row + dy);
-  if (!board.spacesSet.has(normalizeCoord(intermediateA)) || !board.spacesSet.has(normalizeCoord(intermediateB))) {
-    return false;
-  }
-  const adj = board.adjacency[startLower] || [];
-  return adj.includes(normalizeCoord(intermediateA)) && adj.includes(normalizeCoord(intermediateB));
+  const aNorm = normalizeCoord(intermediateA);
+  const bNorm = normalizeCoord(intermediateB);
+  const aExists = board.spacesSet.has(aNorm);
+  const bExists = board.spacesSet.has(bNorm);
+  // Fully sealed corner — both sides absent, cannot cut through
+  if (!aExists && !bExists) return false;
+  // IA corner-cut rule: diagonal is allowed if at least one side is open (not walled off).
+  // Check adjacency to detect walls on each side (movementBlockingEdges encoded in adjacency).
+  const adjList = board.adjacency?.[startLower] || [];
+  const adjSet = new Set(adjList);
+  const aOpen = aExists && adjSet.has(aNorm);
+  const bOpen = bExists && adjSet.has(bNorm);
+  return aOpen || bOpen;
 }
 
 function getNeighborStates(state, board, profile) {
@@ -275,11 +283,15 @@ function getNeighborStates(state, board, profile) {
   const adjSet = adjForCell ? new Set(adjForCell) : null;
 
   for (const vec of moveVectors) {
-    if ((vec.dx && vec.dy) && profile.isLarge) continue;
-    if ((vec.dx && vec.dy) && !canMoveDiagonally(state.topLeft, vec.dx, vec.dy, board)) continue;
+    const isDiagonal = !!(vec.dx && vec.dy);
+    if (isDiagonal && profile.isLarge) continue;
+    if (isDiagonal && !canMoveDiagonally(state.topLeft, vec.dx, vec.dy, board)) continue;
     const nextTopLeft = shiftCoord(state.topLeft, vec.dx, vec.dy);
     if (!nextTopLeft || !board.spacesSet.has(nextTopLeft)) continue;
-    if (adjSet && !adjSet.has(nextTopLeft)) continue;
+    // For orthogonal moves, adjacency is the source of truth for wall encoding.
+    // For diagonal moves, canMoveDiagonally handles corner logic (adjacency data may not
+    // list diagonal targets that are reachable by the IA corner-cut rule).
+    if (!isDiagonal && adjSet && !adjSet.has(nextTopLeft)) continue;
     neighbors.push({ type: 'move', topLeft: nextTopLeft, size: state.size, dx: vec.dx, dy: vec.dy });
   }
   if (profile.canRotate) {
