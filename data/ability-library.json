@@ -1405,7 +1405,8 @@
       "informational": true,
       "label": "Battlefield Awareness",
       "logMessage": "**Battlefield Awareness** — After a friendly figure within 3 spaces rolls dice, choose 1 of those dice and reroll it. Announce before the roll resolves.",
-      "wiredStatus": "unwired"
+      "setBattlefieldAwareness": true,
+      "wiredStatus": "wired"
     },
     "Behind Enemy Lines": {
       "type": "ccEffect",
@@ -1535,8 +1536,9 @@
       "type": "ccEffect",
       "label": "You and a friendly within 3 each perform an attack (same target)",
       "informational": true,
-      "logMessage": "Resolve manually: you and a friendly figure within 3 spaces each perform an attack targeting the same figure.",
-      "wiredStatus": "unwired"
+      "logMessage": "**Coordinated Attack** — You and a friendly figure within 3 spaces each perform an attack targeting the same figure. Use the Attack button for each attack.",
+      "coordinatedAttackEffect": true,
+      "wiredStatus": "wired"
     },
     "Data Theft": {
       "type": "ccEffect",
@@ -1549,8 +1551,9 @@
       "type": "ccEffect",
       "label": "Special: place defeated friendly non-DROID non-unique TROOPER cost ≤4 in empty adjacent space",
       "informational": true,
-      "logMessage": "Resolve manually: choose a defeated friendly non-DROID, non-unique TROOPER with figure cost 4 or less; place in empty adjacent space.",
-      "wiredStatus": "unwired"
+      "logMessage": "**Cloned Reinforcements** — Choose a defeated friendly non-DROID, non-unique TROOPER with figure cost 4 or less. Place it in an empty space adjacent to any other figure in its group.",
+      "clonesReinforcements": true,
+      "wiredStatus": "testready"
     },
     "Endless Reserves": {
       "type": "ccEffect",
@@ -1577,7 +1580,8 @@
       "informational": true,
       "label": "Force Push",
       "logMessage": "**Force Push** — Choose another SMALL figure within 3 spaces. Push that figure up to 2 spaces in a straight line (each space must be empty). Resolve manually.",
-      "wiredStatus": "unwired"
+      "forcePushEffect": true,
+      "wiredStatus": "testready"
     },
     "Harsh Environment": {
       "type": "ccEffect",
@@ -1592,7 +1596,8 @@
       "informational": true,
       "label": "Marksman",
       "logMessage": "**Marksman** — During this Ranged attack, figures do not block line of sight. Announce to opponent before declaring the attack.",
-      "wiredStatus": "unwired"
+      "setsMarksman": true,
+      "wiredStatus": "wired"
     },
     "Ready Weapons": {
       "type": "ccEffect",
