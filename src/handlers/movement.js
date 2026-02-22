@@ -296,6 +296,7 @@ export async function handleMovePick(interaction, ctx) {
   const destDisplay = space.toUpperCase();
   const shortName = (displayName || meta.displayName || '').replace(/\s*\[(?:DG|Group) \d+\]$/, '') || displayName;
   const pLabel = `P${playerNum}`;
+  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
   const path = getMovementPath(cache, startCoord, newTopLeft, newSize, profile);
   const startDisplay = startCoord.toUpperCase();
   const pathStr = path.length > 1
