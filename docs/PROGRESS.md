@@ -18,7 +18,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 | 🔄 Game Flow & Rounds | 12 | 9.1 | 76% | Reinforcement missing; door system + setup attachments now tracked; EoA CC auto-prompt done |
 | ⚔️ Combat System | 15 | 12.5 | 83% | Full sequence works; LOS + figures-as-blockers gap |
 | 🏃 Movement & LOS | 10 | 8.5 | 85% | Engine solid; large figure occupancy gap |
-| 🃏 CC Automation | 20 | 16.0 | 80% | 289/289 CC cards have library entries (100% coverage); 141 wired, 83 partial/testready, 48 unwired (manual), 52 informational (logMessage only) |
+| 🃏 CC Automation | 20 | 16.0 | 80% | 289/289 CC cards have library entries (100% coverage); 141 wired, 83 partial/testready, 100 manual (no game state change) |
 | 🤖 DC Core Gameplay | 12 | 9.8 | 82% | DC specials wired via resolveAbility; `abilityText` filled for 233/238 cards; `specialAbilityIds` populated for 7 DCs; gap is writing more code paths per DC special |
 | ⚡ DC Surge Automation | 15 | 12.5 | **83%** | 165/165 attacking DCs have surgeAbilities; parseSurgeEffect fully handles all types |
 | 🗺️ Map Data | 15 | 9.5 | 63% | 3/3 tournament maps + 2 extras built; dev-facility broken |
@@ -76,8 +76,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 ## 🃏 CC Automation — weight: 20 pts — score: 15.5 / 20 (78%)
 
 > **Coverage: 289 / 289 CC cards (100%) have entries in `ability-library.json`.**
-> 48 `unwired` cards return generic "Resolve manually" text (no game state change).
-> 52 `informational` entries return a logMessage reminder but no game state change.
+> 100 **manual** cards — no game state change (52 post a logMessage reminder, 48 are fully silent).
 > 141 `wired` entries fully automated; 83 `partial` + 12 `testready` partially automated.
 > 102 distinct code branches in `src/game/abilities.js` handle the wired cards.
 
@@ -105,8 +104,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] **Son of Skywalker** — readies own DC (removes from activatedDcIndices, unexhausts embed)
 - [x] **Harsh Environment** — sets `game.harshEnvironmentActive = true` (round-scoped)
 - [x] **Terminal Network** — sets `game.terminalControlPlayerNum` (round-scoped)
-- [ ] **48 CC cards still return manual reminder** (`wiredStatus: unwired`) — no game state change
-- [ ] **52 CC cards are informational only** — have a logMessage reminder but no game state automation
+- [ ] **100 CC cards are manual** — no game state change; 52 post a logMessage reminder, 48 are fully silent
 - [x] **`pendingCcConfirmation` stale** — fixed: 10-min TTL via timestamp; see Infrastructure section
 
 ---
@@ -268,7 +266,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 | 🟡 High | **DC special action automation** (`specialAbilityIds`) | Large | `abilityText` filled for 233/238 ✅; `specialAbilityIds` wired for 7 DCs (MHD-19, R2-D2, Rebel Trooper Elite, Sabine Wren, Weequay Pirate Elite, Nexu Elite, Nexu Regular); remaining degrade gracefully to reminder text + Done button. |
 | ~~🟡 High~~ | ~~**End-of-activation CC triggers**~~ | ~~Medium~~ | ~~`endofactivation` timing exists but nothing auto-fires~~ — **Done**: `dc_cc_eoa_` handler wired; buttons auto-show when `actions=0` |
 | 🟡 High | **development-facility data** | Small | Spaces exist but deployment zones + mission card data are empty |
-| 🟡 Medium | **~100 remaining CC cards** | Medium | 48 `unwired` return generic "Resolve manually"; 52 `informational` log reminder only; no game state change for either group |
+| 🟡 Medium | **100 manual CC cards** | Medium | No game state change; 52 post a logMessage reminder, 48 are fully silent — both require manual resolution |
 | ~~🟡 Medium~~ | ~~**Server-side activation block**~~ | ~~Small~~ | ~~No guard prevents clicking Activate on a DC when `ActivationsRemaining` is already 0~~ — **Done**: `remaining <= 0` guard confirmed present in both activate handlers |
 | 🟡 Medium | **DC keyword trait enforcement** | Medium | `Sharpshooter`/`Charging Assault` etc. in `dc-effects.json keywords` field (`getDcKeywords()` computed live); not yet enforced in combat resolution |
 | 🟢 Low | **Undo for combat/HP/VP** | Medium | Current undo misses: combat outcomes, health changes, conditions, VP awards |
