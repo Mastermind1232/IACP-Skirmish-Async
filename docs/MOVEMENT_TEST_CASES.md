@@ -14,7 +14,7 @@
 | Moving **through** a hostile figure = +1 MP extra (2 MP total for that space) | Consolidated Rules | ✅ |
 | Moving **through** a friendly figure = no extra cost | Consolidated Rules | ✅ |
 | Cannot **end** movement on a space with another figure | Rules Reference | ✅ |
-| Diagonal movement allowed when both orthogonal "corner" spaces exist | CanMoveDiagonally | ✅ |
+| Diagonal movement allowed past a single wall (corner-cut rule) — blocked only when **both** orthogonal sides are walls (diagonal intersection) | Consolidated Rules p.67 | ✅ |
 | Cutting corner diagonally (not entering enemy space) = 1 MP | Implied | ✅ (entering set excludes corner) |
 | movementBlockingEdges (dotted red) = cannot cross | Map tool | ✅ |
 | impassableEdges = solid walls, no adjacency | Map tool | ✅ |
@@ -76,11 +76,11 @@
 - **Expected:** Cannot move A1→B1 directly.
 - **Code behavior:** movementBlockingSet check in evaluateMovementStep. ✅
 
-### Case 6: Diagonal When Corner Missing
+### Case 6: Diagonal When One Corner Missing (corner-cut allowed)
 
-- **Setup:** B1 is off-map or blocking. Luke at A1 wants to reach B2 diagonally.
-- **Expected:** Diagonal A1→B2 requires intermediates A2 and B1. If B1 invalid, diagonal not allowed.
-- **Code behavior:** canMoveDiagonally checks both intermediates. ✅
+- **Setup:** B1 is off-map (wall). Luke at A1 wants to reach B2 diagonally.
+- **Expected:** A2 (the other intermediate) is open, so the corner-cut is allowed. A1→B2 costs 1 MP. Rules: "A figure can move diagonally past any individual wall" (Consolidated Rules p.67).
+- **Code behavior:** canMoveDiagonally: aExists=false, bExists=true(A2), bOpen=true → returns true. ✅
 
 ### Case 7: Through Two Enemies
 
@@ -110,11 +110,11 @@
 - **Rules:** Ignore difficult terrain, blocking, and figure cost.
 - **Code behavior:** ignoreDifficult, ignoreBlocking, ignoreFigureCost in profile. ✅
 
-### Case 12: Diagonal When Corner Missing (Edge Case)
+### Case 12: Diagonal Through Full Corner Intersection (blocked)
 
-- **Setup:** B1 is off-map or blocking. Luke at A1 wants to reach B2 diagonally.
-- **Expected:** Diagonal A1→B2 requires both orthogonal "corner" spaces (A2 and B1) to exist. If B1 is invalid, diagonal not allowed.
-- **Code behavior:** canMoveDiagonally checks both intermediates exist and are adjacent. ✅
+- **Setup:** Both B1 AND A2 are off-map or walls. Luke at A1 wants to reach B2 diagonally.
+- **Expected:** Cannot move diagonally — this is a "diagonal intersection" of two walls, which is explicitly blocked. Rules: "A figure cannot move through the diagonal intersection of any combination of walls" (Consolidated Rules p.67).
+- **Code behavior:** canMoveDiagonally: aExists=false, bExists=false → returns false. ✅
 
 ---
 
