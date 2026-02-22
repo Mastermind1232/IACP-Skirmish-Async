@@ -170,7 +170,7 @@ export async function handleMoveAdjustMp(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, dcMessageMeta, clearMoveGridMessages, getBoardStateForMovement, getMovementProfile, ensureMovementCache, computeMovementCache, normalizeCoord, getMovementTarget, getFigureSize, getNormalizedFootprint, resolveMassivePush, updateMovementBankMessage, getMovementPath, pushUndo, logGameAction, countTerminalsControlledByPlayer, editDistanceMessage, getMoveMpButtonRows, buildBoardMapPayload, saveGames, client
+ * @param {object} ctx - getGame, dcMessageMeta, clearMoveGridMessages, getBoardStateForMovement, getMovementProfile, ensureMovementCache, computeMovementCache, normalizeCoord, getMovementTarget, getFigureSize, getNormalizedFootprint, resolveMassivePush, updateMovementBankMessage, getMovementPath, pushUndo, logGameAction, countTerminalsControlledByPlayer, editDistanceMessage, getMoveMpButtonRows, buildBoardMapPayload, updateDcActionsMessage, saveGames, client
  */
 export async function handleMovePick(interaction, ctx) {
   const {
@@ -339,6 +339,14 @@ export async function handleMovePick(interaction, ctx) {
       await boardChannel.send(payload);
     } catch (err) {
       console.error('Failed to update map after move:', err);
+    }
+  }
+  // Re-render the activation thread minimap so it shows the figure's new position
+  if (ctx.updateDcActionsMessage) {
+    try {
+      await ctx.updateDcActionsMessage(game, msgId, client);
+    } catch (err) {
+      console.error('Failed to update activation minimap after move:', err);
     }
   }
   saveGames();

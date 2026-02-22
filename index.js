@@ -4808,6 +4808,7 @@ client.on('interactionCreate', async (interaction) => {
       editDistanceMessage,
       getMoveMpButtonRows,
       buildBoardMapPayload,
+      updateDcActionsMessage,
       saveGames,
       client,
     };
