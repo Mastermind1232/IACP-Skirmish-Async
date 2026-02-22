@@ -1,6 +1,6 @@
 # IACP Skirmish — Master Progress Tracker
 *Goal: Fully playable, 100% in-Discord automated skirmish experience.*
-*Last updated: Jul 2026 (post full codebase read — every line of every file audited).*
+*Last updated: Feb 2026 (comprehensive audit: CC coverage, activation block confirmed, specialAbilityIds, dc-keywords.json removal, abilityText denominator corrected).*
 
 ---
 
@@ -18,8 +18,8 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 | 🔄 Game Flow & Rounds | 12 | 8.8 | 73% | Reinforcement missing; door system + setup attachments now tracked |
 | ⚔️ Combat System | 15 | 12.5 | 83% | Full sequence works; LOS + figures-as-blockers gap |
 | 🏃 Movement & LOS | 10 | 8.5 | 85% | Engine solid; large figure occupancy gap |
-| 🃏 CC Automation | 20 | 15.5 | 78% | Negation + Celebration confirmed wired; ~49 still return manual message |
-| 🤖 DC Core Gameplay | 12 | 9.7 | 81% | DC specials wired via resolveAbility; `abilityText` filled for 233/235 cards; gap is `specialAbilityIds` automation (code, not data entry) |
+| 🃏 CC Automation | 20 | 15.5 | 78% | 289/289 CC cards have library entries (100% coverage); 136 wired, 83 partial/testready, 58 unwired (manual), 47 informational (logMessage only) |
+| 🤖 DC Core Gameplay | 12 | 9.7 | 81% | DC specials wired via resolveAbility; `abilityText` filled for 233/238 cards; `specialAbilityIds` populated for 5 DCs; gap is writing more code paths per DC special |
 | ⚡ DC Surge Automation | 15 | 12.5 | **83%** | 165/165 attacking DCs have surgeAbilities; parseSurgeEffect fully handles all types |
 | 🗺️ Map Data | 15 | 9.5 | 63% | 3/3 tournament maps + 2 extras built; dev-facility broken |
 | 📜 Mission Rules Engine | 8 | 5.2 | 65% | Door tracking via openedDoors across all maps |
@@ -67,18 +67,19 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] **Ancillary token tracking** — smoke, rubble, energyShield, device, napalm tracked in `game.ancillaryTokens` and rendered on board
 - [x] **Manual VP edit** — `/editvp +N` or `/editvp -N` typed in Game Log; per-player adjustment; triggers win condition check and refreshes scorecard
 - [x] **Supercharge strain** — `superchargeStrainAfterAttackCount` applies strain to attacker's figure after attack resolves
+- [x] **Server-side activation block** — `remaining <= 0` guard in both `handleDcActivate` and `handleConfirmActivate`; returns ephemeral error if no activations remain *(confirmed present)*
 - [ ] **End-of-activation CC auto-prompt** — `endofactivation` timing exists in `cc-timing.js` but nothing auto-triggers; players must manually notice and play
-- [ ] **Server-side activation block** — `p1/p2ActivationsRemaining` is decremented but nothing prevents clicking Activate on a DC when count is already 0
 - [ ] **Free action tracking** — abilities that grant free actions still decrement the action counter
 
 ---
 
 ## 🃏 CC Automation — weight: 20 pts — score: 15.5 / 20 (78%)
 
-> **Coverage: 248 / 297 CC cards (~83%) have entries in `ability-library.json`.**
-> ~49 cards return "Resolve manually" reminder text; no game state change.
+> **Coverage: 289 / 289 CC cards (100%) have entries in `ability-library.json`.**
+> 58 `unwired` cards return generic "Resolve manually" text (no game state change).
+> 47 `informational` entries return a logMessage reminder but no game state change.
+> 136 `wired` entries fully automated; 83 `partial` + 12 `testready` partially automated.
 > 97 distinct code branches in `src/game/abilities.js` handle the wired cards.
-> "Data-verified" (289 cards in `cc-verified.json`) ≠ playtested.
 
 - [x] CC hand management: draw, hold, play, discard
 - [x] CC effects routed through `resolveAbility` → 97 code paths
@@ -99,7 +100,8 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] **CC play from DC activation thread** (`dc_cc_special_`) — Special Action timing; cost-0 triggers Negation window
 - [x] **CC play undo** — undoStack records `cc_play` and `cc_play_dc` types; hand/discard/attachment state restored
 - [x] **25 CC test scenarios** implemented and launchable via `testready` / `testgame` — TIMING_TEST_REQUIREMENTS covers all 10 timing categories
-- [ ] **~49 CC cards still return manual reminder** — not wired to game state
+- [ ] **58 CC cards still return manual reminder** (`wiredStatus: unwired`) — no game state change
+- [ ] **47 CC cards are informational only** — have a logMessage reminder but no game state automation
 - [ ] **`pendingCcConfirmation` stale** — confirmation state leaks if player acts without confirming
 
 ---
@@ -117,14 +119,14 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] Multi-figure groups tracked as one deployment card
 - [x] Power Token system — `/power-token add/remove/list` slash command; stored in `game.figurePowerTokens`; rendered on board minimap
 - [x] **DC specials wired via `resolveAbility`** — `dc-play-area.js handleDcAction(Special)` calls `resolveAbility(specialAbilityIds[idx])` from `dc-effects.json`; if `specialAbilityIds` is populated for a DC, its special IS automated
-- [x] **`abilityText` filled for 233/235 DCs** — human-readable ability text entered via DC effect editor; displayed as reminder in Special embed. This is complete.
+- [x] **`abilityText` filled for 233/238 DCs** — human-readable ability text entered via DC effect editor; displayed as reminder in Special embed. 5 remaining are non-combat utility figures.
 - [x] **Door system** — `open_door_{edge}` interact option tracked in `game.openedDoors`; doors removed from map render when opened; undo-supported
 - [x] **Skirmish Upgrade setup attachment** — `handleSetupAttachTo` places Skirmish Upgrade on DC during setup; stored in `p1DcAttachments` / `p2DcAttachments`; Deplete button + CC attachment embeds update accordingly
 - [x] **Companion embed** — DCs with a `companion` field in `dc-effects.json` get a Companion embed posted in Play Area; updates on Refresh All
 - [x] **Interact: terminals, doors, contraband, launch panels** — `getLegalInteractOptions` returns mission-specific (blue) + standard (grey) options; fully tracked with undo
 - [x] **Undo** — works for: move, pass turn, deploy, interact, cc_play (hand), cc_play_dc (Special from thread)
-- [ ] **DC specials automation gap** — `abilityText` is fully populated (233/235 ✅); but `specialAbilityIds` (the array that triggers `resolveAbility` for bot-automated execution) is populated for only 1 DC. Remaining DCs show ability text reminder + Done button (manual). This is a code-writing problem per ability, not a data entry problem.
-- [ ] **DC keyword traits** — `Sharpshooter`, `Charging Assault`, and others read from `dc-keywords.json` but not enforced in combat resolution
+- [ ] **DC specials automation gap** — `abilityText` is populated (233/238 ✅); `specialAbilityIds` populated for 5 DCs: MHD-19, R2-D2, Rebel Trooper (Elite), Sabine Wren, Weequay Pirate (Elite). Remaining DCs show ability text reminder + Done button (manual). This is a code-writing problem per ability, not a data entry problem.
+- [ ] **DC keyword traits** — `Sharpshooter`, `Charging Assault`, and others stored in `dc-effects.json keywords` field (computed via `getDcKeywords()`; dc-keywords.json deleted); not yet enforced in combat resolution
 - [ ] **Undo scope gap** — undo does NOT work for: combat outcomes, health changes, conditions, VP awards, or group defeats
 
 ---
@@ -253,12 +255,12 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 |---|---|---|---|
 | ~~🔴 Critical~~ | ~~**Reinforcement**~~ | ~~N/A~~ | Campaign-only mechanic — does not apply in skirmish. Removed. |
 | ~~🔴 Critical~~ | ~~**DC surge data**~~ | ~~Done~~ | Surge data already populated for all 165 attacking DCs — previously misstated as 3% |
-| 🟡 High | **DC special action automation** (`specialAbilityIds`) | Large | `abilityText` fully entered ✅; gap is writing code paths in `ability-library.json` per ability and linking via `specialAbilityIds`. Most DCs degrade gracefully to manual + reminder text. |
+| 🟡 High | **DC special action automation** (`specialAbilityIds`) | Large | `abilityText` filled for 233/238 ✅; `specialAbilityIds` wired for 5 DCs (MHD-19, R2-D2, Rebel Trooper Elite, Sabine Wren, Weequay Pirate Elite); remaining degrade gracefully to reminder text + Done button. |
 | 🟡 High | **End-of-activation CC triggers** | Medium | `endofactivation` timing exists but nothing auto-fires; players must notice and play manually |
 | 🟡 High | **development-facility data** | Small | Spaces exist but deployment zones + mission card data are empty |
-| 🟡 Medium | **~49 remaining CC cards** | Medium | Still return "Resolve manually" message; no game state change |
-| 🟡 Medium | **Server-side activation block** | Small | No guard prevents clicking Activate on a DC when `ActivationsRemaining` is already 0 |
-| 🟡 Medium | **DC keyword trait enforcement** | Medium | `Sharpshooter`/`Charging Assault` etc. read from `dc-keywords.json` but not enforced in combat |
+| 🟡 Medium | **~105 remaining CC cards** | Medium | 58 `unwired` return generic "Resolve manually"; 47 `informational` log reminder only; no game state change for either group |
+| ~~🟡 Medium~~ | ~~**Server-side activation block**~~ | ~~Small~~ | ~~No guard prevents clicking Activate on a DC when `ActivationsRemaining` is already 0~~ — **Done**: `remaining <= 0` guard confirmed present in both activate handlers |
+| 🟡 Medium | **DC keyword trait enforcement** | Medium | `Sharpshooter`/`Charging Assault` etc. in `dc-effects.json keywords` field (`getDcKeywords()` computed live); not yet enforced in combat resolution |
 | 🟢 Low | **Undo for combat/HP/VP** | Medium | Current undo misses: combat outcomes, health changes, conditions, VP awards |
 | 🟢 Low | **Detailed game-over summary** | Small | Scorecard embed posts; but no "8 rounds, X kills" narrative |
 | 🟢 Low | **Atomic saves + migration** | Medium | Reliability + upgrade path for games spanning bot restarts |
