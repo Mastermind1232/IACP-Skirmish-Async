@@ -148,7 +148,6 @@ import {
   handleCelebrationPass,
   handleFastForward,
   handleDefenderCcPlay,
-  handleDcPassivesToggle,
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
@@ -3279,19 +3278,6 @@ async function maybeShowEndActivationPhaseButton(game, client) {
 }
 
 /** Update the DC thread's Actions message with current counter. If all actions exhausted, @ the other player to activate. */
-/**
- * Build the content string for the DC actions message, including ability text when toggled on.
- */
-function buildDcActionsContent(data, dcName) {
-  const base = getActionsCounterContent(data.remaining, data.total);
-  if (!data?.showPassives || !dcName) return base;
-  const stats = getDcStats(dcName);
-  const text = stats.abilityText || '';
-  if (!text.trim()) return base;
-  const textTrunc = text.length > 1500 ? text.slice(0, 1497) + '…' : text;
-  return `${base}\n\n📌 **Abilities:**\n${textTrunc}`;
-}
-
 async function updateDcActionsMessage(game, msgId, client) {
   const data = game.dcActionsData?.[msgId];
   if (!data?.threadId) return;
@@ -3304,7 +3290,7 @@ async function updateDcActionsMessage(game, msgId, client) {
       const msg = await thread.messages.fetch(data.messageId);
       const components = meta && game ? getDcActionButtons(msgId, meta.dcName, displayName, data, game) : [];
       const editPayload = {
-        content: buildDcActionsContent(data, meta?.dcName),
+        content: getActionsCounterContent(data.remaining, data.total),
         components,
       };
       const actMinimap = await getActivationMinimapAttachment(game, msgId);
@@ -4764,7 +4750,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_' || buttonKey === 'dc_passives_toggle_') {
+  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_') {
     const dcPlayAreaContext = {
       getGame,
       replyIfGameEnded,
@@ -4823,7 +4809,6 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'dc_cc_special_') await handleDcCcSpecial(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_cc_eoa_') await handleDcCcEndOfActivation(interaction, dcPlayAreaContext);
     else if (buttonKey === 'pounce_space_') await handlePounceSpacePick(interaction, dcPlayAreaContext);
-    else if (buttonKey === 'dc_passives_toggle_') await handleDcPassivesToggle(interaction, dcPlayAreaContext);
     else await handleDcAction(interaction, dcPlayAreaContext, buttonKey);
     return;
   }

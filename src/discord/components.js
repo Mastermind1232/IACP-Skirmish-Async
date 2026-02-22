@@ -660,16 +660,13 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const figures = stats.figures ?? 1;
   const specials = stats.specials || [];
   const specialCosts = stats.specialCosts || [];
-  const abilityText = stats.abilityText || '';
   const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const actionsData = typeof actionsDataOrRemaining === 'object' && actionsDataOrRemaining != null ? actionsDataOrRemaining : { remaining: actionsDataOrRemaining, specialsUsed: [] };
   const actionsRemaining = actionsData.remaining ?? 2;
   const specialsUsed = Array.isArray(actionsData.specialsUsed) ? actionsData.specialsUsed : [];
-  const showPassives = actionsData?.showPassives ?? false;
   const noActions = (actionsRemaining ?? 2) <= 0;
   const playerNum = game ? (getPlayerNumForMsgId(msgId) ?? 1) : 1;
   const selectedFigure = actionsData.selectedFigure ?? null;
-  const hasAbilityText = abilityText.trim().length > 0;
   const rows = [];
 
   if (figures > 1) {
@@ -691,9 +688,6 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
         new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noActions),
         new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noActions),
       ];
-      if (hasAbilityText) {
-        comps.push(new ButtonBuilder().setCustomId(`dc_passives_toggle_${msgId}`).setLabel(showPassives ? '📖 Hide' : '📖 Abilities').setStyle(ButtonStyle.Secondary));
-      }
       rows.push(new ActionRowBuilder().addComponents(...comps));
     }
   } else {
@@ -702,9 +696,6 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noActions),
       new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noActions),
     ];
-    if (hasAbilityText) {
-      comps.push(new ButtonBuilder().setCustomId(`dc_passives_toggle_${msgId}`).setLabel(showPassives ? '📖 Hide' : '📖 Abilities').setStyle(ButtonStyle.Secondary));
-    }
     rows.push(new ActionRowBuilder().addComponents(...comps));
   }
 
