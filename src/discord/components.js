@@ -129,11 +129,15 @@ export function getUndoButton(gameId, disabled = false) {
     .setDisabled(disabled);
 }
 
-/** @param {string} gameId - @param {{ game?: { ended?: boolean } }} [opts] - when game.ended, Undo is disabled (F14). */
+/**
+ * @param {string} gameId
+ * @param {{ game?: object }} [opts]
+ * @returns {import('discord.js').ActionRowBuilder[]} Array of action rows (1 main row + optional fast-forward row)
+ */
 export function getBoardButtons(gameId, opts = {}) {
   const game = opts.game;
   const undoDisabled = !!game?.ended;
-  return new ActionRowBuilder().addComponents(
+  const mainRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`refresh_map_${gameId}`)
       .setLabel('Refresh Map')
@@ -144,6 +148,16 @@ export function getBoardButtons(gameId, opts = {}) {
       .setLabel('Refresh All')
       .setStyle(ButtonStyle.Secondary),
   );
+  const rows = [mainRow];
+  if (game?.isTestGame && game?.testP2IsBot && !game?.ended) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`fast_forward_${gameId}`)
+        .setLabel('⏩ Fast Forward')
+        .setStyle(ButtonStyle.Success)
+    ));
+  }
+  return rows;
 }
 
 /** F17: One row with Map Selection menu (Random / Competitive / Select Draw / Selection). */
@@ -646,13 +660,16 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const figures = stats.figures ?? 1;
   const specials = stats.specials || [];
   const specialCosts = stats.specialCosts || [];
+  const abilityText = stats.abilityText || '';
   const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const actionsData = typeof actionsDataOrRemaining === 'object' && actionsDataOrRemaining != null ? actionsDataOrRemaining : { remaining: actionsDataOrRemaining, specialsUsed: [] };
   const actionsRemaining = actionsData.remaining ?? 2;
   const specialsUsed = Array.isArray(actionsData.specialsUsed) ? actionsData.specialsUsed : [];
+  const showPassives = actionsData?.showPassives ?? false;
   const noActions = (actionsRemaining ?? 2) <= 0;
   const playerNum = game ? (getPlayerNumForMsgId(msgId) ?? 1) : 1;
   const selectedFigure = actionsData.selectedFigure ?? null;
+  const hasAbilityText = abilityText.trim().length > 0;
   const rows = [];
 
   if (figures > 1) {
@@ -674,6 +691,9 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
         new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noActions),
         new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noActions),
       ];
+      if (hasAbilityText) {
+        comps.push(new ButtonBuilder().setCustomId(`dc_passives_toggle_${msgId}`).setLabel(showPassives ? '📖 Hide' : '📖 Abilities').setStyle(ButtonStyle.Secondary));
+      }
       rows.push(new ActionRowBuilder().addComponents(...comps));
     }
   } else {
@@ -682,6 +702,9 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noActions),
       new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noActions),
     ];
+    if (hasAbilityText) {
+      comps.push(new ButtonBuilder().setCustomId(`dc_passives_toggle_${msgId}`).setLabel(showPassives ? '📖 Hide' : '📖 Abilities').setStyle(ButtonStyle.Secondary));
+    }
     rows.push(new ActionRowBuilder().addComponents(...comps));
   }
 

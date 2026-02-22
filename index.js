@@ -146,6 +146,9 @@ import {
   handleNegationLetResolve,
   handleCelebrationPlay,
   handleCelebrationPass,
+  handleFastForward,
+  handleDefenderCcPlay,
+  handleDcPassivesToggle,
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
@@ -2289,7 +2292,7 @@ async function refreshAllGameComponents(game, client) {
 
 /** Returns { content, files?, embeds?, components } for posting the game map. Includes Scorecard embed. */
 async function buildBoardMapPayload(gameId, map, game) {
-  const components = [getBoardButtons(gameId, { game })];
+  const components = getBoardButtons(gameId, { game });
   const embeds = game ? [buildScorecardEmbed(game)] : [];
   const figures = game ? getFiguresForRender(game) : [];
   const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
@@ -3135,9 +3138,11 @@ function getDcStats(dcName) {
       defense: eff.defense ?? null,
       specials: eff.specials || [],
       specialCosts: eff.specialCosts || [],
+      passives: eff.passives || [],
+      abilityText: eff.abilityText || '',
     };
   }
-  return { health: null, figures: isFigurelessDc(dcName) ? 0 : 1, specials: [], specialCosts: [] };
+  return { health: null, figures: isFigurelessDc(dcName) ? 0 : 1, specials: [], specialCosts: [], passives: [], abilityText: '' };
 }
 
 function getDeckIllegalPlayCustomId(gameId, playerNum) {
@@ -3274,6 +3279,19 @@ async function maybeShowEndActivationPhaseButton(game, client) {
 }
 
 /** Update the DC thread's Actions message with current counter. If all actions exhausted, @ the other player to activate. */
+/**
+ * Build the content string for the DC actions message, including ability text when toggled on.
+ */
+function buildDcActionsContent(data, dcName) {
+  const base = getActionsCounterContent(data.remaining, data.total);
+  if (!data?.showPassives || !dcName) return base;
+  const stats = getDcStats(dcName);
+  const text = stats.abilityText || '';
+  if (!text.trim()) return base;
+  const textTrunc = text.length > 1500 ? text.slice(0, 1497) + '…' : text;
+  return `${base}\n\n📌 **Abilities:**\n${textTrunc}`;
+}
+
 async function updateDcActionsMessage(game, msgId, client) {
   const data = game.dcActionsData?.[msgId];
   if (!data?.threadId) return;
@@ -3286,7 +3304,7 @@ async function updateDcActionsMessage(game, msgId, client) {
       const msg = await thread.messages.fetch(data.messageId);
       const components = meta && game ? getDcActionButtons(msgId, meta.dcName, displayName, data, game) : [];
       const editPayload = {
-        content: getActionsCounterContent(data.remaining, data.total),
+        content: buildDcActionsContent(data, meta?.dcName),
         components,
       };
       const actMinimap = await getActivationMinimapAttachment(game, msgId);
@@ -4746,7 +4764,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_') {
+  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_' || buttonKey === 'dc_passives_toggle_') {
     const dcPlayAreaContext = {
       getGame,
       replyIfGameEnded,
@@ -4805,6 +4823,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'dc_cc_special_') await handleDcCcSpecial(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_cc_eoa_') await handleDcCcEndOfActivation(interaction, dcPlayAreaContext);
     else if (buttonKey === 'pounce_space_') await handlePounceSpacePick(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'dc_passives_toggle_') await handleDcPassivesToggle(interaction, dcPlayAreaContext);
     else await handleDcAction(interaction, dcPlayAreaContext, buttonKey);
     return;
   }
@@ -5123,6 +5142,48 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'botmenu_archive_no_') await handleBotmenuArchiveNo(interaction, botmenuContext);
     else if (buttonKey === 'botmenu_kill_yes_') await handleBotmenuKillYes(interaction, botmenuContext);
     else if (buttonKey === 'botmenu_kill_no_') await handleBotmenuKillNo(interaction, botmenuContext);
+    return;
+  }
+
+  if (buttonKey === 'fast_forward_') {
+    const fastForwardContext = {
+      getGame,
+      saveGames,
+      client,
+      dcExhaustedState,
+      dcHealthState,
+      dcMessageMeta,
+      buildDcEmbedAndFiles,
+      getConditionsForDcMessage,
+      getDcPlayAreaComponents,
+      getDcActionButtons,
+      getActionsCounterContent,
+      getActivationMinimapAttachment,
+      updateActivationsMessage,
+      DC_ACTIONS_PER_ACTIVATION,
+      logGameAction,
+      getCcEffect,
+      resolveAbility,
+      updateHandVisualMessage,
+      updateDiscardPileMessage,
+    };
+    await handleFastForward(interaction, fastForwardContext);
+    return;
+  }
+
+  if (buttonKey === 'dc_cc_defender_') {
+    const defenderCcContext = {
+      getGame,
+      saveGames,
+      client,
+      dcMessageMeta,
+      getCcEffect,
+      resolveAbility,
+      logGameAction,
+      updateHandVisualMessage,
+      updateDiscardPileMessage,
+    };
+    await handleDefenderCcPlay(interaction, defenderCcContext);
     return;
   }
 

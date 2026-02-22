@@ -37,6 +37,7 @@ import {
   handleDcCcEndOfActivation,
   handleDcAction,
   handlePounceSpacePick,
+  handleDcPassivesToggle,
 } from './dc-play-area.js';
 import {
   handleSquadModal,
@@ -72,6 +73,7 @@ import {
   handleBotmenuKillYes,
   handleBotmenuKillNo,
 } from './botmenu.js';
+import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 
 const HANDLERS = new Map();
 
@@ -126,6 +128,7 @@ register('dc_deplete_', handleDcDeplete);
 register('dc_cc_special_', handleDcCcSpecial);
 register('dc_cc_eoa_', handleDcCcEndOfActivation);
 register('pounce_space_', handlePounceSpacePick);
+register('dc_passives_toggle_', handleDcPassivesToggle);
 register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'));
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'));
 register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'));
@@ -153,6 +156,8 @@ register('botmenu_archive_yes_', handleBotmenuArchiveYes);
 register('botmenu_archive_no_', handleBotmenuArchiveNo);
 register('botmenu_kill_yes_', handleBotmenuKillYes);
 register('botmenu_kill_no_', handleBotmenuKillNo);
+register('fast_forward_', handleFastForward);
+register('dc_cc_defender_', handleDefenderCcPlay);
 
 /**
  * Return the handler for the given key (prefix), or null if none.
@@ -201,6 +206,7 @@ export {
   handleDcCcEndOfActivation,
   handleDcAction,
   handlePounceSpacePick,
+  handleDcPassivesToggle,
 } from './dc-play-area.js';
 export {
   handleSquadModal,
@@ -236,3 +242,4 @@ export {
   handleBotmenuKillYes,
   handleBotmenuKillNo,
 } from './botmenu.js';
+export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';

@@ -2958,9 +2958,10 @@
       "elite": true,
       "unique": true,
       "affiliation": "Scum",
-      "specials": [
+      "passives": [
         "Relentless"
-      ]
+      ],
+      "specials": []
     },
     "Imperial Officer (Elite)": {
       "abilityText": "Special Action (Executive Order): Choose another friendly Imperial figure within 2 spaces. That figure may interrupt to perform a move or attack.",
@@ -5711,9 +5712,10 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Rebel",
-      "specials": [
+      "passives": [
         "Fury"
-      ]
+      ],
+      "specials": []
     },
     "Wookiee Warrior (Regular)": {
       "abilityText": "Fury: While attacking, if you have suffered 5 or more Damage, apply +1 Surge to the attack results.",
@@ -5743,9 +5745,10 @@
       ],
       "attachment": false,
       "affiliation": "Rebel",
-      "specials": [
+      "passives": [
         "Fury"
-      ]
+      ],
+      "specials": []
     },
     "Yoda": {
       "abilityText": "Calming Presence: At the start of a friendly REBEL figure's activation, that figure may remove one HARMFUL condition and suffer 1 Strain. Limit once per round.\n\nWisdom: At the start of your activation, you may draw 1 Command card. If you do, place 1 card from your hand on the bottom of your deck.\n\nSpecial Action (Do or Do Not): Choose another friendly REBEL FORCE USER within 4 spaces. That figure becomes Focused.\n\nForce Deflection: After an attack targeting you or an adjacent friendly REBEL figure resolves, you may have the attacking figure suffer Damage equal to the number of attack dice rolled. Limit once per round.",

@@ -1044,3 +1044,33 @@ export async function handlePounceSpacePick(interaction, ctx) {
   }
   saveGames();
 }
+
+/**
+ * Toggle the ability text display in the DC actions message.
+ * Button customId: dc_passives_toggle_{msgId}
+ */
+export async function handleDcPassivesToggle(interaction, ctx) {
+  const msgId = interaction.customId.replace('dc_passives_toggle_', '');
+  const { dcMessageMeta, getGame, updateDcActionsMessage, saveGames, client } = ctx;
+
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.reply({ content: 'DC context not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const game = getGame(meta.gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const data = game.dcActionsData?.[msgId];
+  if (!data) {
+    await interaction.reply({ content: 'Activation data not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  data.showPassives = !data.showPassives;
+  await updateDcActionsMessage(game, msgId, client);
+  saveGames();
+}

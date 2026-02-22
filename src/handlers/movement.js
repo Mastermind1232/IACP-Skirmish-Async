@@ -79,6 +79,16 @@ export async function handleMoveMp(interaction, ctx) {
     await interaction.followUp({ content: `No spaces exactly **${mp}** MP away.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
+  // For multi-tile figures, filter buttons to only show the topLeft cell of each reachable
+  // placement. Without this, every footprint cell gets its own button (e.g. a 2x1 figure
+  // would show both A1 and A2 for the same placement, both resolving to topLeft=A1).
+  const isMultiTile = profile.size && profile.size !== '1x1';
+  const buttonSpaces = isMultiTile
+    ? spaces.filter((cell) => {
+        const info = cache.cells.get(normalizeCoord(cell));
+        return info && info.topLeft === normalizeCoord(cell);
+      })
+    : spaces;
   moveState.pendingMp = mp;
   await clearMoveGridMessages(game, moveKey, interaction.channel);
   game.moveGridMessageIds = game.moveGridMessageIds || {};
@@ -89,7 +99,7 @@ export async function handleMoveMp(interaction, ctx) {
       components: [],
     }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
-  const { rows } = getMoveSpaceGridRows(msgId, figureIndex, spaces, boardState.mapSpaces);
+  const { rows } = getMoveSpaceGridRows(msgId, figureIndex, buttonSpaces, boardState.mapSpaces);
   const gridIds = [];
   const firstSpaceRows = rows.slice(0, SPACE_ROWS_ON_FIRST);
   const adjustRow = new ActionRowBuilder().addComponents(
@@ -100,8 +110,9 @@ export async function handleMoveMp(interaction, ctx) {
   );
   const firstRows = [...firstSpaceRows, adjustRow];
   const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, spaces);
+  const multiTileNote = isMultiTile ? `\n📐 Buttons = **top-left corner** of each valid placement (figure extends right/down).` : '';
   const gridPayload = {
-    content: `**Move** — Pick destination (**${mp}** MP):`,
+    content: `**Move** — Pick destination (**${mp}** MP):${multiTileNote}`,
     components: firstRows,
     fetchReply: true,
   };
