@@ -2421,8 +2421,6 @@ async function finishSetupAttachments(game, client) {
  * @param {import('discord.js').Client} client
  * @param {{ scenarioId?: string }} [options] - When scenarioId (e.g. 'smoke_grenade'), use scenario decks and seed P1 hand
  */
-/**
-
 async function runDraftRandom(game, client, options = {}) {
   const { scenarioId } = options;
   const generalChannel = await client.channels.fetch(game.generalId);
