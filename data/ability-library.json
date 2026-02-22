@@ -576,7 +576,7 @@
       "label": "Become Focused and +1 Hit when attacking highest-cost hostile (target validation manual)",
       "applyFocus": true,
       "attackBonusHits": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Tools for the Job": {
       "type": "ccEffect",
@@ -639,7 +639,7 @@
       "label": "Add 1 black die to defense pool (passive manual)",
       "defenseBonusDice": 1,
       "defenseBonusDiceColor": "black",
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Parry": {
       "type": "ccEffect",
@@ -675,7 +675,7 @@
       "label": "Add 1 red die to attack pool (you become Stunned — apply manually)",
       "attackBonusDice": 1,
       "attackBonusDiceColor": "red",
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Inspiring Speech": {
       "type": "ccEffect",
@@ -957,7 +957,7 @@
       "chooseAdjacentHostileThen": {
         "damage": 2
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Right Back At Ya!": {
       "type": "ccEffect",
@@ -1006,7 +1006,7 @@
       "label": "You or adjacent suffers 1 Damage (manual); then gain 1 MP and become Focused",
       "mpBonus": 1,
       "applyFocus": true,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "On a Mission": {
       "type": "ccEffect",

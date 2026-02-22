@@ -505,6 +505,33 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: parts.join(', ') + '.' };
   }
 
+  // ccEffect: applyFocus + mpBonus combo (Stimulants) — Focus and MP together; damage to self/adjacent is manual
+  if (entry.type === 'ccEffect' && entry.applyFocus && typeof entry.mpBonus === 'number' && entry.mpBonus > 0 && !entry.applyHide) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of figureKeys) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+    }
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    bank.total = (bank.total ?? 0) + entry.mpBonus;
+    bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
+    game.movementBank[msgId] = bank;
+    const n = entry.mpBonus;
+    const mpMsg = n === 1 ? '1 movement point' : `${n} movement points`;
+    return {
+      applied: true,
+      logMessage: `Became Focused, gained ${mpMsg}. **Apply Damage manually** as required by the card.`,
+    };
+  }
+
   // ccEffect: +N MP (Fleet Footed, Force Rush, etc.) — requires active activation
   if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
     const { game, playerNum, dcMessageMeta } = context;
