@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
-import { normalizeCoord } from '../game/coords.js';
+import { normalizeCoord, bottomLeftCoord } from '../game/coords.js';
 
 const MAX_BUTTONS_PER_ROW = 5;
 const MAX_ROWS_PER_MESSAGE = 5;
@@ -505,16 +505,24 @@ export function getMoveMpButtonRows(msgId, figureIndex, mpRemaining) {
 }
 
 /** Action rows for movement space selection: move_pick_${msgId}_${figureIndex}_${space}. */
-export function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces) {
+export function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces, size = '1x1') {
+  // Build a labelMap so buttons show bottom-left corner of each placement instead of top-left.
+  const labelMap = {};
+  if (size && size !== '1x1') {
+    for (const space of validSpaces) {
+      const norm = normalizeCoord(space);
+      labelMap[norm] = bottomLeftCoord(norm, size).toUpperCase();
+    }
+  }
   // Pass Infinity so all reachable cells get buttons; overflow is sent across multiple messages in movement.js
-  return getSpaceChoiceRows(`move_pick_${msgId}_${figureIndex}_`, validSpaces, mapSpaces, Infinity);
+  return getSpaceChoiceRows(`move_pick_${msgId}_${figureIndex}_`, validSpaces, mapSpaces, Infinity, labelMap);
 }
 
 /**
  * Generic space choice rows (reusable for CC/DC "pick a space").
  * Buttons: ${customIdPrefix}${space}. Returns { rows, available }.
  */
-export function getSpaceChoiceRows(customIdPrefix, validSpaces, mapSpaces, maxRows = MAX_ROWS_PER_MESSAGE) {
+export function getSpaceChoiceRows(customIdPrefix, validSpaces, mapSpaces, maxRows = MAX_ROWS_PER_MESSAGE, labelMap = {}) {
   const available = (validSpaces || []).map((s) => normalizeCoord(s));
   const orderMap = new Map(
     (mapSpaces?.spaces || []).map((coord, idx) => [normalizeCoord(coord), idx])
@@ -545,7 +553,7 @@ export function getSpaceChoiceRows(customIdPrefix, validSpaces, mapSpaces, maxRo
           chunk.map((space) =>
             new ButtonBuilder()
               .setCustomId(`${customIdPrefix}${space}`)
-              .setLabel(space.toUpperCase())
+              .setLabel(labelMap[space] || space.toUpperCase())
               .setStyle(ButtonStyle.Success)
           )
         )

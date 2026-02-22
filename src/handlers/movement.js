@@ -3,6 +3,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
+import { bottomLeftCoord } from '../game/coords.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
@@ -99,7 +100,7 @@ export async function handleMoveMp(interaction, ctx) {
       components: [],
     }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
-  const { rows } = getMoveSpaceGridRows(msgId, figureIndex, buttonSpaces, boardState.mapSpaces);
+  const { rows } = getMoveSpaceGridRows(msgId, figureIndex, buttonSpaces, boardState.mapSpaces, profile.size);
   const gridIds = [];
   const firstSpaceRows = rows.slice(0, SPACE_ROWS_ON_FIRST);
   const adjustRow = new ActionRowBuilder().addComponents(
@@ -109,8 +110,11 @@ export async function handleMoveMp(interaction, ctx) {
       .setStyle(ButtonStyle.Secondary)
   );
   const firstRows = [...firstSpaceRows, adjustRow];
-  const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, spaces);
-  const multiTileNote = isMultiTile ? `\n📐 Buttons = **top-left corner** of each valid placement (figure extends right/down).` : '';
+  const minimapCells = isMultiTile
+    ? buttonSpaces.map((tl) => bottomLeftCoord(tl, profile.size))
+    : spaces;
+  const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, minimapCells);
+  const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
   const gridPayload = {
     content: `**Move** — Pick destination (**${mp}** MP):${multiTileNote}`,
     components: firstRows,
@@ -293,14 +297,14 @@ export async function handleMovePick(interaction, ctx) {
     game.movementBank[msgId].remaining = Math.max(0, newMp);
     await updateMovementBankMessage(game, msgId, client);
   }
-  const destDisplay = space.toUpperCase();
+  const destDisplay = bottomLeftCoord(newTopLeft, newSize).toUpperCase();
   const shortName = (displayName || meta.displayName || '').replace(/\s*\[(?:DG|Group) \d+\]$/, '') || displayName;
   const pLabel = `P${playerNum}`;
   const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
   const path = getMovementPath(cache, startCoord, newTopLeft, newSize, profile);
-  const startDisplay = startCoord.toUpperCase();
+  const startDisplay = bottomLeftCoord(startCoord, profile.size).toUpperCase();
   const pathStr = path.length > 1
-    ? ` via ${path.map((c) => String(c).toUpperCase()).join(' → ')}`
+    ? ` via ${path.map((c) => bottomLeftCoord(String(c), profile.size).toUpperCase()).join(' → ')}`
     : '';
   const moveLogMsg = await logGameAction(game, client, `<@${ownerId}> moved **${displayName}** from **${startDisplay}** → **${destDisplay}** (**${cost} MP**${pathStr})`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'move' });
   pushUndo(game, {
@@ -348,9 +352,12 @@ export async function handleMovePick(interaction, ctx) {
             return info && info.topLeft === cell;
           })
         : allNewCells;
-      const newMultiTileNote = newIsMultiTile ? `\n📐 Buttons = **top-left corner** of each valid placement (figure extends right/down).` : '';
-      const { rows: newRows } = getMoveSpaceGridRows(msgId, figureIndex, newButtonSpaces, nextBoard.mapSpaces);
-      const newMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, allNewCells);
+      const newMultiTileNote = newIsMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
+      const { rows: newRows } = getMoveSpaceGridRows(msgId, figureIndex, newButtonSpaces, nextBoard.mapSpaces, nextProfile.size);
+      const newMinimapCells = newIsMultiTile
+        ? newButtonSpaces.map((tl) => bottomLeftCoord(tl, nextProfile.size))
+        : allNewCells;
+      const newMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, newMinimapCells);
       const newGridIds = [];
       const newFirstRows = newRows.slice(0, 4);
       const newFirstPayload = {

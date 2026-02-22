@@ -29,6 +29,16 @@ export function colRowToCoord(col, row) {
   return letter.toLowerCase() + (row + 1);
 }
 
+/** Convert a topLeft coord to the bottom-left coord for display (same col, last row of footprint). */
+export function bottomLeftCoord(topLeft, size) {
+  if (!topLeft) return topLeft;
+  const [, rowsStr] = String(size || '1x1').split('x');
+  const rows = parseInt(rowsStr, 10) || 1;
+  if (rows <= 1) return String(topLeft).toLowerCase();
+  const { col, row } = parseCoord(topLeft);
+  return colRowToCoord(col, row + rows - 1);
+}
+
 export function edgeKey(a, b) {
   return [String(a).toLowerCase(), String(b).toLowerCase()].sort().join('|');
 }

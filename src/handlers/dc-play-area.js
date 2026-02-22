@@ -3,6 +3,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration } from 'discord.js';
 import { truncateLabel } from '../discord/components.js';
+import { bottomLeftCoord } from '../game/coords.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 
 /**
@@ -791,9 +792,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         distanceMessageId: null,
       };
       game.moveGridMessageIds = game.moveGridMessageIds || {};
-      const multiTileNote = isMultiTile ? `\n📐 Buttons = **top-left corner** of each valid placement (figure extends right/down).` : '';
-      const { rows } = getMoveSpaceGridRows(msgId, figureIndex, buttonSpaces, boardState.mapSpaces);
-      const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, allCacheCells);
+      const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
+      const { rows } = getMoveSpaceGridRows(msgId, figureIndex, buttonSpaces, boardState.mapSpaces, profile.size);
+      const minimapCells = isMultiTile
+        ? buttonSpaces.map((tl) => bottomLeftCoord(tl, profile.size))
+        : allCacheCells;
+      const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, minimapCells);
       const gridIds = [];
       const firstRows = rows.slice(0, 4);
       const firstPayload = {
