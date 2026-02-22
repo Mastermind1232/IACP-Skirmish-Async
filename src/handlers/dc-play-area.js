@@ -635,7 +635,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     getBoardStateForMovement,
     getMovementProfile,
     computeMovementCache,
-    getMoveMpButtonRows,
+    getMoveSpaceGridRows,
+    getMovementMinimapAttachment,
+    clearMoveGridMessages,
     getLegalInteractOptions,
     FIGURE_LETTERS,
     DC_ACTIONS_PER_ACTIVATION,
@@ -765,13 +767,15 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       }
       game.moveInProgress = game.moveInProgress || {};
       const moveKey = `${msgId}_${figureIndex}`;
-      const mpRows = getMoveMpButtonRows(msgId, figureIndex, mpRemaining);
-      const replyMsg = await interaction.reply({
-        content: `**Move** — Pick distance (**${mpRemaining}** MP remaining):`,
-        components: mpRows,
-        ephemeral: false,
-        fetchReply: true,
-      }).catch(() => null);
+      // Show all reachable cells directly — no MP pre-selection step
+      const allCacheCells = [...cache.cells.keys()];
+      const isMultiTile = profile.size && profile.size !== '1x1';
+      const buttonSpaces = isMultiTile
+        ? allCacheCells.filter((cell) => {
+            const info = cache.cells.get(cell);
+            return info && info.topLeft === cell;
+          })
+        : allCacheCells;
       game.moveInProgress[moveKey] = {
         figureKey,
         playerNum,
@@ -784,10 +788,31 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         cacheMaxMp: mpRemaining,
         startCoord: pos,
         pendingMp: null,
-        distanceMessageId: replyMsg?.id || null,
+        distanceMessageId: null,
       };
       game.moveGridMessageIds = game.moveGridMessageIds || {};
-      game.moveGridMessageIds[moveKey] = [];
+      const multiTileNote = isMultiTile ? `\n📐 Buttons = **top-left corner** of each valid placement (figure extends right/down).` : '';
+      const { rows } = getMoveSpaceGridRows(msgId, figureIndex, buttonSpaces, boardState.mapSpaces);
+      const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, allCacheCells);
+      const gridIds = [];
+      const firstRows = rows.slice(0, 4);
+      const firstPayload = {
+        content: `**Move** — Pick destination (**${mpRemaining}** MP remaining):${multiTileNote}`,
+        components: firstRows,
+        ephemeral: false,
+        fetchReply: true,
+      };
+      if (moveMinimap) firstPayload.files = [moveMinimap];
+      const gridMsg = await interaction.reply(firstPayload).catch(() => null);
+      if (gridMsg?.id) gridIds.push(gridMsg.id);
+      for (let i = 4; i < rows.length; i += 5) {
+        const more = rows.slice(i, i + 5);
+        if (more.length > 0) {
+          const follow = await interaction.channel.send({ content: null, components: more }).catch(() => null);
+          if (follow?.id) gridIds.push(follow.id);
+        }
+      }
+      game.moveGridMessageIds[moveKey] = gridIds;
       return;
     } catch (err) {
       console.error('Move button error:', err);

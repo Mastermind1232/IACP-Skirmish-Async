@@ -202,8 +202,8 @@ export async function handleMovePick(interaction, ctx) {
     pushUndo,
     logGameAction,
     countTerminalsControlledByPlayer,
-    editDistanceMessage,
-    getMoveMpButtonRows,
+    getMoveSpaceGridRows,
+    getMovementMinimapAttachment,
     buildBoardMapPayload,
     saveGames,
     client,
@@ -338,11 +338,41 @@ export async function handleMovePick(interaction, ctx) {
       moveState.movementProfile = nextProfile;
       moveState.movementCache = nextCache;
       moveState.cacheMaxMp = newMp;
+      // Show all reachable cells from new position with remaining MP
+      const allNewCells = [...nextCache.cells.keys()];
+      const newIsMultiTile = nextProfile.size && nextProfile.size !== '1x1';
+      const newButtonSpaces = newIsMultiTile
+        ? allNewCells.filter((cell) => {
+            const info = nextCache.cells.get(cell);
+            return info && info.topLeft === cell;
+          })
+        : allNewCells;
+      const newMultiTileNote = newIsMultiTile ? `\n📐 Buttons = **top-left corner** of each valid placement (figure extends right/down).` : '';
+      const { rows: newRows } = getMoveSpaceGridRows(msgId, figureIndex, newButtonSpaces, nextBoard.mapSpaces);
+      const newMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, allNewCells);
+      const newGridIds = [];
+      const newFirstRows = newRows.slice(0, 4);
+      const newFirstPayload = {
+        content: `**Move** — Pick destination (**${newMp}** MP remaining):${newMultiTileNote}`,
+        components: newFirstRows,
+        fetchReply: true,
+      };
+      if (newMinimap) newFirstPayload.files = [newMinimap];
+      const newGridMsg = await interaction.followUp(newFirstPayload).catch(() => null);
+      if (newGridMsg?.id) newGridIds.push(newGridMsg.id);
+      for (let i = 4; i < newRows.length; i += 5) {
+        const more = newRows.slice(i, i + 5);
+        if (more.length > 0) {
+          const follow = await interaction.channel.send({ content: null, components: more }).catch(() => null);
+          if (follow?.id) newGridIds.push(follow.id);
+        }
+      }
+      game.moveGridMessageIds = game.moveGridMessageIds || {};
+      game.moveGridMessageIds[moveKey] = newGridIds;
+    } else {
+      game.moveGridMessageIds = game.moveGridMessageIds || {};
+      game.moveGridMessageIds[moveKey] = [];
     }
-    const mpRows = getMoveMpButtonRows(msgId, figureIndex, newMp);
-    await editDistanceMessage(moveState, interaction.channel, `**Move** — Pick distance (**${newMp}** MP remaining):`, mpRows);
-    game.moveGridMessageIds = game.moveGridMessageIds || {};
-    game.moveGridMessageIds[moveKey] = [];
   }
   if (game.boardId && game.selectedMap) {
     try {
