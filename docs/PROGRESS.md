@@ -18,7 +18,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 | 🔄 Game Flow & Rounds | 12 | 9.1 | 76% | Reinforcement missing; door system + setup attachments now tracked; EoA CC auto-prompt done |
 | ⚔️ Combat System | 15 | 12.5 | 83% | Full sequence works; LOS + figures-as-blockers gap |
 | 🏃 Movement & LOS | 10 | 8.5 | 85% | Engine solid; large figure occupancy gap |
-| 🃏 CC Automation | 20 | 16.4 | 82% | 289/289 CC cards have library entries (100% coverage); 0 gameready, 12 testready, 151 wired, 126 manual (83 partial + 43 unwired) |
+| 🃏 CC Automation | 20 | 16.6 | 83% | 289/289 CC cards have library entries (100% coverage); 0 gameready, 12 testready, 156 wired, 121 manual (83 partial + 38 unwired) |
 | 🤖 DC Core Gameplay | 12 | 9.8 | 82% | DC specials wired via resolveAbility; `abilityText` filled for 233/238 cards; `specialAbilityIds` populated for 7 DCs; gap is writing more code paths per DC special |
 | ⚡ DC Surge Automation | 15 | 12.5 | **83%** | 165/165 attacking DCs have surgeAbilities; parseSurgeEffect fully handles all types |
 | 🗺️ Map Data | 15 | 9.5 | 63% | 3/3 tournament maps + 2 extras built; dev-facility broken |
@@ -77,8 +77,8 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 
 > **Coverage: 289 / 289 CC cards (100%) have entries in `ability-library.json`.**
 > Status hierarchy: **gameready** → **testready** → **wired** → **manual** (partial/unwired)
-> 0 gameready · 12 testready · 151 wired · 126 manual (83 partial + 43 unwired)
-> 112 distinct code branches in `src/game/abilities.js` handle wired/testready/gameready cards.
+> 0 gameready · 12 testready · 156 wired · 121 manual (83 partial + 38 unwired)
+> 117 distinct code branches in `src/game/abilities.js` handle wired/testready/gameready cards.
 
 - [x] CC hand management: draw, hold, play, discard
 - [x] CC effects routed through `resolveAbility` → 97 code paths

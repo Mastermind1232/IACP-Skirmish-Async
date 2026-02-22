@@ -1989,10 +1989,10 @@
     },
     "Mandalorian Steel": {
       "type": "ccEffect",
-      "informational": true,
       "label": "After attack on friendly: if they spent a Block Token, recover 1 Damage",
       "logMessage": "**Mandalorian Steel** — This round, after an attack resolves targeting a friendly figure, if that figure spent a Block Token during that attack, it recovers 1 Damage. Track manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "setsMandaAsteel": true
     },
     "Navigation Upgrade": {
       "type": "ccEffect",
@@ -2122,10 +2122,10 @@
     },
     "Still Faster Than You": {
       "type": "ccEffect",
-      "informational": true,
       "label": "At start of hostile activation: interrupt to move 2 spaces + attack a different hostile",
       "logMessage": "**Still Faster Than You** — At the start of a hostile figure's activation, interrupt to move 2 spaces and perform an attack targeting a DIFFERENT hostile figure. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "setsStillFaster": true
     },
     "Support Specialist": {
       "type": "ccEffect",
@@ -2150,17 +2150,17 @@
     },
     "There Is No Try": {
       "type": "ccEffect",
-      "informational": true,
       "label": "When a friendly REBEL FORCE USER rolls dice: set 1 die to any side + convert Dodge results",
       "logMessage": "**There Is No Try** — When a friendly REBEL FORCE USER within 4 spaces rolls dice, choose one die and turn it to any side. On that die, convert each Dodge to 2 Blocks + 1 Evade. Resolve manually during the roll.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "setsTherIsNoTry": true
     },
     "Tough Luck": {
       "type": "ccEffect",
-      "informational": true,
       "label": "After opponent rerolls a die: remove that die from the results",
       "logMessage": "**Tough Luck** — After your opponent rerolls a die, remove that die's result entirely from the results. Announce before they reroll. Resolve manually during combat.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "setsToughLuck": true
     },
     "Transmit the Plans": {
       "type": "ccEffect",
@@ -2199,10 +2199,10 @@
     },
     "You Will Not Deny Me": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Fifth Brother cannot be defeated; ignores conditions; recover 2 Damage on each hostile defeat",
       "logMessage": "**You Will Not Deny Me** — Place on Fifth Brother. He cannot be defeated and ignores Harmful conditions. When a hostile figure is defeated, he recovers 2 Damage and this card returns to the game box. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "setsYouWillNotDenyMe": true
     },
     "dc_pounce": {
       "type": "dcSpecial",

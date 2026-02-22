@@ -135,6 +135,11 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.holdGroundPlayerNum = null;
   game.windfallActive = null;
   game.wreakVengeanceActive = null;
+  game.toughLuckPlayerNum = null;
+  game.thereIsNoTryPlayerNum = null;
+  game.youWillNotDenyMeActive = null;
+  game.mandaAsteelPlayerNum = null;
+  game.stillFasterPlayerNum = null;
   const p1Deck = game.player1CcDeck || [];
   const p2Deck = game.player2CcDeck || [];
   const p1Drawn = [];

@@ -2373,6 +2373,61 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: setsToughLuck (Tough Luck — when opponent rerolls a die, remove it from results this round)
+  if (entry.type === 'ccEffect' && entry.setsToughLuck) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.toughLuckPlayerNum = playerNum;
+    return {
+      applied: true,
+      logMessage: 'This round, when your opponent rerolls a die, remove that die from the results (honor).',
+    };
+  }
+
+  // ccEffect: setsTherIsNoTry (There Is No Try — REBEL FORCE USER die manipulation this round)
+  if (entry.type === 'ccEffect' && entry.setsTherIsNoTry) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.thereIsNoTryPlayerNum = playerNum;
+    return {
+      applied: true,
+      logMessage: 'This round, when a friendly REBEL FORCE USER rolls dice: set 1 die to any side and convert Dodge results to your choice (honor).',
+    };
+  }
+
+  // ccEffect: setsYouWillNotDenyMe (You Will Not Deny Me — Fifth Brother immortal + recover 2 on each hostile defeat)
+  if (entry.type === 'ccEffect' && entry.setsYouWillNotDenyMe) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.youWillNotDenyMeActive = { playerNum };
+    return {
+      applied: true,
+      logMessage: '**You Will Not Deny Me** active — Fifth Brother cannot be defeated, ignores conditions, and recovers 2 Damage each time a hostile figure is defeated this round (honor).',
+    };
+  }
+
+  // ccEffect: setsMandaAsteel (Mandalorian Steel — recover 1 Damage when friendly spends a Block Token)
+  if (entry.type === 'ccEffect' && entry.setsMandaAsteel) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.mandaAsteelPlayerNum = playerNum;
+    return {
+      applied: true,
+      logMessage: 'This round, when a friendly figure spends a Block Token during defense, recover 1 Damage on that figure (honor).',
+    };
+  }
+
+  // ccEffect: setsStillFaster (Still Faster Than You — interrupt at start of hostile activation)
+  if (entry.type === 'ccEffect' && entry.setsStillFaster) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.stillFasterPlayerNum = playerNum;
+    return {
+      applied: true,
+      logMessage: 'This round, at the start of a hostile activation: interrupt to move 2 spaces and attack a different hostile figure (honor).',
+    };
+  }
+
   // ccEffect: disablesFigure (Disable — chosen hostile cannot use Surge or Special Actions this round)
   if (entry.type === 'ccEffect' && entry.disablesFigure) {
     const { game, playerNum, chosenOption } = context;
