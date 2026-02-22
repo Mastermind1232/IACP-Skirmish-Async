@@ -169,7 +169,7 @@ export async function renderMap(mapId, options = {}) {
     ctx.fillStyle = useBlackGrid ? '#000000' : 'rgba(0,0,0,0.7)';
     ctx.strokeStyle = useBlackGrid ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.9)';
     ctx.lineWidth = useBlackGrid ? 2.5 : 2;
-    ctx.font = `bold ${Math.max(11, Math.round(13 * scale))}px "${FONT_FAMILY}"`;
+    ctx.font = `bold ${Math.max(9, Math.round(11 * scale))}px "${FONT_FAMILY}"`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
