@@ -1012,7 +1012,7 @@
       "type": "ccEffect",
       "label": "Move up to 5 spaces (push SMALL when entering manual)",
       "mpBonus": 5,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Jump Jets": {
       "type": "ccEffect",
@@ -1150,7 +1150,7 @@
       "type": "ccEffect",
       "label": "After attack that did not miss: defender suffers 1 Strain (+1 per other in discard manual)",
       "defenderStrain": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Second Chance": {
       "type": "ccEffect",
@@ -1196,7 +1196,7 @@
       "type": "ccEffect",
       "label": "Before attack: may target figure/object adjacent to empty space (+1 Accuracy manual)",
       "attackAccuracyBonus": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Balancing Force": {
       "type": "ccEffect",
@@ -1337,7 +1337,7 @@
       "type": "ccEffect",
       "label": "Trigger same Surge up to twice (+1 Surge honor)",
       "attackSurgeBonus": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "I Can Feel It": {
       "type": "ccEffect",
@@ -1881,7 +1881,7 @@
       "label": "Special: perform attack; +2 Accuracy and Pierce 2 (LOS from friendly manual)",
       "attackAccuracyBonus": 2,
       "attackBonusPierce": 2,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Utinni!": {
       "type": "ccEffect",
