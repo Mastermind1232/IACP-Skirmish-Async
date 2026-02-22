@@ -2373,6 +2373,90 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: revealsOpponentHand (Collect Intel) — ephemeral reveal of opponent's CC hand
+  if (entry.type === 'ccEffect' && entry.revealsOpponentHand) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppHandKey = playerNum === 1 ? 'player2CcHand' : 'player1CcHand';
+    const oppHand = game[oppHandKey] || [];
+    const handText = oppHand.length > 0 ? oppHand.map((c) => `**${c}**`).join(', ') : '*(empty)*';
+    return {
+      applied: true,
+      revealToPlayer: `**Opponent's hand (${oppHand.length} card${oppHand.length !== 1 ? 's' : ''}):** ${handText}`,
+      logMessage: "Looked at opponent's Command hand.",
+    };
+  }
+
+  // ccEffect: revealsOpponentDeckTop (Behind Enemy Lines) — ephemeral reveal of top N cards of opponent's deck
+  if (entry.type === 'ccEffect' && typeof entry.revealsOpponentDeckTop === 'number' && entry.revealsOpponentDeckTop > 0) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const n = entry.revealsOpponentDeckTop;
+    const oppDeckKey = playerNum === 1 ? 'player2CcDeck' : 'player1CcDeck';
+    const oppDeck = game[oppDeckKey] || [];
+    const topCards = oppDeck.slice(0, n);
+    const deckText = topCards.length > 0 ? topCards.map((c) => `**${c}**`).join(', ') : '*(empty)*';
+    return {
+      applied: true,
+      revealToPlayer: `**Top ${topCards.length} card${topCards.length !== 1 ? 's' : ''} of opponent's deck:** ${deckText}\nReturn them in any order (honor).`,
+      logMessage: `Looked at top ${topCards.length} card(s) of opponent's Command deck.`,
+    };
+  }
+
+  // ccEffect: stealsFromOpponentDiscard (Data Theft) — take a CC from opponent's discard pile
+  if (entry.type === 'ccEffect' && entry.stealsFromOpponentDiscard) {
+    const { game, playerNum, chosenOption } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppDiscardKey = playerNum === 1 ? 'player2CcDiscard' : 'player1CcDiscard';
+    const oppDiscard = (game[oppDiscardKey] || []).slice();
+    if (chosenOption == null) {
+      if (oppDiscard.length === 0) return { applied: false, manualMessage: "Opponent's discard pile is empty." };
+      return { requiresChoice: true, choiceOptions: [...oppDiscard] };
+    }
+    const stealIdx = oppDiscard.indexOf(chosenOption);
+    if (stealIdx < 0) return { applied: false, manualMessage: `"${chosenOption}" not found in opponent's discard.` };
+    oppDiscard.splice(stealIdx, 1);
+    game[oppDiscardKey] = oppDiscard;
+    const ownHandKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    game[ownHandKey] = [...(game[ownHandKey] || []), chosenOption];
+    return {
+      applied: true,
+      drewCards: [chosenOption],
+      refreshHand: true,
+      refreshDiscard: true,
+      logMessage: `Took **${chosenOption}** from opponent's discard. It may be played once this round.`,
+    };
+  }
+
+  // ccEffect: setsUnlimitedPower (Unlimited Power — Emperor targets any friendly figure on map this round)
+  if (entry.type === 'ccEffect' && entry.setsUnlimitedPower) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.unlimitedPowerActive = { playerNum };
+    return {
+      applied: true,
+      logMessage: '**Unlimited Power** — The Emperor may target any friendly figure on the map (not limited to within 4 spaces) this round.',
+    };
+  }
+
+  // ccEffect: cripplesFigure (Cripple — chosen adjacent hostile cannot voluntarily exit its space this round)
+  if (entry.type === 'ccEffect' && entry.cripplesFigure) {
+    const { game, playerNum, chosenOption } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppDcList = playerNum === 1 ? (game.p2DcList || []) : (game.p1DcList || []);
+    if (chosenOption == null) {
+      const options = oppDcList.filter((dc) => dc && !dc.defeated).map((dc) => dc.displayName || dc.dcName).filter(Boolean);
+      if (options.length === 0) return { applied: false, manualMessage: 'No active hostile figures to cripple.' };
+      return { requiresChoice: true, choiceOptions: options };
+    }
+    game.crippledFigures = game.crippledFigures || [];
+    if (!game.crippledFigures.includes(chosenOption)) game.crippledFigures.push(chosenOption);
+    return {
+      applied: true,
+      logMessage: `**${chosenOption}** is Crippled — cannot voluntarily exit its space this round (honor).`,
+    };
+  }
+
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
 }
 

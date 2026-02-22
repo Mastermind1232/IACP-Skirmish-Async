@@ -129,6 +129,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.signalJammerActive = null;
   game.harshEnvironmentActive = false;
   game.terminalControlPlayerNum = null;
+  game.unlimitedPowerActive = null;
+  game.crippledFigures = [];
   const p1Deck = game.player1CcDeck || [];
   const p2Deck = game.player2CcDeck || [];
   const p1Drawn = [];

@@ -1410,9 +1410,9 @@
     "Behind Enemy Lines": {
       "type": "ccEffect",
       "label": "Look at the top 3 of opponent's Command deck and return in any order",
-      "informational": true,
       "logMessage": "Look at the top 3 of opponent's Command deck and return in any order (resolve deck order manually).",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "revealsOpponentDeckTop": 3
     },
     "Blaze of Glory": {
       "type": "ccEffect",
@@ -1499,9 +1499,9 @@
     "Collect Intel": {
       "type": "ccEffect",
       "label": "Look at your opponent's hand of Command cards",
-      "informational": true,
       "logMessage": "Look at your opponent's Command hand (see their Hand channel).",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "revealsOpponentHand": true
     },
     "Corrupting Force": {
       "type": "ccEffect",
@@ -1541,9 +1541,9 @@
     "Data Theft": {
       "type": "ccEffect",
       "label": "Choose a CC from opponent discard; once this round you may play it as yours",
-      "informational": true,
       "logMessage": "Resolve manually: choose a Command card from opponent's discard; once this round you may play it as though in your hand.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "stealsFromOpponentDiscard": true
     },
     "Cloned Reinforcements": {
       "type": "ccEffect",
@@ -1926,10 +1926,10 @@
     },
     "Cripple": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Adjacent hostile cannot voluntarily exit its space this round",
       "logMessage": "**Cripple** — Choose an adjacent hostile figure. Until end of round, that figure cannot voluntarily exit its space. Track on honor system.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "cripplesFigure": true
     },
     "Disable": {
       "type": "ccEffect",
@@ -2178,10 +2178,10 @@
     },
     "Unlimited Power": {
       "type": "ccEffect",
-      "informational": true,
       "label": "When using Emperor: choose any friendly figure on the map instead of within 4 spaces",
       "logMessage": "**Unlimited Power** — When you use **Emperor**, you may choose any friendly figure on the map instead of one within 4 spaces. Play alongside Emperor; resolve targeting manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "setsUnlimitedPower": true
     },
     "Windfall": {
       "type": "ccEffect",

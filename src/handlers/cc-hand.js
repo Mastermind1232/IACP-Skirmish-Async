@@ -443,6 +443,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         }
       }
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
+      if (result.revealToPlayer) {
+        await interaction.followUp({ content: result.revealToPlayer, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
       saveGames();
       return;
     }
@@ -524,6 +527,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     if (result.applied && (result.refreshHand || result.refreshDiscard)) {
       if (result.refreshHand) await updateHandVisualMessage(game, playerNum, interaction.client);
       if (result.refreshDiscard) await updateDiscardPileMessage(game, playerNum, interaction.client);
+    }
+    if (result.applied && result.revealToPlayer) {
+      await interaction.followUp({ content: result.revealToPlayer, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
   }
   if (ctx.pushUndo) {
