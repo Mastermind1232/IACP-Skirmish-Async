@@ -1126,6 +1126,15 @@ function getScenarioPrimaryCard(scenarioId) {
   }
 }
 
+function getScenarioStatus(scenarioId) {
+  if (!scenarioId) return null;
+  try {
+    const path = join(rootDir, 'data', 'test-scenarios.json');
+    const data = JSON.parse(readFileSync(path, 'utf8'));
+    return (data.scenarios || {})[scenarioId]?.status || null;
+  } catch { return null; }
+}
+
 /** Count active (non-ended) games the player is in. */
 function countActiveGamesForPlayer(playerId) {
   if (!playerId) return 0;
@@ -2415,6 +2424,82 @@ async function finishSetupAttachments(game, client) {
  * @param {import('discord.js').Client} client
  * @param {{ scenarioId?: string }} [options] - When scenarioId (e.g. 'smoke_grenade'), use scenario decks and seed P1 hand
  */
+/**
+ * Deploy all figures near the map center (for testreadycombat scenarios).
+ * P1 figures cluster at the centroid; P2 figures cluster next to P1's anchor figure,
+ * so both squads start within ~2 spaces of each other.
+ */
+function deployForCombatTest(game, mapId) {
+  const rawMapSpaces = getMapSpaces(mapId);
+  if (!rawMapSpaces) throw new Error('Map spaces not found for selected map.');
+  const allSpaces = (rawMapSpaces.spaces || []).map((s) => String(s).toLowerCase());
+  if (!allSpaces.length) throw new Error('No walkable spaces found for selected map.');
+
+  // Centroid of all walkable spaces
+  const allCoords = allSpaces.map((s) => parseCoord(s));
+  const cx = allCoords.reduce((sum, c) => sum + c.col, 0) / allCoords.length;
+  const cy = allCoords.reduce((sum, c) => sum + c.row, 0) / allCoords.length;
+
+  if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
+  if (!game.figurePositions[1]) game.figurePositions[1] = {};
+  if (!game.figurePositions[2]) game.figurePositions[2] = {};
+  game.figureOrientations = game.figureOrientations || {};
+
+  const getOccupied = () => {
+    const occ = [];
+    for (const p of [1, 2]) {
+      for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
+        const dcName = k.split('-')[0];
+        const size = game.figureOrientations?.[k] || getFigureSize(dcName);
+        occ.push(...getFootprintCells(s, size));
+      }
+    }
+    return occ;
+  };
+
+  const p1Meta = getDeployFigureLabels(game.player1Squad?.dcList || []).metadata;
+  const p2Meta = getDeployFigureLabels(game.player2Squad?.dcList || []).metadata;
+
+  // Place P1 figures nearest the centroid
+  for (const meta of p1Meta) {
+    const figureKey = `${meta.dcName}-${meta.dgIndex}-${meta.figureIndex}`;
+    const occupied = getOccupied();
+    const baseSize = getFigureSize(meta.dcName);
+    const size = baseSize === '2x3' ? (Math.random() < 0.5 ? '2x3' : '3x2') : baseSize;
+    const validSpaces = filterValidTopLeftSpaces(allSpaces, occupied, size);
+    if (!validSpaces.length) throw new Error(`No valid center spaces for ${meta.dcName}.`);
+    validSpaces.sort((a, b) => {
+      const pa = parseCoord(a), pb = parseCoord(b);
+      return (Math.abs(pa.col - cx) + Math.abs(pa.row - cy)) - (Math.abs(pb.col - cx) + Math.abs(pb.row - cy));
+    });
+    game.figurePositions[1][figureKey] = validSpaces[0];
+    if (baseSize === '2x3') game.figureOrientations[figureKey] = size;
+  }
+
+  // P2 figures placed nearest P1's anchor figure
+  const anchorKey = p1Meta.length > 0
+    ? `${p1Meta[0].dcName}-${p1Meta[0].dgIndex}-${p1Meta[0].figureIndex}`
+    : null;
+  const anchorPos = anchorKey ? game.figurePositions[1][anchorKey] : null;
+  const anchorCoord = anchorPos ? parseCoord(anchorPos) : { col: cx, row: cy };
+
+  for (const meta of p2Meta) {
+    const figureKey = `${meta.dcName}-${meta.dgIndex}-${meta.figureIndex}`;
+    const occupied = getOccupied();
+    const baseSize = getFigureSize(meta.dcName);
+    const size = baseSize === '2x3' ? (Math.random() < 0.5 ? '2x3' : '3x2') : baseSize;
+    const validSpaces = filterValidTopLeftSpaces(allSpaces, occupied, size);
+    if (!validSpaces.length) throw new Error(`No valid center spaces for ${meta.dcName}.`);
+    validSpaces.sort((a, b) => {
+      const pa = parseCoord(a), pb = parseCoord(b);
+      return (Math.abs(pa.col - anchorCoord.col) + Math.abs(pa.row - anchorCoord.row))
+           - (Math.abs(pb.col - anchorCoord.col) + Math.abs(pb.row - anchorCoord.row));
+    });
+    game.figurePositions[2][figureKey] = validSpaces[0];
+    if (baseSize === '2x3') game.figureOrientations[figureKey] = size;
+  }
+}
+
 async function runDraftRandom(game, client, options = {}) {
   const { scenarioId } = options;
   const generalChannel = await client.channels.fetch(game.generalId);
@@ -2553,8 +2638,12 @@ async function runDraftRandom(game, client, options = {}) {
   const nonInitiativePlayerNum = initiativePlayerNum === 1 ? 2 : 1;
   const zone = game.deploymentZoneChosen;
   const otherZone = zone === 'red' ? 'blue' : 'red';
-  deployForPlayer(initiativePlayerNum, zone, otherZone);
-  deployForPlayer(nonInitiativePlayerNum, otherZone, zone);
+  if (getScenarioStatus(scenarioId) === 'testreadycombat') {
+    deployForCombatTest(game, mapId);
+  } else {
+    deployForPlayer(initiativePlayerNum, zone, otherZone);
+    deployForPlayer(nonInitiativePlayerNum, otherZone, zone);
+  }
 
   game.initiativePlayerDeployed = true;
   game.nonInitiativePlayerDeployed = true;

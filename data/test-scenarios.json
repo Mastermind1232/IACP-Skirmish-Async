@@ -1,5 +1,5 @@
 {
-  "source": "Scenario registry for testready/testgame. status: testready = built, ready to test; gameready = tested and confirmed.",
+  "source": "Scenario registry for testready/testgame. status: testready = built, ready to test; testreadycombat = like testready but figures spawn at map center within ~2 spaces of each other; gameready = tested and confirmed.",
   "scenarios": {
     "smoke_grenade": {
       "status": "testready",
@@ -14,7 +14,7 @@
       "cards": ["Focus", "Planning", "Take Initiative"]
     },
     "blitz": {
-      "status": "testready",
+      "status": "testreadycombat",
       "pattern": "during_attack",
       "primaryCard": "Blitz",
       "cards": ["Blitz", "Deadeye", "Camouflage"]
@@ -44,7 +44,7 @@
       "cards": ["Take Initiative", "I Make My Own Luck"]
     },
     "positioning_advantage": {
-      "status": "testready",
+      "status": "testreadycombat",
       "pattern": "during_attack",
       "primaryCard": "Positioning Advantage",
       "cards": ["Positioning Advantage", "Deadeye"]
@@ -56,7 +56,7 @@
       "cards": ["Rally", "Regroup"]
     },
     "brace_yourself": {
-      "status": "testready",
+      "status": "testreadycombat",
       "pattern": "when_attacked",
       "primaryCard": "Brace Yourself",
       "cards": ["Brace Yourself", "Parry", "Stealth Tactics"]
@@ -74,7 +74,7 @@
       "cards": ["Inspiring Speech", "Ready Weapons"]
     },
     "wild_attack": {
-      "status": "testready",
+      "status": "testreadycombat",
       "pattern": "when_declare_attack",
       "primaryCard": "Wild Attack",
       "cards": ["Wild Attack", "Explosive Weaponry"]
@@ -86,13 +86,13 @@
       "cards": ["Stimulants", "To the Limit"]
     },
     "hit_and_run": {
-      "status": "testready",
+      "status": "testreadycombat",
       "pattern": "post_attack_mp",
       "primaryCard": "Hit and Run",
       "cards": ["Hit and Run", "Fleet Footed"]
     },
     "brace_for_impact": {
-      "status": "testready",
+      "status": "testreadycombat",
       "pattern": "while_defending",
       "primaryCard": "Brace for Impact",
       "cards": ["Brace for Impact", "Heavy Armor"]
@@ -110,7 +110,7 @@
       "cards": ["Force Surge", "Rebel Graffiti"]
     },
     "counter_attack": {
-      "status": "testready",
+      "status": "testreadycombat",
       "pattern": "after_attack_on_you",
       "primaryCard": "Counter Attack",
       "cards": ["Counter Attack", "Dangerous Prey"]
@@ -122,13 +122,13 @@
       "cards": ["Negation", "Celebration"]
     },
     "celebration": {
-      "status": "testready",
+      "status": "testreadycombat",
       "pattern": "after_unique_defeated",
       "primaryCard": "Celebration",
       "cards": ["Celebration", "Of No Importance"]
     },
     "flurry_of_blades": {
-      "status": "testready",
+      "status": "testreadycombat",
       "pattern": "double_action_special",
       "primaryCard": "Flurry of Blades",
       "cards": ["Flurry of Blades", "Pummel"]
