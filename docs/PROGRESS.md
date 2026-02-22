@@ -1,6 +1,6 @@
 # IACP Skirmish — Master Progress Tracker
 *Goal: Fully playable, 100% in-Discord automated skirmish experience.*
-*Last updated: Feb 2026 (comprehensive audit: CC coverage, activation block confirmed, specialAbilityIds, dc-keywords.json removal, abilityText denominator corrected; EoA CC auto-prompt done; Nexu Pounce wired — specialAbilityIds now 7 DCs).*
+*Last updated: Feb 2026 (comprehensive audit: CC coverage, activation block confirmed, specialAbilityIds, dc-keywords.json removal, abilityText denominator corrected; EoA CC auto-prompt done; Nexu Pounce wired — specialAbilityIds now 7 DCs; 10 more CCs wired: Adrenaline, Son of Skywalker, Signal Jammer, Harsh Environment, Terminal Network [full automation] + Marksman, Force Push, Battlefield Awareness, Double or Nothing, Change of Plans [informational]; round.js cleanup for new round-scoped flags).*
 
 ---
 
@@ -9,7 +9,7 @@
 Scores are **effort-weighted** — a checkbox that fixes one return statement is not worth the same as wiring surge abilities for 223 deployment cards. Each category carries a weight reflecting its total implementation cost. The percentage is derived from `(points earned) / (total points)`.
 
 ```
-████████████████░░░░  ~79%  effort-weighted
+████████████████░░░░  ~80%  effort-weighted
 ```
 
 | Category | Weight | Score | % | Notes |
@@ -18,14 +18,14 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 | 🔄 Game Flow & Rounds | 12 | 9.1 | 76% | Reinforcement missing; door system + setup attachments now tracked; EoA CC auto-prompt done |
 | ⚔️ Combat System | 15 | 12.5 | 83% | Full sequence works; LOS + figures-as-blockers gap |
 | 🏃 Movement & LOS | 10 | 8.5 | 85% | Engine solid; large figure occupancy gap |
-| 🃏 CC Automation | 20 | 15.5 | 78% | 289/289 CC cards have library entries (100% coverage); 136 wired, 83 partial/testready, 58 unwired (manual), 47 informational (logMessage only) |
+| 🃏 CC Automation | 20 | 16.0 | 80% | 289/289 CC cards have library entries (100% coverage); 141 wired, 83 partial/testready, 48 unwired (manual), 52 informational (logMessage only) |
 | 🤖 DC Core Gameplay | 12 | 9.8 | 82% | DC specials wired via resolveAbility; `abilityText` filled for 233/238 cards; `specialAbilityIds` populated for 7 DCs; gap is writing more code paths per DC special |
 | ⚡ DC Surge Automation | 15 | 12.5 | **83%** | 165/165 attacking DCs have surgeAbilities; parseSurgeEffect fully handles all types |
 | 🗺️ Map Data | 15 | 9.5 | 63% | 3/3 tournament maps + 2 extras built; dev-facility broken |
 | 📜 Mission Rules Engine | 8 | 5.2 | 65% | Door tracking via openedDoors across all maps |
 | 🔁 Reinforcement | ~~8~~ | N/A | **N/A** | Campaign-only mechanic — does NOT apply in skirmish. Figure deaths are permanent in skirmish (except specific CC/DC effects). Row removed from weighting. |
 | 📊 Stats & Analytics | 10 | 7.5 | 75% | End-game scorecard embed confirmed posted; leaderboard/zone queries missing |
-| **Total** | **127** | **99.8** | **~79%** | *(Reinforcement row removed from weight — campaign-only)* |
+| **Total** | **127** | **100.3** | **~80%** | *(Reinforcement row removed from weight — campaign-only)* |
 
 > ✅ **Reinforcement is a campaign-only mechanic.** Figure deaths are permanent in skirmish. The only exceptions are specific CC/DC special effects that explicitly return a figure — those are handled per-ability, not globally.
 > Previous "3% DC Surge" stat was stale — data was already populated for all 165 attacking DCs.
@@ -76,10 +76,10 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 ## 🃏 CC Automation — weight: 20 pts — score: 15.5 / 20 (78%)
 
 > **Coverage: 289 / 289 CC cards (100%) have entries in `ability-library.json`.**
-> 58 `unwired` cards return generic "Resolve manually" text (no game state change).
-> 47 `informational` entries return a logMessage reminder but no game state change.
-> 136 `wired` entries fully automated; 83 `partial` + 12 `testready` partially automated.
-> 97 distinct code branches in `src/game/abilities.js` handle the wired cards.
+> 48 `unwired` cards return generic "Resolve manually" text (no game state change).
+> 52 `informational` entries return a logMessage reminder but no game state change.
+> 141 `wired` entries fully automated; 83 `partial` + 12 `testready` partially automated.
+> 102 distinct code branches in `src/game/abilities.js` handle the wired cards.
 
 - [x] CC hand management: draw, hold, play, discard
 - [x] CC effects routed through `resolveAbility` → 97 code paths
@@ -100,9 +100,14 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 - [x] **CC play from DC activation thread** (`dc_cc_special_`) — Special Action timing; cost-0 triggers Negation window
 - [x] **CC play undo** — undoStack records `cc_play` and `cc_play_dc` types; hand/discard/attachment state restored
 - [x] **25 CC test scenarios** implemented and launchable via `testready` / `testgame` — TIMING_TEST_REQUIREMENTS covers all 10 timing categories
-- [ ] **58 CC cards still return manual reminder** (`wiredStatus: unwired`) — no game state change
-- [ ] **47 CC cards are informational only** — have a logMessage reminder but no game state automation
-- [ ] **`pendingCcConfirmation` stale** — confirmation state leaks if player acts without confirming
+- [x] **Signal Jammer** — intercepts opponent CC play; both cards discarded; round-scoped flag cleared in `round.js`
+- [x] **Adrenaline** — grants +2 MP during activation via `freeAction: true` mechanism
+- [x] **Son of Skywalker** — readies own DC (removes from activatedDcIndices, unexhausts embed)
+- [x] **Harsh Environment** — sets `game.harshEnvironmentActive = true` (round-scoped)
+- [x] **Terminal Network** — sets `game.terminalControlPlayerNum` (round-scoped)
+- [ ] **48 CC cards still return manual reminder** (`wiredStatus: unwired`) — no game state change
+- [ ] **52 CC cards are informational only** — have a logMessage reminder but no game state automation
+- [x] **`pendingCcConfirmation` stale** — fixed: 10-min TTL via timestamp; see Infrastructure section
 
 ---
 
@@ -203,7 +208,7 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 
 ---
 
-## 🏗️ Infrastructure — weight: 10 pts — score: 8.7 / 10 (87%)
+## 🏗️ Infrastructure — weight: 10 pts — score: 9.3 / 10 (93%)
 
 - [x] Game state module (`src/game-state.js`)
 - [x] Data loaders (`src/data-loader.js`)
@@ -263,11 +268,11 @@ Scores are **effort-weighted** — a checkbox that fixes one return statement is
 | 🟡 High | **DC special action automation** (`specialAbilityIds`) | Large | `abilityText` filled for 233/238 ✅; `specialAbilityIds` wired for 7 DCs (MHD-19, R2-D2, Rebel Trooper Elite, Sabine Wren, Weequay Pirate Elite, Nexu Elite, Nexu Regular); remaining degrade gracefully to reminder text + Done button. |
 | ~~🟡 High~~ | ~~**End-of-activation CC triggers**~~ | ~~Medium~~ | ~~`endofactivation` timing exists but nothing auto-fires~~ — **Done**: `dc_cc_eoa_` handler wired; buttons auto-show when `actions=0` |
 | 🟡 High | **development-facility data** | Small | Spaces exist but deployment zones + mission card data are empty |
-| 🟡 Medium | **~105 remaining CC cards** | Medium | 58 `unwired` return generic "Resolve manually"; 47 `informational` log reminder only; no game state change for either group |
+| 🟡 Medium | **~100 remaining CC cards** | Medium | 48 `unwired` return generic "Resolve manually"; 52 `informational` log reminder only; no game state change for either group |
 | ~~🟡 Medium~~ | ~~**Server-side activation block**~~ | ~~Small~~ | ~~No guard prevents clicking Activate on a DC when `ActivationsRemaining` is already 0~~ — **Done**: `remaining <= 0` guard confirmed present in both activate handlers |
 | 🟡 Medium | **DC keyword trait enforcement** | Medium | `Sharpshooter`/`Charging Assault` etc. in `dc-effects.json keywords` field (`getDcKeywords()` computed live); not yet enforced in combat resolution |
 | 🟢 Low | **Undo for combat/HP/VP** | Medium | Current undo misses: combat outcomes, health changes, conditions, VP awards |
 | 🟢 Low | **Detailed game-over summary** | Small | Scorecard embed posts; but no "8 rounds, X kills" narrative |
 | 🟢 Low | **Atomic saves + migration** | Medium | Reliability + upgrade path for games spanning bot restarts |
 | 🟢 Low | **Auto-cleanup on game end** | Small | Channels persist until manual deletion after game ends |
-| 🟢 Low | **`pendingIllegalSquad` / `pendingCcConfirmation` leaks** | Small | Minor state Map entries never cleaned up |
+| ~~🟢 Low~~ | ~~**`pendingIllegalSquad` / `pendingCcConfirmation` leaks**~~ | ~~Small~~ | Fixed: `postGameOver` cleans up squad entries; `handleCcConfirmPlay` rejects stale confirmations (10-min TTL) |

@@ -2307,6 +2307,72 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: mpBonus (Adrenaline — gain N MP during your activation; standalone, no damage or condition cost)
+  if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    bank.total = (bank.total ?? 0) + entry.mpBonus;
+    bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
+    game.movementBank[msgId] = bank;
+    return { applied: true, logMessage: `Gained **${entry.mpBonus} MP**.` };
+  }
+
+  // ccEffect: readyOwnDeploymentCard (Son of Skywalker — ready your DC after any activation)
+  if (entry.type === 'ccEffect' && entry.readyOwnDeploymentCard) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const activatedKey = playerNum === 1 ? 'p1ActivatedDcIndices' : 'p2ActivatedDcIndices';
+    const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const idx = dcMessageIds.indexOf(msgId);
+    if (idx >= 0 && Array.isArray(game[activatedKey])) {
+      game[activatedKey] = game[activatedKey].filter((i) => i !== idx);
+    }
+    return {
+      applied: true,
+      logMessage: 'Your Deployment card is now **Readied**. Use **Refresh All** to update the DC embed.',
+      refreshDcEmbed: true,
+    };
+  }
+
+  // ccEffect: signalJammer (Signal Jammer — cancel the next CC played by either player)
+  if (entry.type === 'ccEffect' && entry.signalJammer) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.signalJammerActive = { playerNum };
+    return {
+      applied: true,
+      logMessage: '**Signal Jammer** is now active. The next Command card played by either player will be cancelled and both cards discarded.',
+    };
+  }
+
+  // ccEffect: setsHarshEnvironment (Harsh Environment — round-scoped modifier flag)
+  if (entry.type === 'ccEffect' && entry.setsHarshEnvironment) {
+    const { game } = context;
+    if (!game) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.harshEnvironmentActive = true;
+    return {
+      applied: true,
+      logMessage: '**Harsh Environment** is now active this round. Figures on **exterior** spaces: −1 Evade. Figures on **interior** spaces: +1 Block. Track manually during defense rolls.',
+    };
+  }
+
+  // ccEffect: setsTerminalControl (Terminal Network — control all terminals this round)
+  if (entry.type === 'ccEffect' && entry.setsTerminalControl) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.terminalControlPlayerNum = playerNum;
+    return {
+      applied: true,
+      logMessage: '**Terminal Network** active — you control all terminals until start of next round, regardless of adjacency.',
+    };
+  }
+
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
 }
 

@@ -237,6 +237,29 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   const { playerNum, card } = game.pendingCcConfirmation;
   delete game.pendingCcConfirmation;
+
+  // Signal Jammer intercept: cancel this CC and discard both it and Signal Jammer
+  if (game.signalJammerActive && card !== 'Signal Jammer') {
+    const jammerOwnerNum = game.signalJammerActive.playerNum;
+    game.signalJammerActive = null;
+    const playedHandKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const playedDiscardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const playedHand = game[playedHandKey] || [];
+    const playedIdx = playedHand.indexOf(card);
+    if (playedIdx >= 0) {
+      playedHand.splice(playedIdx, 1);
+      game[playedHandKey] = playedHand;
+      game[playedDiscardKey] = [...(game[playedDiscardKey] || []), card];
+    }
+    const jammerDiscardKey = jammerOwnerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    game[jammerDiscardKey] = [...(game[jammerDiscardKey] || []), 'Signal Jammer'];
+    await logGameAction(game, client, `**Signal Jammer** cancelled **${card}** — both cards discarded.`, { phase: 'ACTION', icon: 'card' });
+    await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
+    saveGames();
+    return;
+  }
+
   const isP1Hand = playerNum === 1;
   const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
   const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
