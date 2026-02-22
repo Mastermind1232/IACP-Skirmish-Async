@@ -57,7 +57,7 @@ export async function handleDeployModal(interaction, ctx) {
   const { getGame, getDeploymentZones, updateDeployPromptMessages, logGameAction, saveGames } = ctx;
   const parts = interaction.customId.split('_');
   if (parts.length < 5) {
-    await interaction.reply({ content: 'Invalid modal.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Invalid modal.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const gameId = parts[2];
@@ -65,11 +65,11 @@ export async function handleDeployModal(interaction, ctx) {
   const flatIndex = parseInt(parts[4], 10);
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const deployMeta = playerNum === 1 ? game.player1DeployMetadata : game.player2DeployMetadata;
@@ -77,12 +77,12 @@ export async function handleDeployModal(interaction, ctx) {
   const figMeta = deployMeta?.[flatIndex];
   const figLabel = deployLabels?.[flatIndex];
   if (!figMeta || !figLabel) {
-    await interaction.reply({ content: 'Figure not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Figure not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const space = (interaction.fields.getTextInputValue('deploy_space') || '').trim().toLowerCase();
   if (!space) {
-    await interaction.reply({ content: 'Please enter a space (e.g. A1).', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Please enter a space (e.g. A1).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const mapId = game.selectedMap?.id;
@@ -92,7 +92,7 @@ export async function handleDeployModal(interaction, ctx) {
     const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
     const validSpaces = (zones[playerZone] || []).map((s) => String(s).toLowerCase());
     if (validSpaces.length > 0 && !validSpaces.includes(space)) {
-      await interaction.reply({ content: `**${space.toUpperCase()}** is not in your deployment zone. Check the map for valid cells (e.g. A1, B2).`, ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: `**${space.toUpperCase()}** is not in your deployment zone. Check the map for valid cells (e.g. A1, B2).`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
   }
@@ -103,7 +103,7 @@ export async function handleDeployModal(interaction, ctx) {
   saveGames();
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> deployed **${figLabel.replace(/^Deploy /, '')}** at **${space.toUpperCase()}**`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deploy' });
   await updateDeployPromptMessages(game, playerNum, interaction.client);
-  await interaction.reply({ content: `Deployed **${figLabel.replace(/^Deploy /, '')}** at **${space.toUpperCase()}**.`, ephemeral: true }).catch(() => {});
+  await interaction.reply({ content: `Deployed **${figLabel.replace(/^Deploy /, '')}** at **${space.toUpperCase()}**.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
 
 /** @param {import('discord.js').StringSelectMenuInteraction} interaction */
@@ -113,7 +113,7 @@ export async function handleCcAttachTo(interaction, ctx) {
   const game = getGame(gameId);
   const pending = game?.pendingCcAttachment;
   if (!game || !pending) {
-    await interaction.reply({ content: 'No attachment pending or game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No attachment pending or game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { playerNum, card } = pending;
@@ -121,7 +121,7 @@ export async function handleCcAttachTo(interaction, ctx) {
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if ((isP1Hand && playerNum !== 1) || (isP2Hand && playerNum !== 2)) {
-    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const dcMsgId = interaction.values[0];
@@ -131,7 +131,7 @@ export async function handleCcAttachTo(interaction, ctx) {
   const idx = hand.indexOf(card);
   if (idx < 0) {
     delete game.pendingCcAttachment;
-    await interaction.reply({ content: "That card is no longer in your hand.", ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: "That card is no longer in your hand.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
     return;
   }
@@ -158,9 +158,9 @@ export async function handleCcAttachTo(interaction, ctx) {
       embeds: handPayload.embeds,
       files: handPayload.files || [],
       components: handPayload.components,
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
-  await interaction.message.delete().catch(() => {});
+  await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
   await updateHandVisualMessage(game, playerNum, interaction.client);
   await updateDiscardPileMessage(game, playerNum, interaction.client);
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> played **${card}** as an attachment.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
@@ -173,20 +173,20 @@ export async function handleCcPlaySelect(interaction, ctx) {
   const gameId = interaction.customId.replace('cc_play_select_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   if (!isP1Hand && channelId !== game.p2HandId) {
-    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
   const hand = game[playerNum === 1 ? 'player1CcHand' : 'player2CcHand'] || [];
   const card = interaction.values[0];
   if (!hand.includes(card)) {
-    await interaction.reply({ content: "That card isn't in your hand.", ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: "That card isn't in your hand.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   game.pendingCcConfirmation = { playerNum, card };
@@ -208,8 +208,8 @@ export async function handleCcPlaySelect(interaction, ctx) {
     new ButtonBuilder().setCustomId(`cc_confirm_play_${gameId}`).setLabel('PLAY CARD').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`cc_cancel_play_${gameId}`).setLabel('DO SOMETHING ELSE').setStyle(ButtonStyle.Danger),
   );
-  await interaction.deferUpdate().catch(() => {});
-  await interaction.message.delete().catch(() => {});
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
   const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
   const handChannel = await interaction.client.channels.fetch(handId);
   await handChannel.send({ embeds: [embed], files, components: [row] });
@@ -221,11 +221,11 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   const gameId = interaction.customId.replace('cc_confirm_play_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!game.pendingCcConfirmation) {
-    await interaction.reply({ content: 'No card pending. Try playing again.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No card pending. Try playing again.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { playerNum, card } = game.pendingCcConfirmation;
@@ -236,14 +236,14 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   const hand = game[handKey] || [];
   const idx = hand.indexOf(card);
   if (idx < 0) {
-    await interaction.reply({ content: "That card isn't in your hand anymore.", ephemeral: true }).catch(() => {});
-    await interaction.message.delete().catch(() => {});
+    await interaction.reply({ content: "That card isn't in your hand anymore.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
     return;
   }
   if (!isCcPlayableNow(game, playerNum, card)) {
-    await interaction.reply({ content: "That card can't be played right now (wrong timing).", ephemeral: true }).catch(() => {});
-    await interaction.message.delete().catch(() => {});
+    await interaction.reply({ content: "That card can't be played right now (wrong timing).", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
     return;
   }
@@ -257,8 +257,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       components: [getIllegalCcPlayButtons(gameId)],
     });
     game.pendingIllegalCcPlay.messageId = msg.id;
-    await interaction.deferUpdate().catch(() => {});
-    await interaction.message.delete().catch(() => {});
+    await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
     return;
   }
@@ -266,7 +266,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
     const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
     if (dcMsgIds.length === 0 || dcList.length === 0) {
-      await interaction.reply({ content: 'No Deployment cards to attach to.', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: 'No Deployment cards to attach to.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     game.pendingCcAttachment = { playerNum, card };
@@ -308,9 +308,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         const handPayload = buildHandDisplayPayload(game[handKey], deck, gameId, game, playerNum);
         const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
         handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
-        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(() => {});
+        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
-      await interaction.message.delete().catch(() => {});
+      await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
       await updateHandVisualMessage(game, playerNum, interaction.client);
       await updateDiscardPileMessage(game, playerNum, interaction.client);
       const effectDesc = effectData?.effect ? `\n> *${effectData.effect}*` : '';
@@ -326,7 +326,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
           new ButtonBuilder().setCustomId(`cc_choice_${gameId}_${i}`).setLabel(label).setStyle(ButtonStyle.Secondary)
         );
       }
-      await handChannel.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(() => {});
+      await handChannel.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       saveGames();
       return;
     }
@@ -334,7 +334,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       // Space choice required: commit play, then send space grid + map (reusable pick-a-space pattern).
       const { getBoardStateForMovement, getSpaceChoiceRows, getMapAttachmentForSpaces } = ctx;
       if (!getBoardStateForMovement || !getSpaceChoiceRows || !getMapAttachmentForSpaces) {
-        await interaction.reply({ content: 'Space choice not supported (missing helpers). Resolve manually.', ephemeral: true }).catch(() => {});
+        await interaction.reply({ content: 'Space choice not supported (missing helpers). Resolve manually.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
       await interaction.deferUpdate();
@@ -350,9 +350,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         const handPayload = buildHandDisplayPayload(game[handKey], deck, gameId, game, playerNum);
         const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
         handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
-        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(() => {});
+        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
-      await interaction.message.delete().catch(() => {});
+      await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
       await updateHandVisualMessage(game, playerNum, interaction.client);
       await updateDiscardPileMessage(game, playerNum, interaction.client);
       const effectDesc2 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
@@ -365,7 +365,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       const mapAttachment = await getMapAttachmentForSpaces(game, result.validSpaces);
       const payload = { content: `**Pick a space** (for **${card}**):`, components: rows.slice(0, 5), fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
-      await handChannel.send(payload).catch(() => {});
+      await handChannel.send(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
       saveGames();
       return;
     }
@@ -385,9 +385,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         const handPayload = buildHandDisplayPayload(game[handKey], deck, gameId, game, playerNum);
         const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
         handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
-        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(() => {});
+        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
-      await interaction.message.delete().catch(() => {});
+      await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
       await updateHandVisualMessage(game, playerNum, interaction.client);
       await updateDiscardPileMessage(game, playerNum, interaction.client);
       const effectDesc3 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
@@ -426,8 +426,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         components: [getIllegalCcPlayButtons(gameId)],
       });
       game.pendingIllegalCcPlay.messageId = msg.id;
-      await interaction.deferUpdate().catch(() => {});
-      await interaction.message.delete().catch(() => {});
+      await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
       saveGames();
       return;
     }
@@ -452,9 +452,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       embeds: handPayload.embeds,
       files: handPayload.files || [],
       components: handPayload.components,
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
-  await interaction.message.delete().catch(() => {});
+  await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
   await updateHandVisualMessage(game, playerNum, interaction.client);
   await updateDiscardPileMessage(game, playerNum, interaction.client);
   const effectDesc4 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
@@ -470,7 +470,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         content: `Your opponent played **${card}** (cost 0). You may play **Negation** to cancel it.`,
         components: [ctx.getNegationResponseButtons(gameId)],
         allowedMentions: { users: [oppId] },
-      }).catch(() => {});
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
     const waitingMsg = await handChannel.send({
       content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
@@ -508,12 +508,12 @@ export async function handleCcCancelPlay(interaction, ctx) {
   const gameId = interaction.customId.replace('cc_cancel_play_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   delete game.pendingCcConfirmation;
-  await interaction.deferUpdate().catch(() => {});
-  await interaction.message.delete().catch(() => {});
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
   saveGames();
 }
 
@@ -549,7 +549,7 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
       embeds: handPayload.embeds,
       files: handPayload.files || [],
       components: handPayload.components,
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
   await updateHandVisualMessage(game, playerNum, client);
   await updateDiscardPileMessage(game, playerNum, client);
@@ -584,7 +584,7 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
 export async function handleCcSpacePick(interaction, ctx) {
   const match = interaction.customId.match(/^cc_space_([^_]+)_(.+)$/);
   if (!match) {
-    await interaction.reply({ content: 'Invalid space choice.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Invalid space choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const [, gameId, space] = match;
@@ -592,22 +592,22 @@ export async function handleCcSpacePick(interaction, ctx) {
   const { getGame, resolveAbility, dcMessageMeta, dcHealthState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildBoardMapPayload, client, saveGames } = ctx;
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const pending = game.pendingCcSpaceChoice;
   if (!pending || pending.gameId !== gameId) {
-    await interaction.reply({ content: 'No pending space choice for this game.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No pending space choice for this game.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const playerNum = pending.playerNum;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const validLower = (pending.validSpaces || []).map((s) => String(s).toLowerCase());
   if (!validLower.includes(chosenSpace)) {
-    await interaction.reply({ content: 'That space is not a valid choice.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'That space is not a valid choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -634,7 +634,7 @@ export async function handleCcSpacePick(interaction, ctx) {
   }
   if (result.applied && result.refreshDcEmbed && result.refreshDcEmbedMsgIds?.length) {
     for (const msgId of result.refreshDcEmbedMsgIds) {
-      await updateDcActionsMessage(game, msgId, client).catch(() => {});
+      await updateDcActionsMessage(game, msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
   }
   if (result.applied && result.refreshBoard && game.boardId && game.selectedMap && buildBoardMapPayload) {
@@ -647,7 +647,7 @@ export async function handleCcSpacePick(interaction, ctx) {
     }
   }
   try {
-    await interaction.message.edit({ content: 'Space chosen.', components: [] }).catch(() => {});
+    await interaction.message.edit({ content: 'Space chosen.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   } catch {}
   saveGames();
 }
@@ -656,7 +656,7 @@ export async function handleCcSpacePick(interaction, ctx) {
 export async function handleCcChoice(interaction, ctx) {
   const match = interaction.customId.match(/^cc_choice_(.+)_(\d+)$/);
   if (!match) {
-    await interaction.reply({ content: 'Invalid choice.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Invalid choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const [, gameId, choiceIndexStr] = match;
@@ -664,21 +664,21 @@ export async function handleCcChoice(interaction, ctx) {
   const { getGame, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents, client, saveGames } = ctx;
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const pending = game.pendingCcChoice;
   if (!pending || pending.gameId !== gameId) {
-    await interaction.reply({ content: 'No pending choice for this game.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No pending choice for this game.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const playerNum = pending.playerNum;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (choiceIndex < 0 || choiceIndex >= (pending.choiceOptions?.length ?? 0)) {
-    await interaction.reply({ content: 'Invalid option.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Invalid option.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const chosenOption = pending.choiceOptions?.[choiceIndex];
@@ -705,7 +705,7 @@ export async function handleCcChoice(interaction, ctx) {
           const healthState = dcHealthState.get(msgId) || [];
           const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta));
           const components = getDcPlayAreaComponents(msgId, false, game, meta.dcName);
-          await msg.edit({ embeds: [embed], files, components }).catch(() => {});
+          await msg.edit({ embeds: [embed], files, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         } catch (err) {
           console.error('Failed to update DC embed after ready:', err);
         }
@@ -727,14 +727,14 @@ export async function handleCcChoice(interaction, ctx) {
   if (result.applied && result.refreshDcEmbed && (result.refreshDcEmbedMsgIds?.length || result.readyDcMsgIds?.length)) {
     const msgIds = result.refreshDcEmbedMsgIds || result.readyDcMsgIds || [];
     for (const msgId of msgIds) {
-      await updateDcActionsMessage(game, msgId, client).catch(() => {});
+      await updateDcActionsMessage(game, msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
   }
   if (!result.applied && result.manualMessage) {
     await logGameAction(game, client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
   }
   try {
-    await interaction.message.edit({ content: 'Choice resolved.', components: [] }).catch(() => {});
+    await interaction.message.edit({ content: 'Choice resolved.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   } catch {}
   saveGames();
 }
@@ -745,12 +745,12 @@ export async function handleIllegalCcIgnore(interaction, ctx) {
   const gameId = interaction.customId.replace('illegal_cc_ignore_', '');
   const game = getGame(gameId);
   if (!game || !game.pendingIllegalCcPlay) {
-    await interaction.reply({ content: 'No pending play to resolve.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No pending play to resolve.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { playerNum, card, messageId } = game.pendingIllegalCcPlay;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -759,7 +759,7 @@ export async function handleIllegalCcIgnore(interaction, ctx) {
   if (messageId && interaction.channel?.id) {
     try {
       const msg = await interaction.channel.messages.fetch(messageId);
-      await msg.edit({ content: 'Play resolved.', components: [] }).catch(() => {});
+      await msg.edit({ content: 'Play resolved.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch {}
   }
   saveGames();
@@ -771,13 +771,13 @@ export async function handleNegationPlay(interaction, ctx) {
   const gameId = interaction.customId.replace('negation_play_', '');
   const game = getGame(gameId);
   if (!game || !game.pendingNegation) {
-    await interaction.reply({ content: 'No pending play to negate.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No pending play to negate.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { playedBy, card, waitingMsgId, handChannelId } = game.pendingNegation;
   const oppNum = playedBy === 1 ? 2 : 1;
   if (!canActAsPlayer(game, interaction.user.id, oppNum)) {
-    await interaction.reply({ content: 'Only the opponent can play Negation.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the opponent can play Negation.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const handKey = oppNum === 1 ? 'player1CcHand' : 'player2CcHand';
@@ -785,7 +785,7 @@ export async function handleNegationPlay(interaction, ctx) {
   const hand = game[handKey] || [];
   const idx = hand.indexOf('Negation');
   if (idx < 0) {
-    await interaction.reply({ content: "You don't have Negation in your hand.", ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: "You don't have Negation in your hand.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -796,7 +796,7 @@ export async function handleNegationPlay(interaction, ctx) {
   delete game.pendingNegation;
   await updateHandVisualMessage(game, oppNum, client);
   await updateDiscardPileMessage(game, oppNum, client);
-  await interaction.message.edit({ content: `**Negation** cancelled **${card}**.`, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: `**Negation** cancelled **${card}**.`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   const negPlayerId = oppNum === 1 ? game.player1Id : game.player2Id;
   await logGameAction(game, client, `<@${negPlayerId}> played **Negation** — cancelled **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [negPlayerId] } });
   // Notify the player whose card was cancelled
@@ -805,7 +805,7 @@ export async function handleNegationPlay(interaction, ctx) {
     if (playingHandChannel) {
       const waitingMsg = await playingHandChannel.messages.fetch(waitingMsgId).catch(() => null);
       const playedById = playedBy === 1 ? game.player1Id : game.player2Id;
-      if (waitingMsg) await waitingMsg.edit({ content: `❌ Your **${card}** was cancelled by your opponent's **Negation**. <@${playedById}>` }).catch(() => {});
+      if (waitingMsg) await waitingMsg.edit({ content: `❌ Your **${card}** was cancelled by your opponent's **Negation**. <@${playedById}>` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
   }
   saveGames();
@@ -817,18 +817,18 @@ export async function handleNegationLetResolve(interaction, ctx) {
   const gameId = interaction.customId.replace('negation_let_resolve_', '');
   const game = getGame(gameId);
   if (!game || !game.pendingNegation) {
-    await interaction.reply({ content: 'No pending play to resolve.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No pending play to resolve.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { playedBy, card, fromDc, msgId, wasAttachment, waitingMsgId, handChannelId } = game.pendingNegation;
   const oppNum = playedBy === 1 ? 2 : 1;
   if (!canActAsPlayer(game, interaction.user.id, oppNum)) {
-    await interaction.reply({ content: 'Only the opponent can choose to let it resolve.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the opponent can choose to let it resolve.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
   delete game.pendingNegation;
-  await interaction.message.edit({ content: `**${card}** resolves.`, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: `**${card}** resolves.`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   if (fromDc && msgId && wasAttachment && updateAttachmentMessageForDc && isCcAttachment?.(card)) {
     const attachKey = playedBy === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
     const discardKey = playedBy === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
@@ -854,7 +854,7 @@ export async function handleNegationLetResolve(interaction, ctx) {
     } else if (result.applied && result.logMessage) {
       await logGameAction(game, client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
       if (result.refreshDcEmbed && fromDc && msgId && updateDcActionsMessage) {
-        await updateDcActionsMessage(game, msgId, client).catch(() => {});
+        await updateDcActionsMessage(game, msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
     } else if (result.applied && result.refreshOpponentDiscard) {
       const opp = playedBy === 1 ? 2 : 1;
@@ -869,7 +869,7 @@ export async function handleNegationLetResolve(interaction, ctx) {
     if (playingHandChannel) {
       const waitingMsg = await playingHandChannel.messages.fetch(waitingMsgId).catch(() => null);
       const playedById = playedBy === 1 ? game.player1Id : game.player2Id;
-      if (waitingMsg) await waitingMsg.edit({ content: `✅ **${card}** resolved! <@${playedById}>` }).catch(() => {});
+      if (waitingMsg) await waitingMsg.edit({ content: `✅ **${card}** resolved! <@${playedById}>` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
   }
   saveGames();
@@ -881,12 +881,12 @@ export async function handleCelebrationPlay(interaction, ctx) {
   const gameId = interaction.customId.replace('celebration_play_', '');
   const game = getGame(gameId);
   if (!game || !game.pendingCelebration) {
-    await interaction.reply({ content: 'No Celebration window open.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No Celebration window open.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { attackerPlayerNum } = game.pendingCelebration;
   if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-    await interaction.reply({ content: 'Only the player who defeated the figure can play Celebration.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the player who defeated the figure can play Celebration.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const handKey = attackerPlayerNum === 1 ? 'player1CcHand' : 'player2CcHand';
@@ -894,7 +894,7 @@ export async function handleCelebrationPlay(interaction, ctx) {
   const hand = game[handKey] || [];
   const idx = hand.indexOf('Celebration');
   if (idx < 0) {
-    await interaction.reply({ content: "You don't have Celebration in your hand.", ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: "You don't have Celebration in your hand.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -909,7 +909,7 @@ export async function handleCelebrationPlay(interaction, ctx) {
   delete game.pendingCelebration;
   await updateHandVisualMessage(game, attackerPlayerNum, client);
   await updateDiscardPileMessage(game, attackerPlayerNum, client);
-  await interaction.message.edit({ content: `**Celebration** — +4 VP.`, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: `**Celebration** — +4 VP.`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   const celPlayerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
   await logGameAction(game, client, `<@${celPlayerId}> played **Celebration** — gained 4 VP.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [celPlayerId] } });
   saveGames();
@@ -921,17 +921,17 @@ export async function handleCelebrationPass(interaction, ctx) {
   const gameId = interaction.customId.replace('celebration_pass_', '');
   const game = getGame(gameId);
   if (!game || !game.pendingCelebration) {
-    await interaction.reply({ content: 'No Celebration window open.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No Celebration window open.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { attackerPlayerNum } = game.pendingCelebration;
   if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-    await interaction.reply({ content: 'Only the player who defeated the figure can pass.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the player who defeated the figure can pass.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
   delete game.pendingCelebration;
-  await interaction.message.edit({ content: 'Passed on Celebration.', components: [] }).catch(() => {});
+  await interaction.message.edit({ content: 'Passed on Celebration.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   saveGames();
 }
 
@@ -941,12 +941,12 @@ export async function handleIllegalCcUnplay(interaction, ctx) {
   const gameId = interaction.customId.replace('illegal_cc_unplay_', '');
   const game = getGame(gameId);
   if (!game || !game.pendingIllegalCcPlay) {
-    await interaction.reply({ content: 'No pending play to cancel.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No pending play to cancel.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { playerNum, messageId } = game.pendingIllegalCcPlay;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -954,7 +954,7 @@ export async function handleIllegalCcUnplay(interaction, ctx) {
   if (messageId && interaction.channel?.id) {
     try {
       const msg = await interaction.channel.messages.fetch(messageId);
-      await msg.edit({ content: 'Cancelled — card not played.', components: [] }).catch(() => {});
+      await msg.edit({ content: 'Cancelled — card not played.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch {}
   }
   saveGames();
@@ -966,14 +966,14 @@ export async function handleCcDiscardSelect(interaction, ctx) {
   const gameId = interaction.customId.replace('cc_discard_select_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && channelId !== game.p2HandId) {
-    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
@@ -983,7 +983,7 @@ export async function handleCcDiscardSelect(interaction, ctx) {
   const card = interaction.values[0];
   const idx = hand.indexOf(card);
   if (idx < 0) {
-    await interaction.reply({ content: "That card isn't in your hand.", ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: "That card isn't in your hand.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -1003,9 +1003,9 @@ export async function handleCcDiscardSelect(interaction, ctx) {
       embeds: handPayload.embeds,
       files: handPayload.files || [],
       components: handPayload.components,
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
-  await interaction.message.delete().catch(() => {});
+  await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
   await updateHandVisualMessage(game, playerNum, interaction.client);
   await updateDiscardPileMessage(game, playerNum, interaction.client);
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> discarded **${card}**`, { allowedMentions: { users: [interaction.user.id] }, icon: 'card' });
@@ -1020,25 +1020,25 @@ export async function handleDeckIllegalPlay(interaction, ctx) {
   const playerNum = parseInt(parts[1], 10);
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const isP1 = playerNum === 1;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the owner of this hand can choose Play It Anyway.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner of this hand can choose Play It Anyway.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const key = `${gameId}_${playerNum}`;
   const pending = pendingIllegalSquad.get(key);
   if (!pending || (Date.now() - pending.timestamp > PENDING_ILLEGAL_TTL_MS)) {
     pendingIllegalSquad.delete(key);
-    await interaction.reply({ content: 'This deck choice has expired. Please submit your squad again.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This deck choice has expired. Please submit your squad again.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   pendingIllegalSquad.delete(key);
   await interaction.deferUpdate();
   await applySquadSubmission(game, isP1, pending.squad, interaction.client);
-  await interaction.followUp({ content: `Squad **${pending.squad.name || 'Unnamed'}** accepted (Play It Anyway).`, ephemeral: true }).catch(() => {});
+  await interaction.followUp({ content: `Squad **${pending.squad.name || 'Unnamed'}** accepted (Play It Anyway).`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction */
@@ -1049,12 +1049,12 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
   const playerNum = parseInt(parts[1], 10);
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const isP1 = playerNum === 1;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the owner of this hand can choose Redo.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner of this hand can choose Redo.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const key = `${gameId}_${playerNum}`;
@@ -1070,12 +1070,12 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
     await botMsg.edit({
       embeds: [getHandTooltipEmbed(game, playerNum), getSquadSelectEmbed(playerNum, null)],
       components: [getHandSquadButtons(game.gameId, playerNum)],
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
   saveGames();
   await interaction.deferUpdate();
-  await interaction.message.edit({ content: 'Squad cleared. Please submit again using Select Squad, .vsav upload, or pasted list.', components: [] }).catch(() => {});
-  await interaction.followUp({ content: 'Your squad has been cleared. Submit a new squad using **Select Squad**, upload a .vsav file, or paste your list.', ephemeral: true }).catch(() => {});
+  await interaction.message.edit({ content: 'Squad cleared. Please submit again using Select Squad, .vsav upload, or pasted list.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.followUp({ content: 'Your squad has been cleared. Submit a new squad using **Select Squad**, upload a .vsav file, or paste your list.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction */
@@ -1084,14 +1084,14 @@ export async function handleCcShuffleDraw(interaction, ctx) {
   const gameId = interaction.customId.replace('cc_shuffle_draw_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && !isP2Hand) {
-    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
@@ -1099,7 +1099,7 @@ export async function handleCcShuffleDraw(interaction, ctx) {
   const ccList = squad?.ccList || [];
   const drawnKey = playerNum === 1 ? 'player1CcDrawn' : 'player2CcDrawn';
   if (game[drawnKey]) {
-    await interaction.reply({ content: "You've already drawn your starting hand.", ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: "You've already drawn your starting hand.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -1128,7 +1128,7 @@ export async function handleCcShuffleDraw(interaction, ctx) {
     embeds: handPayload.embeds,
     files: handPayload.files || [],
     components: handPayload.components,
-  }).catch(() => {});
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   await updateHandVisualMessage(game, playerNum, client);
   if (game.player1CcDrawn && game.player2CcDrawn) {
     await updatePlayAreaDcButtons(game, client);
@@ -1143,20 +1143,20 @@ export async function handleCcPlay(interaction, ctx) {
   const gameId = interaction.customId.replace('cc_play_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && !isP2Hand) {
-    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
   const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
   if (hand.length === 0) {
-    await interaction.reply({ content: 'No cards in hand to play.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No cards in hand to play.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const playable = getPlayableCcFromHand(game, playerNum, hand);
@@ -1164,7 +1164,7 @@ export async function handleCcPlay(interaction, ctx) {
     await interaction.reply({
       content: "No command cards can be played right now (wrong timing). Play cards during your activation, at start/end of round, or during an attack as appropriate.",
       ephemeral: true,
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const select = new StringSelectMenuBuilder()
@@ -1184,14 +1184,14 @@ export async function handleCcDraw(interaction, ctx) {
   const gameId = interaction.customId.replace('cc_draw_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && !isP2Hand) {
-    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
@@ -1200,7 +1200,7 @@ export async function handleCcDraw(interaction, ctx) {
   let deck = (game[deckKey] || []).slice();
   const hand = (game[handKey] || []).slice();
   if (deck.length === 0) {
-    await interaction.reply({ content: 'No cards in deck to draw.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No cards in deck to draw.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -1215,7 +1215,7 @@ export async function handleCcDraw(interaction, ctx) {
     embeds: handPayload.embeds,
     files: handPayload.files || [],
     components: handPayload.components,
-  }).catch(() => {});
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   await updateHandVisualMessage(game, playerNum, client);
   await logGameAction(game, client, `<@${interaction.user.id}> drew **${card}**`, { allowedMentions: { users: [interaction.user.id] }, icon: 'card' });
   saveGames();
@@ -1230,18 +1230,18 @@ export async function handleCcSearchDiscard(interaction, ctx) {
   const playerNum = parseInt(playerNumStr, 10);
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const channelId = interaction.channel?.id;
   const isP1Area = channelId === game.p1PlayAreaId;
   const isP2Area = channelId === game.p2PlayAreaId;
   if ((!isP1Area && !isP2Area) || (isP1Area && playerNum !== 1) || (isP2Area && playerNum !== 2)) {
-    await interaction.reply({ content: 'Use this in your Play Area.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your Play Area.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the owner of this Play Area can search their discard pile.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner of this Play Area can search their discard pile.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const existingThreadId = playerNum === 1 ? game.p1DiscardThreadId : game.p2DiscardThreadId;
@@ -1249,7 +1249,7 @@ export async function handleCcSearchDiscard(interaction, ctx) {
     try {
       const existing = await client.channels.fetch(existingThreadId);
       if (existing) {
-        await interaction.reply({ content: 'Discard pile thread is already open. Close it first.', ephemeral: true }).catch(() => {});
+        await interaction.reply({ content: 'Discard pile thread is already open. Close it first.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
     } catch { /* thread was deleted */ }
@@ -1301,16 +1301,16 @@ export async function handleCcCloseDiscard(interaction, ctx) {
   const playerNum = parseInt(playerNumStr, 10);
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const threadId = playerNum === 1 ? game.p1DiscardThreadId : game.p2DiscardThreadId;
   if (!threadId) {
-    await interaction.reply({ content: 'No discard pile thread is open.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No discard pile thread is open.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the owner can close the discard pile thread.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner can close the discard pile thread.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -1332,20 +1332,20 @@ export async function handleCcDiscard(interaction, ctx) {
   const gameId = interaction.customId.replace('cc_discard_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && !isP2Hand) {
-    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
   const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
   if (hand.length === 0) {
-    await interaction.reply({ content: 'No cards in hand to discard.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No cards in hand to discard.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const select = new StringSelectMenuBuilder()

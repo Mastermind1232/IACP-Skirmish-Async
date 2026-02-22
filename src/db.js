@@ -47,8 +47,8 @@ export async function initDb() {
       )
     `);
     // DB3: optional indexes for active games / recent updates
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_games_updated_at ON games (updated_at)').catch(() => {});
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_games_ended ON games ((game_data->>'ended'))`).catch(() => {});
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_games_updated_at ON games (updated_at)').catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_games_ended ON games ((game_data->>'ended'))`).catch((err) => { console.error('[discord]', err?.message ?? err); });
     console.log('[DB] PostgreSQL connected, games and completed_games tables ready.');
   } catch (err) {
     console.error('[DB] Failed to connect:', err.message);

@@ -353,7 +353,7 @@ async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, client) {
     }
     if (!hasContent) {
       const msg = await channel.messages.fetch(attachMsgId);
-      await msg.delete().catch(() => {});
+      await msg.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
       attachMsgIds[idx] = null;
       return;
     }
@@ -1020,7 +1020,7 @@ async function updateMovementBankMessage(game, msgId, client) {
     if (remaining <= 0 && messageId) {
       const thread = await client.channels.fetch(threadId);
       const msg = await thread.messages.fetch(messageId).catch(() => null);
-      if (msg) await msg.delete().catch(() => {});
+      if (msg) await msg.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
       bank.messageId = null;
       return;
     }
@@ -1448,14 +1448,14 @@ async function createHandThreads(client, game) {
     type: ChannelType.PrivateThread,
     invitable: false,
   });
-  await p1Thread.members.add(game.player1Id).catch(() => {});
+  await p1Thread.members.add(game.player1Id).catch((err) => { console.error('[discord]', err?.message ?? err); });
   const p2Thread = await p2PlayArea.threads.create({
     name: 'Your Hand',
     autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
     type: ChannelType.PrivateThread,
     invitable: false,
   });
-  await p2Thread.members.add(game.player2Id).catch(() => {});
+  await p2Thread.members.add(game.player2Id).catch((err) => { console.error('[discord]', err?.message ?? err); });
   game.p1HandId = p1Thread.id;
   game.p2HandId = p2Thread.id;
   return { p1HandThread: p1Thread, p2HandThread: p2Thread };
@@ -1659,18 +1659,18 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
       const testPrompt = scenarioPrimaryCard
         ? `🧪 <@${userId}> — **Testing: ${scenarioPrimaryCard}** (scenario: \`${scenarioId}\`)\n${cardDetails ? `*${cardDetails}*\n` : ''}> *${effectText}*\n\n**How to test:** ${howToTest}${opponentNote}\nThe card is in P1's **Your Hand** thread (inside Play Area).`
         : `🧪 <@${userId}> — **Testing scenario: \`${scenarioId}\`**`;
-      await generalChannel.send({ content: testPrompt, allowedMentions: { users: [userId] } }).catch(() => {});
-      await generalChannel.send({ content: `Done testing? Kill the game here:`, components: [killRow] }).catch(() => {});
+      await generalChannel.send({ content: testPrompt, allowedMentions: { users: [userId] } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await generalChannel.send({ content: `Done testing? Kill the game here:`, components: [killRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       const scenarioDoneText = scenarioPrimaryCard
         ? `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. P1's **Your Hand** thread (inside Play Area) has **${scenarioPrimaryCard}**. **How to test:** ${howToTest}`
         : `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. Scenario: **${scenarioId}**.`;
       if (options.editMessageInstead) {
-        await options.editMessageInstead.edit({ content: scenarioDoneText, allowedMentions: { users: mentionUsers } }).catch(() => {});
+        await options.editMessageInstead.edit({ content: scenarioDoneText, allowedMentions: { users: mentionUsers } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       } else {
         await feedbackChannel.send({
           content: scenarioDoneText,
           allowedMentions: { users: mentionUsers },
-        }).catch(() => {});
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
     } else {
       const setupDesc = p2IsBot
@@ -1688,17 +1688,17 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
         components: [getGeneralSetupButtons(game)],
       });
       game.generalSetupMessageId = setupMsg.id;
-      await generalChannel.send({ content: `🧪 **Test Game #${gameId}** — done? Kill it here:`, components: [killRow] }).catch(() => {});
+      await generalChannel.send({ content: `🧪 **Test Game #${gameId}** — done? Kill it here:`, components: [killRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       const doneText = scenarioId && !scenarioImplemented
         ? `Scenario **${scenarioId}** is not yet implemented. Test game **IA Game #${gameId}** created with standard setup — select the map in Game Log.`
         : `Test game **IA Game #${gameId}** is ready (P1 <@${userId}> vs P2 ${p2Label})! Select the map in Game Log — Play Areas (with **Your Hand** threads) will appear after map selection.`;
       if (options.editMessageInstead) {
-        await options.editMessageInstead.edit({ content: doneText, allowedMentions: { users: mentionUsers } }).catch(() => {});
+        await options.editMessageInstead.edit({ content: doneText, allowedMentions: { users: mentionUsers } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       } else {
         await feedbackChannel.send({
           content: doneText,
           allowedMentions: { users: mentionUsers },
-        }).catch(() => {});
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
     }
     saveGames();
@@ -1804,7 +1804,7 @@ async function postPinnedMissionCardFromGameState(game, client) {
     } else {
       sentMsg = await ch.send({ content: `🎯 **Mission:** ${fullName}` });
     }
-    await sentMsg.pin().catch(() => {});
+    await sentMsg.pin().catch((err) => { console.error('[discord]', err?.message ?? err); });
     await logGameAction(game, client, `Mission selected: **${fullName}** (pinned above).`, { phase: 'SETUP', icon: 'map' });
   } catch (err) {
     console.error('Mission card post error:', err);
@@ -2158,6 +2158,8 @@ async function checkWinConditions(game, client) {
 async function postGameOver(game, client, winnerId, reason) {
   game.ended = true;
   game.winnerId = winnerId ?? game.winnerId ?? null;
+  pendingIllegalSquad.delete(`${game.gameId}_1`);
+  pendingIllegalSquad.delete(`${game.gameId}_2`);
   const embed = buildScorecardEmbed(game);
   const content = winnerId
     ? `\uD83C\uDFC1 **GAME OVER** — <@${winnerId}> wins by ${reason}!`
@@ -2181,7 +2183,7 @@ async function postGameOver(game, client, winnerId, reason) {
 /** Returns true if game ended (and replied to user). Call after getGame() in handlers to block further actions. */
 async function replyIfGameEnded(game, interaction) {
   if (game?.ended) {
-    await interaction.reply({ content: 'This game has ended.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This game has ended.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return true;
   }
   return false;
@@ -2868,7 +2870,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
             content: `<@${ownerId}> — You defeated a unique figure. Play **Celebration** to gain 4 VP?`,
             components: [getCelebrationButtons(game.gameId)],
             allowedMentions: { users: [ownerId] },
-          }).catch(() => {});
+          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         }
       }
     }
@@ -2962,7 +2964,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
               content: `<@${ownerId}> — You defeated a unique figure (Blast). Play **Celebration** to gain 4 VP?`,
               components: [getCelebrationButtons(game.gameId)],
               allowedMentions: { users: [ownerId] },
-            }).catch(() => {});
+            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
           }
         }
       }
@@ -3049,7 +3051,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
   if (combat.rollMessageId) {
     try {
       const rollMsg = await thread.messages.fetch(combat.rollMessageId);
-      await rollMsg.edit({ components: [] }).catch(() => {});
+      await rollMsg.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch {}
   }
   for (const msgId of embedRefreshMsgIds) {
@@ -3062,7 +3064,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
         const exhausted = dcExhaustedState.get(msgId) ?? false;
         const healthState = dcHealthState.get(msgId) || [];
         const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage(game, meta));
-        await dcMsg.edit({ embeds: [embed], files }).catch(() => {});
+        await dcMsg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
     } catch (err) {
       console.error('Failed to update DC embed:', err);
@@ -3257,7 +3259,7 @@ async function maybeShowEndActivationPhaseButton(game, client) {
       embeds: [roundEmbed],
       components: [endBtn],
       allowedMentions: { users: [game.initiativePlayerId] },
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     game.roundActivationButtonShown = true;
     saveGames();
   } catch (err) {
@@ -3283,7 +3285,7 @@ async function updateDcActionsMessage(game, msgId, client) {
       };
       const actMinimap = await getActivationMinimapAttachment(game, msgId);
       if (actMinimap) editPayload.files = [actMinimap];
-      await msg.edit(editPayload).catch(() => {});
+      await msg.edit(editPayload).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch (err) {
       console.error('Failed to update DC actions message:', err);
     }
@@ -3476,7 +3478,7 @@ async function updateHandChannelMessages(game, client) {
       const handMsg = msgs.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
       if (handMsg) {
         const payload = buildHandDisplayPayload(hand, deck, game.gameId, game, pn);
-        await handMsg.edit({ content: payload.content, embeds: payload.embeds, files: payload.files || [], components: payload.components }).catch(() => {});
+        await handMsg.edit({ content: payload.content, embeds: payload.embeds, files: payload.files || [], components: payload.components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
     } catch (err) {
       console.error('Failed to update hand channel message:', err);
@@ -3536,7 +3538,7 @@ async function updatePlayAreaDcButtons(game, client) {
         const exhausted = dcExhaustedState.get(msgId) ?? false;
         const components = getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
         const msg = await channel.messages.fetch(msgId);
-        await msg.edit({ components }).catch(() => {});
+        await msg.edit({ components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
     } catch (err) {
       console.error('Failed to update Play Area DC buttons:', err);
@@ -3715,7 +3717,7 @@ async function applySquadSubmission(game, isP1, squad, client) {
           game.boardId = boardChannel.id;
           if (game.selectedMap) {
             const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-            await boardChannel.send(payload).catch(() => {});
+            await boardChannel.send(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
           }
         } catch (err) {
           console.error('Failed to create Map Updates channel:', err);
@@ -4016,7 +4018,7 @@ client.on('messageCreate', async (message) => {
   const channelNameLc = message.channel?.name?.toLowerCase();
   if (content.startsWith('testready') && channelNameLc === 'lfg') {
     if (!message.guild) {
-      await message.reply('This command must be used in a server channel.').catch(() => {});
+      await message.reply('This command must be used in a server channel.').catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const userId = message.author.id;
@@ -4026,7 +4028,7 @@ client.on('messageCreate', async (message) => {
     const scenarioId = getRandomTestreadyScenario(p2IsBot);
     if (!scenarioId) {
       const hint = p2IsBot ? ' Some scenarios require a real P2 — try `testready @player2`.' : '';
-      await message.reply(`No testready scenarios available.${hint}`).catch(() => {});
+      await message.reply(`No testready scenarios available.${hint}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const msgId = message.id;
@@ -4040,7 +4042,7 @@ client.on('messageCreate', async (message) => {
     } catch (err) {
       console.error('Test game creation error:', err);
       await logGameErrorToBotLogs(message.client, message.guild, null, err, 'test_game_create');
-      await creatingMsg.edit(`Failed to create test game: ${err.message}`).catch(() => {});
+      await creatingMsg.edit(`Failed to create test game: ${err.message}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
     return;
   }
@@ -4048,7 +4050,7 @@ client.on('messageCreate', async (message) => {
   const isTestGameCmd = content.startsWith('testgame') && channelNameLc === 'lfg';
   if (isTestGameCmd) {
     if (!message.guild) {
-      await message.reply('This command must be used in a server channel.').catch(() => {});
+      await message.reply('This command must be used in a server channel.').catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const parts = message.content.trim().split(/\s+/);
@@ -4070,7 +4072,7 @@ client.on('messageCreate', async (message) => {
     } catch (err) {
       console.error('Test game creation error:', err);
       await logGameErrorToBotLogs(message.client, message.guild, null, err, 'test_game_create');
-      await creatingMsg.edit(`Failed to create test game: ${err.message}`).catch(() => {});
+      await creatingMsg.edit(`Failed to create test game: ${err.message}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
     return;
   }
@@ -4152,14 +4154,14 @@ client.on('messageCreate', async (message) => {
     for (const [gameId, game] of getGamesMap()) {
       if (game.generalId !== chId && game.chatId !== chId) continue;
       if (game.ended) {
-        await message.reply('This game has ended. VP cannot be changed.').catch(() => {});
+        await message.reply('This game has ended. VP cannot be changed.').catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
       const authorId = message.author.id;
       const isP1 = authorId === game.player1Id;
       const isP2 = authorId === game.player2Id;
       if (!isP1 && !isP2) {
-        await message.reply('Only players in this game can use /editvp.').catch(() => {});
+        await message.reply('Only players in this game can use /editvp.').catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
       const raw = editVpMatch[1];
@@ -4174,7 +4176,7 @@ client.on('messageCreate', async (message) => {
       saveGames();
       const newTotal = vp.total;
       const side = isP1 ? 'Player 1' : 'Player 2';
-      await message.reply(`✓ **${side}** VP adjusted ${actualDelta >= 0 ? '+' : ''}${actualDelta}. Total is now **${newTotal}** VP.`).catch(() => {});
+      await message.reply(`✓ **${side}** VP adjusted ${actualDelta >= 0 ? '+' : ''}${actualDelta}. Total is now **${newTotal}** VP.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
       // Update scorecard embed in Map Updates channel if present
       if (game.boardId && game.selectedMap) {
         try {
@@ -4183,7 +4185,7 @@ client.on('messageCreate', async (message) => {
           const withScorecard = messages.find((m) => m.embeds?.[0]?.title === 'Scorecard');
           if (withScorecard) {
             const embed = buildScorecardEmbed(game);
-            await withScorecard.edit({ embeds: [embed] }).catch(() => {});
+            await withScorecard.edit({ embeds: [embed] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
           }
         } catch (err) {
           // ignore
@@ -4305,14 +4307,14 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: 'Use /botmenu in the **Game Log** channel of the game you want to manage.',
           ephemeral: true,
-        }).catch(() => {});
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
       await interaction.reply({
         content: '**Bot Stuff** — Choose an action:',
         components: [getBotmenuButtons(gameByChannel.gameId)],
         ephemeral: false,
-      }).catch(() => {});
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     if (cmd === 'power-token') {
@@ -4328,7 +4330,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: 'Use /power-token in the **Game Log** or **Board** channel of an active game.',
           ephemeral: true,
-        }).catch(() => {});
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
       if (await replyIfGameEnded(game, interaction)) return;
@@ -4342,7 +4344,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: `**Power Tokens**\n${lines}`,
           ephemeral: true,
-        }).catch(() => {});
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
       const figureKey = interaction.options.getString('figure');
@@ -4354,7 +4356,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: `Figure **${figureKey}** not found. Valid keys: ${allFigureKeys.slice(0, 8).join(', ')}${allFigureKeys.length > 8 ? '...' : ''}`,
           ephemeral: true,
-        }).catch(() => {});
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
       game.figurePowerTokens = game.figurePowerTokens || {};
@@ -4365,7 +4367,7 @@ client.on('interactionCreate', async (interaction) => {
           await interaction.reply({
             content: `${fk} already has 2 Power Tokens (max). Remove one first.`,
             ephemeral: true,
-          }).catch(() => {});
+          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
           return;
         }
         game.figurePowerTokens[fk] = [...game.figurePowerTokens[fk], type];
@@ -4373,7 +4375,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: `Added **${type}** Power Token to **${fk}**.`,
           ephemeral: false,
-        }).catch(() => {});
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       } else {
         const idx = interaction.options.getInteger('index');
         const arr = game.figurePowerTokens[fk];
@@ -4381,7 +4383,7 @@ client.on('interactionCreate', async (interaction) => {
           await interaction.reply({
             content: `${fk} does not have a token at index ${idx}. Current: ${(arr || []).join(', ') || 'none'}`,
             ephemeral: true,
-          }).catch(() => {});
+          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
           return;
         }
         const removed = arr[idx - 1];
@@ -4391,7 +4393,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: `Removed **${removed}** Power Token from **${fk}**.`,
           ephemeral: false,
-        }).catch(() => {});
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
       if (game.boardId && game.selectedMap) {
         try {
@@ -4412,17 +4414,17 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: 'Use this command in the **#statistics** channel.',
           ephemeral: true,
-        }).catch(() => {});
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
       if (!isDbConfigured()) {
         await interaction.reply({
           content: 'Stats require a database (DATABASE_URL). No data available.',
           ephemeral: true,
-        }).catch(() => {});
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
-      await interaction.deferReply({ ephemeral: false }).catch(() => {});
+      await interaction.deferReply({ ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       try {
         if (cmd === 'statcheck') {
           const targetUser = interaction.options.getUser('player');
@@ -4430,37 +4432,37 @@ client.on('interactionCreate', async (interaction) => {
             const s = await getStatsSummaryForPlayer(targetUser.id);
             await interaction.editReply({
               content: `**Stats for ${targetUser.username}**\nGames: **${s.games}** | Wins: **${s.wins}** | Losses: **${s.losses}** | Draws: **${s.draws}** | Win rate: **${s.winRate}%**`,
-            }).catch(() => {});
+            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
           } else {
             const { totalGames, draws } = await getStatsSummary();
             await interaction.editReply({
               content: `**Completed games:** ${totalGames}\n**Draws:** ${draws}`,
-            }).catch(() => {});
+            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
           }
         } else if (cmd === 'affiliationwinrateglobal') {
           const rows = await getAffiliationWinRates();
           const lines = rows.length
             ? rows.map((r) => `${r.affiliation}: **${r.wins}** / **${r.games}** (${r.winRate}% win rate)`).join('\n')
             : 'No completed games with affiliation data yet.';
-          await interaction.editReply({ content: `**Win rate by affiliation (global)**\n${lines}` }).catch(() => {});
+          await interaction.editReply({ content: `**Win rate by affiliation (global)**\n${lines}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         } else if (cmd === 'affiliationwinratepersonal') {
           const rows = await getAffiliationWinRatesPersonal(interaction.user.id);
           const lines = rows.length
             ? rows.map((r) => `${r.affiliation}: **${r.wins}** / **${r.games}** (${r.winRate}% win rate)`).join('\n')
             : 'No completed games with affiliation data for you yet.';
-          await interaction.editReply({ content: `**Your win rate by affiliation**\n${lines}` }).catch(() => {});
+          await interaction.editReply({ content: `**Your win rate by affiliation**\n${lines}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         } else if (cmd === 'affiliationpickrateglobal') {
           const rows = await getAffiliationPickRates();
           const lines = rows.length
             ? rows.map((r) => `${r.affiliation}: **${r.picks}** picks / **${r.totalArmies}** armies (${r.pickRate}%)`).join('\n')
             : 'No completed games with affiliation data yet.';
-          await interaction.editReply({ content: `**Pick rate by affiliation (global)**\n${lines}` }).catch(() => {});
+          await interaction.editReply({ content: `**Pick rate by affiliation (global)**\n${lines}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         } else if (cmd === 'affiliationpickratepersonal') {
           const rows = await getAffiliationPickRatesPersonal(interaction.user.id);
           const lines = rows.length
             ? rows.map((r) => `${r.affiliation}: **${r.picks}** picks / **${r.totalArmies}** armies (${r.pickRate}%)`).join('\n')
             : 'No completed games with affiliation data for you yet.';
-          await interaction.editReply({ content: `**Your pick rate by affiliation**\n${lines}` }).catch(() => {});
+          await interaction.editReply({ content: `**Your pick rate by affiliation**\n${lines}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         } else if (cmd === 'dcwinrateglobaltopten') {
           const limit = interaction.options.getInteger('limit') ?? 20;
           const rows = await getDcWinRates(limit);
@@ -4469,7 +4471,7 @@ client.on('interactionCreate', async (interaction) => {
             : 'No completed games with army data yet.';
           await interaction.editReply({
             content: `**Win rate by Deployment Card** (top ${limit} by games played, global)\n${lines}`,
-          }).catch(() => {});
+          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         } else if (cmd === 'dcwinratepersonaltopten') {
           const limit = interaction.options.getInteger('limit') ?? 20;
           const rows = await getDcWinRatesPersonal(interaction.user.id, limit);
@@ -4478,7 +4480,7 @@ client.on('interactionCreate', async (interaction) => {
             : 'No completed games with army data for you yet.';
           await interaction.editReply({
             content: `**Your win rate by Deployment Card** (top ${limit} by games played)\n${lines}`,
-          }).catch(() => {});
+          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         } else if (cmd === 'leaderboard') {
           const limit = interaction.options.getInteger('limit') ?? 10;
           const rows = await getLeaderboard(limit);
@@ -4488,13 +4490,13 @@ client.on('interactionCreate', async (interaction) => {
           await interaction.editReply({
             content: `**Leaderboard** (top ${limit} by win rate, min. 5 games)\n${lines}`,
             allowedMentions: { users: [] },
-          }).catch(() => {});
+          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         }
       } catch (err) {
         console.error(`Stats command /${cmd} failed:`, err);
         await interaction.editReply({
           content: `Something went wrong: ${err.message}`,
-        }).catch(() => {});
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
       return;
     }
@@ -4538,11 +4540,11 @@ client.on('interactionCreate', async (interaction) => {
       const msgId = interaction.customId.replace('dc_fig_select_', '');
       const selectedFigure = parseInt(interaction.values[0], 10);
       const meta = dcMessageMeta.get(msgId);
-      if (!meta) { await interaction.reply({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
+      if (!meta) { await interaction.reply({ content: 'DC not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
       const game = getGame(meta.gameId);
-      if (!game) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
-      if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) { await interaction.reply({ content: 'Only the owner can pick a figure.', ephemeral: true }).catch(() => {}); return; }
-      await interaction.deferUpdate().catch(() => {});
+      if (!game) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) { await interaction.reply({ content: 'Only the owner can pick a figure.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
       game.dcActionsData = game.dcActionsData || {};
       game.dcActionsData[msgId] = game.dcActionsData[msgId] || {};
       game.dcActionsData[msgId].selectedFigure = selectedFigure;

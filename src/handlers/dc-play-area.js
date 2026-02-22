@@ -35,37 +35,37 @@ export async function handleDcActivate(interaction, ctx) {
   const dcIndex = parseInt(parts[2], 10);
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the owner of this Play Area can activate their DCs.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner of this Play Area can activate their DCs.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
   const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
   const dc = dcList[dcIndex];
   if (!dc) {
-    await interaction.reply({ content: 'DC not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'DC not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { dcName, displayName, healthState } = dc;
   const remaining = playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
   if (remaining <= 0) {
-    await interaction.reply({ content: 'No activations remaining this round.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No activations remaining this round.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
   const msgId = dcMessageIds[dcIndex];
   if (!msgId) {
-    await interaction.reply({ content: 'DC message not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'DC message not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const isMyTurn = ownerId === turnPlayerId;
   if (!isMyTurn) {
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
     const playAreaCh = await client.channels.fetch(playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
     const promptRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`confirm_activate_${gameId}_${msgId}_${interaction.message.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),
@@ -117,11 +117,11 @@ export async function handleDcActivate(interaction, ctx) {
     game.dcActivationLogMessageIds = game.dcActivationLogMessageIds || {};
     game.dcActivationLogMessageIds[msgId] = logMsg.id;
     const activateRows = getActivateDcButtons(game, playerNum);
-    await interaction.update({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch(() => interaction.deferUpdate().catch(() => {}));
+    await interaction.update({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch(() => interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); }));
   } catch (err) {
     console.error('dc_activate_ error:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, extractGameIdFromInteraction(interaction), err, 'dc_activate');
-    await interaction.followUp({ content: `Activation failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: `Activation failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
 }
 
@@ -145,22 +145,22 @@ export async function handleDcUnactivate(interaction, ctx) {
   const msgId = interaction.customId.replace('dc_unactivate_', '');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.reply({ content: 'Only the owner can un-activate.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner can un-activate.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
   const wasExhausted = dcExhaustedState.get(msgId) ?? false;
   if (!wasExhausted) {
-    await interaction.reply({ content: 'DC is not activated.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'DC is not activated.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -201,7 +201,7 @@ export async function handleDcUnactivate(interaction, ctx) {
     try {
       const logCh = await client.channels.fetch(game.generalId);
       const logMsg = await logCh.messages.fetch(game.dcActivationLogMessageIds[msgId]);
-      await logMsg.delete().catch(() => {});
+      await logMsg.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch {}
     delete game.dcActivationLogMessageIds[msgId];
   }
@@ -241,16 +241,16 @@ export async function handleDcToggle(interaction, ctx) {
   const msgId = interaction.customId.replace('dc_toggle_', '');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.reply({ content: 'Only the owner of this Play Area can toggle their DCs.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner of this Play Area can toggle their DCs.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
@@ -264,7 +264,7 @@ export async function handleDcToggle(interaction, ctx) {
     const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
     const isMyTurn = playerId === turnPlayerId;
     if (!isMyTurn) {
-      await interaction.deferUpdate().catch(() => {});
+      await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
       const playAreaCh = await client.channels.fetch(meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
       const promptRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`confirm_activate_${game.gameId}_${msgId}_0`).setLabel('Yes').setStyle(ButtonStyle.Success),
@@ -359,7 +359,7 @@ export async function handleDcToggle(interaction, ctx) {
       try {
         const logCh = await client.channels.fetch(game.generalId);
         const logMsg = await logCh.messages.fetch(game.dcActivationLogMessageIds[msgId]);
-        await logMsg.delete().catch(() => {});
+        await logMsg.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
       } catch {}
       delete game.dcActivationLogMessageIds[msgId];
     }
@@ -396,21 +396,21 @@ export async function handleDcDeplete(interaction, ctx) {
   const msgId = interaction.customId.replace('dc_deplete_', '');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.reply({ content: 'Only the owner of this Play Area can Deplete their upgrade.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner of this Play Area can Deplete their upgrade.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
   if (isDepletedRemovedFromGame(game, msgId)) {
-    await interaction.reply({ content: 'This upgrade was already depleted and removed from the game.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This upgrade was already depleted and removed from the game.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (meta.playerNum === 1) {
@@ -466,17 +466,17 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   const idx = parseInt(rest.slice(lastUnderscore + 1), 10);
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.reply({ content: 'Only the owner of this activation can play a CC here.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner of this activation can play a CC here.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
@@ -486,7 +486,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   const discardKey = meta.playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
   const hand = game[handKey] || [];
   if (!card || hand.indexOf(card) < 0) {
-    await interaction.reply({ content: "That card isn't in your hand or isn't playable for this figure.", ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: "That card isn't in your hand or isn't playable for this figure.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   // F14: Snapshot for undo before mutating
@@ -524,7 +524,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       embeds: handPayload.embeds || [],
       files: handPayload.files || [],
       components: handPayload.components || [],
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
   await updateHandVisualMessage(game, meta.playerNum, interaction.client);
   await updateDiscardPileMessage(game, meta.playerNum, interaction.client);
@@ -541,7 +541,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
         content: `Your opponent played **${card}** (cost 0). You may play **Negation** to cancel it.`,
         components: [ctx.getNegationResponseButtons(game.gameId)],
         allowedMentions: { users: [oppId] },
-      }).catch(() => {});
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
     const waitingMsg = await handChannel.send({
       content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
@@ -579,7 +579,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
         );
       }
       const handChannel = await interaction.client.channels.fetch(handChannelId);
-      await handChannel.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(() => {});
+      await handChannel.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } else if (result.applied && result.drewCards?.length) {
       await updateHandVisualMessage(game, meta.playerNum, interaction.client);
       const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
@@ -589,7 +589,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       if (result.refreshDcEmbed) {
         await updateDcActionsMessage(game, msgId, interaction.client);
         for (const mid of result.refreshDcEmbedMsgIds || []) {
-          if (mid !== msgId) await updateDcActionsMessage(game, mid, interaction.client).catch(() => {});
+          if (mid !== msgId) await updateDcActionsMessage(game, mid, interaction.client).catch((err) => { console.error('[discord]', err?.message ?? err); });
         }
       }
     } else if (!result.applied && result.manualMessage) {
@@ -677,24 +677,24 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
 
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.reply({ content: 'Only the owner of this Play Area can use these actions.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner of this Play Area can use these actions.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
   const actionsData = game.dcActionsData?.[msgId];
   const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
   if (actionsRemaining <= 0) {
-    await interaction.reply({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (buttonKey === 'dc_special_') {
@@ -702,13 +702,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const specialIdx = parseInt(parts[0], 10);
     const specialsUsed = actionsData?.specialsUsed ?? [];
     if (specialsUsed.includes(specialIdx)) {
-      await interaction.reply({ content: "That special has already been used this activation (each special once per activation unless a card says otherwise).", ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: "That special has already been used this activation (each special once per activation unless a card says otherwise).", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const specialCosts = getDcStats(meta.dcName).specialCosts || [];
     const actionCost = specialCosts[specialIdx] ?? 1;
     if (actionsRemaining < actionCost) {
-      await interaction.reply({ content: `**${action}** costs both actions — you only have ${actionsRemaining} action(s) remaining this activation.`, ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: `**${action}** costs both actions — you only have ${actionsRemaining} action(s) remaining this activation.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     if (!Array.isArray(actionsData.specialsUsed)) actionsData.specialsUsed = [];
@@ -722,7 +722,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const playerNum = meta.playerNum;
       const pos = game.figurePositions?.[playerNum]?.[figureKey];
       if (!pos) {
-        await interaction.reply({ content: 'This figure has no position yet (deploy first).', ephemeral: true }).catch(() => {});
+        await interaction.reply({ content: 'This figure has no position yet (deploy first).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
       const stats = getDcStats(meta.dcName);
@@ -749,13 +749,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await ensureMovementBankMessage(game, msgId, client);
       const boardState = getBoardStateForMovement(game, figureKey);
       if (!boardState) {
-        await interaction.reply({ content: 'Map spaces data not found for this map. Run: npm run generate-map-spaces', ephemeral: true }).catch(() => {});
+        await interaction.reply({ content: 'Map spaces data not found for this map. Run: npm run generate-map-spaces', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
       const profile = getMovementProfile(meta.dcName, figureKey, game);
       const cache = computeMovementCache(pos, mpRemaining, boardState, profile);
       if (cache.cells.size === 0) {
-        await interaction.reply({ content: 'No valid movement spaces.', ephemeral: true }).catch(() => {});
+        await interaction.reply({ content: 'No valid movement spaces.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         return;
       }
       const actData = game.dcActionsData?.[msgId];
@@ -792,7 +792,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     } catch (err) {
       console.error('Move button error:', err);
       await logGameErrorToBotLogs(interaction.client, interaction.guild, extractGameIdFromInteraction(interaction), err, 'dc_move');
-      await interaction.reply({ content: `Move failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: `Move failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
   }
@@ -803,7 +803,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const playerNum = meta.playerNum;
     const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
     if (!attackerPos) {
-      await interaction.reply({ content: 'This figure has no position yet.', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: 'This figure has no position yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const stats = getDcStats(meta.dcName);
@@ -811,7 +811,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const [minRange, maxRange] = attackInfo.range || [1, 3];
     const ms = getMapSpaces(game.selectedMap?.id);
     if (!ms) {
-      await interaction.reply({ content: 'Map spaces not found.', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: 'Map spaces not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const enemyPlayerNum = playerNum === 1 ? 2 : 1;
@@ -835,7 +835,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       targets.push({ figureKey: k, coord, label, hasLOS: los, dist });
     }
     if (targets.length === 0) {
-      await interaction.reply({ content: 'No valid targets in range.', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: 'No valid targets in range.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const displayName = meta.displayName || meta.dcName;
@@ -863,7 +863,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       content: `**Attack** — Choose target for **${figLabel}**:`,
       components: targetRows.slice(0, 5),
       ephemeral: false,
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
 
@@ -874,12 +874,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const mapId = game.selectedMap?.id;
     const pos = game.figurePositions?.[playerNum]?.[figureKey];
     if (!pos) {
-      await interaction.reply({ content: 'This figure has no position yet (deploy first).', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: 'This figure has no position yet (deploy first).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const options = mapId ? getLegalInteractOptions(game, playerNum, figureKey, mapId) : [];
     if (options.length === 0) {
-      await interaction.reply({ content: 'No valid interact options (must be on or adjacent to a terminal, door, or mission token).', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: 'No valid interact options (must be on or adjacent to a terminal, door, or mission token).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const missionOpts = options.filter((o) => o.missionSpecific);
@@ -913,7 +913,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       content: `**Interact** — Choose action for **${figLabel}**:`,
       components: rows.slice(0, 5),
       ephemeral: false,
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
 
@@ -951,7 +951,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.pendingPounceSpaceChoice[msgId] = { gameId: game.gameId, playerNum: meta.playerNum, figureIndex, msgId, abilityId, validSpaces: resolveResult.validSpaces };
       const payload = { content: `**Pounce** — Pick a space to place your figure:`, components: rows.slice(0, 5), ephemeral: false, fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
-      await interaction.reply(payload).catch(() => {});
+      await interaction.reply(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
       saveGames();
       return;
     }
@@ -967,7 +967,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     content: `**${action}** — ${resolveResult.applied ? 'Resolved.' : manualMsg} Click **Done** when finished.`,
     components: [doneRow],
     ephemeral: false,
-  }).catch(() => {});
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   saveGames();
 }
 
@@ -980,7 +980,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
   // pounce_space_{gameId}_{msgId}_{figureIndex}_{space}
   const match = interaction.customId.match(/^pounce_space_([^_]+)_([^_]+)_(\d+)_(.+)$/);
   if (!match) {
-    await interaction.reply({ content: 'Invalid pounce space choice.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Invalid pounce space choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const [, gameId, msgId, figureIndexStr, space] = match;
@@ -988,22 +988,22 @@ export async function handlePounceSpacePick(interaction, ctx) {
   const { getGame, dcMessageMeta, resolveAbility, logGameAction, updateDcActionsMessage, buildBoardMapPayload, client, saveGames } = ctx;
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const pending = game.pendingPounceSpaceChoice?.[msgId];
   if (!pending || pending.gameId !== gameId) {
-    await interaction.reply({ content: 'No pending pounce space choice.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No pending pounce space choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { playerNum, abilityId, validSpaces } = pending;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the activating player can choose the pounce destination.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the activating player can choose the pounce destination.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const validLower = (validSpaces || []).map((s) => String(s).toLowerCase());
   if (!validLower.includes(chosenSpace)) {
-    await interaction.reply({ content: 'That space is not a valid pounce destination.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'That space is not a valid pounce destination.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -1012,7 +1012,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
   delete game.pendingPounceSpaceChoice[msgId];
   if (result.applied) {
     if (result.logMessage) {
-      await logGameAction(game, client, result.logMessage, { phase: 'ROUND', icon: 'move' }).catch(() => {});
+      await logGameAction(game, client, result.logMessage, { phase: 'ROUND', icon: 'move' }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
     if (result.refreshBoard && game.boardId && game.selectedMap && buildBoardMapPayload) {
       try {
@@ -1023,7 +1023,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
         console.error('Pounce board refresh failed:', err);
       }
     }
-    await updateDcActionsMessage(game, msgId, client).catch(() => {});
+    await updateDcActionsMessage(game, msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     const doneRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`special_done_${gameId}_${msgId}`)
@@ -1033,9 +1033,9 @@ export async function handlePounceSpacePick(interaction, ctx) {
     await interaction.message.edit({
       content: `**Pounce**: placed at **${String(chosenSpace).toUpperCase()}**. Use the **Attack** button for your free pounce attack (no action cost), or press **Done** to skip.`,
       components: [doneRow],
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   } else {
-    await interaction.message.edit({ content: `Pounce failed: ${result.manualMessage}`, components: [] }).catch(() => {});
+    await interaction.message.edit({ content: `Pounce failed: ${result.manualMessage}`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
   saveGames();
 }

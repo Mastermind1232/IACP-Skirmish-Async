@@ -101,8 +101,8 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
       console.error('logGameErrorToBotLogs: no guild (interaction may be in DMs)');
       return;
     }
-    await guild.channels.fetch().catch(() => {});
-    await guild.roles.fetch().catch(() => {});
+    await guild.channels.fetch().catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await guild.roles.fetch().catch((err) => { console.error('[discord]', err?.message ?? err); });
     const ch = guild.channels.cache.find((c) => {
       if (c.type !== ChannelType.GuildText) return false;
       const name = (c.name || '').toLowerCase().trim();

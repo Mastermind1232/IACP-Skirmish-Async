@@ -26,7 +26,7 @@ export async function handleMoveMp(interaction, ctx) {
   } = ctx;
   const m = interaction.customId.match(/^move_mp_(.+)_(\d+)_(\d+)$/);
   if (!m) {
-    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const [, msgId, figureIndexStr, mpStr] = m;
@@ -34,34 +34,34 @@ export async function handleMoveMp(interaction, ctx) {
   const mp = parseInt(mpStr, 10);
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const moveKey = `${msgId}_${figureIndex}`;
   const moveState = game.moveInProgress?.[moveKey];
   if (!moveState) {
-    await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { figureKey, playerNum, mpRemaining, displayName } = moveState;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the owner can move.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner can move.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (mp < 1 || mp > mpRemaining) {
-    await interaction.reply({ content: `Choose 1–${mpRemaining} MP.`, ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: `Choose 1–${mpRemaining} MP.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
   const boardState = moveState.boardState || getBoardStateForMovement(game, figureKey);
   if (!boardState) {
     delete game.moveInProgress[moveKey];
-    await interaction.followUp({ content: 'Map data missing. Movement cancelled.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Map data missing. Movement cancelled.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const profile = moveState.movementProfile || getMovementProfile(meta.dcName, figureKey, game);
@@ -70,13 +70,13 @@ export async function handleMoveMp(interaction, ctx) {
   const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
   if (!startCoord) {
     delete game.moveInProgress[moveKey];
-    await interaction.followUp({ content: 'Figure position missing. Movement cancelled.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Figure position missing. Movement cancelled.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const cache = ensureMovementCache(moveState, startCoord, mpRemaining, boardState, profile);
   const spaces = getSpacesAtCost(cache, mp);
   if (spaces.length === 0) {
-    await interaction.followUp({ content: `No spaces exactly **${mp}** MP away.`, ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: `No spaces exactly **${mp}** MP away.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   moveState.pendingMp = mp;
@@ -87,7 +87,7 @@ export async function handleMoveMp(interaction, ctx) {
     await interaction.message.edit({
       content: `**Move** — Pick a destination (**${mp}** MP) — see map and buttons below.`,
       components: [],
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
   const { rows } = getMoveSpaceGridRows(msgId, figureIndex, spaces, boardState.mapSpaces);
   const gridIds = [];
@@ -133,30 +133,30 @@ export async function handleMoveAdjustMp(interaction, ctx) {
   } = ctx;
   const m = interaction.customId.match(/^move_adjust_mp_(.+)_(\d+)$/);
   if (!m) {
-    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const [, msgId, figureIndexStr] = m;
   const figureIndex = parseInt(figureIndexStr, 10);
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const moveKey = `${msgId}_${figureIndex}`;
   const moveState = game.moveInProgress?.[moveKey];
   if (!moveState) {
-    await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { playerNum, mpRemaining } = moveState;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the owner can adjust.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner can adjust.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -199,30 +199,30 @@ export async function handleMovePick(interaction, ctx) {
   } = ctx;
   const m = interaction.customId.match(/^move_pick_(.+)_(\d+)_(.+)$/);
   if (!m) {
-    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const [, msgId, figureIndexStr, space] = m;
   const figureIndex = parseInt(figureIndexStr, 10);
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const moveKey = `${msgId}_${figureIndex}`;
   const moveState = game.moveInProgress?.[moveKey];
   if (!moveState) {
-    await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { figureKey, playerNum, mpRemaining, displayName } = moveState;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the owner can move.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner can move.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -230,30 +230,30 @@ export async function handleMovePick(interaction, ctx) {
   const boardState = getBoardStateForMovement(game, figureKey);
   if (!boardState) {
     delete game.moveInProgress[moveKey];
-    await interaction.followUp({ content: 'Map data missing. Movement cancelled.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Map data missing. Movement cancelled.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const profile = getMovementProfile(meta.dcName, figureKey, game);
   const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
   if (!startCoord) {
     delete game.moveInProgress[moveKey];
-    await interaction.followUp({ content: 'Figure position missing. Movement cancelled.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Figure position missing. Movement cancelled.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const cache = ensureMovementCache(moveState, startCoord, mpRemaining, boardState, profile);
   const targetLower = normalizeCoord(space);
   const targetInfo = getMovementTarget(cache, targetLower);
   if (!targetInfo) {
-    await interaction.followUp({ content: 'Destination not valid for the selected MP.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Destination not valid for the selected MP.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (moveState.pendingMp && targetInfo.cost !== moveState.pendingMp) {
-    await interaction.followUp({ content: 'Select a destination from the most recent distance choice.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Select a destination from the most recent distance choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const cost = targetInfo.cost;
   if (cost > mpRemaining) {
-    await interaction.followUp({ content: 'Not enough movement points.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Not enough movement points.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   moveState.pendingMp = null;

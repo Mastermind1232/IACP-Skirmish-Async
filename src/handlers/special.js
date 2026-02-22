@@ -8,6 +8,6 @@ export async function handleSpecialDone(interaction) {
     await interaction.message.edit({
       content: (interaction.message.content || '').replace('Click **Done** when finished.', '✓ Resolved.'),
       components: [],
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
 }

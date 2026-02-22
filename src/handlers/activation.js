@@ -24,12 +24,12 @@ export async function handleStatusPhase(interaction, ctx) {
   const gameId = interaction.customId.replace('status_phase_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
-    await interaction.reply({ content: 'Only players in this game can end the activation phase.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only players in this game can end the activation phase.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const r1 = game.p1ActivationsRemaining ?? 0;
@@ -42,7 +42,7 @@ export async function handleStatusPhase(interaction, ctx) {
     await interaction.reply({
       content: `Both players must use all activations and actions first. (${parts.join('; ')})`,
       ephemeral: true,
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const round = game.currentRound || 1;
@@ -64,7 +64,7 @@ export async function handleStatusPhase(interaction, ctx) {
     await interaction.reply({
       content: `${clickerIsP1 ? 'P1' : 'P2'} has ended activation. Waiting for **${waiting}** to click **End R${round} Activation Phase**.`,
       ephemeral: true,
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     const generalChannel = await client.channels.fetch(game.generalId);
     const roundEmbed = new EmbedBuilder()
       .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round} - Activation Phase`)
@@ -79,7 +79,7 @@ export async function handleStatusPhase(interaction, ctx) {
       content: `**Round ${round}** — ${game.p1ActivationPhaseEnded ? '✓ P1' : 'P1'} ended activation. ${game.p2ActivationPhaseEnded ? '✓ P2' : 'P2'} ended activation. Both players must click the button when done with activations and any end-of-activation effects.`,
       embeds: [roundEmbed],
       components: [endBtn],
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
     return;
   }
@@ -101,7 +101,7 @@ export async function handleStatusPhase(interaction, ctx) {
     embeds: [roundEmbed],
     allowedMentions: { users: [game.initiativePlayerId] },
   });
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   await updateHandChannelMessages(game, client);
   saveGames();
 }
@@ -115,20 +115,20 @@ export async function handlePassActivationTurn(interaction, ctx) {
   const gameId = interaction.customId.replace('pass_activation_turn_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const turnPlayerNum = turnPlayerId === game.player1Id ? 1 : 2;
   if (!canActAsPlayer(game, interaction.user.id, turnPlayerNum)) {
-    await interaction.reply({ content: "It's not your turn to pass.", ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: "It's not your turn to pass.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const myRem = turnPlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
   const otherRem = turnPlayerId === game.player1Id ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
   if (otherRem <= myRem) {
-    await interaction.reply({ content: 'The other player does not have more activations than you.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'The other player does not have more activations than you.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const otherPlayerId = turnPlayerId === game.player1Id ? game.player2Id : game.player1Id;
@@ -169,7 +169,7 @@ export async function handlePassActivationTurn(interaction, ctx) {
         content: `<@${otherPlayerId}> (${otherZone}**Player ${initNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back if the other player has more activations.' : ''}`,
         components: passRows,
         allowedMentions: { users: [otherPlayerId] },
-      }).catch(() => {});
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch (err) {
       console.error('Failed to update round message for pass:', err);
     }
@@ -201,22 +201,22 @@ export async function handleEndTurn(interaction, ctx) {
   const dcMsgId = match[2];
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const meta = dcMessageMeta.get(dcMsgId);
   if (!meta || meta.gameId !== gameId) {
-    await interaction.reply({ content: 'Invalid End Turn.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Invalid End Turn.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
   if (interaction.user.id !== ownerId) {
-    await interaction.reply({ content: 'Only the player who finished that activation can end the turn.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the player who finished that activation can end the turn.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const pending = game.pendingEndTurn?.[dcMsgId];
   if (!pending) {
-    await interaction.reply({ content: 'This turn was already ended.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This turn was already ended.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -231,7 +231,7 @@ export async function handleEndTurn(interaction, ctx) {
     try {
       const ch = await client.channels.fetch(game.generalId);
       const endTurnMsg = await ch.messages.fetch(pending.messageId);
-      await endTurnMsg.edit({ components: [] }).catch(() => {});
+      await endTurnMsg.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch {}
   }
   const actionsData = game.dcActionsData?.[dcMsgId];
@@ -260,7 +260,7 @@ export async function handleEndTurn(interaction, ctx) {
       embeds: [embed],
       files,
       components,
-    }).catch(() => {});
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   } catch (err) {
     console.error('Failed to update DC card after End Turn:', err);
   }
@@ -290,7 +290,7 @@ export async function handleEndTurn(interaction, ctx) {
         content: `<@${otherPlayerId}> (**Player ${otherPlayerNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back (opponent has more activations).' : ''}`,
         components: passRows,
         allowedMentions: { users: [otherPlayerId] },
-      }).catch(() => {});
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch (err) {
       console.error('Failed to update round message after end turn:', err);
     }
@@ -335,11 +335,11 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (interaction.user.id !== ownerId) return;
   const remaining = meta.playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
   if (remaining <= 0) {
-    await interaction.reply({ content: 'No activations remaining.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No activations remaining.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   dcExhaustedState.set(msgId, true);
   if (meta.playerNum === 1) {
     game.p1ActivationsRemaining--;
@@ -386,7 +386,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     try {
       const activateCardMsg = await logCh.messages.fetch(activateCardMsgId);
       const activateRows = getActivateDcButtons(game, meta.playerNum);
-      await activateCardMsg.edit({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch(() => {});
+      await activateCardMsg.edit({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch {}
   }
   saveGames();
@@ -402,5 +402,5 @@ export async function handleCancelActivate(interaction, _ctx) {
   const [, gameId, ownerId] = match;
   if (interaction.user.id !== ownerId) return;
   await interaction.deferUpdate();
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }

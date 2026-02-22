@@ -37,7 +37,7 @@ export async function handleAttackTarget(interaction, ctx) {
   } = ctx;
   const m = interaction.customId.match(/^attack_target_(.+)_(\d+)_(\d+)$/);
   if (!m) {
-    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const [, msgId, figureIndexStr, targetIndexStr] = m;
@@ -45,28 +45,28 @@ export async function handleAttackTarget(interaction, ctx) {
   const targetIndex = parseInt(targetIndexStr, 10);
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const targets = game.attackTargets?.[`${msgId}_${figureIndex}`];
   const target = targets?.[targetIndex];
   if (!target) {
-    await interaction.reply({ content: 'Target no longer valid.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Target no longer valid.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const attackerPlayerNum = meta.playerNum;
   if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-    await interaction.reply({ content: 'Only the owner can attack.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the owner can attack.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (target.hasLOS === false) {
-    await interaction.reply({ content: '🚫 No line of sight to that target. You cannot attack through blocking terrain or solid walls.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: '🚫 No line of sight to that target. You cannot attack through blocking terrain or solid walls.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferUpdate();
@@ -147,7 +147,7 @@ export async function handleAttackTarget(interaction, ctx) {
   await interaction.message.edit({
     content: `**Combat declared** — See thread in Game Log.`,
     components: [],
-  }).catch(() => {});
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   saveGames();
 }
 
@@ -160,19 +160,19 @@ export async function handleCombatReady(interaction, ctx) {
   const gameId = interaction.customId.replace('combat_ready_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) {
-    await interaction.reply({ content: 'No pending combat.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No pending combat.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const clickerIsP1 = interaction.user.id === game.player1Id;
   const clickerIsP2 = interaction.user.id === game.player2Id;
   if (!clickerIsP1 && !clickerIsP2) {
-    await interaction.reply({ content: 'Only players in this game can indicate ready.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only players in this game can indicate ready.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   // In test games, human (P1) can click for both sides; first click = P1, second = P2
@@ -207,7 +207,7 @@ export async function handleCombatReady(interaction, ctx) {
   combat.rollMessageId = rollMsgSent.id;
   try {
     const preMsg = await thread.messages.fetch(combat.combatPreMsgId);
-    await preMsg.edit({ components: [] }).catch(() => {});
+    await preMsg.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   } catch {}
   saveGames();
 }
@@ -231,17 +231,17 @@ export async function handleCombatRoll(interaction, ctx) {
   const gameId = interaction.customId.replace('combat_roll_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) {
-    await interaction.reply({ content: 'No pending combat.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No pending combat.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
-    await interaction.reply({ content: 'Only players in this game can roll.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only players in this game can roll.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
@@ -250,7 +250,7 @@ export async function handleCombatRoll(interaction, ctx) {
 
   if (!combat.attackRoll) {
     if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-      await interaction.reply({ content: `Only the attacker (P${attackerPlayerNum}) may roll attack dice.`, ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: `Only the attacker (P${attackerPlayerNum}) may roll attack dice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const baseDice = combat.attackInfo?.dice || [];
@@ -281,7 +281,7 @@ export async function handleCombatRoll(interaction, ctx) {
 
   if (!combat.defenseRoll) {
     if (!canActAsPlayer(game, interaction.user.id, defenderPlayerNum)) {
-      await interaction.reply({ content: `Only the defender (P${defenderPlayerNum}) may roll defense dice.`, ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: `Only the defender (P${defenderPlayerNum}) may roll defense dice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const baseColor = combat.targetStats.defense || 'white';
@@ -420,27 +420,27 @@ export async function handleCombatReroll(interaction, ctx) {
   if (!match) return;
   const [, gameId, side, choice] = match;
   const game = getGame(gameId);
-  if (!game) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  if (!game) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId || !combat.rerollPhase) {
-    await interaction.reply({ content: 'No reroll phase active.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No reroll phase active.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const expectedPhase = side === 'atk' ? 'attacker' : 'defender';
   if (combat.rerollPhase !== expectedPhase) {
-    await interaction.reply({ content: `It's the ${combat.rerollPhase}'s turn to reroll.`, ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: `It's the ${combat.rerollPhase}'s turn to reroll.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
   const expectedPlayer = side === 'atk' ? attackerPlayerNum : defenderPlayerNum;
   if (!canActAsPlayer(game, interaction.user.id, expectedPlayer)) {
-    await interaction.reply({ content: `Only P${expectedPlayer} can reroll ${side === 'atk' ? 'attack' : 'defense'} dice.`, ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: `Only P${expectedPlayer} can reroll ${side === 'atk' ? 'attack' : 'defense'} dice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
 
   if (choice !== 'done') {
     const idx = parseInt(choice, 10);
@@ -586,20 +586,20 @@ export async function handleCombatResolveReady(interaction, ctx) {
   const gameId = interaction.customId.replace('combat_resolve_ready_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) {
-    await interaction.reply({ content: 'No pending combat to resolve.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No pending combat to resolve.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
-    await interaction.reply({ content: 'Only players in this game can confirm.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only players in this game can confirm.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   await resolveCombatAfterRolls(game, combat, client);
   saveGames();
 }
@@ -628,18 +628,18 @@ export async function handleCombatSurge(interaction, ctx) {
   const [, gameId, choice] = match;
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId || !combat.surgeRemaining) {
-    await interaction.reply({ content: 'No surge step or already resolved.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No surge step or already resolved.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
   if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-    await interaction.reply({ content: 'Only the attacker may spend surge.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the attacker may spend surge.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
@@ -659,15 +659,15 @@ export async function handleCombatSurge(interaction, ctx) {
       combat.surgeCleave = (combat.surgeCleave || 0) + (mod.cleave ?? 0);
       combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - cost);
       const label = getSurgeLabel(key);
-      await thread.send(`**Surge spent (${cost}):** ${label}`).catch(() => {});
+      await thread.send(`**Surge spent (${cost}):** ${label}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
   }
   if (combat.surgeRemaining <= 0 || choice === 'done') {
     combat.surgeRemaining = 0;
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
     await sendReadyToResolveRolls(thread, gameId);
   } else {
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const remaining = combat.surgeRemaining || 0;
     const surgeRows = [];
@@ -726,26 +726,26 @@ export async function handleCleaveTarget(interaction, ctx) {
   const [, gameId, indexStr] = match;
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const pending = game.pendingCleave;
   if (!pending || pending.gameId !== gameId) {
-    await interaction.reply({ content: 'No cleave target selection in progress.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'No cleave target selection in progress.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (interaction.user.id !== pending.ownerId) {
-    await interaction.reply({ content: 'Only the attacker may choose the cleave target.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Only the attacker may choose the cleave target.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const targetIndex = parseInt(indexStr, 10);
   const target = pending.targets[targetIndex];
   if (!target) {
-    await interaction.reply({ content: 'Invalid target.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Invalid target.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   const { figureKey: cleaveFigureKey, playerNum: cleavePlayerNum } = target;
   const attackerPlayerNum = pending.attackerPlayerNum;
   const ownerId = pending.ownerId;
@@ -797,7 +797,7 @@ export async function handleCleaveTarget(interaction, ctx) {
     }
   }
   try {
-    await interaction.message.edit({ components: [] }).catch(() => {});
+    await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   } catch {}
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   if (cleaveMsgId) embedRefreshMsgIds.add(cleaveMsgId);
