@@ -268,11 +268,18 @@ function getNeighborStates(state, board, profile) {
       { dx: -1, dy: -1 }
     );
   }
+  // When adjacency data is present for this cell, use it to restrict moves to genuinely
+  // connected cells. This handles maps where walls are encoded as adjacency restrictions
+  // rather than (or in addition to) movementBlockingEdges.
+  const adjForCell = board.adjacency?.[state.topLeft];
+  const adjSet = adjForCell ? new Set(adjForCell) : null;
+
   for (const vec of moveVectors) {
     if ((vec.dx && vec.dy) && profile.isLarge) continue;
     if ((vec.dx && vec.dy) && !canMoveDiagonally(state.topLeft, vec.dx, vec.dy, board)) continue;
     const nextTopLeft = shiftCoord(state.topLeft, vec.dx, vec.dy);
     if (!nextTopLeft || !board.spacesSet.has(nextTopLeft)) continue;
+    if (adjSet && !adjSet.has(nextTopLeft)) continue;
     neighbors.push({ type: 'move', topLeft: nextTopLeft, size: state.size, dx: vec.dx, dy: vec.dy });
   }
   if (profile.canRotate) {
