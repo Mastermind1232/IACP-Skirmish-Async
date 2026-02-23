@@ -508,14 +508,70 @@ export async function handleCombatReroll(interaction, ctx) {
   saveGames();
 }
 
+// --- Power token helpers ---
+
+/** Returns [{type, index}] of tokens the role is allowed to spend */
+function getEligibleTokens(game, figureKey, role) {
+  const allowed = role === 'attacker' ? ['Hit', 'Surge'] : ['Block', 'Evade'];
+  return (game.figurePowerTokens?.[figureKey] || [])
+    .map((type, index) => ({ type, index }))
+    .filter(t => allowed.includes(t.type));
+}
+
+/** Sends the spending window with up to 4 token buttons + Skip */
+async function sendTokenWindow(thread, gameId, role, tokens, displayName) {
+  const prefix = role === 'attacker' ? 'att' : 'def';
+  const btns = tokens.slice(0, 4).map(({ type, index }) =>
+    new ButtonBuilder()
+      .setCustomId(`combat_token_${gameId}_${prefix}_${index}`)
+      .setLabel(`Spend ${type} (+1 ${type})`)
+      .setStyle(ButtonStyle.Secondary)
+  );
+  btns.push(
+    new ButtonBuilder()
+      .setCustomId(`combat_token_${gameId}_${prefix}_skip`)
+      .setLabel('Skip (no token)')
+      .setStyle(ButtonStyle.Primary)
+  );
+  await thread.send({
+    content: `**Power Token — ${role === 'attacker' ? 'Attacker' : 'Defender'}** (${displayName}): spend a token or skip.`,
+    components: [new ActionRowBuilder().addComponents(btns)],
+  });
+}
+
+/** Apply token bonus to combat state */
+function applyTokenBonus(combat, type) {
+  if (type === 'Hit')   combat.bonusHits  = (combat.bonusHits  || 0) + 1;
+  if (type === 'Surge') combat.tokenSurgeBonus = (combat.tokenSurgeBonus || 0) + 1;
+  if (type === 'Block') combat.bonusBlock = (combat.bonusBlock || 0) + 1;
+  if (type === 'Evade') combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+}
+
+/** Remove token from game.figurePowerTokens by index */
+function removeSpentToken(game, figureKey, index) {
+  if (!game.figurePowerTokens?.[figureKey]) return;
+  game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey].filter((_, i) => i !== index);
+  if (game.figurePowerTokens[figureKey].length === 0) delete game.figurePowerTokens[figureKey];
+}
+
+/** Advance to next phase: attacker done → check defender; defender done → proceedAfterTokens */
+async function advanceTokenPhase(thread, game, combat, completedRole, ctx) {
+  combat.tokenPhase = null;
+  if (completedRole === 'attacker') {
+    const defTokens = getEligibleTokens(game, combat.target.figureKey, 'defender');
+    if (defTokens.length > 0) {
+      combat.tokenPhase = 'defender';
+      await sendTokenWindow(thread, game.gameId, 'defender', defTokens, combat.target.label);
+      return;
+    }
+  }
+  await proceedAfterTokens(thread, game, combat, ctx);
+}
+
 /**
- * After rerolls are complete: check dodge, evade cancellation, surge spending, or ready-to-resolve.
- * This is the continuation of the defense roll path.
+ * After rerolls are complete: check dodge, then gate through token windows if eligible tokens exist.
  */
 async function proceedAfterRerolls(thread, game, combat, ctx) {
-  const { getAttackerSurgeAbilities, SURGE_LABELS, saveGames } = ctx;
-  const getAbility = ctx.getAbility || (() => null);
-  const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (SURGE_LABELS && SURGE_LABELS[id]) || id);
   const defRoll = combat.defenseRoll;
 
   // Dodge check (now AFTER rerolls, so rerolls can potentially remove dodge)
@@ -524,6 +580,30 @@ async function proceedAfterRerolls(thread, game, combat, ctx) {
     await sendReadyToResolveRolls(thread, game.gameId);
     return;
   }
+
+  const attackerTokens = getEligibleTokens(game, combat.attackerFigureKey, 'attacker');
+  const defenderTokens = getEligibleTokens(game, combat.target.figureKey, 'defender');
+  if (attackerTokens.length > 0) {
+    combat.tokenPhase = 'attacker';
+    await sendTokenWindow(thread, game.gameId, 'attacker', attackerTokens, combat.attackerDisplayName);
+    return;
+  }
+  if (defenderTokens.length > 0) {
+    combat.tokenPhase = 'defender';
+    await sendTokenWindow(thread, game.gameId, 'defender', defenderTokens, combat.target.label);
+    return;
+  }
+  await proceedAfterTokens(thread, game, combat, ctx);
+}
+
+/**
+ * After token windows are resolved: evade cancellation, surge spending, or ready-to-resolve.
+ */
+async function proceedAfterTokens(thread, game, combat, ctx) {
+  const { getAttackerSurgeAbilities, SURGE_LABELS } = ctx;
+  const getAbility = ctx.getAbility || (() => null);
+  const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (SURGE_LABELS && SURGE_LABELS[id]) || id);
+  const defRoll = combat.defenseRoll;
 
   // Evade cancels surge
   const roll = combat.attackRoll;
@@ -534,7 +614,7 @@ async function proceedAfterRerolls(thread, game, combat, ctx) {
   // Hidden on attacker: +1 surge
   const hiddenSurgeBonus = combat.attackerConds?.includes('Hide') ? 1 : 0;
   const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0) + perDefDieSurge + hiddenSurgeBonus;
-  const rawSurge = roll.surge + surgeBonus;
+  const rawSurge = roll.surge + surgeBonus + (combat.tokenSurgeBonus || 0);
   const roundEvade = game.roundDefenseBonusEvade?.[defPlayerNum] || 0;
   const totalEvade = defRoll.evade + (combat.bonusEvade || 0) + roundEvade;
   const evadeCancelled = Math.min(rawSurge, totalEvade);
@@ -709,6 +789,56 @@ export async function handleCombatSurge(interaction, ctx) {
       components: [surgeRow],
     });
   }
+  saveGames();
+}
+
+/**
+ * Handle power token spending buttons (combat_token_).
+ * Custom ID patterns:
+ *   combat_token_{gameId}_att_{n|skip}  — attacker spends token index n, or skips
+ *   combat_token_{gameId}_def_{n|skip}  — defender spends token index n, or skips
+ */
+export async function handleCombatToken(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const m = interaction.customId.match(/^combat_token_([^_]+)_(att|def)_(.+)$/);
+  if (!m) return;
+  const [, gameId, role, choice] = m;
+  const game = getGame(gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) return;
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+
+  const isAttacker = role === 'att';
+  const expectedPhase = isAttacker ? 'attacker' : 'defender';
+  if (combat.tokenPhase !== expectedPhase) return;
+  const playerNum = isAttacker ? combat.attackerPlayerNum : (combat.attackerPlayerNum === 1 ? 2 : 1);
+  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the correct player may spend their token.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+
+  // Skip
+  if (choice === 'skip') {
+    await thread.send(`**Power Token — ${isAttacker ? 'Attacker' : 'Defender'}:** No token spent.`);
+    await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);
+    saveGames();
+    return;
+  }
+
+  // Spend token
+  const tokenIndex = parseInt(choice, 10);
+  const figureKey = isAttacker ? combat.attackerFigureKey : combat.target.figureKey;
+  const tokens = game.figurePowerTokens?.[figureKey] || [];
+  const tokenType = tokens[tokenIndex];
+  if (!tokenType) return;
+
+  applyTokenBonus(combat, tokenType);
+  removeSpentToken(game, figureKey, tokenIndex);
+  await thread.send(`**Power Token spent:** +1 ${tokenType}`);
+  await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);
   saveGames();
 }
 

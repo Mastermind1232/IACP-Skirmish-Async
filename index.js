@@ -99,6 +99,7 @@ import {
   handleCombatRoll,
   handleCombatSurge,
   handleCombatReroll,
+  handleCombatToken,
   handleStatusPhase,
   handlePassActivationTurn,
   handleEndTurn,
@@ -5110,7 +5111,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_') {
+  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_') {
     const combatContext = {
       getGame,
       replyIfGameEnded,
@@ -5152,6 +5153,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'combat_roll_') await handleCombatRoll(interaction, combatContext);
     else if (buttonKey === 'combat_surge_') await handleCombatSurge(interaction, combatContext);
     else if (buttonKey === 'combat_reroll_') await handleCombatReroll(interaction, combatContext);
+    else if (buttonKey === 'combat_token_') await handleCombatToken(interaction, combatContext);
     return;
   }
 
