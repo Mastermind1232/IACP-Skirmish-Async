@@ -90,6 +90,8 @@ import {
   handleMoveMp,
   handleMoveAdjustMp,
   handleMovePick,
+  handleMoveLetter,
+  handleMoveLetterBack,
   handleAttackTarget,
   handleCleaveTarget,
   handleCombatReady,
@@ -228,6 +230,7 @@ import {
   getDcPlayAreaComponents as getDcPlayAreaComponentsFromDiscord,
   getMoveMpButtonRows,
   getMoveSpaceGridRows,
+  buildLetterRows,
   getSpaceChoiceRows,
   getDeployFigureLabelsFromDiscord,
   getDeployButtonRowsFromDiscord,
@@ -4999,7 +5002,7 @@ client.on('interactionCreate', async (interaction) => {
       getBoardStateForMovement,
       getMovementProfile,
       computeMovementCache,
-      getMoveSpaceGridRows,
+      buildLetterRows,
       getMovementMinimapAttachment,
       clearMoveGridMessages,
       getLegalInteractOptions,
@@ -5051,6 +5054,27 @@ client.on('interactionCreate', async (interaction) => {
     await handleMoveAdjustMp(interaction, moveAdjustContext);
     return;
   }
+  if (buttonKey === 'move_letter_') {
+    const moveLetterContext = {
+      getGame,
+      dcMessageMeta,
+      clearMoveGridMessages,
+      getMoveSpaceGridRows,
+      buildLetterRows,
+    };
+    await handleMoveLetter(interaction, moveLetterContext);
+    return;
+  }
+  if (buttonKey === 'move_back_letters_') {
+    const moveBackLettersContext = {
+      getGame,
+      dcMessageMeta,
+      clearMoveGridMessages,
+      buildLetterRows,
+    };
+    await handleMoveLetterBack(interaction, moveBackLettersContext);
+    return;
+  }
   if (buttonKey === 'move_pick_') {
     const movePickContext = {
       getGame,
@@ -5070,7 +5094,7 @@ client.on('interactionCreate', async (interaction) => {
       pushUndo,
       logGameAction,
       countTerminalsControlledByPlayer,
-      getMoveSpaceGridRows,
+      buildLetterRows,
       getMovementMinimapAttachment,
       buildBoardMapPayload,
       updateDcActionsMessage,

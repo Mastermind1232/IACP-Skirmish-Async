@@ -25,6 +25,8 @@ const BUTTON_PREFIXES = [
   'special_done_',
   'move_mp_',
   'move_adjust_mp_',
+  'move_back_letters_',
+  'move_letter_',
   'move_pick_',
   'attack_target_',
   'cleave_target_',

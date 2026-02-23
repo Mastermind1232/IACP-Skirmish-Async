@@ -672,7 +672,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     getBoardStateForMovement,
     getMovementProfile,
     computeMovementCache,
-    getMoveSpaceGridRows,
+    buildLetterRows,
     getMovementMinimapAttachment,
     clearMoveGridMessages,
     getLegalInteractOptions,
@@ -836,36 +836,27 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       };
       game.moveGridMessageIds = game.moveGridMessageIds || {};
       const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
-      const { rows } = getMoveSpaceGridRows(msgId, figureIndex, buttonSpaces, boardState.mapSpaces, profile.size);
       const minimapCells = isMultiTile
         ? buttonSpaces.map((tl) => bottomLeftCoord(tl, profile.size))
         : allCacheCells;
       const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, minimapCells);
-      const gridIds = [];
+      const letterRows = buildLetterRows(buttonSpaces, msgId, figureIndex);
       const manualPickRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
           .setLabel('🗺️ Pick Path Manually')
           .setStyle(ButtonStyle.Secondary)
       );
-      const firstRows = [...rows.slice(0, 4), manualPickRow];
+      const firstRows = [...letterRows.slice(0, 4), manualPickRow];
       const firstPayload = {
-        content: `**Move** — Pick destination (**${mpRemaining}** MP remaining):${multiTileNote}`,
+        content: `**Move** — Pick a column (**${mpRemaining}** MP remaining):${multiTileNote}`,
         components: firstRows,
         ephemeral: false,
         fetchReply: true,
       };
       if (moveMinimap) firstPayload.files = [moveMinimap];
       const gridMsg = await interaction.reply(firstPayload).catch(() => null);
-      if (gridMsg?.id) gridIds.push(gridMsg.id);
-      for (let i = 4; i < rows.length; i += 5) {
-        const more = rows.slice(i, i + 5);
-        if (more.length > 0) {
-          const follow = await interaction.channel.send({ content: null, components: more }).catch(() => null);
-          if (follow?.id) gridIds.push(follow.id);
-        }
-      }
-      game.moveGridMessageIds[moveKey] = gridIds;
+      game.moveGridMessageIds[moveKey] = gridMsg?.id ? [gridMsg.id] : [];
       return;
     } catch (err) {
       console.error('Move button error:', err);

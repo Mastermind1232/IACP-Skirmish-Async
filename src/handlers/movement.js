@@ -200,6 +200,158 @@ export async function handleMoveAdjustMp(interaction, ctx) {
 }
 
 /**
+ * Handles move_letter_ buttons: player picks a column letter, shows cells in that column.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - getGame, dcMessageMeta, clearMoveGridMessages, getMoveSpaceGridRows, buildLetterRows
+ */
+export async function handleMoveLetter(interaction, ctx) {
+  const m = interaction.customId.match(/^move_letter_(.+)_(\d+)_([a-z]+)$/);
+  if (!m) {
+    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const [, msgId, figureIndexStr, letter] = m;
+  const figureIndex = parseInt(figureIndexStr, 10);
+  const { getGame, dcMessageMeta, clearMoveGridMessages, getMoveSpaceGridRows, buildLetterRows } = ctx;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const game = getGame(meta.gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const moveKey = `${msgId}_${figureIndex}`;
+  const moveState = game.moveInProgress?.[moveKey];
+  if (!moveState) {
+    await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  if (!canActAsPlayer(game, interaction.user.id, moveState.playerNum)) {
+    await interaction.reply({ content: 'Only the owner can move.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const { movementCache: cache, movementProfile: profile, boardState } = moveState;
+  if (!cache) {
+    await interaction.reply({ content: 'Move cache expired.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  // Remove the current message from gridIds so clearMoveGridMessages won't delete it
+  const currentMsgId = interaction.message.id;
+  game.moveGridMessageIds = game.moveGridMessageIds || {};
+  game.moveGridMessageIds[moveKey] = (game.moveGridMessageIds[moveKey] || []).filter((id) => id !== currentMsgId);
+  await interaction.deferUpdate();
+  await clearMoveGridMessages(game, moveKey, interaction.channel);
+  game.moveGridMessageIds[moveKey] = [];
+  // Filter button spaces to the selected column letter
+  const allCells = [...cache.cells.keys()];
+  const isMultiTile = profile.size && profile.size !== '1x1';
+  const allButtonSpaces = isMultiTile
+    ? allCells.filter((cell) => { const info = cache.cells.get(cell); return info && info.topLeft === cell; })
+    : allCells;
+  const letterCells = allButtonSpaces.filter((c) => (c.match(/^([a-z]+)/)?.[1] ?? c[0]) === letter);
+  const { rows: cellRows } = getMoveSpaceGridRows(msgId, figureIndex, letterCells, boardState.mapSpaces, profile.size);
+  const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
+  const actionRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`move_back_letters_${msgId}_${figureIndex}`)
+      .setLabel('⬅️ Choose Column')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
+      .setLabel('🗺️ Pick Path Manually')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  const firstRows = [...cellRows.slice(0, 4), actionRow];
+  try {
+    await interaction.message.edit({
+      content: `**Move** — Column **${letter.toUpperCase()}** (${letterCells.length} space${letterCells.length !== 1 ? 's' : ''}):${multiTileNote}`,
+      components: firstRows,
+    });
+  } catch { /* ignore */ }
+  // Send overflow messages if the column has more than 20 cells
+  const newGridIds = [];
+  for (let i = 4; i < cellRows.length; i += 5) {
+    const more = cellRows.slice(i, i + 5);
+    if (more.length > 0) {
+      const follow = await interaction.channel.send({ content: null, components: more }).catch(() => null);
+      if (follow?.id) newGridIds.push(follow.id);
+    }
+  }
+  game.moveGridMessageIds[moveKey] = newGridIds;
+}
+
+/**
+ * Handles move_back_letters_ buttons: returns to the column letter picker.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - getGame, dcMessageMeta, clearMoveGridMessages, buildLetterRows
+ */
+export async function handleMoveLetterBack(interaction, ctx) {
+  const m = interaction.customId.match(/^move_back_letters_(.+)_(\d+)$/);
+  if (!m) {
+    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const [, msgId, figureIndexStr] = m;
+  const figureIndex = parseInt(figureIndexStr, 10);
+  const { getGame, dcMessageMeta, clearMoveGridMessages, buildLetterRows } = ctx;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.reply({ content: 'DC no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const game = getGame(meta.gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const moveKey = `${msgId}_${figureIndex}`;
+  const moveState = game.moveInProgress?.[moveKey];
+  if (!moveState) {
+    await interaction.reply({ content: 'Move session expired.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  if (!canActAsPlayer(game, interaction.user.id, moveState.playerNum)) {
+    await interaction.reply({ content: 'Only the owner can move.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const { movementCache: cache, movementProfile: profile, mpRemaining } = moveState;
+  if (!cache) {
+    await interaction.reply({ content: 'Move cache expired.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  // Remove the current message from gridIds so clearMoveGridMessages won't delete it
+  const currentMsgId = interaction.message.id;
+  game.moveGridMessageIds = game.moveGridMessageIds || {};
+  game.moveGridMessageIds[moveKey] = (game.moveGridMessageIds[moveKey] || []).filter((id) => id !== currentMsgId);
+  await interaction.deferUpdate();
+  await clearMoveGridMessages(game, moveKey, interaction.channel);
+  game.moveGridMessageIds[moveKey] = [];
+  // Rebuild the letter grid from the current cache
+  const allCells = [...cache.cells.keys()];
+  const isMultiTile = profile.size && profile.size !== '1x1';
+  const allButtonSpaces = isMultiTile
+    ? allCells.filter((cell) => { const info = cache.cells.get(cell); return info && info.topLeft === cell; })
+    : allCells;
+  const letterRows = buildLetterRows(allButtonSpaces, msgId, figureIndex);
+  const manualPickRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
+      .setLabel('🗺️ Pick Path Manually')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  const firstRows = [...letterRows.slice(0, 4), manualPickRow];
+  try {
+    await interaction.message.edit({
+      content: `**Move** — Pick a column (**${mpRemaining}** MP remaining):`,
+      components: firstRows,
+    });
+  } catch { /* ignore */ }
+}
+
+/**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, dcMessageMeta, clearMoveGridMessages, getBoardStateForMovement, getMovementProfile, ensureMovementCache, computeMovementCache, normalizeCoord, getMovementTarget, getFigureSize, getNormalizedFootprint, resolveMassivePush, updateMovementBankMessage, getMovementPath, pushUndo, logGameAction, countTerminalsControlledByPlayer, editDistanceMessage, getMoveMpButtonRows, buildBoardMapPayload, updateDcActionsMessage, saveGames, client
  */
@@ -222,7 +374,7 @@ export async function handleMovePick(interaction, ctx) {
     pushUndo,
     logGameAction,
     countTerminalsControlledByPlayer,
-    getMoveSpaceGridRows,
+    buildLetterRows,
     getMovementMinimapAttachment,
     buildBoardMapPayload,
     saveGames,
@@ -367,7 +519,7 @@ export async function handleMovePick(interaction, ctx) {
         } catch { /* already gone */ }
         moveState.distanceMessageId = null;
       }
-      // Show all reachable cells from new position with remaining MP
+      // Show two-tier column picker for new position with remaining MP
       const allNewCells = [...nextCache.cells.keys()];
       const newIsMultiTile = nextProfile.size && nextProfile.size !== '1x1';
       const newButtonSpaces = newIsMultiTile
@@ -377,36 +529,27 @@ export async function handleMovePick(interaction, ctx) {
           })
         : allNewCells;
       const newMultiTileNote = newIsMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
-      const { rows: newRows } = getMoveSpaceGridRows(msgId, figureIndex, newButtonSpaces, nextBoard.mapSpaces, nextProfile.size);
       const newMinimapCells = newIsMultiTile
         ? newButtonSpaces.map((tl) => bottomLeftCoord(tl, nextProfile.size))
         : allNewCells;
       const newMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, newMinimapCells);
-      const newGridIds = [];
+      const newLetterRows = buildLetterRows(newButtonSpaces, msgId, figureIndex);
       const newManualPickRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
           .setLabel('🗺️ Pick Path Manually')
           .setStyle(ButtonStyle.Secondary)
       );
-      const newFirstRows = [...newRows.slice(0, 4), newManualPickRow];
+      const newFirstRows = [...newLetterRows.slice(0, 4), newManualPickRow];
       const newFirstPayload = {
-        content: `**Move** — Pick destination (**${newMp}** MP remaining):${newMultiTileNote}`,
+        content: `**Move** — Pick a column (**${newMp}** MP remaining):${newMultiTileNote}`,
         components: newFirstRows,
         fetchReply: true,
       };
       if (newMinimap) newFirstPayload.files = [newMinimap];
       const newGridMsg = await interaction.followUp(newFirstPayload).catch(() => null);
-      if (newGridMsg?.id) newGridIds.push(newGridMsg.id);
-      for (let i = 4; i < newRows.length; i += 5) {
-        const more = newRows.slice(i, i + 5);
-        if (more.length > 0) {
-          const follow = await interaction.channel.send({ content: null, components: more }).catch(() => null);
-          if (follow?.id) newGridIds.push(follow.id);
-        }
-      }
       game.moveGridMessageIds = game.moveGridMessageIds || {};
-      game.moveGridMessageIds[moveKey] = newGridIds;
+      game.moveGridMessageIds[moveKey] = newGridMsg?.id ? [newGridMsg.id] : [];
     } else {
       game.moveGridMessageIds = game.moveGridMessageIds || {};
       game.moveGridMessageIds[moveKey] = [];

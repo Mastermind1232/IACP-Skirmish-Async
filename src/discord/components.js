@@ -508,6 +508,27 @@ export function getMoveMpButtonRows(msgId, figureIndex, mpRemaining) {
   return rows;
 }
 
+/** Action rows for two-tier movement column picker: move_letter_${msgId}_${figureIndex}_${letter}. */
+export function buildLetterRows(cells, msgId, figureIndex) {
+  const counts = {};
+  for (const c of cells) {
+    const letter = c.match(/^([a-z]+)/)?.[1] ?? c[0];
+    counts[letter] = (counts[letter] || 0) + 1;
+  }
+  const letters = Object.keys(counts).sort();
+  const btns = letters.map((letter) =>
+    new ButtonBuilder()
+      .setCustomId(`move_letter_${msgId}_${figureIndex}_${letter}`)
+      .setLabel(`${letter.toUpperCase()} (${counts[letter]})`)
+      .setStyle(ButtonStyle.Primary)
+  );
+  const rows = [];
+  for (let i = 0; i < btns.length; i += 5) {
+    rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+  }
+  return rows;
+}
+
 /** Action rows for movement space selection: move_pick_${msgId}_${figureIndex}_${space}. */
 export function getMoveSpaceGridRows(msgId, figureIndex, validSpaces, mapSpaces, size = '1x1') {
   // Build a labelMap so buttons show bottom-left corner of each placement instead of top-left.
