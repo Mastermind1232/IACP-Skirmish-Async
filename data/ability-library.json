@@ -1238,12 +1238,10 @@
     },
     "Burst Fire": {
       "type": "ccEffect",
-      "label": "Perform attack +1 Hit (stun adjacent if damage manual)",
-      "nextAttacksBonusHits": {
-        "count": 1,
-        "bonus": 1
-      },
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Special Action: attack; if target suffers damage, adjacent figures become Stunned",
+      "logMessage": "**Burst Fire** — Perform an attack as a Special Action. If the target suffers 1 or more Damage, each figure (friendly and hostile) adjacent to the target’s space becomes Stunned. Perform the attack using the Attack button, then manually apply Stun to adjacent figures if damage was dealt.",
+      "wiredStatus": "wired"
     },
     "Close the Gap": {
       "type": "ccEffect",
@@ -1353,9 +1351,10 @@
     },
     "Field Tactician": {
       "type": "ccEffect",
-      "label": "Friendly within 2 may interrupt move (1 MP honor)",
-      "mpBonus": 1,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "A friendly figure within 2 spaces may interrupt to perform a move",
+      "logMessage": "**Field Tactician** — Choose a friendly figure within 2 spaces of the activating figure. That figure may interrupt the current activation to perform a move action. Trigger the interrupt manually by having that figure’s DC take its movement.",
+      "wiredStatus": "wired"
     },
     "Hunter Protocol": {
       "type": "ccEffect",
