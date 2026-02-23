@@ -2933,6 +2933,7 @@ async function handleBleedResolve(interaction) {
     game[deckKey] = deck;
     await logGameAction(game, interaction.client, `🩸 **Bleeding** — **${dcName}** prevented 1 damage (discarded **${discardedCard}** from deck top).`, { phase: 'ROUND', icon: 'card' });
   }
+  filterCondition(game, figureKey, 'Bleed');  // Bleed resolved — discard condition
   await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   saveGames();
 }
@@ -3156,6 +3157,9 @@ async function resolveCombatAfterRolls(game, combat, client) {
   if (combat.attackerFigureKey) {
     filterCondition(game, combat.attackerFigureKey, 'Focus');  // Focus consumed after attacking
     filterCondition(game, combat.attackerFigureKey, 'Hide');   // Attacker loses Hidden after resolving an attack
+  }
+  if (combat.target?.figureKey) {
+    filterCondition(game, combat.target.figureKey, 'Hide');    // Defender loses Hidden after being attacked
   }
   const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
