@@ -293,26 +293,26 @@
     },
     "Apex Predator": {
       "type": "ccEffect",
-      "label": "Focus, Hidden, 2 Power Tokens, 2 MP (recovery on hostile defeat manual)",
+      "label": "Become Focused, Hidden, gain 2 Power Tokens, gain 2 MP (recovery on hostile defeat is player-honored)",
       "applyFocus": true,
       "applyHide": true,
       "powerTokenGain": 2,
       "mpBonus": 2,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Price of Glory": {
       "type": "ccEffect",
-      "label": "Discard 1 HARMFUL, gain 2 MP (optional Power Tokens manual)",
+      "label": "Discard 1 harmful condition; gain 2 MP (optional Power Token reward is player-honored)",
       "discardUpToNHarmful": 1,
       "mpBonus": 2,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Worth Every Credit": {
       "type": "ccEffect",
-      "label": "Discard 1 HARMFUL, gain 2 MP (VP when next hostile defeated manual)",
+      "label": "Discard 1 harmful condition; gain 2 MP (VP on next hostile defeat is player-honored)",
       "discardUpToNHarmful": 1,
       "mpBonus": 2,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Rank and File": {
       "type": "ccEffect",
@@ -395,9 +395,9 @@
     },
     "Lock On": {
       "type": "ccEffect",
-      "label": "+3 Accuracy (or -1 Dodge/-1 Evade manually)",
+      "label": "+3 Accuracy to attack results (alternatives -1 Dodge/-1 Evade are player-honored)",
       "attackAccuracyBonus": 3,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Assassinate": {
       "type": "ccEffect",
@@ -670,9 +670,9 @@
     },
     "Element of Surprise": {
       "type": "ccEffect",
-      "label": "Remove 1 die from defense pool (LOS: target had no LOS at start of activation; confirm manually)",
+      "label": "Remove 1 defense die from pool (LOS condition at activation start is player-honored)",
       "defensePoolRemoveMax": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Concentrated Fire": {
       "type": "ccEffect",
@@ -1218,9 +1218,9 @@
     },
     "Blend In": {
       "type": "ccEffect",
-      "label": "Attachment: cannot be targeted (discard EOA or when declare attack manual)",
+      "label": "Become Hidden (discard at end of activation or when declaring attack -- player-honored)",
       "applyHide": true,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Built on Hope": {
       "type": "ccEffect",
@@ -1410,14 +1410,16 @@
     "Ballistics Matrix": {
       "type": "ccEffect",
       "label": "Attachment: exhaust before attack; figures do not block LOS (manual)",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "informational": true,
+      "logMessage": "**Ballistics Matrix** — Place on your DC as an attachment. Exhaust before declaring an attack: figures do not block line of sight for this attack."
     },
     "Battlefield Awareness": {
       "type": "ccEffect",
       "informational": true,
       "label": "Battlefield Awareness",
       "logMessage": "**Battlefield Awareness** — After a friendly figure within 3 spaces rolls dice, choose 1 of those dice and reroll it. Announce before the roll resolves.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Behind Enemy Lines": {
       "type": "ccEffect",
@@ -1442,13 +1444,15 @@
     "Cal's Buddy": {
       "type": "ccEffect",
       "label": "Deploy BD-1 to your or adjacent space; activates at start/end of your activation (manual)",
-      "wiredStatus": "unwired"
+      "wiredStatus": "unwired",
+      "informational": true,
+      "logMessage": "**Cal's Buddy** — Deploy BD-1 to your space or an adjacent empty space. BD-1 activates at the start or end of your activation. Resolve manually."
     },
     "Capitalize": {
       "type": "ccEffect",
-      "label": "While attacking: choose 1 die, its controller rerolls (remove 1 defense die honor)",
+      "label": "While attacking: remove 1 defense die from pool (timing and die choice are player-honored)",
       "defensePoolRemoveMax": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Combat Resupply": {
       "type": "ccEffect",
@@ -1491,22 +1495,28 @@
       "informational": true,
       "label": "Change of Plans",
       "logMessage": "**Change of Plans** — After you resolve a group's activation, choose 1 of your Deployment cards; exhaust it to ready another DC that shares a trait with it. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Chaotic Force": {
       "type": "ccEffect",
       "label": "Start of round SCUM: each player chooses 3 figures, roll green, strain = Accuracy. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "informational": true,
+      "logMessage": "**Chaotic Force** — Each player chooses up to 3 figures. Roll 1 green die. Each chosen figure suffers Strain equal to the Accuracy result. Resolve manually."
     },
     "Cheat to Win": {
       "type": "ccEffect",
       "label": "When you use Gambit after rolling: change that die to another result (manual)",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "informational": true,
+      "logMessage": "**Cheat to Win** — After rolling the new die from Gambit, change that die's result to any other result on that die. Resolve manually."
     },
     "Choose a Side": {
       "type": "ccEffect",
       "label": "This round friendly Mobile gain SCUM/IMPERIAL ability (manual)",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "informational": true,
+      "logMessage": "**Choose a Side** — This round, other friendly Mobile figures gain abilities based on your affiliation: SCUM → Personal Combat Shield; IMPERIAL → Gar Saxon Flamethrower. Resolve manually."
     },
     "Collect Intel": {
       "type": "ccEffect",
@@ -1518,7 +1528,9 @@
     "Corrupting Force": {
       "type": "ccEffect",
       "label": "Start of round IMPERIAL: each player chooses 3 figures, roll blue, damage = Hits. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired",
+      "informational": true,
+      "logMessage": "**Corrupting Force** — Each player chooses up to 3 figures. Roll 1 blue die. Each chosen figure suffers Damage equal to the Hit results. Resolve manually."
     },
     "Cut Lines": {
       "type": "ccEffect",
@@ -1541,14 +1553,14 @@
       "label": "Discard that card and cancel its effects (when X cost card played, X ≤ friendly SPY groups)",
       "informational": true,
       "logMessage": "Resolve manually: discard the played card and cancel its effects (honor SPY count).",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Coordinated Attack": {
       "type": "ccEffect",
       "label": "You and a friendly within 3 each perform an attack (same target)",
       "informational": true,
       "logMessage": "Resolve manually: you and a friendly figure within 3 spaces each perform an attack targeting the same figure.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Data Theft": {
       "type": "ccEffect",
@@ -1561,8 +1573,12 @@
       "type": "ccEffect",
       "label": "Special: place defeated friendly non-DROID non-unique TROOPER cost ≤4 in empty adjacent space",
       "placeDefeatedFigure": {
-        "traitFilter": ["TROOPER"],
-        "excludeTraits": ["DROID"],
+        "traitFilter": [
+          "TROOPER"
+        ],
+        "excludeTraits": [
+          "DROID"
+        ],
         "nonUnique": true,
         "maxFigureCost": 4,
         "placementAnchor": "activatingFigure"
@@ -1573,7 +1589,9 @@
       "type": "ccEffect",
       "label": "Special: place defeated friendly TROOPER in empty space adjacent to same group",
       "placeDefeatedFigure": {
-        "traitFilter": ["TROOPER"],
+        "traitFilter": [
+          "TROOPER"
+        ],
         "placementAnchor": "sameGroup",
         "shuffleBackToDeck": true
       },
@@ -1584,7 +1602,7 @@
       "informational": true,
       "label": "Double or Nothing",
       "logMessage": "**Double or Nothing** — During an attack, choose any die. Its controller rerolls it. If the same number of symbols appear, double that die's results; otherwise cancel all results on it. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Expose Weakness": {
       "type": "ccEffect",
@@ -1597,7 +1615,7 @@
       "informational": true,
       "label": "Force Push",
       "logMessage": "**Force Push** — Choose another SMALL figure within 3 spaces. Push that figure up to 2 spaces in a straight line (each space must be empty). Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Harsh Environment": {
       "type": "ccEffect",
@@ -1612,7 +1630,7 @@
       "informational": true,
       "label": "Marksman",
       "logMessage": "**Marksman** — During this Ranged attack, figures do not block line of sight. Announce to opponent before declaring the attack.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Ready Weapons": {
       "type": "ccEffect",
@@ -1963,21 +1981,21 @@
       "informational": true,
       "label": "Block attacks between 1 hostile and 1 friendly figure in LOS this round",
       "logMessage": "**Etiquette and Protocol** — Choose 1 hostile and 1 friendly figure both in your LOS. Until end of round, these figures cannot declare attacks targeting each other.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Evacuate": {
       "type": "ccEffect",
       "informational": true,
       "label": "Defeat a friendly figure within 2 spaces; opponent gains only half VP",
       "logMessage": "**Evacuate** — Choose a friendly figure within 2 spaces. That figure is defeated. Opponent gains only half the VPs they would normally gain (rounded down). Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Ferocity": {
       "type": "ccEffect",
       "informational": true,
       "label": "Choose a CREATURE — it performs 1 attack",
       "logMessage": "**Ferocity** — Choose 1 of your or your opponent's CREATUREs. That figure performs 1 attack. Resolve manually using the Attack button.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Hold Ground": {
       "type": "ccEffect",
@@ -1991,21 +2009,21 @@
       "informational": true,
       "label": "Ranged attack using 1 green + 1 yellow die (no abilities)",
       "logMessage": "**Improvised Weapons** — Perform a Ranged attack using 1 green and 1 yellow die. No abilities allowed during this attack. Use the Attack button and resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Induce Rage": {
       "type": "ccEffect",
       "informational": true,
       "label": "Up to 2 figures: discard all conditions; gain 1 Hit Token per condition discarded",
       "logMessage": "**Induce Rage** — Choose up to 2 figures. Each discards all conditions, then gains 1 Hit Token per condition discarded. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Learn by Example": {
       "type": "ccEffect",
       "informational": true,
       "label": "Play as a copy of a FORCE USER CC in any discard pile",
       "logMessage": "**Learn by Example** — Play as a copy of a FORCE USER Command card from any discard pile, ignoring faction restrictions. Announce which card you're copying and resolve its effect manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Mandalorian Steel": {
       "type": "ccEffect",
@@ -2019,42 +2037,42 @@
       "informational": true,
       "label": "Strain 1, place as attachment; exhaust to give DROID 1 MP per activation",
       "logMessage": "**Navigation Upgrade** — Take 1 Strain. Place this card in your Play Area as an Attachment. During a friendly DROID's activation, exhaust it to give that figure +1 MP. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Optimal Bombardment": {
       "type": "ccEffect",
       "informational": true,
       "label": "Up to 3 adjacent VEHICLES/DROIDS/HEAVY WEAPONs each attack with Blast 1",
       "logMessage": "**Optimal Bombardment** — Choose up to 3 VEHICLES, DROIDS, or HEAVY WEAPONs adjacent to you. Each may interrupt to perform an attack with Blast 1. Resolve each attack manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Overcharged Weapons": {
       "type": "ccEffect",
       "informational": true,
       "label": "Interrupt when hostile activates: attack with Pierce 2; then exhaust + Weaken",
       "logMessage": "**Overcharged Weapons** — When a hostile figure activates, interrupt to attack it (gains Pierce 2). Then exhaust your Deployment card and become Weakened. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Overheated": {
       "type": "ccEffect",
       "informational": true,
       "label": "Strain 4; if Ranged: 2 attacks with -1 Hit; attack type becomes Melee",
       "logMessage": "**Overheated** — Strain 4. If you have the Ranged attack type, perform 2 attacks (apply -1 Hit to results). Then your attack type becomes Melee. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Pack Alpha": {
       "type": "ccEffect",
       "informational": true,
       "label": "Move up to 3 friendly CREATUREs 3 spaces; damage hostile = # adjacent to it",
       "logMessage": "**Pack Alpha** — Up to 3 friendly CREATUREs within 3 spaces each move up to 3 spaces. Then choose a hostile figure — it suffers Damage equal to the number of those figures now adjacent to it. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Parting Blow": {
       "type": "ccEffect",
       "informational": true,
       "label": "Interrupt: attack hostile exiting adjacent space; you become Stunned",
       "logMessage": "**Parting Blow** — Interrupt when a hostile exits an adjacent space. Before it moves, perform an attack targeting that figure. Then you become Stunned. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Price on Their Heads": {
       "type": "ccEffect",
@@ -2068,13 +2086,15 @@
       "informational": true,
       "label": "+X Block when a figure within 3 spaces defends (X = 1 + FORCE USER CCs in discard)",
       "logMessage": "**Protect the Old Ways** — While a friendly figure within 3 spaces is defending, apply +X Block (X = 1 + number of FORCE USER CCs in your discard pile). Resolve manually during the defense roll.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Reinforcements": {
       "type": "ccEffect",
       "label": "Return a defeated TROOPER (reinforcement cost ≤3) adjacent to its group",
       "placeDefeatedFigure": {
-        "traitFilter": ["TROOPER"],
+        "traitFilter": [
+          "TROOPER"
+        ],
         "maxReinforcementCost": 3,
         "placementAnchor": "sameGroup"
       },
@@ -2085,7 +2105,7 @@
       "informational": true,
       "label": "Attack using the defender's DC abilities instead of your own; +1 Surge",
       "logMessage": "**Reverse Engineer** — Perform an attack. During this attack, use abilities on the defender's Deployment card instead of your own. Apply +1 Surge to the results. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Sarlacc Sweep": {
       "type": "ccEffect",
@@ -2099,21 +2119,21 @@
       "informational": true,
       "label": "Attachment: gain DROID trait; reroll 1 attack die while attacking",
       "logMessage": "**Self-Augmentation** — Place on your DC as an Attachment. You gain the DROID trait. While attacking, you may reroll one attack die. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Set a Trap": {
       "type": "ccEffect",
       "informational": true,
       "label": "Choose a tile; at round end a figure on that tile may interrupt to attack a hostile on it",
       "logMessage": "**Set a Trap** — Choose a map tile. At end of round, choose one of your figures on that tile to interrupt to perform an attack targeting a hostile on that tile. Track manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Set the Charges": {
       "type": "ccEffect",
       "informational": true,
       "label": "Roll blue die: open adjacent doors; Hit+Surge Damage to figures on/adjacent to chosen space",
       "logMessage": "**Set the Charges** — Choose a space within 3 spaces. Roll a blue die. Open any unlocked doors adjacent to that space. Each figure/object on or adjacent to it suffers Damage equal to Hit+Surge results. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Signal Jammer": {
       "type": "ccEffect",
@@ -2134,14 +2154,14 @@
       "informational": true,
       "label": "For each hostile adjacent to Dio: Strain 2 or Weaken; if Dio not in play, place Dio",
       "logMessage": "**Static Pulse** — For each hostile adjacent to 'Dio': choose — it suffers 2 Strain or becomes Weakened. If Dio is not in play, place Dio in your space instead. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Stay Down": {
       "type": "ccEffect",
       "informational": true,
       "label": "After Close and Personal: if target survived, attack again; you become Stunned",
       "logMessage": "**Stay Down** — After resolving **Close and Personal**, if the target was not defeated, perform an additional attack on the same target. Then you become Stunned. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Still Faster Than You": {
       "type": "ccEffect",
@@ -2155,7 +2175,7 @@
       "informational": true,
       "label": "Choose a friendly DROID/TECHNICIAN/TROOPER within 3 spaces — it performs an action",
       "logMessage": "**Support Specialist** — Choose a friendly DROID, TECHNICIAN, or TROOPER within 3 spaces. That figure interrupts to perform an action. Trigger the action from their DC thread manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Terminal Network": {
       "type": "ccEffect",
@@ -2169,7 +2189,7 @@
       "informational": true,
       "label": "Roll green die: Damage equal to Hit results to all figures/objects in/adjacent to your space; then defeated",
       "logMessage": "**Terminal Protocol** — Roll 1 green die. Each figure and object in or adjacent to your space suffers Damage equal to the Damage results. Then you are defeated. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "There Is No Try": {
       "type": "ccEffect",
@@ -2197,7 +2217,7 @@
       "informational": true,
       "label": "Move up to 3 friendly DROIDs 1 space; damage hostile = # DROIDs with LOS to it",
       "logMessage": "**Triangulate** — Up to 3 friendly DROIDs each move up to 1 space. Then choose a hostile within 5 spaces and LOS — it suffers Damage equal to the number of those DROIDs with LOS to it. Resolve manually.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "Unlimited Power": {
       "type": "ccEffect",
