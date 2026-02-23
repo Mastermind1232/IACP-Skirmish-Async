@@ -444,6 +444,10 @@ export async function handleDcCcEndOfActivation(interaction, ctx) {
   return _playCcFromDcThread(interaction, ctx, 'dc_cc_eoa_', ctx.getPlayableCcEndOfActivationForDc, 'End of Activation');
 }
 
+export async function handleDcCcDoubleAction(interaction, ctx) {
+  return _playCcFromDcThread(interaction, ctx, 'dc_cc_double_', ctx.getPlayableCcDoubleActionsForDc, 'Double Action');
+}
+
 async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timingLabel) {
   const {
     getGame,
@@ -529,10 +533,13 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   }
   await updateHandVisualMessage(game, meta.playerNum, interaction.client);
   await updateDiscardPileMessage(game, meta.playerNum, interaction.client);
-  // Special Action CCs cost 1 action; deduct before refreshing the thread so the counter is correct.
+  // Special Action CCs cost 1 action; Double Action CCs cost both actions.
   if (timingLabel === 'Special Action') {
     const data = game.dcActionsData?.[msgId];
     if (data && typeof data.remaining === 'number') data.remaining = Math.max(0, data.remaining - 1);
+  } else if (timingLabel === 'Double Action') {
+    const data = game.dcActionsData?.[msgId];
+    if (data && typeof data.remaining === 'number') data.remaining = 0;
   }
   await updateDcActionsMessage(game, msgId, interaction.client);
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}** (${timingLabel}).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });

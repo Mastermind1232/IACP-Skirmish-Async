@@ -663,7 +663,7 @@ export function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces
  * @param {object} [helpers] - { getDcStats(dcName), getPlayerNumForMsgId(msgId), getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName) }
  */
 export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRemaining = 2, game = null, helpers = {}) {
-  const { getDcStats = () => ({}), getPlayerNumForMsgId = () => 1, getPlayableCcSpecialsForDc = () => [], getPlayableCcEndOfActivationForDc = () => [] } = helpers;
+  const { getDcStats = () => ({}), getPlayerNumForMsgId = () => 1, getPlayableCcSpecialsForDc = () => [], getPlayableCcEndOfActivationForDc = () => [], getPlayableCcDoubleActionsForDc = () => [] } = helpers;
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   const specials = stats.specials || [];
@@ -678,18 +678,8 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const rows = [];
 
   if (figures > 1) {
-    const options = [];
-    for (let f = 0; f < figures; f++) {
-      const label = `Figure ${dgIndex}${FIGURE_LETTERS[f]}`;
-      options.push({ label, value: String(f), default: selectedFigure === f });
-    }
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId(`dc_fig_select_${msgId}`)
-      .setPlaceholder('Select a figure to act with…')
-      .addOptions(options);
-    rows.push(new ActionRowBuilder().addComponents(selectMenu));
-
     if (selectedFigure != null && selectedFigure < figures) {
+      // Figure already selected: show action buttons (no dropdown — frees up a row slot)
       const suffix = ` ${dgIndex}${FIGURE_LETTERS[selectedFigure]}`;
       const comps = [
         new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(`Move${suffix}`).setStyle(ButtonStyle.Success).setDisabled(noActions),
@@ -697,6 +687,18 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
         new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noActions),
       ];
       rows.push(new ActionRowBuilder().addComponents(...comps));
+    } else {
+      // No figure selected yet: show dropdown only
+      const options = [];
+      for (let f = 0; f < figures; f++) {
+        const label = `Figure ${dgIndex}${FIGURE_LETTERS[f]}`;
+        options.push({ label, value: String(f), default: false });
+      }
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(`dc_fig_select_${msgId}`)
+        .setPlaceholder('Select a figure to act with…')
+        .addOptions(options);
+      rows.push(new ActionRowBuilder().addComponents(selectMenu));
     }
   } else {
     const comps = [
@@ -733,6 +735,21 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
           .setDisabled(noActions)
       );
       rows.push(new ActionRowBuilder().addComponents(...ccBtns));
+    }
+  }
+  // Double Action CCs: shown when 2 actions remain; disabled when < 2 actions
+  if (game && !noActions && rows.length < 5) {
+    const playableCcDouble = getPlayableCcDoubleActionsForDc(game, playerNum, dcName, displayName);
+    const ccDoubles = playableCcDouble.slice(0, 5);
+    if (ccDoubles.length > 0) {
+      const ccDoubleBtns = ccDoubles.map((ccName, idx) =>
+        new ButtonBuilder()
+          .setCustomId(`dc_cc_double_${msgId}_${idx}`)
+          .setLabel(`CC (2 Actions): ${ccName}`.slice(0, 80))
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled((actionsRemaining ?? 2) < 2)
+      );
+      rows.push(new ActionRowBuilder().addComponents(...ccDoubleBtns));
     }
   }
   // End-of-Activation CCs: shown and enabled only when all actions are spent

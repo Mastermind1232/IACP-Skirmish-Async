@@ -120,6 +120,7 @@ import {
   handleDcDeplete,
   handleDcCcSpecial,
   handleDcCcEndOfActivation,
+  handleDcCcDoubleAction,
   handleDcAction,
   handleSquadModal,
   handleDeployModal,
@@ -397,6 +398,38 @@ function isCcPlayableByDc(ccName, dcName, displayName) {
 function getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName) {
   const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
   return hand.filter((ccName) => isCcPlayableByDc(ccName, dcName, displayName));
+}
+
+/** True if this DC can legally play this CC (for Double Action Special timing). */
+function isCcDoubleActionPlayableByDc(ccName, dcName, displayName) {
+  const effect = getCcEffect(ccName);
+  if (!effect || (effect.timing || '').toLowerCase() !== 'doubleactionspecial') return false;
+  const playableBy = (effect.playableBy || '').trim();
+  if (!playableBy) return false;
+  if (playableBy.toLowerCase() === 'any figure') return true;
+  const dcBase = (dcName || '')
+    .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
+    .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
+    .trim();
+  const displayBase = (displayName || dcBase)
+    .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
+    .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
+    .trim();
+  const d = dcBase.toLowerCase();
+  const disp = displayBase.toLowerCase();
+  const keywords = getDcKeywords()[dcName] || getDcKeywords()[dcBase];
+  const alternatives = playableBy.split(/\s+or\s+/i).map((s) => s.trim().toLowerCase());
+  for (const p of alternatives) {
+    if (d.includes(p) || p.includes(d) || disp.includes(p) || p.includes(disp)) return true;
+    if (keywords && Array.isArray(keywords) && keywords.some((k) => String(k).toLowerCase() === p)) return true;
+  }
+  return false;
+}
+
+/** CC names in hand that are Double Action Special and legally playable by this DC. */
+function getPlayableCcDoubleActionsForDc(game, playerNum, dcName, displayName) {
+  const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+  return hand.filter((ccName) => isCcDoubleActionPlayableByDc(ccName, dcName, displayName));
 }
 
 /** CC names in hand that are End-of-Activation timing and legally playable by this DC. */
@@ -3429,6 +3462,7 @@ function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRemaining =
     getPlayerNumForMsgId: (id) => dcMessageMeta.get(id)?.playerNum ?? 1,
     getPlayableCcSpecialsForDc,
     getPlayableCcEndOfActivationForDc,
+    getPlayableCcDoubleActionsForDc,
   });
 }
 
@@ -4843,7 +4877,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_') {
+  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_cc_double_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_') {
     const dcPlayAreaContext = {
       getGame,
       replyIfGameEnded,
@@ -4870,6 +4904,7 @@ client.on('interactionCreate', async (interaction) => {
       isDepletedRemovedFromGame,
       getPlayableCcSpecialsForDc,
       getPlayableCcEndOfActivationForDc,
+      getPlayableCcDoubleActionsForDc,
       getCcEffect,
       isCcAttachment,
       updateAttachmentMessageForDc,
@@ -4903,6 +4938,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'dc_deplete_') await handleDcDeplete(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_cc_special_') await handleDcCcSpecial(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_cc_eoa_') await handleDcCcEndOfActivation(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'dc_cc_double_') await handleDcCcDoubleAction(interaction, dcPlayAreaContext);
     else if (buttonKey === 'pounce_space_') await handlePounceSpacePick(interaction, dcPlayAreaContext);
     else await handleDcAction(interaction, dcPlayAreaContext, buttonKey);
     return;
