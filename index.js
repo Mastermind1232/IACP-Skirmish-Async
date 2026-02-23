@@ -367,7 +367,7 @@ async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, client) {
   }
 }
 
-/** True if this DC can legally play this CC (for Special Action timing). playableBy: "Any Figure", specific name, or trait. */
+/** True if this DC can legally play this CC (for Special Action timing). playableBy: "Any Figure", specific name, or trait. Handles compound "X or Y" playableBy. */
 function isCcPlayableByDc(ccName, dcName, displayName) {
   const effect = getCcEffect(ccName);
   if (!effect || (effect.timing || '').toLowerCase() !== 'specialaction') return false;
@@ -382,12 +382,14 @@ function isCcPlayableByDc(ccName, dcName, displayName) {
     .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
     .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
     .trim();
-  const p = playableBy.toLowerCase();
   const d = dcBase.toLowerCase();
   const disp = displayBase.toLowerCase();
-  if (d.includes(p) || p.includes(d) || disp.includes(p) || p.includes(disp)) return true;
   const keywords = getDcKeywords()[dcName] || getDcKeywords()[dcBase];
-  if (keywords && Array.isArray(keywords) && keywords.some((k) => String(k).toLowerCase() === p)) return true;
+  const alternatives = playableBy.split(/\s+or\s+/i).map((s) => s.trim().toLowerCase());
+  for (const p of alternatives) {
+    if (d.includes(p) || p.includes(d) || disp.includes(p) || p.includes(disp)) return true;
+    if (keywords && Array.isArray(keywords) && keywords.some((k) => String(k).toLowerCase() === p)) return true;
+  }
   return false;
 }
 
@@ -407,12 +409,14 @@ function getPlayableCcEndOfActivationForDc(game, playerNum, dcName, displayName)
     if (!playableBy || playableBy.toLowerCase() === 'any figure') return true;
     const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
     const displayBase = (displayName || dcBase).replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-    const p = playableBy.toLowerCase();
     const d = dcBase.toLowerCase();
     const disp = displayBase.toLowerCase();
-    if (d.includes(p) || p.includes(d) || disp.includes(p) || p.includes(disp)) return true;
     const keywords = getDcKeywords()[dcName] || getDcKeywords()[dcBase];
-    if (keywords && Array.isArray(keywords) && keywords.some((k) => String(k).toLowerCase() === p)) return true;
+    const alternatives = playableBy.split(/\s+or\s+/i).map((s) => s.trim().toLowerCase());
+    for (const p of alternatives) {
+      if (d.includes(p) || p.includes(d) || disp.includes(p) || p.includes(disp)) return true;
+      if (keywords && Array.isArray(keywords) && keywords.some((k) => String(k).toLowerCase() === p)) return true;
+    }
     return false;
   });
 }
