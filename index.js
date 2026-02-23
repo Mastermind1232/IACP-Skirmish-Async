@@ -5047,7 +5047,6 @@ client.on('interactionCreate', async (interaction) => {
       dcMessageMeta,
       clearMoveGridMessages,
       getMoveMpButtonRows,
-      editDistanceMessage,
     };
     await handleMoveAdjustMp(interaction, moveAdjustContext);
     return;

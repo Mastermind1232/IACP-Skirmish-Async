@@ -842,7 +842,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         : allCacheCells;
       const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, minimapCells);
       const gridIds = [];
-      const firstRows = rows.slice(0, 4);
+      const manualPickRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
+          .setLabel('🗺️ Pick Path Manually')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      const firstRows = [...rows.slice(0, 4), manualPickRow];
       const firstPayload = {
         content: `**Move** — Pick destination (**${mpRemaining}** MP remaining):${multiTileNote}`,
         components: firstRows,

@@ -136,7 +136,7 @@ export async function handleMoveMp(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, dcMessageMeta, clearMoveGridMessages, getMoveMpButtonRows, editDistanceMessage
+ * @param {object} ctx - getGame, dcMessageMeta, clearMoveGridMessages, getMoveMpButtonRows
  */
 export async function handleMoveAdjustMp(interaction, ctx) {
   const {
@@ -144,7 +144,6 @@ export async function handleMoveAdjustMp(interaction, ctx) {
     dcMessageMeta,
     clearMoveGridMessages,
     getMoveMpButtonRows,
-    editDistanceMessage,
   } = ctx;
   const m = interaction.customId.match(/^move_adjust_mp_(.+)_(\d+)$/);
   if (!m) {
@@ -174,13 +173,30 @@ export async function handleMoveAdjustMp(interaction, ctx) {
     await interaction.reply({ content: 'Only the owner can adjust.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
+  // Remove the clicked message from gridIds before clearing so we can transform it in-place
+  const currentMsgId = interaction.message.id;
+  game.moveGridMessageIds = game.moveGridMessageIds || {};
+  game.moveGridMessageIds[moveKey] = (game.moveGridMessageIds[moveKey] || []).filter((id) => id !== currentMsgId);
   await interaction.deferUpdate();
   moveState.pendingMp = null;
   await clearMoveGridMessages(game, moveKey, interaction.channel);
-  game.moveGridMessageIds = game.moveGridMessageIds || {};
-  delete game.moveGridMessageIds[moveKey];
+  game.moveGridMessageIds[moveKey] = [];
   const mpRows = getMoveMpButtonRows(msgId, figureIndex, mpRemaining);
-  await editDistanceMessage(moveState, interaction.channel, `**Move** — Pick distance (**${mpRemaining}** MP remaining):`, mpRows);
+  // Transform the clicked message (space grid or "Pick Path Manually" standalone) into the MP picker
+  try {
+    await interaction.message.edit({
+      content: `**Move** — Pick distance (**${mpRemaining}** MP remaining):`,
+      components: mpRows.length > 0 ? mpRows : [],
+    });
+    moveState.distanceMessageId = currentMsgId;
+  } catch {
+    // Fallback: send a new message if the original was somehow already gone
+    const newMsg = await interaction.channel.send({
+      content: `**Move** — Pick distance (**${mpRemaining}** MP remaining):`,
+      components: mpRows.length > 0 ? mpRows : [],
+    }).catch(() => null);
+    if (newMsg?.id) moveState.distanceMessageId = newMsg.id;
+  }
 }
 
 /**
@@ -343,6 +359,14 @@ export async function handleMovePick(interaction, ctx) {
       moveState.movementProfile = nextProfile;
       moveState.movementCache = nextCache;
       moveState.cacheMaxMp = newMp;
+      // Clean up old MP picker (distanceMessageId) if it exists from a previous manual-path selection
+      if (moveState.distanceMessageId) {
+        try {
+          const distMsg = await interaction.channel.messages.fetch(moveState.distanceMessageId);
+          await distMsg.delete();
+        } catch { /* already gone */ }
+        moveState.distanceMessageId = null;
+      }
       // Show all reachable cells from new position with remaining MP
       const allNewCells = [...nextCache.cells.keys()];
       const newIsMultiTile = nextProfile.size && nextProfile.size !== '1x1';
@@ -359,7 +383,13 @@ export async function handleMovePick(interaction, ctx) {
         : allNewCells;
       const newMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, newMinimapCells);
       const newGridIds = [];
-      const newFirstRows = newRows.slice(0, 4);
+      const newManualPickRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
+          .setLabel('🗺️ Pick Path Manually')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      const newFirstRows = [...newRows.slice(0, 4), newManualPickRow];
       const newFirstPayload = {
         content: `**Move** — Pick destination (**${newMp}** MP remaining):${newMultiTileNote}`,
         components: newFirstRows,
