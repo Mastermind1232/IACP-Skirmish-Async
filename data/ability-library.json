@@ -763,9 +763,10 @@
     },
     "Debts Repaid": {
       "type": "ccEffect",
-      "label": "Become Focused (ready Deployment card manually)",
+      "label": "Become Focused + Ready active Deployment card",
       "applyFocus": true,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired",
+      "readyActiveDc": true
     },
     "Wild Fury": {
       "type": "ccEffect",
@@ -1251,12 +1252,10 @@
     },
     "Definition: 'Love'": {
       "type": "ccEffect",
-      "label": "Attack 5+ spaces without action (remove 1 red manual)",
-      "nextAttacksBonusHits": {
-        "count": 1,
-        "bonus": 0
-      },
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Ranged attack at 5+ spaces without an action; remove 1 red die from pool",
+      "logMessage": "**Definition: 'Love'** — You may perform a Ranged attack without spending an action. The target must be 5+ spaces away. During this attack, remove 1 red die from your attack pool. Perform the attack using the Attack button.",
+      "wiredStatus": "wired"
     },
     "Deploy the Garrison": {
       "type": "ccEffect",
@@ -1359,8 +1358,9 @@
     },
     "Lightbow": {
       "type": "ccEffect",
-      "label": "Ranged attack blue red green +2 Acc Pierce 4 (manual)",
+      "label": "Ranged attack blue+red+green dice, +2 Accuracy, Pierce 4 (custom dice manual)",
       "attackAccuracyBonus": 2,
+      "attackBonusPierce": 4,
       "wiredStatus": "partial"
     },
     "Lure of the Dark Side": {
@@ -1379,12 +1379,10 @@
     },
     "Feral Swipes": {
       "type": "ccEffect",
-      "label": "Melee attack per die in pool (1 attack honor)",
-      "nextAttacksBonusHits": {
-        "count": 1,
-        "bonus": 0
-      },
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Perform a Melee attack using 1 die; repeat once per die in your pool",
+      "logMessage": "**Feral Swipes** — You may perform a Melee attack once per die in your attack pool. Each attack uses only 1 attack die of your choice. Perform each attack manually using the Attack button.",
+      "wiredStatus": "wired"
     },
     "Flurry of Blades": {
       "type": "ccEffect",
@@ -2112,7 +2110,7 @@
       "informational": true,
       "label": "Perform 2 attacks, each targeting a different figure",
       "logMessage": "**Sarlacc Sweep** — Perform 2 attacks, each targeting a different figure. Use the Attack button twice, targeting different figures each time.",
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Self-Augmentation": {
       "type": "ccEffect",
@@ -2210,7 +2208,7 @@
       "informational": true,
       "label": "Distribute 2 Hit Tokens among friendly figures; if adjacent terminal, gain 2 VP",
       "logMessage": "**Transmit the Plans** — Distribute 2 Hit Tokens among your friendly figures (track manually). If adjacent to a terminal, gain 2 VP — use `/editvp +2`.",
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Triangulate": {
       "type": "ccEffect",

@@ -996,6 +996,7 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: Focus / Meditation — apply Focus to activating figures; requires active activation
+  // Optional: readyActiveDc: true → also unexhaust/ready the active DC embed (e.g. Debts Repaid)
   if (abilityId === 'Focus' || (entry.type === 'ccEffect' && entry.applyFocus)) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
@@ -1009,6 +1010,9 @@ export function resolveAbility(abilityId, context) {
     for (const fk of figureKeys) {
       const existing = game.figureConditions[fk] || [];
       if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+    }
+    if (entry.readyActiveDc) {
+      return { applied: true, logMessage: 'Became Focused. Readied active Deployment card.', readyDcMsgIds: [msgId], refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId] };
     }
     return { applied: true, logMessage: 'Became Focused.' };
   }
