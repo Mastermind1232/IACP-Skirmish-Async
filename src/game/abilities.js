@@ -567,7 +567,7 @@ export function resolveAbility(abilityId, context) {
       }
       if (trooperCount > 0) msg += ` Each of ${trooperCount} other friendly TROOPER(s) also gained ${bonus} MP.`;
     }
-    return { applied: true, logMessage: msg };
+    return { applied: true, logMessage: entry.logMessage || msg };
   }
 
   // ccEffect: Power Token gain (Battle Scars, etc.) — requires active activation
@@ -1014,7 +1014,7 @@ export function resolveAbility(abilityId, context) {
     if (entry.readyActiveDc) {
       return { applied: true, logMessage: 'Became Focused. Readied active Deployment card.', readyDcMsgIds: [msgId], refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId] };
     }
-    return { applied: true, logMessage: 'Became Focused.' };
+    return { applied: true, logMessage: entry.logMessage || 'Became Focused.' };
   }
 
   // dcSpecial: mpBonus + applyFocus (e.g. Get into Position — gain MP and become Focused)
@@ -1681,8 +1681,22 @@ export function resolveAbility(abilityId, context) {
       const condPart = targetConditions.length > 0 ? `; target gains ${targetConditions.join(', ')}` : '';
       return { applied: true, logMessage: `Hostile suffered ${dmgLabel}${strainLabel}${condPart}.${selfStrainMsg}${selfHealMsg}`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
     };
-    // Second pass: user already picked a figure
-    if (chosenFigureKey) return applyToFigureKey(chosenFigureKey);
+    // Second pass: user already picked a figure (or an orStunInstead prefixed choice)
+    if (chosenFigureKey) {
+      if (typeof chosenFigureKey === 'string' && chosenFigureKey.startsWith('stun:')) {
+        // orStunInstead: player chose to apply Stun instead of the main strain/damage effect
+        const actualFk = chosenFigureKey.slice(5);
+        const tMsgId = findMsgIdForFigureKey(game, oppNum, actualFk, dcMessageMeta);
+        const tMeta = tMsgId ? dcMessageMeta.get(tMsgId) : null;
+        const tName = tMeta?.displayName || tMeta?.dcName || actualFk;
+        game.figureConditions = game.figureConditions || {};
+        const existing = game.figureConditions[actualFk] || [];
+        if (!existing.includes('Stun')) game.figureConditions[actualFk] = [...existing, 'Stun'];
+        return { applied: true, logMessage: `**${tName}** becomes Stunned.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: tMsgId ? [tMsgId] : [] };
+      }
+      const strainKey = typeof chosenFigureKey === 'string' && chosenFigureKey.startsWith('strain:') ? chosenFigureKey.slice(7) : chosenFigureKey;
+      return applyToFigureKey(strainKey);
+    }
     // First pass: find adjacent hostiles
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
@@ -1701,16 +1715,33 @@ export function resolveAbility(abilityId, context) {
     }
     const hostiles = [...hostileSet];
     if (hostiles.length === 0) return { applied: true, logMessage: 'No adjacent hostile figure.' };
-    if (hostiles.length === 1) return applyToFigureKey(hostiles[0]);
-    // Multiple adjacent hostiles: prompt player to pick one
-    const labels = hostiles.map((fk) => {
+    // Helper to get a display label for a figure key
+    const getFigLabel = (fk) => {
       const tMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
       const tMeta = tMsgId ? dcMessageMeta.get(tMsgId) : null;
       const baseName = tMeta?.displayName || tMeta?.dcName || fk;
       const figIdx = parseInt(fk.split('-').pop(), 10);
       const suffix = isNaN(figIdx) || figIdx === 0 ? '' : ` (${String.fromCharCode(65 + figIdx)})`;
       return `${baseName}${suffix}`;
-    });
+    };
+    // orStunInstead: present "N Strain" vs "Stun" choices (combined with target if multiple hostiles)
+    if (cah.orStunInstead) {
+      const strainN = (cah.strain || 0);
+      const strainDesc = strainN > 0 ? `${strainN} Strain` : 'Strain effect';
+      const combLabels = [];
+      const combValues = [];
+      for (const fk of hostiles) {
+        const lbl = getFigLabel(fk);
+        combLabels.push(hostiles.length > 1 ? `${strainDesc} on ${lbl}` : strainDesc);
+        combValues.push(`strain:${fk}`);
+        combLabels.push(hostiles.length > 1 ? `Stun ${lbl}` : 'Stun');
+        combValues.push(`stun:${fk}`);
+      }
+      return { applied: false, requiresChoice: true, choiceOptions: combLabels, choiceValues: combValues };
+    }
+    if (hostiles.length === 1) return applyToFigureKey(hostiles[0]);
+    // Multiple adjacent hostiles: prompt player to pick one
+    const labels = hostiles.map(getFigLabel);
     return { applied: false, requiresChoice: true, choiceOptions: labels, choiceValues: hostiles };
   }
 

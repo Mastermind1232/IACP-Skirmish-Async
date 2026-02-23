@@ -570,7 +570,8 @@
       "type": "ccEffect",
       "label": "Become Focused (future attack manual)",
       "applyFocus": true,
-      "wiredStatus": "partial"
+      "logMessage": "Became Focused. Once during your next activation, if FORCE USER, perform a Melee attack targeting an adjacent figure using 1 red + 1 yellow die without spending an action (honor).",
+      "wiredStatus": "wired"
     },
     "Master Operative": {
       "type": "ccEffect",
@@ -763,7 +764,8 @@
       "type": "ccEffect",
       "label": "Become Focused (perform 1 additional action manually)",
       "applyFocus": true,
-      "wiredStatus": "partial"
+      "logMessage": "Became Focused. Perform 1 additional action this activation (honor).",
+      "wiredStatus": "wired"
     },
     "Debts Repaid": {
       "type": "ccEffect",
@@ -843,7 +845,8 @@
       "type": "ccEffect",
       "label": "Gain 2 MP (melee attack manual)",
       "mpBonus": 2,
-      "wiredStatus": "partial"
+      "logMessage": "Gained **2 MP**. Perform a Melee attack using 1 red + 1 yellow die without spending an action (honor — see card text).",
+      "wiredStatus": "wired"
     },
     "Lord of the Sith": {
       "type": "ccEffect",
@@ -905,21 +908,24 @@
       "type": "ccEffect",
       "label": "When hostile enters adjacent space: that figure suffers 3 Strain (or Stun — choose one)",
       "chooseAdjacentHostileThen": {
-        "strain": 3
+        "strain": 3,
+        "orStunInstead": true
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Extra Protection": {
       "type": "ccEffect",
       "label": "Move 2 spaces then attack (attack manual)",
       "mpBonus": 2,
-      "wiredStatus": "partial"
+      "logMessage": "Gained **2 MP**. Perform an attack — must target the attacker if possible (honor).",
+      "wiredStatus": "wired"
     },
     "Force Jump": {
       "type": "ccEffect",
       "label": "Move up to 5 spaces (MOBILE during movement manual)",
       "mpBonus": 5,
-      "wiredStatus": "partial"
+      "logMessage": "Gained **5 MP**. During this move you gain MOBILE — treat doors and other figures as if they do not exist; cannot end in blocking terrain (honor).",
+      "wiredStatus": "wired"
     },
     "Counter Attack": {
       "type": "ccEffect",
@@ -999,7 +1005,8 @@
       "type": "ccEffect",
       "label": "Move up to 2 spaces (then attack manual)",
       "mpBonus": 2,
-      "wiredStatus": "partial"
+      "logMessage": "Gained **2 MP**. Perform a Melee attack targeting an adjacent figure or object (honor).",
+      "wiredStatus": "wired"
     },
     "Heightened Reflexes": {
       "type": "ccEffect",
@@ -1311,7 +1318,8 @@
       "type": "ccEffect",
       "label": "Move 3 into space adjacent to friendly, attack targets you (3 MP honor)",
       "mpBonus": 3,
-      "wiredStatus": "partial"
+      "logMessage": "Gained **3 MP**. Move into a space adjacent to the friendly; the attack now targets you instead (honor).",
+      "wiredStatus": "wired"
     },
     "Grenadier": {
       "type": "ccEffect",
@@ -1451,7 +1459,8 @@
       "type": "ccEffect",
       "label": "When attack declared on adjacent friendly: attack targets you instead (2 MP honor to get in position)",
       "mpBonus": 2,
-      "wiredStatus": "partial"
+      "logMessage": "Gained **2 MP** (to move into position if needed). The attack now targets you instead of the adjacent friendly (honor).",
+      "wiredStatus": "wired"
     },
     "Cal's Buddy": {
       "type": "ccEffect",
