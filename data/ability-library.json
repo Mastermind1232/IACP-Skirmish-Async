@@ -981,9 +981,10 @@
     },
     "Payback": {
       "type": "ccEffect",
-      "label": "Perform attack targeting attacker (manual); +2 Surge to attack results",
-      "attackSurgeBonus": 2,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "After attack on you resolves: interrupt to attack the attacker (+2 Surge)",
+      "logMessage": "**Payback** — After an attack targeting you resolves, Dengar may interrupt to perform an attack targeting the attacker. Apply +2 Surge to that attack’s results. Declare the counter-attack manually using the Attack button, then apply +2 Surge in the surge step.",
+      "wiredStatus": "wired"
     },
     "Toxic Dart": {
       "type": "ccEffect",
@@ -1297,9 +1298,10 @@
     },
     "Face Me!": {
       "type": "ccEffect",
-      "label": "Push hostile to adjacent then attack (4 MP honor)",
-      "mpBonus": 4,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Push unique hostile (speed spaces) to adjacent, then attack that figure",
+      "logMessage": "**Face Me!** — Choose a unique hostile figure you have line of sight to. Push that figure a number of spaces equal to its Speed to a space adjacent to Agent Kallus. Then perform a Melee attack targeting that figure. Trigger the push and attack manually using the Attack button.",
+      "wiredStatus": "wired"
     },
     "Feint": {
       "type": "ccEffect",
