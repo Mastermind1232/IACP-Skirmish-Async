@@ -243,21 +243,29 @@ function canMoveDiagonally(start, dx, dy, board) {
   if (!dx || !dy) return true;
   const startLower = normalizeCoord(start);
   const { col, row } = parseCoord(startLower);
-  const intermediateA = colRowToCoord(col + dx, row);
-  const intermediateB = colRowToCoord(col, row + dy);
-  const aNorm = normalizeCoord(intermediateA);
-  const bNorm = normalizeCoord(intermediateB);
+  const aNorm = normalizeCoord(colRowToCoord(col + dx, row));  // lateral corner (same row)
+  const bNorm = normalizeCoord(colRowToCoord(col, row + dy));  // vertical corner (same col)
+  const destNorm = normalizeCoord(colRowToCoord(col + dx, row + dy));
   const aExists = board.spacesSet.has(aNorm);
   const bExists = board.spacesSet.has(bNorm);
   // Fully sealed corner — both sides absent, cannot cut through
   if (!aExists && !bExists) return false;
-  // IA corner-cut rule: diagonal is allowed if at least one side is open (not walled off).
-  // Check adjacency to detect walls on each side (movementBlockingEdges encoded in adjacency).
+  // IA corner-cut rule: diagonal is allowed if at least one full path (corner → dest) is open.
+  // First half: start → corner (adjacency encodes impassable walls; movementBlockingSet catches doors)
   const adjList = board.adjacency?.[startLower] || [];
   const adjSet = new Set(adjList);
-  const aOpen = aExists && adjSet.has(aNorm);
-  const bOpen = bExists && adjSet.has(bNorm);
-  return aOpen || bOpen;
+  const aFirstOpen = aExists && adjSet.has(aNorm) && !board.movementBlockingSet.has(edgeKey(startLower, aNorm));
+  const bFirstOpen = bExists && adjSet.has(bNorm) && !board.movementBlockingSet.has(edgeKey(startLower, bNorm));
+  // Second half: corner → dest (must not be walled off from the corner)
+  const aSecondOpen =
+    aFirstOpen &&
+    !board.movementBlockingSet.has(edgeKey(aNorm, destNorm)) &&
+    (!board.adjacency?.[aNorm] || (board.adjacency[aNorm] || []).includes(destNorm));
+  const bSecondOpen =
+    bFirstOpen &&
+    !board.movementBlockingSet.has(edgeKey(bNorm, destNorm)) &&
+    (!board.adjacency?.[bNorm] || (board.adjacency[bNorm] || []).includes(destNorm));
+  return aSecondOpen || bSecondOpen;
 }
 
 function getNeighborStates(state, board, profile) {
