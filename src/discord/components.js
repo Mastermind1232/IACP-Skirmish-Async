@@ -675,6 +675,12 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const noActions = (actionsRemaining ?? 2) <= 0;
   const playerNum = game ? (getPlayerNumForMsgId(msgId) ?? 1) : 1;
   const selectedFigure = actionsData.selectedFigure ?? null;
+
+  // Stun: check if the active figure is Stunned — if so, disable all action buttons
+  const checkFigIdx = figures === 1 ? 0 : (selectedFigure ?? null);
+  const isStunned = checkFigIdx != null && !!(game?.figureConditions?.[`${dcName}-${dgIndex}-${checkFigIdx}`] || []).includes('Stun');
+  const noAct = noActions || isStunned;
+
   const rows = [];
 
   if (figures > 1) {
@@ -682,9 +688,9 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       // Figure already selected: show action buttons (no dropdown — frees up a row slot)
       const suffix = ` ${dgIndex}${FIGURE_LETTERS[selectedFigure]}`;
       const comps = [
-        new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(`Move${suffix}`).setStyle(ButtonStyle.Success).setDisabled(noActions),
-        new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noActions),
-        new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noActions),
+        new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(`Move${suffix}`).setStyle(ButtonStyle.Success).setDisabled(noAct),
+        new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noAct),
+        new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noAct),
       ];
       rows.push(new ActionRowBuilder().addComponents(...comps));
     } else {
@@ -701,11 +707,14 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       rows.push(new ActionRowBuilder().addComponents(selectMenu));
     }
   } else {
-    const comps = [
-      new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel('Move').setStyle(ButtonStyle.Success).setDisabled(noActions),
-      new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noActions),
-      new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noActions),
-    ];
+    const stunLabel = isStunned ? '⚡ Stunned — no actions' : null;
+    const comps = stunLabel
+      ? [new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel(stunLabel.slice(0, 80)).setStyle(ButtonStyle.Secondary).setDisabled(true),
+         new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(true),
+         new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(true)]
+      : [new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel('Move').setStyle(ButtonStyle.Success).setDisabled(noAct),
+         new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noAct),
+         new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noAct)];
     rows.push(new ActionRowBuilder().addComponents(...comps));
   }
 
@@ -719,7 +728,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
         .setCustomId(`dc_special_${idx}_${msgId}`)
         .setLabel(label)
         .setStyle(ButtonStyle.Primary)
-        .setDisabled(alreadyUsed || (actionsRemaining ?? 2) < cost);
+        .setDisabled(isStunned || alreadyUsed || (actionsRemaining ?? 2) < cost);
     });
     rows.push(new ActionRowBuilder().addComponents(...specialBtns));
   }
@@ -732,12 +741,12 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
           .setCustomId(`dc_cc_special_${msgId}_${idx}`)
           .setLabel(`CC: ${ccName}`.slice(0, 80))
           .setStyle(ButtonStyle.Secondary)
-          .setDisabled(noActions)
+          .setDisabled(noAct)
       );
       rows.push(new ActionRowBuilder().addComponents(...ccBtns));
     }
   }
-  // Double Action CCs: shown when 2 actions remain; disabled when < 2 actions
+  // Double Action CCs: shown when 2 actions remain; disabled when < 2 actions or Stunned
   if (game && !noActions && rows.length < 5) {
     const playableCcDouble = getPlayableCcDoubleActionsForDc(game, playerNum, dcName, displayName);
     const ccDoubles = playableCcDouble.slice(0, 5);
@@ -747,7 +756,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
           .setCustomId(`dc_cc_double_${msgId}_${idx}`)
           .setLabel(`CC (2 Actions): ${ccName}`.slice(0, 80))
           .setStyle(ButtonStyle.Secondary)
-          .setDisabled((actionsRemaining ?? 2) < 2)
+          .setDisabled(isStunned || (actionsRemaining ?? 2) < 2)
       );
       rows.push(new ActionRowBuilder().addComponents(...ccDoubleBtns));
     }

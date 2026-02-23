@@ -1490,6 +1490,9 @@
       "affiliation": "Rebel",
       "specials": [
         "Slam"
+      ],
+      "specialAbilityIds": [
+        "slam"
       ]
     },
     "Chirrut Imwe": {
@@ -1671,6 +1674,10 @@
       "specials": [
         "Force Choke",
         "Brutality"
+      ],
+      "specialAbilityIds": [
+        "force_choke",
+        "brutality"
       ]
     },
     "Davith Elso": {
@@ -2173,6 +2180,9 @@
       "affiliation": "Imperial",
       "specials": [
         "Force Lightning"
+      ],
+      "specialAbilityIds": [
+        "force_lightning"
       ]
     },
     "Ewok Warrior (Elite)": {
@@ -2937,8 +2947,7 @@
       "health": 10,
       "speed": 5,
       "passives": [
-        "Block 1",
-        "+2 Accuracy"
+        "Relentless"
       ],
       "figures": 1,
       "attack": {
@@ -2959,9 +2968,6 @@
       "elite": true,
       "unique": true,
       "affiliation": "Scum",
-      "passives": [
-        "Relentless"
-      ],
       "specials": []
     },
     "Imperial Officer (Elite)": {
@@ -3716,6 +3722,9 @@
       "affiliation": "Rebel",
       "specials": [
         "Saber Strike"
+      ],
+      "specialAbilityIds": [
+        "saber_strike"
       ]
     },
     "Luke Skywalker (Jedi Knight)": {
@@ -3950,6 +3959,10 @@
       "specials": [
         "False Orders",
         "Field Report"
+      ],
+      "specialAbilityIds": [
+        "false_orders",
+        "field_report"
       ]
     },
     "Nexu (Elite)": {
@@ -4207,6 +4220,9 @@
       "affiliation": "Imperial",
       "specials": [
         "On the Hunt"
+      ],
+      "specialAbilityIds": [
+        "on_the_hunt"
       ]
     },
     "R2-D2": {
@@ -4598,6 +4614,9 @@
       "affiliation": "Imperial",
       "specials": [
         "Brutality"
+      ],
+      "specialAbilityIds": [
+        "brutality"
       ]
     },
     "Sabine Wren": {
@@ -6082,7 +6101,10 @@
       "specials": [
         "Pounce"
       ],
-      "specialCosts": []
+      "specialCosts": [],
+      "specialAbilityIds": [
+        "dc_pounce"
+      ]
     }
   }
 }

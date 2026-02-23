@@ -198,6 +198,18 @@ export async function handleDcUnactivate(interaction, ctx) {
   if (game.nextAttackBonusPierce?.[meta.playerNum]) delete game.nextAttackBonusPierce[meta.playerNum];
   if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
   if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
+  // Stun: discarded at the end of the figure's activation
+  if (game.figureConditions) {
+    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+    const stats = ctx.getDcStats ? ctx.getDcStats(meta.dcName) : {};
+    const figures = stats.figures ?? 1;
+    for (let f = 0; f < figures; f++) {
+      const fk = `${meta.dcName}-${dgIndex}-${f}`;
+      if (game.figureConditions[fk]) {
+        game.figureConditions[fk] = game.figureConditions[fk].filter((c) => c !== 'Stun');
+      }
+    }
+  }
   if (game.dcActivationLogMessageIds?.[msgId]) {
     try {
       const logCh = await client.channels.fetch(game.generalId);

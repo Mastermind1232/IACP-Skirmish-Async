@@ -165,26 +165,34 @@
     },
     "force_choke": {
       "type": "dcSpecial",
-      "label": "Force Choke: Choose a hostile figure in your line of sight. That figure suffers 2 Damage and 1 Strain."
+      "label": "Force Choke: Choose a hostile figure in your line of sight. That figure suffers 2 Damage and 1 Strain.",
+      "informational": true,
+      "wiredStatus": "informational"
     },
     "brutality": {
       "type": "dcSpecial",
-      "label": "Brutality: Perform 2 attacks. Each attack must have a different target."
+      "label": "Brutality: Perform 2 attacks. Each attack must have a different target.",
+      "informational": true,
+      "wiredStatus": "informational"
     },
     "saber_strike": {
       "type": "dcSpecial",
-      "label": "Saber Strike: Perform a melee attack using 1 red and 1 yellow die. This attack gains Pierce 3."
+      "label": "Saber Strike: Perform a melee attack using 1 red and 1 yellow die. This attack gains Pierce 3.",
+      "informational": true,
+      "wiredStatus": "informational"
     },
     "get_into_position": {
       "type": "dcSpecial",
       "label": "Get into Position: Gain 4 movement points and become Focused.",
       "mpBonus": 4,
-      "applyFocus": true
+      "applyFocus": true,
+      "wiredStatus": "wired"
     },
     "prowl": {
       "type": "dcSpecial",
       "label": "Prowl: You become Hidden.",
-      "applySelfCondition": "Hide"
+      "applySelfCondition": "Hide",
+      "wiredStatus": "wired"
     },
     "evasive_maneuver": {
       "type": "dcSpecial",
@@ -2283,6 +2291,45 @@
       "label": "Pounce: place figure in empty space within 3, then may perform an attack (free)",
       "pounceRange": 3,
       "wiredStatus": "wired"
+    },
+    "slam": {
+      "type": "dcSpecial",
+      "informational": true,
+      "label": "Slam",
+      "logMessage": "Slam: Roll 1 red die. Choose an adjacent hostile figure — it suffers Damage equal to the Hit results. If that figure is SMALL, you may push it 1 space.",
+      "wiredStatus": "informational"
+    },
+    "force_lightning": {
+      "type": "dcSpecial",
+      "informational": true,
+      "label": "Force Lightning",
+      "logMessage": "Force Lightning: Choose a figure within 4 spaces and line of sight — it suffers 3 Damage and becomes Weakened; each figure adjacent to it suffers 1 Damage. Apply HP changes on the board.",
+      "wiredStatus": "informational"
+    },
+    "false_orders": {
+      "type": "dcSpecial",
+      "informational": true,
+      "label": "False Orders",
+      "logMessage": "False Orders: Choose a hostile figure with a cost of 4 or less within 4 spaces. Perform a move or attack with that figure (resolve manually).",
+      "wiredStatus": "informational"
+    },
+    "field_report": {
+      "type": "dcSpecial",
+      "informational": true,
+      "label": "Field Report",
+      "logMessage": "Field Report: Choose up to 2 friendly figures within 4 spaces with 2 or fewer attack dice in their printed pool — those figures become Hidden. Apply the Hidden condition to their DC cards.",
+      "wiredStatus": "informational"
+    },
+    "on_the_hunt": {
+      "type": "dcSpecial",
+      "freeMoveBonus": 2,
+      "nextAttacksBonusHits": {
+        "count": 1,
+        "bonus": 1
+      },
+      "label": "On the Hunt",
+      "logMessage": "On the Hunt: Gained 2 free movement points — use the Move button. Your next attack automatically gains +1 Hit (tracked by the bot). Target must be a unique hostile figure.",
+      "wiredStatus": "partial"
     }
   }
 }

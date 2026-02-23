@@ -104,6 +104,31 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // dcSpecial: informational — manual resolution with instruction message (no automated game-state change)
+  if (entry.type === 'dcSpecial' && entry.informational && !entry.freeMoveBonus && !entry.nextAttacksBonusHits) {
+    return {
+      applied: true,
+      logMessage: entry.logMessage || entry.label || 'Resolve manually (see rules).',
+      manualMessage: entry.logMessage || entry.label,
+    };
+  }
+
+  // dcSpecial: freeMoveBonus + nextAttacksBonusHits (On the Hunt — gain free MP, next attack gets +N Hit)
+  if (entry.type === 'dcSpecial' && typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && entry.nextAttacksBonusHits) {
+    const { game, msgId, meta } = context;
+    if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    bank.total = (bank.total ?? 0) + entry.freeMoveBonus;
+    bank.remaining = (bank.remaining ?? 0) + entry.freeMoveBonus;
+    game.movementBank[msgId] = bank;
+    const nb = entry.nextAttacksBonusHits;
+    game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
+    game.nextAttacksBonusHits[meta.playerNum] = { count: nb.count, bonus: nb.bonus };
+    const logMsg = entry.logMessage || `Gained ${entry.freeMoveBonus} free MP. Next ${nb.count} attack${nb.count !== 1 ? 's' : ''} gain +${nb.bonus} Hit.`;
+    return { applied: true, logMessage: logMsg };
+  }
+
   // ccEffect: noCommandDrawThisRound (Cut Lines — players cannot draw CCs this round)
   if (entry.type === 'ccEffect' && entry.noCommandDrawThisRound) {
     const { game } = context;
