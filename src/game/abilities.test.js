@@ -840,3 +840,78 @@ test('resolveAbility Emergency Aid recovers to adjacent figure', () => {
   assert.strictEqual(result.applied, true);
   assert.deepStrictEqual(healthState[0], [5, 6]);
 });
+
+test('resolveAbility Dirty Trick with adjacent hostile presents orStunInstead choice', () => {
+  const msgId = 'msg-dt';
+  const hostileMsgId = 'msg-hostile-dt';
+  const game = {
+    gameId: 'g-dt',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: { 'Akbar-1-0': 'o8' }, 2: { 'Stormtroopers-2-0': 'p8' } },
+    dcActionsData: { [msgId]: {} },
+    p2DcMessageIds: [hostileMsgId],
+    p2DcList: [{ dcName: 'Stormtroopers', healthState: [[4, 5]] }],
+    figureConditions: {},
+  };
+  const dcMessageMeta = new Map([
+    [msgId, { gameId: 'g-dt', playerNum: 1, dcName: 'Akbar', displayName: 'Akbar [DG 1]' }],
+    [hostileMsgId, { gameId: 'g-dt', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 2]' }],
+  ]);
+  const result = resolveAbility('Dirty Trick', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, false);
+  assert.strictEqual(result.requiresChoice, true);
+  assert.strictEqual(result.choiceOptions?.length, 2);
+  assert.ok(result.choiceOptions[0].includes('Strain'));
+  assert.ok(result.choiceOptions[1].includes('Stun'));
+  assert.ok(result.choiceValues[0].startsWith('strain:'));
+  assert.ok(result.choiceValues[1].startsWith('stun:'));
+});
+
+test('resolveAbility Dirty Trick with stun: choice applies Stun condition', () => {
+  const hostileFk = 'Stormtroopers-2-0';
+  const hostileMsgId = 'msg-hostile-dt2';
+  const game = {
+    gameId: 'g-dt2',
+    figurePositions: { 1: {}, 2: { [hostileFk]: 'p8' } },
+    p2DcMessageIds: [hostileMsgId],
+    p2DcList: [{ dcName: 'Stormtroopers', healthState: [[4, 5]] }],
+    figureConditions: {},
+  };
+  const dcMessageMeta = new Map([
+    [hostileMsgId, { gameId: 'g-dt2', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 2]' }],
+  ]);
+  const result = resolveAbility('Dirty Trick', { game, playerNum: 1, dcMessageMeta, chosenFigureKey: `stun:${hostileFk}` });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('Stun'));
+  assert.ok(game.figureConditions[hostileFk]?.includes('Stun'));
+});
+
+test('resolveAbility Dirty Trick with strain: choice applies 3 Strain damage', () => {
+  const hostileFk = 'Stormtroopers-2-0';
+  const hostileMsgId = 'msg-hostile-dt3';
+  const healthState = [[4, 5]];
+  const dcHealthState = new Map([[hostileMsgId, healthState]]);
+  const game = {
+    gameId: 'g-dt3',
+    figurePositions: { 1: {}, 2: { [hostileFk]: 'p8' } },
+    p2DcMessageIds: [hostileMsgId],
+    p2DcList: [{ dcName: 'Stormtroopers', healthState: [[4, 5]] }],
+  };
+  const dcMessageMeta = new Map([
+    [hostileMsgId, { gameId: 'g-dt3', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 2]' }],
+  ]);
+  const result = resolveAbility('Dirty Trick', { game, playerNum: 1, dcMessageMeta, dcHealthState, chosenFigureKey: `strain:${hostileFk}` });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(healthState[0], [1, 5]); // 4 - 3 Strain = 1
+});
+
+test('resolveAbility Close and Personal uses entry logMessage and grants 2 MP', () => {
+  const msgId = 'msg-cap';
+  const game = { gameId: 'g-cap', dcActionsData: { [msgId]: {} } };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-cap', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const result = resolveAbility('Close and Personal', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('2 MP'));
+  assert.ok(result.logMessage?.includes('Melee'));
+  assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
+});
