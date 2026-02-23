@@ -2868,7 +2868,7 @@
       "label": "Hunker Down",
       "description": "While defending, if you share a corner or edge with a space containing blocking, impassable, or difficult terrain, apply +1 Evade to your defense results.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "battle_meditation": {
       "type": "dcSpecial",
@@ -3012,7 +3012,7 @@
       "label": "Distracting",
       "description": "While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Evade to the defense results.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "distracting_c3po": {
       "type": "dcSpecial",
@@ -3021,7 +3021,7 @@
       "label": "Distracting",
       "description": "While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Evade to the defense results.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "sustained_by_rage": {
       "type": "dcSpecial",
@@ -3048,7 +3048,7 @@
       "label": "Regenerate",
       "description": "At the end of each round, recover 2 Damage and discard all Harmful conditions.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "full_of_rage": {
       "type": "dcSpecial",

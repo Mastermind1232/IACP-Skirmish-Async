@@ -2,6 +2,7 @@
  * Round handlers: end_end_of_round_, end_start_of_round_
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { getDcEffects } from '../data-loader.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -75,6 +76,40 @@ export async function handleEndEndOfRound(interaction, ctx) {
       if (game.figureConditions[fk].length === 0) delete game.figureConditions[fk];
     }
   }
+  // Regenerate (Bossk): recover 2 HP and discard Bleed at end of round
+  const dcEffects = getDcEffects();
+  for (const [msgId, meta] of dcMessageMeta) {
+    if (meta.gameId !== gameId) continue;
+    if (isDepletedRemovedFromGame(game, msgId)) continue;
+    const eff = dcEffects[meta.dcName] || dcEffects[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if (!(eff?.specialAbilityIds || []).includes('regenerate_bossk')) continue;
+    const healthState = dcHealthState.get(msgId);
+    if (!healthState) continue;
+    let healed = false;
+    for (let i = 0; i < healthState.length; i++) {
+      const entry = healthState[i];
+      if (!Array.isArray(entry)) continue;
+      const [cur, max] = entry;
+      if (cur == null || max == null || cur >= max) continue;
+      healthState[i] = [Math.min(cur + 2, max), max];
+      healed = true;
+    }
+    if (healed) {
+      dcHealthState.set(msgId, healthState);
+      const dcIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const dcList = meta.playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const idx = (dcIds || []).indexOf(msgId);
+      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+      await logGameAction(game, client, `♻️ **Regenerate** — **${meta.dcName}** recovered 2 HP.`, { phase: 'ROUND', icon: 'round' });
+    }
+    // Discard Bleed (Stun/Weaken already cleared above)
+    for (const fk of Object.keys(game.figureConditions || {})) {
+      if (!fk.startsWith(meta.dcName + '-')) continue;
+      game.figureConditions[fk] = (game.figureConditions[fk] || []).filter(c => c !== 'Bleed');
+      if (game.figureConditions[fk].length === 0) delete game.figureConditions[fk];
+    }
+  }
+
   // Apply end-of-round self damage (e.g. Blaze of Glory)
   const eorSelfDamage = game.endOfRoundSelfDamage;
   if (eorSelfDamage && typeof eorSelfDamage === 'object') {

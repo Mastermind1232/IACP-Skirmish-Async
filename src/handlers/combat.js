@@ -3,6 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
+import { getMapSpaces } from '../data-loader.js';
 
 /** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after. */
 async function sendReadyToResolveRolls(thread, gameId) {
@@ -261,6 +262,38 @@ export async function handleAttackTarget(interaction, ctx) {
   const cunningIds = ['cunning_han', 'cunning_jyn', 'cunning_nexu_elite', 'cunning_nexu_reg'];
   if (defSpecialIds.some(id => cunningIds.includes(id))) {
     game.pendingCombat.hasCunning = true;
+  }
+
+  // Distracting (Han Solo, C-3PO): if this figure is adjacent to the targeted space, +1 Evade for defender
+  // "Friendly figure defending" — check if any friendly figure with distracting is adjacent to target.coord
+  const distractingIds = ['distracting_han', 'distracting_c3po'];
+  const mapSpaces = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+  const targetCoord = target.coord ? String(target.coord).toLowerCase() : null;
+  if (mapSpaces && targetCoord) {
+    const adjToTarget = new Set((mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase()));
+    adjToTarget.add(targetCoord); // figure in same space also counts
+    const defenderFigPositions = game.figurePositions?.[defenderPlayerNum] || {};
+    for (const [fk, pos] of Object.entries(defenderFigPositions)) {
+      const fkDcName = fk.replace(/-\d+-\d+$/, '');
+      const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+      if (!(fkEff?.specialAbilityIds || []).some(id => distractingIds.includes(id))) continue;
+      if (!adjToTarget.has(String(pos).toLowerCase())) continue;
+      game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) + 1;
+      await thread.send(`**Distracting** (${fkDcName}) — adjacent to target, +1 Evade for defender.`);
+      break; // only one Distracting bonus
+    }
+  }
+
+  // Hunker Down (Cara Dune): if defender shares edge/corner with blocking/impassable/difficult terrain, +1 Evade
+  if (defSpecialIds.includes('hunker_down') && mapSpaces && targetCoord) {
+    const adjToDefender = new Set((mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase()));
+    const terrain = mapSpaces.terrain || {};
+    const hunkerTerrain = ['blocking', 'impassable', 'difficult'];
+    const hasNearbyTerrain = [...adjToDefender].some(s => hunkerTerrain.includes((terrain[s] || 'normal').toLowerCase()));
+    if (hasNearbyTerrain) {
+      game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) + 1;
+      await thread.send('**Hunker Down** — Cara Dune is adjacent to terrain, +1 Evade.');
+    }
   }
 
   // Relentless (Trandoshan Hunter, IG-88, Fifth Brother): 1 Strain to target within 3
