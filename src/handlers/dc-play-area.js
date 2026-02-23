@@ -79,8 +79,6 @@ export async function handleDcActivate(interaction, ctx) {
     });
     return;
   }
-    console.error('dc_activate_ deferUpdate failed:', e?.message || e);
-  });
   try {
     const channel = await client.channels.fetch(playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
     const msg = await channel.messages.fetch(msgId);
