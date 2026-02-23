@@ -198,29 +198,35 @@
       "type": "dcSpecial",
       "label": "Evasive Maneuver: Move up to 2 spaces, then recover 2 Damage.",
       "recoverSelf": 2,
-      "freeMoveBonus": 2
+      "freeMoveBonus": 2,
+      "wiredStatus": "wired"
     },
     "medical_loadout": {
       "type": "dcSpecial",
       "label": "Medical Loadout: You recover 3 Damage. (To heal an adjacent figure instead, use manual resolve.)",
-      "recoverSelf": 3
+      "recoverSelf": 3,
+      "wiredStatus": "wired"
     },
     "scomp_link": {
       "type": "dcSpecial",
       "label": "Scomp Link: If adjacent to a terminal, draw 1 Command card.",
-      "drawCCIfAdjacentTerminal": 1
+      "drawCCIfAdjacentTerminal": 1,
+      "wiredStatus": "wired"
     },
     "stim_canister": {
       "type": "dcSpecial",
-      "label": "Stim Canister: An adjacent friendly figure recovers 2 Health. (Resolve manually  target must be chosen.)"
+      "label": "Stim Canister: An adjacent friendly figure recovers 2 Health. (Resolve manually  target must be chosen.)",
+      "wiredStatus": "informational"
     },
     "inform": {
       "type": "dcSpecial",
-      "label": "Inform: Choose an adjacent friendly figure. That figure becomes Focused. (Resolve manually  target must be chosen.)"
+      "label": "Inform: Choose an adjacent friendly figure. That figure becomes Focused. (Resolve manually  target must be chosen.)",
+      "wiredStatus": "informational"
     },
     "force_heal": {
       "type": "dcSpecial",
-      "label": "Force Heal: An adjacent friendly figure recovers 1 Damage and discards a HARMFUL condition. (Resolve manually  target must be chosen.)"
+      "label": "Force Heal: An adjacent friendly figure recovers 1 Damage and discards a HARMFUL condition. (Resolve manually  target must be chosen.)",
+      "wiredStatus": "informational"
     },
     "cc:advance_warning": {
       "type": "ccEffect",
@@ -2330,6 +2336,746 @@
       "label": "On the Hunt",
       "logMessage": "On the Hunt: Gained 2 free movement points — use the Move button. Your next attack automatically gains +1 Hit (tracked by the bot). Target must be a unique hostile figure.",
       "wiredStatus": "partial"
+    },
+    "shocking_palm": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Shocking Palm",
+      "description": "The attack misses and the defender becomes Stunned.",
+      "wiredStatus": "unwired"
+    },
+    "concussive_bolt": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Concussive Bolt",
+      "description": "After this attack resolves, if you are targeting a SMALL figure and it did not miss, you may push that figure 1 space.",
+      "wiredStatus": "unwired"
+    },
+    "interrogate": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Interrogate",
+      "description": "Look at your opponent's hand and choose a Command card. You may discard a card of equal or greater cost from your hand to discard the chosen card.",
+      "wiredStatus": "unwired"
+    },
+    "suppression": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Suppression",
+      "description": "After resolving a Ranged attack, if it did not miss due to accuracy, the target suffers Strain equal to the number of Block, Evade, and Dodge results, to a maximum of 2.",
+      "wiredStatus": "unwired"
+    },
+    "agitate": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Agitate",
+      "description": "If this attack does not miss, the defending figure's group must be the next group to activate, if able.",
+      "wiredStatus": "unwired"
+    },
+    "fell_swoop": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Fell Swoop",
+      "description": "After this attack resolves, become Hidden, move up to 2 spaces, then perform an attack. Limit once per round.",
+      "wiredStatus": "unwired"
+    },
+    "spread_the_pain": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Spread the Pain",
+      "description": "Choose a HARMFUL condition not already chosen this attack. After this attack resolves, if it did not miss, a figure on or adjacent to the target space gains the chosen condition. Can be used multiple times per attack.",
+      "wiredStatus": "unwired"
+    },
+    "shrapnel": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Shrapnel",
+      "description": "Choose one: This attack gains Blast 2, or after this attack resolves, if it did not miss, each figure and object within 2 spaces of the target space suffers 1 Damage.",
+      "wiredStatus": "unwired"
+    },
+    "bargain": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Bargain",
+      "description": "Spend 1 VP to roll 1 green die. For each Hit result, gain 1 VP.",
+      "wiredStatus": "unwired"
+    },
+    "harass": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Harass",
+      "description": "After the attack resolves, if it did not miss, the defender suffers 1 Strain.",
+      "wiredStatus": "unwired"
+    },
+    "squad_command": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Squad Command",
+      "description": "Choose an adjacent friendly TROOPER. That figure becomes Focused.",
+      "wiredStatus": "unwired"
+    },
+    "critical_hit": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Critical Hit",
+      "description": "This attack gains Pierce 2. If the target suffered 1 or more Damage, the target may not play Command cards this round.",
+      "wiredStatus": "unwired"
+    },
+    "stalk_prey": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Stalk Prey",
+      "description": "After this attack resolves, you gain 2 movement points and 1 Hit Token.",
+      "wiredStatus": "unwired"
+    },
+    "mastery": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Mastery",
+      "description": "Choose and re-draw a FORCE USER Command card of cost 1 or less from your discard pile. Limit once per round.",
+      "wiredStatus": "unwired"
+    },
+    "deadly_spin": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Deadly Spin",
+      "description": "Apply -1 Dodge to the defense results. This attack gains Cleave 3.",
+      "wiredStatus": "unwired"
+    },
+    "fighting_knife": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Fighting Knife",
+      "description": "After this attack resolves, choose an adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results.",
+      "wiredStatus": "unwired"
+    },
+    "stun_net": {
+      "type": "surge",
+      "surgeCost": 1,
+      "label": "Stun Net",
+      "description": "After this attack resolves, if it did not miss, the target becomes Stunned.",
+      "wiredStatus": "unwired"
+    },
+    "wrist_cord": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Wrist Cord",
+      "description": "Once per round, spend 2 MP to choose a SMALL figure within 3 spaces in your line of sight. Push that figure up to 3 spaces into a space adjacent to you.",
+      "oncePer": "round",
+      "wiredStatus": "unwired"
+    },
+    "wrist_flamethrower": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Wrist Flamethrower",
+      "description": "Once per round, spend 2 MP to choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain, then becomes Weakened.",
+      "oncePer": "round",
+      "wiredStatus": "unwired"
+    },
+    "bo_rifle_staff_strike": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Bo-Rifle Staff Strike",
+      "description": "Once during your activation, perform a Melee attack using 2 red dice without spending an action.",
+      "oncePer": "activation",
+      "wiredStatus": "unwired"
+    },
+    "heroic": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Heroic",
+      "description": "Once during your activation, you may perform an attack without spending an action.",
+      "oncePer": "activation",
+      "wiredStatus": "unwired"
+    },
+    "brutal_cleave": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "post-combat",
+      "label": "Brutal Cleave",
+      "description": "After you resolve an attack during your activation, you may suffer 1 Strain to perform an attack using 1 red and 1 yellow die targeting a different figure or object. Limit once per activation.",
+      "oncePer": "activation",
+      "wiredStatus": "unwired"
+    },
+    "smash": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Smash",
+      "description": "Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.",
+      "oncePer": "activation",
+      "wiredStatus": "unwired"
+    },
+    "force_throw": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Force Throw",
+      "description": "Once during your activation, you may suffer 1 Strain to choose another SMALL figure within 3 spaces. Push that figure up to 2 spaces.",
+      "oncePer": "activation",
+      "wiredStatus": "unwired"
+    },
+    "electrified_knuckledusters": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Electrified Knuckledusters",
+      "description": "Once during your activation, choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Hit results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.",
+      "oncePer": "activation",
+      "wiredStatus": "unwired"
+    },
+    "parting_gift": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Parting Gift",
+      "description": "Once during your activation, you may choose a space within 3 spaces and roll 1 green die. Each other figure and object on or adjacent to that space suffers Damage equal to the Hit results.",
+      "oncePer": "activation",
+      "wiredStatus": "unwired"
+    },
+    "demolish": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Demolish",
+      "description": "Once during your activation, you may choose a space within 3 spaces and line of sight. Each figure on or adjacent to that space suffers 1 Damage. Then, place a rubble token in that space and you suffer 1 Strain.",
+      "oncePer": "activation",
+      "wiredStatus": "unwired"
+    },
+    "mortar_launcher": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "end-of-round",
+      "label": "Mortar Launcher",
+      "description": "At the end of the round, you may move up to 2 spaces. Then, choose a space within 3 spaces that contains a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Hit results.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "charge": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Charge",
+      "description": "Move a number of spaces up to your Speed. Then, you may perform an attack.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "rapid_fire_ig11": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Rapid Fire",
+      "description": "Perform 2 attacks.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "rapid_fire_vinto": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Rapid Fire",
+      "description": "Perform 2 attacks.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "indiscriminate_fire": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Indiscriminate Fire",
+      "description": "Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red attack die. Each other figure within 2 spaces of the target space other than the defender suffers Damage equal to the Hit results and Strain equal to the Surge results.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "battlefield_leadership": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Battlefield Leadership",
+      "description": "Perform an attack, then choose another friendly figure within 3 spaces. That figure may interrupt to move up to 1 space and then perform an attack with the same target.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "gifted_mechanic": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Gifted Mechanic",
+      "description": "Choose an adjacent friendly DROID or VEHICLE. You and that figure each recover 1 Damage and gain 1 Hit Token.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "wall_run": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Wall Run",
+      "description": "Move a number of spaces up to your Speed. During this movement, you may ignore terrain in spaces that share an edge or corner with a wall.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "ee3_carbine": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-declare",
+      "label": "EE-3 Carbine",
+      "description": "When you declare an attack, you may spend 2 movement points to change one of your attack dice to a red die. Limit once per attack.",
+      "oncePer": "activation",
+      "wiredStatus": "unwired"
+    },
+    "dual_bladed_fury": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-declare",
+      "label": "Dual-Bladed Fury",
+      "description": "Before you declare an attack, choose one: This attack gains Reach and Cleave 2, or you become Focused.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "shock_and_awe": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-declare",
+      "label": "Shock and Awe",
+      "description": "When you declare an attack, you may replace 1 Yellow die in your attack pool with 1 Red die. Limit once per round.",
+      "oncePer": "round",
+      "wiredStatus": "unwired"
+    },
+    "flawless_execution": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-declare",
+      "label": "Flawless Execution",
+      "description": "Before you declare an attack, you become Focused. If you are already Focused, you may gain 1 Power Token and add 1 attack die of any color to your attack pool instead of 1 green die.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "foresight": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Foresight",
+      "description": "While defending, you may reroll 1 defense die.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "arsenal": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-declare",
+      "label": "Arsenal",
+      "description": "Your attack pool consists of any combination of 2 attack dice.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "epic_arsenal": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-declare",
+      "label": "Epic Arsenal",
+      "description": "Your attack pool consists of any combination of 3 attack dice. You cannot roll more than 2 dice of a single color.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "soresu_form": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Soresu Form",
+      "description": "While a friendly figure within 3 spaces is defending, it may reroll 1 die. If it does, convert each Dodge result to 2 Block and 1 Evade and, if that figure is not FORCE USER, you suffer 1 Strain.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "inspiring": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Inspiring",
+      "description": "While another friendly figure within 3 spaces is attacking, it may reroll 1 die.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "hair_trigger": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "activation",
+      "label": "Hair Trigger",
+      "description": "At the start of a hostile figure's activation, you may interrupt to perform an attack that targets that figure. Limit once per round.",
+      "oncePer": "round",
+      "wiredStatus": "unwired"
+    },
+    "figurehead": {
+      "type": "dcSpecial",
+      "category": "interrupt",
+      "trigger": "when-targeted",
+      "label": "Figurehead",
+      "description": "Before a friendly figure within 4 spaces suffers Damage or Strain, you may suffer Damage or Strain to prevent 1 of that Damage or Strain.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "executor": {
+      "type": "dcSpecial",
+      "category": "interrupt",
+      "trigger": "post-combat",
+      "label": "Executor",
+      "description": "When a friendly figure within 3 spaces is defeated, you may interrupt to move up to 2 spaces and then perform an attack. Limit once per round.",
+      "oncePer": "round",
+      "wiredStatus": "unwired"
+    },
+    "i_am_one_with_the_force": {
+      "type": "dcSpecial",
+      "category": "interrupt",
+      "trigger": "activation",
+      "label": "I'm One With the Force",
+      "description": "At the start of a hostile figure's activation, you may move up to 2 spaces to a space adjacent to a hostile figure. Limit once per round.",
+      "oncePer": "round",
+      "wiredStatus": "unwired"
+    },
+    "return_fire": {
+      "type": "dcSpecial",
+      "category": "interrupt",
+      "trigger": "post-combat",
+      "label": "Return Fire",
+      "description": "After an attack targeting you is resolved, if you did not suffer any Damage, you may interrupt to perform an attack targeting that attacker. Limit once per round.",
+      "oncePer": "round",
+      "wiredStatus": "unwired"
+    },
+    "defensive_stance": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Defensive Stance",
+      "description": "While defending, you may reroll 1 defense die. If you do, convert each Dodge result to 2 Block and 1 Evade.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "overpower": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Overpower",
+      "description": "While attacking, you may reroll 1 red die. While defending, you may reroll 1 black die.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "vanguard": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-declare",
+      "label": "Vanguard",
+      "description": "While attacking a figure within 3 spaces, you may replace one die in your attack pool with 1 red die.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "targeting_computer_hk_elite": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Targeting Computer",
+      "description": "While attacking, you may reroll 1 attack die.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "targeting_computer_ig11": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Targeting Computer",
+      "description": "While attacking, you may reroll 1 attack die.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "targeting_computer_probe_elite": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Targeting Computer",
+      "description": "While attacking, you may reroll 1 attack die.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "targeting_computer_sentry_elite": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Targeting Computer",
+      "description": "While attacking, you may reroll 1 attack die.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "targeting_computer_sentry_reg": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Targeting Computer",
+      "description": "While attacking, you may reroll 1 attack die.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "charge_generators": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Charge Generators",
+      "description": "While attacking, if you have suffered fewer than 9 Damage, apply +1 Hit to the attack results and you may reroll 1 attack die.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "expertise": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "activation",
+      "label": "Expertise",
+      "description": "After you perform a Special Action, you may perform an additional action. Limit once per activation.",
+      "oncePer": "activation",
+      "wiredStatus": "unwired"
+    },
+    "self_destruct_protocol": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "activation",
+      "label": "Self-Destruct Protocol",
+      "description": "When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "self_destruct_probe": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "end-of-round",
+      "label": "Self-Destruct",
+      "description": "At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "lasat_honor_guard": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Lasat-Honor Guard",
+      "description": "While attacking, after any rerolls, you may turn 1 die showing only a single attack icon to any other side.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "hunker_down": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "when-targeted",
+      "label": "Hunker Down",
+      "description": "While defending, if you share a corner or edge with a space containing blocking, impassable, or difficult terrain, apply +1 Evade to your defense results.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "battle_meditation": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Battle Meditation",
+      "description": "Before you declare an attack, become Focused.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "military_efficiency": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "post-combat",
+      "label": "Military Efficiency",
+      "description": "After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "boltslinger": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "post-combat",
+      "label": "Boltslinger",
+      "description": "After you resolve an attack during your activation, you may choose a hostile figure other than the defender in your line of sight and within 3 spaces. That figure suffers 1 Damage.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "sidewinder": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "post-combat",
+      "label": "Sidewinder",
+      "description": "After you resolve an attack, you may suffer 1 Strain to move up to 2 spaces. Limit once per round.",
+      "oncePer": "round",
+      "wiredStatus": "unwired"
+    },
+    "relentless_trandoshan_elite": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Relentless",
+      "description": "When you declare an attack targeting a figure within 3 spaces, that figure suffers 1 Strain.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "relentless_trandoshan_reg": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Relentless",
+      "description": "When you declare an attack targeting a figure within 3 spaces, that figure suffers 1 Strain.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "relentless_ig88": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Relentless",
+      "description": "When you declare an attack targeting a figure within 3 spaces, that figure suffers 1 Strain.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "acp_scattergun": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-dice",
+      "label": "ACP Scattergun",
+      "description": "Named surge ability - see surgeAbilities for effect.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "scattergun": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-dice",
+      "label": "Scattergun",
+      "description": "Named surge ability - see surgeAbilities for effect.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "cunning_han": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "when-targeted",
+      "label": "Cunning",
+      "description": "While defending, apply +1 Block to the defense results for each Evade result.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "cunning_jyn": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "when-targeted",
+      "label": "Cunning",
+      "description": "While defending, apply +1 Block to the defense results for each Evade result.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "cunning_nexu_elite": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "when-targeted",
+      "label": "Cunning",
+      "description": "While defending, apply +1 Block to the defense results for each Evade result.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "cunning_nexu_reg": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "when-targeted",
+      "label": "Cunning",
+      "description": "While defending, apply +1 Block to the defense results for each Evade result.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "fury_wookiee_elite": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-dice",
+      "label": "Fury",
+      "description": "While attacking, if you have suffered 5 or more Damage, apply +1 Surge to the attack results.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "fury_wookiee_reg": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-dice",
+      "label": "Fury",
+      "description": "While attacking, if you have suffered 5 or more Damage, apply +1 Surge to the attack results.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "distracting_han": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "when-targeted",
+      "label": "Distracting",
+      "description": "While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Evade to the defense results.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "distracting_c3po": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "when-targeted",
+      "label": "Distracting",
+      "description": "While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Evade to the defense results.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "sustained_by_rage": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "activation",
+      "label": "Sustained by Rage",
+      "description": "You cannot recover Damage. If you have not resolved an activation this round, you cannot be defeated.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "deflect": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "post-combat",
+      "label": "Deflect",
+      "description": "After a Ranged attack targeting you or an adjacent friendly figure resolves, a hostile figure of your choice in your line of sight suffers 1 Damage.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "regenerate_bossk": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "end-of-round",
+      "label": "Regenerate",
+      "description": "At the end of each round, recover 2 Damage and discard all Harmful conditions.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "full_of_rage": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Full of Rage",
+      "description": "Before you declare an attack, if you have suffered 3 or more Damage, become Focused.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "fifth_brother_relentless": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Relentless Pursuit",
+      "description": "When you declare an attack, if the target is within 3 spaces, that figure suffers 1 Strain.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
+    },
+    "shared_intuition": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-dice",
+      "label": "Shared Intuition",
+      "description": "While attacking, if another friendly HUNTER within 3 spaces has line of sight to the target space, apply +1 Hit to your attack results.",
+      "oncePer": null,
+      "wiredStatus": "unwired"
     }
   }
 }
