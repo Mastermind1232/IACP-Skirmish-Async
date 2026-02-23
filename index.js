@@ -1852,7 +1852,12 @@ async function postPinnedMissionCardFromGameState(game, client) {
         sentMsg = await ch.send({ content: `🎯 **Mission:** ${fullName}` });
       }
     } else {
-      sentMsg = await ch.send({ content: `🎯 **Mission:** ${fullName}` });
+      const parts = [`🎯 **Mission:** ${fullName}`];
+      if (missionData?.setup) parts.push(`**Setup:** ${missionData.setup}`);
+      if (missionData?.persistent) parts.push(`**Persistent:** ${missionData.persistent}`);
+      if (missionData?.startOfRound) parts.push(`**Start of Round:** ${missionData.startOfRound}`);
+      if (missionData?.endOfRound) parts.push(`**End of Round:** ${missionData.endOfRound}`);
+      sentMsg = await ch.send({ content: parts.join('\n') });
     }
     await sentMsg.pin().catch((err) => { console.error('[discord]', err?.message ?? err); });
     await logGameAction(game, client, `Mission selected: **${fullName}** (pinned above).`, { phase: 'SETUP', icon: 'map' });

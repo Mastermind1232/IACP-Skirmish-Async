@@ -92,6 +92,7 @@ export async function handleMapSelectionChoice(interaction, ctx) {
     client,
     saveGames,
   } = ctx;
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   const gameId = interaction.customId.replace('map_selection_menu_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -161,6 +162,7 @@ export async function handleMapSelectionChoice(interaction, ctx) {
     await postMissionCardAfterMapSelection(game, client, map);
   }
   await finishMapSelectionAfterChoice(game, client, ctx);
+  await interaction.editReply({ content: `✅ **${game.selectedMission?.fullName || game.selectedMap?.name || 'Map'}** selected!`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
 
 /**
@@ -291,6 +293,7 @@ export async function handleMapSelectionDraw(interaction, ctx) {
     postPinnedMissionCardFromGameState,
     client,
   } = ctx;
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   const gameId = interaction.customId.replace('map_selection_draw_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -309,6 +312,7 @@ export async function handleMapSelectionDraw(interaction, ctx) {
   }
   await postPinnedMissionCardFromGameState(game, client);
   await finishMapSelectionAfterChoice(game, client, ctx);
+  await interaction.editReply({ content: `✅ **${game.selectedMission?.fullName || game.selectedMap?.name || 'Map'}** selected!`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
 
 /**
@@ -324,6 +328,7 @@ export async function handleMapSelectionPick(interaction, ctx) {
     postPinnedMissionCardFromGameState,
     client,
   } = ctx;
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   const gameId = interaction.customId.replace('map_selection_pick_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -341,6 +346,7 @@ export async function handleMapSelectionPick(interaction, ctx) {
   }
   await postPinnedMissionCardFromGameState(game, client);
   await finishMapSelectionAfterChoice(game, client, ctx);
+  await interaction.editReply({ content: `✅ **${game.selectedMission?.fullName || game.selectedMap?.name || 'Map'}** selected!`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
 
 /**
