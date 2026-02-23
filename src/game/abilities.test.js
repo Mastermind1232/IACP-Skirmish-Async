@@ -1224,3 +1224,11 @@ test('resolveAbility Lightbow returns informational logMessage', () => {
   assert.ok(result.logMessage?.includes('Pierce 4'));
   assert.ok(result.logMessage?.includes('blue'));
 });
+
+test('resolveAbility Celebration grants VP', () => {
+  const game = { gameId: 'g-cel', player1VP: { total: 2, kills: 0, objectives: 0 } };
+  const result = resolveAbility('Celebration', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.player1VP.total, 6); // 2 + 4
+  assert.ok(result.logMessage?.includes('4 VP'));
+});

@@ -2140,6 +2140,19 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: celebrationVp only (Celebration) — gain N VP after a unique hostile is defeated (honor system, no armyCost modifier)
+  if (entry.type === 'ccEffect' && typeof entry.celebrationVp === 'number' && !entry.increaseArmyCostBy) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[vpKey].total = (game[vpKey].total ?? 0) + entry.celebrationVp;
+    return {
+      applied: true,
+      logMessage: `**Celebration** — Gained ${entry.celebrationVp} VP (honor: play after a unique hostile figure is defeated).`,
+    };
+  }
+
   // ccEffect: roundAttackRerollDice (Just Business) — until end of round, may reroll 1 attack die when attacking
   if (entry.type === 'ccEffect' && typeof entry.roundAttackRerollDice === 'number' && entry.roundAttackRerollDice > 0) {
     const { game, playerNum } = context;
