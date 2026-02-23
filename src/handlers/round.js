@@ -233,6 +233,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.squadSwarmPlayerNum = null;
   game.whenDefeatHostileWithin3GainBlockTokens = null;
   game.overrunThisActivation = {};
+  game.roundFigureAbilityUsed = {};
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client });
   }

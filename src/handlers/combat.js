@@ -302,6 +302,50 @@ export async function handleAttackTarget(interaction, ctx) {
     await applyStrainToFigure(game, defenderPlayerNum, target.figureKey, 1, 'Relentless', meta.dcName, ctx, thread);
   }
 
+  // Flawless Execution (Cad Bane): become Focused; if already Focused → Wild token + yellow die
+  if (atkSpecialIds.includes('flawless_execution')) {
+    if (!attackerConds.includes('Focus')) {
+      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
+      if (!game.figureConditions) game.figureConditions = {};
+      game.figureConditions[attackerFigureKey] = [...(game.figureConditions[attackerFigureKey] || []).filter(c => c !== 'Focus'), 'Focus'];
+      await thread.send('**Flawless Execution** — Cad Bane is **Focused** before attacking (+1 green die).');
+    } else {
+      if (!game.figurePowerTokens) game.figurePowerTokens = {};
+      game.figurePowerTokens[attackerFigureKey] = [...(game.figurePowerTokens[attackerFigureKey] || []), 'Wild'];
+      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'yellow'] };
+      await thread.send('**Flawless Execution** — Cad Bane was already Focused: +1 Wild token and +1 yellow die (use pre-combat window to change die color if needed).');
+    }
+  }
+
+  // Shock and Awe (Cara Dune): once per round, replace 1 Yellow die with Red
+  if (atkSpecialIds.includes('shock_and_awe')) {
+    const sawKey = attackerFigureKey + '_shock_and_awe';
+    if (!game.roundFigureAbilityUsed?.[sawKey]) {
+      const dice = game.pendingCombat.attackInfo.dice || [];
+      const yellIdx = dice.findIndex(d => d === 'yellow');
+      if (yellIdx >= 0) {
+        const newDice = [...dice];
+        newDice[yellIdx] = 'red';
+        game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: newDice };
+        if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
+        game.roundFigureAbilityUsed[sawKey] = true;
+        await thread.send('**Shock and Awe** — 1 Yellow die replaced with Red.');
+      }
+    }
+  }
+
+  // Vanguard (AT-RT): within 3 spaces, replace 1 non-red die with Red
+  if (atkSpecialIds.includes('vanguard') && distanceToTarget <= 3) {
+    const dice = game.pendingCombat.attackInfo.dice || [];
+    const nonRedIdx = dice.findIndex(d => d !== 'red');
+    if (nonRedIdx >= 0) {
+      const newDice = [...dice];
+      newDice[nonRedIdx] = 'red';
+      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: newDice };
+      await thread.send(`**Vanguard** — 1 ${dice[nonRedIdx]} die replaced with Red (target within ${distanceToTarget} spaces).`);
+    }
+  }
+
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
   if (nextPierce) delete game.nextAttackBonusPierce?.[attackerPlayerNum];
   delete game.lastAttackTargetSpacesForRubble;
@@ -471,8 +515,67 @@ export async function handleCombatRoll(interaction, ctx) {
     const atkInnate = getInnateRerolls(combat.attackerDcName);
     const defenderDcName = combat.target?.figureKey?.replace(/-\d+-\d+$/, '') || '';
     const defInnate = getInnateRerolls(defenderDcName);
-    const atkRerolls = (combat.rerollOneAttackDie || 0) + (game.roundAttackRerollDice?.[attackerPlayerNum] || 0) + atkInnate.attackReroll;
-    const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll;
+
+    // Ability-based rerolls from specialAbilityIds
+    const getDcEff = ctx.getDcEffects || (() => ({}));
+    const dcHS = ctx.dcHealthState;
+    const atkEffR = getDcEff()[combat.attackerDcName] || getDcEff()[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    const defEffR = getDcEff()[defenderDcName] || getDcEff()[(defenderDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    const atkSIds = atkEffR?.specialAbilityIds || [];
+    const defSIds = defEffR?.specialAbilityIds || [];
+    let atkSpecialReroll = 0;
+    let defSpecialReroll = 0;
+    // Targeting Computer (HK Assassin elite, IG-11, Probe Droid elite, Sentry Droid elite/reg): +1 atk reroll
+    const tcIds = ['targeting_computer_hk_elite', 'targeting_computer_ig11', 'targeting_computer_probe_elite', 'targeting_computer_sentry_elite', 'targeting_computer_sentry_reg'];
+    if (atkSIds.some(id => tcIds.includes(id))) atkSpecialReroll += 1;
+    // Overpower (Royal Guard Champion): +1 atk reroll when attacking, +1 def reroll when defending
+    if (atkSIds.includes('overpower')) atkSpecialReroll += 1;
+    if (defSIds.includes('overpower')) defSpecialReroll += 1;
+    // Foresight (Darth Vader defending): +1 def reroll
+    if (defSIds.includes('foresight')) defSpecialReroll += 1;
+    // Defensive Stance (Diala Passil defending): +1 def reroll
+    if (defSIds.includes('defensive_stance')) defSpecialReroll += 1;
+    // Charge Generators (AT-DP attacking): +1 atk reroll + +1 Hit if < 9 damage suffered
+    if (atkSIds.includes('charge_generators')) {
+      const atkHpA = dcHS?.get(combat.attackerMsgId) || [];
+      const atkFHp = atkHpA[combat.attackerFigureIndex ?? 0];
+      const atkDs = atkFHp ? Math.max(0, (atkFHp[1] ?? atkFHp[0] ?? 0) - (atkFHp[0] ?? 0)) : 0;
+      if (atkDs < 9) { atkSpecialReroll += 1; combat.bonusHits = (combat.bonusHits || 0) + 1; }
+    }
+    // Inspiring (Luke Skywalker on attacker's team): +1 atk reroll for another friendly within 3 spaces
+    {
+      const atkFigs = game.figurePositions?.[attackerPlayerNum] || {};
+      const mapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const atkPos = atkFigs[combat.attackerFigureKey];
+      for (const [fk, pos] of Object.entries(atkFigs)) {
+        if (fk === combat.attackerFigureKey) continue;
+        const fn = fk.replace(/-\d+-\d+$/, '');
+        const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
+        if (!(fe?.specialAbilityIds || []).includes('inspiring')) continue;
+        if (atkPos && isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkPos).toLowerCase(), 3)) {
+          atkSpecialReroll += 1; break;
+        }
+      }
+    }
+    // Soresu Form (Kanan Jarrus on defender's team): +1 def reroll for a friendly within 3 spaces
+    {
+      const defFigs = game.figurePositions?.[defenderPlayerNum] || {};
+      const mapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const defPos = combat.target?.coord;
+      for (const [fk, pos] of Object.entries(defFigs)) {
+        const fn = fk.replace(/-\d+-\d+$/, '');
+        const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
+        if (!(fe?.specialAbilityIds || []).includes('soresu_form')) continue;
+        if (defPos && isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defPos).toLowerCase(), 3)) {
+          defSpecialReroll += 1;
+          combat.soresuFormFigKey = fk;
+          break;
+        }
+      }
+    }
+
+    const atkRerolls = (combat.rerollOneAttackDie || 0) + (game.roundAttackRerollDice?.[attackerPlayerNum] || 0) + atkInnate.attackReroll + atkSpecialReroll;
+    const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll + defSpecialReroll;
     if (atkRerolls > 0 || defRerolls > 0) {
       combat.rerollPhase = 'attacker';
       combat.attackerRerollsRemaining = atkRerolls;
@@ -654,6 +757,28 @@ export async function handleCombatReroll(interaction, ctx) {
   // Still has rerolls — show updated UI
   await sendRerollUI(thread, game, combat, combat.rerollPhase);
   saveGames();
+}
+
+/** BFS check: is coordB reachable from coordA within maxDist hops via mapSpaces adjacency? */
+function isWithinSpaces(mapSpaces, coordA, coordB, maxDist) {
+  if (!mapSpaces?.adjacency || !coordA || !coordB) return false;
+  const a = coordA.toLowerCase(), b = coordB.toLowerCase();
+  if (a === b) return true;
+  const visited = new Set([a]);
+  let frontier = [a];
+  for (let d = 1; d <= maxDist; d++) {
+    const next = [];
+    for (const c of frontier) {
+      for (const adj of (mapSpaces.adjacency[c] || [])) {
+        const s = String(adj).toLowerCase();
+        if (s === b) return true;
+        if (!visited.has(s)) { visited.add(s); next.push(s); }
+      }
+    }
+    frontier = next;
+    if (!frontier.length) break;
+  }
+  return false;
 }
 
 // --- DC passive stat helpers ---
