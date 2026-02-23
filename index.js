@@ -3317,6 +3317,29 @@ async function resolveCombatAfterRolls(game, combat, client) {
   await finishCombatResolution(game, combat, resultText, embedRefreshMsgIds, client);
 }
 
+/** BFS distance check on mapSpaces adjacency (used for Boltslinger, etc.). */
+function isWithinN(posA, posB, maxDist, mapId) {
+  const ms = getMapSpaces(mapId);
+  if (!ms?.adjacency || !posA || !posB) return false;
+  const a = String(posA).toLowerCase(), b = String(posB).toLowerCase();
+  if (a === b) return true;
+  const visited = new Set([a]);
+  let frontier = [a];
+  for (let d = 1; d <= maxDist; d++) {
+    const next = [];
+    for (const c of frontier) {
+      for (const adj of (ms.adjacency[c] || [])) {
+        const s = String(adj).toLowerCase();
+        if (s === b) return true;
+        if (!visited.has(s)) { visited.add(s); next.push(s); }
+      }
+    }
+    frontier = next;
+    if (!frontier.length) break;
+  }
+  return false;
+}
+
 /** Send result to thread, clear combat/roll UI, refresh DC embeds and board. */
 async function finishCombatResolution(game, combat, resultText, embedRefreshMsgIds, client) {
   const thread = await client.channels.fetch(combat.combatThreadId);
@@ -3335,6 +3358,54 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     await ensureMovementBankMessage(game, pending.msgId, client);
     delete game.hitAndRunPendingMp;
   }
+  // --- Post-combat ability prompts (before clearing pendingCombat) ---
+  const pcAttEff = getDcEffects()?.[combat.attackerDcName] || getDcEffects()?.[combat.attackerDcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const pcAttIds = pcAttEff?.specialAbilityIds || [];
+  const pcOwnerId = combat.attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+  // Sidewinder (Jyn Odan): suffer 1 Strain to move 2 after attack (once/round)
+  if (pcAttIds.includes('sidewinder') && combat.attackerMsgId != null) {
+    const swKey = combat.attackerFigureKey + '_sidewinder';
+    if (!game.roundFigureAbilityUsed?.[swKey]) {
+      await thread.send({
+        content: `<@${pcOwnerId}> **Sidewinder** — Suffer 1 Strain to move up to 2 spaces? (once per round)`,
+        allowedMentions: { users: [pcOwnerId] },
+        components: [new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`sidewinder_apply_${game.gameId}_${combat.attackerMsgId}_${combat.attackerFigureIndex ?? 0}`).setLabel('Suffer 1 Strain → +2 MP').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`sidewinder_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary),
+        )],
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
+  }
+  // Boltslinger (Vinto Hreeda): deal 1 Dmg to another hostile within 3 after attack
+  if (pcAttIds.includes('boltslinger') && game.selectedMap?.id && combat.attackerFigureKey) {
+    const blDefPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+    const atkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
+    const defFigs = game.figurePositions?.[blDefPlayerNum] || {};
+    const boltslingerTargets = [];
+    for (const [fk, pos] of Object.entries(defFigs)) {
+      if (fk === combat.target?.figureKey) continue;
+      if (!isWithinN(atkPos, pos, 3, game.selectedMap.id)) continue;
+      const blMsgId = findDcMessageIdForFigure(game.gameId, blDefPlayerNum, fk);
+      const blDcIds = blDefPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const blDcList = blDefPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+      const blIdx = (blDcIds || []).indexOf(blMsgId);
+      const blLabel = (blIdx >= 0 && blDcList?.[blIdx]?.displayName) ? blDcList[blIdx].displayName : fk.replace(/-\d+-\d+$/, '');
+      boltslingerTargets.push({ figureKey: fk, playerNum: blDefPlayerNum, label: String(blLabel).slice(0, 80) });
+    }
+    if (boltslingerTargets.length > 0) {
+      game.pendingBoltslinger = { gameId: game.gameId, attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: boltslingerTargets };
+      const btns = boltslingerTargets.slice(0, 4).map((t, i) =>
+        new ButtonBuilder().setCustomId(`boltslinger_target_${game.gameId}_${i}`).setLabel(t.label).setStyle(ButtonStyle.Danger)
+      );
+      btns.push(new ButtonBuilder().setCustomId(`boltslinger_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
+      await thread.send({
+        content: `<@${pcOwnerId}> **Boltslinger** — Choose a hostile within 3 spaces to deal 1 Damage (verify LOS):`,
+        allowedMentions: { users: [pcOwnerId] },
+        components: [new ActionRowBuilder().addComponents(btns)],
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
+  }
+
   delete game.pendingCombat;
   delete game.pendingCleave;
   if (combat.rollMessageId) {
@@ -3372,6 +3443,130 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
   if (combat.attackerMsgId) {
     await updateDcActionsMessage(game, combat.attackerMsgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
+}
+
+/** Sidewinder (Jyn Odan): apply 1 Strain + grant 2 MP after attack. */
+async function handleSidewinderApply(interaction) {
+  const m = interaction.customId.match(/^sidewinder_apply_([^_]+)_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, attackerMsgId, figIndexStr] = m;
+  const game = getGame(gameId);
+  if (!game) return;
+  const figureIndex = parseInt(figIndexStr, 10);
+  const meta = dcMessageMeta.get(attackerMsgId);
+  if (!meta) return;
+  if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
+    await interaction.followUp({ content: 'Only the attacker can use Sidewinder.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+  const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+  const swKey = figureKey + '_sidewinder';
+  if (game.roundFigureAbilityUsed?.[swKey]) {
+    await interaction.followUp({ content: 'Sidewinder already used this round.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  // Apply 1 Strain
+  const attHS = dcHealthState.get(attackerMsgId) || [];
+  const attEntry = attHS[figureIndex];
+  if (attEntry) {
+    const [aC, aM] = attEntry;
+    const aMVal = aM ?? aC ?? 99;
+    const aNew = Math.max(0, (aC ?? aMVal) - 1);
+    attHS[figureIndex] = [aNew, aMVal];
+    dcHealthState.set(attackerMsgId, attHS);
+    const dcIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcList = meta.playerNum === 1 ? game.p1DcList : game.p2DcList;
+    const idx = (dcIds || []).indexOf(attackerMsgId);
+    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...attHS];
+  }
+  // Grant 2 MP
+  game.movementBank = game.movementBank || {};
+  const bank = game.movementBank[attackerMsgId] || { total: 0, remaining: 0 };
+  bank.total = (bank.total ?? 0) + 2;
+  bank.remaining = (bank.remaining ?? 0) + 2;
+  game.movementBank[attackerMsgId] = bank;
+  // Mark used this round
+  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+  game.roundFigureAbilityUsed[swKey] = true;
+  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.channel.send('**Sidewinder** — Jyn Odan suffered 1 Strain and gained +2 MP.');
+  await logGameAction(game, client, `**Sidewinder** — Jyn Odan suffered 1 Strain and gained +2 MP.`, { phase: 'ROUND', icon: 'card' });
+  await ensureMovementBankMessage(game, attackerMsgId, client);
+  try {
+    const ch = await client.channels.fetch(meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
+    const msg = await ch.messages.fetch(attackerMsgId);
+    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, dcExhaustedState.get(attackerMsgId) ?? false, meta.displayName, dcHealthState.get(attackerMsgId) || [], getConditionsForDcMessage(game, meta));
+    await msg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  } catch (e) { console.error('Failed to refresh Sidewinder DC embed:', e); }
+  saveGames();
+}
+
+async function handleSidewinderSkip(interaction) {
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  saveGames();
+}
+
+/** Boltslinger (Vinto Hreeda): deal 1 Dmg to chosen nearby hostile. */
+async function handleBoltslingerTarget(interaction) {
+  const m = interaction.customId.match(/^boltslinger_target_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, idxStr] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingBoltslinger) return;
+  const { attackerPlayerNum, combatThreadId, targets } = game.pendingBoltslinger;
+  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
+    await interaction.followUp({ content: 'Only the attacker can use Boltslinger.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const target = targets[parseInt(idxStr, 10)];
+  if (!target) return;
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  const targetMsgId = findDcMessageIdForFigure(gameId, target.playerNum, target.figureKey);
+  if (targetMsgId) {
+    const figMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
+    const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
+    const hs = dcHealthState.get(targetMsgId) || [];
+    const entry = hs[figIdx];
+    if (entry) {
+      const [c, mVal] = entry;
+      const maxHp = mVal ?? c ?? 99;
+      const nNew = Math.max(0, (c ?? maxHp) - 1);
+      hs[figIdx] = [nNew, maxHp];
+      dcHealthState.set(targetMsgId, hs);
+      const dcIds = target.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const dcList = target.playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const idx = (dcIds || []).indexOf(targetMsgId);
+      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+      try {
+        const tMeta = dcMessageMeta.get(targetMsgId);
+        if (tMeta) {
+          const ch = await client.channels.fetch(tMeta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
+          const msg = await ch.messages.fetch(targetMsgId);
+          const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta));
+          await msg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }
+      } catch (e) { console.error('Failed to refresh Boltslinger target embed:', e); }
+    }
+  }
+  const blThread = await client.channels.fetch(combatThreadId).catch(() => null);
+  if (blThread) await blThread.send(`**Boltslinger** — **${target.label}** suffers 1 Damage.`);
+  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await logGameAction(game, client, `**Boltslinger** — **${target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
+  delete game.pendingBoltslinger;
+  saveGames();
+}
+
+async function handleBoltslingerSkip(interaction) {
+  const m = interaction.customId.match(/^boltslinger_skip_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  if (game) delete game.pendingBoltslinger;
+  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  saveGames();
 }
 
 /** DCs whose image is in DC Skirmish Upgrades are figureless (incl. Squad Upgrades like [Flame Trooper]); if image is in dc-figures, it's a figure. */
@@ -5194,6 +5389,11 @@ client.on('interactionCreate', async (interaction) => {
     await handleMovePick(interaction, movePickContext);
     return;
   }
+
+  if (buttonKey === 'sidewinder_apply_') { await handleSidewinderApply(interaction); return; }
+  if (buttonKey === 'sidewinder_skip_') { await handleSidewinderSkip(interaction); return; }
+  if (buttonKey === 'boltslinger_target_') { await handleBoltslingerTarget(interaction); return; }
+  if (buttonKey === 'boltslinger_skip_') { await handleBoltslingerSkip(interaction); return; }
 
   if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_') {
     const combatContext = {

@@ -2895,7 +2895,7 @@
       "label": "Boltslinger",
       "description": "After you resolve an attack during your activation, you may choose a hostile figure other than the defender in your line of sight and within 3 spaces. That figure suffers 1 Damage.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "sidewinder": {
       "type": "dcSpecial",
@@ -2904,7 +2904,7 @@
       "label": "Sidewinder",
       "description": "After you resolve an attack, you may suffer 1 Strain to move up to 2 spaces. Limit once per round.",
       "oncePer": "round",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "relentless_trandoshan_elite": {
       "type": "dcSpecial",
