@@ -1029,3 +1029,78 @@ test('resolveAbility Force Lightning applies 2 Damage and Stun to adjacent hosti
   assert.deepStrictEqual(hostileHealth[0], [4, 8]); // 6 - 2 = 4
   assert.ok(game.figureConditions['Stormtroopers-2-0']?.includes('Stun'));
 });
+
+// ── Tests for sets* game-state-flag handlers ─────────────────────────────────
+
+test('resolveAbility Signal Jammer sets signalJammerActive on game', () => {
+  const game = { gameId: 'g-sj' };
+  const result = resolveAbility('Signal Jammer', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(game.signalJammerActive, { playerNum: 1 });
+});
+
+test('resolveAbility Shadow Ops sets shadowOpsBlockedPlayer to opponent', () => {
+  const game = { gameId: 'g-so' };
+  const result = resolveAbility('Shadow Ops', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.shadowOpsBlockedPlayer, 2);
+});
+
+test('resolveAbility Shadow Ops for player 2 blocks player 1', () => {
+  const game = { gameId: 'g-so2' };
+  resolveAbility('Shadow Ops', { game, playerNum: 2 });
+  assert.strictEqual(game.shadowOpsBlockedPlayer, 1);
+});
+
+test('resolveAbility Tough Luck sets toughLuckPlayerNum', () => {
+  const game = { gameId: 'g-tl' };
+  const result = resolveAbility('Tough Luck', { game, playerNum: 2 });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.toughLuckPlayerNum, 2);
+});
+
+test('resolveAbility Hold Ground sets holdGroundPlayerNum', () => {
+  const game = { gameId: 'g-hg' };
+  const result = resolveAbility('Hold Ground', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.holdGroundPlayerNum, 1);
+});
+
+test('resolveAbility Terminal Network sets terminalControlPlayerNum', () => {
+  const game = { gameId: 'g-tn' };
+  const result = resolveAbility('Terminal Network', { game, playerNum: 2 });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.terminalControlPlayerNum, 2);
+});
+
+test('resolveAbility Windfall sets windfallActive with playerNum', () => {
+  const game = { gameId: 'g-wf3' };
+  const result = resolveAbility('Windfall', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(game.windfallActive, { playerNum: 1 });
+});
+
+test('resolveAbility Still Faster Than You sets stillFasterPlayerNum', () => {
+  const game = { gameId: 'g-sft' };
+  const result = resolveAbility('Still Faster Than You', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.stillFasterPlayerNum, 1);
+});
+
+test('resolveAbility Disable with no choice presents hostile list', () => {
+  const game = {
+    gameId: 'g-dis',
+    p2DcList: [{ dcName: 'Nexu', displayName: 'Nexu [DG 1]' }],
+  };
+  const result = resolveAbility('Disable', { game, playerNum: 1 });
+  assert.strictEqual(result.requiresChoice, true);
+  assert.ok(result.choiceOptions?.includes('Nexu [DG 1]'));
+});
+
+test('resolveAbility Disable with chosenOption adds to disabledFigures', () => {
+  const game = { gameId: 'g-dis2', p2DcList: [], disabledFigures: [] };
+  const result = resolveAbility('Disable', { game, playerNum: 1, chosenOption: 'Nexu [DG 1]' });
+  assert.strictEqual(result.applied, true);
+  assert.ok(game.disabledFigures.includes('Nexu [DG 1]'));
+  assert.ok(result.logMessage?.includes('Nexu'));
+});
