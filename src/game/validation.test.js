@@ -26,12 +26,12 @@ test('constants', () => {
 
 test('validateDeckLegal illegal DC total', () => {
   const result = validateDeckLegal({
-    dcList: ['Darth Vader'], // 14 pts only
+    dcList: ['Darth Vader'], // 18 pts (IACP cost) — not 40
     ccList: [],
   });
   assert.strictEqual(result.legal, false);
   assert.ok(result.errors.some((e) => e.includes('Deployment total') || e.includes('40')));
-  assert.strictEqual(result.dcTotal, 14);
+  assert.strictEqual(result.dcTotal, 18);
 });
 
 test('validateDeckLegal unknown DC', () => {
