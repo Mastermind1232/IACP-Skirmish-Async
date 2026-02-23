@@ -4814,6 +4814,8 @@ client.on('interactionCreate', async (interaction) => {
       getBoardStateForMovement,
       getSpaceChoiceRows,
       getMapAttachmentForSpaces,
+      ensureMovementBankMessage,
+      updateMovementBankMessage,
     };
     if (buttonKey === 'deck_illegal_play_') await handleDeckIllegalPlay(interaction, ccHandButtonContext);
     else if (buttonKey === 'deck_illegal_redo_') await handleDeckIllegalRedo(interaction, ccHandButtonContext);

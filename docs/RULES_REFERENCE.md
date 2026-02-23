@@ -47,7 +47,7 @@ In a skirmish, outside of attacks, resolve mission rules first, followed by effe
 initiative, then effects triggered by their opponent.
 During an attack, in both a campaign and a skirmish, resolve mission rules first, followed by effects triggered
 by the attacker, then effects triggered by the defender.
-For additional information on timing conflicts, see "Conflicts" on page 22.
+For additional information on timing conflicts, see "Conflicts" on page [22](#control).
 
 
 ## GAME MODES
@@ -66,9 +66,9 @@ In addition to having a choice of different rebel hero characters and Imperial o
 story missions and interleaved side missions allow the same campaign to be played more than once and get a
 different experience. The core game contains one campaign, the boxed expansions provide additional
 campaigns (full or minicampaigns).
-Each Campaign (p.17) consists of Campaign Setup (p.18), after which the players follow the corresponding
-campaign log to see which mission or type of mission to play next (Mission Stage p.46). The campaign log also
-shows when to perform Rebel Upgrade Stage (p.52) and Imperial Upgrade Stage (p.35) to purchase new
+Each Campaign ([p.17](#campaign-setup)) consists of Campaign Setup ([p.18](#claim)), after which the players follow the corresponding
+campaign log to see which mission or type of mission to play next (Mission Stage [p.46](#mobile)). The campaign log also
+shows when to perform Rebel Upgrade Stage ([p.52](#re-draw)) and Imperial Upgrade Stage ([p.35](#incapacitated)) to purchase new
 abilities and useful items. The Campaign log can be found from the back of the campaign book/rulebook of the
 boxed expansion. Campaign logs can also be found from FFG Star Wars: Imperial Assault product page under
 Player Resources.
@@ -77,13 +77,13 @@ Player Resources.
 
 Star Wars: Imperial Assault offers a completely distinct game experience in the skirmish game. Skirmish
 missions allow two players to compete in head-to-head, tactical combat. You’ll muster your own teams of
-Imperial, Rebel, and Mercenary forces (Army Building p.9), and build decks of Command cards (p.20), which
+Imperial, Rebel, and Mercenary forces (Army Building [p.9](#attachment)), and build decks of Command cards ([p.20](#companions)), which
 you can play to gain an unexpected advantage. Each skirmish mission has its own objectives. Whether you
 recover lost holocrons, or battle to defeat a raiding party, you’ll find danger and tense, tactical choices in every
 skirmish.
 There are also a number of maps in the various expansions to play 4-player skirmish missions in free-for-all
 and team play modes.
-See “Skirmish” p.55, “Four-Player Skirmishes” p.32.
+See “Skirmish” [p.55](#skirmish-attachments), “Four-Player Skirmishes” [p.32](#conflicts-in-a-four-player-skirmish).
 
 ## LEGENDS OF THE ALLIANCE COMPANION APP
 
@@ -117,7 +117,7 @@ or all parts of the ability cannot be performed, you perform as much as you can.
 - If an ability is "used," it can be triggered multiple times each round, but all abilities can only be triggered
 once per timing instance. For example, an ability that says, "Use while attacking to apply +1 to the attack
 results," it can only be triggered once during each attack. (See the timing of abilities that use “while
-attacking” or “while defending” from “Special Situations Regarding Attacks” on page 12.)
+attacking” or “while defending” from “Special Situations Regarding Attacks” on page [12](#attacking-objects).)
 - Some abilities have costs which must be paid in order to resolve the ability. Ability costs include, but are
 not limited to:
 - : Special action - this ability requires spending an action per each special action symbol listed.
@@ -125,45 +125,44 @@ not limited to:
 - : A hero voluntarily suffers the listed amount of  (strain) without exceeding their endurance in
 order to use this ability. Other figures don't have endurance and can voluntarily suffer a strain cost to
 activate an ability, and suffer the strain cost as damage instead (in a skirmish each damage suffered this
-way can be cancelled by discarding a command card from the command card deck). See “Strain” p.58.
+way can be cancelled by discarding a command card from the command card deck). See “Strain” [p.58](#supply-cards).
 - : These abilities appear in the campaign. The Imperial player must spend the listed amount of 
-(“Threat” p.60) to use this ability.
-- Exhaust: The player must exhaust (p.30) the card to use this ability.
-- Deplete: The player must deplete (p.25) the card to use this ability.
+(“Threat” [p.60](#tile-types)) to use this ability.
+- Exhaust: The player must exhaust ([p.30](#focused)) the card to use this ability.
+- Deplete: The player must deplete ([p.25](#deployment-cards)) the card to use this ability.
 - Discard / Play: The card or a specified token needs to be discarded to use the ability. In a Skirmish,
-usually using an ability on a command card (p.20) requires it to be played as part of its cost.
-- VP: In a skirmish some abilities require to spend or pay (p.50) Victory Points (p.62).
+usually using an ability on a command card ([p.20](#companions)) requires it to be played as part of its cost.
+- VP: In a skirmish some abilities require to spend or pay ([p.50](#push)) Victory Points ([p.62](#winning-the-game)).
 - A figure can perform each special action ability (denoted by ) only once per activation.
-- An ability that can be used "during your activation" (p.28) can be used before or after performing an action
+- An ability that can be used "during your activation" ([p.28](#energy-shield)) can be used before or after performing an action
 during an activation. Abilities that can be used "during your activation" are not interrupting abilities unless
 otherwise specified, and thus cannot be used while resolving another ability.
 - Many abilities can trigger from the same event in the game. The decisions to use abilities with the same
-trigger condition are performed in the timing conflict resolution order (p.22). The cost of each ability is
+trigger condition are performed in the timing conflict resolution order ([p.22](#control)). The cost of each ability is
 paid just before it is resolved.
 - An ability that causes one or more figures to suffer damage (such as Darth Vader's "Force Choke") is not
 considered to be an attack and does not count toward a figure's attack limitations.
 - Abilities that have per-activation limits (for example: "limit once per activation") cannot be used outside of
 an activation.
-Related Topics: Attacks 10, Deplete 25, During Activation 28, Exhaust 30,
-Endurance 28, Strain 58, Threat 60
+Related Topics: [Attacks](#attacks), [Deplete](#deplete), [During Activation](#during-activation), [Exhaust](#exhaust), [Endurance](#endurance), [Strain](#strain), [Threat](#threat)
 
 
 ## ABILITIES BOX
 
 The abilities box is the portion of a Companion, Deployment, or Form card that includes keywords, passive
 abilities, and surge abilities.
-Related Topics: Companions 21, Deployment Cards 26, Form Cards 31, Text Box 60
+Related Topics: [Companions](#companions), [Deployment Cards](#deployment-cards), [Form Cards](#form-cards), [Text Box](#text-box)
 
 ## ACCURACY
 
-Ranged attacks () need enough Accuracy to not miss the target (“Miss” p. 42). The amount of Accuracy
-needed is equal to the number of spaces the attacker is away from the target ("Counting Spaces" p. 23).
+Ranged attacks () need enough Accuracy to not miss the target (“Miss” [p.42](#mission-events)). The amount of Accuracy
+needed is equal to the number of spaces the attacker is away from the target ("Counting Spaces" [p.23](#credits)).
 - The attacker's total Accuracy is determined by adding all accuracy results from dice, and applying any
 Accuracy modifiers provided by abilities and conditions.
 - While attacking an adjacent figure or object with a ranged attack, the attacker needs at least 1 Accuracy.
 This also applies to attacking a Companion in the same space. (A Companion is defined to be adjacent to
 objects and figures in the same space.) Attacking an object in the same spage requires 0 accuracy.
-Related Topics: Attacks 10, Counting Spaces 23, Line of Sight 40, Miss 42
+Related Topics: [Attacks](#attacks), [Counting Spaces](#counting-spaces), [Line of Sight](#line-of-sight), [Miss](#miss)
 
 ## ACTIONS
 
@@ -186,7 +185,7 @@ imperial activation instructions use the  attack action symbol to denote acti
 considered special actions, and are not limited to once per activation unless otherwise indicated.
 - Numerous game effects allow figures to perform an attack, rest, interact, or perform a move without
 performing an action.
-Related Topics: Activation 4, Attacks 10, Movement 47, Interact 37, Rest 54
+Related Topics: [Activation](#activation), [Attacks](#attacks), [Movement](#movement), [Interact](#interact), [Rest](#rest)
 
 ## ACTIVATION
 
@@ -210,7 +209,7 @@ up to twice per activation.
 second activation until after each hero has resolved its first activation.
 - Each hero readies all of their exhausted cards at the start of their activation.
 - In a three-hero game, Rebel players choose one hero to claim a second activation token at the end of
-each round. In a two-hero game, each hero has two activation tokens. (“Campaign Setup” p.18)
+each round. In a two-hero game, each hero has two activation tokens. (“Campaign Setup” [p.18](#claim))
 - After performing up to two actions and the applicable “during your activation” abilities, such as spending
 the remaining movement points, a figure declares the end of its activation. A player may choose to end a
 figure's activation without performing both actions or spending all of its movement points. Remaining
@@ -221,7 +220,7 @@ actions and unspent movement points do not carry over to a figure's next activat
 continue to resolve activations until all groups are exhausted.
 - Abilities that can be used during a figure's activation are used before or after either of that figure's two
 actions but not while performing actions or other abilities.
-Related Topics: Active Missions 5, Exhaust 30, Deployment Cards 26, Group 33
+Related Topics: [Active Missions](#active-missions), [Exhaust](#exhaust), [Deployment Cards](#deployment-cards), [Group](#group)
 
 ## ACTIVATION PHASE
 
@@ -233,10 +232,10 @@ in the order of their choice.
 - During a campaign mission, Rebel and Imperial players alternate activating groups. The Rebel players
 resolve the first activation each round.
 - During a skirmish, players alternate activating groups, starting with the player with initiative each round. In
-Four-Player Skirmishes (p.32), each player in clockwise order activates one of their ready groups.
+Four-Player Skirmishes ([p.32](#conflicts-in-a-four-player-skirmish)), each player in clockwise order activates one of their ready groups.
 - During a skirmish, if a player has fewer ready Deployment cards than any of their opponents, that player
 may choose not to activate a group and pass play back to their opponent.
-Related Topics: Activation 4, Actions 4, Group 33
+Related Topics: [Activation](#activation), [Actions](#actions), [Group](#group)
 
 ## ACTIVE MISSIONS
 
@@ -245,7 +244,7 @@ heroes can choose to resolve.
 Missions can become active from campaign setup, as the result of a resolved mission, the imperial player
 purchasing an agenda mission card, or when a replacement is drawn after resolving a side mission which had
 been drawn from the side mission deck.
-Related Topics: Campaign Setup 18, Missions 43
+Related Topics: [Campaign Setup](#campaign-setup), [Missions](#missions)
 
 
 ## ADJACENT
@@ -259,9 +258,8 @@ other. A  (ranged) attack targeting an adjacent figure needs at least 1 Accur
 each other (see example #16 in "Appendix I - Line of Sight Examples" p.65).
 - A space that is blocking terrain is not adjacent to any other space.
 - If occupying blocking terrain, a figure or object which is distance 1 from another figure, object, or a space
-is adjacent even when the space it occupies is not. (“Counting Spaces” p.23, “Blocking Terrain” p.15.)
-Related Topics: Accuracy 4, Blocking Terrain 15, Blocking Terrain Examples 68,
-Counting Spaces 23, Line of Sight 40, Melee Attack 41, Movement 47, Ranged Attack 51
+is adjacent even when the space it occupies is not. (“Counting Spaces” [p.23](#credits), “Blocking Terrain” [p.15](#bounty-tokens).)
+Related Topics: [Accuracy](#accuracy), [Blocking Terrain](#blocking-terrain), [Blocking Terrain Examples](#blocking-terrain-examples), [Counting Spaces](#counting-spaces), [Line of Sight](#line-of-sight), [Melee Attack](#melee-attack), [Movement](#movement), [Ranged Attack](#ranged-attack)
 
 ## AFFILIATION
 
@@ -277,12 +275,11 @@ that ally loses that affiliation and is considered a  (Rebel) for as long as 
 to that player are friendly to each other, while all figures belonging to their opponent are hostile toward
 their figures.
 - Deployment cards with  (Neutral) icon and card back do not belong to any affiliation. When creating an
-army (p.9) for a skirmish, a player may choose to include Neutral Deployment cards as if they belonged to
+army ([p.9](#attachment)) for a skirmish, a player may choose to include Neutral Deployment cards as if they belonged to
 their affiliation.
-- A companion (p.21) shares the affiliation of the group it is associated with.
+- A companion ([p.21](#conditions)) shares the affiliation of the group it is associated with.
 - If an ability uses the affiliation symbol (, , or ), it only applies to figures of the matching affiliation.
-Related Topics: Friendly Figure 33, Hostile Figure 35, Imperial Figures 35,
-Neutral Deployment Cards 49
+Related Topics: [Friendly Figure](#friendly-figure), [Hostile Figure](#hostile-figure), [Imperial Figures](#imperial-figures), [Neutral Deployment Cards](#neutral-deployment-cards)
 
 ## AGENDA CARDS
 
@@ -290,7 +287,7 @@ During a campaign, the Imperial player can purchase Agenda cards. These cards ha
 abilities and are usually discarded after use.
 - The Imperial player can purchase Agenda cards by spending influence during the Imperial Upgrade Stage.
 - During campaign setup, the Imperial player builds their Agenda deck by choosing six sets of Agenda cards
-(see "Building the Agenda Deck" on page 7).
+(see "Building the Agenda Deck" on page [7](#villains)).
 - During Jabba's Realm and Heart of the Empire campaigns, and the Tyrants of Lothal mini campaign, the
 Imperial player may only have a total of four Agenda cards between their hand and their play area. If, at the
 end of an Imperial Upgrade Stage, the imperial player has more than four Agenda cards, cards must be
@@ -329,8 +326,7 @@ does not include the time period of the campaign.
 - An Agenda's set is only used for building the deck at the start of a campaign and has no other game effect.
 - All Agenda cards not chosen during campaign setup are returned to the game box and are not used during
 this campaign.
-Related Topics: Forced Missions 31, Hidden Information 34, Influence 36, Imperial
-Upgrade Stage 35, Time Period 61
+Related Topics: [Forced Missions](#forced-missions), [Hidden Information](#hidden-information), [Influence](#influence), [Imperial Upgrade Stage](#imperial-upgrade-stage), [Time Period](#time-period)
 
 ## ALLIES
 
@@ -356,8 +352,8 @@ the art on the corresponding Deployment card.
 
 All figures corresponding to unique Imperial ( or ) Deployment cards are villains. Villains follow all
 general rules for allies, in addition to the following:
-- Once gained as a reward, villains can be brought into a mission as an open group (p.49). (Also see
-“Deployment” p.25)
+- Once gained as a reward, villains can be brought into a mission as an open group ([p.49](#paying-vps)). (Also see
+“Deployment” [p.25](#deployment-cards))
 
 ## REBEL ALLIES
 
@@ -372,7 +368,7 @@ ally, collectively controlling it. After activating an ally, exhaust its Deploym
 player performs an activation. Rebel allies are often rewarded from green Side Mission cards.
 During the Tyrants of Lothal mini campaign, Rebel players follow a different procedure when choosing to
 deploy an ally in a mission.
-- During step 7 of "Campaign Mission Setup" p.44, after the Rebel players choose and deploy an ally, the
+- During step 7 of "Campaign Mission Setup" [p.44](#skirmish-mission-setup), after the Rebel players choose and deploy an ally, the
 Imperial player no longer gains threat equal to the Deployment cost listed on the Ally card. Instead, the
 Imperial player gains threat equal to half that cost (rounded up) and may resolve an optional
 deployment. Then, the Imperial player places strain tokens equal to half of the ally's Deployment cost
@@ -384,7 +380,7 @@ round until there are no strain tokens in their play area.
 Imperial player does not receive threat for tokens discarded this way.
 - During the Tyrants of Lothal campaign, the Rebel players will be prompted to bring a Spectre Ally.
 Spectre Allies are those allies with "Spectre" or “Chopper” in their subname, such as C1-10P
-(CHOPPER), Kanan Jarrus (SPECTRE-1), and Sabine Wren (SPECTRE-5). (“Spectre Allies” p.56)
+(CHOPPER), Kanan Jarrus (SPECTRE-1), and Sabine Wren (SPECTRE-5). (“Spectre Allies” [p.56](#status-phase))
 - Rebel allies are not heroes. During their activation, they cannot interact with crates or rest. Rebel allies can
 perform only one action containing attacks each activation, and follow all other rules for non-hero figures.
 - The term "Rebel figures" includes all heroes as well as Rebel allies.
@@ -397,8 +393,7 @@ optional deployment. These figures do not restrict heroes from choosing to deplo
 mission.
 If the rebel players gain an ally that has the  (Imperial) or  (Mercenary) affiliation, that ally loses that
 affiliation and is considered a  (Rebel) for as long as it is an ally.
-Related Topics: Deployment 25, Missions 43, Open Groups 49, Spectre Allies 56,
-Unique 62
+Related Topics: [Deployment](#deployment), [Missions](#missions), [Open Groups](#open-groups), [Spectre Allies](#spectre-allies), [Unique](#unique)
 
 
 ## ARMY BUILDING
@@ -410,10 +405,10 @@ are built without any foreknowledge of the opponent's army or the skirmish missi
 
 The Deployment cards (including SKIRMISH UPGRADES) in a player's army must obey the following restrictions:
 - Deployment Cost: The total Deployment cost of the army's cards must be 40 or fewer deployment points.
-- Affiliation Restriction: All deployment cards in an army must contain the same affiliation icon (p.6).
+- Affiliation Restriction: All deployment cards in an army must contain the same affiliation icon ([p.6](#types-of-agenda-cards)).
 - Name Restriction: Each army is limited to a number of Deployment cards with the same name:
-- Maximum of 1 of each unique Deployment card. (See “Unique” p.62)
-- Maximum of 2 of each elite (red) Deployment card. (See “Elite Figure” p.28)
+- Maximum of 1 of each unique Deployment card. (See “Unique” [p.62](#winning-the-game))
+- Maximum of 2 of each elite (red) Deployment card. (See “Elite Figure” [p.28](#energy-shield))
 - Maximum of 4 of each regular (gray) Deployment card.
 - Skirmish Upgrade Cards: Some Deployment cards have the SKIRMISH UPGRADE trait. These cards provide
 special abilities, but unlike normal Deployment cards, they do not have corresponding figures. Rules and
@@ -426,13 +421,13 @@ exhaust one of their Skirmish Upgrade cards.
 ## COMMAND CARD DECK
 
 The Command cards in a player's army determine the tricks and surprises that the player will be able to spring
-throughout the course of the skirmish (see "Command cards" p.20).
+throughout the course of the skirmish (see "Command cards" [p.20](#companions)).
 - Deck Size: Each player's Command card deck must include exactly 15 Command cards.
 - Command Cost: The total cost of a player's Command cards must be 15 or fewer points.
 - Duplicate Restriction: Each Command card has a number of card limit icons displayed to the right of the
 card's cost. The number of icons tells how many copies of that card a player can have in their deck. Most
 Command cards have only one icon, restricting the card to one copy per each Command deck.
-Related Topics: Skirmish Attachments 56, Skirmish 55
+Related Topics: [Skirmish Attachments](#skirmish-attachments), [Skirmish](#skirmish)
 
 
 ## ATTACHMENT
@@ -447,7 +442,7 @@ Imperial player's play area. They may be attached again when deploying figures i
 rules above.
 - Many attachments require the group to have a specific trait, such as "TROOPER." Attachments with these
 restrictions cannot be played on a group that does not have the trait.
-Related Topics: Class Cards 19, Deployment 25, Deployment Cards 26
+Related Topics: [Class Cards](#class-cards), [Deployment](#deployment), [Deployment Cards](#deployment-cards)
 
 ## ATTACKS
 
@@ -473,7 +468,7 @@ same method as if the figure were attacking. For example, if this occurred in re
 "Arsenal," the player controlling the targeted figure determines which two dice Verena will use
 during "Close Quarters."
 - A figure must end its movement (not sharing a space with another non-companion figure) to perform an
-attack. (See “Movement”, page 47.)
+attack. (See “Movement”, page [47](#movement-points).)
 - During an attack, if the attacker's line of sight to the target space changes or if the defender moves, the
 attacker must then re-declare a target space. If none of the defender's spaces are eligible, the attack misses,
 there is no target space, and abilities that refer to a target space have no effect. If the target of a  attack
@@ -485,13 +480,13 @@ the attack has Reach), the attack misses.
 ## STEPS OF AN ATTACK
 
 When a figure performs an attack, it resolves the steps listed below. For each step, abilities with the same
-trigger are resolved in the timing conflict resolution order (“Conflicts”, page 22).
+trigger are resolved in the timing conflict resolution order (“Conflicts”, page [22](#control)).
 1. Declare Target: Based upon its attack type ( or ), the figure performing the attack (referred to as the
 attacker) declares one eligible target for the attack (referred to as the target).
 - For a melee attack (), an eligible target is any hostile figure (or an object which can be attacked) in the
 same space or adjacent to the attacker (or within 2 spaces and in line of sight if the attack has Reach).
 - For a ranged attack (), an eligible target is any hostile figure (or an object which can be attacked)
-within line of sight (p.40) of the attacker.
+within line of sight ([p.40](#massive)) of the attacker.
 - If the attacker or target have abilities with the timing “before declaring an attack” or “before declaring a
 target”, they are performed immediately before step 1.
 - During a campaign, when a hero declares target they must also declare one of their weapons to use for
@@ -509,12 +504,12 @@ under "Defense" on the target figure's Hero sheet or Deployment card).
 this time. At the end of this step each  (evade) result cancels one  (surge) result. Any  abilities
 that provide modifiers are not resolved until step 5.
 - Conditions are considered mission rules, so they perform their modifications to the results first. Both
-Hidden and Weakened affect the attack/defense results. (See also “Negative Symbols” p. 48.)
+Hidden and Weakened affect the attack/defense results. (See also “Negative Symbols” [p.48](#neutral-deployment-cards).)
 5. Spend Surges: If there are any  results remaining, the attacker may spend them to trigger  abilities.
 - Each  ability can be used only once per attack.
 6. Check Accuracy: If performing a ranged attack () the total Accuracy value must be equal to or greater
-than the number of spaces the target is away from the attacker. (See “Accuracy” p.4 and "Counting
-Spaces" p.23). If the total Accuracy value is less than this number, the attack misses.
+than the number of spaces the target is away from the attacker. (See “Accuracy” [p.4](#activation-phase) and "Counting
+Spaces" [p.23](#credits)). If the total Accuracy value is less than this number, the attack misses.
 - Note that line of sight and the distance between the attacker and target are determined separately. For
 example for large figures they might use different spaces for their determination.
 7. Calculate Damage: If the attack misses due to insufficient accuracy or a dodge, the target suffers no .
@@ -542,7 +537,7 @@ abilities, such as Blast.
 - Dice rolled by the attacker are referred to as the attack pool, while all dice rolled by the defender are
 referred to as the defense pool.
 - Red, blue, yellow, and green dice are referred to as attack dice. Black and white dice are referred to as
-defense dice. (See also “Dice Types” p.27)
+defense dice. (See also “Dice Types” [p.27](#elite-figure))
 - The keyword abilities Blast and Cleave, and any Condition keyword require the target of the attack to
 suffer one or more  to be be performed after the attack resolves.
 - Any ability that is resolved "while attacking" or "while defending" can be used at any point during the
@@ -567,15 +562,12 @@ tokens.
 - An ability that does not involve an attack but causes a figure to suffer damage (such as Darth Vader's
 "Force Choke") is not considered to be an attack.
 - During a campaign, a hero performing an attack may spend 1 to recover 1. Limit once per attack.
-Related Topics: Blast 15, Cleave 19, Conditions 22, Conflicts 22, Convert 23,
-Counting Spaces 23, Damage 24, Defeated 24, Health 33, Item Cards 38, Line of
-Sight 40, Melee Attack 41, Miss 42, Power Tokens 50, Surges 59, Ranged Attack 51,
-Target 59
+Related Topics: [Blast](#blast), [Cleave](#cleave), [Conditions](#conditions), [Conflicts](#conflicts), [Convert](#convert), [Counting Spaces](#counting-spaces), [Damage](#damage), [Defeated](#defeated), [Health](#health), [Item Cards](#item-cards), [Line of Sight](#line-of-sight), [Melee Attack](#melee-attack), [Miss](#miss), [Power Tokens](#power-tokens), [Surges](#surges), [Ranged Attack](#ranged-attack), [Target](#target)
 
 
 ## ATTACKING OBJECTS
 
-Mission rules can allow a figure to attack objects, such as doors or tokens. (See “Objects”, page 49.)
+Mission rules can allow a figure to attack objects, such as doors or tokens. (See “Objects”, page [49](#paying-vps).)
 - Mission rules specify how much Health the object has. Any  it suffers is placed on or adjacent to the
 object. If an object suffers  equal to or greater than its Health, it is destroyed and removed from the map.
 If the object is a door, it is considered to have opened.
@@ -600,8 +592,7 @@ to or distance from a door (counting spaces), the door is considered to be occup
 which it shares an edge.
 (If the ranged attacker is adjacent to a door, the attack can target the door in the figure's own space even if
 the spaces on this side of the door are occupied. Anything else would be silly.)
-Related Topics: Blast 15, Cleave 19, Conditions 22, Convert 23, Counting
-Spaces 23, Damage 24, Doors 27, Health 33, Objects 49, Target 59
+Related Topics: [Blast](#blast), [Cleave](#cleave), [Conditions](#conditions), [Convert](#convert), [Counting Spaces](#counting-spaces), [Damage](#damage), [Doors](#doors), [Health](#health), [Objects](#objects), [Target](#target)
 
 ## ATTRIBUTES
 
@@ -614,7 +605,7 @@ During a campaign, each hero has varying expertise in the following three attrib
  tests are often related to slicing terminals and repairing objects.
 - Mission effects often test these attributes, requiring the hero to roll specific dice to determine if a positive
 or negative effect is resolved.
-Related Topics: Attribute Tests 14
+Related Topics: [Attribute Tests](#attribute-tests)
 
 
 ## ATTRIBUTE TESTS
@@ -647,16 +638,16 @@ occurs, allies can interact to perform those tests in the same way a hero would.
 receive 1 success when they perform attribute tests. Regular figures automatically fail tests.
 - Some abilities give a figure the option of whether or not to perform an attribute test. If that figure chooses
 not to perform the test, it counts as not having succeeded that test.
-Related Topics: Attributes 13, Elite Figure 28, Interact 37, Negative Symbols 48
+Related Topics: [Attributes](#attributes), [Elite Figure](#elite-figure), [Interact](#interact), [Negative Symbols](#negative-symbols)
 
 ## BANES AND BOONS
 
-Return to Hoth campaign only – While a Threat Mission (p.60) is an active mission, the ability on it grants the
+Return to Hoth campaign only – While a Threat Mission ([p.60](#tile-types)) is an active mission, the ability on it grants the
 respective Bane Reward card to the Imperial player.
 In addition to their effects as Reward cards, Banes and Boons put into play and earned through the various
 threat missions have additional effects throughout the campaign. Some story mission events will vary in favor
 of the Rebels or the Imperial player based on the number of Bane or Boon cards currently in play.
-Related Topics: Campaign Setup 18, Threat Missions 60
+Related Topics: [Campaign Setup](#campaign-setup), [Threat Missions](#threat-missions)
 
 
 ## BLAST
@@ -673,8 +664,7 @@ of the attack.
 - The  suffered by Blast is not prevented by .
 - If an attack inflicts a condition, such as Stunned or Bleeding, the condition is applied only to the target of
 the attack and not to figures affected by Blast.
-Related Topics: Attacks 10, Attacking Objects 13, Conditions 22, Keywords 39,
-Large Figures 39, Target 59
+Related Topics: [Attacks](#attacks), [Attacking Objects](#attacking-objects), [Conditions](#conditions), [Keywords](#keywords), [Large Figures](#large-figures), [Target](#target)
 
 ## BLEEDING
 
@@ -682,7 +672,7 @@ Bleeding is a HARMFUL condition. A figure with Bleeding can use the  specifie
 condition card to discard Bleeding.
 If a figure has Bleeding after it has resolved an action, the figure suffers 1 .
 Bleeding is not voluntarily suffering strain.
-Related Topics: Conditions 22, Strain 58
+Related Topics: [Conditions](#conditions), [Strain](#strain)
 
 ## BLOCKING TERRAIN
 
@@ -706,8 +696,7 @@ rules for Mobile to that figure or object.
 - Those spaces of blocking terrain do not block line of sight to or from that figure's space.
 - Melee attacks can be declared by or targeting that figure, ignoring those spaces of blocking terrain.
 - Those spaces of blocking terrain still block movement.
-Related Topics: Adjacent 6, Blocking Terrain Examples 68, Counting Spaces 23,
-Massive 41, Mobile 47, Movement 47, Line of Sight 40, Place 50, Push 51, Terrain 60
+Related Topics: [Adjacent](#adjacent), [Blocking Terrain Examples](#blocking-terrain-examples), [Counting Spaces](#counting-spaces), [Massive](#massive), [Mobile](#mobile), [Movement](#movement), [Line of Sight](#line-of-sight), [Place](#place), [Push](#push), [Terrain](#terrain)
 
 
 ## BOUNTY TOKENS
@@ -731,10 +720,10 @@ cards together to create the Side Mission deck:
 - Four (two if playing a Return to Hoth campaign) green Side Mission cards chosen by the rebel players. The
 rebel players cannot choose more than one of these cards that rewards the same ally, regardless of the ally's
 subtitle, such as "Hero of the Rebellion."
-They may choose more than one mission that rewards “Any 1 Spectre ally.” (See “Spectre Allies” p.56)
+They may choose more than one mission that rewards “Any 1 Spectre ally.” (See “Spectre Allies” [p.56](#status-phase))
 - Four (two if playing a Return to Hoth campaign) random gray Side Mission cards. These are dealt
 facedown and are not shown to any players.
-Related Topics: Campaign Setup 18
+Related Topics: [Campaign Setup](#campaign-setup)
 
 
 ## CAMPAIGN
@@ -745,18 +734,17 @@ players resolve a variety of missions and acquire Agenda, Item, Reward, and Clas
 another.
 - Most side missions can be played in any full-length campaign.
 - The missions included in Twin Shadows, The Bespin Gambit, and Tyrants of Lothal expansions can be
-played in succession to form a narrative mini campaign (p.42).
-- Players record information about the campaign in the campaign log (p.17).
+played in succession to form a narrative mini campaign ([p.42](#mission-events)).
+- Players record information about the campaign in the campaign log ([p.17](#campaign-setup)).
 - During the Jabba's Realm campaign, the Imperial player cannot earn Jabba the Hutt as a villain.
 - During the Tyrants of Lothal campaign, the Imperial player cannot earn Hondo Ohnaka or Thrawn as a
 villain.
-Related Topics: Campaign Setup 18, Imperial Upgrade Stage 35, Mini Campaign 42, Missions
-43, Mission Stage 46, Rebel Upgrade Stage 52, Time Period 61, Winning the Game 63
+Related Topics: [Campaign Setup](#campaign-setup), [Imperial Upgrade Stage](#imperial-upgrade-stage), [Mini Campaign](#mini-campaign), [Missions](#missions), [Mission Stage](#mission-stage), [Rebel Upgrade Stage](#rebel-upgrade-stage), [Time Period](#time-period), [Winning the Game](#winning-the-game)
 
 ## CAMPAIGN LOG
 
 After performing the campaign setup
-(p.18), players use the corresponding
+([p.18](#claim)), players use the corresponding
 campaign log to track and record
 information relevant to the progression
 of the campaign. The campaign log can
@@ -772,25 +760,24 @@ provide space to record the earned
 XP, credits, and influence, as well
 as purchased class and agenda cards, and earned rewards including earned allies and villains.
 - The Campaign Log area itself lists mission slots, and for each mission slot the three stages in order:
-- Mission Stage (p.46) with the
+- Mission Stage ([p.46](#mobile)) with the
 type of mission to play and the
 threat level to use,
-- Rebel Upgrade Stage (p.52),
-- Imperial Upgrade Stage (p.35).
+- Rebel Upgrade Stage ([p.52](#re-draw)),
+- Imperial Upgrade Stage ([p.35](#incapacitated)).
 The introductory mission is usually already filled in, in this case “Aftermath” is the introductory mission of
 the core campaign.
-- Below the Campaign Log area there is room to write down any forced missions (see p.31) which may
+- Below the Campaign Log area there is room to write down any forced missions (see [p.31](#four-player-skirmishes)) which may
 become active during the campaign. Currently there are only three forced missions – one from mission
 results in the core campaign (“Captured”), and two from agenda cards (“Impounded” and “Wanted”).
-Related Topics: Campaign Setup 18, Imperial Upgrade Stage 35, Mini Campaign 42, Missions
-43, Mission Stage 46, Rebel Upgrade Stage 52, Time Period 61, Winning the Game 63
+Related Topics: [Campaign Setup](#campaign-setup), [Imperial Upgrade Stage](#imperial-upgrade-stage), [Mini Campaign](#mini-campaign), [Missions](#missions), [Mission Stage](#mission-stage), [Rebel Upgrade Stage](#rebel-upgrade-stage), [Time Period](#time-period), [Winning the Game](#winning-the-game)
 
 
 ## CAMPAIGN SETUP
 
 There are many campaigns available through the core box and each boxed expansion. The core campaign and
 campaigns from big-box expansions are full-length campaigns (11 missions, except Heart of the Empire is 8
-missions). The small-box expansions contain mini campaigns (4 to 7 missions, see “Mini Campaigns” p.42).
+missions). The small-box expansions contain mini campaigns (4 to 7 missions, see “Mini Campaigns” [p.42](#mission-events)).
 Once the players have chosen a specific campaign to play, perform the following steps.
 1. Choose Player Roles: Players choose one player to take on the role of the Imperial player. All other
 players are Rebel players. Players retain these roles for the entirety of the campaign.
@@ -805,24 +792,24 @@ cards without an experience (XP) cost faceup in the Imperial player's play area.
 - If the Imperial player's chosen Imperial class has multiple basic cards (without an XP cost), each of
 those cards are placed faceup in their play area.
 4. Build Agenda Deck: The Imperial player builds their deck of Agenda cards (see "Building the Agenda
-Deck" on page 7). If playing a minicampaign, return all cards in their Agenda deck that are played as side
+Deck" on page [7](#villains)). If playing a minicampaign, return all cards in their Agenda deck that are played as side
 or forced missions to the game box.
 5. If playing a full campaign, Build Side Mission Deck: Build the Side Mission deck (see "Building the Side
-Mission Deck" on page 16).
+Mission Deck" on page [16](#campaign)).
 - If playing a Return to Hoth campaign, Prepare Threat Missions: The Imperial player shuffles the four
-Threat Mission cards (see "Threat Missions" p.60) and places them in a deck near the Side Mission
+Threat Mission cards (see "Threat Missions" [p.60](#tile-types)) and places them in a deck near the Side Mission
 deck.
 If playing a minicampaign, Upgrade Heroes and Imperial Player:
 - Upgrade Heroes: If playing Twin Shadows or The Bespin Gambit each hero receives 3 XP and heroes
 collectively receive 400 credits per hero. If playing Tyrants of Lothal each hero receives 2 XP and
-heroes collectively receive 300 credits per hero. Then, heroes resolve a Rebel Upgrade Stage (p.52).
+heroes collectively receive 300 credits per hero. Then, heroes resolve a Rebel Upgrade Stage ([p.52](#re-draw)).
 When purchasing Item cards during this Rebel Upgrade Stage, Rebel players draw cards from the Tier 1
 Item deck.
 - Upgrade Imperial Player: If playing Twin Shadows or The Bespin Gambit the Imperial player receives
 3 XP. If playing Tyrants of Lothal the Imperial player receives 2 XP. Then, the player performs an
-Imperial Upgrade Stage (p.35), but skips purchasing Agenda cards (there is no influence to spend).
+Imperial Upgrade Stage ([p.35](#incapacitated)), but skips purchasing Agenda cards (there is no influence to spend).
 6. Set Up Introductory Mission: Players are then ready to set up and play the Introductory mission for the
-campaign. The name of the mission is specified in the campaign log (p.17) of the chosen campaign.
+campaign. The name of the mission is specified in the campaign log ([p.17](#campaign-setup)) of the chosen campaign.
 - The Introductory mission for the core campaign is “Aftermath”, for Return to Hoth “The Battle of
 Hoth”, for Jabba's Realm “Trespass”, for Heart of the Empire “Dark Recon”.
 - For Twin Shadows, the Introductory mission is "Hunted Down", for The Bespin Gambit "Reclamation",
@@ -835,17 +822,16 @@ During the Jabba's Realm campaign, the Imperial player cannot earn Jabba the Hut
 ## HONDO OHNAKA & THRAWN
 
 During the Tyrants of Lothal campaign, the Imperial player cannot earn Hondo Ohnaka or Thrawn as a villain.
-Related Topics: Active Missions 5, Agenda Cards 6, Campaign Log 17, Class Cards
-19, Mini Campaign 42, Missions 43, Mission Setup 44
+Related Topics: [Active Missions](#active-missions), [Agenda Cards](#agenda-cards), [Campaign Log](#campaign-log), [Class Cards](#class-cards), [Mini Campaign](#mini-campaign), [Missions](#missions), [Mission Setup](#mission-setup)
 
 
 ## CLAIM
 
-When a player claims a token or component, the player places it in their play area (p.50). The effect of claiming
+When a player claims a token or component, the player places it in their play area ([p.50](#push)). The effect of claiming
 a token is explained in the mission's rules.
 - At the end of a mission, all claimed tokens are returned to the game box.
 - Claim is different than retrieve.
-Related Topics: Crate Tokens 23, Interact 37, Play Area 50, Retrieving Tokens 54
+Related Topics: [Crate Tokens](#crate-tokens), [Interact](#interact), [Play Area](#play-area), [Retrieving Tokens](#retrieving-tokens)
 
 ## CLASS CARDS
 
@@ -859,15 +845,14 @@ Upgrade Stages.
 - Class cards that have been purchased remain faceup in a player's play area. They have ongoing effects as
 listed on the cards. Class cards cannot be traded between heroes.
 - Some Class card abilities have costs. If this cost cannot be paid, the text immediately following this cost
-cannot be resolved. Ability costs are explained under "Abilities" on page 3.
+cannot be resolved. Ability costs are explained under "Abilities" on page [3](#abilities-box).
 - Some Class cards have multiple abilities separated by a horizontal line. These abilities can be used
 independently and have separate costs and requirements in order to use them.
 - Some heroes have a Class deck that includes Item cards with an XP cost. These cards can be purchased
 with XP like any other Class card and are used like other items of the same type. If a player wishes to sell
 any of these items after purchasing them, the player may do so for 50 credits like any other Item card
 without a listed credit cost.
-Related Topics: Abilities 3, Actions 4, Attachment 10, Exhaust 30, Experience
-Points 30, Item Cards 38, Play Area 50, Strain 58
+Related Topics: [Abilities](#abilities), [Actions](#actions), [Attachment](#attachment), [Exhaust](#exhaust), [Experience Points](#experience-points), [Item Cards](#item-cards), [Play Area](#play-area), [Strain](#strain)
 
 ## CLEAVE
 
@@ -886,7 +871,7 @@ the attack and not to the figures or objects affected by Cleave.
 - When a figure uses the Cleave keyword during a  attack, the hostile figure chosen to suffer the  from
 Cleave must be within line of sight of the attacker and within a number of spaces of the attacker equal to or
 less than the Accuracy result of the attack.
-Related Topics: Attacks 10, Attacking Objects 13, Conditions 22, Keywords 39
+Related Topics: [Attacks](#attacks), [Attacking Objects](#attacking-objects), [Conditions](#conditions), [Keywords](#keywords)
 
 
 ## COMMAND CARDS
@@ -895,7 +880,7 @@ During a skirmish, players play Command cards to resolve a wide range of powerfu
 - During setup, each player draws three Command cards into their hand. Command cards in a player's hand
 are kept secret from their opponent.
 - Each player draws one Command card each Status Phase, plus one additional Command card for each
-terminal token the player controls (Control p.23).
+terminal token the player controls (Control [p.23](#credits)).
 - After the effect of a Command card has resolved, it is placed faceup in the player's discard pile.
 - If there are no cards remaining in a player's Command deck, the player cannot draw Command cards.
 - A player cannot play multiple copies of the same Command card at the same time (on the same trigger
@@ -911,8 +896,7 @@ when building their army. The following limits must be obeyed:
 - The total cost of cards in the command card deck must be 15 or less.
 - Each Command card has a number of restriction icons next to its cost. This is the maximum number of
 copies of that card a player can have in their deck.
-Related Topics: Actions 4, Affiliation 6, Control 23, Re-Draw 53, Status Phase 57,
-Terminal Tokens 59
+Related Topics: [Actions](#actions), [Affiliation](#affiliation), [Control](#control), [Re-Draw](#re-draw), [Status Phase](#status-phase), [Terminal Tokens](#terminal-tokens)
 
 
 ## COMPANIONS
@@ -930,7 +914,7 @@ movement in a space containing a companion.
 - A companion is adjacent to each figure and object in its space, and each of those figures and objects are
 adjacent to the companion.
 - A companion cannot interact.
-- A companion has a figure cost of 0 (see "Figure Cost", page 30).
+- A companion has a figure cost of 0 (see "Figure Cost", page [30](#focused)).
 - If a companion performs an attribute test, it automatically fails.
 - When a group that is associated with a companion leaves play, the companion remains in play but can no
 longer activate unless a game effect allows that companion to activate as part of a different group.
@@ -940,7 +924,7 @@ player may have only one companion of each type in play.
 that player's control, it is removed from the map first.
 - During a skirmish, abilities that specifically affect a companion can affect only your companion.
 - A companion is not a member of its associated group.
-Related Topics: Affiliation 6, Figure Cost 30, Group 33, Imperial Figures 35
+Related Topics: [Affiliation](#affiliation), [Figure Cost](#figure-cost), [Group](#group), [Imperial Figures](#imperial-figures)
 
 ## COMPONENT LIMITATIONS
 
@@ -959,7 +943,7 @@ imperial and mercenary expansions that have both regular and elite deployment ca
 unique groups and all rebel allies are naturally limited to one group due to the game mechanisms.
 - In a skirmish, a player can have a maximum of one of each unique Deployment card in their army, two of
 each elite Deployment card, and four of each regular Deployment card.
-Related Topics: Imperial Figures 35, Elite Figure 28, Unique 62
+Related Topics: [Imperial Figures](#imperial-figures), [Elite Figure](#elite-figure), [Unique](#unique)
 
 
 ## CONDITIONS
@@ -983,8 +967,7 @@ has a condition keyword, the corresponding condition is applied using the follow
 condition to be applied. The corresponding condition is applied after the attack resolves.
 - BENEFICIAL conditions are applied to the attacker. HARMFUL conditions are applied to the target.
 - Objects cannot gain conditions.
-Related Topics: Attacks 10, Bleeding 15, Damage 24, Focused 31, Hidden 34,
-Keywords 39, Power Tokens 50, Stunned 58, Weakened 62
+Related Topics: [Attacks](#attacks), [Bleeding](#bleeding), [Damage](#damage), [Focused](#focused), [Hidden](#hidden), [Keywords](#keywords), [Power Tokens](#power-tokens), [Stunned](#stunned), [Weakened](#weakened)
 
 ## CONFLICTS
 
@@ -992,7 +975,7 @@ Numerous abilities, mission rules, and other game effects can be triggered at th
 - While attacking, mission rules and effects from conditions are resolved with priority, followed by effects
 from the attacker (including figures friendly to him), then effects from the defender (including figures
 friendly to him).
-- While attacking during a Four-Player Team Battle skirmish (p.32), mission rules are resolved with priority,
+- While attacking during a Four-Player Team Battle skirmish ([p.32](#conflicts-in-a-four-player-skirmish)), mission rules are resolved with priority,
 followed by effects from the attacker and the attacker's figures, then effects from the defender and their
 figures. Then, the attacker's teammate may resolve effects, followed by the defender's teammate.
 - Effects from multiple figures under the control of a single player are resolved in the order of that player's
@@ -1015,7 +998,7 @@ chooses a Rebel player to make the final decision.
 During a skirmish, outside of attacks, mission rules are resolved first, followed by effects from the player with
 initiative, then effects from each other player, proceeding clockwise around the table.
 - If multiple mission rules would resolve at the same time, the player with initiative decides their order.
-Related Topics: Abilities 3, Attacks 10, Initiative 36, Winning the Game 63
+Related Topics: [Abilities](#abilities), [Attacks](#attacks), [Initiative](#initiative), [Winning the Game](#winning-the-game)
 
 
 ## CONTROL
@@ -1028,7 +1011,7 @@ hostile figures on or adjacent to the token.
 - If both friendly and hostile figures are on or adjacent to the token, no one Controls the token.
 - In a Skirmish, a player Controls a deployment zone if there is at least one friendly figure in any space of
 that deployment zone and no hostile figures in any space of that deployment zone.
-Related Topics: Adjacent 6, Friendly Figure 33, Hostile Figure 35
+Related Topics: [Adjacent](#adjacent), [Friendly Figure](#friendly-figure), [Hostile Figure](#hostile-figure)
 
 ## CONVERT
 
@@ -1037,7 +1020,7 @@ removed from the dice results and the new result is added to the dice results (a
 - Abilities that remove or add accuracy or symbols are resolved during the Apply Modifiers step of an attack,
 unless they require spending a  (surge).
 - After being converted, the new result may be converted again by other effects.
-Related Topics: Attacks 10
+Related Topics: [Attacks](#attacks)
 
 ## COUNTING SPACES
 
@@ -1053,8 +1036,7 @@ object or a space is determined by counting spaces to the space the figure or ob
 terrain for the space you count spaces to (and count spaces from if the other figure or object occupies
 blocking terrain). If the distance is 1, the figure or object is adjacent to the other figure, object, or space.
 This does not make the spaces they occupy adjacent.
-Related Topics: Adjacent 6, Blocking Terrain 15, Blocking Terrain Examples 68,
-Doors 27, Terrain 60, Walls 62
+Related Topics: [Adjacent](#adjacent), [Blocking Terrain](#blocking-terrain), [Blocking Terrain Examples](#blocking-terrain-examples), [Doors](#doors), [Terrain](#terrain), [Walls](#walls)
 
 ## CRATE TOKENS
 
@@ -1064,13 +1046,13 @@ and end their movement in the same space as a crate token.
 - If a crate token is in a space containing terrain, the terrain in the space still takes effect.
 For example, a space with blocking terrain that contains a crate token still blocks line of
 sight, and figures cannot enter the space.
-- During a campaign, crates are objects that heroes can interact (p.37) with to Claim (p.19) the token and
+- During a campaign, crates are objects that heroes can interact ([p.37](#item-cards)) with to Claim ([p.19](#command-cards)) the token and
 draw a Supply card.
 - During a campaign, at the end of each mission, heroes receive 50 credits for each crate token they have in
 their play areas.
 - The color of crate tokens has no game effect unless specified by the mission.
 - A crate token with its colored side down cannot be examined by players. This color is hidden information.
-Related Topics: Claim 19, Credits 24, Hidden Information 34, Interact 37, Supply Cards 59
+Related Topics: [Claim](#claim), [Credits](#credits), [Hidden Information](#hidden-information), [Interact](#interact), [Supply Cards](#supply-cards)
 
 
 ## CREDITS
@@ -1084,13 +1066,13 @@ heroes spend credits, they subtract them from the credits on the campaign log an
 Stages.
 - At the end of each campaign mission, heroes receive 50 credits for each crate token they have in their play
 areas.
-Related Topics: Crate Tokens 23, Item Cards 38, Rebel Upgrade Stage 52
+Related Topics: [Crate Tokens](#crate-tokens), [Item Cards](#item-cards), [Rebel Upgrade Stage](#rebel-upgrade-stage)
 
 ## DAMAGE
 
 Many game effects cause figures to suffer  (damage). This is most often suffered from attacks and Blast and
 Cleave, but can also be suffered from a variety of abilities.
-- When a figure has suffered  equal to or exceeding its Health, it is defeated (p.24).
+- When a figure has suffered  equal to or exceeding its Health, it is defeated ([p.24](#deplete)).
 - When a hero suffers , place an equal number of damage tokens on their Hero sheet.
 - When any other figure suffers , place an equal number of damage tokens next to the figure. These
 damage tokens move with the figure.
@@ -1103,7 +1085,7 @@ damage tokens currently on its Hero sheet or by its figure.
 - A figure or object cannot suffer  in excess of its Health. Any  over this amount has no effect.
 - If an effect causes a figure to reduce its Health value, and it has suffered an amount of  greater than the
 resulting Health value, any  in excess of its Health is discarded and has no effect.
-Related Topics: Attacks 10, Attacking Objects 13, Defeated 24, Health 33, Objects 49
+Related Topics: [Attacks](#attacks), [Attacking Objects](#attacking-objects), [Defeated](#defeated), [Health](#health), [Objects](#objects)
 
 ## DEFEATED
 
@@ -1117,8 +1099,7 @@ tokens.
 - During a campaign, when the last Imperial figure in a non-unique group is defeated, the Deployment card
 is returned to the Imperial player's hand and can be optionally deployed later in the mission using normal
 deployment rules.
-Related Topics: Damage 24, Deployment 25, Health 33, Reinforce 53, Unique 62,
-Withdraw 63, Wounded 64
+Related Topics: [Damage](#damage), [Deployment](#deployment), [Health](#health), [Reinforce](#reinforce), [Unique](#unique), [Withdraw](#withdraw), [Wounded](#wounded)
 
 
 ## DEPLETE
@@ -1128,7 +1109,7 @@ of each mission, all depleted cards are flipped faceup.
 When a card is depleted, abilities on that card no longer have any effect. For example, if MHD-19 uses the
 "deplete" ability on their Reward card "Systems Upgrade", the card's "+2 Health" ability is no longer active,
 and MHD-19's Health is immediately reduced by 2.
-Related Topics: Abilities 3
+Related Topics: [Abilities](#abilities)
 
 ## DEPLOYMENT
 
@@ -1141,7 +1122,7 @@ campaign guide or deployment zone.
 
 The Imperial player deploys figures throughout the course of every mission. The "Deployment and Setup" box
 in the mission's rules lists which figures the Imperial player can deploy throughout the mission (see "Mission
-Setup" on page 44).
+Setup" on page [44](#skirmish-mission-setup)).
 - Deployment location is determined by named tiles or icons, such as deployment points, on the map.
 - When the location for a figure's deployment is not specified, it is deployed as close as possible to any
 active deployment point shown in the mission's diagram, chosen by the Imperial player. This includes
@@ -1158,8 +1139,8 @@ do not cost  to deploy.
 - When an initial or reserved group is defeated, except for unique figures, the Deployment card is
 returned to the Imperial player's hand and can be later deployed during an optional deployment (such as
 the Deploy and Reinforce step of the Status Phase).
-- The Imperial player may deploy any number of groups during each optional deployment (p.49), including
-the Deploy and Reinforce step of the Status Phase. The Imperial player can also reinforce (p.53) figures
+- The Imperial player may deploy any number of groups during each optional deployment ([p.49](#paying-vps)), including
+the Deploy and Reinforce step of the Status Phase. The Imperial player can also reinforce ([p.53](#rest)) figures
 during optional deployments.
 - Deployment points on the mission's map diagram are hidden information. The Imperial player must follow
 these icons, but cannot show the map to the Rebel players. Mission rules tell the players when deployment
@@ -1169,10 +1150,8 @@ the Rebel players can observe where further deployments are placing figures to d
 ## SKIRMISH DEPLOYMENT
 
 During setup of a skirmish, players place all of their figures within their deployment zone. “Skirmish Mission
-Setup” p.45.
-Related Topics: Initial Groups 36, Initiative 36, Hidden Information 34, Mission
-Setup 44, Open Groups 49, Optional Deployment 49, Reinforce 53, Reserved Groups
-53, Status Phase 57, Threat 60
+Setup” [p.45](#mission-stage).
+Related Topics: [Initial Groups](#initial-groups), [Initiative](#initiative), [Hidden Information](#hidden-information), [Mission Setup](#mission-setup), [Open Groups](#open-groups), [Optional Deployment](#optional-deployment), [Reinforce](#reinforce), [Reserved Groups](#reserved-groups), [Status Phase](#status-phase), [Threat](#threat)
 
 
 ## DEPLOYMENT CARDS
@@ -1190,23 +1169,22 @@ have gray borders.
 - Unique cards are identified by a bullet (▪) before the name, for example, "▪ Darth Vader".
 - Deployment and Companion cards list a number of traits under the name (such as TROOPER). Traits have no
 inherent gameplay effect, but may be referred to by other components and by some rules. For example,
-traits are used to restrict playing of Command Cards p.20, and limit modifications you can add on weapon
-items p.38.
+traits are used to restrict playing of Command Cards [p.20](#companions), and limit modifications you can add on weapon
+items [p.38](#keywords).
 - In a skirmish, some Deployment cards have the SKIRMISH UPGRADE trait. Rules and abilities that reference
 Deployment cards do not affect, do not include, and cannot manipulate Skirmish Upgrade cards unless the
 rule or ability states otherwise.
 For example, a player cannot use the card "Temporary Alliance" to add Skirmish Upgrade cards from other
 factions to their army. As another example, when using "Take Initiative," players cannot choose to exhaust
 one of their Skirmish Upgrade cards.
-Related Topics: Abilities Box 4, Affiliation 6, Allies 7, Elite Figure 28, Group
-34, Open Groups 49, Skirmish Attachments 56, Text Box 60, Unique 62
+Related Topics: [Abilities Box](#abilities-box), [Affiliation](#affiliation), [Allies](#allies), [Elite Figure](#elite-figure), [Group](#group), [Open Groups](#open-groups), [Skirmish Attachments](#skirmish-attachments), [Text Box](#text-box), [Unique](#unique)
 
 ## DEPLOYMENT POINTS
 
 In a campaign, green deployment points are active at the start of each mission. Other deployment points are not
 active until specified by the mission's rules, even if another rule allows a one-time deployment to any of those
 points.
-Related Topics: Deployment 25, Hidden Information 34
+Related Topics: [Deployment](#deployment), [Hidden Information](#hidden-information)
 
 ## DEVICE TOKENS
 
@@ -1218,7 +1196,7 @@ area. During a mission, Saska's abilities may allow friendly figures to claim an
 beneficial effects. Discarded tokens return to Saska's supply.
 The number of device tokens that figures can collectively claim is limited by the provided supply of eight
 tokens. A figure can individually claim any number of these tokens.
-Related Topics: Hero 34
+Related Topics: [Hero](#hero)
 
 
 ## DICE TYPES
@@ -1226,21 +1204,21 @@ Related Topics: Hero 34
 Some abilities refer to a die's type. A die's type is either "attack" or "defense."
 - Blue, Red, Green, and Yellow dice are attack dice.
 - Black and White dice are defense dice.
-Related Topics: Icon Types 35
+Related Topics: [Icon Types](#icon-types)
 
 ## DIFFICULT TERRAIN
 
 Difficult terrain is represented by a solid blue line surrounding a group of spaces of the map. If a space contains
 a Rubble token, it is considered to contain difficult terrain.
-- A figure must spend one additional movement point to enter (p.29) a space containing difficult terrain.
-- A figure doesn't need to spend additional movement points to exit (p.30) a space containing difficult terrain.
+- A figure must spend one additional movement point to enter ([p.29](#exhaust)) a space containing difficult terrain.
+- A figure doesn't need to spend additional movement points to exit ([p.30](#focused)) a space containing difficult terrain.
 - Line of sight can be traced through difficult terrain.
 - If a space contains a hostile figure and difficult terrain, other figures must spend two additional movement
 points to enter the space (one for the figure and one for the terrain).
 - When a large figure enters difficult terrain, it spends only one additional movement point, regardless of the
 number of spaces of difficult terrain that it occupies.
 - Figures that have Massive or Mobile ignore extra movement points costs.
-Related Topics: Enter 29, Exit 30, Line of Sight 40, Rubble 54, Terrain 60
+Related Topics: [Enter](#enter), [Exit](#exit), [Line of Sight](#line-of-sight), [Rubble](#rubble), [Terrain](#terrain)
 
 ## DISTRIBUTE
 
@@ -1248,7 +1226,7 @@ Some effects allow a player to distribute a number of identical elements amongst
 distributing tokens, that player gives a number of those elements to each of those figures such that the total
 number given out is equal to or less than the amount designated to be distributed. Each figure amongst those to
 whom the elements are to be distributed may receive as many as the total number or as few as zero.
-Related Topics: Power Tokens 50
+Related Topics: [Power Tokens](#power-tokens)
 
 ## DOORS
 
@@ -1260,19 +1238,18 @@ Doors block line of sight and adjacency.
 - If an effect closes a door, place a door token on the map as shown on the mission's map. Figures cannot
 voluntarily close doors.
 - If a large figure occupies spaces on both sides of a door when it closes, that figure is pushed to the closest
-valid space (see "Push" on page 51).
+valid space (see "Push" on page [51](#rebel-upgrade-stage)).
 - For abilities that refer to adjacency, the spaces that share an edge with a door are the only spaces that are
 considered to be adjacent to that door (and the door is adjacent to those spaces).
-- For abilities that refer to distance from or distance to a door (“Counting Spaces” p.23), the door is
+- For abilities that refer to distance from or distance to a door (“Counting Spaces” [p.23](#credits)), the door is
 considered to be occupying each empty space with which it shares an edge.
 - Some missions specify that certain doors are locked. Locked doors cannot be opened except as specified in
-the mission rules. A locked door can have Health, and when destroyed it is removed from the map (p.13).
+the mission rules. A locked door can have Health, and when destroyed it is removed from the map ([p.13](#attribute-tests)).
 A mission rule can also specify how to unlock a locked door. When a door becomes unlocked, the door
 remains closed but can now be opened with an interact following normal rules.
 - Some missions allow heroes to place doors. Doors must be placed on exactly two edges. A door cannot
 overlap a wall or another door.
-Related Topics: Attacking Objects 13, Counting Spaces 23, Interact 37, Line of
-Sight 40, Objects 49, Push 51
+Related Topics: [Attacking Objects](#attacking-objects), [Counting Spaces](#counting-spaces), [Interact](#interact), [Line of Sight](#line-of-sight), [Objects](#objects), [Push](#push)
 
 
 DURING (YOUR) ACTIVATION
@@ -1281,7 +1258,7 @@ activation, but not during them. Each “during an activation” ability needs t
 perform another “during an activation” ability.
 Spending movement points to move 1 space is a “during your activation” ability. You can perform it repeatedly
 in succession without ending movement.
-Related Topics: Abilities 3, Actions 4, Movement 47, Movement Points 48.
+Related Topics: [Abilities](#abilities), [Actions](#actions), [Movement](#movement), [Movement Points](#movement-points)
 
 ## ELITE FIGURE
 
@@ -1295,12 +1272,12 @@ the guide is referencing the regular version.
 - If an elite figure is required to perform an attribute test, it automatically receives one success.
 - Heroes in the campaign are not considered regular or elite.
 - A figure with a gray Deployment card is regular and not elite.
-Related Topics: Allies 7, Deployment Cards 26, Group 33, Imperial Figures 35
+Related Topics: [Allies](#allies), [Deployment Cards](#deployment-cards), [Group](#group), [Imperial Figures](#imperial-figures)
 
 ## EMPTY SPACE
 
 Any space that does not contain a figure is empty.
-Related Topics: Place 50
+Related Topics: [Place](#place)
 
 ## ENDING MOVEMENT
 
@@ -1311,16 +1288,16 @@ spaces), or when being placed in a space by a game effect, for example by deploy
 (unless the moving figure has the Massive keyword).
 - A figure does not need to end movement to perform a “during your activation” ability that isn't an action or
 an attack.
-Related Topics: Massive 41, Movement 47, Movement Points 48, Place 50, Push 51
+Related Topics: [Massive](#massive), [Movement](#movement), [Movement Points](#movement-points), [Place](#place), [Push](#push)
 
 ## ENDURANCE
 
 During a campaign, each hero has an Endurance value printed on their hero sheet. This is the maximum number
 of  (strain) that the figure can have suffered (the number of  tokens on the hero sheet).
 A hero cannot choose to suffer  if the amount of  the hero has suffered would exceed their Endurance. (See
-Strain p.58)
+Strain [p.58](#supply-cards))
 Non-hero figures do not have Endurance.
-Related Topics: Recover 52, Rest 54, Strain 58, Surges 59
+Related Topics: [Recover](#recover), [Rest](#rest), [Strain](#strain), [Surges](#surges)
 
 
 ## ENERGY SHIELD
@@ -1334,19 +1311,19 @@ sight. Line of sight can be traced to a figure or object occupying a space conta
 shield, but Line of sight cannot be traced through a space containing an energy shield. Line of sight can be
 drawn out of a space containing an energy shield. (See “Appendix IV – Energy Shield Examples” on page 69.)
 A space can contain both rubble and an energy shield.
-Related Topics: Line of Sight 40, Rubble 54, Terrain 60
+Related Topics: [Line of Sight](#line-of-sight), [Rubble](#rubble), [Terrain](#terrain)
 
 ## ENTER
 
 Some effects are triggered when a figure enters a space. Entering a space includes when a figure moves into, is
 pushed into, or is placed in the space by an effect (including deployment or reinforcement).
-Related Topics: Exit 30, Movement 47, Place 50, Push 51
+Related Topics: [Exit](#exit), [Movement](#movement), [Place](#place), [Push](#push)
 
 ## ENTRANCE
 
 Entrance refers to the space containing the entrance token. Heroes are deployed to the entrance token at the
 start of a mission in a campaign.
-Related Topics: Deployment 25, Missions 43
+Related Topics: [Deployment](#deployment), [Missions](#missions)
 
 ## EPILOGUES
 
@@ -1362,7 +1339,7 @@ packs to create a longer campaign. The Ally and Villain packs involved in the ex
 new type of card called Epilogue cards. These cards provide epilogues to the missions contained in the figure
 packs. All rules that apply to epilogues also apply to the Epilogue cards. The epilogue cards are not used if the
 missions are used as side missions in a full campaign.
-Related Topics: Campaign 17, Mini Campaigns 42
+Related Topics: [Campaign](#campaign), [Mini Campaigns](#mini-campaigns)
 
 ## ESCAPING
 
@@ -1370,8 +1347,7 @@ Certain mission rules can allow a figure to escape. In order to escape, the figu
 point while on or adjacent to the space indicated in the mission's rules.
 A figure cannot escape while Stunned. When a figure escapes, it is removed from the map. A figure not on the
 map cannot be affected by abilities, and cannot perform activations.
-Related Topics: Abilities 3, Activation 4, Movement 47, Movement Points 48,
-Stunned 58
+Related Topics: [Abilities](#abilities), [Activation](#activation), [Movement](#movement), [Movement Points](#movement-points), [Stunned](#stunned)
 
 
 ## EXHAUST
@@ -1390,18 +1366,13 @@ to mark that the figures in that group have already activated during this round.
 abilities that must be used before, during, or after the player's figure activates.
 - Abilities on exhausted cards can be used as long as the abilities do not require the player to exhaust the card
 to use the ability.
-- Static or passive abilities (abilities that are always “on” and do not require exhausting the card) remain
-active even when the card is exhausted.
-- If a card has multiple abilities that each require exhausting the card, the player may use only one of them per
-ready cycle—once the card is exhausted to pay for one such ability, the others cannot be used until the card is
-readied (unless another effect readies the card).
-Related Topics: Abilities 3, Activation 4, Class Cards 19, Deployment Cards 26, Ready 51
+Related Topics: [Abilities](#abilities), [Activation](#activation), [Class Cards](#class-cards), [Deployment Cards](#deployment-cards), [Ready](#ready)
 
 ## EXIT
 
 Some effects are triggered when a figure exits a space. Exiting a space includes when a figure moves or is
 pushed out of a space, or is placed in a different space.
-Related Topics: Enter 29, Place 50, Push 51
+Related Topics: [Enter](#enter), [Place](#place), [Push](#push)
 
 ## EXPANSION ICON
 
@@ -1415,11 +1386,11 @@ expansion icon to distinguish the components from other expansions.
 During a campaign, players gain experience points (XP) as mission rewards. During the Rebel and Imperial
 Upgrade Stages, players can spend XP to purchase Class cards.
 - Unspent XP is recorded on the campaign log and may be spent during future Upgrade Stages.
-Related Topics: Imperial Upgrade Stage 35, Rebel Upgrade Stage 52
+Related Topics: [Imperial Upgrade Stage](#imperial-upgrade-stage), [Rebel Upgrade Stage](#rebel-upgrade-stage)
 
 ## EXTERIOR SPACES
 
-See "Interior Spaces" on page 37.
+See "Interior Spaces" on page [37](#item-cards).
 
 ## FIGURE COST
 
@@ -1429,7 +1400,7 @@ Each figure in Imperial Assault has a figure cost that may be referenced by abil
 - A companion has a figure cost of 0.
 - Otherwise, such as the captive from "Imperial Hospitality," (pg. 29, Campaign Guide, core game) the figure
 cost is 0.
-Related Topics: Companions 21, Deployment Cards 26
+Related Topics: [Companions](#companions), [Deployment Cards](#deployment-cards)
 
 
 ## FOCUSED
@@ -1444,14 +1415,14 @@ the attacker gains Focused after the attack resolves.
 - Due to timing conflict resolution, an existing Focused is discarded before a new Focused is gained.
 - If a figure gains the Focused condition after rolling dice for an attack or test, it cannot use the condition
 until the next time it attacks or performs a test.
-Related Topics: Attacks 10, Damage 24, Conditions 22
+Related Topics: [Attacks](#attacks), [Damage](#damage), [Conditions](#conditions)
 
 ## FORCED MISSIONS
 
 During a campaign, some Agenda cards and mission results can force a certain mission to be played. For
 example, if an Agenda card says "Play `Wanted' as a forced mission," players would immediately play this
 mission, and then resume the campaign from the next stage on the campaign log.
-- Forced missions are recorded on the "Forced Missions" section of the campaign log (p.17). When a mission
+- Forced missions are recorded on the "Forced Missions" section of the campaign log ([p.17](#campaign-setup)). When a mission
 is forced and players do not have time to resolve the mission this session, they should record the mission in
 the Forced Missions section without checking the box. The next time they resume their campaign, they will
 immediately play this mission.
@@ -1464,7 +1435,7 @@ stages get resolved after resolving the forced mission.
 - The threat level for a forced mission is equal to the threat level of the most recently played mission.
 - Because forced missions are never chosen to be played, they do not have corresponding Mission cards.
 - If players run out of space in the "Forced Missions" section of the campaign log, something went wrong.
-Related Topics: Agenda Cards 6, Mission Events 43
+Related Topics: [Agenda Cards](#agenda-cards), [Mission Events](#mission-events)
 
 ## FORM CARDS
 
@@ -1477,7 +1448,7 @@ A Deployment card can only gain a Form card with a subname corresponding to that
 Form Cards are unique. If there are multiple Clawdite Shapeshifters in play, only 1 copy of each Clawdite
 Shapeshifter Form card can be in play at the same time. During a skirmish, only 1 copy can be in play in each
 army instead.
-Related Topics: Abilities Box 4, Text Box 60, Unique 62
+Related Topics: [Abilities Box](#abilities-box), [Text Box](#text-box), [Unique](#unique)
 
 
 ## FOUR-PLAYER SKIRMISHES
@@ -1493,7 +1464,7 @@ During a four-player skirmish players use a skirmish mission deck that includes 
 corresponding to four-player skirmish maps.
 - Two additional deployment zones are available: yellow and green.
 - During the Activation Phase each player activates a group in clockwise order.
-- During the ready step of the Skirmish Status Phase (p.57), all players ready all of their exhausted cards and
+- During the ready step of the Skirmish Status Phase ([p.57](#strain)), all players ready all of their exhausted cards and
 the player who has the initiative token passes it to the player on their left.
 
 ## GAME MODES
@@ -1546,10 +1517,10 @@ copies of "Devious Scheme" have no effect.
 
 During a four-player skirmish, mission rules are resolved first, followed by effects from the player with
 initiative, and then effects from each other player, proceeding clockwise around the table.
-While attacking during a Four-Player Team Battle skirmish (p.32), mission rules are resolved with priority,
+While attacking during a Four-Player Team Battle skirmish ([p.32](#conflicts-in-a-four-player-skirmish)), mission rules are resolved with priority,
 followed by effects from the attacker and the attacker's figures, then effects from the defender and their figures.
 Then, the attacker's teammate may resolve effects, followed by the defender's teammate.
-Related Topics: Conflicts 22, Skirmish 55
+Related Topics: [Conflicts](#conflicts), [Skirmish](#skirmish)
 
 ## FRIENDLY FIGURE
 
@@ -1563,7 +1534,7 @@ figures are hostile figures.
 opponents and the remaining player is your teammate. All figures belonging to opponents are hostile, and
 all figures belonging to teammates are friendly.
 - Players cannot target friendly figures with attacks.
-Related Topics: Affiliation 6, Hostile Figure 35
+Related Topics: [Affiliation](#affiliation), [Hostile Figure](#hostile-figure)
 
 ## GROUP
 
@@ -1579,42 +1550,42 @@ perform activations.
 to be differentiated.
 - To do this, players can place an ID token on the Deployment card and apply matching ID Stickers to the
 bases of the corresponding figures.
-Related Topics: Deployment 25, Elite Figure 28, Exhaust 30
+Related Topics: [Deployment](#deployment), [Elite Figure](#elite-figure), [Exhaust](#exhaust)
 
 ## HABITAT
 
 Habitat is a keyword found on certain Deployment cards. During a campaign, when the Imperial player is
 selecting open groups for a mission, the player can choose a Deployment card with the Habitat keyword only
-if there is at least one tile in that mission's map whose tile type (p.61) matches the listed Habitat.
+if there is at least one tile in that mission's map whose tile type ([p.61](#unique)) matches the listed Habitat.
 During a skirmish, Habitat has no effect.
-Related Topics: Open Groups 49, Tile Types 61
+Related Topics: [Open Groups](#open-groups), [Tile Types](#tile-types)
 
 ## HEALTH
 
 When a figure has damage tokens equal to its Health, it is defeated. Health is listed on the figure's Deployment
 card or Hero sheet.
-Related Topics: Damage 24, Defeated 24, Healthy 34
+Related Topics: [Damage](#damage), [Defeated](#defeated), [Healthy](#healthy)
 
 
 ## HEALTHY
 
 During a campaign, a hero is healthy as long as the hero is not wounded. Other figures are healthy until they are
 defeated.
-Related Topics: Hero 34, Wounded 64
+Related Topics: [Hero](#hero), [Wounded](#wounded)
 
 ## HERO
 
 During a campaign, each Rebel player controls a hero. The word "Hero" is used to refer to hero figures, the
 player controlling the figure, and all of the associated components.
 Some heroes use their own tokens and are limited to the number of tokens provided. Saska Teft uses Device
-Tokens p.26, Loku Kanaloa uses Recon Tokens p.52, Tress Hacnua uses Style Tokens p.58.
-Related Topics: Campaign Setup 18
+Tokens [p.26](#dice-types), Loku Kanaloa uses Recon Tokens [p.52](#re-draw), Tress Hacnua uses Style Tokens [p.58](#supply-cards).
+Related Topics: [Campaign Setup](#campaign-setup)
 
 ## HIDDEN
 
 Hidden is a BENEFICIAL condition which applies -2 Accuracy while defending and +1 while
 attacking. A figure discards Hidden after resolving an attack.
-Related Topics: Accuracy 4, Attacks 10, Conditions 22
+Related Topics: [Accuracy](#accuracy), [Attacks](#attacks), [Conditions](#conditions)
 
 ## HIDDEN INFORMATION
 
@@ -1649,8 +1620,7 @@ is turned faceup and is no longer hidden information.
 - During the Heart of the Empire campaign, the Imperial player may be given the option to make narrative
 choices as the result of mission rewards. For that reason, in the mission guide portion, the Imperial player is
 not allowed to read beyond the story mission whose card is currently in play as the active mission.
-Related Topics: Agenda Cards 6, Deployment Cards 26, Crate Tokens 23, Mission
-Events 43, Missions 43, Terminal Tokens 59
+Related Topics: [Agenda Cards](#agenda-cards), [Deployment Cards](#deployment-cards), [Crate Tokens](#crate-tokens), [Mission Events](#mission-events), [Missions](#missions), [Terminal Tokens](#terminal-tokens)
 
 
 ## HOSTILE FIGURE
@@ -1662,12 +1632,12 @@ figures are hostile figures.
 - During a Four-Player Team Battle skirmish, the players on your immediate left and right are your
 opponents and the remaining player is your teammate. All figures belonging to opponents are hostile, and
 all figures belonging to teammates are friendly.
-Related Topics: Affiliation 6, Friendly Figure 33, Imperial Figures 35
+Related Topics: [Affiliation](#affiliation), [Friendly Figure](#friendly-figure), [Imperial Figures](#imperial-figures)
 
 ## ICON TYPES
 
 Some abilities refer to an icon's type.  and  are attack icons. , , and  are defense icons.
-Related Topics: Dice Types 27
+Related Topics: [Dice Types](#dice-types)
 
 ## IMPASSABLE TERRAIN
 
@@ -1675,16 +1645,15 @@ Impassable terrain is represented by a dashed red line surrounding a space of th
 space containing impassable terrain unless an ability allows this, such as Massive or Mobile.
 - Sometimes impassable terrain is only on one edge of a space. Figures cannot move, be pushed through, or
 be placed on (if a Large figure) an impassable edge unless they have a special ability that allows this, such
-as Massive (p.41) or Mobile (p.47).
+as Massive ([p.41](#mini-campaigns)) or Mobile ([p.47](#movement-points)).
 - Line of sight can be traced through impassable terrain.
-Related Topics: Line of Sight 40, Massive 41, Mobile 47, Movement 47, Place 50,
-Push 51, Terrain 60
+Related Topics: [Line of Sight](#line-of-sight), [Massive](#massive), [Mobile](#mobile), [Movement](#movement), [Place](#place), [Push](#push), [Terrain](#terrain)
 
 ## IMPERIAL FIGURES
 
 During a campaign, all figures belonging to the Imperial player are Imperial figures. This includes all
 Deployment cards with an  or  icon under the Imperial player's control.
-Related Topics: Activation 4, Deployment Cards 26, Elite Figure 28, Group 33
+Related Topics: [Activation](#activation), [Deployment Cards](#deployment-cards), [Elite Figure](#elite-figure), [Group](#group)
 
 ## IMPERIAL UPGRADE STAGE
 
@@ -1700,9 +1669,8 @@ The player may purchase any of these cards by spending influence equal to the ca
 not purchase are shuffled back into the deck without being revealed.
 - Most Agenda cards are immediately read aloud and resolved when purchased. The only exception is if
 the card instructs the player to "keep this card secret." The Imperial player keeps the card and resolves
-the effect when playing it (see "Types of Agenda Cards" on page 6).
-Related Topics: Agenda Cards 6, Campaign Log 17, Class Cards 19, Experience Points
-30, Influence 36
+the effect when playing it (see "Types of Agenda Cards" on page [6](#types-of-agenda-cards)).
+Related Topics: [Agenda Cards](#agenda-cards), [Campaign Log](#campaign-log), [Class Cards](#class-cards), [Experience Points](#experience-points), [Influence](#influence)
 
 
 ## INCAPACITATED
@@ -1716,7 +1684,7 @@ space containing an incapacitated figure.
 - The figure cannot suffer  (damage) or be targeted or affected by attacks, abilities, or any game effect
 except as specified by the mission's rules. The abilities of the figure are no longer available.
 - The figure can still be pushed by a massive figure ending its movement in the incapacitated figure's space.
-Related Topics: Massive 41, Missions 43, Withdraw 63
+Related Topics: [Massive](#massive), [Missions](#missions), [Withdraw](#withdraw)
 
 ## INFLUENCE
 
@@ -1728,7 +1696,7 @@ and records this new total. When the imperial player spends influence, the playe
 current influence on the campaign log and records this new total.
 - The imperial player does not have to spend all of their influence at once. Unspent influence may be spent
 during future Imperial Upgrade Stages.
-Related Topics: Agenda Cards 6, Imperial Upgrade Stage 35
+Related Topics: [Agenda Cards](#agenda-cards), [Imperial Upgrade Stage](#imperial-upgrade-stage)
 
 ## INITIAL GROUPS
 
@@ -1739,7 +1707,7 @@ The figures for these groups are placed according to the map in the mission's di
 - When the last figure in an initial non-unique group is defeated, the corresponding Deployment card is
 placed in the Imperial player's hand. The imperial player can Deploy these groups during optional
 deployments following normal deployment rules.
-Related Topics: Attachments 10, Deployment 25, Reinforce 53
+Related Topics: [Attachments](#attachments), [Deployment](#deployment), [Reinforce](#reinforce)
 
 ## INITIATIVE
 
@@ -1752,7 +1720,7 @@ round.
 - The player with initiative breaks all ties for mission rules. For example, if the mission rule moves a token
 one space toward the closest figure and there are two figures equidistant, the player with initiative chooses
 which figure the token moves toward.
-Related Topics: Conflicts 22, Deployment 25, Skirmish 55, Status Phase 57
+Related Topics: [Conflicts](#conflicts), [Deployment](#deployment), [Skirmish](#skirmish), [Status Phase](#status-phase)
 
 
 ## INTERACT
@@ -1766,8 +1734,7 @@ performing an interact.
 retrieving tokens.
 - If the mission rules have an attribute icon in parentheses after the target of the interact, the figure must pass
 the corresponding attribute test in order to resolve the effect of the interact.
-Related Topics: Actions 4, Activation 4, Attribute Tests 14, Doors 27, Crate
-Tokens 23, Retrieving Tokens 54, Supply Cards 59, Terminal Tokens 59
+Related Topics: [Actions](#actions), [Activation](#activation), [Attribute Tests](#attribute-tests), [Doors](#doors), [Crate Tokens](#crate-tokens), [Retrieving Tokens](#retrieving-tokens), [Supply Cards](#supply-cards), [Terminal Tokens](#terminal-tokens)
 
 ## INTERIOR SPACES
 
@@ -1784,7 +1751,7 @@ Massive.
 - During a campaign, figures with the Massive keyword cannot enter interior spaces.
 - Any space that is not an interior space is an exterior space.
 - All spaces on tiles 38A, 39A, 38B and 39B are exterior spaces.
-Related Topics: Massive 41, Tile Types 61
+Related Topics: [Massive](#massive), [Tile Types](#tile-types)
 
 ## INTERRUPT
 
@@ -1798,7 +1765,7 @@ resolve that effect are still paid.
 For example, if a player plays a Command card that allows it to attack a figure, and the figure interrupts to
 move out of line of sight, the Command card is discarded and the action spent on the attack is lost.
 - A figure's action cannot be interrupted while the figure is in a space containing another figure.
-Related Topics: Conflicts 22
+Related Topics: [Conflicts](#conflicts)
 
 
 ## ITEM CARDS
@@ -1842,8 +1809,7 @@ in their play area unattached. Abilities on modifications that are not attached 
 - An Item card cannot have more than one modification with the same trait attached to it at the same time,
 excluding the MODIFICATION trait. For example, a weapon can only have one BARREL modification attached
 to it.
-Related Topics: Attacks 10, Campaign Setup 18, Credits 24, Play Area 50, Rebel
-Upgrade Stage 52
+Related Topics: [Attacks](#attacks), [Campaign Setup](#campaign-setup), [Credits](#credits), [Play Area](#play-area), [Rebel Upgrade Stage](#rebel-upgrade-stage)
 
 
 ## KEYWORDS
@@ -1853,8 +1819,7 @@ Keywords are shorthands for longer abilities.
 - Condition keywords Bleed, Focus, Hide, Stun, and Weaken are used during attacks to apply the
 corresponding condition (Bleeding, Focused, Hidden, Stunned, Weakened) after the attack resolves if the
 target suffered damage from the attack. Abilities may also apply the conditions directly.
-Related Topics: Blast 15, Cleave 19, Conditions 22, Habitat 33, Massive 41,
-Mobile 47, Pierce 50, Recover 52, Reach 51
+Related Topics: [Blast](#blast), [Cleave](#cleave), [Conditions](#conditions), [Habitat](#habitat), [Massive](#massive), [Mobile](#mobile), [Pierce](#pierce), [Recover](#recover), [Reach](#reach)
 
 ## LARGE FIGURES
 
@@ -1877,8 +1842,7 @@ these requirements only once per each moved space.
 spend one additional movement point instead of two.
 - If an effect places a large figure in a space, the player resolving the effect chooses the figure's orientation. It
 can be placed in any legal spaces as long as one of the figure's spaces enters the space instructed.
-Related Topics: Attacks 10, Enter 29, Line of Sight 40, Massive 41, Mobile 47,
-Movement 47, Push 51, Small Figure 56, Target 59
+Related Topics: [Attacks](#attacks), [Enter](#enter), [Line of Sight](#line-of-sight), [Massive](#massive), [Mobile](#mobile), [Movement](#movement), [Push](#push), [Small Figure](#small-figure), [Target](#target)
 
 
 ## LINE OF SIGHT
@@ -1892,7 +1856,7 @@ target space) contains a wall, door, non-companion figure, energy shield, or blo
 does not have line of sight to the target.
 - If the figure determining line of sight is Large, any of the spaces it occupies can be used to draw line of
 sight from. If the target is a Large figure or an object occupying multiple spaces, any of their spaces can be
-chosen to draw line of sight to. (Also see “Attacks” p.13.)
+chosen to draw line of sight to. (Also see “Attacks” [p.13](#attribute-tests).)
 - Line of sight can be traced from or to any corner on the map. Each line can be traced along the corners and
 edges of spaces containing figures, doors, energy shields, walls, and blocking terrain.
 - Graphical details of the tiles are ignored when drawing line of sight. Walls only block line of sight along an
@@ -1911,15 +1875,14 @@ doors), and to figures and objects in the same space, including themselves.
 - A blocking edge, door, or wall connecting the two chosen corners of the target space blocks line of sight if
 it is between the target space and the corner from which line of sight is being drawn.
 - Line of sight can be drawn to a figure or object that is occupying blocking terrain. (See “Blocking Terrain”
-p.15, “Massive” p.41, “Mobile” p.47)
+[p.15](#bounty-tokens), “Massive” [p.41](#mini-campaigns), “Mobile” [p.47](#movement-points))
 Most of the above situations are shown in detail in "Appendix I - Line of Sight Examples" on page 65 and
 “Appendix IV – Energy Shield Examples” on page 69.
-Related Topics: Adjacent 6, Attacks 10, Blocking Terrain 15, Energy Shields 29,
-Ranged Attack 51, Walls 62
+Related Topics: [Adjacent](#adjacent), [Attacks](#attacks), [Blocking Terrain](#blocking-terrain), [Energy Shields](#energy-shields), [Ranged Attack](#ranged-attack), [Walls](#walls)
 
 ## LOCKED
 
-See "Doors" on page 27.
+See "Doors" on page [27](#elite-figure).
 
 ## MAP DIAGRAM
 
@@ -1927,14 +1890,14 @@ The map diagram of each mission indicates assembly for the map, as well as place
 figures. It also displays information referenced by mission rules, such as named map tiles or deployment points.
 Note: Figures shown with gray and black borders both correspond to a gray Deployment card, but belong to
 different groups.
-Related Topics: Mission Setup 44
+Related Topics: [Mission Setup](#mission-setup)
 
 
 ## MASSIVE
 
 The Massive keyword is found on some Deployment cards and applies special rules to figures in that group.
 - Figures do not block line of sight to or from a Massive figure.
-- During a campaign, Massive figures cannot enter interior spaces (p.37).
+- During a campaign, Massive figures cannot enter interior spaces ([p.37](#item-cards)).
 - Massive figures ignore terrain for movement, thus can enter spaces containing blocking terrain and
 impassable terrain. They can also move through and end movement on blocked or impassable terrain edges.
 - Massive figures can enter spaces containing hostile figures and/or difficult terrain at no additional
@@ -1948,7 +1911,7 @@ other players push their figures.
 - If a Massive figure ends movement on a Large figure, that Large figure is pushed to a valid position
 that requires the least spaces of pushed movement. Note that while pushing a large figure, it cannot
 move diagonally and cannot be rotated. If the figure cannot reach a valid position by being pushed,
-place (p.50) it in a valid position that is the least number of spaces away (“Counting Spaces” p.23).
+place ([p.50](#push)) it in a valid position that is the least number of spaces away (“Counting Spaces” [p.23](#credits)).
 - When a Massive figure is placed e.g. during a deployment it is considered to have ended its movement.
 This means that unless another Massive figure is on the deployment point, a deployed Massive figure
 will usually deploy directly to the point, pushing all other figures aside.
@@ -1957,8 +1920,7 @@ activation, Start of Round, or End of Round, the Massive figure cannot voluntari
 that activation, Start of Round, or End of Round.
 - If a Massive figure occupies a space containing blocking terrain, line of sight can be traced to that figure,
 spaces can be counted to that figure, and adjacent figures can attack that figure.
-Related Topics: Blocking Terrain 15, Counting Spaces 23, Impassable Terrain 35,
-Interior Spaces 37, Line of Sight 40, Mobile 47, Movement 47, Push 51, Terrain 60
+Related Topics: [Blocking Terrain](#blocking-terrain), [Counting Spaces](#counting-spaces), [Impassable Terrain](#impassable-terrain), [Interior Spaces](#interior-spaces), [Line of Sight](#line-of-sight), [Mobile](#mobile), [Movement](#movement), [Push](#push), [Terrain](#terrain)
 
 ## MELEE ATTACK
 
@@ -1970,7 +1932,7 @@ perform melee attacks.
 that uses the  icon is a ranged attack, not a melee attack.
 - A  (melee) attack with the Reach keyword can target figures or objects in line of sight and within 2
 spaces.
-Related Topics: Accuracy 4, Adjacent 6, Attacks 10, Reach 51
+Related Topics: [Accuracy](#accuracy), [Adjacent](#adjacent), [Attacks](#attacks), [Reach](#reach)
 
 
 ## MINI CAMPAIGNS
@@ -1981,8 +1943,8 @@ Tyrants of Lothal expansions can be played in succession to form a narrative min
 Playing a mini campaign is similar to playing a full campaign. The missions used to make up the story of the
 mini campaign are all considered to be story missions and are played in a specific order. Side missions are not
 played during the mini campaign unless playing an Expanded Mini campaign.
-During the Mission Stage (p.46), Rebel players do not choose the next mission to resolve based upon active
-Side or Story Mission cards. Each mission's epilogue (p.29) will determine the next active mission to be
+During the Mission Stage ([p.46](#mobile)), Rebel players do not choose the next mission to resolve based upon active
+Side or Story Mission cards. Each mission's epilogue ([p.29](#exhaust)) will determine the next active mission to be
 resolved, so there is always just one active mission.
 
 ## EXPANDING THE MINI CAMPAIGNS
@@ -1998,7 +1960,7 @@ log (including upgrade stages).
 - The Ally and Villain packs involved in the expanded campaign include Epilogue cards. These provide
 epilogues to the missions contained in the figure packs. All rules that apply to epilogues also apply to the
 Epilogue cards. The epilogue cards are not used if the missions are used as side missions.
-Related Topics: Campaign Log 17, Campaign Setup 18
+Related Topics: [Campaign Log](#campaign-log), [Campaign Setup](#campaign-setup)
 
 ## MISS
 
@@ -2009,7 +1971,7 @@ target. If the total Accuracy is less than this distance, then the attack misses
 - When an attack misses, other effects can still be triggered (such as using the Recover keyword). If the
 ability requires the target figure to suffer one or more , such as Blast, Cleave, and a Condition keyword,
 a miss prevents that ability from being resolved, because the target suffers no damage.
-Related Topics: Accuracy 4, Attacks 10, Counting Spaces 23
+Related Topics: [Accuracy](#accuracy), [Attacks](#attacks), [Counting Spaces](#counting-spaces)
 
 
 ## MISSION EVENTS
@@ -2029,7 +1991,7 @@ that mission event that corresponds to the option chosen.
 - When the Imperial player deploys an initial or reserved group, this does not cost any  (threat). Reserved
 groups can only be deployed by mission rules. When a rule allows the Imperial player to resolve an
 optional deployment, such as during the Status Phase, the imperial player must spend  normally.
-- While resolving an optional deployment, the Imperial player can also reinforce figures (p.53) corresponding
+- While resolving an optional deployment, the Imperial player can also reinforce figures ([p.53](#rest)) corresponding
 to groups already on the map.
 - Certain rules reference the mission ending or progressing, followed by the  symbol. This indicates that
 the preceding text is an objective that the heroes are attempting to fulfill, which should be emphasized to
@@ -2044,30 +2006,29 @@ map and featuring unique mission rules.
 ## RESOLVING A MISSION
 
 Missions in Imperial Assault are played over a number of game rounds. Each round consists of an Activation
-Phase (“Activation” p.4) followed by a Status Phase (“Status Phase” p.57). Mission events provide surprises
+Phase (“Activation” [p.4](#activation-phase)) followed by a Status Phase (“Status Phase” [p.57](#strain)). Mission events provide surprises
 and new objectives during a mission.
 After resolving the Status Phase, play proceeds to the next round, starting with an Activation Phase. These
-phases are repeated until the mission ends (see "Winning the Game" on page 63).
+phases are repeated until the mission ends (see "Winning the Game" on page [63](#within-x-spaces)).
 
 ## STORY AND SIDE MISSIONS
 
 During a campaign, players resolve a series of alternating story and side missions accoding to the respective
-campaign log (p.17). The rules and maps for each mission are found in the Campaign Guide or Rulesheet.
-- During each "Mission Stage” p.46, the heroes choose and resolve one active mission.
+campaign log ([p.17](#campaign-setup)). The rules and maps for each mission are found in the Campaign Guide or Rulesheet.
+- During each "Mission Stage” [p.46](#mobile), the heroes choose and resolve one active mission.
 - A mission cannot be played twice during a campaign.
 - Side Mission cards list a number of traits under the name (such as TATOOINE). Traits have no gameplay
 effect but may be referred to by other components.
 
 ## FORCED MISSIONS
 
-Forced Missions (p.31) are additional missions inserted to the normal sequence of campaign missions.
+Forced Missions ([p.31](#four-player-skirmishes)) are additional missions inserted to the normal sequence of campaign missions.
 
 ## SKIRMISH MISSIONS
 
 The map for each skirmish mission is shown in that mission's diagram. The rules for each skirmish mission are
 listed on Skirmish Mission cards.
-Related Topics: Active Missions 5, Agenda Cards 6, Campaign 17, Mission Setup 44,
-Mission Stage 46, Winning the Game 63
+Related Topics: [Active Missions](#active-missions), [Agenda Cards](#agenda-cards), [Campaign](#campaign), [Mission Setup](#mission-setup), [Mission Stage](#mission-stage), [Winning the Game](#winning-the-game)
 
 
 ## MISSION SETUP
@@ -2104,20 +2065,20 @@ card. The different border colors differentiate between two initial regular grou
 5. Prepare Dice, Cards, and Other Tokens: Place all dice, the Condition cards and Supply deck, damage
 tokens, strain tokens, and condition tokens within easy reach of all players.
 6. Read Mission Briefing: The Imperial player reads the flavor text and rules from the "Mission Briefing"
-section aloud to all players. (See “Mission Events” p.43 and “Hidden Information” p.34)
+section aloud to all players. (See “Mission Events” [p.43](#mission-setup) and “Hidden Information” [p.34](#hostile-figure))
 7. Deploy Rebel Figures: Rebel players places all hero figures in the space containing and as close as
-possible to the entrance token. This includes the space containing the entrance token (p.29).
+possible to the entrance token. This includes the space containing the entrance token ([p.29](#exhaust)).
 - Rebel players choose the order in which their figures are deployed. Before placing their figures, they
-choose the Item cards (p.38) that they will bring to the mission. Each hero may bring up to 1 Armor
+choose the Item cards ([p.38](#keywords)) that they will bring to the mission. Each hero may bring up to 1 Armor
 (), 2 Weapons, and 3 Equipment ().
 - After deploying hero figures, Rebel players may choose to deploy an ally that they have gained as a
-reward ("Rebel Allies" p.8).
+reward ("Rebel Allies" [p.8](#army-building)).
 - If the Rebel players chose to deploy an ally, the Imperial player gains  and can perform an optional
-deployment. (see “Rebel Allies” p.8 for details).
+deployment. (see “Rebel Allies” [p.8](#army-building) for details).
 8. Prepare Activation Tokens: Each hero receives one activation token and places it ready (green side
 faceup) on their Hero sheet. When playing with 2 or 3 heroes, Legendary or Heroic Reward cards give
-more activation tokens (“Campaign Setup” p.18).
-Then the campaign mission starts with the first activation phase (“Activation” p.4). Rebel players perform the
+more activation tokens (“Campaign Setup” [p.18](#claim)).
+Then the campaign mission starts with the first activation phase (“Activation” [p.4](#activation-phase)). Rebel players perform the
 first activation.
 
 
@@ -2145,16 +2106,15 @@ The player to their left does the same, choosing from the remaining deployment z
 players have deployed.
 If all of a player's figures do not fit in their deployment zone, the player must remove and redeploy figures
 to fill as many spaces of this zone as possible. Then the player deploys any remaining figures as close to
-the deployment zone as possible (see "Counting Spaces" on page 23).
+the deployment zone as possible (see "Counting Spaces" on page [23](#credits)).
 5. Draw Command Cards: Set the round dial to one. Each player draws three cards from their Command
 deck.
-Related Topics: Allies 7, Campaign Setup 18, Command Cards 20, Deployment 25,
-Deployment Cards 26, Skirmish 55
+Related Topics: [Allies](#allies), [Campaign Setup](#campaign-setup), [Command Cards](#command-cards), [Deployment](#deployment), [Deployment Cards](#deployment-cards), [Skirmish](#skirmish)
 
 
 ## MISSION STAGE
 
-During a campaign, players choose and resolve missions during the Mission Stage of the campaign log (p.17).
+During a campaign, players choose and resolve missions during the Mission Stage of the campaign log ([p.17](#campaign-setup)).
 The Mission Stage consists of the following steps:
 1. Choose Mission: Rebel players refer to the campaign log to determine the next mission. If this reads "Side
 Mission," the heroes choose one of the active Side Mission cards. If this reads "Story Mission," they must
@@ -2162,13 +2122,13 @@ choose an active Story Mission card. There may be just one active mission of the
 - Active missions that are not chosen are saved between sessions and remain active until resolved.
 - During the Heart of the Empire campaign, after the heroes choose a Story Mission to resolve, return all
 other active Story Mission cards to the game box.
-2. Resolve Mission: Players resolve the chosen mission starting with Mission Setup (p.44). At the end they
-receive rewards (p.54) from the “End of Mission” event and from the “Additional Rewards” section.
+2. Resolve Mission: Players resolve the chosen mission starting with Mission Setup ([p.44](#skirmish-mission-setup)). At the end they
+receive rewards ([p.54](#skirmish)) from the “End of Mission” event and from the “Additional Rewards” section.
 3. Post-Mission Cleanup: After resolving the mission, players perform the following:
 - Wounded heroes flip their hero sheets to the healthy side. Heroes recover all  (damage) and  (strain).
 - Heroes shuffle all of their Supply cards back into the Supply deck.
 - Heroes gain 50 credits for each crate token claimed during the mission and then discard the tokens.
-- Unless otherwise specified by abilities or rules (see Bounty tokens p.16), all other tokens are discarded.
+- Unless otherwise specified by abilities or rules (see Bounty tokens [p.16](#campaign)), all other tokens are discarded.
 - Return the Mission card corresponding to the mission that was just resolved to the game box.
 - If players just resolved the introductory mission, shuffle the Side Mission deck, draw two cards, and
 place them faceup on the table. If playing the Return to Hoth campaign, also draw two cards from the
@@ -2180,8 +2140,7 @@ a random card from the Side Mission deck and place it faceup on the table. It is
 instructions on each remaining active agenda side mission card.
 After resolving "Post-Mission Cleanup," players proceed to the next stage listed on the campaign log. The next
 stage is usually the Rebel Upgrade Stage unless the resolved mission was a forced mission.
-Related Topics: Campaign Log 17, Crate Tokens 23, Missions 43, Supply Cards 59, Rebel
-Upgrade Stage 52, Threat Missions 60
+Related Topics: [Campaign Log](#campaign-log), [Crate Tokens](#crate-tokens), [Missions](#missions), [Supply Cards](#supply-cards), [Rebel Upgrade Stage](#rebel-upgrade-stage), [Threat Missions](#threat-missions)
 
 ## MISSION TOKENS
 
@@ -2195,7 +2154,7 @@ movement in the same space as a mission token.
 blocking terrain that contains a mission token still blocks line of sight, and figures cannot enter the space.
 - The colored border of mission tokens has no game effect unless specified by the mission. A neutral mission
 token with its colored side down cannot be examined. The color is hidden information.
-Related Topics: Control 23, Hidden Information 34, Interact 37
+Related Topics: [Control](#control), [Hidden Information](#hidden-information), [Interact](#interact)
 
 
 ## MOBILE
@@ -2205,23 +2164,22 @@ and spaces containing hostile figures. They ignore terrain for movement, so can 
 impassable and blocking terrain, and can end movement in a space containing impassable or blocking terrain.
 - If a figure with Mobile occupies a space containing blocking terrain, line of sight can be traced to that
 figure, spaces can be counted to that figure, and adjacent figures can attack that figure.
-Related Topics: Blocking Terrain 15, Counting Spaces 23, Keywords 39, Line of
-Sight 40, Massive 41, Terrain 60
+Related Topics: [Blocking Terrain](#blocking-terrain), [Counting Spaces](#counting-spaces), [Keywords](#keywords), [Line of Sight](#line-of-sight), [Massive](#massive), [Terrain](#terrain)
 
 ## MODIFICATIONS
 
-See "Item Cards" on page 38.
+See "Item Cards" on page [38](#keywords).
 
 ## MOVEMENT
 
 All figures move one space at a time. Large figures cannot move diagonally. There are two basic ways for a
 figure to move: move X spaces, and by spending movement points for each space moved. (See also “Place” on
-page 50 and “Push” on page 51.)
+page [50](#push) and “Push” on page [51](#rebel-upgrade-stage).)
 When a figure performs a move (for example by using the Move action), it gains movement points equal to its
 Speed. Gaining movement points doesn't move the figure. The Move action finishes immediately after granting
 the movement points. Movement points can also be gained from other sources than the Move action. (See
-“Movement Points”, page 48.)
-- Figures with Massive (p.41) or Mobile (p.47) ignore terrain for their movement (“Movement Examples”, p.
+“Movement Points”, page [48](#neutral-deployment-cards).)
+- Figures with Massive ([p.41](#mini-campaigns)) or Mobile ([p.47](#movement-points)) ignore terrain for their movement (“Movement Examples”, p.
 67), other figures cannot move or be pushed into or through blocking or impassable terrain.
 - Figures cannot move through walls or doors.
 - Performing a move does not move the figure; it only provides movement points that may be spent during
@@ -2233,7 +2191,7 @@ the attack and then some of them after the attack.
 terrain, but a figure cannot move through the diagonal intersection of any combination of wall, door,
 blocking terrain, or impassable terrain (see "Appendix II - Movement Examples" on page 67).
 - A Large figure may rotate 90° by spending one movement point, but additional movement point costs may
-apply if the figure does not have Massive or Mobile. (See “Large Figures” on page 39 for details.)
+apply if the figure does not have Massive or Mobile. (See “Large Figures” on page [39](#line-of-sight) for details.)
 - Move X Spaces: If an ability moves a figure a listed number of spaces, this movement ignores movement
 point costs. All other effects of terrain and figures apply, for example the figure cannot end its movement in
 another figure's space. Usually abilities use the forms “move up to X spaces” and “may move 1 space”. You
@@ -2246,15 +2204,14 @@ movement in the space. A figure can only enter a space if it can end movement le
 - A figure must spend one additional movement point to enter a space that contains difficult terrain.
 - There are rare situations where a figure can lose all of its movement points or become unable to spend
 movement points (by becoming Stunned) while in a space where it cannot end its movement (such as in
-another non-companion figure's space). In this situation, push (see “Push” p.51) the moving figure to the
+another non-companion figure's space). In this situation, push (see “Push” [p.51](#rebel-upgrade-stage)) the moving figure to the
 closest valid space (the figure's controller's choice if there are more than one).
 
 
-- Large figures have additional movement restrictions. See "Large Figures" on page 39 and "Appendix II -
+- Large figures have additional movement restrictions. See "Large Figures" on page [39](#line-of-sight) and "Appendix II -
 Movement Examples" on page 67.
 - Movement points received outside of a figure's own activation must be spent immediately or be lost.
-Related Topics: Adjacent 6, Counting Spaces 23, Large Figures 39, Movement Points
-48, Place 50, Push 51, Terrain 60
+Related Topics: [Adjacent](#adjacent), [Counting Spaces](#counting-spaces), [Large Figures](#large-figures), [Movement Points](#movement-points), [Place](#place), [Push](#push), [Terrain](#terrain)
 
 ## MOVEMENT POINTS
 
@@ -2266,7 +2223,7 @@ movement points that figure possesses (movement point pool).
 - A figure is not required to spend all of the movement points it possesses, but at the end of its activation, it
 loses all of its remaining movement points.
 - Spending movement points is not an action and may be done at any time during the figure's activation
-(p.28). They can be spent before or after performing any action but cannot be spent while resolving an
+([p.28](#energy-shield)). They can be spent before or after performing any action but cannot be spent while resolving an
 action or another ability.
 - If a figure gains movement points when it is not its activation, those movement points must be spent
 immediately as an interrupt or be lost. If a figure gains movement points as part of a special action, they
@@ -2276,11 +2233,11 @@ points, the player announces how many movement points their figure has and count
 spends movement points.
 - During a campaign, a hero can suffer 1 (strain) during their activation to gain one movement point. The
 hero may do this up to twice per activation.
-Related Topics: Abilities 3, Actions 4, During Activation 28, Movement 47, Strain 58
+Related Topics: [Abilities](#abilities), [Actions](#actions), [During Activation](#during-activation), [Movement](#movement), [Strain](#strain)
 
 ## MOVING THROUGH
 
-See "Movement" on page 47.
+See "Movement" on page [47](#movement-points).
 
 ## NEGATIVE DEPLOYMENT COST
 
@@ -2291,7 +2248,7 @@ include additional Deployment cards with a total cost up to 44.
 If a card with a negative deployment cost is an attachment, the other Deployment cards selected for the army
 must include at least one eligible card onto which it can be attached. When a group with an attachment with a
 negative deployment cost is defeated, the VPs scored are modified by that card's negative cost.
-Related Topics: Skirmish Attachments 56
+Related Topics: [Skirmish Attachments](#skirmish-attachments)
 
 ## NEGATIVE SYMBOLS
 
@@ -2299,7 +2256,7 @@ Attribute tests and attacks can gain negative versions of symbols for example fr
 modifications, or conditions such as Weakened (-1 while defending and -1 while attacking). If a positive
 and negative version of the same symbol exist in the attribute test results or in the attack/defense results, they
 eliminate each other immediately. A negative version of a symbol doesn't have any other effect.
-Related Topics: Attacks 10, Attribute Tests 14
+Related Topics: [Attacks](#attacks), [Attribute Tests](#attribute-tests)
 
 
 ## NEUTRAL DEPLOYMENT CARDS
@@ -2308,7 +2265,7 @@ Deployment cards with a Neutral icon () and card back do not belong to any af
 army for a skirmish, a player may choose to include Neutral Deployment cards as if they belonged to their
 affiliation.
 Neutral Deployment cards cannot be used in a campaign.
-Related Topics: Affiliation 6
+Related Topics: [Affiliation](#affiliation)
 
 ## NEUTRAL FIGURES
 
@@ -2320,7 +2277,7 @@ explicitly specified by the mission's rules.
 - Figures can move through spaces containing neutral figures at no additional movement point cost, but
 figures cannot end movement in the same space (unless the figure is a companion 21 or has Massive).
 - Neutral figures block line of sight.
-Related Topics: Line of Sight 40, Massive 41, Movement 47
+Related Topics: [Line of Sight](#line-of-sight), [Massive](#massive), [Movement](#movement)
 
 ## OBJECTS
 
@@ -2330,31 +2287,29 @@ objects.
 figure explicitly.
 - Except for doors, objects do not restrict movement or block line of sight.
 - Objects cannot be pushed.
-- Mission rules can allow objects to be attacked by specified figures (see "Attacking Objects", page 13).
+- Mission rules can allow objects to be attacked by specified figures (see "Attacking Objects", page [13](#attribute-tests)).
 - Abilities that apply damage to objects only affect objects that can be attacked.
-Related Topics: Attacking Objects 13, Crate Tokens 23, Doors 27, Mission Tokens
-46, Movement 47, Terminal Tokens 59
+Related Topics: [Attacking Objects](#attacking-objects), [Crate Tokens](#crate-tokens), [Doors](#doors), [Mission Tokens](#mission-tokens), [Movement](#movement), [Terminal Tokens](#terminal-tokens)
 
 ## OPEN GROUPS
 
 During a campaign, most missions allow the Imperial player to choose a number of Deployment cards known
 as open groups. The Imperial player starts the mission with these open groups as their hand of deployment
-cards. Unique Imperial ( or ) Deployment cards (“Villains”, p.62) can only be included in open groups
+cards. Unique Imperial ( or ) Deployment cards (“Villains”, [p.62](#winning-the-game)) can only be included in open groups
 once they have been gained as rewards.
 - These Deployment cards are kept secret in the Imperial player's hand of deployment cards until deployed.
 - The Imperial player can deploy groups from their hand of deployment cards during an optional deployment,
 including during the Deploy and Reinforce step of the Status Phase.
 - When the last figure in a non-unique group is defeated, the Deployment card returns to the Imperial
 player's hand of Deployment cards.
-Related Topics: Deployment 25, Deployment Cards 26, Group 33, Optional Deployment
-49, Status Phase 57
+Related Topics: [Deployment](#deployment), [Deployment Cards](#deployment-cards), [Group](#group), [Optional Deployment](#optional-deployment), [Status Phase](#status-phase)
 
 ## OPTIONAL DEPLOYMENT
 
 In the campaign, optional deployments from mission rules and imperial abilities allow the imperial player to
 optionally spend  (threat) to deploy groups and/or reinforce figures. The Deploy and Reinforce step of the
 Status Phase is also an optional deployment.
-Related Topics: Deployment 25, Deployment Cards 26, Group 33, Status Phase 57
+Related Topics: [Deployment](#deployment), [Deployment Cards](#deployment-cards), [Group](#group), [Status Phase](#status-phase)
 
 
 ## PAYING VPS
@@ -2364,7 +2319,7 @@ paid player gains an equal number of VPs.
 - If using an ability requires a player to pay more VPs than that player has, that player cannot use that ability.
 - If a player's ability requires an opponent to pay more VPs than they have, that opponent pays all of their
 remaining VPs.
-Related Topics: Victory Points 62, Winning the Game 63
+Related Topics: [Victory Points](#victory-points), [Winning the Game](#winning-the-game)
 
 ## PIERCE
 
@@ -2372,7 +2327,7 @@ This keyword allows a figure to ignore a number of (block) results while atta
 allows an attack to ignore up to 2 results.
 - If the number of  results is less than the Pierce value, the excess Pierce value has no effect.
 - If multiple Pierce abilities are used during an attack, their values are added together.
-Related Topics: Attacks 10, Keywords 39
+Related Topics: [Attacks](#attacks), [Keywords](#keywords)
 
 ## PLACE
 
@@ -2383,7 +2338,7 @@ Many effects place figures or tokens on specific spaces of the map.
 containing another figure, blocking terrain, or impassable terrain (unless their ability allows it).
 - When a figure is placed, it enters the space(s) where it is placed and exits the space(s) it occupied before.
 - When a figure is placed, it ends movement.
-Related Topics: Enter 29, Exit 30, Massive 41, Mobile 47, Movement 47, Terrain 60
+Related Topics: [Enter](#enter), [Exit](#exit), [Massive](#massive), [Mobile](#mobile), [Movement](#movement), [Terrain](#terrain)
 
 ## PLAY AREA
 
@@ -2393,7 +2348,7 @@ claimed tokens, and more. The imperial player and each hero have separate play a
 - Abilities on cards and on Hero sheets in a player's play area can be used as explained on the card or sheet.
 - All faceup cards in a player's play area are open information and can be examined by any player.
 - When a player controls more than one hero, each hero has their own play area.
-Related Topics: Claim 19, Supply Cards 59
+Related Topics: [Claim](#claim), [Supply Cards](#supply-cards)
 
 ## POWER TOKENS
 
@@ -2411,7 +2366,7 @@ When an ability refers to the  (wild power token), the player can choose any 
 Power tokens are not limited. If players run out of a token type, they should use a suitable replacement.
 Each figure can only have up to 2 total power tokens. If a figure would gain more than 2, its player must choose
 tokens to discard until the figure has 2. A figure cannot spend more than 1 power token per attack.
-Related Topics: Attacks 10
+Related Topics: [Attacks](#attacks)
 
 
 ## PUSH
@@ -2427,7 +2382,7 @@ occupied by a large figure, the player controlling that figure determines its pl
 - While pushing a large figure, it cannot move diagonally and cannot be rotated.
 - When a figure with Massive or Mobile is pushed, the push ignores terrain, and a figure with Massive can
 end movement when occupying spaces with another figure(s).
-Related Topics: Exit 30, Large Figures 39, Movement 47
+Related Topics: [Exit](#exit), [Large Figures](#large-figures), [Movement](#movement)
 
 ## RANGED ATTACK
 
@@ -2439,7 +2394,7 @@ attacker.
 spaces away from the target. If the attacker does not have enough Accuracy results, the attack misses.
 - While performing a ranged attack that targets an adjacent figure (or an object which can suffer damage), the
 attacker requires at least 1 Accuracy result or the attack misses.
-Related Topics: Accuracy 4, Attacks 10, Counting Spaces 23, Line of Sight 40, Miss 42
+Related Topics: [Accuracy](#accuracy), [Attacks](#attacks), [Counting Spaces](#counting-spaces), [Line of Sight](#line-of-sight), [Miss](#miss)
 
 ## REACH
 
@@ -2447,7 +2402,7 @@ A figure with the Reach keyword may perform  (melee) attacks that target figu
 away.
 - The target of the attack must be within 2 spaces and in line of sight.
 - An attack with Reach does not require Accuracy.
-Related Topics: Attacks 10, Counting Spaces 23, Melee Attack 41
+Related Topics: [Attacks](#attacks), [Counting Spaces](#counting-spaces), [Melee Attack](#melee-attack)
 
 ## READY
 
@@ -2461,8 +2416,7 @@ all of its activation tokens green side faceup instead.
 cards, Imperial companion cards. Reward cards), and activation tokens of heroes are readied during the
 Ready step of the Status Phase of each round. All exhausted cards of a hero are readied at the start of that
 hero's activation.
-Related Topics: Activation 4, Class Cards 19, Deployment Cards 26, Exhaust 30,
-Item Cards 38
+Related Topics: [Activation](#activation), [Class Cards](#class-cards), [Deployment Cards](#deployment-cards), [Exhaust](#exhaust), [Item Cards](#item-cards)
 
 
 ## REBEL UPGRADE STAGE
@@ -2485,8 +2439,7 @@ to the deck.
 sold card is returned to the game box. Then the heroes receive an amount of credits equal to half the
 card's cost rounded up to the nearest 25.
 - Item cards without a credit cost can be sold for the heroes to receive 50 credits.
-Related Topics: Campaign Log 17, Class Cards 19, Credits 24, Experience Points 30,
-Item Cards 38
+Related Topics: [Campaign Log](#campaign-log), [Class Cards](#class-cards), [Credits](#credits), [Experience Points](#experience-points), [Item Cards](#item-cards)
 
 ## RECON TOKENS
 
@@ -2499,7 +2452,7 @@ number of beneficial effects.
 The total number of recon tokens that can be placed is limited by the included supply of two tokens. However,
 if an ability allows Loku to place a recon token, the player may either use a token already in play, moving it
 from its current position, or use one from their supply. Discarded tokens return to Loku's supply.
-Related Topics: Hero 34
+Related Topics: [Hero](#hero)
 
 ## RECOVER
 
@@ -2512,7 +2465,7 @@ target of their attack does not suffer any .
 immediately when the surge is spent (step 5 of the attack).
 - If a hero recovers more  than the hero has suffered, the hero recovers one  for each  the hero cannot
 recover. (This rule is not in effect when playing a Legends of the Alliance campaign.)
-Related Topics: Damage 24, Keywords 39, Rest 54, Strain 58, Surges 59
+Related Topics: [Damage](#damage), [Keywords](#keywords), [Rest](#rest), [Strain](#strain), [Surges](#surges)
 
 
 ## RE-DRAW
@@ -2520,7 +2473,7 @@ Related Topics: Damage 24, Keywords 39, Rest 54, Strain 58, Surges 59
 In a skirmish, some Command cards have ability text that allows a player to RE-DRAW it. Re-draw abilities are
 active while the card is in the (your) discard pile. When a player re-draws a Command card, the player takes
 that card from their discard pile and places it in their hand. That card may be played again normally.
-Related Topics: Command Cards 20
+Related Topics: [Command Cards](#command-cards)
 
 ## REINFORCE
 
@@ -2537,7 +2490,7 @@ cost.
 same group), as long as the imperial player spends the  individually for each figure.
 - The Imperial player cannot reinforce a figure from a group that has figures on the map equal to its group
 limit.
-Related Topics: Deployment 25, Group 33, Unique 62
+Related Topics: [Deployment](#deployment), [Group](#group), [Unique](#unique)
 
 ## REPLACING TILES
 
@@ -2546,14 +2499,14 @@ set aside. When this happens, the Imperial player removes the listed tile or til
 imperial player connects the listed set-aside tiles to the newly exposed puzzle edge of the map.
 If a figure or token is occupying a space on a removed tile, place it in the corresponding space of the
 replacement tile. If there is no such space, place it in the nearest possible space instead.
-Related Topics: Hidden Information 34, Terrain 60
+Related Topics: [Hidden Information](#hidden-information), [Terrain](#terrain)
 
 ## REROLL
 
 When dice are rerolled, their old results are ignored and new results are used instead. Each die may be rerolled
-only once per attack regardless of who is rerolling the die. (See "Attacks" on page 10.)
+only once per attack regardless of who is rerolling the die. (See "Attacks" on page [10](#steps-of-an-attack).)
 Limit is not defined for attribute test. Limiting rerolls to once per die per attribute test seems a good house rule.
-Related Topics: Attacks 10, Attribute Tests 14
+Related Topics: [Attacks](#attacks), [Attribute Tests](#attribute-tests)
 
 ## RESERVED GROUPS
 
@@ -2566,7 +2519,7 @@ be deployed or reinforced while facedown. Rebel players cannot look at reserved 
 figure in a non-unique group is defeated, the matching Deployment card is placed in the Imperial player's
 hand. The imperial player can then deploy these figures during an optional deployment following normal
 deployment rules.
-Related Topics: Deployment 25, Hidden Information 34, Mission Setup 44
+Related Topics: [Deployment](#deployment), [Hidden Information](#hidden-information), [Mission Setup](#mission-setup)
 
 
 ## REST
@@ -2577,7 +2530,7 @@ equal to their Endurance.
 cannot recover. This rule is not in effect when playing a Legends of the Alliance campaign.
 - When playing a Legends of the Alliance campaign, after rest a hero can spend one Medpac from the app to
 recover 5.
-Related Topics: Actions 4, Damage 24, Endurance 28, Recover 52, Strain 58
+Related Topics: [Actions](#actions), [Damage](#damage), [Endurance](#endurance), [Recover](#recover), [Strain](#strain)
 
 ## RETRIEVING TOKENS
 
@@ -2590,22 +2543,22 @@ becomes wounded or if the hero withdraws.
 - Mission rules specify the effect and purpose of retrieving tokens.
 - At the end of a mission, all carried tokens are returned to the game box.
 - Retrieving a token is not claiming a token.
-Related Topics: Claim 19, Interact 37, Mission Tokens 46
+Related Topics: [Claim](#claim), [Interact](#interact), [Mission Tokens](#mission-tokens)
 
 ## REVEAL
 
 When a rule or ability instructs a player to reveal a card, that player takes that card from its current location
 (such as a player's hand or the top of a deck) and shows it to all players. After the rule or ability resolves, that
 card is returned to that location unless it was otherwise affected by the ability.
-Related Topics: Hidden Information 34
+Related Topics: [Hidden Information](#hidden-information)
 
 ## REWARDS
 
 At the end of each mission, a number of rewards are received by the Imperial and Rebel players. Some rewards
 are received from mission results and are listed under the “End of Mission” section. Others are found in the
 “Additional Rewards” section, and these are received in addition to those from “End of Mission”. During a
-mini campaign, epilogues (see “Epilogues” on page 29) provide rewards specific to mini campaign progression.
-Related Topics: Mini Campaigns 42, Mission Events 43, Mission Stage 46, Reward Cards 54
+mini campaign, epilogues (see “Epilogues” on page [29](#exhaust)) provide rewards specific to mini campaign progression.
+Related Topics: [Mini Campaigns](#mini-campaigns), [Mission Events](#mission-events), [Mission Stage](#mission-stage), [Reward Cards](#reward-cards)
 
 ## REWARD CARDS
 
@@ -2613,10 +2566,10 @@ During a campaign, players can gain cards from the Reward deck. This deck contai
 cards that cannot be purchased and are usually gained only as a mission reward.
 - Players always gain specific Reward cards from the deck.
 - In a three-hero game, each player receives a "Heroic" Reward card at the start of the campaign. In a two-
-hero game, each player receives a "Legendary" Reward card (see "Campaign Setup" on page 18).
+hero game, each player receives a "Legendary" Reward card (see "Campaign Setup" on page [18](#claim)).
 - Players can look at cards in the Reward deck at any time.
 - Heroes cannot give their Reward cards to other heroes, and cannot sell Reward cards.
-Related Topics: Class Cards 19, Item Cards 38
+Related Topics: [Class Cards](#class-cards), [Item Cards](#item-cards)
 
 ## RUBBLE
 
@@ -2625,7 +2578,7 @@ from the supply and places it in the space directed by the ability or effect.
 A space containing rubble is considered to be difficult terrain, in addition to its other terrain
 types. The effect of rubble does not stack with the effect of preexisting difficult terrain.
 A space can contain both rubble and an energy shield.
-Related Topics: Difficult Terrain 27, Rubble 54, Terrain 60
+Related Topics: [Difficult Terrain](#difficult-terrain), [Rubble](#rubble), [Terrain](#terrain)
 
 
 ## SKIRMISH
@@ -2634,18 +2587,18 @@ A skirmish is a special mission in which players build armies and compete to acq
 that specify "during a campaign" do not apply to skirmish missions.
 The "Hoth Battlefield", “Nal Hutta Borderlands”, and “Temple Gardens” skirmish maps, found on the Skirmish
 Map Sheet of Return to Hoth, Jabba's Realm, and Heart of the Empire expansions, allow four players to
-compete in a massive Imperial Assault battle (“Four-Player Skirmishes” p.32). Depending on which mission is
+compete in a massive Imperial Assault battle (“Four-Player Skirmishes” [p.32](#conflicts-in-a-four-player-skirmish)). Depending on which mission is
 played, the players could all compete against each other in a Free-For-All or in a Team Battle.
 Before playing a skirmish, perform the following steps:
 1. Bring Armies and Command Cards: To play a skirmish mission, each player needs an army consisting
 of up to 40 points worth of Deployment cards and a deck of exactly 15 Command cards. Each player
 places their Deployment cards faceup in front of him and shuffles their deck of Command cards. (See
-“Army Building” p.9)
+“Army Building” [p.9](#attachment))
 2. Determine Initiative: The player who has the lowest total cost of Deployment cards chooses which player
 begins the game with the initiative token. In the case of a tie, players determine initiative randomly. The
 player with initiative will choose deployment zones and resolve the first activation during the first round.
 3. Determine and set up Skirmish Mission: The player with initiative shuffles their Skirmish Mission deck
-(see, "Building a Skirmish Mission Deck" on page 6) and draws one card. This card lists the name of the
+(see, "Building a Skirmish Mission Deck" on page [6](#types-of-agenda-cards)) and draws one card. This card lists the name of the
 mission, which map it is played on, and the special rules for this mission.
 After drawing this card, players refer to the matching skirmish mission diagram to build the map.
 In tournament play the mission to play is determined according to the tournament rules.
@@ -2656,7 +2609,7 @@ deploys all of their figures in the chosen deployment zone.
 The player to their left does the same, choosing from the remaining deployment zones, and so on until all
 players have deployed.
 5. Draw Command Cards: Set the round dial to one. Each player draws three cards from their Command
-deck (see "Command Cards" p.20).
+deck (see "Command Cards" [p.20](#companions)).
 Players are then ready to begin playing the skirmish.
 
 ## PLAYING A SKIRMISH
@@ -2671,14 +2624,13 @@ player has fewer ready Deployment cards than any opponent, that player can choos
 and pass play to the next opponent.
 Once all Deployment cards are exhausted, players proceed to the Status Phase.
 - Status Phase: After all figures have been activated, players resolve the steps of the status phase in
-preparation for the next game round. (see “Status Phase” p. 57).
-These phases are repeated until the mission ends (see "Winning a Skirmish" p. 63).
+preparation for the next game round. (see “Status Phase” [p.57](#strain)).
+These phases are repeated until the mission ends (see "Winning a Skirmish" [p.63](#within-x-spaces)).
 The player with initiative breaks all ties for mission rules. For example, if a mission rule moves a token one
 space toward the closest figure and there are two figures equidistant, the player with initiative chooses which
 figure the token moves toward.
-See special rules that apply for Four-Player Skirmish from page 32.
-Related Topics: Army Building 9, Command Cards 20, Initiative 36, Missions 43,
-Mission Setup 44, Winning the Game 63
+See special rules that apply for Four-Player Skirmish from page [32](#conflicts-in-a-four-player-skirmish).
+Related Topics: [Army Building](#army-building), [Command Cards](#command-cards), [Initiative](#initiative), [Missions](#missions), [Mission Setup](#mission-setup), [Winning the Game](#winning-the-game)
 
 
 ## SKIRMISH ATTACHMENTS
@@ -2698,17 +2650,17 @@ the deployment cost of the "Attachment" card in addition to the VPs scored from 
 
 In skirmish, some effects on command and Deployment cards refer to the number of the current round. Players
 should keep track of the current round number. The round number advances during the Status Phase after step
-3, “End of Round Effects”. (See “Status Phase” p. 57)
+3, “End of Round Effects”. (See “Status Phase” [p.57](#strain))
 
 ## SKIRMISH UPGRADES
 
-See “Deployment Cards” p.26 and “Skirmish Attachments” p.56
+See “Deployment Cards” [p.26](#dice-types) and “Skirmish Attachments” [p.56](#status-phase)
 
 ## SMALL FIGURE
 
 Any figure that occupies only a single space is a small figure. Some rules and abilities specify that they apply
 only to small figures.
-Related Topics: Large Figures 39
+Related Topics: [Large Figures](#large-figures)
 
 ## SPECIAL SETUP
 
@@ -2720,7 +2672,7 @@ revealed by mission rules, no player is allowed to examine the facedown side of 
 listed tokens and places them facedown in any of the indicated spaces of their choice. Until revealed by
 mission rules, Rebel players are not allowed to examine the facedown side of these tokens. After the tokens
 are placed, they cannot be moved, but the Imperial player can examine them during the mission.
-Related Topics: Mission Setup 44
+Related Topics: [Mission Setup](#mission-setup)
 
 ## SPECTRE ALLIES
 
@@ -2729,7 +2681,7 @@ a Spectre Ally. Spectre Allies are those allies with "Spectre" or “Chopper” 
 (CHOPPER), Kanan Jarrus (SPECTRE-1), and Sabine Wren (SPECTRE-5).
 During campaign setup, when the hero players are choosing green side missions, they may choose more than
 one mission that rewards “Any 1 Spectre ally.”
-Related Topics: Allies 7, Minicampaigns 42, Unique 62
+Related Topics: [Allies](#allies), [Minicampaigns](#minicampaigns), [Unique](#unique)
 
 
 ## STATUS PHASE
@@ -2747,7 +2699,7 @@ hero also readies all of their activation tokens by flipping them green-side fac
 that are not associated with any hero are also readied.
 - Hero Class cards, Item cards, Reward cards associated with heroes, and associated Companion cards are
 readied at the start of that hero's activation, not during the Status Phase.
-3. Deploy and Reinforce: The Imperial player may perform an optional deployment (p.49). This allows him
+3. Deploy and Reinforce: The Imperial player may perform an optional deployment ([p.49](#paying-vps)). This allows him
 to spend  (threat) to deploy groups and/or reinforce figures to place additional figures onto the map.
 4. End of Round Effects: If there are any abilities or mission rules triggered at the end of this game round,
 players resolve them at this time – mission rules first, then abilities from the imperial player, and abilities
@@ -2766,8 +2718,7 @@ for each terminal the player controls.
 3. End of Round Effects: Resolve any abilities or mission rules that are triggered at the end of the round.
 4. Pass Initiative: Increase the current round counter. The player who has the initiative token passes it to the
 player on their left. Then players begin a new round starting with a new Activation Phase.
-Related Topics: Command Cards 20, Control 23, Deployment 25, Initiative 36, Open
-Groups 49, Ready 51, Reinforce 53, Terminal Tokens 59, Threat 60
+Related Topics: [Command Cards](#command-cards), [Control](#control), [Deployment](#deployment), [Initiative](#initiative), [Open Groups](#open-groups), [Ready](#ready), [Reinforce](#reinforce), [Terminal Tokens](#terminal-tokens), [Threat](#threat)
 
 
 ## STRAIN
@@ -2780,9 +2731,9 @@ game effects cause figures to suffer .
 When a hero suffers , place an equal number of strain tokens on their Hero sheet. When any other figure
 suffers , it suffers an equal amount of  (damage) instead.
 - Heroes have many abilities that have  costs. These abilities require the hero to suffer  in order to use
-the ability. (“Abilities” p.3)
+the ability. (“Abilities” [p.3](#abilities-box))
 - A hero can suffer 1 (strain) at any point during their activation to gain one movement point. The hero
-may do this up to twice per activation. (“During Activation” p.28)
+may do this up to twice per activation. (“During Activation” [p.28](#energy-shield))
 - A hero cannot choose to suffer  if the amount of  the hero has suffered would exceed their Endurance.
 This includes suffering  to gain movement points or using abilities with a  cost.
 - If an effect forces a hero to suffer  that exceeds their Endurance, the hero instead suffers one  for each
@@ -2801,7 +2752,7 @@ tokens currently on their Hero sheet.
 In a skirmish, when a figure suffers , it suffers an equal amount of  (damage) instead. The player
 controlling the figure can prevent any of this  by discarding one Command card from the top of their deck
 for each  that they wishes to prevent.
-Related Topics: Abilities 3, Damage 24, Endurance 28, Movement 47, Recover 52
+Related Topics: [Abilities](#abilities), [Damage](#damage), [Endurance](#endurance), [Movement](#movement), [Recover](#recover)
 
 ## STUNNED
 
@@ -2809,7 +2760,7 @@ Stunned is a HARMFUL condition. A Stunned figure cannot voluntarily exit its spa
 attack. A figure can resolve an attack that has already been declared if it becomes Stunned during it. A
 Stunned figure can use the  specified on the Stunned condition card to discard the Stunned condition.
 During a mission that allows escaping, Stunned figures cannot escape.
-Related Topics: Conditions 22
+Related Topics: [Conditions](#conditions)
 
 ## STYLE TOKENS
 
@@ -2819,7 +2770,7 @@ Tress Hacnua's Hero sheet and Class cards.
 During campaign setup, when Tress Hacnua is chosen as a hero, place the two style tokens near her play area.
 During a mission, Tress's abilities allow her to gain and spend these tokens for a number of beneficial effects.
 The total number of style tokens that can be gained is limited by the included supply of two tokens.
-Related Topics: Hero 34
+Related Topics: [Hero](#hero)
 
 
 ## SUPPLY CARDS
@@ -2830,14 +2781,14 @@ card is placed faceup in the hero's play area and can be used as instructed on t
 - Supply cards cannot be traded to different heroes.
 - During post-mission cleanup supply cards are shuffled back into the Supply deck, whether they were used
 or not.
-Related Topics: Claim 19, Credits 24, Crate Tokens 23, Mission Stage 46
+Related Topics: [Claim](#claim), [Credits](#credits), [Crate Tokens](#crate-tokens), [Mission Stage](#mission-stage)
 
 ## SURGES
 
 Surges are attack results represented by  icons. Surges are gained during an attack and can be spent to
 activate surge abilities from the weapon used for the attack, its modification, the hero sheet or hero class cards,
 or from a non-hero figure's deployment or companion card.
-- Each  (evade) result removes one  result at the end of the 4.Apply Modifiers step (see“Attacks” p.10).
+- Each  (evade) result removes one  result at the end of the 4.Apply Modifiers step (see“Attacks” [p.10](#steps-of-an-attack)).
 Thus, each  reduces the number of  the attacker can spend by one.
 - Each  ability can be triggered only once per attack.
 - During a campaign, a hero performing an attack may spend 1 to recover 1.
@@ -2845,7 +2796,7 @@ Thus, each  reduces the number of  the attacker can spend by one.
 keyword, adds the keyword during the Spend Surges step of the attack, but their effect is performed or
 gives the corresponding condition after the attack resolves if the target suffered damage from the attack.
 - Any  not spent during an attack are lost.
-Related Topics: Attacks 10, Icon Types 35, Negative Symbols 48, Strain 58
+Related Topics: [Attacks](#attacks), [Icon Types](#icon-types), [Negative Symbols](#negative-symbols), [Strain](#strain)
 
 ## TARGET
 
@@ -2855,7 +2806,7 @@ the target.
 for determining line of sight and some abilities.
 - If an ability refers to the target space, it is referring to the space occupied by the target. If the target is a
 large figure, it is referring to the space chosen.
-Related Topics: Attacks 10, Blast 15, Line of Sight 40
+Related Topics: [Attacks](#attacks), [Blast](#blast), [Line of Sight](#line-of-sight)
 
 ## TERMINAL TOKENS
 
@@ -2872,7 +2823,7 @@ space.
 - The colors of terminal tokens have no game effect unless specified by the mission.
 - A terminal token with its colored side down cannot be examined by players. This color is hidden
 information.
-Related Topics: Control 23, Hidden Information 34, Interact 37, Objects 49
+Related Topics: [Control](#control), [Hidden Information](#hidden-information), [Interact](#interact), [Objects](#objects)
 
 
 ## TERRAIN
@@ -2886,39 +2837,37 @@ blocking terrain. These spaces are not adjacent to one another.
 - Colored borders (in combination with walls) that do not fully encompass a space or group of spaces are
 terrain edges. The terrain rules are only applied to the colored edge of this space and not the space itself.
 - Tokens in a space have no effect on the space's terrain unless the rules for the token explicitly specify so.
-- Solid red lines are blocking terrain (p.15).
-- Dotted red lines are impassable terrain (p.35).
-- Solid blue lines are difficult terrain (p.27). A space containing Rubble (p. 54) is considered to be difficult
+- Solid red lines are blocking terrain ([p.15](#bounty-tokens)).
+- Dotted red lines are impassable terrain ([p.35](#incapacitated)).
+- Solid blue lines are difficult terrain ([p.27](#elite-figure)). A space containing Rubble ([p.54](#skirmish)) is considered to be difficult
 terrain.
-Related Topics: Blocking Terrain 15, Difficult Terrain 27, Impassable
-Terrain 35, Movement 47, Rubble 54, Walls 62
+Related Topics: [Blocking Terrain](#blocking-terrain), [Difficult Terrain](#difficult-terrain), [Impassable Terrain](#impassable-terrain), [Movement](#movement), [Rubble](#rubble), [Walls](#walls)
 
 ## TESTS
 
-See "Attribute Tests" on page 14.
+See "Attribute Tests" on page [14](#blast).
 
 ## TEXT BOX
 
 The text box is the portion of a Companion, Deployment, or a Form card that includes specifically worded and
 named special actions, surge abilities, and passive abilities.
-Related Topics: Abilities Box 4, Form Cards 31
+Related Topics: [Abilities Box](#abilities-box), [Form Cards](#form-cards)
 
 ## THREAT
 
-During a campaign mission, the Imperial player spends  (threat) to deploy groups (p.25) and reinforce
-figures (p.53) to the map.
--  is set to 0 at the start of a mission. Special Setup during mission setup (p.44) can provide  and an
-optional deployment. This also happens if the rebels choose an ally for a mission (“Rebel Allies” p.8).
-- During the Increase Threat step of the Status Phase (p.57),  is increased by the mission's threat level
-printed on the campaign log (p.17). Threat level is also frequently referenced to determine a particular value
+During a campaign mission, the Imperial player spends  (threat) to deploy groups ([p.25](#deployment-cards)) and reinforce
+figures ([p.53](#rest)) to the map.
+-  is set to 0 at the start of a mission. Special Setup during mission setup ([p.44](#skirmish-mission-setup)) can provide  and an
+optional deployment. This also happens if the rebels choose an ally for a mission (“Rebel Allies” [p.8](#army-building)).
+- During the Increase Threat step of the Status Phase ([p.57](#strain)),  is increased by the mission's threat level
+printed on the campaign log ([p.17](#campaign-setup)). Threat level is also frequently referenced to determine a particular value
 in many missions. Remember the difference between the amount of  and threat level. Threat level is
 usually constant during each mission.
 - When  is increased or reduced, the Imperial player rotates the threat dial to display the new total.
 - The Imperial player cannot have less than 0  or more than 20 . Any threat gained or lost beyond these
 limits is ignored.
 - The Imperial player cannot trigger an ability that costs more  than there is.
-Related Topics: Abilities 3, Class Cards 19, Deployment 25, Mission Setup 44,
-Reinforce 53, Status Phase 57
+Related Topics: [Abilities](#abilities), [Class Cards](#class-cards), [Deployment](#deployment), [Mission Setup](#mission-setup), [Reinforce](#reinforce), [Status Phase](#status-phase)
 
 ## THREAT MISSIONS
 
@@ -2929,15 +2878,15 @@ problems facing the Rebellion in this era.
 When choosing side missions during the campaign, the heroes will have to decide either to resolve these
 lingering threats, or to follow their own side mission priorities. When the Rebels deal with one of these threats,
 the fruits of their efforts are represented by Boon Reward cards.
-Related Topics: Banes and Boons 14, Campaign Setup 18
+Related Topics: [Banes and Boons](#banes-and-boons), [Campaign Setup](#campaign-setup)
 
 
 ## TILE TYPES
 
 Each map tile in Imperial Assault has one or more tile types corresponding to the environment that tile
 represents. Tile types have no direct gameplay effect but may be referred to by other components.
-The primary tile type distinction is between interior and exterior ("Interior Spaces" p.37, “Massive” p.41).
-Other tile types include forest, desert, snow, and city. (See “Habitat” p.33.)
+The primary tile type distinction is between interior and exterior ("Interior Spaces" [p.37](#item-cards), “Massive” [p.41](#mini-campaigns)).
+Other tile types include forest, desert, snow, and city. (See “Habitat” [p.33](#healthy).)
 - Forest:
 - Core game tiles  01A-18A, 37A, 38B, and 39A
 - Return to Hoth tiles 05A and 24A
@@ -2960,7 +2909,7 @@ Other tile types include forest, desert, snow, and city. (See “Habitat” p.33
 - Jabba's Realm tiles 02A, 07A, 10A, 13A, 15A, 17A, 01B-02B, 05B, 07B, 09B-13B, 15B, 17B
 - Heart of the Empire tiles 01A-12A, 15A-18A
 - Tyrants of Lothal tiles  01A, 03A-08A, 11A-12A, 03B, 08B, 11B
-Related Topics: Habitat 33, Interior Spaces 37, Massive 41
+Related Topics: [Habitat](#habitat), [Interior Spaces](#interior-spaces), [Massive](#massive)
 
 ## TIME PERIOD
 
@@ -2974,7 +2923,7 @@ campaigns do not have a time period.
 campaign, the Imperial player cannot choose that set when building their Agenda deck.
 - If an Agenda set or Side Mission card does not have a time period displayed, it can be used in any
 campaign.
-Related Topics: Agenda Cards 6, Campaign 17, Campaign Setup 18, Missions 43
+Related Topics: [Agenda Cards](#agenda-cards), [Campaign](#campaign), [Campaign Setup](#campaign-setup), [Missions](#missions)
 
 
 ## UNIQUE
@@ -2984,7 +2933,7 @@ before the name, for example, "▪ Darth Vader."
 - Unique cards are identified by name only. Sub-names, affiliations, and abilities are not taken into account
 when determining which cards have the same name. For example, a player that has "▪ Luke Skywalker
 HERO OF THE REBELLION" in play cannot deploy “▪ Luke Skywalker JEDI KNIGHT”.
-Related Topics: Allies 7, Deployment Cards 26
+Related Topics: [Allies](#allies), [Deployment Cards](#deployment-cards)
 
 ## VICTORY POINTS
 
@@ -2994,13 +2943,13 @@ another player VPs, the paying player loses VPs and the paid player gains an equ
 - If using an ability requires a player to pay more VPs than that player has, that player cannot use that ability.
 - If a player's ability requires an opponent to pay more VPs than they have, that opponent pays all of their
 remaining VPs.
-Related Topics: Paying VPs 50, Winning the Game 63
+Related Topics: [Paying VPs](#paying-vps), [Winning the Game](#winning-the-game)
 
 ## VILLAINS
 
 All figures corresponding to unique Imperial ( or ) Deployment cards are villains. Villains follow all
-general rules for allies listed on page 7.
-Related Topics: Allies 7
+general rules for allies listed on page [7](#villains).
+Related Topics: [Allies](#allies)
 
 ## WALLS
 
@@ -3011,13 +2960,13 @@ examples of moving and tracing line of sight with walls.
 enter blocking terrain but cannot move through walls.
 - Walls only block line of sight along an entire edge of a space. If a wall does not cover an entire edge, then
 line of sight may be traced to, from, and through that edge or corner.
-Related Topics: Line of Sight 40, Movement 47, Terrain 60
+Related Topics: [Line of Sight](#line-of-sight), [Movement](#movement), [Terrain](#terrain)
 
 ## WEAKENED
 
 Weakened is a HARMFUL condition and applies -1 while defending and -1 while attacking.
 Weakened is automatically discarded at the end of a figure's activation.
-Related Topics: Conditions 22, Negative Symbols 48
+Related Topics: [Conditions](#conditions), [Negative Symbols](#negative-symbols)
 
 
 ## WINNING THE GAME
@@ -3036,7 +2985,7 @@ The player(s) who win the final mission win the campaign.
 A two-player skirmish mission ends as soon as one player has accumulated 40 or more victory points (VPs).
 The player with the most VPs wins the game. If all of a player's figures are defeated, the player loses the game
 immediately, regardless of victory points.
-A Four-Player (p.32) Free-For-All skirmish ends immediately when at least one player has gained 40 or more
+A Four-Player ([p.32](#conflicts-in-a-four-player-skirmish)) Free-For-All skirmish ends immediately when at least one player has gained 40 or more
 VPs, at which point the player with the most VPs wins the game. The game will also end when three players
 have been eliminated, at which point the remaining player wins the game.
 A Four-Player Team Battle skirmish ends immediately when one team has collectively gained 60 or more VPs,
@@ -3044,7 +2993,7 @@ at which point the team with the most VPs wins the game. The game will also end 
 have both been eliminated, at which point the remaining team wins the game.
 A player earns victory points (VPs) during a game each time the player defeats an opponent's figure or through
 abilities or mission rules.
-- When a figure is defeated, the opposing player scores VPs equal to that figure's Figure Cost (p.30).
+- When a figure is defeated, the opposing player scores VPs equal to that figure's Figure Cost ([p.30](#focused)).
 - When the last figure in a group is defeated, if that group had an attachment, the opposing player scores VPs
 equal to that attachment's cost.
 
@@ -3057,7 +3006,7 @@ player adds the Health values of any defeated figures corresponding to Deploymen
 The player with the lowest total damage tokens and Health wins.
 If players are still tied, each player rolls one blue die, and the player with the highest Accuracy rolled wins the
 game.
-Related Topics: Campaign 17, Defeated 24, Group 33, Skirmish 55
+Related Topics: [Campaign](#campaign), [Defeated](#defeated), [Group](#group), [Skirmish](#skirmish)
 
 ## WITHDRAW
 
@@ -3073,43 +3022,42 @@ final mission, the hero still wins or loses the campaign with the rest of the Re
 - A hero who has withdrawn remains wounded until the end of the mission.
 - During post-mission cleanup, withdrawn heroes are no longer considered withdrawn. They perform all
 normal "Post-Mission Cleanup" steps and participate in all future stages of the campaign.
-Related Topics: Defeated 24, Mission Stage 46, Wounded 64
+Related Topics: [Defeated](#defeated), [Mission Stage](#mission-stage), [Wounded](#wounded)
 
 
 ## WITHIN X SPACES
 
 When the target of an ability is X or less spaces away from the figure having the ability, it is within X spaces.
-A figure is within X spaces of itself. See "Counting Spaces" on page 23.
+A figure is within X spaces of itself. See "Counting Spaces" on page [23](#credits).
 
 ## WOUNDED
 
 During a campaign, when a healthy hero has suffered  (damage) equal to their Health the hero is wounded.
 The hero discards all damage tokens and flips their Hero sheet to the wounded side. If their  (strain) exceeds
 their new Endurance value, the hero discards any strain tokens that exceed their Endurance.
-- If a wounded hero is defeated, the hero withdraws (p.63).
+- If a wounded hero is defeated, the hero withdraws ([p.63](#within-x-spaces)).
 - The wounded side of a hero sheet lists fewer abilities and often has lower Health, Speed, Endurance, or
 Attributes.
 - Once a hero is wounded, their sheet remains on the wounded side until the end of the mission.
 - If a card or mission effect allows a wounded hero to flip their hero sheet to the healthy side during the
 course of a mission, that hero is no longer wounded.
-Related Topics: Damage 24, Defeated 24, Health 33, Healthy 34, Hero 34, Strain
-58, Withdraw 63
+Related Topics: [Damage](#damage), [Defeated](#defeated), [Health](#health), [Healthy](#healthy), [Hero](#hero), [Strain](#strain), [Withdraw](#withdraw)
 
 ## XP
 
-See "Experience Points" on page 30.
+See "Experience Points" on page [30](#focused).
 “YOU”
 Many cards use the word "you" to refer to a figure instead of the player. For example, if a Deployment card
 reads "While attacking, you may reroll 1 or more attack dice" each figure belonging to that card's group may
 use that ability. If an ability requires “you” to exhaust the card, then only the figure paying the exhaust cost can
 use the ability.
 - If a figure's ability specifies “you” to choose something within a set number of spaces, players count spaces
-(p.23) from the figure using the ability. Likewise, if an ability specifies “you” to choose an adjacent figure
-or object, the figure or object must be adjacent (p.6) to the figure using the ability. If the ability requires
-“you” to have line of sight (p.40), it is determined from the figure using the ability.
+([p.23](#credits)) from the figure using the ability. Likewise, if an ability specifies “you” to choose an adjacent figure
+or object, the figure or object must be adjacent ([p.6](#types-of-agenda-cards)) to the figure using the ability. If the ability requires
+“you” to have line of sight ([p.40](#massive)), it is determined from the figure using the ability.
 - If an effect corresponding to a figure instructs "you" to claim a token, gain VPs, or manipulate cards, or
 refers to "your" army or figures, "you" refers to that figure's player.
-Related Topics: Adjacent 6, Counting Spaces 23, Line of Sight 40
+Related Topics: [Adjacent](#adjacent), [Counting Spaces](#counting-spaces), [Line of Sight](#line-of-sight)
 
 
 APPENDIX I – LINE OF SIGHT EXAMPLES
@@ -3123,11 +3071,11 @@ figure (2) who
 cannot trace it
 back (3). The
 lines cannot overlap (4).
-- Line of sight (p.40) can be traced through the target (5).
+- Line of sight ([p.40](#massive)) can be traced through the target (5).
 Figures on opposite sides of the end of a wall have line
 of sight to each other (6), but since the spaces are not
 adjacent,  attacks cannot target each other unless the
-attack has Reach (p.51).
+attack has Reach ([p.51](#rebel-upgrade-stage)).
 - A figure can trace line of sight through itself and
 through its target (7).
 - Line of sight can be traced parallel along a wall (8),
@@ -3137,17 +3085,17 @@ pictured).
 (10), energy shield, or blocking terrain space (11) as
 long as the line does not enter the blocking space or
 energy shield, or cross through an edge completely
-covered by a wall (p.62).
+covered by a wall ([p.62](#winning-the-game)).
 - Line of sight cannot be traced through doors (12), walls
 (13), non-target figures (14), blocking terrain (15), or
 energy shields (see p. 69).
 - Line of sight cannot be traced through the diagonal
-intersection of any walls, doors (p.27), energy shields,
+intersection of any walls, doors ([p.27](#elite-figure)), energy shields,
 or blocking terrain (16).
 - Line of sight can be traced to and from the corner of a
 figure and any combination of another figure (17),
-wall, door, energy shield (p.29), or blocking terrain
-(p.15).
+wall, door, energy shield ([p.29](#exhaust)), or blocking terrain
+([p.15](#bounty-tokens)).
 
 
 - If the area between the line of sight lines contains a wall, door, energy shield, or blocking terrain, then the
@@ -3166,7 +3114,7 @@ If there is a figure positioned
 diagonally to the terrain, walls, or
 another figure, this does not cost
 additional movement points – only
-the space the moving figure enters (p.29) affects the required
+the space the moving figure enters ([p.29](#exhaust)) affects the required
 movement points.
 - A figure cannot move through the diagonal intersection of any
 combination of walls, doors, blocking terrain, or impassable
@@ -3200,9 +3148,9 @@ space with blocking or impassable terrain.
 ## ICONS
 
 Attack Type: : Ranged Attack : Melee Attack
-Attack Icons: : Damage : Surge (Surges p.59)
-Defense Icons: : Block (Attacks p.10) : Evade : Dodge (Miss
-p.42)
+Attack Icons: : Damage : Surge (Surges [p.59](#terrain))
+Defense Icons: : Block (Attacks [p.10](#steps-of-an-attack)) : Evade : Dodge (Miss
+[p.42](#mission-events))
 Some Costs: : Strain : Threat
 Affiliation: : Rebel : Imperial : Mercenary : Neutral
 Attributes: : Strength : Insight : Tech
@@ -3265,7 +3213,7 @@ and counting spaces.
 Both the elite Rebel Trooper and
 elite Nexu can attack the elite Jet
 Trooper. (See also Blocking Terrain
-p.15.)
+[p.15](#bounty-tokens).)
 APPENDIX IV: ENERGY SHIELD EXAMPLES
 Energy Shields block line of sight, but do not affect counting spaces or adjacency.
 - A figure on a space that contains an energy

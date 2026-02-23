@@ -403,7 +403,7 @@ export function resolveAbility(abilityId, context) {
     bank.remaining = (bank.remaining ?? 0) + n;
     game.movementBank[msgId] = bank;
     const msg = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
-    return { applied: true, logMessage: msg };
+    return { applied: true, logMessage: msg, refreshMovementBank: true, activeMsgId: msgId };
   }
 
   // ccEffect: discardUpToNHarmful + mpBonus combo (optionally + recoverDamage) — Heart of Freedom, Price of Glory

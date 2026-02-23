@@ -865,7 +865,7 @@ export async function handleNegationPlay(interaction, ctx) {
 
 /** @param {import('discord.js').ButtonInteraction} interaction — "Let it resolve" for pending cost-0 CC. */
 export async function handleNegationLetResolve(interaction, ctx) {
-  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, saveGames, resolveAbility, dcMessageMeta, dcHealthState, updateDcActionsMessage, updateAttachmentMessageForDc, isCcAttachment } = ctx;
+  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, saveGames, resolveAbility, dcMessageMeta, dcHealthState, updateDcActionsMessage, updateAttachmentMessageForDc, isCcAttachment, ensureMovementBankMessage, updateMovementBankMessage } = ctx;
   const gameId = interaction.customId.replace('negation_let_resolve_', '');
   const game = getGame(gameId);
   if (!game || !game.pendingNegation) {
@@ -907,6 +907,10 @@ export async function handleNegationLetResolve(interaction, ctx) {
       await logGameAction(game, client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
       if (result.refreshDcEmbed && fromDc && msgId && updateDcActionsMessage) {
         await updateDcActionsMessage(game, msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
+      if (result.refreshMovementBank && result.activeMsgId && ensureMovementBankMessage && updateMovementBankMessage) {
+        await ensureMovementBankMessage(game, result.activeMsgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await updateMovementBankMessage(game, result.activeMsgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
     } else if (result.applied && result.refreshOpponentDiscard) {
       const opp = playedBy === 1 ? 2 : 1;

@@ -118,7 +118,7 @@ export async function handleDcActivate(interaction, ctx) {
     game.dcActivationLogMessageIds = game.dcActivationLogMessageIds || {};
     game.dcActivationLogMessageIds[msgId] = logMsg.id;
     const activateRows = getActivateDcButtons(game, playerNum);
-    await interaction.update({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch(() => interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); }));
+    await interaction.editReply({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   } catch (err) {
     console.error('dc_activate_ error:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, extractGameIdFromInteraction(interaction), err, 'dc_activate');
