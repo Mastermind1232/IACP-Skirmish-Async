@@ -3293,6 +3293,10 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
       console.error('Failed to update map after attack:', err);
     }
   }
+  // Refresh activation thread minimap after combat (conditions/actions may have changed)
+  if (combat.attackerMsgId) {
+    await updateDcActionsMessage(game, combat.attackerMsgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }
 }
 
 /** DCs whose image is in DC Skirmish Upgrades are figureless (incl. Squad Upgrades like [Flame Trooper]); if image is in dc-figures, it's a figure. */
@@ -3500,7 +3504,10 @@ async function updateDcActionsMessage(game, msgId, client) {
         components,
       };
       const actMinimap = await getActivationMinimapAttachment(game, msgId);
-      if (actMinimap) editPayload.files = [actMinimap];
+      if (actMinimap) {
+        editPayload.files = [actMinimap];
+        editPayload.attachments = []; // replace old minimap image rather than accumulating
+      }
       await msg.edit(editPayload).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch (err) {
       console.error('Failed to update DC actions message:', err);
