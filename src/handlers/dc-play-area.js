@@ -568,7 +568,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
     const abilityId = effectData?.abilityId ?? card;
     const result = ctx.resolveAbility(abilityId, { game, playerNum: meta.playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, msgId });
     if (result.requiresChoice && result.choiceOptions?.length > 0) {
-      game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId: game.gameId, playerNum: meta.playerNum };
+      game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId: game.gameId, playerNum: meta.playerNum, ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}) };
       const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = await import('discord.js');
       const rows = [];
       const maxPerRow = 5;

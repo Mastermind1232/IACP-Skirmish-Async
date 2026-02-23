@@ -1573,12 +1573,42 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: chooseAdjacentHostileThen — choose one adjacent hostile figure, apply damage and/or strain (strain applied as damage)
+  // ccEffect: chooseAdjacentHostileThen — choose one adjacent hostile figure, apply damage and/or strain.
+  // First call: finds adjacent hostiles; if exactly 1, auto-resolves; if 2+, returns requiresChoice so a picker is shown.
+  // Second call: context.chosenFigureKey is set (from pendingCcChoice.choiceValues[choiceIndex]); applies directly.
   if (entry.type === 'ccEffect' && entry.chooseAdjacentHostileThen && (entry.chooseAdjacentHostileThen.damage > 0 || entry.chooseAdjacentHostileThen.strain > 0)) {
-    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
     const { damage = 0, strain = 0 } = entry.chooseAdjacentHostileThen;
     const totalDamage = damage + strain;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const strainPart = strain > 0 ? ` and ${strain} Strain` : '';
+    // Shared: apply damage/strain to a specific figure key
+    const applyToFigureKey = (targetFk) => {
+      if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
+      const targetMsgId = findMsgIdForFigureKey(game, oppNum, targetFk, dcMessageMeta);
+      if (!targetMsgId) return { applied: false, manualMessage: 'Resolve manually: could not find target deployment.' };
+      const targetMeta = dcMessageMeta.get(targetMsgId);
+      if (!targetMeta) return { applied: false, manualMessage: 'Resolve manually: could not find target.' };
+      const targetKeys = getFigureKeysForDcMsg(game, oppNum, targetMeta);
+      const targetIdx = targetKeys.indexOf(targetFk);
+      if (targetIdx < 0) return { applied: false, manualMessage: 'Resolve manually: could not find target figure index.' };
+      const healthState = dcHealthState.get(targetMsgId) || [];
+      const hs = healthState[targetIdx];
+      if (!Array.isArray(hs) || hs.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for target.' };
+      const [cur, max] = hs;
+      const newCur = Math.max(0, (cur ?? max ?? 0) - totalDamage);
+      healthState[targetIdx] = [newCur, max];
+      dcHealthState.set(targetMsgId, healthState);
+      const dcMessageIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
+      const idx2 = (dcMessageIds || []).indexOf(targetMsgId);
+      if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...healthState];
+      return { applied: true, logMessage: `Hostile figure suffered ${damage} Damage${strainPart} (${totalDamage} total).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [targetMsgId] };
+    };
+    // Second pass: user already picked a figure
+    if (chosenFigureKey) return applyToFigureKey(chosenFigureKey);
+    // First pass: find adjacent hostiles
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     const meta = dcMessageMeta.get(msgId);
@@ -1587,7 +1617,6 @@ export function resolveAbility(abilityId, context) {
     if (activatingKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
     const mapId = game.selectedMap?.id;
     if (!mapId) return { applied: false, manualMessage: 'Resolve manually: no map selected.' };
-    const oppNum = playerNum === 1 ? 2 : 1;
     const hostileSet = new Set();
     for (const fk of activatingKeys) {
       const adj = getFiguresAdjacentToTarget(game, fk, mapId);
@@ -1597,36 +1626,17 @@ export function resolveAbility(abilityId, context) {
     }
     const hostiles = [...hostileSet];
     if (hostiles.length === 0) return { applied: true, logMessage: 'No adjacent hostile figure.' };
-    if (hostiles.length > 1) {
-      return { applied: false, manualMessage: `Resolve manually: choose which of ${hostiles.length} adjacent hostile figures.` };
-    }
-    if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
-    const targetFk = hostiles[0];
-    const targetMsgId = findMsgIdForFigureKey(game, oppNum, targetFk, dcMessageMeta);
-    if (!targetMsgId) return { applied: false, manualMessage: 'Resolve manually: could not find target deployment.' };
-    const targetMeta = dcMessageMeta.get(targetMsgId);
-    if (!targetMeta) return { applied: false, manualMessage: 'Resolve manually: could not find target.' };
-    const targetKeys = getFigureKeysForDcMsg(game, oppNum, targetMeta);
-    const targetIdx = targetKeys.indexOf(targetFk);
-    if (targetIdx < 0) return { applied: false, manualMessage: 'Resolve manually: could not find target figure index.' };
-    const healthState = dcHealthState.get(targetMsgId) || [];
-    const entry_ = healthState[targetIdx];
-    if (!Array.isArray(entry_) || entry_.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for target.' };
-    const [cur, max] = entry_;
-    const newCur = Math.max(0, (cur ?? max ?? 0) - totalDamage);
-    healthState[targetIdx] = [newCur, max];
-    dcHealthState.set(targetMsgId, healthState);
-    const dcMessageIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
-    const idx = (dcMessageIds || []).indexOf(targetMsgId);
-    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-    const strainPart = strain > 0 ? ` and ${strain} Strain` : '';
-    return {
-      applied: true,
-      logMessage: `Adjacent hostile figure suffered ${damage} Damage${strainPart} (${totalDamage} total).`,
-      refreshDcEmbed: true,
-      refreshDcEmbedMsgIds: [targetMsgId],
-    };
+    if (hostiles.length === 1) return applyToFigureKey(hostiles[0]);
+    // Multiple adjacent hostiles: prompt player to pick one
+    const labels = hostiles.map((fk) => {
+      const tMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
+      const tMeta = tMsgId ? dcMessageMeta.get(tMsgId) : null;
+      const baseName = tMeta?.displayName || tMeta?.dcName || fk;
+      const figIdx = parseInt(fk.split('-').pop(), 10);
+      const suffix = isNaN(figIdx) || figIdx === 0 ? '' : ` (${String.fromCharCode(65 + figIdx)})`;
+      return `${baseName}${suffix}`;
+    });
+    return { applied: false, requiresChoice: true, choiceOptions: labels, choiceValues: hostiles };
   }
 
   // ccEffect: powerTokenGainToGroup (Ready Weapons) — distribute up to N tokens among figures in activating group (max 2 per figure)

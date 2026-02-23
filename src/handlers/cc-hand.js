@@ -346,7 +346,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       const effectDesc = effectData?.effect ? `\n> *${effectData.effect}*` : '';
       await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
-      game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId, playerNum };
+      game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId, playerNum, ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}) };
       const rows = [];
       const maxPerRow = 5;
       for (let i = 0; i < result.choiceOptions.length; i++) {
@@ -742,6 +742,7 @@ export async function handleCcChoice(interaction, ctx) {
     dcHealthState,
     choiceIndex,
     chosenOption,
+    chosenFigureKey: pending.choiceValues?.[choiceIndex] ?? null,
     combat: game.combat || game.pendingCombat,
   });
   delete game.pendingCcChoice;
