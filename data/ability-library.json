@@ -1552,16 +1552,24 @@
     "Cloned Reinforcements": {
       "type": "ccEffect",
       "label": "Special: place defeated friendly non-DROID non-unique TROOPER cost ≤4 in empty adjacent space",
-      "informational": true,
-      "logMessage": "Resolve manually: choose a defeated friendly non-DROID, non-unique TROOPER with figure cost 4 or less; place in empty adjacent space.",
-      "wiredStatus": "unwired"
+      "placeDefeatedFigure": {
+        "traitFilter": ["TROOPER"],
+        "excludeTraits": ["DROID"],
+        "nonUnique": true,
+        "maxFigureCost": 4,
+        "placementAnchor": "activatingFigure"
+      },
+      "wiredStatus": "wired"
     },
     "Endless Reserves": {
       "type": "ccEffect",
       "label": "Special: place defeated friendly TROOPER in empty space adjacent to same group",
-      "informational": true,
-      "logMessage": "Resolve manually: choose a defeated friendly TROOPER; place in empty space adjacent to another figure in its group.",
-      "wiredStatus": "unwired"
+      "placeDefeatedFigure": {
+        "traitFilter": ["TROOPER"],
+        "placementAnchor": "sameGroup",
+        "shuffleBackToDeck": true
+      },
+      "wiredStatus": "wired"
     },
     "Double or Nothing": {
       "type": "ccEffect",
@@ -2056,10 +2064,13 @@
     },
     "Reinforcements": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Return a defeated TROOPER (reinforcement cost ≤3) adjacent to its group",
-      "logMessage": "**Reinforcements** — Choose 1 of your defeated TROOPERs with reinforcement cost ≤3. Place that figure adjacent to any other figure of its group. Notify opponent and resolve manually.",
-      "wiredStatus": "unwired"
+      "placeDefeatedFigure": {
+        "traitFilter": ["TROOPER"],
+        "maxReinforcementCost": 3,
+        "placementAnchor": "sameGroup"
+      },
+      "wiredStatus": "wired"
     },
     "Reverse Engineer": {
       "type": "ccEffect",

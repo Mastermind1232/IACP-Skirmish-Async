@@ -346,7 +346,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       const effectDesc = effectData?.effect ? `\n> *${effectData.effect}*` : '';
       await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
-      game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId, playerNum, ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}) };
+      game.pendingCcChoice = { abilityId, choiceOptions: result.choiceOptions, gameId, playerNum, card, ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}) };
       const rows = [];
       const maxPerRow = 5;
       for (let i = 0; i < result.choiceOptions.length; i++) {
@@ -388,7 +388,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       const effectDesc2 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
       await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc2}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
-      game.pendingCcSpaceChoice = { abilityId, gameId, playerNum, card, validSpaces: result.validSpaces };
+      game.pendingCcSpaceChoice = { abilityId, gameId, playerNum, card, validSpaces: result.validSpaces, chosenFigureKey: result.chosenFigureKey ?? null };
       const boardState = getBoardStateForMovement(game, null);
       const mapSpaces = boardState?.mapSpaces || { spaces: result.validSpaces };
       const { rows } = getSpaceChoiceRows(`cc_space_${gameId}_`, result.validSpaces, mapSpaces);
@@ -669,6 +669,7 @@ export async function handleCcSpacePick(interaction, ctx) {
     dcMessageMeta,
     dcHealthState,
     chosenSpace,
+    chosenFigureKey: pending.chosenFigureKey ?? null,
     combat: game.combat || game.pendingCombat,
   });
   delete game.pendingCcSpaceChoice;
@@ -713,7 +714,7 @@ export async function handleCcChoice(interaction, ctx) {
   }
   const [, gameId, choiceIndexStr] = match;
   const choiceIndex = parseInt(choiceIndexStr, 10);
-  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents, client, saveGames } = ctx;
+  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents, getBoardStateForMovement, getSpaceChoiceRows, getMapAttachmentForSpaces, client, saveGames } = ctx;
   const game = getGame(gameId);
   if (!game) {
     await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -782,6 +783,37 @@ export async function handleCcChoice(interaction, ctx) {
     for (const msgId of msgIds) {
       await updateDcActionsMessage(game, msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
+  }
+  if (!result.applied && result.requiresSpaceChoice && Array.isArray(result.validSpaces) && result.validSpaces.length > 0) {
+    if (!getBoardStateForMovement || !getSpaceChoiceRows || !getMapAttachmentForSpaces) {
+      await logGameAction(game, client, 'CC effect: Space choice not supported. Resolve manually.', { phase: 'ACTION', icon: 'card' });
+      saveGames();
+      return;
+    }
+    game.pendingCcSpaceChoice = {
+      abilityId: pending.abilityId,
+      gameId,
+      playerNum,
+      card: pending.card,
+      validSpaces: result.validSpaces,
+      chosenFigureKey: result.chosenFigureKey ?? pending.choiceValues?.[choiceIndex] ?? null,
+    };
+    const handChannelId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+    const handCh = await client.channels.fetch(handChannelId).catch(() => null);
+    if (handCh) {
+      const boardState2 = getBoardStateForMovement(game, null);
+      const mapSpaces2 = boardState2?.mapSpaces || { spaces: result.validSpaces };
+      const { rows: spaceRows } = getSpaceChoiceRows(`cc_space_${gameId}_`, result.validSpaces, mapSpaces2);
+      const mapAttachment2 = await getMapAttachmentForSpaces(game, result.validSpaces);
+      const payload2 = { content: `**Pick a space** (for **${pending.card ?? pending.abilityId}**):`, components: spaceRows.slice(0, 5) };
+      if (mapAttachment2) payload2.files = [mapAttachment2];
+      await handCh.send(payload2).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
+    try {
+      await interaction.message.edit({ content: 'Figure chosen. Now pick a space.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    } catch {}
+    saveGames();
+    return;
   }
   if (!result.applied && result.manualMessage) {
     await logGameAction(game, client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });

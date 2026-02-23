@@ -2657,6 +2657,175 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: placeDefeatedFigure (Reinforcements, Cloned Reinforcements, Endless Reserves)
+  // placeDefeatedFigure: { traitFilter?, excludeTraits?, nonUnique?, maxReinforcementCost?, maxFigureCost?, placementAnchor, shuffleBackToDeck? }
+  // Flow: 1st call → find candidates (requiresChoice if >1, or requiresSpaceChoice if =1);
+  //        2nd call (chosenFigureKey, no chosenSpace) → compute valid spaces → requiresSpaceChoice;
+  //        3rd call (chosenFigureKey + chosenSpace) → place figure, optionally shuffle card back.
+  if (entry.type === 'ccEffect' && entry.placeDefeatedFigure) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace } = context;
+    const pdf = entry.placeDefeatedFigure;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const poses = game.figurePositions?.[playerNum] || {};
+
+    // Helper: compute valid placement spaces for a chosen figure key
+    const computeValidSpaces = (fk) => {
+      const boardState = getBoardStateForMovement(game, null);
+      if (!boardState?.mapSpaces) return [];
+      const occupied = new Set();
+      for (const pNum of [1, 2]) {
+        for (const coord of Object.values(game.figurePositions?.[pNum] || {})) {
+          if (coord) occupied.add(String(coord).toLowerCase());
+        }
+      }
+      let anchorPositions = [];
+      if (pdf.placementAnchor === 'sameGroup') {
+        for (const dc of dcList) {
+          const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+          if (!dcName) continue;
+          const displayName = typeof dc === 'object' ? dc.displayName : dcName;
+          const dgMatch = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+          const dgIndex = dgMatch ? dgMatch[1] : '1';
+          const prefix = `${dcName}-${dgIndex}-`;
+          if (fk.startsWith(prefix)) {
+            for (const [k, coord] of Object.entries(poses)) {
+              if (k.startsWith(prefix) && coord) anchorPositions.push(coord);
+            }
+            break;
+          }
+        }
+      } else if (pdf.placementAnchor === 'activatingFigure') {
+        if (dcMessageMeta) {
+          const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+          if (msgId) {
+            const meta = dcMessageMeta.get(msgId);
+            if (meta) {
+              for (const k of getFigureKeysForDcMsg(game, playerNum, meta)) {
+                const pos = poses[k];
+                if (pos) anchorPositions.push(pos);
+              }
+            }
+          }
+        }
+      }
+      if (anchorPositions.length === 0) return [];
+      const validSet = new Set();
+      for (const anchor of anchorPositions) {
+        for (const s of getReachableSpaces(anchor, 1, boardState.mapSpaces, [])) {
+          if (!occupied.has(String(s).toLowerCase())) validSet.add(String(s).toLowerCase());
+        }
+      }
+      return [...validSet];
+    };
+
+    // Helper: build a display label for a figure key
+    const getFigLabel = (fk) => {
+      for (const dc of dcList) {
+        const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+        if (!dcName) continue;
+        const displayName = typeof dc === 'object' ? dc.displayName : dcName;
+        const dgMatch = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+        const dgIndex = dgMatch ? dgMatch[1] : '1';
+        const prefix = `${dcName}-${dgIndex}-`;
+        if (fk.startsWith(prefix)) {
+          const figIdx = parseInt(fk.replace(prefix, ''), 10);
+          const figCount = getStatsForDc(dcName)?.figures ?? 1;
+          const suffix = figCount <= 1 || isNaN(figIdx) || figIdx === 0 ? '' : ` (${String.fromCharCode(65 + figIdx)})`;
+          return `${displayName || dcName}${suffix}`;
+        }
+      }
+      return fk;
+    };
+
+    // 3rd call: place figure at chosen space
+    if (chosenFigureKey && chosenSpace) {
+      game.figurePositions = game.figurePositions || {};
+      game.figurePositions[playerNum] = game.figurePositions[playerNum] || {};
+      game.figurePositions[playerNum][chosenFigureKey] = String(chosenSpace).toLowerCase();
+      const figLabel = getFigLabel(chosenFigureKey);
+      let shuffleMsg = '';
+      if (pdf.shuffleBackToDeck) {
+        const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+        const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+        const discard = (game[discardKey] || []).slice();
+        const cardIdx = discard.lastIndexOf(abilityId);
+        if (cardIdx >= 0) {
+          discard.splice(cardIdx, 1);
+          game[discardKey] = discard;
+          const deck = (game[deckKey] || []).slice();
+          deck.push(abilityId);
+          for (let k = deck.length - 1; k > 0; k--) {
+            const j = Math.floor(Math.random() * (k + 1));
+            [deck[k], deck[j]] = [deck[j], deck[k]];
+          }
+          game[deckKey] = deck;
+          shuffleMsg = ` **${abilityId}** shuffled back into deck.`;
+        }
+      }
+      return {
+        applied: true,
+        logMessage: `Placed **${figLabel}** at **${String(chosenSpace).toUpperCase()}**.${shuffleMsg}`,
+        refreshBoard: true,
+        ...(pdf.shuffleBackToDeck ? { refreshDiscard: true } : {}),
+      };
+    }
+
+    // 2nd call: figure chosen, compute valid spaces
+    if (chosenFigureKey) {
+      const validSpaces = computeValidSpaces(chosenFigureKey);
+      if (validSpaces.length === 0) {
+        return { applied: false, manualMessage: `No empty spaces adjacent to ${pdf.placementAnchor === 'activatingFigure' ? 'activating figure' : 'same group'}. Resolve manually.` };
+      }
+      return { requiresSpaceChoice: true, validSpaces, chosenFigureKey };
+    }
+
+    // 1st call: find eligible defeated figures
+    const candidates = [];
+    for (let i = 0; i < dcList.length; i++) {
+      const dc = dcList[i];
+      const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+      if (!dcName) continue;
+      const displayName = typeof dc === 'object' ? dc.displayName : dcName;
+      const dgMatch = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const dgIndex = dgMatch ? dgMatch[1] : String(i + 1);
+      const stats = getStatsForDc(dcName);
+      const keywords = stats?.keywords || [];
+      if (pdf.traitFilter?.length && !pdf.traitFilter.some((t) => keywords.includes(t))) continue;
+      if (pdf.excludeTraits?.length && pdf.excludeTraits.some((t) => keywords.includes(t))) continue;
+      if (pdf.nonUnique && stats?.unique) continue;
+      const figureCost = stats?.subCost ?? stats?.cost ?? 0;
+      if (pdf.maxReinforcementCost != null && figureCost > pdf.maxReinforcementCost) continue;
+      if (pdf.maxFigureCost != null && figureCost > pdf.maxFigureCost) continue;
+      const figureCount = stats?.figures ?? 1;
+      for (let figIdx = 0; figIdx < figureCount; figIdx++) {
+        const fk = `${dcName}-${dgIndex}-${figIdx}`;
+        if (!poses[fk]) {
+          const suffix = figureCount <= 1 ? '' : ` (${String.fromCharCode(65 + figIdx)})`;
+          candidates.push({ figureKey: fk, label: `${displayName || dcName}${suffix}` });
+        }
+      }
+    }
+
+    if (candidates.length === 0) return { applied: false, manualMessage: 'No eligible defeated figures found.' };
+
+    if (candidates.length === 1) {
+      const { figureKey } = candidates[0];
+      const validSpaces = computeValidSpaces(figureKey);
+      if (validSpaces.length === 0) {
+        return { applied: false, manualMessage: `No empty spaces adjacent to ${pdf.placementAnchor === 'activatingFigure' ? 'activating figure' : 'same group'}. Resolve manually.` };
+      }
+      return { requiresSpaceChoice: true, validSpaces, chosenFigureKey: figureKey };
+    }
+
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: candidates.map((c) => c.label),
+      choiceValues: candidates.map((c) => c.figureKey),
+    };
+  }
+
   return { applied: false, manualMessage: entry.label ? `Resolve manually: ${entry.label}` : 'Resolve manually (see rules).' };
 }
 
