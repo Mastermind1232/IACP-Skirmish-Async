@@ -1834,20 +1834,23 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: readyAdjacentFriendlyDeploymentCard (New Orders) — context.readyAdjacentFriendlyDcName from handler
+  // ccEffect: readyAdjacentFriendlyDeploymentCard (New Orders) — present choiceOptions from dcList; chosenOption = DC to ready
   if (entry.type === 'ccEffect' && entry.readyAdjacentFriendlyDeploymentCard) {
-    const { game, playerNum, readyAdjacentFriendlyDcName } = context;
+    const { game, playerNum, dcMessageMeta, readyAdjacentFriendlyDcName, chosenOption } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    if (!readyAdjacentFriendlyDcName) {
-      return {
-        applied: false,
-        requiresChoice: true,
-        choiceTarget: 'readyAdjacentFriendlyDeploymentCard',
-        manualMessage: 'Choose 1 adjacent friendly figure to ready its Deployment card.',
-      };
+    const targetName = readyAdjacentFriendlyDcName || chosenOption;
+    if (!targetName) {
+      // Build choice list from friendly DCs (honor system: player picks an adjacent one)
+      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const opts = dcList
+        .filter((dc) => dc && !dc.defeated)
+        .map((dc) => (typeof dc === 'object' ? dc.displayName || dc.dcName : dc))
+        .filter(Boolean);
+      if (opts.length === 0) return { applied: false, manualMessage: 'No friendly Deployment cards to ready. Resolve manually.' };
+      return { applied: false, requiresChoice: true, choiceOptions: opts };
     }
     const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-    const nameLower = String(readyAdjacentFriendlyDcName).toLowerCase().trim();
+    const nameLower = String(targetName).toLowerCase().trim();
     for (let i = 0; i < dcList.length; i++) {
       const dc = dcList[i];
       const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
@@ -1856,9 +1859,27 @@ export function resolveAbility(abilityId, context) {
       if (!matchName || (!matchName.includes(nameLower) && !nameLower.includes(matchName))) continue;
       if (typeof dc === 'object') dcList[i] = { ...dc, exhausted: false };
       else dcList[i] = { dcName, displayName: dcName, exhausted: false };
-      return { applied: true, logMessage: `Readied **${displayName || dcName}**'s Deployment card.` };
+      // Also find msgId to refresh the DC embed
+      let readyMsgId = null;
+      if (dcMessageMeta) {
+        for (const [msgId, meta] of dcMessageMeta) {
+          if (meta.playerNum !== playerNum) continue;
+          const metaName = (meta.displayName || meta.dcName || '').toLowerCase();
+          if (metaName === matchName || metaName.includes(nameLower) || nameLower.includes(metaName)) {
+            readyMsgId = msgId;
+            break;
+          }
+        }
+      }
+      const result = { applied: true, logMessage: `Readied **${displayName || dcName}**'s Deployment card (New Orders).` };
+      if (readyMsgId) {
+        result.readyDcMsgIds = [readyMsgId];
+        result.refreshDcEmbed = true;
+        result.refreshDcEmbedMsgIds = [readyMsgId];
+      }
+      return result;
     }
-    return { applied: false, manualMessage: `Could not find Deployment card matching "${readyAdjacentFriendlyDcName}".` };
+    return { applied: false, manualMessage: `Could not find Deployment card matching "${targetName}".` };
   }
 
   // ccEffect: readyOwnDeploymentCard + endOfRoundSelfDamage (Blaze of Glory) — choiceOptions = your DCs; chosenOption = displayName to ready
@@ -2159,9 +2180,9 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: applyStunToUpToNAdjacentHostiles (Roar) — only if suffered damage >= N
+  // ccEffect: applyStunToUpToNAdjacentHostiles (Roar) — choose opponent DC; all its figures become Stunned
   if (entry.type === 'ccEffect' && typeof entry.applyStunToUpToNAdjacentHostiles === 'number' && entry.applyStunToUpToNAdjacentHostiles > 0) {
-    const { game, playerNum, dcMessageMeta, dcHealthState, stunnedFigureKeys } = context;
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
@@ -2172,41 +2193,57 @@ export function resolveAbility(abilityId, context) {
         return { applied: false, manualMessage: `Roar: you must have suffered ${entry.onlyIfSufferedDamageGte}+ Damage (you have suffered ${totalDamage}).` };
       }
     }
-    if (!Array.isArray(stunnedFigureKeys) || stunnedFigureKeys.length === 0) {
-      return {
-        applied: false,
-        requiresChoice: true,
-        choiceTarget: 'applyStunToAdjacentHostiles',
-        choiceCount: Math.min(entry.applyStunToUpToNAdjacentHostiles, 3),
-        manualMessage: `Choose up to ${entry.applyStunToUpToNAdjacentHostiles} adjacent hostile figures to become Stunned.`,
-      };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    if (!chosenFigureKey) {
+      // Build choice list from opponent DCs (honor: player picks an adjacent hostile DC)
+      const choiceOptions = [];
+      const choiceValues = [];
+      for (const [dcMsgId, meta] of dcMessageMeta) {
+        if (meta.playerNum !== oppNum) continue;
+        const name = meta.displayName || meta.dcName;
+        if (!name) continue;
+        choiceOptions.push(name);
+        choiceValues.push(dcMsgId);
+      }
+      if (choiceOptions.length === 0) return { applied: false, manualMessage: 'No hostile figures found. Resolve manually.' };
+      return { applied: false, requiresChoice: true, choiceOptions, choiceValues };
     }
+    // Apply Stun to all figures of the chosen hostile DC
+    const targetMeta = dcMessageMeta.get(chosenFigureKey);
+    if (!targetMeta) return { applied: false, manualMessage: `Could not find hostile DC. Resolve manually.` };
+    const figureKeys = getFigureKeysForDcMsg(game, oppNum, targetMeta);
     game.figureConditions = game.figureConditions || {};
-    for (const fk of stunnedFigureKeys.slice(0, entry.applyStunToUpToNAdjacentHostiles)) {
+    let stunned = 0;
+    for (const fk of figureKeys.slice(0, entry.applyStunToUpToNAdjacentHostiles)) {
       const existing = game.figureConditions[fk] || [];
       if (!existing.includes('Stun')) game.figureConditions[fk] = [...existing, 'Stun'];
+      stunned++;
     }
+    const label = targetMeta.displayName || targetMeta.dcName || 'hostile figure(s)';
     return {
       applied: true,
-      logMessage: `${stunnedFigureKeys.length} adjacent hostile figure(s) became Stunned.`,
+      logMessage: `**${label}** — ${stunned} figure(s) became Stunned.`,
     };
   }
 
-  // ccEffect: pushFriendlyWithin3Spaces (Reposition)
+  // ccEffect: pushFriendlyWithin3Spaces (Reposition) — choiceOptions from dcList; chosenOption = figure to push
   if (entry.type === 'ccEffect' && typeof entry.pushFriendlyWithin3Spaces === 'number' && entry.pushFriendlyWithin3Spaces > 0) {
-    const { game, playerNum, repositionFriendlyDcName } = context;
+    const { game, playerNum, repositionFriendlyDcName, chosenOption } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    if (!repositionFriendlyDcName) {
-      return {
-        applied: false,
-        requiresChoice: true,
-        choiceTarget: 'pushFriendlyWithin3Spaces',
-        manualMessage: `Choose a SMALL friendly figure within 3 spaces to push up to ${entry.pushFriendlyWithin3Spaces} spaces.`,
-      };
+    const targetName = repositionFriendlyDcName || chosenOption;
+    if (!targetName) {
+      // Build choice list from friendly DCs (honor: player picks a SMALL figure within 3 spaces)
+      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const opts = dcList
+        .filter((dc) => dc && !dc.defeated)
+        .map((dc) => (typeof dc === 'object' ? dc.displayName || dc.dcName : dc))
+        .filter(Boolean);
+      if (opts.length === 0) return { applied: false, manualMessage: 'No friendly figures to push. Resolve manually.' };
+      return { applied: false, requiresChoice: true, choiceOptions: opts };
     }
     return {
       applied: true,
-      logMessage: `Push **${repositionFriendlyDcName}** up to ${entry.pushFriendlyWithin3Spaces} spaces (resolve movement).`,
+      logMessage: `Push **${targetName}** up to ${entry.pushFriendlyWithin3Spaces} spaces (resolve movement manually).`,
     };
   }
 
