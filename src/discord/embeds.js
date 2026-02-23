@@ -20,21 +20,13 @@ export function buildScorecardEmbed(game) {
   const vp1 = game.player1VP || { total: 0, kills: 0, objectives: 0 };
   const vp2 = game.player2VP || { total: 0, kills: 0, objectives: 0 };
   const p1HasInitiative = game.initiativeDetermined && game.initiativePlayerId === game.player1Id;
-  const p2HasInitiative = game.initiativeDetermined && game.initiativePlayerId === game.player2Id;
 
+  // Single-line-per-stat layout: works on both desktop and mobile (no inline columns)
   const fields = [
-    { name: 'Player 1', value: `<@${game.player1Id}>`, inline: true },
-    { name: 'Player 2', value: `<@${game.player2Id}>`, inline: true },
-    { name: '\u200b', value: '\u200b', inline: true },
-    { name: 'Total VP', value: `${vp1.total}`, inline: true },
-    { name: 'Total VP', value: `${vp2.total}`, inline: true },
-    { name: '\u200b', value: '\u200b', inline: true },
-    { name: 'Kills', value: `${vp1.kills}`, inline: true },
-    { name: 'Kills', value: `${vp2.kills}`, inline: true },
-    { name: '\u200b', value: '\u200b', inline: true },
-    { name: 'Objectives', value: `${vp1.objectives}`, inline: true },
-    { name: 'Objectives', value: `${vp2.objectives}`, inline: true },
-    { name: '\u200b', value: '\u200b', inline: true },
+    { name: 'Players', value: `**P1:** <@${game.player1Id}>\n**P2:** <@${game.player2Id}>`, inline: false },
+    { name: 'Total VP', value: `**P1:** ${vp1.total} \u2003 **P2:** ${vp2.total}`, inline: false },
+    { name: 'Kills', value: `**P1:** ${vp1.kills} \u2003 **P2:** ${vp2.kills}`, inline: false },
+    { name: 'Objectives', value: `**P1:** ${vp1.objectives} \u2003 **P2:** ${vp2.objectives}`, inline: false },
   ];
   if (game.initiativeDetermined) {
     const zoneLabel = getInitiativePlayerZoneLabel(game);

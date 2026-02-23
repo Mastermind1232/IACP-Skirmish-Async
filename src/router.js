@@ -36,6 +36,7 @@ const BUTTON_PREFIXES = [
   'bleed_accept_',
   'bleed_prevent_',
   'status_phase_',
+  'dc_end_activation_',
   'end_end_of_round_',
   'end_start_of_round_',
   'map_selection_',

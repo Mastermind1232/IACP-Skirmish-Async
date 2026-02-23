@@ -100,6 +100,7 @@ import {
   handleStatusPhase,
   handlePassActivationTurn,
   handleEndTurn,
+  handleDcEndActivation,
   handleConfirmActivate,
   handleCancelActivate,
   handleMapSelection,
@@ -5132,7 +5133,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'status_phase_' || buttonKey === 'pass_activation_turn_' || buttonKey === 'end_turn_' || buttonKey === 'confirm_activate_' || buttonKey === 'cancel_activate_') {
+  if (buttonKey === 'status_phase_' || buttonKey === 'pass_activation_turn_' || buttonKey === 'end_turn_' || buttonKey === 'dc_end_activation_' || buttonKey === 'confirm_activate_' || buttonKey === 'cancel_activate_') {
     const activationContext = {
       getGame,
       replyIfGameEnded,
@@ -5161,10 +5162,12 @@ client.on('interactionCreate', async (interaction) => {
       DC_ACTIONS_PER_ACTIVATION,
       ThreadAutoArchiveDuration,
       ACTION_ICONS,
+      getDcStats,
     };
     if (buttonKey === 'status_phase_') await handleStatusPhase(interaction, activationContext);
     else if (buttonKey === 'pass_activation_turn_') await handlePassActivationTurn(interaction, activationContext);
     else if (buttonKey === 'end_turn_') await handleEndTurn(interaction, activationContext);
+    else if (buttonKey === 'dc_end_activation_') await handleDcEndActivation(interaction, activationContext);
     else if (buttonKey === 'confirm_activate_') await handleConfirmActivate(interaction, activationContext);
     else if (buttonKey === 'cancel_activate_') await handleCancelActivate(interaction, activationContext);
     return;

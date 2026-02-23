@@ -300,6 +300,130 @@ export async function handleEndTurn(interaction, ctx) {
 }
 
 /**
+ * Handle dc_end_activation_ — red "End Activation" button on the DC card.
+ * Immediately ends the current activation: deletes thread, cleans up state, pings opponent.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handleDcEndActivation(interaction, ctx) {
+  const {
+    getGame,
+    replyIfGameEnded,
+    dcMessageMeta,
+    dcHealthState,
+    buildDcEmbedAndFiles,
+    getConditionsForDcMessage,
+    getDcPlayAreaComponents,
+    logGameAction,
+    maybeShowEndActivationPhaseButton,
+    client,
+    saveGames,
+  } = ctx;
+  const msgId = interaction.customId.replace('dc_end_activation_', '');
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const game = getGame(meta.gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  if (await replyIfGameEnded(game, interaction)) return;
+  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== ownerId) {
+    await interaction.reply({ content: 'Only the owner can end this activation.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  await interaction.deferUpdate();
+  const otherPlayerId = meta.playerNum === 1 ? game.player2Id : game.player1Id;
+  const otherPlayerNum = meta.playerNum === 1 ? 2 : 1;
+  const displayName = meta.displayName || meta.dcName;
+  const gameId = game.gameId;
+
+  // Clean up activation state
+  const actionsData = game.dcActionsData?.[msgId];
+  if (actionsData?.threadId) {
+    try {
+      const thread = await client.channels.fetch(actionsData.threadId);
+      await thread.delete();
+    } catch (err) {
+      console.error('Failed to delete DC activation thread on End Activation:', err);
+    }
+  }
+  if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
+  if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
+  if (game.nextAttacksBonusHits?.[meta.playerNum]) delete game.nextAttacksBonusHits[meta.playerNum];
+  if (game.nextAttacksBonusConditions?.[meta.playerNum]) delete game.nextAttacksBonusConditions[meta.playerNum];
+  if (game.nextAttackBonusSurgeAbilities?.[meta.playerNum]) delete game.nextAttackBonusSurgeAbilities[meta.playerNum];
+  if (game.nextAttackBonusPierce?.[meta.playerNum]) delete game.nextAttackBonusPierce[meta.playerNum];
+  if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
+  if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
+  // Stun: discarded at end of activation
+  if (game.figureConditions && ctx.getDcStats) {
+    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+    const figures = ctx.getDcStats(meta.dcName).figures ?? 1;
+    for (let f = 0; f < figures; f++) {
+      const fk = `${meta.dcName}-${dgIndex}-${f}`;
+      if (game.figureConditions[fk]) game.figureConditions[fk] = game.figureConditions[fk].filter((c) => c !== 'Stun');
+    }
+  }
+
+  game.lastActivationMsgIdByPlayer = game.lastActivationMsgIdByPlayer || {};
+  game.lastActivationMsgIdByPlayer[meta.playerNum] = msgId;
+  game.currentActivationTurnPlayerId = otherPlayerId;
+
+  // Update DC card (stays exhausted)
+  try {
+    const playAreaId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+    const playChannel = await client.channels.fetch(playAreaId);
+    const dcMsg = await playChannel.messages.fetch(msgId);
+    const healthState = dcHealthState.get(msgId) ?? [[null, null]];
+    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, meta));
+    await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, meta.dcName) }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  } catch (err) {
+    console.error('Failed to update DC card after End Activation:', err);
+  }
+
+  // Ping opponent
+  await logGameAction(game, client, `<@${otherPlayerId}> (**Player ${otherPlayerNum}'s turn**) **${displayName}** ended activation — your turn to activate a figure!`, {
+    allowedMentions: { users: [otherPlayerId] },
+    phase: 'ROUND',
+    icon: 'activate',
+  });
+
+  // Update round activation message
+  if (game.roundActivationMessageId && game.generalId && !game.roundActivationButtonShown) {
+    try {
+      const ch = await client.channels.fetch(game.generalId);
+      const msg = await ch.messages.fetch(game.roundActivationMessageId);
+      const round = game.currentRound || 1;
+      const newCurrentRem = otherPlayerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+      const justActedRem = meta.playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+      const passRows = [];
+      if (justActedRem > newCurrentRem && newCurrentRem > 0) {
+        passRows.push(new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`pass_activation_turn_${gameId}`)
+            .setLabel('Pass turn to opponent')
+            .setStyle(ButtonStyle.Secondary)
+        ));
+      }
+      await msg.edit({
+        content: `<@${otherPlayerId}> (**Player ${otherPlayerNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back (opponent has more activations).' : ''}`,
+        components: passRows,
+        allowedMentions: { users: [otherPlayerId] },
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    } catch (err) {
+      console.error('Failed to update round message after End Activation:', err);
+    }
+  }
+  await maybeShowEndActivationPhaseButton(game, client);
+  saveGames();
+}
+
+/**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, dcMessageMeta, dcExhaustedState, dcHealthState, buildDcEmbedAndFiles, getDcPlayAreaComponents, updateActivationsMessage, getActionsCounterContent, getDcActionButtons, getActivationMinimapAttachment, getActivateDcButtons, DC_ACTIONS_PER_ACTIVATION, ThreadAutoArchiveDuration, ACTION_ICONS, client, saveGames
  */

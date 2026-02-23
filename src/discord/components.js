@@ -79,7 +79,11 @@ export function getDcToggleButton(msgId, exhausted, game = null) {
       new ButtonBuilder()
         .setCustomId(`dc_toggle_${msgId}`)
         .setLabel('Ready')
-        .setStyle(ButtonStyle.Success)
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`dc_end_activation_${msgId}`)
+        .setLabel('End Activation')
+        .setStyle(ButtonStyle.Danger)
     );
   }
   const bothDrawn = game && game.player1CcDrawn && game.player2CcDrawn;
