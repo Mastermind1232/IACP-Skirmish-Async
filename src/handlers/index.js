@@ -35,6 +35,7 @@ import {
   handleDcDeplete,
   handleDcCcSpecial,
   handleDcCcEndOfActivation,
+  handleDcCcDoubleAction,
   handleDcAction,
   handlePounceSpacePick,
 } from './dc-play-area.js';
@@ -126,6 +127,7 @@ register('dc_toggle_', handleDcToggle);
 register('dc_deplete_', handleDcDeplete);
 register('dc_cc_special_', handleDcCcSpecial);
 register('dc_cc_eoa_', handleDcCcEndOfActivation);
+register('dc_cc_double_', handleDcCcDoubleAction);
 register('pounce_space_', handlePounceSpacePick);
 register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'));
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'));
@@ -202,6 +204,7 @@ export {
   handleDcDeplete,
   handleDcCcSpecial,
   handleDcCcEndOfActivation,
+  handleDcCcDoubleAction,
   handleDcAction,
   handlePounceSpacePick,
 } from './dc-play-area.js';
