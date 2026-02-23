@@ -1338,9 +1338,10 @@
     },
     "Demoralizing Monologue": {
       "type": "ccEffect",
-      "label": "Reroll 1 defense die, reveal hand remove die (1 defense remove honor)",
-      "defensePoolRemoveMax": 1,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Reroll 1 defense die; if you reveal 2+ hand cards, remove that die",
+      "logMessage": "**Demoralizing Monologue** — Choose and reroll 1 defense die. You may then reveal your hand. If you reveal 2 or more Command cards this way, remove that die’s results from the defense pool. Reroll the die manually and apply the reveal+remove step manually if applicable.",
+      "wiredStatus": "wired"
     },
     "Field Supply": {
       "type": "ccEffect",
