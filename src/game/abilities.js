@@ -1578,7 +1578,8 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: chooseAdjacentHostileThen — choose one adjacent hostile figure, apply damage and/or strain.
-  // Supports: damage, strain, scaleStrainToRound, weaken/stun/bleed (conditions on target), selfStrain (cost).
+  // Supports: damage, strain, scaleStrainToRound, weaken/stun/bleed (conditions on target), selfStrain (cost),
+  //           healSelfIfTrait: {trait, amount} — recover N damage if activating DC has the named trait.
   // First call: finds adjacent hostiles; if exactly 1, auto-resolves; if 2+, returns requiresChoice so a picker is shown.
   // Second call: context.chosenFigureKey is set (from pendingCcChoice.choiceValues[choiceIndex]); applies directly.
   if (entry.type === 'ccEffect' && entry.chooseAdjacentHostileThen && (entry.chooseAdjacentHostileThen.damage > 0 || entry.chooseAdjacentHostileThen.strain > 0)) {
@@ -1642,10 +1643,43 @@ export function resolveAbility(abilityId, context) {
           selfStrainMsg = ` You suffered ${selfStrain} Strain.`;
         }
       }
+      // Heal self if activating figure has the required trait (e.g. Force Drain: recover 3 if FORCE USER)
+      let selfHealMsg = '';
+      const healSIT = cah.healSelfIfTrait;
+      if (healSIT?.trait && typeof healSIT.amount === 'number' && healSIT.amount > 0 && dcHealthState) {
+        const healSelfMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+        if (healSelfMsgId) {
+          const healSelfMeta = dcMessageMeta.get(healSelfMsgId);
+          const selfDcStats = healSelfMeta ? getStatsForDc(healSelfMeta.dcName) : null;
+          if (selfDcStats?.keywords?.includes(healSIT.trait)) {
+            const selfKeys = healSelfMeta ? getFigureKeysForDcMsg(game, playerNum, healSelfMeta) : [];
+            const selfHs = (dcHealthState.get(healSelfMsgId) || []).slice();
+            let remaining = healSIT.amount;
+            let totalHealed = 0;
+            for (let si = 0; si < selfKeys.length && remaining > 0; si++) {
+              const shs = selfHs[si];
+              if (Array.isArray(shs) && shs.length >= 2) {
+                const [sCur, sMax] = shs;
+                const healAmt = Math.min(sMax - (sCur ?? 0), remaining);
+                if (healAmt > 0) {
+                  selfHs[si] = [(sCur ?? 0) + healAmt, sMax];
+                  totalHealed += healAmt;
+                  remaining -= healAmt;
+                }
+              }
+            }
+            if (totalHealed > 0) {
+              dcHealthState.set(healSelfMsgId, selfHs);
+              if (!refreshIds.includes(healSelfMsgId)) refreshIds.push(healSelfMsgId);
+              selfHealMsg = ` You recovered ${totalHealed} Damage.`;
+            }
+          }
+        }
+      }
       const strainLabel = strain > 0 ? (damage > 0 ? ` and ${strain} Strain` : `${strain} Strain`) : '';
       const dmgLabel = damage > 0 ? `${damage} Damage` : '';
       const condPart = targetConditions.length > 0 ? `; target gains ${targetConditions.join(', ')}` : '';
-      return { applied: true, logMessage: `Hostile suffered ${dmgLabel}${strainLabel}${condPart}.${selfStrainMsg}`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
+      return { applied: true, logMessage: `Hostile suffered ${dmgLabel}${strainLabel}${condPart}.${selfStrainMsg}${selfHealMsg}`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
     };
     // Second pass: user already picked a figure
     if (chosenFigureKey) return applyToFigureKey(chosenFigureKey);

@@ -548,11 +548,15 @@
     },
     "Force Drain": {
       "type": "ccEffect",
-      "label": "Hostile within 2: 3 Damage + Stun + Weaken (recover 3 HP if FORCE USER manual)",
+      "label": "Adjacent hostile: 3 Damage + Stun + Weaken; if FORCE USER recover 3 Damage (within 2 manual)",
       "chooseAdjacentHostileThen": {
         "damage": 3,
         "stun": true,
-        "weaken": true
+        "weaken": true,
+        "healSelfIfTrait": {
+          "trait": "FORCE USER",
+          "amount": 3
+        }
       },
       "wiredStatus": "partial"
     },
