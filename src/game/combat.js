@@ -180,14 +180,14 @@ export function computeCombatResult(combat) {
   const cleaveText = combat.surgeCleave ? ` Cleave ${combat.surgeCleave}` : '';
 
   let resultText = `**Result:** Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
-  if (bonusAcc) resultText += ` | CC bonus: +${bonusAcc} acc`;
-  if (bonusHits || perDefDieDamage) resultText += ` | CC bonus: +${(bonusHits || 0) + perDefDieDamage} Hit`;
-  if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) resultText += ` | CC bonus: +${bonusBlock} Block`;
+  if (bonusAcc) resultText += ` | bonus: +${bonusAcc} acc`;
+  if (bonusHits || perDefDieDamage) resultText += ` | bonus: +${(bonusHits || 0) + perDefDieDamage} Hit`;
+  if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) resultText += ` | bonus: +${bonusBlock} Block`;
   if (combat.ignoreDefenseResultsNotOnDice) resultText += ' | CC: ignore defense not on dice';
   if (evadeCancelled > 0) resultText += ` | Evade cancelled ${evadeCancelled} surge`;
-  if (bonusEvade) resultText += ` | CC bonus: +${bonusEvade} Evade`;
-  if (bonusPierce) resultText += ` | CC bonus: +${bonusPierce} pierce`;
-  if (bonusBlast) resultText += ` | CC bonus: Blast ${bonusBlast}`;
+  if (bonusEvade) resultText += ` | bonus: +${bonusEvade} Evade`;
+  if (bonusPierce) resultText += ` | bonus: +${bonusPierce} pierce`;
+  if (bonusBlast) resultText += ` | bonus: Blast ${bonusBlast}`;
   if ((combat.bonusConditions || []).length) resultText += ` | CC bonus: ${combat.bonusConditions.join(', ')}`;
   if (surgeD || surgeP || surgeA || conditionsText || blastText || recoverText || cleaveText) {
     resultText += ` | Surge: +${surgeD} dmg, +${surgeP} pierce, +${surgeA} acc${conditionsText}${blastText}${recoverText}${cleaveText}`;

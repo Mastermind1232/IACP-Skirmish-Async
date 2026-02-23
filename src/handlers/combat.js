@@ -149,6 +149,11 @@ export async function handleAttackTarget(interaction, ctx) {
     defenseRoll: null,
     attackTargetMsgId: interaction.message.id,
   };
+  // Apply printed passive stat bonuses from both figures' deployment cards
+  const attackerPassives = getDcStats(meta.dcName).passives || [];
+  const defenderPassives = getDcStats(targetDcName).passives || [];
+  applyDcPassivesToCombat(game.pendingCombat, attackerPassives, defenderPassives);
+
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
   if (nextPierce) delete game.nextAttackBonusPierce?.[attackerPlayerNum];
   delete game.lastAttackTargetSpacesForRubble;
@@ -501,6 +506,38 @@ export async function handleCombatReroll(interaction, ctx) {
   // Still has rerolls — show updated UI
   await sendRerollUI(thread, game, combat, combat.rerollPhase);
   saveGames();
+}
+
+// --- DC passive stat helpers ---
+
+/**
+ * Parse the dc-effects.json `passives` array for a figure and apply printed
+ * card stat bonuses to the pending combat object.
+ *
+ * Attacker bonuses: +N Hit, +N Accuracy, Pierce N, +N Surge, Blast N
+ * Defender bonuses: Block N, +N Evade
+ * Combined entries (e.g. "+1 Hit, +1 Accuracy, +1 Block") split by comma —
+ * each part is applied to whichever role is relevant.
+ */
+function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives) {
+  const parts = (str) => str.split(',').map((s) => s.trim().toLowerCase());
+
+  for (const passive of (attackerPassives || [])) {
+    for (const p of parts(passive)) {
+      const hit  = p.match(/^\+(\d+)\s+hit(s?)$/);   if (hit)    { combat.bonusHits      = (combat.bonusHits      || 0) + parseInt(hit[1],    10); continue; }
+      const acc  = p.match(/^\+(\d+)\s+accur/);       if (acc)    { combat.bonusAccuracy  = (combat.bonusAccuracy  || 0) + parseInt(acc[1],    10); continue; }
+      const pier = p.match(/^pierce\s+(\d+)$/i);      if (pier)   { combat.bonusPierce    = (combat.bonusPierce    || 0) + parseInt(pier[1],   10); continue; }
+      const surg = p.match(/^\+(\d+)\s+surge$/);      if (surg)   { combat.surgeBonus     = (combat.surgeBonus     || 0) + parseInt(surg[1],   10); continue; }
+      const blas = p.match(/^blast\s+(\d+)$/);        if (blas)   { combat.bonusBlast     = (combat.bonusBlast     || 0) + parseInt(blas[1],   10); continue; }
+    }
+  }
+
+  for (const passive of (defenderPassives || [])) {
+    for (const p of parts(passive)) {
+      const blk  = p.match(/^(?:block\s+(\d+)|\+(\d+)\s+block)$/i); if (blk) { combat.bonusBlock = (combat.bonusBlock || 0) + parseInt(blk[1] ?? blk[2], 10); continue; }
+      const evd  = p.match(/^\+(\d+)\s+evade$/);      if (evd)    { combat.bonusEvade     = (combat.bonusEvade     || 0) + parseInt(evd[1],    10); continue; }
+    }
+  }
 }
 
 // --- Power token helpers ---
