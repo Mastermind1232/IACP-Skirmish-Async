@@ -256,7 +256,7 @@
       "draw": 2,
       "discardIfNotTrait": "LEADER",
       "discardFromDrawn": 1,
-      "wiredStatus": "testready"
+      "wiredStatus": "wired"
     },
     "Black Market Prices": {
       "type": "ccEffect",
@@ -331,7 +331,7 @@
       "type": "ccEffect",
       "label": "You become Focused",
       "applyFocus": true,
-      "wiredStatus": "testready"
+      "wiredStatus": "wired"
     },
     "Battle Scars": {
       "type": "ccEffect",
@@ -361,7 +361,7 @@
       "type": "ccEffect",
       "label": "+1 Surge to attack results",
       "attackSurgeBonus": 1,
-      "wiredStatus": "testready"
+      "wiredStatus": "wired"
     },
     "Positioning Advantage": {
       "type": "ccEffect",
@@ -373,7 +373,7 @@
       "type": "ccEffect",
       "label": "+2 Accuracy to attack results",
       "attackAccuracyBonus": 2,
-      "wiredStatus": "testready"
+      "wiredStatus": "wired"
     },
     "Heavy Ordnance": {
       "type": "ccEffect",
@@ -391,7 +391,7 @@
       "type": "ccEffect",
       "label": "Become Hidden when attack declared on you",
       "applyHideWhenDefending": true,
-      "wiredStatus": "testready"
+      "wiredStatus": "wired"
     },
     "Lock On": {
       "type": "ccEffect",
@@ -482,7 +482,7 @@
           "roundAttackSurgeBonus": 1
         }
       ],
-      "wiredStatus": "testready"
+      "wiredStatus": "wired"
     },
     "Opportunistic": {
       "type": "ccEffect",
@@ -1032,7 +1032,7 @@
       "type": "ccEffect",
       "label": "Place your figure in an empty space within 5 spaces (treat as 5 MP)",
       "mpBonus": 5,
-      "wiredStatus": "testready"
+      "wiredStatus": "wired"
     },
     "Force Lightning": {
       "type": "ccEffect",
@@ -1203,7 +1203,7 @@
       "label": "Choose space within 2; place shield, friendly within 2 gains 2 MP",
       "chooseSpaceWithin2OfActivating": true,
       "mpBonus": 2,
-      "wiredStatus": "testready"
+      "wiredStatus": "wired"
     },
     "Guerilla Warfare": {
       "type": "ccEffect",
@@ -1254,7 +1254,7 @@
       "type": "ccEffect",
       "label": "Up to 3 TROOPERS Hidden, Surge Stun (you Hidden auto)",
       "applyHide": true,
-      "wiredStatus": "testready"
+      "wiredStatus": "wired"
     },
     "Definition: 'Love'": {
       "type": "ccEffect",
@@ -1560,7 +1560,7 @@
       },
       "vpGainSelf": 3,
       "vpGainOpponent": 3,
-      "wiredStatus": "testready"
+      "wiredStatus": "wired"
     },
     "Comm Disruption": {
       "type": "ccEffect",
@@ -1657,14 +1657,14 @@
       "label": "Claim the initiative token; then exhaust 1 of your Deployment cards",
       "claimInitiative": true,
       "exhaustOneDeploymentCard": true,
-      "wiredStatus": "testready"
+      "wiredStatus": "wired"
     },
     "Hostile Negotiation": {
       "type": "ccEffect",
       "label": "Discard 1 random Command card from your hand; opponent discards 2 random from their hand",
       "discardRandomFromHand": 1,
       "opponentDiscardRandomFromHand": 2,
-      "wiredStatus": "testready"
+      "wiredStatus": "wired"
     },
     "De Wanna Wanga": {
       "type": "ccEffect",
