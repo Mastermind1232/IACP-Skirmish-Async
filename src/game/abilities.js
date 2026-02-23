@@ -1574,16 +1574,23 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: chooseAdjacentHostileThen — choose one adjacent hostile figure, apply damage and/or strain.
+  // Supports: damage, strain, scaleStrainToRound, weaken/stun/bleed (conditions on target), selfStrain (cost).
   // First call: finds adjacent hostiles; if exactly 1, auto-resolves; if 2+, returns requiresChoice so a picker is shown.
   // Second call: context.chosenFigureKey is set (from pendingCcChoice.choiceValues[choiceIndex]); applies directly.
   if (entry.type === 'ccEffect' && entry.chooseAdjacentHostileThen && (entry.chooseAdjacentHostileThen.damage > 0 || entry.chooseAdjacentHostileThen.strain > 0)) {
     const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
-    const { damage = 0, strain = 0 } = entry.chooseAdjacentHostileThen;
+    const cah = entry.chooseAdjacentHostileThen;
+    const { damage = 0, selfStrain = 0, scaleStrainToRound = false } = cah;
+    const strain = scaleStrainToRound ? (game?.round || 1) : (cah.strain || 0);
     const totalDamage = damage + strain;
+    const targetConditions = [
+      ...(cah.weaken ? ['Weaken'] : []),
+      ...(cah.stun ? ['Stun'] : []),
+      ...(cah.bleed ? ['Bleed'] : []),
+    ];
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const oppNum = playerNum === 1 ? 2 : 1;
-    const strainPart = strain > 0 ? ` and ${strain} Strain` : '';
-    // Shared: apply damage/strain to a specific figure key
+    // Shared: apply damage/strain/conditions to target; optionally apply selfStrain to activating figure
     const applyToFigureKey = (targetFk) => {
       if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
       const targetMsgId = findMsgIdForFigureKey(game, oppNum, targetFk, dcMessageMeta);
@@ -1597,14 +1604,44 @@ export function resolveAbility(abilityId, context) {
       const hs = healthState[targetIdx];
       if (!Array.isArray(hs) || hs.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for target.' };
       const [cur, max] = hs;
-      const newCur = Math.max(0, (cur ?? max ?? 0) - totalDamage);
-      healthState[targetIdx] = [newCur, max];
+      healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - totalDamage), max];
       dcHealthState.set(targetMsgId, healthState);
       const dcMessageIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
+      const dcList2 = oppNum === 1 ? game.p1DcList : game.p2DcList;
       const idx2 = (dcMessageIds || []).indexOf(targetMsgId);
-      if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...healthState];
-      return { applied: true, logMessage: `Hostile figure suffered ${damage} Damage${strainPart} (${totalDamage} total).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [targetMsgId] };
+      if (idx2 >= 0 && dcList2?.[idx2]) dcList2[idx2].healthState = [...healthState];
+      // Apply conditions to target
+      if (targetConditions.length > 0) {
+        game.figureConditions = game.figureConditions || {};
+        const existing = game.figureConditions[targetFk] || [];
+        const toAdd = targetConditions.filter((c) => !existing.includes(c));
+        if (toAdd.length > 0) game.figureConditions[targetFk] = [...existing, ...toAdd];
+      }
+      // Apply self-strain to activating figure(s)
+      const refreshIds = [targetMsgId];
+      let selfStrainMsg = '';
+      if (selfStrain > 0) {
+        const selfMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+        if (selfMsgId && dcHealthState) {
+          const selfMeta = dcMessageMeta.get(selfMsgId);
+          const selfKeys = selfMeta ? getFigureKeysForDcMsg(game, playerNum, selfMeta) : [];
+          const selfHs = (dcHealthState.get(selfMsgId) || []).slice();
+          for (let si = 0; si < selfKeys.length; si++) {
+            const shs = selfHs[si];
+            if (Array.isArray(shs) && shs.length >= 1) {
+              const [sCur, sMax] = shs;
+              selfHs[si] = [Math.max(0, (sCur ?? sMax ?? 0) - selfStrain), sMax];
+            }
+          }
+          dcHealthState.set(selfMsgId, selfHs);
+          if (!refreshIds.includes(selfMsgId)) refreshIds.push(selfMsgId);
+          selfStrainMsg = ` You suffered ${selfStrain} Strain.`;
+        }
+      }
+      const strainLabel = strain > 0 ? (damage > 0 ? ` and ${strain} Strain` : `${strain} Strain`) : '';
+      const dmgLabel = damage > 0 ? `${damage} Damage` : '';
+      const condPart = targetConditions.length > 0 ? `; target gains ${targetConditions.join(', ')}` : '';
+      return { applied: true, logMessage: `Hostile suffered ${dmgLabel}${strainLabel}${condPart}.${selfStrainMsg}`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
     };
     // Second pass: user already picked a figure
     if (chosenFigureKey) return applyToFigureKey(chosenFigureKey);

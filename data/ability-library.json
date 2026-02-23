@@ -548,9 +548,11 @@
     },
     "Force Drain": {
       "type": "ccEffect",
-      "label": "One hostile within 2 spaces suffers 3 Damage (Stunned/Weakened and recover 3 if FORCE USER manual)",
+      "label": "Hostile within 2: 3 Damage + Stun + Weaken (recover 3 HP if FORCE USER manual)",
       "chooseAdjacentHostileThen": {
-        "damage": 3
+        "damage": 3,
+        "stun": true,
+        "weaken": true
       },
       "wiredStatus": "partial"
     },
@@ -884,11 +886,12 @@
     },
     "Grisly Contest": {
       "type": "ccEffect",
-      "label": "Adjacent hostile suffers 2 Damage (you suffer 2 Strain manual)",
+      "label": "Adjacent hostile suffers 2 Damage; you suffer 2 Strain",
       "chooseAdjacentHostileThen": {
-        "damage": 2
+        "damage": 2,
+        "selfStrain": 2
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Dirty Trick": {
       "type": "ccEffect",
@@ -978,9 +981,10 @@
     },
     "Toxic Dart": {
       "type": "ccEffect",
-      "label": "One hostile within 3 and LOS suffers 1 Strain (Weaken and range manual)",
+      "label": "Hostile within 3 LOS: 1 Strain + Weaken (adjacent auto-resolved; non-adjacent manual)",
       "chooseAdjacentHostileThen": {
-        "strain": 1
+        "strain": 1,
+        "weaken": true
       },
       "wiredStatus": "partial"
     },
@@ -1025,17 +1029,19 @@
     },
     "Force Lightning": {
       "type": "ccEffect",
-      "label": "One hostile within 2 suffers 2 Damage (figures adjacent to it 2 Damage, Stun manual)",
+      "label": "Hostile within 2: 2 Damage + Stun (adjacent-to-target splash 2 Damage + Stun manual)",
       "chooseAdjacentHostileThen": {
-        "damage": 2
+        "damage": 2,
+        "stun": true
       },
       "wiredStatus": "partial"
     },
     "Eerie Visage": {
       "type": "ccEffect",
-      "label": "Each hostile with LOS suffers 1 Strain, Weakened (one adjacent auto; rest manual)",
+      "label": "Each hostile with LOS: 1 Strain + Weaken (adjacent auto-resolved; non-adjacent manual)",
       "chooseAdjacentHostileThen": {
-        "strain": 1
+        "strain": 1,
+        "weaken": true
       },
       "wiredStatus": "partial"
     },
@@ -1063,9 +1069,10 @@
     },
     "Out of Time": {
       "type": "ccEffect",
-      "label": "One hostile within 3 LOS suffers Strain = round (manual)",
+      "label": "Hostile within 3 LOS: Strain = round number (adjacent auto-resolved; non-adjacent manual)",
       "chooseAdjacentHostileThen": {
-        "strain": 1
+        "strain": 1,
+        "scaleStrainToRound": true
       },
       "wiredStatus": "partial"
     },
@@ -1087,11 +1094,12 @@
     },
     "Disarm": {
       "type": "ccEffect",
-      "label": "When adjacent hostile Bleeding from your attack: 1 Damage Weakened (manual)",
+      "label": "Adjacent hostile Bleeding from your attack: 1 Damage + Weaken (timing honored by player)",
       "chooseAdjacentHostileThen": {
-        "damage": 1
+        "damage": 1,
+        "weaken": true
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Miracle Worker": {
       "type": "ccEffect",
