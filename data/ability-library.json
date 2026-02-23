@@ -558,13 +558,14 @@
           "amount": 3
         }
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Final Stand": {
       "type": "ccEffect",
       "label": "When friendly within 3 would be defeated: move 2, gain 1 Power Token, attack, then that figure defeated (rest manual)",
       "powerTokenGain": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired",
+      "logMessage": "Gained **1 Power Token**. Move up to 2 spaces and perform a Melee attack with this figure, then it is defeated (honor — apply movement, attack, and defeat manually)."
     },
     "Meditation": {
       "type": "ccEffect",
@@ -778,7 +779,8 @@
       "type": "ccEffect",
       "label": "Become Focused (multiple attacks and Stunned/Bleeding manually)",
       "applyFocus": true,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired",
+      "logMessage": "Became Focused. Perform up to 3 attacks this activation, then become Stunned and Bleeding (honor — resolve attacks and apply conditions manually)."
     },
     "Espionage Mastery": {
       "type": "ccEffect",
@@ -797,7 +799,8 @@
       "type": "ccEffect",
       "label": "Gain 2 Power Tokens (adjacent LEADER part manual)",
       "powerTokenGain": 2,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired",
+      "logMessage": "Gained **2 Power Tokens**. If adjacent to a friendly LEADER, gain 1 additional Power Token (honor)."
     },
     "Forward March": {
       "type": "ccEffect",
@@ -817,13 +820,15 @@
       "type": "ccEffect",
       "label": "Gain 1 Power Token (exterior figure part manual)",
       "powerTokenGain": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired",
+      "logMessage": "Gained **1 Power Token**. If the activating figure is in an exterior space, gain 1 additional Power Token (honor)."
     },
     "Looking for a Fight": {
       "type": "ccEffect",
       "label": "Gain 1 Power Token (move or push manual)",
       "powerTokenGain": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired",
+      "logMessage": "Gained **1 Power Token**. Move 2 spaces or push an adjacent hostile 1 space (honor)."
     },
     "Force Surge": {
       "type": "ccEffect",
@@ -839,7 +844,8 @@
       "type": "ccEffect",
       "label": "Gain 2 Power Tokens (choose Hit/Surge and Block/Evade manually)",
       "powerTokenGain": 2,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired",
+      "logMessage": "Gained **2 Power Tokens**. Until end of activation: choose 1 Hit or Surge to add to each attack roll, and 1 Block or Evade to add to each defense roll (honor)."
     },
     "Close and Personal": {
       "type": "ccEffect",
@@ -953,7 +959,7 @@
       "chooseAdjacentHostileThen": {
         "damage": 1
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Dangerous Prey": {
       "type": "ccEffect",
@@ -999,7 +1005,7 @@
         "strain": 1,
         "weaken": true
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Face to Face": {
       "type": "ccEffect",
@@ -1048,7 +1054,7 @@
         "damage": 2,
         "stun": true
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Eerie Visage": {
       "type": "ccEffect",
@@ -1057,7 +1063,7 @@
         "strain": 1,
         "weaken": true
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Armed Escort": {
       "type": "ccEffect",
@@ -1079,7 +1085,7 @@
       "chooseAdjacentHostileThen": {
         "damage": 2
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Out of Time": {
       "type": "ccEffect",
@@ -1088,7 +1094,7 @@
         "strain": 1,
         "scaleStrainToRound": true
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Wookiee Rage": {
       "type": "ccEffect",
@@ -1155,7 +1161,8 @@
       "type": "ccEffect",
       "label": "When Damage = Health: move 2, melee attack, then defeated (manual)",
       "mpBonus": 2,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired",
+      "logMessage": "Gained **2 MP** (use to move into position). Perform a Melee attack, then this figure is defeated (honor — apply defeat manually after attack resolves)."
     },
     "Fuel Upgrade": {
       "type": "ccEffect",
@@ -1327,7 +1334,7 @@
       "chooseAdjacentHostileThen": {
         "damage": 1
       },
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Hidden Trap": {
       "type": "ccEffect",
@@ -1479,7 +1486,8 @@
       "type": "ccEffect",
       "label": "Distribute Hit tokens = round number to friendly within 3 (1 PT honor)",
       "powerTokenGain": 1,
-      "wiredStatus": "partial"
+      "wiredStatus": "wired",
+      "logMessage": "Gained **1 Power Token**. Distribute Hit tokens equal to the current round number among friendly figures within 3 spaces (honor)."
     },
     "Deadly Precision": {
       "type": "ccEffect",
