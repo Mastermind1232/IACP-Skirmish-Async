@@ -507,7 +507,7 @@ export async function handleCombatReroll(interaction, ctx) {
 
 /** Returns [{type, index}] of tokens the role is allowed to spend */
 function getEligibleTokens(game, figureKey, role) {
-  const allowed = role === 'attacker' ? ['Hit', 'Surge'] : ['Block', 'Evade'];
+  const allowed = role === 'attacker' ? ['Hit', 'Surge', 'Wild'] : ['Block', 'Evade', 'Wild'];
   return (game.figurePowerTokens?.[figureKey] || [])
     .map((type, index) => ({ type, index }))
     .filter(t => allowed.includes(t.type));
@@ -519,7 +519,7 @@ async function sendTokenWindow(thread, gameId, role, tokens, displayName) {
   const btns = tokens.slice(0, 4).map(({ type, index }) =>
     new ButtonBuilder()
       .setCustomId(`combat_token_${gameId}_${prefix}_${index}`)
-      .setLabel(`Spend ${type} (+1 ${type})`)
+      .setLabel(type === 'Wild' ? 'Wild (choose type)' : `Spend ${type} (+1 ${type})`)
       .setStyle(ButtonStyle.Secondary)
   );
   btns.push(
@@ -530,6 +530,21 @@ async function sendTokenWindow(thread, gameId, role, tokens, displayName) {
   );
   await thread.send({
     content: `**Power Token — ${role === 'attacker' ? 'Attacker' : 'Defender'}** (${displayName}): spend a token or skip.`,
+    components: [new ActionRowBuilder().addComponents(btns)],
+  });
+}
+
+/** Sends Wild type selection: attacker picks Hit/Surge; defender picks Block/Evade */
+async function sendWildTypeWindow(thread, gameId, role) {
+  const types = role === 'attacker' ? ['Hit', 'Surge'] : ['Block', 'Evade'];
+  const btns = types.map(t =>
+    new ButtonBuilder()
+      .setCustomId(`combat_token_${gameId}_wild_${t.toLowerCase()}`)
+      .setLabel(`+1 ${t}`)
+      .setStyle(ButtonStyle.Secondary)
+  );
+  await thread.send({
+    content: '**Wild token** — Choose which type to apply:',
     components: [new ActionRowBuilder().addComponents(btns)],
   });
 }
@@ -792,7 +807,8 @@ export async function handleCombatSurge(interaction, ctx) {
  */
 export async function handleCombatToken(interaction, ctx) {
   const { getGame, replyIfGameEnded, saveGames } = ctx;
-  const m = interaction.customId.match(/^combat_token_([^_]+)_(att|def)_(.+)$/);
+  // Match both att/def (spend/skip) and wild (type resolution) patterns
+  const m = interaction.customId.match(/^combat_token_([^_]+)_(att|def|wild)_(.+)$/);
   if (!m) return;
   const [, gameId, role, choice] = m;
   const game = getGame(gameId);
@@ -801,6 +817,24 @@ export async function handleCombatToken(interaction, ctx) {
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) return;
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+
+  // Wild type resolution: combat_token_{gameId}_wild_{hit|surge|block|evade}
+  if (role === 'wild') {
+    if (!combat.pendingWildRole || combat.pendingWildTokenIndex == null) return;
+    const typeMap = { hit: 'Hit', surge: 'Surge', block: 'Block', evade: 'Evade' };
+    const resolvedType = typeMap[choice];
+    if (!resolvedType) return;
+    applyTokenBonus(combat, resolvedType);
+    const figKey = combat.pendingWildRole === 'attacker' ? combat.attackerFigureKey : combat.target.figureKey;
+    removeSpentToken(game, figKey, combat.pendingWildTokenIndex);
+    await thread.send(`**Power Token spent:** Wild → +1 ${resolvedType}`);
+    const completedRole = combat.pendingWildRole;
+    combat.pendingWildRole = null;
+    combat.pendingWildTokenIndex = null;
+    await advanceTokenPhase(thread, game, combat, completedRole, ctx);
+    saveGames();
+    return;
+  }
 
   const isAttacker = role === 'att';
   const expectedPhase = isAttacker ? 'attacker' : 'defender';
@@ -825,6 +859,15 @@ export async function handleCombatToken(interaction, ctx) {
   const tokens = game.figurePowerTokens?.[figureKey] || [];
   const tokenType = tokens[tokenIndex];
   if (!tokenType) return;
+
+  // Wild: prompt for type selection first
+  if (tokenType === 'Wild') {
+    combat.pendingWildRole = expectedPhase;
+    combat.pendingWildTokenIndex = tokenIndex;
+    await sendWildTypeWindow(thread, game.gameId, expectedPhase);
+    saveGames();
+    return;
+  }
 
   applyTokenBonus(combat, tokenType);
   removeSpentToken(game, figureKey, tokenIndex);

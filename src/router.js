@@ -35,6 +35,7 @@ const BUTTON_PREFIXES = [
   'combat_roll_',
   'combat_surge_',
   'combat_reroll_',
+  'combat_token_',
   'bleed_accept_',
   'bleed_prevent_',
   'status_phase_',
