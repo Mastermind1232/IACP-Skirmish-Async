@@ -265,22 +265,13 @@ export async function handleKillGame(interaction, ctx) {
     await interaction.followUp({ content: 'Only players in this game can kill it.', ephemeral: true });
     return;
   }
-  await interaction.deferReply({ ephemeral: true });
   try {
     await deleteGameChannelsAndGame(game, gameId, ctx);
-    try {
-      await interaction.editReply({ content: `Game **IA Game #${gameId}** deleted. All channels removed.` });
-    } catch {
-      // Channel was deleted, reply fails - ignore
-    }
+    await interaction.followUp({ content: `Game **IA Game #${gameId}** deleted. All channels removed.`, ephemeral: true }).catch(() => {});
   } catch (err) {
     console.error('Kill game error:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'kill_game');
-    try {
-      await interaction.editReply({ content: `Failed to delete: ${err.message}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
-    } catch {
-      // ignore
-    }
+    await interaction.followUp({ content: `Failed to delete: ${err.message}`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
 }
 

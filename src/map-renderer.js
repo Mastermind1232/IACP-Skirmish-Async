@@ -166,10 +166,10 @@ export async function renderMap(mapId, options = {}) {
     const coordFilter = showGridOnlyOnCoords
       ? new Set((Array.isArray(showGridOnlyOnCoords) ? showGridOnlyOnCoords : []).map((c) => String(c).toLowerCase()))
       : null;
-    ctx.fillStyle = useBlackGrid ? '#000000' : 'rgba(0,0,0,0.7)';
+    ctx.fillStyle = useBlackGrid ? '#8B35C8' : 'rgba(107,33,168,0.85)';
     ctx.strokeStyle = useBlackGrid ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.9)';
     ctx.lineWidth = useBlackGrid ? 2.5 : 2;
-    ctx.font = `bold ${Math.max(9, Math.round(11 * scale))}px "${FONT_FAMILY}"`;
+    ctx.font = `bold ${Math.max(8, Math.round(10 * scale))}px "${FONT_FAMILY}"`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 

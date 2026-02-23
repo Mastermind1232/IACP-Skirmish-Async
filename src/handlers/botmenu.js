@@ -118,14 +118,13 @@ export async function handleBotmenuArchiveYes(interaction, ctx) {
     await interaction.followUp({ content: 'Game not found or already deleted.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.deferReply({ ephemeral: true });
   try {
     await deleteGameChannelsAndGame(game, gameId, ctx);
-    await interaction.editReply({ content: `Game **IA Game #${gameId}** archived. Channels removed.` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `Game **IA Game #${gameId}** archived. Channels removed.`, ephemeral: true }).catch(() => {});
   } catch (err) {
     console.error('Archive error:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'botmenu_archive');
-    await interaction.editReply({ content: `Failed: ${err.message}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `Failed: ${err.message}`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
 }
 
@@ -147,14 +146,13 @@ export async function handleBotmenuKillYes(interaction, ctx) {
     await interaction.followUp({ content: 'You are not allowed to kill this game.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.deferReply({ ephemeral: true });
   try {
     await deleteGameChannelsAndGame(game, gameId, ctx);
-    await interaction.editReply({ content: `Game **IA Game #${gameId}** deleted. All channels removed.` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `Game **IA Game #${gameId}** deleted. All channels removed.`, ephemeral: true }).catch(() => {});
   } catch (err) {
     console.error('Kill game error:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'botmenu_kill');
-    await interaction.editReply({ content: `Failed: ${err.message}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `Failed: ${err.message}`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
 }
 
