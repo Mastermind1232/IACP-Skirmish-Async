@@ -271,10 +271,20 @@ From **docs/RULES_REFERENCE.md** and **docs/consolidated-rules-raw.txt**:
 
 ---
 
-## Progress (~7% of CCs auto; ~90% of those with abilityId)
+## Progress (~98% of CC library entries wired)
 
 - **Surge:** 100% — all surge abilities resolved.
-- **CC effects:** 298 total; 59 have abilityId; ~59 fully or partially automated.
-- **CCs with automation:** Draw (6 incl. Planning, Black Market Prices), conditional draw (2), MP bonus (9 incl. Advance Warning), Focus (2 incl. Meditation), Power Token gain (1), Rally (discardHarmfulConditions), Regroup (discardHarmfulFromAdjacentFigures), Recovery (recoverDamage), Heart of Freedom, Price of Glory, Worth Every Credit (discardUpToNHarmful + mpBonus combo), Apex Predator (Focus + Hide + 2 Power Tokens + 2 MP; recovery on defeat manual), Against the Odds (1), Hit and Run (mpAfterAttack), Beatdown (nextAttacksBonusHits), Maximum Firepower (nextAttacksBonusHits), Size Advantage (nextAttacksBonusHits + nextAttacksBonusConditions; target SMALL manual), Blitz (attackSurgeBonus), Master Operative (applyFocus + attackSurgeBonus), Primary Target (applyFocus + attackBonusHits; highest-cost target manual), Bladestorm (attackSurgeBonus; blast manual), Camouflage (applyHideWhenDefending), Positioning Advantage (attackBonusHits), Assassinate (attackBonusHits), Deathblow (attackBonusHits; +2 vs Ranged manual), Deadeye (attackAccuracyBonus), Lock On (attackAccuracyBonus; -1 Dodge/Evade manual), Heavy Ordnance (attackBonusHits vs figure), Explosive Weaponry (attackBonusBlast), Tools for the Job (attackBonusDice), Wild Attack (attackBonusDice + defenseBonusDiceFromAttacker), Wild Fire (defensePoolRemoveMax), One in a Million (defensePoolRemoveAll when not attacker activation), Parry (applyDefenseBonusBlock; +1 Block default), Spinning Kick (attackBonusSurgeAbilities), Cruel Strike (nextAttackBonusSurgeAbilities), Brace Yourself (applyDefenseBonusBlock; when not attacker's activation), Take Position (roundDefenseBonusBlock), Take Cover (roundDefenseBonusBlock + roundDefenseBonusEvade), Survival Instincts (roundDefenseBonusBlock + roundDefenseBonusEvade), Emergency Aid (recoverDamageToAdjacent), Hour of Need (recoverDamageFromRound), Brace for Impact (defenseBonusDice), Stealth Tactics (defenseBonusDice white), Knowledge and Defense (defenseBonusDice black), Fool Me Once (clearOpponentDiscard; draw 1 if SPY), Honoring the Fallen (attackBonusHitsFromDefeatedFriendly), Black Market Prices (draw 2, discard 1, gain VP = cost).
+- **CC effects:** 289 total; 248 have explicit `abilityId`; all 289 have a library entry (card name = id). **283 wired, 5 partial, 1 unwired.**
+- All 289 CCs produce either a real automated effect or a helpful informational logMessage. “Resolve manually” only appears when the game context is missing (no active activation, no combat, etc.).
 
-Phase 2 next: add more `type` values and branches in `resolveAbility` (e.g. more CC “draw N” effects, DC specials by name) so more effects run automatically instead of showing "Resolve manually".
+### Remaining partial cards (need new mechanics to fully wire)
+
+| Card | Why partial | What's needed |
+|------|-------------|---------------|
+| **Foresee** | `draw:1` fires unconditionally; actual draw is conditional on discarded card cost ≤1 | Conditional draw UI (inspect opponent top-of-deck) |
+| **Devotion** | `draw:1` draws randomly; should search deck for trait-matching card | Deck search UI |
+| **Built on Hope** | `draw:1` draws top card; should show top 3 and let player pick 1 | Top-N-pick UI |
+| **Hidden Trap** | `chooseAdjacentHostileThen` handler targets hostile figures, not spaces | Space-targeting flow (choose terminal, apply AoE to adjacent) |
+| **Lightbow** | `attackAccuracyBonus+Pierce` require active `pendingCombat`; Lightbow creates a new attack | Standalone attack-declaration flow |
+
+Phase 3: space-targeting flow (reuse movement minimap pattern) would unlock Hidden Trap and other area-effect cards. Deck-search UI would unlock Foresee/Devotion/Built on Hope.

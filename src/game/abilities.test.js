@@ -915,3 +915,117 @@ test('resolveAbility Close and Personal uses entry logMessage and grants 2 MP', 
   assert.ok(result.logMessage?.includes('Melee'));
   assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
 });
+
+// ── Tests for recently promoted partial→wired cards ───────────────────────────
+
+test('resolveAbility Wild Fury applies Focus and uses entry logMessage', () => {
+  const msgId = 'msg-wf';
+  const game = {
+    gameId: 'g-wf2',
+    dcActionsData: { [msgId]: {} },
+    p1DcMessageIds: [msgId],
+    p1DcList: [{ dcName: 'Darth Vader', healthState: [[8, 10]] }],
+    figureConditions: {},
+    figurePositions: { 1: { 'Darth Vader-1-0': 'n8' }, 2: {} },
+    selectedMap: { id: 'mos-eisley-outskirts' },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-wf2', playerNum: 1, dcName: 'Darth Vader', displayName: 'Darth Vader [DG 1]' }]]);
+  const result = resolveAbility('Wild Fury', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.startsWith('Became Focused.'));
+  assert.ok(result.logMessage?.includes('attacks') || result.logMessage?.includes('manually'));
+  assert.ok(game.figureConditions['Darth Vader-1-0']?.includes('Focus'));
+});
+
+test('resolveAbility Dying Lunge grants 2 MP and uses entry logMessage', () => {
+  const msgId = 'msg-dl';
+  const game = { gameId: 'g-dl', dcActionsData: { [msgId]: {} } };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-dl', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const result = resolveAbility('Dying Lunge', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
+  assert.ok(result.logMessage?.includes('2 MP'));
+  assert.ok(result.logMessage?.includes('defeated') || result.logMessage?.includes('Melee'));
+});
+
+test('resolveAbility Out of Time applies strain = round number via scaleStrainToRound', () => {
+  const msgId = 'msg-oot';
+  const hostileMsgId = 'msg-oot-hostile';
+  const healthState = [[8, 10]];
+  const dcHealthState = new Map([[hostileMsgId, healthState]]);
+  const game = {
+    gameId: 'g-oot',
+    round: 4,
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: { 'Obi-Wan-1-0': 'o8' }, 2: { 'Stormtroopers-2-0': 'p8' } },
+    dcActionsData: { [msgId]: {} },
+    p2DcMessageIds: [hostileMsgId],
+    p2DcList: [{ dcName: 'Stormtroopers', healthState: [[8, 10]] }],
+  };
+  const dcMessageMeta = new Map([
+    [msgId, { gameId: 'g-oot', playerNum: 1, dcName: 'Obi-Wan', displayName: 'Obi-Wan [DG 1]' }],
+    [hostileMsgId, { gameId: 'g-oot', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 2]' }],
+  ]);
+  const result = resolveAbility('Out of Time', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(healthState[0], [4, 10]); // 8 - 4 (round 4) = 4
+});
+
+test('resolveAbility Force Drain applies damage+Stun+Weaken and heals self if FORCE USER', () => {
+  const msgId = 'msg-fd';
+  const hostileMsgId = 'msg-fd-hostile';
+  const selfHealth = [[6, 10]];
+  const hostileHealth = [[8, 10]];
+  const dcHealthState = new Map([
+    [msgId, selfHealth],
+    [hostileMsgId, hostileHealth],
+  ]);
+  const game = {
+    gameId: 'g-fd',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: { 'Luke Skywalker-1-0': 'o8' }, 2: { 'Stormtroopers-2-0': 'p8' } },
+    dcActionsData: { [msgId]: {} },
+    p1DcMessageIds: [msgId],
+    p1DcList: [{ dcName: 'Luke Skywalker', healthState: [[6, 10]] }],
+    p2DcMessageIds: [hostileMsgId],
+    p2DcList: [{ dcName: 'Stormtroopers', healthState: [[8, 10]] }],
+    figureConditions: {},
+  };
+  const dcMessageMeta = new Map([
+    [msgId, { gameId: 'g-fd', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }],
+    [hostileMsgId, { gameId: 'g-fd', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 2]' }],
+  ]);
+  const result = resolveAbility('Force Drain', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(hostileHealth[0], [5, 10]); // 8 - 3 = 5
+  const fk = 'Stormtroopers-2-0';
+  assert.ok(game.figureConditions[fk]?.includes('Stun'));
+  assert.ok(game.figureConditions[fk]?.includes('Weaken'));
+  // Luke Skywalker has FORCE USER trait → heals 3: 6 + 3 = 9
+  // Handler uses .slice() so we read back through dcHealthState (the Map was updated)
+  assert.deepStrictEqual(dcHealthState.get(msgId)[0], [9, 10]);
+});
+
+test('resolveAbility Force Lightning applies 2 Damage and Stun to adjacent hostile', () => {
+  const msgId = 'msg-fl';
+  const hostileMsgId = 'msg-fl-hostile';
+  const hostileHealth = [[6, 8]];
+  const dcHealthState = new Map([[hostileMsgId, hostileHealth]]);
+  const game = {
+    gameId: 'g-fl',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: { 'Emperor Palpatine-1-0': 'o8' }, 2: { 'Stormtroopers-2-0': 'p8' } },
+    dcActionsData: { [msgId]: {} },
+    p2DcMessageIds: [hostileMsgId],
+    p2DcList: [{ dcName: 'Stormtroopers', healthState: [[6, 8]] }],
+    figureConditions: {},
+  };
+  const dcMessageMeta = new Map([
+    [msgId, { gameId: 'g-fl', playerNum: 1, dcName: 'Emperor Palpatine', displayName: 'Emperor Palpatine [DG 1]' }],
+    [hostileMsgId, { gameId: 'g-fl', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 2]' }],
+  ]);
+  const result = resolveAbility('Force Lightning', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(hostileHealth[0], [4, 8]); // 6 - 2 = 4
+  assert.ok(game.figureConditions['Stormtroopers-2-0']?.includes('Stun'));
+});
