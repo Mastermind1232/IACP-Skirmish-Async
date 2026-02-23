@@ -799,15 +799,17 @@
     },
     "Forward March": {
       "type": "ccEffect",
-      "label": "You gain 1 MP (each friendly within 2 spaces manual)",
-      "mpBonus": 1,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Each friendly figure within 2 spaces of you gains 1 MP",
+      "logMessage": "**Forward March** — Each of your friendly figures within 2 spaces of the activating VEHICLE figure gains 1 movement point. Apply 1 MP to each qualifying figure’s movement bank manually from their DC.",
+      "wiredStatus": "wired"
     },
     "Let's Make a Deal": {
       "type": "ccEffect",
-      "label": "Become Focused (pay VP / -X Hits manual)",
-      "applyFocus": true,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "While defending: pay X VP for -X Hits; then become Focused",
+      "logMessage": "**Let’s Make a Deal** — While defending, pay your opponent X Victory Points to apply -X Hits to the attack results (VP must be applied manually using your channel). Then, Hondo Ohnaka becomes Focused. Apply the Focused condition manually to Hondo’s figure.",
+      "wiredStatus": "wired"
     },
     "Marked Territory": {
       "type": "ccEffect",
@@ -1288,9 +1290,10 @@
     },
     "Droid Mastery": {
       "type": "ccEffect",
-      "label": "J4X Focused then attack or deploy (manual)",
-      "applyFocus": true,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "J4X-7 becomes Focused, then interrupts to attack; or deploy J4X-7 if not in play",
+      "logMessage": "**Droid Mastery** — J4X-7 becomes Focused. J4X-7 may then interrupt to perform an attack. If J4X-7 is not in play, deploy it to Jarrod Kelvin’s space instead. Apply the Focused condition to J4X-7 manually and trigger the interrupt from J4X-7’s DC.",
+      "wiredStatus": "wired"
     },
     "Face Me!": {
       "type": "ccEffect",
