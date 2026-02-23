@@ -148,5 +148,9 @@ export async function handleInteractChoice(interaction, ctx) {
       gameLogMessageId: logMsg?.id,
     });
   }
+  // Bleeding: trigger after Interact action resolves
+  if ((game.figureConditions?.[figureKey] || []).includes('Bleed') && ctx.sendBleedingPrompt) {
+    await ctx.sendBleedingPrompt(game, interaction.channel, figureKey, playerNum, displayName);
+  }
   saveGames();
 }

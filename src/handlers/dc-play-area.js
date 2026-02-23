@@ -624,6 +624,16 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       gameLogMessageId: logMsg?.id,
     });
   }
+  // Bleeding: trigger after action-consuming CC plays (Special Action or Double Action)
+  if ((timingLabel === 'Special Action' || timingLabel === 'Double Action') && ctx.sendBleedingPrompt) {
+    const actionsData = game.dcActionsData?.[msgId];
+    const selectedFigure = actionsData?.selectedFigure ?? 0;
+    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+    const figureKey = `${meta.dcName}-${dgIndex}-${selectedFigure}`;
+    if ((game.figureConditions?.[figureKey] || []).includes('Bleed')) {
+      await ctx.sendBleedingPrompt(game, interaction.channel, figureKey, meta.playerNum, meta.displayName || meta.dcName);
+    }
+  }
   saveGames();
 }
 
@@ -810,6 +820,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         startCoord: pos,
         pendingMp: null,
         distanceMessageId: null,
+        pendingBleed: (game.figureConditions?.[figureKey] || []).includes('Bleed'),
       };
       game.moveGridMessageIds = game.moveGridMessageIds || {};
       const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
@@ -1036,6 +1047,15 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     components: [doneRow],
     ephemeral: false,
   }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  // Bleeding: trigger after DC Special action resolves
+  if (buttonKey === 'dc_special_' && ctx.sendBleedingPrompt) {
+    const selectedFigure = actionsData?.selectedFigure ?? 0;
+    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+    const figureKey = `${meta.dcName}-${dgIndex}-${selectedFigure}`;
+    if ((game.figureConditions?.[figureKey] || []).includes('Bleed')) {
+      await ctx.sendBleedingPrompt(game, interaction.channel, figureKey, meta.playerNum, displayName);
+    }
+  }
   saveGames();
 }
 

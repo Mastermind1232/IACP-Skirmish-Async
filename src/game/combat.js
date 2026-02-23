@@ -132,7 +132,10 @@ export function computeCombatResult(combat) {
   const bonusBlock = combat.bonusBlock || 0;
   const bonusEvade = combat.bonusEvade || 0;
   const evadeCancelled = combat.evadeCancelledSurge || 0;
-  const totalAccuracy = roll.acc + surgeA + bonusAcc;
+  // Hidden on defender: -2 accuracy for the attacker
+  const defenderHidden = !!combat.defenderConds?.includes('Hide');
+  const hiddenAccPenalty = defenderHidden ? 2 : 0;
+  const totalAccuracy = roll.acc + surgeA + bonusAcc - hiddenAccPenalty;
   let hit = true;
   let missReason = '';
   if (defRoll.dodge) {
@@ -194,6 +197,7 @@ export function computeCombatResult(combat) {
   }
   if (attackerWeakened) resultText += ` | **Weakened** (attacker -1 dmg)`;
   if (defenderWeakened) resultText += ` | **Weakened** (defender -1 block)`;
+  if (defenderHidden) resultText += ` | **Hidden** (defender -2 accuracy)`;
   if (!hit) resultText += missReason ? ` → **Miss** (${missReason})` : ' → **Miss**';
   else resultText += ` → **${damage} damage**${conditionsText}`;
   if (combat.attackResultReplaceWithStun) resultText += ' (Set for Stun: 0 damage, Stunned)';

@@ -2822,6 +2822,117 @@ function filterCondition(game, figureKey, cond) {
   if (game.figureConditions[figureKey].length === 0) delete game.figureConditions[figureKey];
 }
 
+/** Send a Bleeding damage prompt to the given channel. Offers "Take 1 damage" or "Prevent (discard CC)". */
+async function sendBleedingPrompt(game, channel, figureKey, playerNum, displayName) {
+  const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+  const deckCount = (game[deckKey] || []).length;
+  const acceptBtn = new ButtonBuilder()
+    .setCustomId(`bleed_accept_${game.gameId}_${playerNum}_${figureKey}`)
+    .setLabel('Take 1 damage')
+    .setStyle(ButtonStyle.Danger);
+  const preventBtn = new ButtonBuilder()
+    .setCustomId(`bleed_prevent_${game.gameId}_${playerNum}_${figureKey}`)
+    .setLabel(`Prevent (discard CC, ${deckCount} left)`)
+    .setStyle(ButtonStyle.Primary)
+    .setDisabled(deckCount === 0);
+  const row = new ActionRowBuilder().addComponents(acceptBtn, preventBtn);
+  await channel.send({
+    content: `🩸 **Bleeding** — **${displayName}** suffers 1 damage after resolving their action. Take damage or discard top CC to prevent?`,
+    components: [row],
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+}
+
+/** Handle bleed_accept_ / bleed_prevent_ button clicks. */
+async function handleBleedResolve(interaction) {
+  const match = interaction.customId.match(/^bleed_(accept|prevent)_(\d+)_(1|2)_(.+)$/);
+  if (!match) return;
+  const [, action, gameId, playerNumStr, figureKey] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== playerId && !game.isTestGame) {
+    await interaction.reply({ content: 'Only the figure owner can resolve Bleeding.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  await interaction.deferUpdate();
+  const msgId = findDcMessageIdForFigure(gameId, playerNum, figureKey);
+  const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
+  const figureIndex = figMatch ? parseInt(figMatch[2], 10) : 0;
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+
+  if (action === 'accept') {
+    if (msgId) {
+      const healthState = dcHealthState.get(msgId) || [];
+      const entry = healthState[figureIndex];
+      if (entry) {
+        const [cur, max] = entry;
+        const newCur = Math.max(0, (cur ?? max) - 1);
+        healthState[figureIndex] = [newCur, max ?? newCur];
+        dcHealthState.set(msgId, healthState);
+        const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const idx = (dcIds || []).indexOf(msgId);
+        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+        await logGameAction(game, interaction.client, `🩸 **Bleeding** — **${dcName}** suffered 1 damage.`, { phase: 'ROUND', icon: 'attack' });
+        if (newCur <= 0) {
+          if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figureKey];
+          const opponentPlayerNum = playerNum === 1 ? 2 : 1;
+          const stats = getDcStats(dcName);
+          const effects = getDcEffects()?.[dcName];
+          const figures = stats?.figures ?? 1;
+          const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
+          const vpKey = opponentPlayerNum === 1 ? 'player1VP' : 'player2VP';
+          game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+          game[vpKey].kills += vp;
+          game[vpKey].total += vp;
+          await logGameAction(game, interaction.client, `🩸 **Bleeding** — **${dcName}** was defeated! +${vp} VP to P${opponentPlayerNum}`, { phase: 'ROUND', icon: 'attack' });
+          if (idx >= 0 && isGroupDefeated(game, playerNum, idx)) {
+            const activatedIndices = playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+            if (!activatedIndices.includes(idx)) {
+              if (playerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
+              else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+              await updateActivationsMessage(game, playerNum, interaction.client);
+            }
+          }
+          await checkWinConditions(game, interaction.client);
+        }
+        // Refresh DC embed
+        try {
+          const meta = dcMessageMeta.get(msgId);
+          if (meta) {
+            const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+            const ch = await interaction.client.channels.fetch(channelId);
+            const dcMsg = await ch.messages.fetch(msgId);
+            const exhausted = dcExhaustedState.get(msgId) ?? false;
+            const health = dcHealthState.get(msgId) || [];
+            const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, health, getConditionsForDcMessage(game, meta));
+            await dcMsg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }
+        } catch (err) {
+          console.error('Failed to update DC embed after Bleeding:', err);
+        }
+      }
+    }
+  } else {
+    // prevent: discard top CC from deck
+    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const deck = game[deckKey] || [];
+    if (deck.length === 0) {
+      await interaction.followUp({ content: 'No CCs in deck to discard!', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
+    const discardedCard = deck.splice(0, 1)[0];
+    game[deckKey] = deck;
+    await logGameAction(game, interaction.client, `🩸 **Bleeding** — **${dcName}** prevented 1 damage (discarded **${discardedCard}** from deck top).`, { phase: 'ROUND', icon: 'card' });
+  }
+  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  saveGames();
+}
+
 /** Resolve combat after rolls (and optional surge). Applies damage, VP, updates embeds/board, clears pendingCombat. */
 async function resolveCombatAfterRolls(game, combat, client) {
   // Beatdown / nextAttacksBonusHits: consume one charge and add bonus to this attack
@@ -3040,30 +3151,14 @@ async function resolveCombatAfterRolls(game, combat, client) {
   // Discard consumed conditions post-combat
   if (combat.attackerFigureKey) {
     filterCondition(game, combat.attackerFigureKey, 'Focus');  // Focus consumed after attacking
-    filterCondition(game, combat.attackerFigureKey, 'Hide');   // Attacker breaks stealth by attacking
+    filterCondition(game, combat.attackerFigureKey, 'Hide');   // Attacker loses Hidden after resolving an attack
   }
-  filterCondition(game, combat.target.figureKey, 'Hide');      // Defender's Hide removed when attacked
   const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
-  // Bleed: attacker suffers 1 damage (ignore armor) after their Attack action
-  if (combat.attackerConds?.includes('Bleed') && combat.attackerMsgId != null) {
-    const attMsgId = combat.attackerMsgId;
-    const attFigIdx = combat.attackerFigureIndex ?? 0;
-    const attHS = dcHealthState.get(attMsgId) || [];
-    const attEntry = attHS[attFigIdx];
-    if (attEntry) {
-      const [aC, aM] = attEntry;
-      const aNew = Math.max(0, (aC ?? aM) - 1);
-      attHS[attFigIdx] = [aNew, aM ?? aNew];
-      dcHealthState.set(attMsgId, attHS);
-      const attP = combat.attackerPlayerNum;
-      const bleedDcIds = attP === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const bleedDcList = attP === 1 ? game.p1DcList : game.p2DcList;
-      const bIdx = (bleedDcIds || []).indexOf(attMsgId);
-      if (bIdx >= 0 && bleedDcList?.[bIdx]) bleedDcList[bIdx].healthState = [...attHS];
-      embedRefreshMsgIds.add(attMsgId);
-      await logGameAction(game, client, `**${combat.attackerDisplayName}** suffered 1 damage from Bleeding.`, { phase: 'ROUND', icon: 'attack' });
-    }
+  // Bleed: attacker prompted to take 1 damage or prevent by discarding CC after Attack action
+  if (combat.attackerConds?.includes('Bleed')) {
+    const bleedThread = await client.channels.fetch(combat.combatThreadId);
+    await sendBleedingPrompt(game, bleedThread, combat.attackerFigureKey, combat.attackerPlayerNum, combat.attackerDisplayName);
   }
   // Deflection: if defender took 0 damage (attack hit but was fully blocked), attacker suffers N damage
   const deflectDmg = game.deflectionPending?.[defenderPlayerNum];
@@ -4910,6 +5005,7 @@ client.on('interactionCreate', async (interaction) => {
       FIGURE_LETTERS,
       resolveAbility,
       getNegationResponseButtons,
+      sendBleedingPrompt,
     };
     if (buttonKey === 'dc_activate_') await handleDcActivate(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_unactivate_') await handleDcUnactivate(interaction, dcPlayAreaContext);
@@ -4978,6 +5074,7 @@ client.on('interactionCreate', async (interaction) => {
       getMovementMinimapAttachment,
       buildBoardMapPayload,
       updateDcActionsMessage,
+      sendBleedingPrompt,
       saveGames,
       client,
     };
@@ -5027,6 +5124,11 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'combat_roll_') await handleCombatRoll(interaction, combatContext);
     else if (buttonKey === 'combat_surge_') await handleCombatSurge(interaction, combatContext);
     else if (buttonKey === 'combat_reroll_') await handleCombatReroll(interaction, combatContext);
+    return;
+  }
+
+  if (buttonKey === 'bleed_accept_' || buttonKey === 'bleed_prevent_') {
+    await handleBleedResolve(interaction);
     return;
   }
 
@@ -5181,6 +5283,7 @@ client.on('interactionCreate', async (interaction) => {
       getDcStats,
       updateDcActionsMessage,
       logGameAction,
+      sendBleedingPrompt,
       saveGames,
       pushUndo,
       getMissionTokenLabel,

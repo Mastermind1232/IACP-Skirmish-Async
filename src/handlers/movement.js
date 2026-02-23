@@ -399,5 +399,12 @@ export async function handleMovePick(interaction, ctx) {
       console.error('Failed to update activation minimap after move:', err);
     }
   }
+  // Bleeding: trigger once after first space moved (pendingBleed set when Move action declared)
+  if (moveState.pendingBleed && ctx.sendBleedingPrompt) {
+    moveState.pendingBleed = false;
+    if ((game.figureConditions?.[moveState.figureKey] || []).includes('Bleed')) {
+      await ctx.sendBleedingPrompt(game, interaction.channel, moveState.figureKey, moveState.playerNum, moveState.displayName);
+    }
+  }
   saveGames();
 }

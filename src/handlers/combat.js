@@ -531,7 +531,9 @@ async function proceedAfterRerolls(thread, game, combat, ctx) {
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
   const perDefDieSurge = (combat.bonusSurgePerDefenseDie || 0) * defenseDiceCount;
-  const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0) + perDefDieSurge;
+  // Hidden on attacker: +1 surge
+  const hiddenSurgeBonus = combat.attackerConds?.includes('Hide') ? 1 : 0;
+  const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0) + perDefDieSurge + hiddenSurgeBonus;
   const rawSurge = roll.surge + surgeBonus;
   const roundEvade = game.roundDefenseBonusEvade?.[defPlayerNum] || 0;
   const totalEvade = defRoll.evade + (combat.bonusEvade || 0) + roundEvade;
@@ -575,8 +577,8 @@ async function proceedAfterRerolls(thread, game, combat, ctx) {
     const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
     const roundSurge = game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0;
     const ccSurge = (combat.surgeBonus || 0);
-    const surgeDisplay = (ccSurge > 0 || roundSurge > 0)
-      ? `${roll.surge}${ccSurge ? ` + ${ccSurge} (CC)` : ''}${roundSurge ? ` + ${roundSurge} (round)` : ''} = **${totalSurge}**`
+    const surgeDisplay = (ccSurge > 0 || roundSurge > 0 || hiddenSurgeBonus > 0)
+      ? `${roll.surge}${ccSurge ? ` + ${ccSurge} (CC)` : ''}${roundSurge ? ` + ${roundSurge} (round)` : ''}${hiddenSurgeBonus ? ` + 1 (Hidden)` : ''} = **${totalSurge}**`
       : `**${totalSurge}**`;
     await thread.send({
       content: `**Spend surge?** You have ${surgeDisplay} surge. Choose an ability or Done.`,
