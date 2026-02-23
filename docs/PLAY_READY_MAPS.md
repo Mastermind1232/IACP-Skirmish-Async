@@ -1,11 +1,21 @@
 # Play-Ready Maps (Bot Pool)
 
-Mission A and Mission B count separately. **2** in the play-ready pool so far.
+Mission A and Mission B count separately. **12** in the play-ready pool (6 maps × 2 variants each).
 
 | # | Map | Mission |
 |---|-----|---------|
 | 1 | Mos Eisley Outskirts | A — Get to the Ship |
 | 2 | Mos Eisley Outskirts | B — Smuggled Goods |
+| 3 | Corellian Underground | A |
+| 4 | Corellian Underground | B |
+| 5 | Chopper Base Atollon | A |
+| 6 | Chopper Base Atollon | B |
+| 7 | Lothal Wastes | A |
+| 8 | Lothal Wastes | B |
+| 9 | Development Facility | A |
+| 10 | Development Facility | B |
+| 11 | Devaron Garrison | A |
+| 12 | Devaron Garrison | B |
 
 ---
 

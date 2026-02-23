@@ -23,6 +23,5 @@ When entering Deployment Card ability text in `dc-effects.json` (via the DC Effe
 
 ## Related files
 
-- **dc-stats.json** — Cost, health, figures, speed, attack, defense, specials (per card). Update from physical/Vassal card or IACP reference.
-- **dc-keywords.json** — Keywords that affect rules (e.g. AT-ST → Massive). Used by the bot for movement/LOS.
-- **dc-specials-reference.md** — Reference for special ability names (⚡ special action icon only).
+- **dc-effects.json** — All DC data lives here: cost, health, figures, speed, attack, defense, keywords, surge abilities, specials, and ability text. Edit via the DC Effect Editor tool.
+- **dc-images.json** — DC card image paths.
