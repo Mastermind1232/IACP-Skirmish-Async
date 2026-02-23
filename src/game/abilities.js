@@ -1518,9 +1518,39 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: mpBonus + chooseAdjacentHostileThen (e.g. Force Surge — gain 1 MP then choose adjacent hostile for damage/strain)
+  // Second call (chosenFigureKey set): only apply damage, MP was already granted on first call.
   if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0 && entry.chooseAdjacentHostileThen) {
-    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const cah = entry.chooseAdjacentHostileThen;
+    const { damage = 0, strain = 0 } = cah;
+    const totalDamage = damage + strain;
+    const oppNum = playerNum === 1 ? 2 : 1;
+    // Second call: apply damage/conditions to chosen target (MP was already granted)
+    if (chosenFigureKey) {
+      if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
+      const targetMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
+      if (!targetMsgId) return { applied: false, manualMessage: 'Resolve manually: could not find target.' };
+      const targetMeta = dcMessageMeta.get(targetMsgId);
+      if (!targetMeta) return { applied: false, manualMessage: 'Resolve manually: could not find target.' };
+      const targetKeys = getFigureKeysForDcMsg(game, oppNum, targetMeta);
+      const targetIdx = targetKeys.indexOf(chosenFigureKey);
+      if (targetIdx < 0) return { applied: false, manualMessage: 'Resolve manually: could not find target figure index.' };
+      const healthState = dcHealthState.get(targetMsgId) || [];
+      const hs = healthState[targetIdx];
+      if (!Array.isArray(hs) || hs.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for target.' };
+      const [cur, max] = hs;
+      healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - totalDamage), max];
+      dcHealthState.set(targetMsgId, healthState);
+      const dcMsgIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const dcListArr = oppNum === 1 ? game.p1DcList : game.p2DcList;
+      const idx2 = (dcMsgIds || []).indexOf(targetMsgId);
+      if (idx2 >= 0 && dcListArr?.[idx2]) dcListArr[idx2].healthState = [...healthState];
+      const strainPart2 = strain > 0 ? ` and ${strain} Strain` : '';
+      const tName = targetMeta.displayName || targetMeta.dcName || chosenFigureKey;
+      return { applied: true, logMessage: `**${tName}** suffered ${damage > 0 ? `${damage} Damage${strainPart2}` : `${strain} Strain`}.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [targetMsgId] };
+    }
+    // First call: grant MP, then find adjacent hostiles and auto-apply or offer choice
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     game.movementBank = game.movementBank || {};
@@ -1528,15 +1558,12 @@ export function resolveAbility(abilityId, context) {
     bank.total = (bank.total ?? 0) + entry.mpBonus;
     bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
     game.movementBank[msgId] = bank;
-    const { damage = 0, strain = 0 } = entry.chooseAdjacentHostileThen;
-    const totalDamage = damage + strain;
     if (totalDamage <= 0) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
     const meta = dcMessageMeta.get(msgId);
     if (!meta) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const mapId = game.selectedMap?.id;
     if (!mapId || activatingKeys.length === 0) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
-    const oppNum = playerNum === 1 ? 2 : 1;
     const hostileSet = new Set();
     for (const fk of activatingKeys) {
       const adj = getFiguresAdjacentToTarget(game, fk, mapId);
@@ -1546,9 +1573,20 @@ export function resolveAbility(abilityId, context) {
     }
     const hostiles = [...hostileSet];
     if (hostiles.length === 0) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP. No adjacent hostile.` };
-    if (hostiles.length > 1 || !dcHealthState) {
-      return { applied: true, logMessage: `Gained ${entry.mpBonus} MP. Resolve manually: choose adjacent hostile for ${damage} Damage, ${strain} Strain.` };
+    // Multiple adjacent hostiles: MP is granted; prompt player to pick damage target
+    if (hostiles.length > 1) {
+      const labels = hostiles.map((fk) => {
+        const tMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
+        const tMeta = tMsgId ? dcMessageMeta.get(tMsgId) : null;
+        const baseName = tMeta?.displayName || tMeta?.dcName || fk;
+        const figIdx = parseInt(fk.split('-').pop(), 10);
+        const suffix = isNaN(figIdx) || figIdx === 0 ? '' : ` (${String.fromCharCode(65 + figIdx)})`;
+        return `${baseName}${suffix}`;
+      });
+      return { applied: false, requiresChoice: true, choiceOptions: labels, choiceValues: hostiles };
     }
+    // Exactly 1 adjacent hostile: auto-apply if dcHealthState available
+    if (!dcHealthState) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP. Resolve manually: choose adjacent hostile for ${damage > 0 ? `${damage} Damage` : ''}${strain > 0 ? ` ${strain} Strain` : ''}.` };
     const targetFk = hostiles[0];
     const targetMsgId = findMsgIdForFigureKey(game, oppNum, targetFk, dcMessageMeta);
     if (!targetMsgId) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
@@ -1558,20 +1596,19 @@ export function resolveAbility(abilityId, context) {
     const targetIdx = targetKeys.indexOf(targetFk);
     if (targetIdx < 0) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
     const healthState = dcHealthState.get(targetMsgId) || [];
-    const entry_ = healthState[targetIdx];
-    if (!Array.isArray(entry_) || entry_.length < 1) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
-    const [cur, max] = entry_;
-    const newCur = Math.max(0, (cur ?? max ?? 0) - totalDamage);
-    healthState[targetIdx] = [newCur, max];
+    const hs0 = healthState[targetIdx];
+    if (!Array.isArray(hs0) || hs0.length < 1) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
+    const [cur, max] = hs0;
+    healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - totalDamage), max];
     dcHealthState.set(targetMsgId, healthState);
-    const dcMessageIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
-    const idx = (dcMessageIds || []).indexOf(targetMsgId);
-    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    const dcMsgIds2 = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcListArr2 = oppNum === 1 ? game.p1DcList : game.p2DcList;
+    const idx2 = (dcMsgIds2 || []).indexOf(targetMsgId);
+    if (idx2 >= 0 && dcListArr2?.[idx2]) dcListArr2[idx2].healthState = [...healthState];
     const strainPart = strain > 0 ? ` and ${strain} Strain` : '';
     return {
       applied: true,
-      logMessage: `Gained ${entry.mpBonus} MP. Adjacent hostile suffered ${damage} Damage${strainPart} (${totalDamage} total).`,
+      logMessage: `Gained ${entry.mpBonus} MP. Adjacent hostile suffered ${damage > 0 ? `${damage} Damage${strainPart}` : `${strain} Strain`} (${totalDamage} total).`,
       refreshDcEmbed: true,
       refreshDcEmbedMsgIds: [targetMsgId],
     };
