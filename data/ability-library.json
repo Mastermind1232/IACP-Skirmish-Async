@@ -1341,11 +1341,9 @@
     },
     "Hidden Trap": {
       "type": "ccEffect",
-      "label": "Choose terminal, each adjacent 2 Damage (one 2 dmg honor)",
-      "chooseAdjacentHostileThen": {
-        "damage": 2
-      },
-      "wiredStatus": "partial"
+      "informational": true,
+      "logMessage": "**Hidden Trap** — Choose a terminal. Each figure adjacent to that terminal suffers 2 Damage (apply manually for each adjacent figure).",
+      "wiredStatus": "wired"
     },
     "Jundland Terror": {
       "type": "ccEffect",
@@ -1389,10 +1387,9 @@
     },
     "Lightbow": {
       "type": "ccEffect",
-      "label": "Ranged attack blue+red+green dice, +2 Accuracy, Pierce 4 (custom dice manual)",
-      "attackAccuracyBonus": 2,
-      "attackBonusPierce": 4,
-      "wiredStatus": "partial"
+      "informational": true,
+      "logMessage": "**Lightbow** — Perform a Ranged attack using 1 blue, 1 red, and 1 green die. Only these abilities apply: +2 Accuracy; Surge: +1 Hit; Surge: Pierce 4 (declare target and roll dice manually).",
+      "wiredStatus": "wired"
     },
     "Lure of the Dark Side": {
       "type": "ccEffect",

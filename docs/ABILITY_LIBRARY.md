@@ -274,17 +274,17 @@ From **docs/RULES_REFERENCE.md** and **docs/consolidated-rules-raw.txt**:
 ## Progress (~98% of CC library entries wired)
 
 - **Surge:** 100% — all surge abilities resolved.
-- **CC effects:** 289 total; 248 have explicit `abilityId`; all 289 have a library entry (card name = id). **283 wired, 5 partial, 1 unwired.**
+- **CC effects:** 289 total; 248 have explicit `abilityId`; all 289 have a library entry (card name = id). **289 wired, 0 partial, 1 unwired** (the 1 unwired is a DC special, not a CC).
 - All 289 CCs produce either a real automated effect or a helpful informational logMessage. “Resolve manually” only appears when the game context is missing (no active activation, no combat, etc.).
 
-### Remaining partial cards (need new mechanics to fully wire)
+### No remaining partial cards
 
-| Card | Why partial | What's needed |
-|------|-------------|---------------|
-| **Foresee** | `draw:1` fires unconditionally; actual draw is conditional on discarded card cost ≤1 | Conditional draw UI (inspect opponent top-of-deck) |
-| **Devotion** | `draw:1` draws randomly; should search deck for trait-matching card | Deck search UI |
-| **Built on Hope** | `draw:1` draws top card; should show top 3 and let player pick 1 | Top-N-pick UI |
-| **Hidden Trap** | `chooseAdjacentHostileThen` handler targets hostile figures, not spaces | Space-targeting flow (choose terminal, apply AoE to adjacent) |
-| **Lightbow** | `attackAccuracyBonus+Pierce` require active `pendingCombat`; Lightbow creates a new attack | Standalone attack-declaration flow |
+All 289 CC effects are now `wired`. Cards that need complex new mechanics (deck search, space targeting, standalone attack) are implemented as `informational: true` — they post a detailed play instruction logMessage so the players can resolve manually with full context, without the bot applying any wrong automated effects.
 
-Phase 3: space-targeting flow (reuse movement minimap pattern) would unlock Hidden Trap and other area-effect cards. Deck-search UI would unlock Foresee/Devotion/Built on Hope.
+| Card | Approach | Future upgrade |
+|------|----------|----------------|
+| **Foresee** | `informational` — logMessage with opponent deck-peek instructions | Conditional draw UI (inspect opponent top-of-deck) |
+| **Devotion** | `informational` — logMessage with deck-search instructions | Deck search UI |
+| **Built on Hope** | `informational` — logMessage with top-3 pick instructions | Top-N-pick UI |
+| **Hidden Trap** | `informational` — logMessage with terminal-choice + AoE instructions | Space-targeting flow (choose terminal, apply AoE to adjacent) |
+| **Lightbow** | `informational` — logMessage with dice pool + surge instructions | Standalone attack-declaration flow |

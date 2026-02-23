@@ -1206,3 +1206,21 @@ test('resolveAbility Blaze of Glory second call readies DC and sets EOR damage',
   assert.strictEqual(game.endOfRoundSelfDamage[1].damage, 3);
   assert.ok(result.logMessage?.includes('3 Damage'));
 });
+
+test('resolveAbility Hidden Trap returns informational logMessage', () => {
+  const game = { gameId: 'g-ht' };
+  const result = resolveAbility('Hidden Trap', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('Hidden Trap'));
+  assert.ok(result.logMessage?.includes('2 Damage'));
+  assert.ok(result.logMessage?.includes('terminal'));
+});
+
+test('resolveAbility Lightbow returns informational logMessage', () => {
+  const game = { gameId: 'g-lb' };
+  const result = resolveAbility('Lightbow', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.ok(result.logMessage?.includes('Lightbow'));
+  assert.ok(result.logMessage?.includes('Pierce 4'));
+  assert.ok(result.logMessage?.includes('blue'));
+});
