@@ -841,9 +841,10 @@
     },
     "Lord of the Sith": {
       "type": "ccEffect",
-      "label": "Gain 2 MP (Force Choke or attack manual)",
-      "mpBonus": 2,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "When hostile defeated (not your activation): interrupt to move 2, Force Choke or Melee attack",
+      "logMessage": "**Lord of the Sith** — When a hostile figure is defeated not during your activation, Darth Vader may interrupt to move up to 2 spaces. He may then use Force Choke or perform a Melee attack. Trigger the interrupt manually when a hostile is defeated during the opponent’s activation.",
+      "wiredStatus": "wired"
     },
     "Retaliation": {
       "type": "ccEffect",
@@ -896,7 +897,7 @@
     },
     "Dirty Trick": {
       "type": "ccEffect",
-      "label": "When hostile enters adjacent: that figure suffers 3 Strain (or Stun manual)",
+      "label": "When hostile enters adjacent space: that figure suffers 3 Strain (or Stun — choose one)",
       "chooseAdjacentHostileThen": {
         "strain": 3
       },
@@ -944,11 +945,10 @@
     },
     "Dangerous Prey": {
       "type": "ccEffect",
-      "label": "Attacker suffers 1 Damage (3 if adjacent manual); then move 2 (manual)",
-      "chooseAdjacentHostileThen": {
-        "damage": 1
-      },
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "After attack on you resolves: attacker suffers 1 Damage (3 if adjacent); move 2",
+      "logMessage": "**Dangerous Prey** — After an attack targeting you resolves: the attacker suffers 1 Damage (or 3 Damage if adjacent to you). You may then move up to 2 spaces. Apply damage manually; use your movement bank for the 2 spaces.",
+      "wiredStatus": "wired"
     },
     "Deflection": {
       "type": "ccEffect",
@@ -968,11 +968,10 @@
     },
     "Right Back At Ya!": {
       "type": "ccEffect",
-      "label": "Attacker suffers 1 Damage (3 if you spent Block Token manual)",
-      "chooseAdjacentHostileThen": {
-        "damage": 1
-      },
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "When attack declared on you: attacker suffers 1 Damage (3 if you spend Block Token)",
+      "logMessage": "**Right Back At Ya!** — When an attack targeting you is declared: the attacker suffers 1 Damage. If you spend a Block Power Token, the attacker suffers 3 Damage instead. Apply damage manually to the attacker's DC health tracker.",
+      "wiredStatus": "wired"
     },
     "Payback": {
       "type": "ccEffect",
@@ -1201,9 +1200,10 @@
     },
     "Guerilla Warfare": {
       "type": "ccEffect",
-      "label": "Each friendly with no other friendly within 2 gains Block token and Hidden (you Hidden auto; rest manual)",
-      "applyHide": true,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Each friendly with no adjacent friendly gains a Block Token and Hidden",
+      "logMessage": "**Guerilla Warfare** — Each of your friendly figures with no other friendly figure within 2 spaces gains 1 Block Power Token and becomes Hidden. Apply the Block token and Hidden condition to each qualifying figure manually.",
+      "wiredStatus": "wired"
     },
     "Arcing Shot": {
       "type": "ccEffect",
@@ -1240,9 +1240,10 @@
     },
     "Close the Gap": {
       "type": "ccEffect",
-      "label": "BRAWLER move 2 then armor token (you 2 MP honor)",
-      "mpBonus": 2,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Each friendly BRAWLER may move 2 spaces; then gains an Armor Token",
+      "logMessage": "**Close the Gap** — Each of your friendly BRAWLER figures may move up to 2 spaces. After each BRAWLER resolves their movement, they gain an Armor Token. Trigger each BRAWLER’s movement manually from their DC.",
+      "wiredStatus": "wired"
     },
     "Covering Fire": {
       "type": "ccEffect",
@@ -1259,9 +1260,10 @@
     },
     "Deploy the Garrison": {
       "type": "ccEffect",
-      "label": "TROOPER/GUARDIAN within 4 gain 2 MP or 1 Hit (you 2 MP honor)",
-      "mpBonus": 2,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Each TROOPER/GUARDIAN within 4 gains 2 MP or 1 Hit Token (your choice)",
+      "logMessage": "**Deploy the Garrison** — Each friendly TROOPER or GUARDIAN figure within 4 spaces of you gains 2 movement points or 1 Hit Power Token (your choice per figure). Apply MP or the Hit token to each qualifying figure manually.",
+      "wiredStatus": "wired"
     },
     "Disorient": {
       "type": "ccEffect",
@@ -1322,9 +1324,10 @@
     },
     "Jundland Terror": {
       "type": "ccEffect",
-      "label": "Tusken/Bantha gain 2 MP, interrupt attack (2 MP honor)",
-      "mpBonus": 2,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Chosen Tusken Raider/Bantha Rider gains 2 MP and may interrupt to Melee attack",
+      "logMessage": "**Jundland Terror** — Choose a friendly Tusken Raider or Bantha Rider. During their next activation, that figure gains 2 movement points. Once during this activation, when a hostile figure attacks, this figure may interrupt to perform a Melee attack. Apply 2 MP and the interrupt manually.",
+      "wiredStatus": "wired"
     },
     "Demoralizing Monologue": {
       "type": "ccEffect",
@@ -1334,9 +1337,10 @@
     },
     "Field Supply": {
       "type": "ccEffect",
-      "label": "Up to 2 within 3 gain Hit or Surge token (1 PT honor)",
-      "powerTokenGain": 1,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Up to 2 figures within 3 each gain 1 Hit or Surge Token; ongoing trigger this round",
+      "logMessage": "**Field Supply** — Up to 2 other friendly figures within 3 spaces each gain 1 Hit Token or 1 Surge Token (your choice per figure). Distribute tokens manually. Also, during this round, when a figure uses a Command card, they may place 1 of their tokens on this card — track that manually.",
+      "wiredStatus": "wired"
     },
     "Field Tactician": {
       "type": "ccEffect",
@@ -1373,9 +1377,10 @@
     },
     "Call the Vanguard": {
       "type": "ccEffect",
-      "label": "TROOPER cost 4+ interrupt move+attack (2 MP honor)",
-      "mpBonus": 2,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "A friendly TROOPER (cost 4+) interrupts to move and attack",
+      "logMessage": "**Call the Vanguard** — A friendly TROOPER figure with a cost of 4 or greater may interrupt the current activation to perform a move action and then an attack. Trigger this interrupt manually with that figure’s DC.",
+      "wiredStatus": "wired"
     },
     "Feral Swipes": {
       "type": "ccEffect",
@@ -1466,9 +1471,10 @@
     },
     "Efficient Travel": {
       "type": "ccEffect",
-      "label": "Start of round: this round figures ignore difficult terrain and hostile MP cost (1 MP honor)",
-      "mpBonus": 1,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Until end of round: your figures ignore Difficult Terrain and hostile figure entry cost",
+      "logMessage": "**Efficient Travel** — Until the end of this round, each of your figures ignores the additional movement point cost for Difficult Terrain and for entering spaces occupied by hostile figures. Track this rule change manually for the rest of the round.",
+      "wiredStatus": "wired"
     },
     "Elusive": {
       "type": "ccEffect",
@@ -1478,9 +1484,10 @@
     },
     "Findsman Meditation": {
       "type": "ccEffect",
-      "label": "Start of round: choose opponent group; when they activate interrupt to move or attack (2 MP honor)",
-      "mpBonus": 2,
-      "wiredStatus": "partial"
+      "informational": true,
+      "label": "Choose opponent's group; when they activate, you may interrupt to move 2 or attack",
+      "logMessage": "**Findsman Meditation** — Choose one of your opponent’s deployment groups. When your opponent activates that group this round, you (Zuckuss) may interrupt before their first action to move up to 2 spaces or perform an attack. Announce the interrupt manually when they activate.",
+      "wiredStatus": "wired"
     },
     "Hard to Hit": {
       "type": "ccEffect",

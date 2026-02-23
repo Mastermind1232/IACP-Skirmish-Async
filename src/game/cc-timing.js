@@ -154,6 +154,9 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'whenhostilefigurewithin3spacesdefeated':
       // Paid in Beskar: play when you defeat a hostile within 3 spaces (honor system)
       return ctx.duringActivation;
+    case 'whenhostilefiguredefeatednotyouractivation':
+      // Lord of the Sith: playable during your activation (honor system: play when hostile defeated not during your activation)
+      return ctx.duringActivation;
     case 'whileattackingbeforedefenderrerolls':
       // Rapid Recalibration: play while attacking, before defender rerolls
       return ctx.duringAttack && ctx.isAttacker;
