@@ -72,14 +72,14 @@ export async function handleBotmenuArchive(interaction, ctx) {
   const gameId = interaction.customId.replace('botmenu_archive_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found or already deleted.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found or already deleted.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.reply({ content: 'Only players in this game can archive it.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only players in this game can archive it.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.reply({
+  await interaction.followUp({
     content: '**Are you sure you want to archive?** This will remove the game and its channels. First to confirm wins.',
     components: [getBotmenuArchiveConfirmButtons(gameId)],
     ephemeral: false,
@@ -92,17 +92,17 @@ export async function handleBotmenuKill(interaction, ctx) {
   const gameId = interaction.customId.replace('botmenu_kill_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found or already deleted.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found or already deleted.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!canKillGame(interaction, game)) {
-    await interaction.reply({
+    await interaction.followUp({
       content: 'Only game participants or users with the **Admin** or **Bothelpers** role can kill the game.',
       ephemeral: true,
     }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.reply({
+  await interaction.followUp({
     content: '**Are you sure you want to kill this game?** This will remove the game and its channels. First to confirm wins.',
     components: [getBotmenuKillConfirmButtons(gameId)],
     ephemeral: false,
@@ -115,7 +115,7 @@ export async function handleBotmenuArchiveYes(interaction, ctx) {
   const gameId = interaction.customId.replace('botmenu_archive_yes_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found or already deleted.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found or already deleted.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferReply({ ephemeral: true });
@@ -131,7 +131,7 @@ export async function handleBotmenuArchiveYes(interaction, ctx) {
 
 /** Archive No: cancel. */
 export async function handleBotmenuArchiveNo(interaction, ctx) {
-  await interaction.update({ content: 'Cancelled.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.editReply({ content: 'Cancelled.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
 
 /** Kill Game Yes: delete channels and game. */
@@ -140,11 +140,11 @@ export async function handleBotmenuKillYes(interaction, ctx) {
   const gameId = interaction.customId.replace('botmenu_kill_yes_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found or already deleted.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found or already deleted.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!canKillGame(interaction, game)) {
-    await interaction.reply({ content: 'You are not allowed to kill this game.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'You are not allowed to kill this game.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferReply({ ephemeral: true });
@@ -160,5 +160,5 @@ export async function handleBotmenuKillYes(interaction, ctx) {
 
 /** Kill Game No: cancel. */
 export async function handleBotmenuKillNo(interaction, ctx) {
-  await interaction.update({ content: 'Cancelled.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.editReply({ content: 'Cancelled.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }

@@ -39,26 +39,26 @@ export async function handleMapSelection(interaction, ctx) {
   const gameId = interaction.customId.replace('map_selection_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.reply({ content: 'Only players in this game can select the map.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only players in this game can select the map.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (game.mapSelected) {
-    await interaction.reply({ content: `Map already selected: **${game.selectedMap?.name ?? 'Unknown'}**.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `Map already selected: **${game.selectedMap?.name ?? 'Unknown'}**.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const playReadyMaps = ctx.getPlayReadyMaps?.() ?? [];
   if (playReadyMaps.length === 0) {
-    await interaction.reply({
+    await interaction.followUp({
       content: 'No maps have deployment zones configured yet. Add zone data to `data/deployment-zones.json` for at least one map.',
       ephemeral: true,
     }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.reply({
+  await interaction.followUp({
     content: 'Choose how to select the map:',
     components: [getMapSelectionMenu(gameId)],
     ephemeral: false,
@@ -95,22 +95,22 @@ export async function handleMapSelectionChoice(interaction, ctx) {
   const gameId = interaction.customId.replace('map_selection_menu_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (game.mapSelected) {
-    await interaction.reply({ content: 'Map already selected.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Map already selected.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const value = interaction.values?.[0];
   if (value === 'select_draw' || value === 'selection') {
     const options = buildPlayableMissionOptions(getPlayReadyMaps, getMissionCardsData);
     if (value === 'select_draw' && options.length < 2) {
-      await interaction.reply({ content: 'Need at least 2 playable missions for Select Draw. Use **Random** or **Selection**.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'Need at least 2 playable missions for Select Draw. Use **Random** or **Selection**.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     if (options.length === 0) {
-      await interaction.reply({ content: 'No playable missions. Add mission data and deployment zones for at least one map.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'No playable missions. Add mission data and deployment zones for at least one map.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const content = value === 'select_draw'
@@ -119,7 +119,7 @@ export async function handleMapSelectionChoice(interaction, ctx) {
     const components = value === 'select_draw'
       ? [getMissionSelectDrawMenu(gameId, options)]
       : [getMissionSelectionPickMenu(gameId, options)];
-    await interaction.update({ content, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.editReply({ content, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   let map = null;
@@ -127,13 +127,13 @@ export async function handleMapSelectionChoice(interaction, ctx) {
     const rotation = getTournamentRotation?.();
     const missionIds = rotation?.missionIds ?? [];
     if (missionIds.length === 0) {
-      await interaction.reply({ content: 'No tournament rotation configured. Use **Random** or add missions to `data/tournament-rotation.json`.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'No tournament rotation configured. Use **Random** or add missions to `data/tournament-rotation.json`.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const playReadyMapIds = new Set((getPlayReadyMaps?.() ?? []).map((m) => m.id));
     const playableFromRotation = missionIds.filter((id) => playReadyMapIds.has(String(id).split(':')[0]));
     if (playableFromRotation.length === 0) {
-      await interaction.reply({ content: 'No playable missions in tournament rotation (maps need deployment zones and map-spaces). Use **Random**.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'No playable missions in tournament rotation (maps need deployment zones and map-spaces). Use **Random**.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const missionId = playableFromRotation[Math.floor(Math.random() * playableFromRotation.length)];
@@ -141,25 +141,23 @@ export async function handleMapSelectionChoice(interaction, ctx) {
     const mapDef = getMapRegistry?.().find((m) => m.id === mapId);
     const missionData = getMissionCardsData?.()[mapId]?.[variant || 'a'];
     if (!mapDef || !missionData) {
-      await interaction.reply({ content: 'Invalid mission in rotation. Use **Random**.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'Invalid mission in rotation. Use **Random**.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     map = { id: mapDef.id, name: mapDef.name, imagePath: mapDef.imagePath };
     game.selectedMap = map;
     game.selectedMission = { variant: variant || 'a', name: missionData.name, fullName: `${map.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {} };
     game.mapSelected = true;
-    await interaction.deferUpdate();
     await postPinnedMissionCardFromGameState(game, client);
   } else {
     const playReadyMaps = getPlayReadyMaps();
     if (playReadyMaps.length === 0) {
-      await interaction.reply({ content: 'No play-ready maps.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'No play-ready maps.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     map = playReadyMaps[Math.floor(Math.random() * playReadyMaps.length)];
     game.selectedMap = { id: map.id, name: map.name, imagePath: map.imagePath };
     game.mapSelected = true;
-    await interaction.deferUpdate();
     await postMissionCardAfterMapSelection(game, client, map);
   }
   await finishMapSelectionAfterChoice(game, client, ctx);
@@ -296,20 +294,19 @@ export async function handleMapSelectionDraw(interaction, ctx) {
   const gameId = interaction.customId.replace('map_selection_draw_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (game.mapSelected) {
-    await interaction.reply({ content: 'Map already selected.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Map already selected.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const values = interaction.values ?? [];
   const missionId = values[Math.floor(Math.random() * values.length)];
   if (!applyMissionToGame(game, missionId, getMapRegistry, getMissionCardsData)) {
-    await interaction.reply({ content: 'Invalid mission. Try again or use Random.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid mission. Try again or use Random.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.deferUpdate();
   await postPinnedMissionCardFromGameState(game, client);
   await finishMapSelectionAfterChoice(game, client, ctx);
 }
@@ -330,19 +327,18 @@ export async function handleMapSelectionPick(interaction, ctx) {
   const gameId = interaction.customId.replace('map_selection_pick_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (game.mapSelected) {
-    await interaction.reply({ content: 'Map already selected.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Map already selected.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const missionId = interaction.values?.[0];
   if (!missionId || !applyMissionToGame(game, missionId, getMapRegistry, getMissionCardsData)) {
-    await interaction.reply({ content: 'Invalid mission. Try again or use Random.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid mission. Try again or use Random.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.deferUpdate();
   await postPinnedMissionCardFromGameState(game, client);
   await finishMapSelectionAfterChoice(game, client, ctx);
 }
@@ -364,18 +360,17 @@ export async function handleDraftRandom(interaction, ctx) {
   const gameId = interaction.customId.replace('draft_random_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.reply({ content: 'Only players in this game can use Draft Random.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only players in this game can use Draft Random.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (game.draftRandomUsed || game.currentRound || game.initiativeDetermined || game.deploymentZoneChosen) {
-    await interaction.reply({ content: 'Draft Random is only available at game setup.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Draft Random is only available at game setup.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.deferUpdate();
   try {
     await runDraftRandom(game, client);
     game.draftRandomUsed = true;
@@ -405,22 +400,22 @@ export async function handleDetermineInitiative(interaction, ctx) {
   const gameId = interaction.customId.replace('determine_initiative_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.reply({ content: 'Only players in this game can determine initiative.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only players in this game can determine initiative.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (game.initiativeDetermined) {
-    await interaction.reply({ content: 'Initiative was already determined.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Initiative was already determined.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const missing = [];
   if (!game.player1Squad) missing.push(`<@${game.player1Id}> (Player 1)`);
   if (!game.player2Squad) missing.push(`<@${game.player2Id}> (Player 2)`);
   if (missing.length > 0) {
-    await interaction.reply({ content: 'Both players must select their squads before initiative can be determined.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Both players must select their squads before initiative can be determined.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
     if (generalChannel) {
       await generalChannel.send({
@@ -434,7 +429,6 @@ export async function handleDetermineInitiative(interaction, ctx) {
   const playerNum = winner === game.player1Id ? 1 : 2;
   game.initiativePlayerId = winner;
   game.initiativeDetermined = true;
-  await interaction.deferUpdate();
   await clearPreGameSetup(game, client);
   await logGameAction(game, client, `<@${winner}> (**Player ${playerNum}**) won initiative! Chooses deployment zone and activates first each round.`, { allowedMentions: { users: [winner] }, phase: 'INITIATIVE', icon: 'initiative' });
   const generalChannel = await client.channels.fetch(game.generalId);
@@ -457,15 +451,15 @@ export async function handleDeploymentZone(interaction, ctx) {
   const gameId = interaction.customId.replace(isRed ? 'deployment_zone_red_' : 'deployment_zone_blue_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (interaction.user.id !== game.initiativePlayerId) {
-    await interaction.reply({ content: 'Only the player with initiative can choose the deployment zone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the player with initiative can choose the deployment zone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (game.deploymentZoneChosen) {
-    await interaction.reply({ content: `Deployment zone already chosen: **${game.deploymentZoneChosen}**.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `Deployment zone already chosen: **${game.deploymentZoneChosen}**.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const zone = isRed ? 'red' : 'blue';
@@ -474,7 +468,6 @@ export async function handleDeploymentZone(interaction, ctx) {
   const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
   game.player1DeploymentZone = initiativePlayerNum === 1 ? zone : otherZone;
   game.player2DeploymentZone = initiativePlayerNum === 2 ? zone : otherZone;
-  await interaction.deferUpdate();
   const zoneLabel = `[${zone.toUpperCase()}] `;
   await logGameAction(game, client, `<@${game.initiativePlayerId}> (${zoneLabel}**Player ${initiativePlayerNum}**) chose the **${zone}** deployment zone`, { allowedMentions: { users: [game.initiativePlayerId] }, phase: 'INITIATIVE', icon: 'zone' });
   if (game.deploymentZoneMessageId) {
@@ -550,7 +543,7 @@ export async function handleDeploymentFig(interaction, ctx) {
   } = ctx;
   const parts = interaction.customId.split('_');
   if (parts.length < 5) {
-    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const gameId = parts[2];
@@ -558,18 +551,18 @@ export async function handleDeploymentFig(interaction, ctx) {
   const flatIndex = parseInt(parts[4], 10);
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
   if (interaction.user.id !== ownerId) {
-    await interaction.reply({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const labels = playerNum === 1 ? game.player1DeployLabels : game.player2DeployLabels;
   const label = labels?.[flatIndex];
   if (!label) {
-    await interaction.reply({ content: 'Figure not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Figure not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const mapId = game.selectedMap?.id;
@@ -606,7 +599,7 @@ export async function handleDeploymentFig(interaction, ctx) {
         .setLabel('3×2 (3 wide, 2 tall)')
         .setStyle(ButtonStyle.Primary)
     );
-    await interaction.reply({
+    await interaction.followUp({
       content: `Choose orientation for **${label.replace(/^Deploy /, '')}** (large unit):`,
       components: [orientationRow],
       ephemeral: false,
@@ -617,7 +610,7 @@ export async function handleDeploymentFig(interaction, ctx) {
   if (zoneSpaces.length > 0) {
     const { rows, available } = getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
     if (available.length === 0) {
-      await interaction.reply({ content: 'No spaces left in your deployment zone (all occupied or no valid spot for this size).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'No spaces left in your deployment zone (all occupied or no valid spot for this size).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const BTM_PER_MSG = 5;
@@ -642,7 +635,7 @@ export async function handleDeploymentFig(interaction, ctx) {
     const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
     const replyPayload = { content: promptText, components: firstRows, ephemeral: false, fetchReply: true };
     if (mapAttachment) replyPayload.files = [mapAttachment];
-    const replyMsg = await interaction.reply(replyPayload).catch(() => null);
+    const replyMsg = await interaction.followUp(replyPayload).catch(() => null);
     const gridIds = [];
     if (replyMsg?.id) gridIds.push(replyMsg.id);
     for (let i = BTM_PER_MSG; i < rows.length; i += BTM_PER_MSG) {
@@ -688,7 +681,7 @@ export async function handleDeploymentOrient(interaction, ctx) {
   } = ctx;
   const parts = interaction.customId.split('_');
   if (parts.length < 6) {
-    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const gameId = parts[2];
@@ -697,12 +690,12 @@ export async function handleDeploymentOrient(interaction, ctx) {
   const orientation = parts[5];
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
   if (interaction.user.id !== ownerId) {
-    await interaction.reply({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const labels = playerNum === 1 ? game.player1DeployLabels : game.player2DeployLabels;
@@ -710,7 +703,7 @@ export async function handleDeploymentOrient(interaction, ctx) {
   const label = labels?.[flatIndex];
   const figMeta = deployMeta?.[flatIndex];
   if (!label || !figMeta) {
-    await interaction.reply({ content: 'Figure not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Figure not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const figureKey = `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}`;
@@ -735,7 +728,7 @@ export async function handleDeploymentOrient(interaction, ctx) {
   const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, orientation);
   if (validSpaces.length === 0) {
     delete game.pendingDeployOrientation[`${playerNum}_${flatIndex}`];
-    await interaction.reply({ content: 'No valid spots for this orientation in your zone. Try the other orientation.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No valid spots for this orientation in your zone. Try the other orientation.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { rows } = getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
@@ -743,7 +736,6 @@ export async function handleDeploymentOrient(interaction, ctx) {
   const firstRows = rows.slice(0, BTM_PER_MSG);
   game.deploySpaceGridMessageIds = game.deploySpaceGridMessageIds || {};
   const gridKey = `${playerNum}_${flatIndex}`;
-  await interaction.deferUpdate();
   const gridIds = [];
   try {
     const isInitiative = playerNum === initiativePlayerNum;
@@ -787,7 +779,7 @@ export async function handleDeployPick(interaction, ctx) {
   const { getGame, logGameAction, pushUndo, updateDeployPromptMessages, buildBoardMapPayload, client, saveGames } = ctx;
   const match = interaction.customId.match(/^deploy_pick_([^_]+)_(\d+)_(\d+)_(.+)$/);
   if (!match) {
-    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const [, gameId, playerNumStr, flatIndexStr, space] = match;
@@ -795,12 +787,12 @@ export async function handleDeployPick(interaction, ctx) {
   const flatIndex = parseInt(flatIndexStr, 10);
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
   if (interaction.user.id !== ownerId) {
-    await interaction.reply({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const deployMeta = playerNum === 1 ? game.player1DeployMetadata : game.player2DeployMetadata;
@@ -808,10 +800,9 @@ export async function handleDeployPick(interaction, ctx) {
   const figMeta = deployMeta?.[flatIndex];
   const figLabel = deployLabels?.[flatIndex];
   if (!figMeta || !figLabel) {
-    await interaction.reply({ content: 'Figure not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Figure not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.deferUpdate();
   const figureKey = `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}`;
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
   if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
@@ -871,7 +862,7 @@ export async function handleDeployPick(interaction, ctx) {
       console.error('Failed to update map after deployment:', err);
     }
   }
-  await interaction.update({
+  await interaction.editReply({
     content: `✓ Deployed **${figLabel.replace(/^Deploy /, '')}** at **${spaceUpper}**.`,
     components: [],
     attachments: [],
@@ -902,18 +893,18 @@ export async function handleDeploymentDone(interaction, ctx) {
   const gameId = interaction.customId.replace('deployment_done_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.reply({ content: 'Only players in this game can use this.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only players in this game can use this.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
   if (!isP1Hand && !isP2Hand) {
-    await interaction.reply({ content: 'Use the Deployment Completed button in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Use the Deployment Completed button in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
@@ -922,12 +913,11 @@ export async function handleDeploymentDone(interaction, ctx) {
 
   if (isInitiativeSide) {
     if (game.initiativePlayerDeployed) {
-      await interaction.reply({ content: "You've already marked deployed.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: "You've already marked deployed.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     game.initiativePlayerDeployed = true;
     await logGameAction(game, client, `<@${interaction.user.id}> finished deploying`, { allowedMentions: { users: [interaction.user.id] }, phase: 'DEPLOYMENT', icon: 'deployed' });
-    await interaction.deferUpdate();
     const initiativeHandId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
     try {
       const handChannel = await client.channels.fetch(initiativeHandId);
@@ -1002,15 +992,14 @@ export async function handleDeploymentDone(interaction, ctx) {
   }
 
   if (!game.initiativePlayerDeployed) {
-    await interaction.reply({ content: 'Wait for the initiative player to deploy first.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Wait for the initiative player to deploy first.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (game.nonInitiativePlayerDeployed) {
-    await interaction.reply({ content: "You've already marked deployed.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: "You've already marked deployed.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   game.nonInitiativePlayerDeployed = true;
-  await interaction.deferUpdate();
   const nonInitiativeHandId = game.initiativePlayerId === game.player1Id ? game.p2HandId : game.p1HandId;
   try {
     const handChannel = await client.channels.fetch(nonInitiativeHandId);
@@ -1115,12 +1104,12 @@ export async function handleSetupAttachTo(interaction, ctx) {
   const playerNum = parseInt(playerNumStr, 10);
   const game = getGame(gameId);
   if (!game || !game.setupAttachmentPhase || !game.setupAttachmentPending) {
-    await interaction.reply({ content: 'Game or setup phase not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game or setup phase not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
   if (interaction.user.id !== ownerId) {
-    await interaction.reply({ content: 'Only the owner of this hand can place setup attachments.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner of this hand can place setup attachments.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const pending = game.setupAttachmentPending[playerNum];
@@ -1135,7 +1124,6 @@ export async function handleSetupAttachTo(interaction, ctx) {
   game[attachKey][dcMsgId].push(card);
   pending.shift();
 
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   try {
     await updateAttachmentMessageForDc(game, playerNum, dcMsgId, client);
   } catch (err) {

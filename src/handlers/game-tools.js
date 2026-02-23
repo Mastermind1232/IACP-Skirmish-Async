@@ -14,18 +14,17 @@ export async function handleRefreshMap(interaction, ctx) {
   const gameId = interaction.customId.replace('refresh_map_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.reply({ content: 'Only players in this game can refresh the map.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only players in this game can refresh the map.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!game.selectedMap) {
-    await interaction.reply({ content: 'No map selected yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No map selected yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.deferUpdate();
   try {
     const boardChannel = await client.channels.fetch(game.boardId);
     const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
@@ -46,14 +45,13 @@ export async function handleRefreshAll(interaction, ctx) {
   const gameId = interaction.customId.replace('refresh_all_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.reply({ content: 'Only players in this game can refresh.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only players in this game can refresh.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.deferUpdate();
   try {
     await refreshAllGameComponents(game, client);
     await interaction.followUp({ content: '✓ Full refresh complete. Reloaded all JSON data, map renderer cache, map, DCs, hands, discard piles.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -84,20 +82,20 @@ export async function handleUndo(interaction, ctx) {
   const gameId = interaction.customId.replace('undo_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (game.ended) {
-    await interaction.reply({ content: 'Undo is disabled once the game has ended.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Undo is disabled once the game has ended.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.reply({ content: 'Only players in this game can use Undo.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only players in this game can use Undo.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const last = game.undoStack?.pop();
   if (!last) {
-    await interaction.reply({ content: 'Nothing to undo yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Nothing to undo yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
 
@@ -136,7 +134,7 @@ export async function handleUndo(interaction, ctx) {
       }
     }
     saveGames();
-    await interaction.reply({ content: 'Pass turn undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Pass turn undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (last.type === 'move') {
@@ -164,11 +162,11 @@ export async function handleUndo(interaction, ctx) {
       }
     }
     saveGames();
-    await interaction.reply({ content: 'Movement undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Movement undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (game.currentRound) {
-    await interaction.reply({ content: 'Undo is only available during deployment for that action.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Undo is only available during deployment for that action.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (last.type === 'deploy_pick') {
@@ -189,7 +187,7 @@ export async function handleUndo(interaction, ctx) {
       }
     }
     saveGames();
-    await interaction.reply({ content: 'Last deployment undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Last deployment undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (last.type === 'interact') {
@@ -211,7 +209,7 @@ export async function handleUndo(interaction, ctx) {
     }
     if (updateDcActionsMessage && last.msgId) await updateDcActionsMessage(game, last.msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
-    await interaction.reply({ content: 'Interact undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Interact undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (last.type === 'cc_play') {
@@ -227,7 +225,7 @@ export async function handleUndo(interaction, ctx) {
     if (updateHandVisualMessage) await updateHandVisualMessage(game, last.playerNum, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     if (updateDiscardPileMessage) await updateDiscardPileMessage(game, last.playerNum, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
-    await interaction.reply({ content: 'Command card play undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Command card play undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (last.type === 'cc_play_dc') {
@@ -245,10 +243,10 @@ export async function handleUndo(interaction, ctx) {
     if (updateDiscardPileMessage) await updateDiscardPileMessage(game, last.playerNum, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     if (updateDcActionsMessage && last.msgId) await updateDcActionsMessage(game, last.msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
-    await interaction.reply({ content: 'Command card (Special) play undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Command card (Special) play undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.reply({ content: 'That action cannot be undone yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.followUp({ content: 'That action cannot be undone yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
 
 /**
@@ -260,11 +258,11 @@ export async function handleKillGame(interaction, ctx) {
   const gameId = interaction.customId.replace('kill_game_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found or already deleted.', ephemeral: true });
+    await interaction.followUp({ content: 'Game not found or already deleted.', ephemeral: true });
     return;
   }
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.reply({ content: 'Only players in this game can kill it.', ephemeral: true });
+    await interaction.followUp({ content: 'Only players in this game can kill it.', ephemeral: true });
     return;
   }
   await interaction.deferReply({ ephemeral: true });
@@ -302,7 +300,7 @@ export async function handleDefaultDeck(interaction, ctx) {
   } = ctx;
   const parts = interaction.customId.split('_');
   if (parts.length < 5) {
-    await interaction.reply({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const gameId = parts[2];
@@ -310,23 +308,23 @@ export async function handleDefaultDeck(interaction, ctx) {
   const faction = parts[4];
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (!game.mapSelected) {
-    await interaction.reply({ content: 'Map selection must be completed before you can load a squad.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Map selection must be completed before you can load a squad.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const isP1 = playerNum === '1';
   const userId = isP1 ? game.player1Id : game.player2Id;
   if (interaction.user.id !== userId) {
-    await interaction.reply({ content: 'Only the owner of this hand can load a default deck.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner of this hand can load a default deck.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const squadMap = { rebel: DEFAULT_DECK_REBELS, scum: DEFAULT_DECK_SCUM, imperial: DEFAULT_DECK_IMPERIAL };
   const squad = squadMap[faction];
   if (!squad) {
-    await interaction.reply({ content: 'Unknown faction.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Unknown faction.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.deferReply({ ephemeral: true });

@@ -2233,7 +2233,7 @@ async function postGameOver(game, client, winnerId, reason) {
 /** Returns true if game ended (and replied to user). Call after getGame() in handlers to block further actions. */
 async function replyIfGameEnded(game, interaction) {
   if (game?.ended) {
-    await interaction.reply({ content: 'This game has ended.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'This game has ended.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return true;
   }
   return false;
@@ -2855,15 +2855,14 @@ async function handleBleedResolve(interaction) {
   const playerNum = parseInt(playerNumStr, 10);
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
   if (interaction.user.id !== playerId && !game.isTestGame) {
-    await interaction.reply({ content: 'Only the figure owner can resolve Bleeding.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the figure owner can resolve Bleeding.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.deferUpdate();
   const msgId = findDcMessageIdForFigure(gameId, playerNum, figureKey);
   const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
   const figureIndex = figMatch ? parseInt(figMatch[2], 10) : 0;
@@ -4892,6 +4891,7 @@ client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return;
   const buttonKey = getHandlerKey(interaction.customId, 'button');
   if (!buttonKey) return;
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
 
     if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_confirm_play_' || buttonKey === 'cc_cancel_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'cc_choice_' || buttonKey === 'cc_space_' || buttonKey === 'squad_select_' || buttonKey === 'illegal_cc_ignore_' || buttonKey === 'illegal_cc_unplay_' || buttonKey === 'negation_play_' || buttonKey === 'negation_let_resolve_' || buttonKey === 'celebration_play_' || buttonKey === 'celebration_pass_') {
     const ccHandButtonContext = {
@@ -5015,6 +5015,8 @@ client.on('interactionCreate', async (interaction) => {
       resolveAbility,
       getNegationResponseButtons,
       sendBleedingPrompt,
+      updateMovementBankMessage,
+      getCommandCardImagePath,
     };
     if (buttonKey === 'dc_activate_') await handleDcActivate(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_unactivate_') await handleDcUnactivate(interaction, dcPlayAreaContext);

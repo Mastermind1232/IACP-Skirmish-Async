@@ -39,16 +39,16 @@ export async function handleEndEndOfRound(interaction, ctx) {
   const gameId = interaction.customId.replace('end_end_of_round_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   if (!game.endOfRoundWhoseTurn) {
-    await interaction.reply({ content: 'Not in End of Round window.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Not in End of Round window.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (interaction.user.id !== game.endOfRoundWhoseTurn) {
-    await interaction.reply({ content: "It's not your turn in the End of Round window.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: "It's not your turn in the End of Round window.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const initiativeId = game.initiativePlayerId;
@@ -64,7 +64,6 @@ export async function handleEndEndOfRound(interaction, ctx) {
     return;
   }
   game.endOfRoundWhoseTurn = null;
-  await interaction.deferUpdate();
   game.dcFinishedPinged = {};
   game.pendingEndTurn = {};
   // Clear per-activation conditions (Stun, Weaken) from all figures at end of round.
@@ -254,16 +253,16 @@ export async function handleEndStartOfRound(interaction, ctx) {
   const gameId = interaction.customId.replace('end_start_of_round_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   if (!game.startOfRoundWhoseTurn) {
-    await interaction.reply({ content: 'Not in Start of Round window.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Not in Start of Round window.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (interaction.user.id !== game.startOfRoundWhoseTurn) {
-    await interaction.reply({ content: "It's not your turn in the Start of Round window.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: "It's not your turn in the Start of Round window.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const initiativeId = game.initiativePlayerId;
@@ -279,7 +278,6 @@ export async function handleEndStartOfRound(interaction, ctx) {
     return;
   }
   game.startOfRoundWhoseTurn = null;
-  await interaction.deferUpdate();
   const generalChannel = await client.channels.fetch(game.generalId);
   const roundEmbed = new EmbedBuilder()
     .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound} - Start of Round`)

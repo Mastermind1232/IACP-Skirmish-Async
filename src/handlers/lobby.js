@@ -21,16 +21,16 @@ export async function handleLobbyJoin(interaction, ctx) {
   const threadId = interaction.customId.replace('lobby_join_', '');
   const lobby = lobbies.get(threadId);
   if (!lobby) {
-    await interaction.reply({ content: 'This lobby no longer exists.', ephemeral: true });
+    await interaction.followUp({ content: 'This lobby no longer exists.', ephemeral: true });
     return;
   }
   if (lobby.joinedId) {
-    await interaction.reply({ content: 'This game already has two players.', ephemeral: true });
+    await interaction.followUp({ content: 'This game already has two players.', ephemeral: true });
     return;
   }
   const joinerId = interaction.user.id;
   if (joinerId !== lobby.creatorId && countActiveGamesForPlayer(joinerId) >= MAX_ACTIVE_GAMES_PER_PLAYER) {
-    await interaction.reply({
+    await interaction.followUp({
       content: `You are already in **${MAX_ACTIVE_GAMES_PER_PLAYER}** active games. Finish or leave a game before joining another.`,
       ephemeral: true,
     });
@@ -39,7 +39,7 @@ export async function handleLobbyJoin(interaction, ctx) {
   if (interaction.user.id === lobby.creatorId) {
     lobby.joinedId = interaction.user.id;
     lobby.status = 'Full';
-    await interaction.update({
+    await interaction.editReply({
       embeds: [getLobbyEmbed(lobby)],
       components: [getLobbyStartButton(threadId)],
     });
@@ -49,7 +49,7 @@ export async function handleLobbyJoin(interaction, ctx) {
   }
   lobby.joinedId = interaction.user.id;
   lobby.status = 'Full';
-  await interaction.update({
+  await interaction.editReply({
     embeds: [getLobbyEmbed(lobby)],
     components: [getLobbyStartButton(threadId)],
   });
@@ -76,11 +76,11 @@ export async function handleLobbyStart(interaction, ctx) {
   const threadId = interaction.customId.replace('lobby_start_', '');
   const lobby = lobbies.get(threadId);
   if (!lobby || !lobby.joinedId) {
-    await interaction.reply({ content: 'Both players must join before starting. Player 2 has not joined yet.', ephemeral: true });
+    await interaction.followUp({ content: 'Both players must join before starting. Player 2 has not joined yet.', ephemeral: true });
     return;
   }
   if (interaction.user.id !== lobby.creatorId && interaction.user.id !== lobby.joinedId) {
-    await interaction.reply({ content: 'Only players in this game can start it.', ephemeral: true });
+    await interaction.followUp({ content: 'Only players in this game can start it.', ephemeral: true });
     return;
   }
   const c1 = countActiveGamesForPlayer(lobby.creatorId);
@@ -89,7 +89,7 @@ export async function handleLobbyStart(interaction, ctx) {
     const who = [];
     if (c1 >= MAX_ACTIVE_GAMES_PER_PLAYER) who.push('<@' + lobby.creatorId + '>');
     if (c2 >= MAX_ACTIVE_GAMES_PER_PLAYER) who.push('<@' + lobby.joinedId + '>');
-    await interaction.reply({
+    await interaction.followUp({
       content: `${who.join(' and ')} ${who.length > 1 ? 'are' : 'is'} already in **${MAX_ACTIVE_GAMES_PER_PLAYER}** active games. Finish or leave a game before starting another.`,
       ephemeral: true,
       allowedMentions: { users: [lobby.creatorId, lobby.joinedId] },
@@ -112,7 +112,7 @@ export async function handleLobbyStart(interaction, ctx) {
     // ignore
   }
 
-  await interaction.reply({ content: 'Creating your game channels...', ephemeral: true });
+  await interaction.followUp({ content: 'Creating your game channels...', ephemeral: true });
   let gameId;
   try {
     const guild = interaction.guild;
