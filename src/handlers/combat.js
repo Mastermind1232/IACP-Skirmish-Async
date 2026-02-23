@@ -1071,6 +1071,18 @@ export async function handleCombatSurge(interaction, ctx) {
       combat.surgeBlast = (combat.surgeBlast || 0) + (mod.blast ?? 0);
       combat.surgeRecover = (combat.surgeRecover || 0) + (mod.recover ?? 0);
       combat.surgeCleave = (combat.surgeCleave || 0) + (mod.cleave ?? 0);
+      // Named surge flags
+      if (mod.replaceWithStun) combat.attackResultReplaceWithStun = true;
+      if (mod.surgeCancelDodge) combat.surgeCancelDodge = true;
+      if (mod.surgeHarass) combat.surgeHarass = (combat.surgeHarass || 0) + mod.surgeHarass;
+      if (mod.surgeSquadCommand) combat.surgeSquadCommand = true;
+      if (mod.surgeStalkPrey) combat.surgeStalkPrey = true;
+      if (mod.surgeCriticalHit) combat.surgeCriticalHit = true;
+      if (mod.surgeSuppressionStrain) combat.surgeSuppressionStrain = true;
+      if (mod.surgeComplex) {
+        const cThread = await interaction.client.channels.fetch(combat.combatThreadId);
+        await cThread.send(`⚠️ **${getSurgeLabel(key)}** — resolve manually (see ability text).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
       combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - cost);
       const label = getSurgeLabel(key);
       await thread.send(`**Surge spent (${cost}):** ${label}`).catch((err) => { console.error('[discord]', err?.message ?? err); });

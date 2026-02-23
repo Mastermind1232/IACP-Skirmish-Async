@@ -3163,6 +3163,81 @@ async function resolveCombatAfterRolls(game, combat, client) {
   }
   const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
+
+  // --- Named surge post-combat effects ---
+  if (hit && targetMsgId) {
+    // Harass: defender suffers N Strain after a non-miss
+    if ((combat.surgeHarass || 0) > 0) {
+      const hHS = dcHealthState.get(targetMsgId) || [];
+      const hEntry = hHS[targetFigIndex];
+      if (hEntry) {
+        const [hC, hM] = hEntry;
+        const hNew = Math.max(0, (hC ?? hM) - combat.surgeHarass);
+        hHS[targetFigIndex] = [hNew, hM ?? hNew];
+        dcHealthState.set(targetMsgId, hHS);
+        const hDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const hDcL = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+        const hIdx = (hDcIds || []).indexOf(targetMsgId);
+        if (hIdx >= 0 && hDcL?.[hIdx]) hDcL[hIdx].healthState = [...hHS];
+        embedRefreshMsgIds.add(targetMsgId);
+        await logGameAction(game, client, `**Harass** — **${combat.target.label}** suffers **${combat.surgeHarass}** Strain`, { phase: 'ROUND', icon: 'attack' });
+      }
+    }
+    // Suppression: target suffers Strain = min(block + evade + [1 if dodge], 2)
+    if (combat.surgeSuppressionStrain) {
+      const supRoll = combat.defenseRoll || {};
+      const supAmt = Math.min((supRoll.block || 0) + (supRoll.evade || 0) + (supRoll.dodge ? 1 : 0), 2);
+      if (supAmt > 0) {
+        const sHS = dcHealthState.get(targetMsgId) || [];
+        const sEntry = sHS[targetFigIndex];
+        if (sEntry) {
+          const [sC, sM] = sEntry;
+          const sNew = Math.max(0, (sC ?? sM) - supAmt);
+          sHS[targetFigIndex] = [sNew, sM ?? sNew];
+          dcHealthState.set(targetMsgId, sHS);
+          const sDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const sDcL = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+          const sIdx = (sDcIds || []).indexOf(targetMsgId);
+          if (sIdx >= 0 && sDcL?.[sIdx]) sDcL[sIdx].healthState = [...sHS];
+          embedRefreshMsgIds.add(targetMsgId);
+          await logGameAction(game, client, `**Suppression** — **${combat.target.label}** suffers **${supAmt}** Strain (${supRoll.block || 0} block, ${supRoll.evade || 0} evade${supRoll.dodge ? ', 1 dodge' : ''})`, { phase: 'ROUND', icon: 'attack' });
+        }
+      }
+    }
+  }
+  // Stalk Prey: attacker gains +2 MP and +1 Hit Token on hit
+  if (hit && combat.surgeStalkPrey && combat.attackerMsgId) {
+    game.movementBank = game.movementBank || {};
+    const spBank = game.movementBank[combat.attackerMsgId] || { total: 0, remaining: 0 };
+    spBank.total = (spBank.total ?? 0) + 2;
+    spBank.remaining = (spBank.remaining ?? 0) + 2;
+    game.movementBank[combat.attackerMsgId] = spBank;
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    game.figurePowerTokens[combat.attackerFigureKey] = [...(game.figurePowerTokens[combat.attackerFigureKey] || []), 'Hit'];
+    await logGameAction(game, client, `**Stalk Prey** — **${combat.attackerDcName}** gained +2 MP and +1 Hit Token`, { phase: 'ROUND', icon: 'card' });
+    await ensureMovementBankMessage(game, combat.attackerMsgId, client);
+    embedRefreshMsgIds.add(combat.attackerMsgId);
+  }
+  // Squad Command: Focus an adjacent friendly TROOPER
+  if (hit && combat.surgeSquadCommand && game.selectedMap?.id && combat.attackerFigureKey) {
+    const sqAdj = getFiguresAdjacentToTarget(game, combat.attackerFigureKey, game.selectedMap.id);
+    for (const { figureKey: sqFk, playerNum: sqPn } of sqAdj) {
+      if (sqPn !== attackerPlayerNum) continue;
+      const sqDcName = sqFk.replace(/-\d+-\d+$/, '');
+      const sqEff = getDcEffects()?.[sqDcName] || getDcEffects()?.[sqDcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const sqKws = (sqEff?.keywords || []).map((k) => String(k).toUpperCase());
+      if (!sqKws.includes('TROOPER')) continue;
+      game.figureConditions = game.figureConditions || {};
+      const sqExisting = game.figureConditions[sqFk] || [];
+      if (!sqExisting.includes('Focus')) {
+        game.figureConditions[sqFk] = [...sqExisting, 'Focus'];
+        const sqMsgId = findDcMessageIdForFigure(game.gameId, sqPn, sqFk);
+        if (sqMsgId) embedRefreshMsgIds.add(sqMsgId);
+        await logGameAction(game, client, `**Squad Command** — **${sqDcName}** is now **Focused**`, { phase: 'ROUND', icon: 'card' });
+      }
+    }
+  }
+
   // Bleed: attacker prompted to take 1 damage or prevent by discarding CC after Attack action
   if (combat.attackerConds?.includes('Bleed')) {
     const bleedThread = await client.channels.fetch(combat.combatThreadId);

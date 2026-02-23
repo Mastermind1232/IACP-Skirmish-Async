@@ -2342,119 +2342,119 @@
       "surgeCost": 1,
       "label": "Shocking Palm",
       "description": "The attack misses and the defender becomes Stunned.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "concussive_bolt": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Concussive Bolt",
       "description": "After this attack resolves, if you are targeting a SMALL figure and it did not miss, you may push that figure 1 space.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "informational"
     },
     "interrogate": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Interrogate",
       "description": "Look at your opponent's hand and choose a Command card. You may discard a card of equal or greater cost from your hand to discard the chosen card.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "informational"
     },
     "suppression": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Suppression",
       "description": "After resolving a Ranged attack, if it did not miss due to accuracy, the target suffers Strain equal to the number of Block, Evade, and Dodge results, to a maximum of 2.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "agitate": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Agitate",
       "description": "If this attack does not miss, the defending figure's group must be the next group to activate, if able.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "informational"
     },
     "fell_swoop": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Fell Swoop",
       "description": "After this attack resolves, become Hidden, move up to 2 spaces, then perform an attack. Limit once per round.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "informational"
     },
     "spread_the_pain": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Spread the Pain",
       "description": "Choose a HARMFUL condition not already chosen this attack. After this attack resolves, if it did not miss, a figure on or adjacent to the target space gains the chosen condition. Can be used multiple times per attack.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "informational"
     },
     "shrapnel": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Shrapnel",
       "description": "Choose one: This attack gains Blast 2, or after this attack resolves, if it did not miss, each figure and object within 2 spaces of the target space suffers 1 Damage.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "bargain": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Bargain",
       "description": "Spend 1 VP to roll 1 green die. For each Hit result, gain 1 VP.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "informational"
     },
     "harass": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Harass",
       "description": "After the attack resolves, if it did not miss, the defender suffers 1 Strain.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "squad_command": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Squad Command",
       "description": "Choose an adjacent friendly TROOPER. That figure becomes Focused.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "critical_hit": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Critical Hit",
       "description": "This attack gains Pierce 2. If the target suffered 1 or more Damage, the target may not play Command cards this round.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "stalk_prey": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Stalk Prey",
       "description": "After this attack resolves, you gain 2 movement points and 1 Hit Token.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "mastery": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Mastery",
       "description": "Choose and re-draw a FORCE USER Command card of cost 1 or less from your discard pile. Limit once per round.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "informational"
     },
     "deadly_spin": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Deadly Spin",
       "description": "Apply -1 Dodge to the defense results. This attack gains Cleave 3.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "fighting_knife": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Fighting Knife",
       "description": "After this attack resolves, choose an adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "informational"
     },
     "stun_net": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Stun Net",
       "description": "After this attack resolves, if it did not miss, the target becomes Stunned.",
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "wrist_cord": {
       "type": "dcSpecial",

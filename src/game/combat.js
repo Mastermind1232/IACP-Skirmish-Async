@@ -96,6 +96,22 @@ export function getAttackerSurgeAbilities(combat) {
 /** Parse a surge ability key into modifiers. F6: blast, recover, cleave. */
 export function parseSurgeEffect(key) {
   const out = { damage: 0, pierce: 0, accuracy: 0, conditions: [], blast: 0, recover: 0, cleave: 0 };
+  const k = String(key || '').toLowerCase().trim();
+  // Named surge key shortcuts (cannot be parsed as generic patterns)
+  if (k === 'stun_net') { out.conditions.push('Stun'); return out; }
+  if (k === 'harass') { out.surgeHarass = 1; return out; }
+  if (k === 'shocking_palm') { out.replaceWithStun = true; return out; }
+  if (k === 'squad_command') { out.surgeSquadCommand = true; return out; }
+  if (k === 'stalk_prey') { out.surgeStalkPrey = true; return out; }
+  if (k === 'deadly_spin') { out.surgeCancelDodge = true; out.cleave = 3; return out; }
+  if (k === 'shrapnel') { out.blast = 2; return out; }
+  if (k === 'critical_hit') { out.pierce = 2; out.surgeCriticalHit = true; return out; }
+  if (k === 'suppression') { out.surgeSuppressionStrain = true; return out; }
+  // Complex surge effects: flag for informational display, resolve manually
+  if (['concussive_bolt', 'agitate', 'fighting_knife', 'mastery', 'bargain',
+       'fell_swoop', 'spread_the_pain', 'interrogate'].includes(k)) {
+    out.surgeComplex = k; return out;
+  }
   const parts = String(key || '').toLowerCase().trim().split(/\s*,\s*/);
   for (const p of parts) {
     const dmg = p.match(/^damage\s+(\d+)$/); if (dmg) { out.damage += parseInt(dmg[1], 10); continue; }
@@ -138,7 +154,7 @@ export function computeCombatResult(combat) {
   const totalAccuracy = roll.acc + surgeA + bonusAcc - hiddenAccPenalty;
   let hit = true;
   let missReason = '';
-  if (defRoll.dodge) {
+  if (defRoll.dodge && !combat.surgeCancelDodge) {
     hit = false;
     missReason = 'Dodge';
   } else if (combat.isRanged && combat.distanceToTarget != null) {
@@ -203,6 +219,7 @@ export function computeCombatResult(combat) {
   if (attackerWeakened) resultText += ` | **Weakened** (attacker -1 dmg)`;
   if (defenderWeakened) resultText += ` | **Weakened** (defender -1 block)`;
   if (defenderHidden) resultText += ` | **Hidden** (defender -2 accuracy)`;
+  if (defRoll.dodge && combat.surgeCancelDodge) resultText += ` | **Deadly Spin**: Dodge cancelled`;
   if (!hit) resultText += missReason ? ` → **Miss** (${missReason})` : ' → **Miss**';
   else resultText += ` → **${damage} damage**${conditionsText}`;
   if (combat.attackResultReplaceWithStun) resultText += ' (Set for Stun: 0 damage, Stunned)';
