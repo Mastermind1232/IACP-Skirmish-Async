@@ -529,6 +529,11 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   }
   await updateHandVisualMessage(game, meta.playerNum, interaction.client);
   await updateDiscardPileMessage(game, meta.playerNum, interaction.client);
+  // Special Action CCs cost 1 action; deduct before refreshing the thread so the counter is correct.
+  if (timingLabel === 'Special Action') {
+    const data = game.dcActionsData?.[msgId];
+    if (data && typeof data.remaining === 'number') data.remaining = Math.max(0, data.remaining - 1);
+  }
   await updateDcActionsMessage(game, msgId, interaction.client);
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}** (${timingLabel}).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   if (enteringNegation) {
@@ -587,6 +592,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       await logGameAction(game, interaction.client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
     } else if (result.applied && result.logMessage) {
       await logGameAction(game, interaction.client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
+      await interaction.followUp({ content: `✅ **${card}** resolved: ${result.logMessage}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       if (result.refreshDcEmbed) {
         await updateDcActionsMessage(game, msgId, interaction.client);
         for (const mid of result.refreshDcEmbedMsgIds || []) {
@@ -595,6 +601,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       }
     } else if (!result.applied && result.manualMessage) {
       await logGameAction(game, interaction.client, `CC effect: ${result.manualMessage}`, { phase: 'ACTION', icon: 'card' });
+      await interaction.followUp({ content: `⚠️ **${card}** — ${result.manualMessage}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
   }
   if (ctx.pushUndo) {
