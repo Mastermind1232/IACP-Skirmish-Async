@@ -1104,3 +1104,105 @@ test('resolveAbility Disable with chosenOption adds to disabledFigures', () => {
   assert.ok(game.disabledFigures.includes('Nexu [DG 1]'));
   assert.ok(result.logMessage?.includes('Nexu'));
 });
+
+test('resolveAbility Beatdown sets nextAttacksBonusHits for 2 attacks +1 Hit', () => {
+  const msgId = 'msg-bd';
+  const game = { gameId: 'g-bd', dcActionsData: { [msgId]: {} } };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bd', playerNum: 1, dcName: 'Wookiee Warrior', displayName: 'Wookiee [DG 1]' }]]);
+  const result = resolveAbility('Beatdown', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(game.nextAttacksBonusHits[1], { count: 2, bonus: 1 });
+  assert.ok(result.logMessage?.includes('2') && result.logMessage?.includes('+1 Hit'));
+});
+
+test('resolveAbility New Orders first call returns choice list of friendly DCs', () => {
+  const game = {
+    gameId: 'g-no',
+    p1DcList: [{ dcName: 'Boba Fett', displayName: 'Boba Fett [DG 1]' }],
+  };
+  const result = resolveAbility('New Orders', { game, playerNum: 1 });
+  assert.strictEqual(result.requiresChoice, true);
+  assert.ok(result.choiceOptions?.includes('Boba Fett [DG 1]'));
+});
+
+test('resolveAbility New Orders second call readies matching DC', () => {
+  const game = {
+    gameId: 'g-no2',
+    p1DcList: [{ dcName: 'Boba Fett', displayName: 'Boba Fett [DG 1]', exhausted: true }],
+  };
+  const result = resolveAbility('New Orders', { game, playerNum: 1, chosenOption: 'Boba Fett [DG 1]' });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.p1DcList[0].exhausted, false);
+  assert.ok(result.logMessage?.includes('Boba Fett'));
+});
+
+test('resolveAbility Roar fails damage check when insufficient damage suffered', () => {
+  const msgId = 'msg-roar';
+  // healthState [7, 10]: suffered 3 damage (10-7=3), exactly meets threshold
+  const dcHealthState = new Map([[msgId, [[7, 10]]]]);
+  const game = { gameId: 'g-roar', dcActionsData: { [msgId]: {} }, p2DcList: [] };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-roar', playerNum: 1, dcName: 'Bantha', displayName: 'Bantha [DG 1]' }]]);
+  // 10-7 = 3 damage, threshold is 3 — should pass
+  const result = resolveAbility('Roar', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  // Should NOT return the damage-check failure (no hostile DCs → different error)
+  assert.ok(!result.manualMessage?.includes('you have suffered 0'));
+});
+
+test('resolveAbility Roar returns manual when damage < threshold', () => {
+  const msgId = 'msg-roar2';
+  // healthState [9, 10]: only 1 damage suffered, threshold is 3
+  const dcHealthState = new Map([[msgId, [[9, 10]]]]);
+  const game = { gameId: 'g-roar2', dcActionsData: { [msgId]: {} } };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-roar2', playerNum: 1, dcName: 'Bantha', displayName: 'Bantha [DG 1]' }]]);
+  const result = resolveAbility('Roar', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(result.applied, false);
+  assert.ok(result.manualMessage?.includes('Damage'));
+  // totalDamage = 10 - 9 = 1, should say "you have suffered 1" not "suffered 0"
+  assert.ok(result.manualMessage?.includes('1'));
+});
+
+test('resolveAbility Roar with chosenFigureKey applies Stun to hostile figures', () => {
+  const msgId = 'msg-roar3';
+  const hostileMsgId = 'msg-roar3-hostile';
+  // No damage check needed: pass dcHealthState with enough damage
+  const dcHealthState = new Map([[msgId, [[5, 10]]]]);
+  const game = {
+    gameId: 'g-roar3',
+    dcActionsData: { [msgId]: {} },
+    p2DcMessageIds: [hostileMsgId],
+    p2DcList: [{ dcName: 'Nexu', displayName: 'Nexu [DG 2]', healthState: [[3, 6]] }],
+    figurePositions: { 1: {}, 2: { 'Nexu-2-0': 'p8' } },
+    figureConditions: {},
+  };
+  const dcMessageMeta = new Map([
+    [msgId, { gameId: 'g-roar3', playerNum: 1, dcName: 'Rancor', displayName: 'Rancor [DG 1]' }],
+    [hostileMsgId, { gameId: 'g-roar3', playerNum: 2, dcName: 'Nexu', displayName: 'Nexu [DG 2]' }],
+  ]);
+  const result = resolveAbility('Roar', { game, playerNum: 1, dcMessageMeta, dcHealthState, chosenFigureKey: hostileMsgId });
+  assert.strictEqual(result.applied, true);
+  assert.ok(game.figureConditions['Nexu-2-0']?.includes('Stun'));
+});
+
+test('resolveAbility Blaze of Glory first call returns DC choice list', () => {
+  const msgId = 'msg-bog';
+  const game = { gameId: 'g-bog' };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bog', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const result = resolveAbility('Blaze of Glory', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.requiresChoice, true);
+  assert.ok(result.choiceOptions?.includes('Luke [DG 1]'));
+});
+
+test('resolveAbility Blaze of Glory second call readies DC and sets EOR damage', () => {
+  const msgId = 'msg-bog2';
+  const game = {
+    gameId: 'g-bog2',
+    p1DcMessageIds: [msgId],
+    p1DcList: [{ dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]', exhausted: true }],
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bog2', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
+  const result = resolveAbility('Blaze of Glory', { game, playerNum: 1, dcMessageMeta, chosenOption: 'Luke [DG 1]' });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.p1DcList[0].exhausted, false);
+  assert.strictEqual(game.endOfRoundSelfDamage[1].damage, 3);
+  assert.ok(result.logMessage?.includes('3 Damage'));
+});

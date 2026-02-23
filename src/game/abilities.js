@@ -2256,7 +2256,8 @@ export function resolveAbility(abilityId, context) {
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     if (typeof entry.onlyIfSufferedDamageGte === 'number') {
       const healthState = dcHealthState?.get(msgId) || [];
-      const totalDamage = healthState.reduce((s, e) => s + (e?.damage ?? 0), 0);
+      // healthState entries are [current, max]; damage suffered = max - current
+      const totalDamage = healthState.reduce((s, e) => s + ((e?.[1] ?? 0) - (e?.[0] ?? e?.[1] ?? 0)), 0);
       if (totalDamage < entry.onlyIfSufferedDamageGte) {
         return { applied: false, manualMessage: `Roar: you must have suffered ${entry.onlyIfSufferedDamageGte}+ Damage (you have suffered ${totalDamage}).` };
       }
