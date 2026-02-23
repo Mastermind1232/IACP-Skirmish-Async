@@ -19,8 +19,69 @@ async function sendReadyToResolveRolls(thread, gameId) {
 }
 
 /**
+ * Apply direct unpreventable strain/damage to a figure (Relentless, etc.).
+ * Handles defeat, VP, activations update.
+ */
+async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLabel, sourceLabel, ctx, thread) {
+  const {
+    dcHealthState, findDcMessageIdForFigure, logGameAction, isGroupDefeated, checkWinConditions,
+    updateActivationsMessage, updateAttachmentMessageForDc, getDcStats, getDcEffects, client,
+  } = ctx;
+  if (!dcHealthState || !findDcMessageIdForFigure) return;
+  const msgId = findDcMessageIdForFigure(game.gameId, playerNum, figureKey);
+  if (!msgId) return;
+  const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
+  const figureIndex = figMatch ? parseInt(figMatch[2], 10) : 0;
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const healthState = dcHealthState.get(msgId) || [];
+  const entry = healthState[figureIndex];
+  if (!entry) return;
+  const [cur, max] = entry;
+  const newCur = Math.max(0, (cur ?? max) - amount);
+  healthState[figureIndex] = [newCur, max ?? newCur];
+  dcHealthState.set(msgId, healthState);
+  const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+  const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+  const idx = (dcIds || []).indexOf(msgId);
+  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+  await thread.send(`**${abilityLabel}** (${sourceLabel}) — **${dcName}** suffers 1 Strain (${cur ?? max} → ${newCur} HP).`);
+  if (logGameAction) {
+    await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** suffered 1 Strain.`, { phase: 'ROUND', icon: 'attack' });
+  }
+  if (newCur <= 0) {
+    const attackerPlayerNum = playerNum === 1 ? 2 : 1;
+    if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figureKey];
+    const stats = getDcStats?.(dcName);
+    const effects = getDcEffects?.()?.[dcName];
+    const figures = stats?.figures ?? 1;
+    const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
+    const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[vpKey].kills += vp;
+    game[vpKey].total += vp;
+    if (logGameAction) {
+      await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
+    }
+    if (idx >= 0 && isGroupDefeated?.(game, playerNum, idx)) {
+      const activatedIndices = playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+      if (!activatedIndices.includes(idx)) {
+        if (playerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
+        else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+        if (updateActivationsMessage) await updateActivationsMessage(game, playerNum, client);
+      }
+      const ccAttachKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+      if (game[ccAttachKey]?.[msgId]?.length) {
+        delete game[ccAttachKey][msgId];
+        if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, playerNum, msgId, client);
+      }
+    }
+    await checkWinConditions?.(game, client);
+  }
+}
+
+/**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, updateDcActionsMessage, ACTION_ICONS, ThreadAutoArchiveDuration, resolveCombatAfterRolls, saveGames, client
+ * @param {object} ctx - getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, updateDcActionsMessage, ACTION_ICONS, ThreadAutoArchiveDuration, resolveCombatAfterRolls, saveGames, client, dcHealthState, findDcMessageIdForFigure, logGameAction, isGroupDefeated, checkWinConditions, updateActivationsMessage
  */
 export async function handleAttackTarget(interaction, ctx) {
   const {
@@ -30,6 +91,13 @@ export async function handleAttackTarget(interaction, ctx) {
     getDcStats,
     getDcEffects,
     updateDcActionsMessage,
+    dcHealthState,
+    findDcMessageIdForFigure,
+    logGameAction,
+    isGroupDefeated,
+    checkWinConditions,
+    updateActivationsMessage,
+    updateAttachmentMessageForDc,
     ACTION_ICONS,
     ThreadAutoArchiveDuration,
     saveGames,
@@ -153,6 +221,53 @@ export async function handleAttackTarget(interaction, ctx) {
   const attackerPassives = getDcStats(meta.dcName).passives || [];
   const defenderPassives = getDcStats(targetDcName).passives || [];
   applyDcPassivesToCombat(game.pendingCombat, attackerPassives, defenderPassives);
+
+  // --- Passive-auto ability wiring ---
+  const atkEff = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const defEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const atkSpecialIds = atkEff?.specialAbilityIds || [];
+  const defSpecialIds = defEff?.specialAbilityIds || [];
+
+  // Health state for HP-conditional abilities (Full of Rage, Fury)
+  const atkHpArr = dcHealthState?.get(msgId) || [];
+  const atkFigHp = atkHpArr[figureIndex];
+  const atkDamageSuffered = atkFigHp ? Math.max(0, (atkFigHp[1] ?? atkFigHp[0] ?? 0) - (atkFigHp[0] ?? 0)) : 0;
+
+  // Battle Meditation (Diala Passil): auto-Focus before attacking
+  if (atkSpecialIds.includes('battle_meditation') && !game.pendingCombat.attackerConds.includes('Focus')) {
+    game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
+    if (!game.figureConditions) game.figureConditions = {};
+    game.figureConditions[attackerFigureKey] = [...(game.figureConditions[attackerFigureKey] || []).filter(c => c !== 'Focus'), 'Focus'];
+    await thread.send('**Battle Meditation** — Diala is **Focused** before attacking (+1 green die).');
+  }
+
+  // Full of Rage (Krrsantan): auto-Focus if 3+ damage suffered
+  if (atkSpecialIds.includes('full_of_rage') && !game.pendingCombat.attackerConds.includes('Focus') &&
+      !(game.figureConditions?.[attackerFigureKey] || []).includes('Focus') && atkDamageSuffered >= 3) {
+    game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
+    if (!game.figureConditions) game.figureConditions = {};
+    game.figureConditions[attackerFigureKey] = [...(game.figureConditions[attackerFigureKey] || []).filter(c => c !== 'Focus'), 'Focus'];
+    await thread.send(`**Full of Rage** — Krrsantan is **Focused** before attacking (${atkDamageSuffered} damage suffered, +1 green die).`);
+  }
+
+  // Fury (Wookiee Warriors): +1 Surge if 5+ damage
+  const furyIds = ['fury_wookiee_elite', 'fury_wookiee_reg'];
+  if (atkSpecialIds.some(id => furyIds.includes(id)) && atkDamageSuffered >= 5) {
+    game.pendingCombat.furyBonus = 1;
+    await thread.send(`**Fury** — Wookiee Warrior is **Furious** (+1 Surge, having suffered ${atkDamageSuffered} damage).`);
+  }
+
+  // Cunning (Han Solo, Jyn Odan, Nexu): while defending, +1 Block per Evade result
+  const cunningIds = ['cunning_han', 'cunning_jyn', 'cunning_nexu_elite', 'cunning_nexu_reg'];
+  if (defSpecialIds.some(id => cunningIds.includes(id))) {
+    game.pendingCombat.hasCunning = true;
+  }
+
+  // Relentless (Trandoshan Hunter, IG-88, Fifth Brother): 1 Strain to target within 3
+  const relentlessIds = ['relentless_trandoshan_elite', 'relentless_trandoshan_reg', 'relentless_ig88', 'fifth_brother_relentless'];
+  if (atkSpecialIds.some(id => relentlessIds.includes(id)) && distanceToTarget <= 3) {
+    await applyStrainToFigure(game, defenderPlayerNum, target.figureKey, 1, 'Relentless', meta.dcName, ctx, thread);
+  }
 
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
   if (nextPierce) delete game.nextAttackBonusPierce?.[attackerPlayerNum];
@@ -660,7 +775,9 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   const perDefDieSurge = (combat.bonusSurgePerDefenseDie || 0) * defenseDiceCount;
   // Hidden on attacker: +1 surge
   const hiddenSurgeBonus = combat.attackerConds?.includes('Hide') ? 1 : 0;
-  const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0) + perDefDieSurge + hiddenSurgeBonus;
+  // Fury (Wookiee Warriors): +1 surge if 5+ damage (set at attack declare time)
+  const furyBonus = combat.furyBonus || 0;
+  const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0) + perDefDieSurge + hiddenSurgeBonus + furyBonus;
   const rawSurge = roll.surge + surgeBonus + (combat.tokenSurgeBonus || 0);
   const roundEvade = game.roundDefenseBonusEvade?.[defPlayerNum] || 0;
   const totalEvade = defRoll.evade + (combat.bonusEvade || 0) + roundEvade;
@@ -704,8 +821,8 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
     const roundSurge = game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0;
     const ccSurge = (combat.surgeBonus || 0);
-    const surgeDisplay = (ccSurge > 0 || roundSurge > 0 || hiddenSurgeBonus > 0)
-      ? `${roll.surge}${ccSurge ? ` + ${ccSurge} (CC)` : ''}${roundSurge ? ` + ${roundSurge} (round)` : ''}${hiddenSurgeBonus ? ` + 1 (Hidden)` : ''} = **${totalSurge}**`
+    const surgeDisplay = (ccSurge > 0 || roundSurge > 0 || hiddenSurgeBonus > 0 || furyBonus > 0)
+      ? `${roll.surge}${ccSurge ? ` + ${ccSurge} (CC)` : ''}${roundSurge ? ` + ${roundSurge} (round)` : ''}${hiddenSurgeBonus ? ` + 1 (Hidden)` : ''}${furyBonus ? ` + ${furyBonus} (Fury)` : ''} = **${totalSurge}**`
       : `**${totalSurge}**`;
     await thread.send({
       content: `**Spend surge?** You have ${surgeDisplay} surge. Choose an ability or Done.`,

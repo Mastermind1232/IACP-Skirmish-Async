@@ -148,7 +148,11 @@ export function computeCombatResult(combat) {
     }
   }
   const pierceToUse = combat.defenderIgnorePierce ? 0 : totalPierce;
-  const blockForCalc = combat.ignoreDefenseResultsNotOnDice ? defRoll.block : (defRoll.block + bonusBlock);
+  // Cunning: +1 Block per rolled Evade result while defending (Han Solo, Jyn Odan, Nexu)
+  const cunningBonus = (combat.hasCunning) ? defRoll.evade : 0;
+  const blockForCalc = combat.ignoreDefenseResultsNotOnDice
+    ? (defRoll.block + cunningBonus)
+    : (defRoll.block + bonusBlock + cunningBonus);
   let effectiveBlock = Math.max(0, blockForCalc - pierceToUse);
   // Weakened on defender: -1 from their block result
   const defenderWeakened = combat.defenderConds?.includes('Weaken');
@@ -183,6 +187,7 @@ export function computeCombatResult(combat) {
   if (bonusAcc) resultText += ` | bonus: +${bonusAcc} acc`;
   if (bonusHits || perDefDieDamage) resultText += ` | bonus: +${(bonusHits || 0) + perDefDieDamage} Hit`;
   if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) resultText += ` | bonus: +${bonusBlock} Block`;
+  if (cunningBonus) resultText += ` | **Cunning**: +${cunningBonus} Block (from ${defRoll.evade} evade)`;
   if (combat.ignoreDefenseResultsNotOnDice) resultText += ' | CC: ignore defense not on dice';
   if (evadeCancelled > 0) resultText += ` | Evade cancelled ${evadeCancelled} surge`;
   if (bonusEvade) resultText += ` | bonus: +${bonusEvade} Evade`;

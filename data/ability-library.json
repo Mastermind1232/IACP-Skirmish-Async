@@ -2877,7 +2877,7 @@
       "label": "Battle Meditation",
       "description": "Before you declare an attack, become Focused.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "military_efficiency": {
       "type": "dcSpecial",
@@ -2913,7 +2913,7 @@
       "label": "Relentless",
       "description": "When you declare an attack targeting a figure within 3 spaces, that figure suffers 1 Strain.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "relentless_trandoshan_reg": {
       "type": "dcSpecial",
@@ -2922,7 +2922,7 @@
       "label": "Relentless",
       "description": "When you declare an attack targeting a figure within 3 spaces, that figure suffers 1 Strain.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "relentless_ig88": {
       "type": "dcSpecial",
@@ -2931,7 +2931,7 @@
       "label": "Relentless",
       "description": "When you declare an attack targeting a figure within 3 spaces, that figure suffers 1 Strain.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "acp_scattergun": {
       "type": "dcSpecial",
@@ -2958,7 +2958,7 @@
       "label": "Cunning",
       "description": "While defending, apply +1 Block to the defense results for each Evade result.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "cunning_jyn": {
       "type": "dcSpecial",
@@ -2967,7 +2967,7 @@
       "label": "Cunning",
       "description": "While defending, apply +1 Block to the defense results for each Evade result.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "cunning_nexu_elite": {
       "type": "dcSpecial",
@@ -2976,7 +2976,7 @@
       "label": "Cunning",
       "description": "While defending, apply +1 Block to the defense results for each Evade result.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "cunning_nexu_reg": {
       "type": "dcSpecial",
@@ -2985,7 +2985,7 @@
       "label": "Cunning",
       "description": "While defending, apply +1 Block to the defense results for each Evade result.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "fury_wookiee_elite": {
       "type": "dcSpecial",
@@ -2994,7 +2994,7 @@
       "label": "Fury",
       "description": "While attacking, if you have suffered 5 or more Damage, apply +1 Surge to the attack results.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "fury_wookiee_reg": {
       "type": "dcSpecial",
@@ -3003,7 +3003,7 @@
       "label": "Fury",
       "description": "While attacking, if you have suffered 5 or more Damage, apply +1 Surge to the attack results.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "distracting_han": {
       "type": "dcSpecial",
@@ -3057,7 +3057,7 @@
       "label": "Full of Rage",
       "description": "Before you declare an attack, if you have suffered 3 or more Damage, become Focused.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "fifth_brother_relentless": {
       "type": "dcSpecial",
@@ -3066,7 +3066,7 @@
       "label": "Relentless Pursuit",
       "description": "When you declare an attack, if the target is within 3 spaces, that figure suffers 1 Strain.",
       "oncePer": null,
-      "wiredStatus": "unwired"
+      "wiredStatus": "wired"
     },
     "shared_intuition": {
       "type": "dcSpecial",
