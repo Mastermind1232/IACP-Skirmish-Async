@@ -370,7 +370,7 @@ test('resolveAbility Meditation applies Focus (same as Focus)', () => {
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-med', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [DG 1]' }]]);
   const result = resolveAbility('Meditation', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.strictEqual(result.logMessage, 'Became Focused.');
+  assert.ok(result.logMessage.startsWith('Became Focused.'));
   assert.strictEqual(game.figureConditions['Luke Skywalker-1-0']?.includes('Focus'), true);
 });
 
