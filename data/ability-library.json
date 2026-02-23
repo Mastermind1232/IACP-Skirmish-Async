@@ -516,9 +516,10 @@
     },
     "Foresee": {
       "type": "ccEffect",
-      "label": "Look at top 2 of opponent's deck, discard 1 (manual). If discarded cost ≤1, draw 1",
-      "draw": 1,
-      "wiredStatus": "partial"
+      "label": "Look at top 2 of opponent's deck, discard 1; if cost ≤1, draw 1 (fully manual)",
+      "informational": true,
+      "logMessage": "**Foresee** — Look at the top 2 cards of your opponent's Command deck; discard 1 of them. If the discarded card's cost is 1 or less, draw 1 Command card from your own deck (honor).",
+      "wiredStatus": "wired"
     },
     "Preservation Protocol": {
       "type": "ccEffect",
@@ -1129,9 +1130,10 @@
     },
     "Devotion": {
       "type": "ccEffect",
-      "label": "Draw 1 card with chosen figure's trait (search manual)",
-      "draw": 1,
-      "wiredStatus": "partial"
+      "label": "Search Command deck for card with chosen figure's trait; draw it (manual search)",
+      "informational": true,
+      "logMessage": "**Devotion** — Choose an adjacent friendly figure. Search your Command deck for 1 card that has that figure's name as a trait; draw it, then shuffle your deck (honor — resolve the search manually).",
+      "wiredStatus": "wired"
     },
     "Whistling Birds": {
       "type": "ccEffect",
@@ -1246,9 +1248,10 @@
     },
     "Built on Hope": {
       "type": "ccEffect",
-      "label": "Look at top 3, place 1 in hand (rest manual)",
-      "draw": 1,
-      "wiredStatus": "partial"
+      "label": "Look at top 3 of your deck; place 1 in hand, rest on top/bottom in any order (manual)",
+      "informational": true,
+      "logMessage": "**Built on Hope** — Look at the top 3 cards of your Command deck; place 1 in your hand and put the others on the top or bottom of your deck in any order (honor — resolve manually). Passive: when this card is discarded from your deck, re-draw it.",
+      "wiredStatus": "wired"
     },
     "Burst Fire": {
       "type": "ccEffect",
