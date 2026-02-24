@@ -211,6 +211,7 @@ export {
   handleDcCcDoubleAction,
   handleDcAction,
   handlePounceSpacePick,
+  handleDcAbilityChoice,
 } from './dc-play-area.js';
 export {
   handleSquadModal,
