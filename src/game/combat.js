@@ -98,8 +98,8 @@ export function getAttackerSurgeAbilities(combat) {
 /** Parse a surge ability key into modifiers. F6: blast, recover, cleave. */
 export function parseSurgeEffect(key) {
   const out = { damage: 0, pierce: 0, accuracy: 0, conditions: [], blast: 0, recover: 0, cleave: 0 };
-  // Strip double-surge prefix before parsing
-  const k = String(key || '').replace(/^double:/, '').toLowerCase().trim();
+  // Strip double-surge prefix and parenthetical annotations (e.g. "blast 3 (2 surges)" → "blast 3")
+  const k = String(key || '').replace(/^double:/, '').replace(/\s*\([^)]*\)/g, '').toLowerCase().trim();
   // Named surge key shortcuts (cannot be parsed as generic patterns)
   if (k === 'stun_net') { out.conditions.push('Stun'); return out; }
   if (k === 'harass') { out.surgeHarass = 1; return out; }
@@ -112,15 +112,18 @@ export function parseSurgeEffect(key) {
   if (k === 'suppression') { out.surgeSuppressionStrain = true; return out; }
   // Complex surge effects: flag for informational display, resolve manually
   if (['concussive_bolt', 'agitate', 'fighting_knife', 'mastery', 'bargain',
-       'fell_swoop', 'spread_the_pain', 'interrogate'].includes(k)) {
+       'fell_swoop', 'spread_the_pain', 'interrogate',
+       'cancel 2', 'cleave x', 'recover x',
+       'block 1', 'block token', 'hit token', 'hit token 2',
+       'evade', 'evade token', 'power token', 'surge 1'].includes(k)) {
     out.surgeComplex = k; return out;
   }
-  const parts = String(key || '').toLowerCase().trim().split(/\s*,\s*/);
+  const parts = k.split(/\s*,\s*/);
   for (const p of parts) {
     const dmg = p.match(/^damage\s+(\d+)$/); if (dmg) { out.damage += parseInt(dmg[1], 10); continue; }
     const hit = p.match(/^\+(\d+)\s+hit(s?)$/); if (hit) { out.damage += parseInt(hit[1], 10); continue; }
     const pierce = p.match(/^pierce\s+(\d+)$/); if (pierce) { out.pierce += parseInt(pierce[1], 10); continue; }
-    const acc = p.match(/^accuracy\s+(\d+)$/); if (acc) { out.accuracy += parseInt(acc[1], 10); continue; }
+    const acc = p.match(/^accuracy\s+(-?\d+)$/); if (acc) { out.accuracy += parseInt(acc[1], 10); continue; }
     const blast = p.match(/^blast\s+(\d+)$/); if (blast) { out.blast += parseInt(blast[1], 10); continue; }
     const recover = p.match(/^recover\s+(\d+)$/); if (recover) { out.recover += parseInt(recover[1], 10); continue; }
     const cleave = p.match(/^cleave\s+(\d+)$/); if (cleave) { out.cleave += parseInt(cleave[1], 10); continue; }
@@ -129,6 +132,10 @@ export function parseSurgeEffect(key) {
     else if (p === 'bleed') out.conditions.push('Bleed');
     else if (p === 'hide') out.conditions.push('Hide');
     else if (p === 'focus') out.conditions.push('Focus');
+    // Token effects within a combo (e.g. "stun, evade token") — flag for manual resolution
+    else if (['block token', 'hit token', 'hit token 2', 'evade token', 'power token', 'surge 1', 'evade', 'block 1', 'cancel 2'].includes(p)) {
+      out.surgeComplex = out.surgeComplex || p;
+    }
   }
   return out;
 }

@@ -181,6 +181,7 @@ export function getMovementProfile(dcName, figureKey, game) {
   const keywords = getMovementKeywords(dcName);
   const isMassive = keywords.has('massive');
   const isMobile = keywords.has('mobile');
+  const hasEfficientTravel = keywords.has('efficient travel');
   return {
     size: storedSize,
     cols,
@@ -190,9 +191,9 @@ export function getMovementProfile(dcName, figureKey, game) {
     canRotate: cols !== rows,
     isMassive,
     isMobile,
-    ignoreDifficult: isMassive || isMobile,
+    ignoreDifficult: isMassive || isMobile || hasEfficientTravel,
     ignoreBlocking: isMassive || isMobile,
-    ignoreFigureCost: isMassive || isMobile,
+    ignoreFigureCost: isMassive || isMobile || hasEfficientTravel,
     canEndOnOccupied: isMassive,
     keywords,
   };
