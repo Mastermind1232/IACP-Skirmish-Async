@@ -2,7 +2,7 @@
  * F1 Ability library: lookup by id, resolve surge (code-per-ability). No Discord.
  * Surge resolution uses combat.parseSurgeEffect; DCs still reference keys in dc-effects (surgeAbilities array).
  */
-import { getAbilityLibrary, getDcEffects, getCcEffect } from '../data-loader.js';
+import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect } from '../data-loader.js';
 
 /** Look up DC stats by name (handles display variants). */
 function getStatsForDc(dcName) {
@@ -120,17 +120,37 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, freeAction: true, logMessage: `**${label}** — You may perform ${entry.actionBonus} additional action${entry.actionBonus !== 1 ? 's' : ''} this activation. Action counter restored.` };
   }
 
-  // dcSpecial: freeAttackBonus (Heroic) — next attack this activation costs no action
+  // dcSpecial: overrideAttackDice (Saber Strike, Bo-Rifle Staff Strike) — next attack uses specific dice/type/pierce
+  // Must run BEFORE freeAttackBonus to take precedence when both are present.
+  if (entry.type === 'dcSpecial' && Array.isArray(entry.overrideAttackDice)) {
+    const { game, msgId } = context;
+    if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[msgId] = true;
+    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+    game.pendingOverrideAttackDice[msgId] = {
+      dice: entry.overrideAttackDice,
+      type: entry.overrideAttackType || null,
+      pierce: entry.overrideAttackPierce || 0,
+    };
+    return {
+      applied: true,
+      freeAction: !!entry.freeAction,
+      logMessage: entry.logMessage || `**${entry.label}** — Click Attack to proceed.`,
+    };
+  }
+
+  // dcSpecial: freeAttackBonus (Heroic, Rapid Fire, Brutality) — next attack this activation costs no action
   if (entry.type === 'dcSpecial' && entry.freeAttackBonus) {
     const { game, msgId } = context;
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[msgId] = true;
     const label = entry.label || 'Heroic';
-    return { applied: true, freeAction: true, logMessage: `**${label}** — Your next attack costs no action. Click Attack when ready.` };
+    return { applied: true, freeAction: true, logMessage: entry.logMessage || `**${label}** — Your next attack costs no action. Click Attack when ready.` };
   }
 
-  // dcSpecial: freeMoveEqualToSpeed (Wall Run) — gain free MP equal to DC's Speed; terrain-adjacent-to-walls is honour
+  // dcSpecial: freeMoveEqualToSpeed (Wall Run, Charge) — gain free MP equal to DC's Speed
   if (entry.type === 'dcSpecial' && entry.freeMoveEqualToSpeed) {
     const { game, msgId, meta } = context;
     if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
@@ -141,8 +161,36 @@ export function resolveAbility(abilityId, context) {
     bank.total = (bank.total ?? 0) + speed;
     bank.remaining = (bank.remaining ?? 0) + speed;
     game.movementBank[msgId] = bank;
+    // Charge (and similar): also grant a free attack after the move
+    if (entry.freeAttackBonus) {
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = true;
+    }
     const label = entry.label || 'Wall Run';
-    return { applied: true, logMessage: `**${label}** — Gained ${speed} free movement points (your Speed). You may ignore terrain adjacent to walls during this movement (honour system).`, refreshMovementBank: true, activeMsgId: msgId };
+    const extraMsg = entry.freeAttackBonus ? ' Then your next attack costs no action.' : ' You may ignore terrain adjacent to walls during this movement (honour system).';
+    return { applied: true, logMessage: entry.logMessage || `**${label}** — Gained ${speed} free movement points (your Speed).${extraMsg}`, refreshMovementBank: true, activeMsgId: msgId };
+  }
+
+  // dcSpecial: rollOneDie (Slam, Smash, Electrified Knuckledusters, Parting Gift) — roll one die and report results
+  if (entry.type === 'dcSpecial' && entry.rollOneDie) {
+    const color = entry.rollOneDie;
+    const faces = getDiceData().attack?.[color.toLowerCase()];
+    if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die and apply results manually.` };
+    const face = faces[Math.floor(Math.random() * faces.length)];
+    const hits = face.dmg ?? 0;
+    const surges = face.surge ?? 0;
+    const acc = face.acc ?? 0;
+    const parts = [];
+    if (hits) parts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+    if (surges) parts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
+    if (acc) parts.push(`${acc} Accuracy`);
+    const diceResult = parts.length ? parts.join(', ') : 'blank';
+    const surgeMsg = entry.rollOneDieSurgeCondition && surges >= 1 ? ` (1+ Surge → apply **${entry.rollOneDieSurgeCondition}** condition!)` : '';
+    const noteMsg = entry.rollOneDieNote ? `\n> ${entry.rollOneDieNote}` : '';
+    return {
+      applied: true,
+      logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**${surgeMsg}${noteMsg}`,
+    };
   }
 
   // dcSpecial: freeMoveBonus + nextAttacksBonusHits (On the Hunt — gain free MP, next attack gets +N Hit)

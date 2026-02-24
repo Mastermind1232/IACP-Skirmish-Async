@@ -5529,6 +5529,8 @@ client.on('interactionCreate', async (interaction) => {
       getAbility,
       resolveSurgeAbility,
       getSurgeAbilityLabel,
+      getRange,
+      hasLineOfSight,
     };
     if (buttonKey === 'cleave_target_') await handleCleaveTarget(interaction, combatContext);
     else if (buttonKey === 'attack_target_') await handleAttackTarget(interaction, combatContext);

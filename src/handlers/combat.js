@@ -130,6 +130,7 @@ export async function handleAttackTarget(interaction, ctx) {
     return;
   }
   const attackerPlayerNum = meta.playerNum;
+  const { getRange, hasLineOfSight } = ctx;
   if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
     await interaction.followUp({ content: 'Only the owner can attack.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
@@ -147,6 +148,14 @@ export async function handleAttackTarget(interaction, ctx) {
 
   const attackerStats = getDcStats(meta.dcName);
   let attackInfo = attackerStats.attack || { dice: ['red'], range: [1, 3] };
+
+  // pendingOverrideAttackDice (Saber Strike, Bo-Rifle Staff Strike): replace dice/type/pierce for this attack
+  const overrideDice = game.pendingOverrideAttackDice?.[msgId];
+  if (overrideDice) {
+    if (overrideDice.dice) attackInfo = { ...attackInfo, dice: overrideDice.dice };
+    if (overrideDice.type === 'melee') attackInfo = { ...attackInfo, range: [1, 1] };
+    delete game.pendingOverrideAttackDice[msgId];
+  }
   const targetDcName = target.figureKey.replace(/-\d+-\d+$/, '');
   const targetStats = getDcStats(targetDcName);
   const targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName.replace(/\s*\[.*\]\s*$/, '')];
@@ -182,7 +191,7 @@ export async function handleAttackTarget(interaction, ctx) {
     components: [readyRow],
   });
   const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
-  const nextPierce = game.nextAttackBonusPierce?.[attackerPlayerNum] || 0;
+  const nextPierce = (game.nextAttackBonusPierce?.[attackerPlayerNum] || 0) + (overrideDice?.pierce || 0);
   const [minRange, maxRange] = attackInfo.range || [1, 3];
   const isRanged = minRange >= 2 || maxRange >= 3;
   const distanceToTarget = target.dist ?? 1;
@@ -366,6 +375,35 @@ export async function handleAttackTarget(interaction, ctx) {
       game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: newDice };
       await thread.send(`**Vanguard** — 1 ${dice[nonRedIdx]} die replaced with Red (target within ${distanceToTarget} spaces).`);
     }
+  }
+
+  // Shared Intuition (Tress Hacnua): +1 Hit while attacking if another friendly HUNTER within 3 has LOS to target
+  if (atkSpecialIds.includes('shared_intuition') && getRange && hasLineOfSight && mapSpaces && targetCoord) {
+    const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
+    if (attackerPos) {
+      const friendlyPoses = game.figurePositions?.[attackerPlayerNum] || {};
+      let found = false;
+      for (const [fk, pos] of Object.entries(friendlyPoses)) {
+        if (found || fk === attackerFigureKey) continue;
+        const fkDcName = fk.replace(/-\d+-\d+$/, '');
+        const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+        const fkKeywords = (fkEff?.keywords || []).map((k) => String(k).toUpperCase());
+        if (!fkKeywords.includes('HUNTER')) continue;
+        if (getRange(attackerPos, pos) > 3) continue;
+        if (!hasLineOfSight(pos, targetCoord, mapSpaces)) continue;
+        game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+        await thread.send(`**Shared Intuition** — ${fkDcName} (HUNTER) is within 3 spaces with LOS to target: +1 Hit.`);
+        found = true;
+      }
+    }
+  }
+
+  // Log override dice if active (Saber Strike, Bo-Rifle Staff Strike)
+  if (overrideDice?.dice) {
+    const diceStr = overrideDice.dice.join(', ');
+    const typeStr = overrideDice.type === 'melee' ? ' (Melee)' : '';
+    const pierceStr = overrideDice.pierce > 0 ? `, Pierce ${overrideDice.pierce}` : '';
+    await thread.send(`**Override dice** — Attack uses [${diceStr}]${typeStr}${pierceStr}.`);
   }
 
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];

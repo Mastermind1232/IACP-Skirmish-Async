@@ -172,14 +172,22 @@
     "brutality": {
       "type": "dcSpecial",
       "label": "Brutality: Perform 2 attacks. Each attack must have a different target.",
-      "informational": true,
-      "wiredStatus": "informational"
+      "wiredStatus": "wired",
+      "freeAttackBonus": true,
+      "logMessage": "**Brutality** — Your next attack costs no action (2 attacks total; each must target a different figure — honor system)."
     },
     "saber_strike": {
       "type": "dcSpecial",
       "label": "Saber Strike: Perform a melee attack using 1 red and 1 yellow die. This attack gains Pierce 3.",
-      "informational": true,
-      "wiredStatus": "informational"
+      "wiredStatus": "wired",
+      "freeAttackBonus": true,
+      "overrideAttackDice": [
+        "red",
+        "yellow"
+      ],
+      "overrideAttackType": "melee",
+      "overrideAttackPierce": 3,
+      "logMessage": "**Saber Strike** — Your next attack is free and uses [Red, Yellow] dice with Pierce 3 (melee)."
     },
     "get_into_position": {
       "type": "dcSpecial",
@@ -2304,10 +2312,11 @@
     },
     "slam": {
       "type": "dcSpecial",
-      "informational": true,
       "label": "Slam",
       "logMessage": "Slam: Roll 1 red die. Choose an adjacent hostile figure — it suffers Damage equal to the Hit results. If that figure is SMALL, you may push it 1 space.",
-      "wiredStatus": "informational"
+      "wiredStatus": "wired",
+      "rollOneDie": "red",
+      "rollOneDieNote": "Deal Hit results as Damage to 1 adjacent hostile figure. If that figure is SMALL, you may push it 1 space."
     },
     "force_lightning": {
       "type": "dcSpecial",
@@ -2489,9 +2498,15 @@
       "label": "Bo-Rifle Staff Strike",
       "description": "Once during your activation, perform a Melee attack using 2 red dice without spending an action.",
       "oncePer": "activation",
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Bo-Rifle Staff Strike** — Once during your activation, perform a Melee attack using 2 red dice without spending an action.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired",
+      "logMessage": "**Bo-Rifle Staff Strike** — Free Special action. Your next attack costs no action and uses [Red, Red] dice (melee).",
+      "freeAction": true,
+      "freeAttackBonus": true,
+      "overrideAttackDice": [
+        "red",
+        "red"
+      ],
+      "overrideAttackType": "melee"
     },
     "heroic": {
       "type": "dcSpecial",
@@ -2521,9 +2536,10 @@
       "label": "Smash",
       "description": "Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.",
       "oncePer": "activation",
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Smash** — Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired",
+      "logMessage": "**Smash** — Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.. Resolve manually and inform your opponent.",
+      "rollOneDie": "red",
+      "rollOneDieNote": "Deal Hit results as Damage to 1 adjacent hostile figure. If that figure is SMALL, you may push it 1 space adjacent to you."
     },
     "force_throw": {
       "type": "dcSpecial",
@@ -2543,9 +2559,11 @@
       "label": "Electrified Knuckledusters",
       "description": "Once during your activation, choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Hit results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.",
       "oncePer": "activation",
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Electrified Knuckledusters** — Once during your activation, choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Hit results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired",
+      "logMessage": "**Electrified Knuckledusters** — Once during your activation, choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Hit results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.. Resolve manually and inform your opponent.",
+      "rollOneDie": "blue",
+      "rollOneDieNote": "Deal Hit results as Damage to 1 adjacent hostile figure. If 1+ Surge rolled: that figure becomes Stunned.",
+      "rollOneDieSurgeCondition": "Stun"
     },
     "parting_gift": {
       "type": "dcSpecial",
@@ -2554,9 +2572,10 @@
       "label": "Parting Gift",
       "description": "Once during your activation, you may choose a space within 3 spaces and roll 1 green die. Each other figure and object on or adjacent to that space suffers Damage equal to the Hit results.",
       "oncePer": "activation",
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Parting Gift** — Once during your activation, you may choose a space within 3 spaces and roll 1 green die. Each other figure and object on or adjacent to that space suffers Damage equal to the Hit results.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired",
+      "logMessage": "**Parting Gift** — Once during your activation, you may choose a space within 3 spaces and roll 1 green die. Each other figure and object on or adjacent to that space suffers Damage equal to the Hit results.. Resolve manually and inform your opponent.",
+      "rollOneDie": "green",
+      "rollOneDieNote": "Choose a space within 3. Each figure on or adjacent to that space suffers Hit results as Damage."
     },
     "demolish": {
       "type": "dcSpecial",
@@ -2587,9 +2606,10 @@
       "label": "Charge",
       "description": "Move a number of spaces up to your Speed. Then, you may perform an attack.",
       "oncePer": null,
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Charge** — Move a number of spaces up to your Speed. Then, you may perform an attack.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired",
+      "logMessage": "**Charge** — Gained free MP equal to Speed. Your next attack costs no action.",
+      "freeMoveEqualToSpeed": true,
+      "freeAttackBonus": true
     },
     "rapid_fire_ig11": {
       "type": "dcSpecial",
@@ -2598,9 +2618,9 @@
       "label": "Rapid Fire",
       "description": "Perform 2 attacks.",
       "oncePer": null,
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Rapid Fire** — Perform 2 attacks.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired",
+      "logMessage": "**Rapid Fire** — Your next attack costs no action (2 attacks total for this activation).",
+      "freeAttackBonus": true
     },
     "rapid_fire_vinto": {
       "type": "dcSpecial",
@@ -2609,9 +2629,9 @@
       "label": "Rapid Fire",
       "description": "Perform 2 attacks.",
       "oncePer": null,
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Rapid Fire** — Perform 2 attacks.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired",
+      "logMessage": "**Rapid Fire** — Your next attack costs no action (2 attacks total for this activation).",
+      "freeAttackBonus": true
     },
     "indiscriminate_fire": {
       "type": "dcSpecial",
@@ -3150,9 +3170,9 @@
       "label": "Shared Intuition",
       "description": "While attacking, if another friendly HUNTER within 3 spaces has line of sight to the target space, apply +1 Hit to your attack results.",
       "oncePer": null,
-      "wiredStatus": "informational",
+      "wiredStatus": "auto",
       "informational": true,
-      "logMessage": "**Shared Intuition** — While attacking, if another friendly HUNTER within 3 spaces has line of sight to the target space, apply +1 Hit to your attack results.. Resolve manually and inform your opponent."
+      "logMessage": "**Shared Intuition** (passive) — While attacking, if another friendly HUNTER within 3 has LOS to the target, +1 Hit is automatically applied. No manual action needed."
     }
   }
 }
