@@ -1414,12 +1414,15 @@ export async function handlePounceSpacePick(interaction, ctx) {
         .setLabel('Done')
         .setStyle(ButtonStyle.Success)
     );
+    const editContent = abilityId === 'pounce'
+      ? `**Pounce**: placed at **${String(chosenSpace).toUpperCase()}**. Use the **Attack** button for your free pounce attack (no action cost), or press **Done** to skip.`
+      : `${result.logMessage || `**${abilityId}** resolved.`} Click **Done** when finished.`;
     await interaction.message.edit({
-      content: `**Pounce**: placed at **${String(chosenSpace).toUpperCase()}**. Use the **Attack** button for your free pounce attack (no action cost), or press **Done** to skip.`,
+      content: editContent,
       components: [doneRow],
     }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   } else {
-    await interaction.message.edit({ content: `Pounce failed: ${result.manualMessage}`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.message.edit({ content: `${abilityId === 'pounce' ? 'Pounce' : 'Ability'} failed: ${result.manualMessage}`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
   saveGames();
 }

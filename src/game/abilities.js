@@ -504,9 +504,10 @@ export function resolveAbility(abilityId, context) {
           resultParts.push(`became **${surgeCondition}**`);
         }
         const targetName = targetFigureKey.replace(/-\d+-\d+$/, '');
+        const pushNote = entry.rollOneDiePushSmallHonor ? ' If that figure is SMALL, you may push it 1 space adjacent to you (apply manually).' : '';
         return {
           applied: true,
-          logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.`,
+          logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.${pushNote}`,
           refreshDcEmbed: true,
         };
       }
@@ -627,6 +628,123 @@ export function resolveAbility(abilityId, context) {
       applied: true,
       logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**${surgeMsg}${noteMsg}`,
     };
+  }
+
+  // dcSpecial: fixedAreaEffect (Demolish, Wrist Flamethrower) — space choice, then apply fixed damage/conditions to area
+  if (entry.type === 'dcSpecial' && entry.fixedAreaEffect) {
+    const { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, chosenSpace } = context;
+    const range = entry.fixedAreaRange || 3;
+    const dmgAmt = entry.fixedAreaDamage || 0;
+    const strainAmt = entry.fixedAreaStrain || 0;
+    const totalPerFig = dmgAmt + strainAmt;
+    const conditions = entry.fixedAreaConditions || [];
+
+    if (chosenSpace) {
+      // Phase 2: apply fixed damage/strain/conditions to all figures on or adjacent to chosenSpace
+      if (!game || !dcHealthState) return { applied: false, manualMessage: `Apply ${entry.label} effects manually.` };
+      const boardState = getBoardStateForMovement(game, null);
+      const spaceNorm = String(chosenSpace).toLowerCase();
+      const adj = boardState?.mapSpaces?.adjacency?.[spaceNorm] || [];
+      const affectedSpaces = new Set([spaceNorm, ...adj.map((s) => String(s).toLowerCase())]);
+      const results = [];
+      for (const pn of [1, 2]) {
+        for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+          if (!coord || !affectedSpaces.has(String(coord).toLowerCase())) continue;
+          const dcName = fk.replace(/-\d+-\d+$/, '');
+          const parts = [];
+          if (totalPerFig > 0) {
+            const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+            if (figMsgId) {
+              const hs = dcHealthState.get(figMsgId) || [];
+              const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+              const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+              const hp = hs[figIdx];
+              if (hp) {
+                const [cur, max] = hp;
+                const newCur = Math.max(0, (cur ?? max) - totalPerFig);
+                hs[figIdx] = [newCur, max ?? newCur];
+                dcHealthState.set(figMsgId, hs);
+                const dcIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+                const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+                const idx = (dcIds || []).indexOf(figMsgId);
+                if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+                const dmgLabel = [dmgAmt > 0 ? `${dmgAmt} Dmg` : null, strainAmt > 0 ? `${strainAmt} Strain` : null].filter(Boolean).join('+');
+                parts.push(`${dmgLabel} (HP: ${cur ?? max}→${newCur})`);
+              } else {
+                parts.push(`apply ${totalPerFig} damage manually`);
+              }
+            } else {
+              parts.push(`apply ${totalPerFig} damage manually`);
+            }
+          }
+          if (conditions.length) {
+            game.figureConditions = game.figureConditions || {};
+            const existing = game.figureConditions[fk] || [];
+            game.figureConditions[fk] = [...new Set([...existing, ...conditions])];
+            const added = conditions.filter((c) => !existing.includes(c));
+            if (added.length) parts.push(added.join(', '));
+          }
+          if (parts.length) results.push(`**${dcName}**: ${parts.join(', ')}`);
+        }
+      }
+      // Apply self strain
+      const selfStrainAmt = entry.fixedSelfStrain || 0;
+      if (selfStrainAmt > 0 && dcHealthState && msgId) {
+        const actData = game.dcActionsData?.[msgId];
+        const selfFigIdx = actData?.selectedFigure ?? 0;
+        const dgMatch = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+        const dgIndex = dgMatch ? dgMatch[1] : '1';
+        const selfHs = dcHealthState.get(msgId) || [];
+        const selfHp = selfHs[selfFigIdx];
+        if (selfHp) {
+          const [cur, max] = selfHp;
+          const newCur = Math.max(0, (cur ?? max) - selfStrainAmt);
+          selfHs[selfFigIdx] = [newCur, max ?? newCur];
+          dcHealthState.set(msgId, selfHs);
+          const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+          const idx = (dcIds || []).indexOf(msgId);
+          if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...selfHs];
+          results.push(`**${meta?.dcName}** suffers ${selfStrainAmt} Strain (self)`);
+        }
+      }
+      // Place rubble token on chosen space
+      if (entry.placesRubble) {
+        game.ancillaryTokens = game.ancillaryTokens || {};
+        game.ancillaryTokens.rubble = [...(game.ancillaryTokens.rubble || []), spaceNorm];
+        results.push(`rubble token placed at **${String(chosenSpace).toUpperCase()}**`);
+      }
+      // Deduct MP cost if specified (e.g. Wrist Flamethrower costs 2 MP)
+      if (entry.mpCost > 0 && game.movementBank?.[msgId]) {
+        game.movementBank[msgId].remaining = Math.max(0, (game.movementBank[msgId].remaining || 0) - entry.mpCost);
+        results.push(`spent ${entry.mpCost} MP`);
+      }
+      const spaceUpper = String(chosenSpace).toUpperCase();
+      return {
+        applied: true,
+        logMessage: `**${entry.label}** — Space **${spaceUpper}**. ${results.length ? results.join('; ') : 'No figures affected.'}`,
+        refreshDcEmbed: results.length > 0,
+        refreshBoard: !!entry.placesRubble,
+      };
+    }
+    // Phase 1: pick a space within range
+    if (!game || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
+    const actionsData = game.dcActionsData?.[msgId];
+    const selectedFig = actionsData?.selectedFigure ?? 0;
+    const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIndex = dgMatch ? dgMatch[1] : '1';
+    const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+    const activatingPos = game.figurePositions?.[playerNum]?.[activatingFigureKey];
+    if (!activatingPos) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (position unknown).` };
+    const boardState = getBoardStateForMovement(game, null);
+    if (!boardState?.mapSpaces) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (map not loaded).` };
+    const occ = boardState.occupiedSet;
+    const occArr = occ instanceof Set ? [...occ] : (occ || []);
+    const reachable = getReachableSpaces(activatingPos, range, boardState.mapSpaces, occArr);
+    const validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
+    const validSpaces = [...validSet];
+    if (validSpaces.length === 0) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (no spaces in range).` };
+    return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**${entry.label}** — Choose a space within ${range}:` };
   }
 
   // dcSpecial: missileSalvoStart (BT-1 Missile Salvo) — set up multi-attack salvo state

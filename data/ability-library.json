@@ -2495,11 +2495,18 @@
     },
     "wrist_flamethrower": {
       "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
       "label": "Wrist Flamethrower",
       "description": "Once per round, spend 2 MP to choose a space within 2 spaces. Each figure on or adjacent suffers 1 Damage + 1 Strain + becomes Weakened.",
-      "informational": true,
-      "logMessage": "**Wrist Flamethrower** — Spend 2 MP, then choose a space within 2 spaces. Each figure on or adjacent to that space suffers 1 Damage + 1 Strain and becomes **Weakened**. Resolve damage and conditions manually on each DC card.",
-      "wiredStatus": "informational"
+      "oncePer": "activation",
+      "wiredStatus": "wired",
+      "fixedAreaEffect": true,
+      "fixedAreaRange": 2,
+      "fixedAreaDamage": 1,
+      "fixedAreaStrain": 1,
+      "fixedAreaConditions": ["Weaken"],
+      "mpCost": 2
     },
     "bo_rifle_staff_strike": {
       "type": "dcSpecial",
@@ -2550,9 +2557,9 @@
       "description": "Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.",
       "oncePer": "activation",
       "wiredStatus": "wired",
-      "logMessage": "**Smash** — Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.. Resolve manually and inform your opponent.",
       "rollOneDie": "red",
-      "rollOneDieNote": "Deal Hit results as Damage to 1 adjacent hostile figure. If that figure is SMALL, you may push it 1 space adjacent to you."
+      "rollOneDieTarget": "adjacentHostile",
+      "rollOneDiePushSmallHonor": true
     },
     "force_throw": {
       "type": "dcSpecial",
@@ -2589,12 +2596,17 @@
     },
     "demolish": {
       "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
       "label": "Demolish",
-      "description": "Choose a space within 3 spaces and LOS. Adjacent figures suffer 1 Damage, place a rubble token, you suffer 1 Strain.",
-      "informational": true,
-      "logMessage": "**Demolish** — Choose a space within 3 spaces and line of sight. Each figure on or adjacent to that space suffers 1 Damage. Place a rubble token in that space. Resolve damage and rubble manually.",
-      "wiredStatus": "partial",
-      "strainCostToSelf": 1
+      "description": "Choose a space within 3 spaces and LOS. Each figure on or adjacent suffers 1 Damage. Place a rubble token. You suffer 1 Strain.",
+      "oncePer": "activation",
+      "wiredStatus": "wired",
+      "fixedAreaEffect": true,
+      "fixedAreaRange": 3,
+      "fixedAreaDamage": 1,
+      "fixedSelfStrain": 1,
+      "placesRubble": true
     },
     "mortar_launcher": {
       "type": "dcSpecial",
