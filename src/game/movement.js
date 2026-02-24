@@ -399,7 +399,7 @@ export function computeMovementCache(startCoord, mpLimit, board, profile) {
     if (canEnd) {
       for (const cell of current.footprint) {
         if (!board.spacesSet.has(cell)) continue;
-        if (current.cost === 0 && cell === startTopLeft) continue;
+        if (current.cost === 0) continue; // never treat starting footprint as a destination
         const prev = cells.get(cell);
         if (!prev || current.cost < prev.cost) {
           cells.set(cell, {
