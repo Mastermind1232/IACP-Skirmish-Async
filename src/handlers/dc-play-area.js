@@ -924,6 +924,27 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         return;
       }
     }
+    // Priority Target passive: figures do not block LOS for this attacker's attacks.
+    // MASSIVE attackers also ignore figure blocking (rules: figures don't block LOS to/from MASSIVE).
+    const attackerPassivesLower = (getDcStats(meta.dcName).passives || []).map(p => String(p).toLowerCase());
+    const attackerIgnoresFigureBlocking = attackerPassivesLower.includes('priority target') || attackerKws.includes('MASSIVE');
+    // Build figure-blocking coord set: all occupied cells except attacker footprint and MASSIVE figures
+    let allFigureBlockingCoords = null;
+    if (!attackerIgnoresFigureBlocking) {
+      allFigureBlockingCoords = new Set();
+      const attackerSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
+      const attackerFp = new Set(getFootprintCells(attackerPos, attackerSize).map(c => String(c).toLowerCase()));
+      for (const poses_ of [game.figurePositions?.[playerNum] || {}, game.figurePositions?.[enemyPlayerNum] || {}]) {
+        for (const [fk, pos] of Object.entries(poses_)) {
+          if (!pos || attackerFp.has(String(pos).toLowerCase())) continue;
+          const fkDcName = fk.replace(/-\d+-\d+$/, '');
+          const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
+          if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
+          const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
+          for (const cell of getFootprintCells(pos, fkSize)) allFigureBlockingCoords.add(String(cell).toLowerCase());
+        }
+      }
+    }
     const targets = [];
     const poses = game.figurePositions?.[enemyPlayerNum] || {};
     const dcList = enemyPlayerNum === 1 ? game.player1Squad?.dcList : game.player2Squad?.dcList || [];
@@ -947,7 +968,19 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       // "I Must Go Alone": protected player's figures cannot be targeted from beyond N spaces
       const iMustGoAlone = game.roundDefenderCannotBeTargetedUnlessWithinSpaces;
       if (iMustGoAlone?.playerNum === enemyPlayerNum && dist > iMustGoAlone.spaces) continue;
-      const los = hasLineOfSight(attackerPos, coord, ms);
+      // Build per-target figure blocking: exclude target's footprint (a figure doesn't block LOS to itself)
+      // Also: MASSIVE targets don't block LOS to/from themselves
+      let losCoords = allFigureBlockingCoords;
+      if (allFigureBlockingCoords) {
+        const targetEff = getDcEffects()[dcName] || getDcEffects()[dcName.replace(/\s*\[.*\]\s*$/, '')];
+        if ((targetEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) {
+          losCoords = null; // MASSIVE targets: no figure blocking
+        } else {
+          const targetFp = new Set(getFootprintCells(coord, size).map(c => String(c).toLowerCase()));
+          losCoords = new Set([...allFigureBlockingCoords].filter(c => !targetFp.has(c)));
+        }
+      }
+      const los = hasLineOfSight(attackerPos, coord, ms, losCoords);
       const m = k.match(/-(\d+)-(\d+)$/);
       const dg = m ? parseInt(m[1], 10) : 1;
       const fi = m ? parseInt(m[2], 10) : 0;

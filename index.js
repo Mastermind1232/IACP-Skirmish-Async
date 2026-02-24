@@ -750,7 +750,7 @@ function getCellsAlongLine(x1, y1, x2, y2) {
  * is unobstructed by blocking terrain or solid walls (impassable edges).
  * Dotted red movementBlockingEdges do NOT block LOS.
  */
-function hasLineOfSight(coord1, coord2, mapSpaces) {
+function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) {
   const blockingSet = new Set((mapSpaces?.blocking || []).map((s) => String(s).toLowerCase()));
   const impassableEdges = mapSpaces?.impassableEdges || [];
   const a = parseCoord(coord1);
@@ -796,6 +796,7 @@ function hasLineOfSight(coord1, coord2, mapSpaces) {
         if (col === a.col && row === a.row) continue;
         if (col === b.col && row === b.row) continue;
         if (blockingSet.has(colRowToCoord(col, row))) { spaceBlocked = true; break; }
+        if (figureBlockingCoords?.has(colRowToCoord(col, row))) { spaceBlocked = true; break; }
       }
       if (!spaceBlocked) return true; // this corner pair is clear
     }
