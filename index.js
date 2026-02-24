@@ -130,6 +130,7 @@ import {
   handleDcAction,
   handleDcAbilityChoice,
   handleArsenalPick,
+  handleEe3DiePick,
   handleSquadModal,
   handleDeployModal,
   handleCcAttachTo,
@@ -3907,7 +3908,7 @@ function getDcStats(dcName) {
       'distracting_han','distracting_c3po','hunker_down','full_of_rage','fury_wookiee_elite','fury_wookiee_reg',
       'relentless_trandoshan_elite','relentless_trandoshan_reg','relentless_ig88','fifth_brother_relentless',
       'lasat_honor_guard','shock_and_awe','flawless_execution','expertise','regenerate_bossk',
-      'sidestep_nexu_elite','sidestep_nexu_reg']);
+      'sidestep_nexu_elite','sidestep_nexu_reg','ee3_carbine']);
     let specials = eff.specials;
     if (!specials && eff.specialAbilityIds?.length) {
       const lib = getAbilityLibrary() || {};
@@ -5598,7 +5599,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_cc_double_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_' || buttonKey === 'dc_ability_choice_') {
+  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_cc_double_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_' || buttonKey === 'dc_ability_choice_' || buttonKey === 'ee3_pick_die_') {
     const dcPlayAreaContext = {
       getGame,
       replyIfGameEnded,
@@ -5670,6 +5671,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'dc_cc_double_') await handleDcCcDoubleAction(interaction, dcPlayAreaContext);
     else if (buttonKey === 'pounce_space_') await handlePounceSpacePick(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_ability_choice_') await handleDcAbilityChoice(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'ee3_pick_die_') await handleEe3DiePick(interaction, dcPlayAreaContext);
     else await handleDcAction(interaction, dcPlayAreaContext, buttonKey);
     return;
   }

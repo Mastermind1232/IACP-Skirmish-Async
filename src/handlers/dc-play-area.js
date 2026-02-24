@@ -197,6 +197,7 @@ export async function handleDcUnactivate(interaction, ctx) {
   if (game.hitAndRunPendingMp?.msgId === msgId) delete game.hitAndRunPendingMp;
   if (game.pendingOverrideAttackDice?.[msgId]) delete game.pendingOverrideAttackDice[msgId];
   if (game.pendingMissileSalvo?.[msgId]) delete game.pendingMissileSalvo[msgId];
+  if (game.pendingEe3Carbine?.[msgId]) delete game.pendingEe3Carbine[msgId];
   // Stun: discarded at the end of the figure's activation
   if (game.figureConditions) {
     const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
@@ -1075,6 +1076,38 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
+    // EE-3 Carbine (Boba Fett): spend 2 MP to change one attack die to red (limit once per attack)
+    const hasEe3Carbine = atkSpecialIds.includes('ee3_carbine');
+    if (hasEe3Carbine && !game.pendingEe3Carbine?.[msgId]) {
+      const mpRemaining = game.movementBank?.[msgId]?.remaining ?? 0;
+      if (mpRemaining >= 2) {
+        const baseDice = stats.attack?.dice || ['red'];
+        const nonRedDice = [...new Set(baseDice.filter((d) => d !== 'red'))];
+        if (nonRedDice.length > 0) {
+          const dieBtns = nonRedDice.map((color) =>
+            new ButtonBuilder()
+              .setCustomId(`ee3_pick_die_${color}_${game.gameId}_${msgId}_${figureIndex}`)
+              .setLabel(`${color.charAt(0).toUpperCase() + color.slice(1)} \u2192 Red`)
+              .setStyle(ButtonStyle.Success)
+          );
+          dieBtns.push(
+            new ButtonBuilder()
+              .setCustomId(`ee3_pick_die_skip_${game.gameId}_${msgId}_${figureIndex}`)
+              .setLabel('Skip EE-3 Carbine')
+              .setStyle(ButtonStyle.Secondary)
+          );
+          game.pendingEe3Carbine = game.pendingEe3Carbine || {};
+          game.pendingEe3Carbine[msgId] = { gameId: game.gameId, playerNum, figureIndex, msgId };
+          await interaction.followUp({
+            content: `**EE-3 Carbine** — Spend **2 MP** (${mpRemaining} remaining) to change one attack die to red:`,
+            components: [new ActionRowBuilder().addComponents(dieBtns)],
+            ephemeral: false,
+          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          saveGames();
+          return;
+        }
+      }
+    }
     await buildAndSendAttackTargets(interaction, ctx, game, meta, msgId, figureKey, figureIndex, {
       dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats,
       excludeFigureKeys: game.pendingMissileSalvo?.[msgId]?.targetsFired,
@@ -1454,6 +1487,70 @@ export async function handleArsenalPick(interaction, ctx) {
   game.pendingOverrideAttackDice[msgId] = { dice: chosenDice };
   saveGames();
 
+  const stats = getDcStats(meta.dcName);
+  const attackInfo = stats.attack || { dice: ['red'], range: [1, 3] };
+  const [minRange, maxRange] = attackInfo.range || [1, 3];
+  const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
+  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum];
+  const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
+  const ms = getMapSpaces(game.selectedMap?.id);
+  if (!ms) {
+    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const playerNum = meta.playerNum;
+  const enemyPlayerNum = playerNum === 1 ? 2 : 1;
+  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+  const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!attackerPos) {
+    await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+
+  await buildAndSendAttackTargets(interaction, ctx, game, meta, msgId, figureKey, figureIndex, {
+    dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats,
+    excludeFigureKeys: game.pendingMissileSalvo?.[msgId]?.targetsFired,
+  });
+}
+
+/**
+ * Handle ee3_pick_die_ button: player chose which die color to upgrade to red (or skipped).
+ * customId: ee3_pick_die_{color|skip}_{gameId}_{msgId}_{figureIndex}
+ */
+export async function handleEe3DiePick(interaction, ctx) {
+  const { getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames } = ctx;
+  const withoutPrefix = interaction.customId.replace('ee3_pick_die_', '');
+  const parts = withoutPrefix.split('_');
+  const color = parts[0]; // 'blue', 'green', 'yellow', or 'skip'
+  const gameId = parts[1];
+  const figureIndex = parseInt(parts[parts.length - 1], 10);
+  const msgId = parts.slice(2, -1).join('_');
+
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) return;
+  const game = getGame(gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+
+  game.pendingEe3Carbine = game.pendingEe3Carbine || {};
+
+  if (color !== 'skip') {
+    // Deduct 2 MP and upgrade one die of the chosen color to red
+    const mp = game.movementBank?.[msgId];
+    if (mp) mp.remaining = Math.max(0, mp.remaining - 2);
+    const stats = getDcStats(meta.dcName);
+    const baseDice = [...(stats.attack?.dice || ['red'])];
+    const idx = baseDice.indexOf(color);
+    if (idx !== -1) baseDice[idx] = 'red';
+    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+    game.pendingOverrideAttackDice[msgId] = { dice: baseDice };
+  }
+  game.pendingEe3Carbine[msgId] = 'decided';
+  saveGames();
+
+  // Proceed to attack target selection
   const stats = getDcStats(meta.dcName);
   const attackInfo = stats.attack || { dice: ['red'], range: [1, 3] };
   const [minRange, maxRange] = attackInfo.range || [1, 3];

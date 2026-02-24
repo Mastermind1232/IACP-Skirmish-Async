@@ -39,6 +39,7 @@ import {
   handleDcAction,
   handlePounceSpacePick,
   handleArsenalPick,
+  handleEe3DiePick,
 } from './dc-play-area.js';
 import {
   handleSquadModal,
@@ -215,6 +216,7 @@ export {
   handlePounceSpacePick,
   handleDcAbilityChoice,
   handleArsenalPick,
+  handleEe3DiePick,
 } from './dc-play-area.js';
 export {
   handleSquadModal,

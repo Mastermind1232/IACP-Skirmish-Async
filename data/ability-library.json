@@ -2715,10 +2715,8 @@
       "trigger": "combat-declare",
       "label": "EE-3 Carbine",
       "description": "When you declare an attack, you may spend 2 movement points to change one of your attack dice to a red die. Limit once per attack.",
-      "oncePer": "activation",
-      "wiredStatus": "passive-reminder",
-      "informational": true,
-      "logMessage": "**EE-3 Carbine** — When you declare an attack, you may spend 2 movement points to change one of your attack dice to a red die. Limit once per attack.. Resolve manually and inform your opponent.",
+      "oncePer": "attack",
+      "wiredStatus": "wired",
       "freeAction": true
     },
     "dual_bladed_fury": {

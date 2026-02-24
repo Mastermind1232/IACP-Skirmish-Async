@@ -19,6 +19,7 @@ const BUTTON_PREFIXES = [
   'dc_cc_defender_',
   'dc_ability_choice_',
   'pounce_space_',
+  'ee3_pick_die_',
   'dc_move_',
   'dc_attack_',
   'dc_interact_',
