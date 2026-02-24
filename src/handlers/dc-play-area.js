@@ -831,7 +831,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
       const minimapCells = isMultiTile
         ? buttonSpaces.map((tl) => bottomLeftCoord(tl, profile.size))
-        : allCacheCells;
+        : buttonSpaces;
       const moveMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, minimapCells);
       const letterRows = buildLetterRows(buttonSpaces, msgId, figureIndex);
       const manualPickRow = new ActionRowBuilder().addComponents(
