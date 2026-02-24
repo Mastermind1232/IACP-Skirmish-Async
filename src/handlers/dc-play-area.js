@@ -196,6 +196,7 @@ export async function handleDcUnactivate(interaction, ctx) {
   if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
   if (game.hitAndRunPendingMp?.msgId === msgId) delete game.hitAndRunPendingMp;
   if (game.pendingOverrideAttackDice?.[msgId]) delete game.pendingOverrideAttackDice[msgId];
+  if (game.pendingMissileSalvo?.[msgId]) delete game.pendingMissileSalvo[msgId];
   // Stun: discarded at the end of the figure's activation
   if (game.figureConditions) {
     const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
@@ -704,7 +705,7 @@ function buildArsenalSelectOptions(diceCount) {
 /** Build and display the attack target selector buttons. */
 async function buildAndSendAttackTargets(
   interaction, ctx, game, meta, msgId, figureKey, figureIndex,
-  { dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats }
+  { dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats, excludeFigureKeys }
 ) {
   const { getDcEffects, getDcStats, getFigureSize, getFootprintCells, getRange, hasLineOfSight, dcMessageMeta, FIGURE_LETTERS } = ctx;
   // Priority Target / MASSIVE: figure blocking exceptions
@@ -763,6 +764,11 @@ async function buildAndSendAttackTargets(
     const figCount = getDcStats(dcName).figures ?? 1;
     const label = figCount > 1 ? `${dg}${FIGURE_LETTERS[fi] || 'a'}` : (totals[dcName] > 1 ? `${dcName} [DG ${dg}]` : dcName);
     targets.push({ figureKey: k, coord, label, hasLOS: los, dist });
+  }
+  // Missile Salvo: filter out already-targeted figures
+  if (excludeFigureKeys?.length) {
+    const excluded = new Set(excludeFigureKeys);
+    targets.splice(0, targets.length, ...targets.filter(t => !excluded.has(t.figureKey)));
   }
   if (targets.length === 0) {
     await interaction.followUp({ content: 'No valid targets in range.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -1031,7 +1037,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // Reach: melee figure can target 1–2 spaces away; no accuracy check (still counts as melee)
     const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
     const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
-    const hasReach = attackerKws.includes('REACH') || !!game.nextAttackReach?.[playerNum];
+    const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[playerNum];
     const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
     const ms = getMapSpaces(game.selectedMap?.id);
     if (!ms) {
@@ -1071,6 +1077,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     }
     await buildAndSendAttackTargets(interaction, ctx, game, meta, msgId, figureKey, figureIndex, {
       dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats,
+      excludeFigureKeys: game.pendingMissileSalvo?.[msgId]?.targetsFired,
     });
     return;
   }
@@ -1449,7 +1456,7 @@ export async function handleArsenalPick(interaction, ctx) {
   const [minRange, maxRange] = attackInfo.range || [1, 3];
   const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
-  const hasReach = attackerKws.includes('REACH') || !!game.nextAttackReach?.[meta.playerNum];
+  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum];
   const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
   const ms = getMapSpaces(game.selectedMap?.id);
   if (!ms) {
@@ -1468,5 +1475,6 @@ export async function handleArsenalPick(interaction, ctx) {
 
   await buildAndSendAttackTargets(interaction, ctx, game, meta, msgId, figureKey, figureIndex, {
     dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats,
+    excludeFigureKeys: game.pendingMissileSalvo?.[msgId]?.targetsFired,
   });
 }

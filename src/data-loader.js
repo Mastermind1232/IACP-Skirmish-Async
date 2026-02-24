@@ -194,11 +194,18 @@ export function isExteriorSpace(mapSpaces, coord) {
 export function getDcEffects() {
   return dcEffects;
 }
-/** Returns a map of dcName → keywords[], derived from dc-effects.json (single source of truth). */
+/** Returns a map of dcName → keywords[], derived from dc-effects.json (single source of truth).
+ *  Movement/combat-relevant passive traits (Mobile, Massive, Efficient Travel, Reach) are
+ *  promoted to keywords so movement.js and combat handlers see them uniformly. */
 export function getDcKeywords() {
+  const PASSIVE_AS_KEYWORD = new Set(['mobile', 'massive', 'efficient travel', 'reach']);
   const out = {};
   for (const [name, card] of Object.entries(dcEffects)) {
-    if (Array.isArray(card.keywords)) out[name] = card.keywords;
+    const kws = Array.isArray(card.keywords) ? [...card.keywords] : [];
+    for (const p of (card.passives || [])) {
+      if (PASSIVE_AS_KEYWORD.has(String(p).toLowerCase())) kws.push(p);
+    }
+    if (kws.length) out[name] = kws;
   }
   return out;
 }
