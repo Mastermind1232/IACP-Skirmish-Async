@@ -41,6 +41,8 @@ const BUTTON_PREFIXES = [
   'sidewinder_skip_',
   'boltslinger_target_',
   'boltslinger_skip_',
+  'indiscriminate_die_',
+  'indiscriminate_skip_',
   'bleed_accept_',
   'bleed_prevent_',
   'status_phase_',

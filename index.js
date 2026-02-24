@@ -3479,6 +3479,44 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
       }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
   }
+  // Indiscriminate Fire (Bossk): after attack, if not a miss, choose 1 non-red attack die;
+  // each figure within 2 spaces of target (other than the defender) suffers Damage = Hits and Strain = Surges on that die.
+  if (pcAttIds.includes('indiscriminate_fire') && !resultText.includes('**Miss**') && game.selectedMap?.id && combat.target?.figureKey) {
+    const ifDefPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+    const targetPos = game.figurePositions?.[ifDefPlayerNum]?.[combat.target.figureKey];
+    const rolledDice = combat.attackRoll?.dice || [];
+    const nonRedDice = rolledDice.filter((d) => (d.color || '').toLowerCase() !== 'red');
+    if (nonRedDice.length > 0 && targetPos) {
+      const splashTargets = [];
+      for (const pn of [1, 2]) {
+        const figs = game.figurePositions?.[pn] || {};
+        for (const [fk, pos] of Object.entries(figs)) {
+          if (fk === combat.target.figureKey) continue;
+          if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
+          const mid = findDcMessageIdForFigure(game.gameId, pn, fk);
+          const dcIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+          const idx2 = (dcIds || []).indexOf(mid);
+          const lbl = (idx2 >= 0 && dcList?.[idx2]?.displayName) ? dcList[idx2].displayName : fk.replace(/-\d+-\d+$/, '');
+          splashTargets.push({ figureKey: fk, playerNum: pn, label: String(lbl).slice(0, 80) });
+        }
+      }
+      if (nonRedDice.length === 1) {
+        await applyIndiscriminateFireSplash(game, combat.attackerPlayerNum, combat.combatThreadId, nonRedDice[0], splashTargets, thread, client);
+      } else {
+        game.pendingIndiscriminateFire = { attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: splashTargets, availableDice: nonRedDice };
+        const ifBtns = nonRedDice.slice(0, 5).map((d, i) =>
+          new ButtonBuilder().setCustomId(`indiscriminate_die_${game.gameId}_${i}`).setLabel(`${String(d.color).slice(0, 1).toUpperCase()}${String(d.color).slice(1)} (${d.dmg}dmg/${d.surge}↯)`).setStyle(ButtonStyle.Secondary)
+        );
+        ifBtns.push(new ButtonBuilder().setCustomId(`indiscriminate_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
+        await thread.send({
+          content: `<@${pcOwnerId}> **Indiscriminate Fire** — Choose 1 non-red attack die for splash:`,
+          allowedMentions: { users: [pcOwnerId] },
+          components: [new ActionRowBuilder().addComponents(ifBtns)],
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
+    }
+  }
 
   delete game.pendingCombat;
   delete game.pendingCleave;
@@ -3640,6 +3678,101 @@ async function handleBoltslingerSkip(interaction) {
   await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   if (game) delete game.pendingBoltslinger;
   await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  saveGames();
+}
+
+/** Indiscriminate Fire (Bossk): apply splash damage/strain to all figures within 2 of target (except defender). */
+async function applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThreadId, die, splashTargets, thread, client) {
+  const totalDmg = die.dmg || 0;
+  const totalStrain = die.surge || 0;
+  const totalEffect = totalDmg + totalStrain;
+  const dieColor = String(die.color || '').replace(/^\w/, (c) => c.toUpperCase());
+  const dieDesc = `${dieColor} die (${totalDmg} dmg, ${totalStrain} strain)`;
+  if (splashTargets.length === 0) {
+    await thread.send(`**Indiscriminate Fire** — ${dieDesc}: No figures within 2 spaces of the target.`).catch(() => {});
+    return;
+  }
+  if (totalEffect === 0) {
+    await thread.send(`**Indiscriminate Fire** — ${dieDesc}: 0 effect on splash targets.`).catch(() => {});
+    return;
+  }
+  const lines = [];
+  for (const t of splashTargets) {
+    const mid = findDcMessageIdForFigure(game.gameId, t.playerNum, t.figureKey);
+    if (!mid) continue;
+    const figM = t.figureKey.match(/-(\d+)-(\d+)$/);
+    const figIdx = figM ? parseInt(figM[2], 10) : 0;
+    const hs = dcHealthState.get(mid) || [];
+    const entry = hs[figIdx];
+    if (!entry) continue;
+    const [cur, maxHp] = entry;
+    const newHp = Math.max(0, (cur ?? maxHp) - totalEffect);
+    hs[figIdx] = [newHp, maxHp ?? newHp];
+    dcHealthState.set(mid, hs);
+    const dcIds = t.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcList = t.playerNum === 1 ? game.p1DcList : game.p2DcList;
+    const idx = (dcIds || []).indexOf(mid);
+    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+    const parts = [];
+    if (totalDmg > 0) parts.push(`${totalDmg} Damage`);
+    if (totalStrain > 0) parts.push(`${totalStrain} Strain`);
+    lines.push(`• **${t.label}** suffers ${parts.join(' + ')}`);
+    if (newHp <= 0) {
+      if (game.figurePositions?.[t.playerNum]) delete game.figurePositions[t.playerNum][t.figureKey];
+      if (game.figureConditions?.[t.figureKey]) delete game.figureConditions[t.figureKey];
+      const splashDcEff = getDcEffects()?.[t.figureKey.replace(/-\d+-\d+$/, '')];
+      const splashVP = splashDcEff?.cost ?? 1;
+      const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+      game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+      game[vpKey].kills += splashVP; game[vpKey].total += splashVP;
+      lines.push(`  → **${t.label} defeated!** +${splashVP} VP`);
+    }
+    try {
+      const tMeta = dcMessageMeta.get(mid);
+      if (tMeta) {
+        const ch = await client.channels.fetch(tMeta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
+        const msg = await ch.messages.fetch(mid);
+        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(mid) ?? false, tMeta.displayName, dcHealthState.get(mid) || [], getConditionsForDcMessage(game, tMeta));
+        await msg.edit({ embeds: [embed], files }).catch(() => {});
+      }
+    } catch {}
+  }
+  const msg = `**Indiscriminate Fire** — ${dieDesc}:\n${lines.join('\n')}`;
+  await thread.send(msg).catch(() => {});
+  await logGameAction(game, client, `**Indiscriminate Fire** — ${dieDesc}: splash to ${lines.length} figure(s).`, { phase: 'ROUND', icon: 'attack' });
+  saveGames();
+}
+
+/** Indiscriminate Fire die choice button: indiscriminate_die_{gameId}_{dieIndex} */
+async function handleIndiscriminateFireDie(interaction) {
+  const m = interaction.customId.match(/^indiscriminate_die_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, idxStr] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingIndiscriminateFire) return;
+  const { attackerPlayerNum, combatThreadId, targets, availableDice } = game.pendingIndiscriminateFire;
+  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
+    await interaction.followUp({ content: 'Only the attacker can choose the Indiscriminate Fire die.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const die = availableDice[parseInt(idxStr, 10)];
+  if (!die) return;
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  delete game.pendingIndiscriminateFire;
+  await interaction.message.edit({ components: [] }).catch(() => {});
+  const thread = await client.channels.fetch(combatThreadId).catch(() => null);
+  if (thread) await applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThreadId, die, targets, thread, client);
+  saveGames();
+}
+
+/** Indiscriminate Fire skip button: indiscriminate_skip_{gameId} */
+async function handleIndiscriminateFireSkip(interaction) {
+  const m = interaction.customId.match(/^indiscriminate_skip_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  if (game) delete game.pendingIndiscriminateFire;
+  await interaction.message.edit({ components: [] }).catch(() => {});
   saveGames();
 }
 
@@ -5511,6 +5644,8 @@ client.on('interactionCreate', async (interaction) => {
   if (buttonKey === 'sidewinder_skip_') { await handleSidewinderSkip(interaction); return; }
   if (buttonKey === 'boltslinger_target_') { await handleBoltslingerTarget(interaction); return; }
   if (buttonKey === 'boltslinger_skip_') { await handleBoltslingerSkip(interaction); return; }
+  if (buttonKey === 'indiscriminate_die_') { await handleIndiscriminateFireDie(interaction); return; }
+  if (buttonKey === 'indiscriminate_skip_') { await handleIndiscriminateFireSkip(interaction); return; }
 
   if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_') {
     const combatContext = {
