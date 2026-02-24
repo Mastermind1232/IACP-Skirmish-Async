@@ -206,7 +206,7 @@ export function resolveAbility(abilityId, context) {
       }
       const dcName = targetFigureKey.replace(/-\d+-\d+$/, '');
       const splashNote = splashDamageNote ? `\n> ${splashDamageNote}` : '';
-      return { applied: true, logMessage: `**${entry.label}** — **${dcName}** ${parts.join(', ') || 'targeted'}.${splashNote}`, refreshDcEmbed: true };
+      return { applied: true, freeAction: !!entry.freeAction, logMessage: `**${entry.label}** — **${dcName}** ${parts.join(', ') || 'targeted'}.${splashNote}`, refreshDcEmbed: true };
     }
     // First call: enumerate valid enemy targets with range/LOS filter
     const activatingKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
@@ -450,6 +450,18 @@ export function resolveAbility(abilityId, context) {
       applied: true,
       logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**${surgeMsg}${noteMsg}`,
     };
+  }
+
+  // dcSpecial: freeMoveBonus standalone (I'm One With the Force, etc.) — add N free MP to movement bank
+  if (entry.type === 'dcSpecial' && typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && !entry.nextAttacksBonusHits) {
+    const { game, msgId } = context;
+    if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    bank.total = (bank.total ?? 0) + entry.freeMoveBonus;
+    bank.remaining = (bank.remaining ?? 0) + entry.freeMoveBonus;
+    game.movementBank[msgId] = bank;
+    return { applied: true, freeAction: !!entry.freeAction, logMessage: entry.logMessage || `**${entry.label}** — Gained ${entry.freeMoveBonus} free movement points.`, refreshMovementBank: true, activeMsgId: msgId };
   }
 
   // dcSpecial: freeMoveBonus + nextAttacksBonusHits (On the Hunt — gain free MP, next attack gets +N Hit)

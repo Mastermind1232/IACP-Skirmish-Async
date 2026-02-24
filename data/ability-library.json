@@ -2820,14 +2820,12 @@
     },
     "i_am_one_with_the_force": {
       "type": "dcSpecial",
-      "category": "interrupt",
-      "trigger": "activation",
       "label": "I'm One With the Force",
-      "description": "At the start of a hostile figure's activation, you may move up to 2 spaces to a space adjacent to a hostile figure. Limit once per round.",
+      "description": "At the start of a hostile figure's activation, you may move up to 2 spaces to a space adjacent to a hostile figure.",
+      "freeMoveBonus": 2,
+      "logMessage": "**I'm One With the Force** \u2014 Gain 2 free movement points. Move adjacent to a hostile figure. (Trigger: at the start of any hostile figure's activation, once per round.)",
       "oncePer": "round",
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**I'm One With the Force** \u00e2\u20ac\u201d At the start of a hostile figure's activation, you may move up to 2 spaces to a space adjacent to a hostile figure. Limit once per round.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired"
     },
     "return_fire": {
       "type": "dcSpecial",
@@ -3147,14 +3145,16 @@
     },
     "deflect": {
       "type": "dcSpecial",
-      "category": "passive-auto",
-      "trigger": "post-combat",
       "label": "Deflect",
       "description": "After a Ranged attack targeting you or an adjacent friendly figure resolves, a hostile figure of your choice in your line of sight suffers 1 Damage.",
-      "oncePer": null,
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Deflect** \u00e2\u20ac\u201d After a Ranged attack targeting you or an adjacent friendly figure resolves, a hostile figure of your choice in your line of sight suffers 1 Damage.. Resolve manually and inform your opponent."
+      "targetHostileFigure": {
+        "damage": 1,
+        "strain": 0,
+        "requiresLos": true
+      },
+      "logMessage": "**Deflect** \u2014 Choose an enemy in your line of sight to redirect 1 Damage to. (Trigger: after a ranged attack targeting you or an adjacent friendly resolves.)",
+      "freeAction": true,
+      "wiredStatus": "wired"
     },
     "regenerate_bossk": {
       "type": "dcSpecial",
