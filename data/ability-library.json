@@ -2480,7 +2480,7 @@
       "surgeCost": 1,
       "label": "Fighting Knife",
       "description": "After this attack resolves, choose an adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results.",
-      "wiredStatus": "informational"
+      "wiredStatus": "wired"
     },
     "stun_net": {
       "type": "surge",

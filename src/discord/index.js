@@ -33,6 +33,7 @@ export {
   getKillGameButton,
   getRequestActionButtons,
   getCleaveTargetButtons,
+  getFightingKnifeTargetButtons,
   getMoveMpButtonRows,
   buildLetterRows,
   getMoveSpaceGridRows,

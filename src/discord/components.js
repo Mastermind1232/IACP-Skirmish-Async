@@ -489,6 +489,23 @@ export function getCleaveTargetButtons(gameId, targets) {
   return rows.slice(0, MAX_ROWS_PER_MESSAGE);
 }
 
+/** Fighting Knife: target buttons + Skip. customId: fighting_knife_target_${gameId}_${index}. */
+export function getFightingKnifeTargetButtons(gameId, targets) {
+  if (!targets?.length) return [];
+  const allBtns = targets.map((t, i) =>
+    new ButtonBuilder()
+      .setCustomId(`fighting_knife_target_${gameId}_${i}`)
+      .setLabel((t.label || t.figureKey || `Target ${i + 1}`).slice(0, 80))
+      .setStyle(ButtonStyle.Danger)
+  );
+  allBtns.push(new ButtonBuilder().setCustomId(`fighting_knife_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+  const rows = [];
+  for (let i = 0; i < allBtns.length; i += MAX_BUTTONS_PER_ROW) {
+    rows.push(new ActionRowBuilder().addComponents(allBtns.slice(i, i + MAX_BUTTONS_PER_ROW)));
+  }
+  return rows.slice(0, MAX_ROWS_PER_MESSAGE);
+}
+
 /** Action rows for MP selection: move_mp_${msgId}_${figureIndex}_${mp}. */
 export function getMoveMpButtonRows(msgId, figureIndex, mpRemaining) {
   if (!mpRemaining || mpRemaining < 1) return [];

@@ -271,6 +271,7 @@ import {
   getKillGameButton,
   getRequestActionButtons,
   getCleaveTargetButtons,
+  getFightingKnifeTargetButtons,
   getDcActionButtons as getDcActionButtonsFromDiscord,
   getActivateDcButtons as getActivateDcButtonsFromDiscord,
 } from './src/discord/index.js';
@@ -3401,7 +3402,8 @@ async function resolveCombatAfterRolls(game, combat, client) {
       }
     }
   }
-  await finishCombatResolution(game, combat, resultText, embedRefreshMsgIds, client);
+  const fkTriggered = await checkPostCombatSurges(game, combat, resultText, embedRefreshMsgIds, thread, ownerId, defenderPlayerNum);
+  if (!fkTriggered) await finishCombatResolution(game, combat, resultText, embedRefreshMsgIds, client);
 }
 
 /** BFS distance check on mapSpaces adjacency (used for Boltslinger, etc.). */
@@ -3423,6 +3425,48 @@ function isWithinN(posA, posB, maxDist, mapId) {
     }
     frontier = next;
     if (!frontier.length) break;
+  }
+  return false;
+}
+
+/**
+ * Check for post-combat surge effects that need UI interaction, before finishCombatResolution.
+ * Returns true if a pending interaction was triggered (caller should NOT call finishCombatResolution yet).
+ * Returns false if nothing triggered (caller should call finishCombatResolution).
+ */
+async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgIds, thread, ownerId, defenderPlayerNum) {
+  const hit = !resultText.includes('**Miss**');
+  // Fighting Knife (Verena Talos): after non-miss, choose adjacent hostile, roll 1 red die, apply hits
+  if (hit && combat.surgeFightingKnife && combat.attackerFigureKey && game.selectedMap?.id) {
+    const adjHostiles = getFiguresAdjacentToTarget(game, combat.attackerFigureKey, game.selectedMap.id)
+      .filter((c) => c.playerNum === defenderPlayerNum);
+    if (adjHostiles.length > 0) {
+      const targetsWithLabels = adjHostiles.map((c) => {
+        const mid = findDcMessageIdForFigure(game.gameId, c.playerNum, c.figureKey);
+        const dcList = c.playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const dcIds = c.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const idx = (dcIds || []).indexOf(mid);
+        const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : c.figureKey.replace(/-\d+-\d+$/, '');
+        return { figureKey: c.figureKey, playerNum: c.playerNum, label: String(label).slice(0, 80), msgId: mid };
+      });
+      game.pendingFightingKnife = {
+        gameId: game.gameId,
+        combatThreadId: combat.combatThreadId,
+        attackerPlayerNum: combat.attackerPlayerNum,
+        ownerId,
+        targets: targetsWithLabels,
+        resultText,
+        combat,
+        initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
+      };
+      const rows = getFightingKnifeTargetButtons(game.gameId, targetsWithLabels);
+      await thread.send({
+        content: `<@${ownerId}> **Fighting Knife** — Choose an adjacent hostile figure to roll 1 red die:`,
+        allowedMentions: { users: [ownerId] },
+        components: rows,
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return true;
+    }
   }
   return false;
 }
@@ -3808,6 +3852,90 @@ async function handleIndiscriminateFireSkip(interaction) {
   await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   if (game) delete game.pendingIndiscriminateFire;
   await interaction.message.edit({ components: [] }).catch(() => {});
+  saveGames();
+}
+
+/** Fighting Knife target pick: fighting_knife_target_{gameId}_{index} */
+async function handleFightingKnifeTarget(interaction) {
+  const m = interaction.customId.match(/^fighting_knife_target_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, idxStr] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingFightingKnife) return;
+  const pending = game.pendingFightingKnife;
+  if (!canActAsPlayer(game, interaction.user.id, pending.attackerPlayerNum)) {
+    await interaction.followUp({ content: 'Only the attacker can pick the Fighting Knife target.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const target = pending.targets[parseInt(idxStr, 10)];
+  if (!target) return;
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(() => {});
+  delete game.pendingFightingKnife;
+  // Roll 1 red die
+  const die = rollSingleAttackDie('red');
+  const hits = die.dmg || 0;
+  const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+  if (!thread) { saveGames(); return; }
+  const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
+  if (hits > 0 && target.msgId) {
+    const fkMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
+    const figIndex = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+    const healthState = dcHealthState.get(target.msgId) || [];
+    const entry = healthState[figIndex];
+    if (entry) {
+      const [cur, max] = entry;
+      const newCur = Math.max(0, (cur ?? max) - hits);
+      healthState[figIndex] = [newCur, max ?? newCur];
+      dcHealthState.set(target.msgId, healthState);
+      const dcIds = target.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const dcList = target.playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const idx = (dcIds || []).indexOf(target.msgId);
+      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+      embedRefreshMsgIds.add(target.msgId);
+      if (newCur <= 0) {
+        if (game.figurePositions?.[target.playerNum]) delete game.figurePositions[target.playerNum][target.figureKey];
+        const dcName = target.figureKey.replace(/-\d+-\d+$/, '');
+        const stats = getDcStats(dcName);
+        const effects = getDcEffects()?.[dcName];
+        const figures = stats?.figures ?? 1;
+        const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
+        const vpKey = pending.attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+        game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+        game[vpKey].kills += vp;
+        game[vpKey].total += vp;
+        await logGameAction(game, client, `**Fighting Knife** — **${target.label}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
+        if (idx >= 0 && isGroupDefeated(game, target.playerNum, idx)) {
+          const activatedIndices = target.playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+          if (!activatedIndices.includes(idx)) {
+            if (target.playerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
+            else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+            await updateActivationsMessage(game, target.playerNum, client);
+          }
+        }
+        await checkWinConditions(game, client);
+      }
+    }
+  }
+  const dieDesc = `${die.dmg}dmg${die.surge ? `/${die.surge}↯` : ''}`;
+  await logGameAction(game, client, `**Fighting Knife** — ${target.label}: rolled 1 red die (${dieDesc}), dealt **${hits}** damage`, { phase: 'ROUND', icon: 'attack' });
+  await thread.send(`**Fighting Knife** — Rolled 1 red die on **${target.label}**: ${dieDesc} → **${hits} Damage**.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
+  saveGames();
+}
+
+/** Fighting Knife skip: fighting_knife_skip_{gameId} */
+async function handleFightingKnifeSkip(interaction) {
+  const m = interaction.customId.match(/^fighting_knife_skip_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  if (!game?.pendingFightingKnife) return;
+  const pending = game.pendingFightingKnife;
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(() => {});
+  delete game.pendingFightingKnife;
+  const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
+  await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
   saveGames();
 }
 
@@ -5765,6 +5893,8 @@ client.on('interactionCreate', async (interaction) => {
   if (buttonKey === 'boltslinger_skip_') { await handleBoltslingerSkip(interaction); return; }
   if (buttonKey === 'indiscriminate_die_') { await handleIndiscriminateFireDie(interaction); return; }
   if (buttonKey === 'indiscriminate_skip_') { await handleIndiscriminateFireSkip(interaction); return; }
+  if (buttonKey === 'fighting_knife_target_') { await handleFightingKnifeTarget(interaction); return; }
+  if (buttonKey === 'fighting_knife_skip_') { await handleFightingKnifeSkip(interaction); return; }
   if (buttonKey === 'missile_salvo_die_') { await handleMissileSalvoDie(interaction); return; }
   if (buttonKey === 'missile_salvo_done_') { await handleMissileSalvoDone(interaction); return; }
 
@@ -5784,6 +5914,7 @@ client.on('interactionCreate', async (interaction) => {
       isGroupDefeated,
       checkWinConditions,
       finishCombatResolution,
+      checkPostCombatSurges,
       ACTION_ICONS,
       ThreadAutoArchiveDuration,
       resolveCombatAfterRolls,

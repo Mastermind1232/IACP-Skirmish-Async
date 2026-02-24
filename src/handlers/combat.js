@@ -1189,6 +1189,7 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeStalkPrey) combat.surgeStalkPrey = true;
       if (mod.surgeCriticalHit) combat.surgeCriticalHit = true;
       if (mod.surgeSuppressionStrain) combat.surgeSuppressionStrain = true;
+      if (mod.surgeFightingKnife) combat.surgeFightingKnife = true;
       // Self-condition surges: apply condition to attacker's own figure
       if (mod.surgeSelfFocus && combat.attackerFigureKey) {
         game.figureConditions = game.figureConditions || {};
@@ -1466,6 +1467,16 @@ export async function handleCleaveTarget(interaction, ctx) {
   } catch {}
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   if (cleaveMsgId) embedRefreshMsgIds.add(cleaveMsgId);
+  delete game.pendingCleave;
+  const { checkPostCombatSurges } = ctx;
+  if (checkPostCombatSurges) {
+    const defPN = pending.attackerPlayerNum === 1 ? 2 : 1;
+    const cThread = await client.channels.fetch(pending.combat.combatThreadId).catch(() => null);
+    if (cThread) {
+      const triggered = await checkPostCombatSurges(game, pending.combat, pending.resultText, embedRefreshMsgIds, cThread, pending.ownerId, defPN);
+      if (triggered) { saveGames(); return; }
+    }
+  }
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
   saveGames();
 }

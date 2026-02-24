@@ -124,8 +124,10 @@ export function parseSurgeEffect(key) {
   if (k === 'block 1') { out.surgeAttackerBlock = 1; return out; }
   // Spend 1 surge, gain 1 surge back (net zero, allows chaining into other abilities)
   if (k === 'surge 1') { out.surgeGrantExtraSurge = 1; return out; }
+  // Fighting Knife (Verena Talos): post-attack roll 1 red die, hits applied to adjacent hostile
+  if (k === 'fighting_knife') { out.surgeFightingKnife = true; return out; }
   // Complex surge effects: flag for informational display, resolve manually
-  if (['concussive_bolt', 'agitate', 'fighting_knife', 'mastery', 'bargain',
+  if (['concussive_bolt', 'agitate', 'mastery', 'bargain',
        'fell_swoop', 'spread_the_pain', 'interrogate',
        'cancel 2', 'cleave x', 'recover x', 'evade token'].includes(k)) {
     out.surgeComplex = k; return out;
