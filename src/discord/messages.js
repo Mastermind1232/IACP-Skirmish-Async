@@ -70,7 +70,9 @@ export async function logGameAction(game, client, content, options = {}) {
     }
     const timestamp = `<t:${Math.floor(Date.now() / 1000)}:t>`;
     const msgContent = `${icon}${timestamp} — ${content}`;
-    const sentMsg = await ch.send({ content: msgContent, allowedMentions: options.allowedMentions });
+    const payload = { content: msgContent, allowedMentions: options.allowedMentions };
+    if (options.files?.length) payload.files = options.files;
+    const sentMsg = await ch.send(payload);
     const setupPhases = ['SETUP', 'INITIATIVE', 'DEPLOYMENT'];
     if (phase && setupPhases.includes(phase)) {
       game.setupLogMessageIds = game.setupLogMessageIds || [];

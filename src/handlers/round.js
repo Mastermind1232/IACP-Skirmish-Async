@@ -6,7 +6,7 @@ import { getDcEffects } from '../data-loader.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, client
+ * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, buildBoardMapPayload, client
  */
 export async function handleEndEndOfRound(interaction, ctx) {
   const {
@@ -35,6 +35,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     updateHandVisualMessage,
     buildHandDisplayPayload,
     sendRoundActivationPhaseMessage,
+    buildBoardMapPayload,
     client,
   } = ctx;
   const gameId = interaction.customId.replace('end_end_of_round_', '');
@@ -70,11 +71,22 @@ export async function handleEndEndOfRound(interaction, ctx) {
   // Clear per-activation conditions (Stun, Weaken) from all figures at end of round.
   // Rules: Stun/Weaken removed at end of that figure's activation; each figure activates once per round,
   // so clearing at end of round is equivalent.
+  const clearedConditions = []; // collect {figureKey, cleared[]} for announcement
   if (game.figureConditions) {
     for (const fk of Object.keys(game.figureConditions)) {
-      game.figureConditions[fk] = game.figureConditions[fk].filter((c) => c !== 'Stun' && c !== 'Weaken');
+      const before = game.figureConditions[fk];
+      const toRemove = before.filter((c) => c === 'Stun' || c === 'Weaken');
+      game.figureConditions[fk] = before.filter((c) => c !== 'Stun' && c !== 'Weaken');
       if (game.figureConditions[fk].length === 0) delete game.figureConditions[fk];
+      if (toRemove.length > 0) clearedConditions.push({ figureKey: fk, cleared: toRemove });
     }
+  }
+  if (clearedConditions.length > 0) {
+    const condSummary = clearedConditions.map(({ figureKey, cleared }) => {
+      const dcName = figureKey.replace(/-\d+-\d+$/, '');
+      return `**${dcName}**: ${cleared.join(', ')} removed`;
+    }).join('; ');
+    await logGameAction(game, client, `🔄 **End of Round** — Conditions cleared: ${condSummary}.`, { phase: 'ROUND', icon: 'round' });
   }
   // Regenerate (Bossk): recover 2 HP and discard Bleed at end of round
   const dcEffects = getDcEffects();
@@ -151,6 +163,16 @@ export async function handleEndEndOfRound(interaction, ctx) {
       await msg.edit({ embeds: [embed], files, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch (err) {
       console.error('Failed to ready DC embed:', err);
+    }
+  }
+  // Regenerate the board map so condition icons and updated health are reflected
+  if (buildBoardMapPayload && game.boardId && game.selectedMap) {
+    try {
+      const boardChannel = await client.channels.fetch(game.boardId);
+      const payload = await buildBoardMapPayload(gameId, game.selectedMap, game);
+      await boardChannel.send(payload);
+    } catch (err) {
+      console.error('Failed to refresh board at end of round:', err);
     }
   }
   game.p1ActivationsRemaining = game.p1ActivationsTotal ?? 0;

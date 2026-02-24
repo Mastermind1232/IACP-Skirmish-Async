@@ -31,6 +31,7 @@ export async function applyAbilityResult(result, opts) {
     getConditionsForDcMessage,
     getDcPlayAreaComponents,
     buildBoardMapPayload,
+    getConditionCardPath,
   } = ctx;
 
   // --- Unhandled routing: caller must set up pendingCcChoice/pendingCcSpaceChoice themselves ---
@@ -115,6 +116,28 @@ export async function applyAbilityResult(result, opts) {
       seen.add(id);
       await updateDcActionsMessage(game, id, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
+    // Also rebuild the DC play area embed for each refreshed ID so conditions/health show up there too.
+    // readyDcMsgIds already rebuilds with exhausted=false; here we rebuild with the current exhausted state.
+    const readySet = new Set(result.readyDcMsgIds || []);
+    for (const id of idsToRefresh) {
+      if (readySet.has(id)) continue; // already handled by readyDcMsgIds section above
+      const meta = dcMessageMeta?.get(id);
+      if (!meta || !buildDcEmbedAndFiles || !getDcPlayAreaComponents) continue;
+      try {
+        const chId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+        const ch = await client.channels.fetch(chId);
+        const msg = await ch.messages.fetch(id);
+        const healthState = dcHealthState?.get(id) || [];
+        const exhausted = dcExhaustedState?.get(id) || false;
+        const { embed, files } = await buildDcEmbedAndFiles(
+          meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta)
+        );
+        const components = getDcPlayAreaComponents(id, exhausted, game, meta.dcName);
+        await msg.edit({ embeds: [embed], files, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      } catch (err) {
+        console.error('Failed to refresh DC play area embed:', err);
+      }
+    }
   }
 
   // --- Refresh movement bank ---
@@ -135,6 +158,34 @@ export async function applyAbilityResult(result, opts) {
       await boardChannel.send(payload);
     } catch (err) {
       console.error('Failed to refresh board after CC effect:', err);
+    }
+  }
+
+  // --- Notify DC activation thread of conditions/effects (new message, not just minimap update) ---
+  if (result.applied && result.refreshDcEmbed && result.logMessage) {
+    const idsToNotify = [...new Set([...(result.refreshDcEmbedMsgIds || []), ...(msgId ? [msgId] : [])])];
+    for (const id of idsToNotify) {
+      const data = game.dcActionsData?.[id];
+      if (!data?.threadId) continue;
+      try {
+        const thread = await client.channels.fetch(data.threadId);
+        await thread.send({ content: `💡 ${result.logMessage}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      } catch (err) {
+        console.error('Failed to send CC effect to DC thread:', err);
+      }
+    }
+  }
+
+  // --- Post condition card images to game log ---
+  if (result.applied && result.conditionCardsToPost?.length && getConditionCardPath && logGameAction) {
+    const seen = new Set();
+    for (const cond of result.conditionCardsToPost) {
+      if (seen.has(cond)) continue;
+      seen.add(cond);
+      const imgPath = getConditionCardPath(cond);
+      if (imgPath) {
+        await logGameAction(game, client, `📋 **${cond}** condition card:`, { phase: 'ACTION', icon: 'card', files: [imgPath] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
     }
   }
 

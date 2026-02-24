@@ -1836,8 +1836,16 @@ async function postPinnedMissionCardFromGameState(game, client) {
   const mission = game.selectedMission;
   const map = game.selectedMap;
   if (!mission || !map) return;
-  const fullName = mission.fullName || `${map.name || map.id} — ${mission.name}`;
   const missionData = getMissionCardsData()[map.id]?.[mission.variant];
+  // Build variant label: always show "Variant A — Name" explicitly.
+  // Strip leading "X. " or "X: " from missionData.name if it duplicates the variant letter.
+  const variantLetter = mission.variant ? String(mission.variant).toUpperCase() : '';
+  let missionName = missionData?.name || mission.name || '';
+  const dupPattern = new RegExp(`^${variantLetter}[.:] ?`, 'i');
+  if (variantLetter && dupPattern.test(missionName)) missionName = missionName.replace(dupPattern, '').trim();
+  const variantLabel = variantLetter ? `Variant ${variantLetter} — ${missionName}` : missionName;
+  const mapLabel = map.name || map.id;
+  const fullName = `${mapLabel}: ${variantLabel}`;
   try {
     const ch = await client.channels.fetch(game.generalId);
     let sentMsg;
@@ -1970,6 +1978,7 @@ function getFiguresForRender(game) {
       const baseSize = getFigureSize(dcName);
       const figureSize = game.figureOrientations?.[figureKey] || baseSize;
       const powerTokens = game.figurePowerTokens?.[figureKey] || [];
+      const conditions = game.figureConditions?.[figureKey] || [];
       figures.push({
         coord: space,
         color,
@@ -1979,6 +1988,7 @@ function getFiguresForRender(game) {
         label,
         figureKey,
         powerTokens,
+        conditions,
       });
     }
   }
@@ -2760,6 +2770,14 @@ function resolveDcImagePath(relPath, dcName) {
 }
 
 
+/** Return absolute path to condition card image, or null if not found. */
+function getConditionCardPath(conditionName) {
+  if (!conditionName) return null;
+  const fname = `Condition card--${conditionName}.jpg`;
+  const p = join(rootDir, 'vassal_extracted', 'images', 'conditions', fname);
+  return existsSync(p) ? p : null;
+}
+
 /** Resolve DC name to circular figure image (for map tokens). Tries figures/ subfolder first, then root. */
 function getFigureImagePath(dcName) {
   if (!dcName || typeof dcName !== 'string') return null;
@@ -3022,6 +3040,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
       if (newCur <= 0) {
         // F7: Keep healthState, figurePositions, and DC embed in sync when one figure in a group dies.
         if (game.figurePositions?.[defenderPlayerNum]) delete game.figurePositions[defenderPlayerNum][combat.target.figureKey];
+        if (game.figureConditions?.[combat.target.figureKey]) delete game.figureConditions[combat.target.figureKey];
         const { cost, subCost, figures } = combat.targetStats;
         const vp = (figures > 1 && subCost != null) ? subCost : (cost ?? 5);
         const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
@@ -3115,6 +3134,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
         if (blastIdx >= 0 && blastDcList?.[blastIdx]) blastDcList[blastIdx].healthState = [...blastHS];
         if (newBCur <= 0) {
           if (game.figurePositions?.[blastPlayerNum]) delete game.figurePositions[blastPlayerNum][blastFigureKey];
+          if (game.figureConditions?.[blastFigureKey]) delete game.figureConditions[blastFigureKey];
           const blastStats = getDcStats(blastDcList[blastIdx]?.dcName);
           const cost = blastStats?.cost ?? 5;
           const figures = blastStats?.figures ?? 1;
@@ -5219,6 +5239,7 @@ client.on('interactionCreate', async (interaction) => {
       getMapAttachmentForSpaces,
       ensureMovementBankMessage,
       updateMovementBankMessage,
+      getConditionCardPath,
     };
     if (buttonKey === 'deck_illegal_play_') await handleDeckIllegalPlay(interaction, ccHandButtonContext);
     else if (buttonKey === 'deck_illegal_redo_') await handleDeckIllegalRedo(interaction, ccHandButtonContext);
@@ -5299,6 +5320,8 @@ client.on('interactionCreate', async (interaction) => {
       sendBleedingPrompt,
       updateMovementBankMessage,
       getCommandCardImagePath,
+      getConditionCardPath,
+      buildBoardMapPayload,
     };
     if (buttonKey === 'dc_activate_') await handleDcActivate(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_unactivate_') await handleDcUnactivate(interaction, dcPlayAreaContext);
@@ -5518,6 +5541,7 @@ client.on('interactionCreate', async (interaction) => {
       updateHandVisualMessage,
       buildHandDisplayPayload,
       sendRoundActivationPhaseMessage,
+      buildBoardMapPayload,
       client,
     };
     await handleEndEndOfRound(interaction, roundContext);

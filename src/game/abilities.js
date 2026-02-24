@@ -527,7 +527,7 @@ export function resolveAbility(abilityId, context) {
     bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
     game.movementBank[msgId] = bank;
     const parts = ['Became Focused', 'Hidden', toAdd > 0 ? `gained ${toAdd} Power Token(s)` : null, `gained ${entry.mpBonus} MP`].filter(Boolean);
-    return { applied: true, logMessage: parts.join(', ') + '.' };
+    return { applied: true, logMessage: parts.join(', ') + '.', refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true, conditionCardsToPost: ['Focus', 'Hidden'] };
   }
 
   // ccEffect: applyFocus + mpBonus combo (Stimulants) — Focus and MP together; damage to self/adjacent is manual
@@ -554,6 +554,9 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: `Became Focused, gained ${mpMsg}. **Apply Damage manually** as required by the card.`,
+      refreshDcEmbed: true,
+      refreshDcEmbedMsgIds: [msgId],
+      refreshBoard: true,
     };
   }
 
@@ -631,7 +634,7 @@ export function resolveAbility(abilityId, context) {
     if (toAdd <= 0) return { applied: false, manualMessage: 'That figure already has 2 Power Tokens (max).' };
     for (let i = 0; i < toAdd; i++) game.figurePowerTokens[fk].push('Wild');
     const msg = toAdd === 1 ? 'Gained 1 Power Token.' : `Gained ${toAdd} Power Tokens.`;
-    return { applied: true, logMessage: msg };
+    return { applied: true, logMessage: msg, refreshBoard: true };
   }
 
   // ccEffect: focusGainToAdjacentUpToN (Inspiring Speech) — Focus up to N friendly figures adjacent to activating figure(s)
@@ -664,7 +667,7 @@ export function resolveAbility(abilityId, context) {
       const existing = game.figureConditions[fk] || [];
       if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
     }
-    return { applied: true, logMessage: `${adjacent.length} adjacent figure(s) became Focused.` };
+    return { applied: true, logMessage: `${adjacent.length} adjacent figure(s) became Focused.`, refreshBoard: true };
   }
 
   // ccEffect: Against the Odds — end of round, VP condition, Focus up to 3 figures
@@ -686,7 +689,7 @@ export function resolveAbility(abilityId, context) {
       const existing = game.figureConditions[fk] || [];
       if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
     }
-    return { applied: true, logMessage: `${allKeys.length} figure(s) became Focused.` };
+    return { applied: true, logMessage: `${allKeys.length} figure(s) became Focused.`, refreshBoard: true };
   }
 
   // ccEffect: vpGainSelf + vpGainOpponent (e.g. Dangerous Bargains — start of round, if self VP ≤ N, both gain VP)
@@ -867,6 +870,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: discarded > 0 ? `Discarded ${discarded} HARMFUL condition(s) from ${adjacent.length} adjacent figure(s).` : 'No HARMFUL conditions on adjacent figures.',
+      refreshBoard: discarded > 0,
     };
   }
 
@@ -894,6 +898,9 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: discarded > 0 ? `Discarded ${discarded} HARMFUL condition(s).` : 'No HARMFUL conditions to discard.',
+      refreshDcEmbed: discarded > 0,
+      refreshDcEmbedMsgIds: discarded > 0 ? [msgId] : undefined,
+      refreshBoard: discarded > 0,
     };
   }
 
@@ -959,7 +966,7 @@ export function resolveAbility(abilityId, context) {
     }
     cbt.bonusHits = (cbt.bonusHits || 0) + entry.attackBonusHits;
     const focusPart = focusApplied ? 'Became Focused. ' : '';
-    return { applied: true, logMessage: `${focusPart}+${entry.attackBonusHits} Hit added to this attack.` };
+    return { applied: true, logMessage: `${focusPart}+${entry.attackBonusHits} Hit added to this attack.`, refreshDcEmbed: focusApplied, refreshBoard: focusApplied };
   }
 
   // ccEffect: applyFocus + attackSurgeBonus combo (Master Operative) — both Focus and +1 Surge
@@ -991,7 +998,7 @@ export function resolveAbility(abilityId, context) {
     if (cbt.surgeRemaining != null) cbt.surgeRemaining = (cbt.surgeRemaining || 0) + n;
     else cbt.surgeBonus = (cbt.surgeBonus || 0) + n;
     const focusPart = focusApplied ? 'Became Focused. ' : '';
-    return { applied: true, logMessage: `${focusPart}+${n} Surge added to this attack.` };
+    return { applied: true, logMessage: `${focusPart}+${n} Surge added to this attack.`, refreshDcEmbed: focusApplied, refreshBoard: focusApplied };
   }
 
   // ccEffect: mpCost + applyFocus (e.g. Shared Experience — spend 3 MP to become Focused)
@@ -1017,7 +1024,7 @@ export function resolveAbility(abilityId, context) {
       const existing = game.figureConditions[fk] || [];
       if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
     }
-    return { applied: true, logMessage: `Spent ${entry.mpCost} MP and became Focused.` };
+    return { applied: true, logMessage: `Spent ${entry.mpCost} MP and became Focused.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
   }
 
   // ccEffect: Focus / Meditation — apply Focus to activating figures; requires active activation
@@ -1037,9 +1044,9 @@ export function resolveAbility(abilityId, context) {
       if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
     }
     if (entry.readyActiveDc) {
-      return { applied: true, logMessage: 'Became Focused. Readied active Deployment card.', readyDcMsgIds: [msgId], refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId] };
+      return { applied: true, logMessage: 'Became Focused. Readied active Deployment card.', readyDcMsgIds: [msgId], refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
     }
-    return { applied: true, logMessage: entry.logMessage || 'Became Focused.' };
+    return { applied: true, logMessage: entry.logMessage || 'Became Focused.', refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true, conditionCardsToPost: ['Focus'] };
   }
 
   // dcSpecial: mpBonus + applyFocus (e.g. Get into Position — gain MP and become Focused)
@@ -1060,7 +1067,7 @@ export function resolveAbility(abilityId, context) {
       const existing = game.figureConditions[fk] || [];
       if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
     }
-    return { applied: true, logMessage: `Gained ${entry.mpBonus} movement point${entry.mpBonus !== 1 ? 's' : ''}. Became Focused.` };
+    return { applied: true, logMessage: `Gained ${entry.mpBonus} movement point${entry.mpBonus !== 1 ? 's' : ''}. Became Focused.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
   }
 
   // dcSpecial: applySelfCondition — apply Focus or Hide to own activating figures (e.g. Prowl, Inform-self)
@@ -1075,7 +1082,7 @@ export function resolveAbility(abilityId, context) {
       const existing = game.figureConditions[fk] || [];
       if (!existing.includes(cond)) game.figureConditions[fk] = [...existing, cond];
     }
-    return { applied: true, logMessage: `Became ${cond}.` };
+    return { applied: true, logMessage: `Became ${cond}.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true, conditionCardsToPost: [cond] };
   }
 
   // dcSpecial: recoverSelf — recover N damage from own activating figure(s)

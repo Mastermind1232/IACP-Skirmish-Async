@@ -293,6 +293,32 @@ export async function renderMap(mapId, options = {}) {
         }
       }
     }
+    // Condition icons: rendered at top-right of figure, stacking left, using pre-sized slot images
+    const conditionIcons = (fig.conditions || []).slice(0, 5);
+    if (conditionIcons.length > 0) {
+      // Slot assignment per condition (matches file naming: Icon-{slot}-{Condition} {size}.png)
+      const COND_SLOT = { Bleeding: 1, Stunned: 2, Weakened: 3, Focused: 4, Hidden: 5 };
+      const condSizeStr = (fig.figureSize || '1x1');
+      const iconSize = Math.max(12, clipRadius * 0.5);
+      // Start from top-right corner, stack icons leftward
+      let ciX = cx + clipRadius;
+      const ciY = cy - clipRadius;
+      for (const cond of conditionIcons) {
+        const slot = COND_SLOT[cond] || 1;
+        const condIconFile = `Icon-${slot}-${cond} ${condSizeStr}.png`;
+        const condIconPath = join(rootDir, 'vassal_extracted', 'images', 'conditions', condIconFile);
+        if (existsSync(condIconPath)) {
+          try {
+            const condImg = await loadImage(condIconPath);
+            ciX -= iconSize;
+            ctx.drawImage(condImg, ciX, ciY, iconSize, iconSize);
+            ciX -= iconSize * 0.05; // small gap between icons
+          } catch (err) {
+            console.error('Condition icon load failed:', condIconFile, err);
+          }
+        }
+      }
+    }
   }
 
   // Draw map tokens using game box images from vassal_extracted/images/tokens
