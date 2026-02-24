@@ -345,10 +345,32 @@ export function resolveAbility(abilityId, context) {
   }
 
   // dcSpecial: informational — manual resolution with instruction message (no automated game-state change)
+  // Supports strainCostToSelf: auto-deducts HP from activating figure if specified.
   if (entry.type === 'dcSpecial' && entry.informational && !entry.freeMoveBonus && !entry.nextAttacksBonusHits) {
+    const { game, msgId, dcHealthState, playerNum } = context;
+    let strainNote = '';
+    if (entry.strainCostToSelf > 0 && game && msgId && dcHealthState) {
+      const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const healthState = dcHealthState.get(msgId) || [];
+      if (healthState[selectedFig]) {
+        const [cur, max] = healthState[selectedFig];
+        const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
+        healthState[selectedFig] = [newCur, max ?? newCur];
+        dcHealthState.set(msgId, healthState);
+        const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const idx = dcIds ? dcIds.indexOf(msgId) : -1;
+        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+        strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${cur ?? max} \u2192 ${newCur} HP).`;
+      } else {
+        strainNote = ` (Apply ${entry.strainCostToSelf} Strain to yourself manually.)`;
+      }
+    }
     return {
       applied: true,
-      logMessage: entry.logMessage || entry.label || 'Resolve manually (see rules).',
+      freeAction: !!entry.freeAction,
+      refreshDcEmbed: entry.strainCostToSelf > 0,
+      logMessage: (entry.logMessage || entry.label || 'Resolve manually (see rules).') + strainNote,
       manualMessage: entry.logMessage || entry.label,
     };
   }
