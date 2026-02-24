@@ -160,6 +160,78 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Military Efficiency** — **${toReturn}** shuffled from discard back into your Command deck. (Honour system: choose which card to return — bot uses most-recently-discarded.)`, refreshDiscard: true };
   }
 
+  // dcSpecial: targetHostileFigure (Force Choke, Force Lightning) — pick enemy target, apply damage/strain/condition
+  // First call: returns requiresChoice with enemy figure list; second call: applies effect to chosen figure.
+  if (entry.type === 'dcSpecial' && entry.targetHostileFigure && typeof entry.targetHostileFigure === 'object') {
+    const { damage = 0, strain = 0, applyCondition, requiresLos = false, range: maxRange = 999, splashDamageNote } = entry.targetHostileFigure;
+    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSight: losCheck, getRange: getRng, getMapSpaces: getMs, choiceIndex, targetFigureKey } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.logMessage || `Resolve ${entry.label} manually.` };
+    const enemyPlayerNum = playerNum === 1 ? 2 : 1;
+    const enemyPositions = game.figurePositions?.[enemyPlayerNum] || {};
+    // Second call: apply effect to the chosen figure
+    if (choiceIndex != null && targetFigureKey) {
+      const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
+      const parts = [];
+      const totalDmg = damage + strain;
+      if (totalDmg > 0 && dcHealthState && targetMsgId) {
+        const healthState = dcHealthState.get(targetMsgId) || [];
+        const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const entryHp = healthState[figIdx];
+        if (entryHp) {
+          const [cur, max] = entryHp;
+          const newCur = Math.max(0, (cur ?? max) - totalDmg);
+          healthState[figIdx] = [newCur, max ?? newCur];
+          dcHealthState.set(targetMsgId, healthState);
+          const dcIds = enemyPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcList = enemyPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+          const idx = (dcIds || []).indexOf(targetMsgId);
+          if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+          const dmgStr = damage > 0 && strain > 0 ? `${damage} Damage + ${strain} Strain` : damage > 0 ? `${damage} Damage` : `${strain} Strain`;
+          parts.push(`suffered ${dmgStr} (HP: ${cur ?? max} → ${newCur})`);
+        } else {
+          parts.push(`(HP not tracked — apply ${damage > 0 ? `${damage} Damage` : ''}${strain > 0 ? ` ${strain} Strain` : ''} manually)`);
+        }
+      } else if (totalDmg > 0) {
+        const dmgStr = damage > 0 && strain > 0 ? `${damage} Damage + ${strain} Strain` : damage > 0 ? `${damage} Damage` : `${strain} Strain`;
+        parts.push(`(apply ${dmgStr} manually)`);
+      }
+      if (applyCondition) {
+        game.figureConditions = game.figureConditions || {};
+        const existing = game.figureConditions[targetFigureKey] || [];
+        if (!existing.includes(applyCondition)) {
+          game.figureConditions[targetFigureKey] = [...existing, applyCondition];
+          parts.push(`became **${applyCondition}**`);
+        }
+      }
+      const dcName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      const splashNote = splashDamageNote ? `\n> ${splashDamageNote}` : '';
+      return { applied: true, logMessage: `**${entry.label}** — **${dcName}** ${parts.join(', ') || 'targeted'}.${splashNote}`, refreshDcEmbed: true };
+    }
+    // First call: enumerate valid enemy targets with range/LOS filter
+    const activatingKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const attackerKey = activatingKeys.find((k) => k.endsWith(`-${selectedFig}`)) || activatingKeys[0];
+    const attackerPos = attackerKey ? (game.figurePositions?.[playerNum]?.[attackerKey]) : null;
+    const mapSpaces = getMs ? getMs(game.selectedMap?.id) : null;
+    const validTargets = [];
+    for (const [fk, coord] of Object.entries(enemyPositions)) {
+      if (!coord) continue;
+      if (getRng && attackerPos && maxRange < 999) {
+        const dist = getRng(attackerPos, coord);
+        if (dist > maxRange) continue;
+      }
+      if (requiresLos && losCheck && attackerPos && mapSpaces) {
+        if (!losCheck(attackerPos, coord, mapSpaces)) continue;
+      }
+      validTargets.push({ fk, name: fk.replace(/-\d+-\d+$/, '') });
+    }
+    if (validTargets.length === 0) {
+      return { applied: false, manualMessage: `No valid targets in range/LOS. Apply **${entry.label}** manually.` };
+    }
+    return { applied: false, requiresChoice: true, choiceOptions: validTargets.map((t) => t.name), targetFigureKeys: validTargets.map((t) => t.fk) };
+  }
+
   // dcSpecial: informational — manual resolution with instruction message (no automated game-state change)
   if (entry.type === 'dcSpecial' && entry.informational && !entry.freeMoveBonus && !entry.nextAttacksBonusHits) {
     return {
@@ -175,10 +247,10 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, freeAction: true, logMessage: `**${label}** — You may perform ${entry.actionBonus} additional action${entry.actionBonus !== 1 ? 's' : ''} this activation. Action counter restored.` };
   }
 
-  // dcSpecial: overrideAttackDice (Saber Strike, Bo-Rifle Staff Strike) — next attack uses specific dice/type/pierce
+  // dcSpecial: overrideAttackDice (Saber Strike, Bo-Rifle Staff Strike, Brutal Cleave) — next attack uses specific dice/type/pierce
   // Must run BEFORE freeAttackBonus to take precedence when both are present.
   if (entry.type === 'dcSpecial' && Array.isArray(entry.overrideAttackDice)) {
-    const { game, msgId } = context;
+    const { game, msgId, dcHealthState, playerNum } = context;
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[msgId] = true;
@@ -188,10 +260,30 @@ export function resolveAbility(abilityId, context) {
       type: entry.overrideAttackType || null,
       pierce: entry.overrideAttackPierce || 0,
     };
+    // strainCostToSelf (Brutal Cleave): reduce activating figure's HP by strain amount
+    let strainNote = '';
+    if (entry.strainCostToSelf > 0 && dcHealthState) {
+      const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const healthState = dcHealthState.get(msgId) || [];
+      if (healthState[selectedFig]) {
+        const [cur, max] = healthState[selectedFig];
+        const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
+        healthState[selectedFig] = [newCur, max ?? newCur];
+        dcHealthState.set(msgId, healthState);
+        const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const idx = dcIds ? dcIds.indexOf(msgId) : -1;
+        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+        strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${cur ?? max} → ${newCur} HP).`;
+      } else {
+        strainNote = ` (Apply ${entry.strainCostToSelf} Strain to self manually.)`;
+      }
+    }
     return {
       applied: true,
       freeAction: !!entry.freeAction,
-      logMessage: entry.logMessage || `**${entry.label}** — Click Attack to proceed.`,
+      refreshDcEmbed: entry.strainCostToSelf > 0,
+      logMessage: (entry.logMessage || `**${entry.label}** — Click Attack to proceed.`) + strainNote,
     };
   }
 

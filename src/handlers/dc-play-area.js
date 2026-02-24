@@ -1045,7 +1045,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const ids = effectEntry?.specialAbilityIds;
     abilityId = Array.isArray(ids) && ids[specialIdx] != null ? ids[specialIdx] : `dc_special:${meta.dcName}:${specialIdx}`;
   }
-  const resolveResult = resolveAbility ? resolveAbility(abilityId, { game, msgId, meta, playerNum: meta.playerNum, dcMessageMeta, dcHealthState: ctx.dcHealthState, specialLabel: action }) : { applied: false, manualMessage: 'Resolve manually (see rules).' };
+  const resolveResult = resolveAbility ? resolveAbility(abilityId, {
+    game, msgId, meta, playerNum: meta.playerNum, dcMessageMeta, dcHealthState: ctx.dcHealthState, specialLabel: action,
+    hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapSpaces: ctx.getMapSpaces,
+    findDcMessageIdForFigure: ctx.findDcMessageIdForFigure,
+  }) : { applied: false, manualMessage: 'Resolve manually (see rules).' };
   // Handle choice-required abilities (e.g. Dual-Bladed Fury: Focus or Reach+Cleave)
   if (!resolveResult.applied && resolveResult.requiresChoice && Array.isArray(resolveResult.choiceOptions) && resolveResult.choiceOptions.length > 0) {
     const choiceButtons = resolveResult.choiceOptions.map((label, i) =>
@@ -1059,7 +1063,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       rows.push(new ActionRowBuilder().addComponents(choiceButtons.slice(i, i + 5)));
     }
     game.pendingDcAbilityChoice = game.pendingDcAbilityChoice || {};
-    game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`] = { gameId: game.gameId, playerNum: meta.playerNum, abilityId, msgId, figureIndex, specialIdx };
+    game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`] = {
+      gameId: game.gameId, playerNum: meta.playerNum, abilityId, msgId, figureIndex, specialIdx,
+      targetFigureKeys: resolveResult.targetFigureKeys || null,
+    };
     // Refund the action since we haven't resolved yet — player commits when they pick
     if (actionsData) {
       actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
@@ -1138,14 +1145,19 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     await interaction.followUp({ content: 'No pending ability choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const { playerNum, abilityId, figureIndex } = pending;
+  const { playerNum, abilityId, figureIndex, targetFigureKeys } = pending;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
     await interaction.followUp({ content: 'Only the ability owner can choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   delete game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`];
   const meta = dcMessageMeta.get(msgId);
-  const resolveResult = resolveAbility ? resolveAbility(abilityId, { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, choiceIndex }) : { applied: false, manualMessage: 'Resolve manually.' };
+  const resolveResult = resolveAbility ? resolveAbility(abilityId, {
+    game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, choiceIndex,
+    targetFigureKey: targetFigureKeys?.[choiceIndex] || null,
+    hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapSpaces: ctx.getMapSpaces,
+    findDcMessageIdForFigure: ctx.findDcMessageIdForFigure,
+  }) : { applied: false, manualMessage: 'Resolve manually.' };
   // Deduct action (was refunded when showing choice buttons)
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {
