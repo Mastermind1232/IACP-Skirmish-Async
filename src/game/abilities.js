@@ -1977,15 +1977,17 @@ export function resolveAbility(abilityId, context) {
       if (msgId) {
         const meta = dcMessageMeta.get(msgId);
         const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-        game.figureEvadeTokens = game.figureEvadeTokens || {};
+        game.figurePowerTokens = game.figurePowerTokens || {};
         for (const fk of figureKeys) {
-          game.figureEvadeTokens[fk] = (game.figureEvadeTokens[fk] || 0) + entry.evadeTokenGain;
+          game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+          for (let i = 0; i < entry.evadeTokenGain; i++) game.figurePowerTokens[fk].push('Evade');
         }
       }
     }
+    const evadeNote = entry.evadeTokenGain ? `Gained ${entry.evadeTokenGain} Evade Token(s). ` : '';
     return {
       applied: true,
-      logMessage: `Gained ${entry.evadeTokenGain || 0} Evade Token(s). Until end of round, when defending apply +${entry.roundDefenderBonusBlockPerEvade} Block per Evade result.`,
+      logMessage: `${evadeNote}Until end of round, when defending apply +${entry.roundDefenderBonusBlockPerEvade} Block per Evade result.`,
     };
   }
 
