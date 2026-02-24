@@ -158,7 +158,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
       const ch = await client.channels.fetch(chId);
       const msg = await ch.messages.fetch(msgId);
       const healthState = dcHealthState.get(msgId) || [];
-      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta));
+      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
       const components = getDcPlayAreaComponents(msgId, false, game, meta.dcName);
       await msg.edit({ embeds: [embed], files, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch (err) {

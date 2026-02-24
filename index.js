@@ -2349,7 +2349,7 @@ async function refreshAllGameComponents(game, client) {
       const channelId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
       const channel = await client.channels.fetch(channelId);
       const msg = await channel.messages.fetch(msgId);
-      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState, getConditionsForDcMessage(game, meta));
+      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState, getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, msgId));
       const components = getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
       await msg.edit({ embeds: [embed], files: files?.length ? files : [], components });
     } catch (err) {
@@ -2772,6 +2772,17 @@ function getSquadSelectEmbed(playerNum, squad) {
   return embed;
 }
 
+/**
+ * Maps figure DC name → { upgradeName → upgraded card image path }.
+ * When a figure has the named skirmish upgrade attached, the embed shows the upgraded art.
+ */
+const UPGRADE_IMAGE_OVERRIDES = {
+  'Darth Vader': { 'Driven by Hatred': 'vassal_extracted/images/dc-figures/Darth Vader Driven by Hatred.jpg' },
+  'Han Solo':    { 'Rogue Smuggler':   'vassal_extracted/images/dc-figures/Han Solo Rogue Smuggler.jpg' },
+  'Chewbacca':   { 'Wookiee Avenger':  'vassal_extracted/images/dc-figures/Chewbacca Wookiee Avenger.jpg' },
+  'IG-88':       { 'Focused on the Kill': 'vassal_extracted/images/dc-figures/IG-88 Focused on the Kill.jpg' },
+};
+
 /** Resolve DC name to DC card image path (for deployment card embeds). Looks in dc-figures/ or DC Skirmish Upgrades/ first, then root. */
 function getDcImagePath(dcName) {
   if (!dcName || typeof dcName !== 'string') return null;
@@ -2982,7 +2993,7 @@ async function handleBleedResolve(interaction) {
             const dcMsg = await ch.messages.fetch(msgId);
             const exhausted = dcExhaustedState.get(msgId) ?? false;
             const health = dcHealthState.get(msgId) || [];
-            const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, health, getConditionsForDcMessage(game, meta));
+            const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, health, getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, msgId));
             await dcMsg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
           }
         } catch (err) {
@@ -3535,7 +3546,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
         const dcMsg = await channel.messages.fetch(msgId);
         const exhausted = dcExhaustedState.get(msgId) ?? false;
         const healthState = dcHealthState.get(msgId) || [];
-        const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage(game, meta));
+        const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, msgId));
         await dcMsg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
     } catch (err) {
@@ -3609,7 +3620,7 @@ async function handleSidewinderApply(interaction) {
   try {
     const ch = await client.channels.fetch(meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
     const msg = await ch.messages.fetch(attackerMsgId);
-    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, dcExhaustedState.get(attackerMsgId) ?? false, meta.displayName, dcHealthState.get(attackerMsgId) || [], getConditionsForDcMessage(game, meta));
+    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, dcExhaustedState.get(attackerMsgId) ?? false, meta.displayName, dcHealthState.get(attackerMsgId) || [], getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, attackerMsgId));
     await msg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   } catch (e) { console.error('Failed to refresh Sidewinder DC embed:', e); }
   saveGames();
@@ -3657,7 +3668,7 @@ async function handleBoltslingerTarget(interaction) {
         if (tMeta) {
           const ch = await client.channels.fetch(tMeta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
           const msg = await ch.messages.fetch(targetMsgId);
-          const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta));
+          const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId));
           await msg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         }
       } catch (e) { console.error('Failed to refresh Boltslinger target embed:', e); }
@@ -3732,7 +3743,7 @@ async function applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThre
       if (tMeta) {
         const ch = await client.channels.fetch(tMeta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
         const msg = await ch.messages.fetch(mid);
-        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(mid) ?? false, tMeta.displayName, dcHealthState.get(mid) || [], getConditionsForDcMessage(game, tMeta));
+        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(mid) ?? false, tMeta.displayName, dcHealthState.get(mid) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, mid));
         await msg.edit({ embeds: [embed], files }).catch(() => {});
       }
     } catch {}
@@ -4075,6 +4086,12 @@ function getActivateDcButtons(game, playerNum) {
  * @param {{ dcName: string, displayName: string }} meta
  * @returns {string[][]|undefined} conditionsByFigure, or undefined if none
  */
+/** Return the list of DC Skirmish Upgrade names attached to the given msgId (checks both players). */
+function getDcUpgradeAttachments(game, msgId) {
+  if (!game || !msgId) return [];
+  return (game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || []);
+}
+
 function getConditionsForDcMessage(game, meta) {
   if (!game?.figureConditions || !meta?.dcName) return undefined;
   const stats = getDcStats(meta.dcName);
@@ -4092,7 +4109,7 @@ function getConditionsForDcMessage(game, meta) {
   return hasAny ? out : undefined;
 }
 
-async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, conditionsByFigure) {
+async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, conditionsByFigure, dcAttachments = []) {
   const status = exhausted ? 'EXHAUSTED' : 'READIED';
   const color = exhausted ? 0xed4245 : 0x57f287; // red : green
   const figureless = isFigurelessDc(dcName);
@@ -4115,7 +4132,15 @@ async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState,
     .setColor(color);
 
   let files = [];
-  const imagePath = getDcImagePath(dcName?.trim());
+  // Check if any attached skirmish upgrade overrides the card image
+  const baseDcForOverride = (dcName || '').replace(/\s*\[.*\]\s*$/, '').trim();
+  const upgradeMap = UPGRADE_IMAGE_OVERRIDES[baseDcForOverride];
+  let imagePath = getDcImagePath(dcName?.trim());
+  if (upgradeMap && dcAttachments?.length) {
+    for (const attachName of dcAttachments) {
+      if (upgradeMap[attachName]) { imagePath = upgradeMap[attachName]; break; }
+    }
+  }
   if (imagePath) {
     const fullPath = join(rootDir, imagePath);
     if (existsSync(fullPath)) {
