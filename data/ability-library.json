@@ -2643,14 +2643,11 @@
     },
     "indiscriminate_fire": {
       "type": "dcSpecial",
-      "category": "active",
-      "trigger": "activation",
       "label": "Indiscriminate Fire",
-      "description": "Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red attack die. Each other figure within 2 spaces of the target space other than the defender suffers Damage equal to the Hit results and Strain equal to the Surge results.",
-      "oncePer": null,
-      "wiredStatus": "informational",
+      "description": "Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red die \u2014 each other figure within 2 spaces of the target (not the defender) suffers Damage = Hits and Strain = Surges on that die.",
       "informational": true,
-      "logMessage": "**Indiscriminate Fire** \u00e2\u20ac\u201d Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red attack die. Each other figure within 2 spaces of the target space other than the defender suffers Damage equal to the Hit results and Strain equal to the Surge results.. Resolve manually and inform your opponent."
+      "logMessage": "**Indiscriminate Fire** \u2014 Click **Attack** to perform your attack. After it resolves (if not a miss), choose 1 non-red die from your roll \u2014 each figure within 2 spaces of the target (except the defender) suffers Damage equal to its Hit results and Strain equal to its Surge results. Apply splash damage manually to affected DC cards.",
+      "wiredStatus": "informational"
     },
     "battlefield_leadership": {
       "type": "dcSpecial",
@@ -2787,36 +2784,30 @@
     },
     "hair_trigger": {
       "type": "dcSpecial",
-      "category": "passive-reactive",
-      "trigger": "activation",
       "label": "Hair Trigger",
-      "description": "At the start of a hostile figure's activation, you may interrupt to perform an attack that targets that figure. Limit once per round.",
-      "oncePer": "round",
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Hair Trigger** \u00e2\u20ac\u201d At the start of a hostile figure's activation, you may interrupt to perform an attack that targets that figure. Limit once per round.. Resolve manually and inform your opponent."
+      "description": "At the start of a hostile figure's activation, interrupt to perform an attack targeting that figure. Limit once per round.",
+      "freeAttackBonus": true,
+      "freeAction": true,
+      "logMessage": "**Hair Trigger** \u2014 (Interrupt: triggered at the start of a hostile figure's activation.) Your next attack costs no action \u2014 click **Attack** to target the activating figure. Limit once per round.",
+      "wiredStatus": "wired"
     },
     "figurehead": {
       "type": "dcSpecial",
-      "category": "interrupt",
-      "trigger": "when-targeted",
       "label": "Figurehead",
-      "description": "Before a friendly figure within 4 spaces suffers Damage or Strain, you may suffer Damage or Strain to prevent 1 of that Damage or Strain.",
-      "oncePer": null,
-      "wiredStatus": "informational",
+      "description": "Before a friendly figure within 4 spaces suffers Damage or Strain, you may suffer that Damage or Strain instead to prevent 1 of it.",
       "informational": true,
-      "logMessage": "**Figurehead** \u00e2\u20ac\u201d Before a friendly figure within 4 spaces suffers Damage or Strain, you may suffer Damage or Strain to prevent 1 of that Damage or Strain.. Resolve manually and inform your opponent."
+      "logMessage": "**Figurehead** \u2014 (Interrupt/Passive: before a friendly within 4 suffers Damage or Strain, you may suffer that Damage or Strain to prevent 1 of it.) Resolve manually: reduce friendly's incoming damage/strain by 1 and apply 1 damage/strain to this figure instead.",
+      "wiredStatus": "informational"
     },
     "executor": {
       "type": "dcSpecial",
-      "category": "interrupt",
-      "trigger": "post-combat",
       "label": "Executor",
-      "description": "When a friendly figure within 3 spaces is defeated, you may interrupt to move up to 2 spaces and then perform an attack. Limit once per round.",
-      "oncePer": "round",
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Executor** \u00e2\u20ac\u201d When a friendly figure within 3 spaces is defeated, you may interrupt to move up to 2 spaces and then perform an attack. Limit once per round.. Resolve manually and inform your opponent."
+      "description": "When a friendly figure within 3 spaces is defeated, interrupt to move up to 2 spaces then perform an attack. Limit once per round.",
+      "freeMoveBonus": 2,
+      "freeAttackBonus": true,
+      "freeAction": true,
+      "logMessage": "**Executor** \u2014 (Interrupt: triggered when a friendly figure within 3 spaces is defeated.) Gain 2 free movement points, then your next attack costs no action. Limit once per round.",
+      "wiredStatus": "wired"
     },
     "i_am_one_with_the_force": {
       "type": "dcSpecial",
@@ -2829,14 +2820,12 @@
     },
     "return_fire": {
       "type": "dcSpecial",
-      "category": "interrupt",
-      "trigger": "post-combat",
       "label": "Return Fire",
-      "description": "After an attack targeting you is resolved, if you did not suffer any Damage, you may interrupt to perform an attack targeting that attacker. Limit once per round.",
-      "oncePer": "round",
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Return Fire** \u00e2\u20ac\u201d After an attack targeting you is resolved, if you did not suffer any Damage, you may interrupt to perform an attack targeting that attacker. Limit once per round.. Resolve manually and inform your opponent."
+      "description": "After an attack targeting you resolves with no damage, interrupt to perform an attack targeting the attacker. Limit once per round.",
+      "freeAttackBonus": true,
+      "freeAction": true,
+      "logMessage": "**Return Fire** \u2014 (Interrupt: triggered after an attack targeting you resolves with 0 Damage.) Your next attack costs no action \u2014 click **Attack** to target the attacker. Limit once per round.",
+      "wiredStatus": "wired"
     },
     "defensive_stance": {
       "type": "dcSpecial",

@@ -452,7 +452,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // dcSpecial: freeMoveBonus standalone (I'm One With the Force, etc.) — add N free MP to movement bank
+  // dcSpecial: freeMoveBonus standalone (I'm One With the Force, Executor, etc.) — add N free MP; optionally also grant free attack
   if (entry.type === 'dcSpecial' && typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && !entry.nextAttacksBonusHits) {
     const { game, msgId } = context;
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
@@ -461,6 +461,11 @@ export function resolveAbility(abilityId, context) {
     bank.total = (bank.total ?? 0) + entry.freeMoveBonus;
     bank.remaining = (bank.remaining ?? 0) + entry.freeMoveBonus;
     game.movementBank[msgId] = bank;
+    // Also grant free attack if specified (e.g. Executor)
+    if (entry.freeAttackBonus) {
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = true;
+    }
     return { applied: true, freeAction: !!entry.freeAction, logMessage: entry.logMessage || `**${entry.label}** — Gained ${entry.freeMoveBonus} free movement points.`, refreshMovementBank: true, activeMsgId: msgId };
   }
 
