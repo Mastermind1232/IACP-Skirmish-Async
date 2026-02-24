@@ -419,6 +419,25 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       const effectDesc3 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
       const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc3}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       await applyAbilityResult(result, { game, playerNum, client: interaction.client, ctx });
+      if (result.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
+        const handChannelId2 = playerNum === 1 ? game.p1HandId : game.p2HandId;
+        if (handChannelId2) {
+          game.pendingPowerTokenGrant.channelId = handChannelId2;
+          const ptCh = await interaction.client.channels.fetch(handChannelId2).catch(() => null);
+          if (ptCh) {
+            const { grants } = game.pendingPowerTokenGrant;
+            const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
+            const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
+            const btns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+              new ButtonBuilder().setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
+            );
+            await ptCh.send({
+              content: `**Choose power token type** for **${figNames}** (${totalCount > 1 ? `${totalCount} tokens` : '1 token'}):`,
+              components: [new ActionRowBuilder().addComponents(btns)],
+            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }
+        }
+      }
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
       if (result.revealToPlayer) {
         await interaction.followUp({ content: result.revealToPlayer, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });

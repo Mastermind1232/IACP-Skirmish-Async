@@ -73,6 +73,21 @@
         "z13"
       ],
       "missionA": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "Panel",
+            "image": "Mission Token--Neutral GRAY.gif"
+          }
+        ],
+        "positions": {
+          "0": [
+            "o12",
+            "o16",
+            "w13",
+            "x12"
+          ]
+        },
         "launchPanels": [
           "o12",
           "o16",
@@ -511,6 +526,42 @@
           "j11"
         ]
       ],
+      "namedAreas": [
+        {
+          "name": "Area 1",
+          "cells": []
+        }
+      ]
+    },
+    "anchorhead-cantina-bar": {
+      "terminals": [],
+      "missionA": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "Panel",
+            "image": "Mission Token--Neutral GRAY.gif"
+          }
+        ],
+        "positions": {
+          "0": []
+        },
+        "launchPanels": []
+      },
+      "missionB": {
+        "tokenTypes": [
+          {
+            "id": "0",
+            "label": "",
+            "image": "Mission Token--Neutral GRAY.gif"
+          }
+        ],
+        "positions": {
+          "0": []
+        },
+        "contraband": []
+      },
+      "doors": [],
       "namedAreas": [
         {
           "name": "Area 1",

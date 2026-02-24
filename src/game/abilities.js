@@ -239,13 +239,13 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve ${entry.label} manually.` };
     const mapId = game.selectedMap?.id;
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    // Helper: add hit tokens to a figure key (up to max 2)
+    // Helper: add Hit tokens to a figure key (up to max 2) — specifically Hit tokens, not generic power tokens
     function addHitToken(fk, n) {
       if (n <= 0) return;
       game.figurePowerTokens = game.figurePowerTokens || {};
       game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
       const current = game.figurePowerTokens[fk].length;
-      for (let i = 0; i < Math.min(n, 2 - current); i++) game.figurePowerTokens[fk].push('Wild');
+      for (let i = 0; i < Math.min(n, 2 - current); i++) game.figurePowerTokens[fk].push('Hit');
     }
     // Second call: apply effects to self + chosen target
     if (choiceIndex != null && targetFigureKey) {
@@ -898,14 +898,16 @@ export function resolveAbility(abilityId, context) {
     game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
     const current = game.figurePowerTokens[fk].length;
     const toAdd = Math.min(entry.powerTokenGain, 2 - current);
-    for (let i = 0; i < toAdd; i++) game.figurePowerTokens[fk].push('Wild');
     game.movementBank = game.movementBank || {};
     const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
     bank.total = (bank.total ?? 0) + entry.mpBonus;
     bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
     game.movementBank[msgId] = bank;
-    const parts = ['Became Focused', 'Hidden', toAdd > 0 ? `gained ${toAdd} Power Token(s)` : null, `gained ${entry.mpBonus} MP`].filter(Boolean);
-    return { applied: true, logMessage: parts.join(', ') + '.', refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true, conditionCardsToPost: ['Focus', 'Hidden'] };
+    if (toAdd > 0) {
+      game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: meta?.displayName || fk, count: toAdd }], channelId: null, playerNum };
+    }
+    const parts = ['Became Focused', 'Hidden', toAdd > 0 ? `gained ${toAdd} Power Token(s) — choose type` : null, `gained ${entry.mpBonus} MP`].filter(Boolean);
+    return { applied: true, requiresPowerTokenChoice: toAdd > 0, logMessage: parts.join(', ') + '.', refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true, conditionCardsToPost: ['Focus', 'Hidden'] };
   }
 
   // ccEffect: applyFocus + mpBonus combo (Stimulants) — Focus and MP together; damage to self/adjacent is manual
@@ -1010,9 +1012,9 @@ export function resolveAbility(abilityId, context) {
     const current = game.figurePowerTokens[fk].length;
     const toAdd = Math.min(n, 2 - current);
     if (toAdd <= 0) return { applied: false, manualMessage: 'That figure already has 2 Power Tokens (max).' };
-    for (let i = 0; i < toAdd; i++) game.figurePowerTokens[fk].push('Wild');
-    const msg = toAdd === 1 ? 'Gained 1 Power Token.' : `Gained ${toAdd} Power Tokens.`;
-    return { applied: true, logMessage: msg, refreshBoard: true };
+    game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: fk, count: toAdd }], channelId: null, playerNum };
+    const msg = toAdd === 1 ? 'Gained 1 Power Token — choose type.' : `Gained ${toAdd} Power Tokens — choose type.`;
+    return { applied: true, requiresPowerTokenChoice: true, logMessage: msg, refreshBoard: true };
   }
 
   // ccEffect: focusGainToAdjacentUpToN (Inspiring Speech) — Focus up to N friendly figures adjacent to activating figure(s)
@@ -2290,16 +2292,20 @@ export function resolveAbility(abilityId, context) {
     if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures in group.' };
     const totalToAdd = Math.min(entry.powerTokenGainToGroup, figureKeys.length * 2);
     game.figurePowerTokens = game.figurePowerTokens || {};
+    const grants = [];
     let remaining = totalToAdd;
     for (const fk of figureKeys) {
       if (remaining <= 0) break;
       const current = (game.figurePowerTokens[fk] || []).length;
       const cap = 2 - current;
       const toAdd = Math.min(remaining, Math.max(0, cap));
-      for (let i = 0; i < toAdd; i++) (game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || []).push('Wild');
+      if (toAdd > 0) grants.push({ figureKey: fk, figName: fk, count: toAdd });
       remaining -= toAdd;
     }
-    return { applied: true, logMessage: `Distributed ${totalToAdd} Hit Token(s) among figures in your group.` };
+    if (grants.length > 0) {
+      game.pendingPowerTokenGrant = { grants, channelId: null, playerNum };
+    }
+    return { applied: true, requiresPowerTokenChoice: grants.length > 0, logMessage: `Distributed ${totalToAdd} Power Token(s) among figures in your group — choose type.` };
   }
 
   // ccEffect: claimInitiative only (I Make My Own Luck) — optional firstActivationFigureName

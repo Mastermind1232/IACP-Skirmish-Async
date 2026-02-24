@@ -15,7 +15,7 @@ import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
 import { handleEndEndOfRound, handleEndStartOfRound } from './round.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
-import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCombatToken } from './combat.js';
+import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCombatToken, handlePowerTokenChoice } from './combat.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate } from './activation.js';
 import {
   handleMapSelection,
@@ -109,6 +109,7 @@ register('combat_resolve_ready_', handleCombatResolveReady);
   register('combat_surge_', handleCombatSurge);
   register('combat_reroll_', handleCombatReroll);
 register('combat_token_', handleCombatToken);
+register('power_token_choice_', handlePowerTokenChoice);
 register('status_phase_', handleStatusPhase);
 register('pass_activation_turn_', handlePassActivationTurn);
 register('end_turn_', handleEndTurn);
@@ -185,7 +186,7 @@ export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
 export { handleEndEndOfRound, handleEndStartOfRound } from './round.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
-export { handleAttackTarget, handleCleaveTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handleCombatToken } from './combat.js';
+export { handleAttackTarget, handleCleaveTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handleCombatToken, handlePowerTokenChoice } from './combat.js';
 export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate } from './activation.js';
 export {
   handleMapSelection,

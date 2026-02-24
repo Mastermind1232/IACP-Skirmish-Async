@@ -341,10 +341,10 @@ export async function handleAttackTarget(interaction, ctx) {
       game.figureConditions[attackerFigureKey] = [...(game.figureConditions[attackerFigureKey] || []).filter(c => c !== 'Focus'), 'Focus'];
       await thread.send('**Flawless Execution** — Cad Bane is **Focused** before attacking (+1 green die).');
     } else {
-      if (!game.figurePowerTokens) game.figurePowerTokens = {};
-      game.figurePowerTokens[attackerFigureKey] = [...(game.figurePowerTokens[attackerFigureKey] || []), 'Wild'];
       game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'yellow'] };
-      await thread.send('**Flawless Execution** — Cad Bane was already Focused: +1 Wild token and +1 yellow die (use pre-combat window to change die color if needed).');
+      game.pendingPowerTokenGrant = { grants: [{ figureKey: attackerFigureKey, figName: meta.dcName, count: 1 }], channelId: thread.id, playerNum: attackerPlayerNum };
+      await thread.send('**Flawless Execution** — Cad Bane was already Focused: +1 yellow die. Choose a power token type:');
+      await sendPowerTokenChoicePrompt(thread, gameId, game.pendingPowerTokenGrant.grants);
     }
   }
 
@@ -863,6 +863,9 @@ function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives) {
       const pier = p.match(/^pierce\s+(\d+)$/i);      if (pier)   { combat.bonusPierce    = (combat.bonusPierce    || 0) + parseInt(pier[1],   10); continue; }
       const surg = p.match(/^\+(\d+)\s+surge$/);      if (surg)   { combat.surgeBonus     = (combat.surgeBonus     || 0) + parseInt(surg[1],   10); continue; }
       const blas = p.match(/^blast\s+(\d+)$/);        if (blas)   { combat.bonusBlast     = (combat.bonusBlast     || 0) + parseInt(blas[1],   10); continue; }
+      const clv  = p.match(/^cleave\s+(\d+)$/);       if (clv)    { combat.passiveCleave  = (combat.passiveCleave  || 0) + parseInt(clv[1],    10); continue; }
+      if (p === 'bleed')        { combat.bonusConditions = (combat.bonusConditions || []).concat(['Bleed']); continue; }
+      if (p === 'professional') { combat.rerollOneAttackDie = (combat.rerollOneAttackDie || 0) + 1; continue; }
     }
   }
 
@@ -870,6 +873,7 @@ function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives) {
     for (const p of parts(passive)) {
       const blk  = p.match(/^(?:block\s+(\d+)|\+(\d+)\s+block)$/i); if (blk) { combat.bonusBlock = (combat.bonusBlock || 0) + parseInt(blk[1] ?? blk[2], 10); continue; }
       const evd  = p.match(/^\+(\d+)\s+evade$/);      if (evd)    { combat.bonusEvade     = (combat.bonusEvade     || 0) + parseInt(evd[1],    10); continue; }
+      if (p === 'professional') { combat.defenderRerollDiceMax = (combat.defenderRerollDiceMax || 0) + 1; continue; }
     }
   }
 }
@@ -928,6 +932,23 @@ function applyTokenBonus(combat, type) {
   if (type === 'Evade') combat.bonusEvade = (combat.bonusEvade || 0) + 1;
 }
 
+/** Send a 4-button prompt asking the player to choose a power token type (Hit/Surge/Block/Evade) */
+async function sendPowerTokenChoicePrompt(thread, gameId, grants) {
+  const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
+  const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
+  const countLabel = totalCount > 1 ? `${totalCount} tokens` : '1 token';
+  const btns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+    new ButtonBuilder()
+      .setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`)
+      .setLabel(t)
+      .setStyle(ButtonStyle.Secondary)
+  );
+  await thread.send({
+    content: `**Choose power token type** for **${figNames}** (${countLabel}):`,
+    components: [new ActionRowBuilder().addComponents(btns)],
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+}
+
 /** Remove token from game.figurePowerTokens by index */
 function removeSpentToken(game, figureKey, index) {
   if (!game.figurePowerTokens?.[figureKey]) return;
@@ -955,8 +976,19 @@ async function advanceTokenPhase(thread, game, combat, completedRole, ctx) {
 async function proceedAfterRerolls(thread, game, combat, ctx) {
   const defRoll = combat.defenseRoll;
 
-  // Dodge check (now AFTER rerolls, so rerolls can potentially remove dodge)
-  if (defRoll.dodge) {
+  // Defensive Stance (Diala Passil): if a Dodge is rolled while defending, convert it to +2 Block, +1 Evade
+  if (defRoll.dodge && combat.target?.figureKey) {
+    const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const defDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const defEff = getDcEff[defDcName] || getDcEff[defDcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if ((defEff?.specialAbilityIds || []).includes('defensive_stance')) {
+      combat.defenseRoll = { block: (defRoll.block || 0) + 2, evade: (defRoll.evade || 0) + 1, dodge: false };
+      await thread.send('**Defensive Stance** — Dodge converted to +2 Block, +1 Evade.');
+    }
+  }
+
+  // Dodge check (now AFTER rerolls and Defensive Stance conversion)
+  if (combat.defenseRoll.dodge) {
     await thread.send('**DODGE!** The attack misses — all damage and effects negated.');
     await sendReadyToResolveRolls(thread, game.gameId);
     return;
@@ -1152,6 +1184,46 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeStalkPrey) combat.surgeStalkPrey = true;
       if (mod.surgeCriticalHit) combat.surgeCriticalHit = true;
       if (mod.surgeSuppressionStrain) combat.surgeSuppressionStrain = true;
+      // Self-condition surges: apply condition to attacker's own figure
+      if (mod.surgeSelfFocus && combat.attackerFigureKey) {
+        game.figureConditions = game.figureConditions || {};
+        const existing = game.figureConditions[combat.attackerFigureKey] || [];
+        if (!existing.includes('Focus')) game.figureConditions[combat.attackerFigureKey] = [...existing, 'Focus'];
+      }
+      if (mod.surgeSelfHide && combat.attackerFigureKey) {
+        game.figureConditions = game.figureConditions || {};
+        const existing = game.figureConditions[combat.attackerFigureKey] || [];
+        if (!existing.includes('Hide')) game.figureConditions[combat.attackerFigureKey] = [...existing, 'Hide'];
+      }
+      // Power token grants to attacker's figurePowerTokens
+      if ((mod.surgeGrantHitToken || 0) > 0 && combat.attackerFigureKey) {
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        game.figurePowerTokens[combat.attackerFigureKey] = game.figurePowerTokens[combat.attackerFigureKey] || [];
+        for (let _i = 0; _i < mod.surgeGrantHitToken; _i++) game.figurePowerTokens[combat.attackerFigureKey].push('Hit');
+      }
+      if ((mod.surgeGrantBlockToken || 0) > 0 && combat.attackerFigureKey) {
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        game.figurePowerTokens[combat.attackerFigureKey] = game.figurePowerTokens[combat.attackerFigureKey] || [];
+        for (let _i = 0; _i < mod.surgeGrantBlockToken; _i++) game.figurePowerTokens[combat.attackerFigureKey].push('Block');
+      }
+      if ((mod.surgeGrantPowerToken || 0) > 0 && combat.attackerFigureKey) {
+        const figName = combat.attackerFigureKey.replace(/-\d+-\d+$/, '');
+        game.pendingPowerTokenGrant = { grants: [{ figureKey: combat.attackerFigureKey, figName, count: mod.surgeGrantPowerToken }], channelId: null, playerNum: combat.attackerPlayerNum };
+      }
+      if ((mod.surgeGrantEvade || 0) > 0 && combat.attackerFigureKey) {
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        game.figurePowerTokens[combat.attackerFigureKey] = game.figurePowerTokens[combat.attackerFigureKey] || [];
+        for (let _i = 0; _i < mod.surgeGrantEvade; _i++) game.figurePowerTokens[combat.attackerFigureKey].push('Evade');
+      }
+      if ((mod.surgeAttackerBlock || 0) > 0 && combat.attackerFigureKey) {
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        game.figurePowerTokens[combat.attackerFigureKey] = game.figurePowerTokens[combat.attackerFigureKey] || [];
+        for (let _i = 0; _i < mod.surgeAttackerBlock; _i++) game.figurePowerTokens[combat.attackerFigureKey].push('Block');
+      }
+      // Surge-for-surge: add back to remaining before the cost decrement below
+      if ((mod.surgeGrantExtraSurge || 0) > 0) {
+        combat.surgeRemaining = (combat.surgeRemaining || 0) + mod.surgeGrantExtraSurge;
+      }
       if (mod.surgeComplex) {
         const cThread = await interaction.client.channels.fetch(combat.combatThreadId);
         await cThread.send(`⚠️ **${getSurgeLabel(key)}** — resolve manually (see ability text).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -1159,6 +1231,13 @@ export async function handleCombatSurge(interaction, ctx) {
       combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - cost);
       const label = getSurgeLabel(key);
       await thread.send(`**Surge spent (${cost}):** ${label}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      // If this surge granted a power token, send the type-choice prompt now
+      if (game.pendingPowerTokenGrant?.channelId === null) {
+        game.pendingPowerTokenGrant.channelId = thread.id;
+        await sendPowerTokenChoicePrompt(thread, gameId, game.pendingPowerTokenGrant.grants);
+        saveGames();
+        return; // wait for player to choose token type before continuing surge
+      }
     }
   }
   if (combat.surgeRemaining <= 0 || choice === 'done') {
@@ -1383,5 +1462,57 @@ export async function handleCleaveTarget(interaction, ctx) {
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   if (cleaveMsgId) embedRefreshMsgIds.add(cleaveMsgId);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
+  saveGames();
+}
+
+/**
+ * Handle power token type-choice buttons (power_token_choice_).
+ * Fired after any ability grants a generic "power token"; player picks Hit/Surge/Block/Evade.
+ */
+export async function handlePowerTokenChoice(interaction, ctx) {
+  await interaction.deferUpdate().catch(() => {});
+  const { getGame, saveGames, canActAsPlayer } = ctx;
+  const match = interaction.customId.match(/^power_token_choice_([^_]+)_(hit|surge|block|evade)$/);
+  if (!match) return;
+  const [, gameId, typeRaw] = match;
+  const type = typeRaw[0].toUpperCase() + typeRaw.slice(1); // 'Hit', 'Surge', 'Block', 'Evade'
+  const game = getGame(gameId);
+  if (!game?.pendingPowerTokenGrant?.grants?.length) return;
+  const { grants, channelId, playerNum } = game.pendingPowerTokenGrant;
+  if (playerNum && !canActAsPlayer(game, interaction.user.id, playerNum)) return;
+  game.figurePowerTokens = game.figurePowerTokens || {};
+  const lines = [];
+  for (const { figureKey, figName, count } of grants) {
+    game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
+    for (let i = 0; i < count; i++) game.figurePowerTokens[figureKey].push(type);
+    lines.push(`${figName}: ${count > 1 ? `${count}× ` : ''}**${type}**`);
+  }
+  game.pendingPowerTokenGrant = null;
+  if (channelId) {
+    const ch = await interaction.client.channels.fetch(channelId).catch(() => null);
+    if (ch) await ch.send(`**Power Token(s) granted:** ${lines.join(', ')}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }
+  // If we're mid-surge and there are still surges remaining, continue the surge flow
+  const combat = game.pendingCombat;
+  if (combat?.surgeRemaining > 0 && channelId) {
+    const thread = await interaction.client.channels.fetch(channelId).catch(() => null);
+    if (thread) {
+      const surgeAbilities = ctx.getAttackerSurgeAbilities ? ctx.getAttackerSurgeAbilities(combat) : [];
+      const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS?.[id]) || id);
+      const remaining = combat.surgeRemaining || 0;
+      const surgeRows = [];
+      for (let i = 0; i < surgeAbilities.length; i++) {
+        const k = surgeAbilities[i];
+        const cost = (k?.startsWith?.('double:') ? 2 : (ctx.getAbility?.(k)?.surgeCost ?? 1));
+        if (cost > remaining) continue;
+        const label = (getSurgeLabel(k) || k).slice(0, 80);
+        const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
+        surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_${i}`).setLabel(btnLabel.slice(0, 80)).setStyle(ButtonStyle.Secondary));
+      }
+      surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
+      const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
+      await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
+  }
   saveGames();
 }

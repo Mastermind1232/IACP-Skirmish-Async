@@ -620,6 +620,25 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       await handCh.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } else {
       await applyAbilityResult(result, { game, playerNum: meta.playerNum, msgId, client: interaction.client, ctx });
+      if (result.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
+        const threadId = game.dcActionsData?.[msgId]?.threadId;
+        if (threadId) {
+          game.pendingPowerTokenGrant.channelId = threadId;
+          const ptThread = await interaction.client.channels.fetch(threadId).catch(() => null);
+          if (ptThread) {
+            const { grants } = game.pendingPowerTokenGrant;
+            const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
+            const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
+            const btns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+              new ButtonBuilder().setCustomId(`power_token_choice_${game.gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
+            );
+            await ptThread.send({
+              content: `**Choose power token type** for **${figNames}** (${totalCount > 1 ? `${totalCount} tokens` : '1 token'}):`,
+              components: [new ActionRowBuilder().addComponents(btns)],
+            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }
+        }
+      }
     }
   }
   if (ctx.pushUndo) {
@@ -1096,6 +1115,43 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   if (resolveResult.freeAction && actionsData) {
     actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
     await updateDcActionsMessage(game, msgId, client);
+  }
+  // Power token type-choice prompt (player chooses Hit/Surge/Block/Evade immediately upon earning)
+  if (resolveResult.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
+    const threadId = game.dcActionsData?.[msgId]?.threadId;
+    if (threadId) {
+      game.pendingPowerTokenGrant.channelId = threadId;
+      const ptThread = await client.channels.fetch(threadId).catch(() => null);
+      if (ptThread) {
+        const { grants } = game.pendingPowerTokenGrant;
+        const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
+        const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
+        const btns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+          new ButtonBuilder().setCustomId(`power_token_choice_${game.gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
+        );
+        await ptThread.send({
+          content: `**Choose power token type** for **${figNames}** (${totalCount > 1 ? `${totalCount} tokens` : '1 token'}):`,
+          components: [new ActionRowBuilder().addComponents(btns)],
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
+    }
+  }
+  // Expertise (Ko-Tun Feralo): once per activation, using a Special grants 1 extra action
+  if (buttonKey === 'dc_special_' && abilityId !== 'expertise' && actionsData) {
+    const selectedFigure = actionsData?.selectedFigure ?? 0;
+    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+    const expertiseFk = `${meta.dcName}-${dgIndex}-${selectedFigure}`;
+    const expertiseKey = expertiseFk + '_expertise';
+    const effects = getDcEffects?.() || {};
+    const effectEntry = effects[meta.dcName] || effects[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if ((effectEntry?.specialAbilityIds || []).includes('expertise') && !game.roundFigureAbilityUsed?.[expertiseKey]) {
+      if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
+      game.roundFigureAbilityUsed[expertiseKey] = true;
+      actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
+      await updateDcActionsMessage(game, msgId, client);
+      const thread = interaction.channel;
+      await thread.send(`**Expertise** — ${displayName} gains 1 extra action this activation.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
   }
   const manualMsg = resolveResult.manualMessage || 'Resolve manually (see rules).';
   const doneRow = new ActionRowBuilder().addComponents(

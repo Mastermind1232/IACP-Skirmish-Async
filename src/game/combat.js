@@ -110,12 +110,24 @@ export function parseSurgeEffect(key) {
   if (k === 'shrapnel') { out.blast = 2; return out; }
   if (k === 'critical_hit') { out.pierce = 2; out.surgeCriticalHit = true; return out; }
   if (k === 'suppression') { out.surgeSuppressionStrain = true; return out; }
+  // Self-condition surges: attacker gains condition (not applied to target)
+  if (k === 'focus') { out.surgeSelfFocus = true; return out; }
+  if (k === 'hide') { out.surgeSelfHide = true; return out; }
+  // Power token grants: attacker gains tokens to use on later rolls
+  if (k === 'hit token') { out.surgeGrantHitToken = 1; return out; }
+  if (k === 'hit token 2') { out.surgeGrantHitToken = 2; return out; }
+  if (k === 'block token') { out.surgeGrantBlockToken = 1; return out; }
+  if (k === 'power token') { out.surgeGrantPowerToken = 1; return out; }
+  // Attacker gains an evade (for own next defense — honour system)
+  if (k === 'evade') { out.surgeGrantEvade = 1; return out; }
+  // Attacker gains block on own next defense (honour system)
+  if (k === 'block 1') { out.surgeAttackerBlock = 1; return out; }
+  // Spend 1 surge, gain 1 surge back (net zero, allows chaining into other abilities)
+  if (k === 'surge 1') { out.surgeGrantExtraSurge = 1; return out; }
   // Complex surge effects: flag for informational display, resolve manually
   if (['concussive_bolt', 'agitate', 'fighting_knife', 'mastery', 'bargain',
        'fell_swoop', 'spread_the_pain', 'interrogate',
-       'cancel 2', 'cleave x', 'recover x',
-       'block 1', 'block token', 'hit token', 'hit token 2',
-       'evade', 'evade token', 'power token', 'surge 1'].includes(k)) {
+       'cancel 2', 'cleave x', 'recover x', 'evade token'].includes(k)) {
     out.surgeComplex = k; return out;
   }
   const parts = k.split(/\s*,\s*/);
@@ -130,9 +142,10 @@ export function parseSurgeEffect(key) {
     if (p === 'stun') out.conditions.push('Stun');
     else if (p === 'weaken') out.conditions.push('Weaken');
     else if (p === 'bleed') out.conditions.push('Bleed');
-    else if (p === 'hide') out.conditions.push('Hide');
-    else if (p === 'focus') out.conditions.push('Focus');
-    // Token effects within a combo (e.g. "stun, evade token") — flag for manual resolution
+    // hide/focus in combos: self-effect (attacker gains condition, not target)
+    else if (p === 'hide') out.surgeSelfHide = true;
+    else if (p === 'focus') out.surgeSelfFocus = true;
+    // Token/complex effects within a combo — flag for manual resolution
     else if (['block token', 'hit token', 'hit token 2', 'evade token', 'power token', 'surge 1', 'evade', 'block 1', 'cancel 2'].includes(p)) {
       out.surgeComplex = out.surgeComplex || p;
     }

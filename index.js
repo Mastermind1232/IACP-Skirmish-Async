@@ -3345,7 +3345,9 @@ async function resolveCombatAfterRolls(game, combat, client) {
     }
   }
   // F6 Cleave: attacker may choose one other figure in melee (adjacent to attacker) to apply cleave damage
-  if (hit && damage > 0 && (combat.surgeCleave || 0) > 0 && game.selectedMap?.id) {
+  // Triggered by either surge Cleave ability or Cleave N passive on deployment card
+  const effectiveCleave = (combat.surgeCleave || 0) + (combat.passiveCleave || 0);
+  if (hit && damage > 0 && effectiveCleave > 0 && game.selectedMap?.id) {
     const attMeta = combat.attackerMsgId ? dcMessageMeta.get(combat.attackerMsgId) : null;
     const attDg = (attMeta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const attackerFigureKey = attMeta ? `${attMeta.dcName}-${attDg}-${combat.attackerFigureIndex ?? 0}` : null;
@@ -3366,7 +3368,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
         game.pendingCleave = {
           gameId: game.gameId,
           combatThreadId: combat.combatThreadId,
-          surgeCleave: combat.surgeCleave || 0,
+          surgeCleave: effectiveCleave,
           attackerPlayerNum,
           ownerId,
           targets: targetsWithLabels,
@@ -3376,7 +3378,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
         };
         const cleaveRows = getCleaveTargetButtons(game.gameId, targetsWithLabels);
         await thread.send({
-          content: `**Cleave (${combat.surgeCleave} damage):** <@${ownerId}> — Choose one target in melee to apply cleave damage:`,
+          content: `**Cleave (${effectiveCleave} damage):** <@${ownerId}> — Choose one target in melee to apply cleave damage:`,
           allowedMentions: { users: [ownerId] },
           components: cleaveRows,
         });
