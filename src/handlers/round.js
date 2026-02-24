@@ -244,6 +244,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.roundTrooperAttackHitBonus = {};
   game.roundVehicleSpeedBonus = {};
   game.deflectionPending = {};
+  game.roundAttackRerollDice = {};
+  game.roundDefenderCannotBeTargetedUnlessWithinSpaces = null;
+  game.roundDebuffNextHostileActivation = null;
   game.roundDroidExtraActionCostDamage = null;
   game.sitTightPlayerNum = null;
   game.roundInTheShadowsPlayerNum = null;

@@ -85,18 +85,21 @@ export const SURGE_LABELS = {
   'accuracy 2, surge 1': '+2 Accuracy, +1 Surge', 'damage 2, hide': '+2 Hits, Hide',
 };
 
-/** Get attacker's surge abilities from dc-effects + combat.bonusSurgeAbilities (CCs like Spinning Kick). */
+/** Get attacker's surge abilities from dc-effects + combat.bonusSurgeAbilities (CCs like Spinning Kick).
+ *  Double-surge abilities (cost 2) are tagged with the "double:" prefix. */
 export function getAttackerSurgeAbilities(combat) {
   const card = getDcEffects()[combat.attackerDcName] || getDcEffects()[combat.attackerDcName?.replace(/\s*\[.*\]\s*$/, '')];
   const base = card?.surgeAbilities || [];
+  const doubles = (card?.doubleSurgeAbilities || []).map((k) => `double:${k}`);
   const bonus = combat?.bonusSurgeAbilities || [];
-  return [...base, ...bonus];
+  return [...base, ...doubles, ...bonus];
 }
 
 /** Parse a surge ability key into modifiers. F6: blast, recover, cleave. */
 export function parseSurgeEffect(key) {
   const out = { damage: 0, pierce: 0, accuracy: 0, conditions: [], blast: 0, recover: 0, cleave: 0 };
-  const k = String(key || '').toLowerCase().trim();
+  // Strip double-surge prefix before parsing
+  const k = String(key || '').replace(/^double:/, '').toLowerCase().trim();
   // Named surge key shortcuts (cannot be parsed as generic patterns)
   if (k === 'stun_net') { out.conditions.push('Stun'); return out; }
   if (k === 'harass') { out.surgeHarass = 1; return out; }

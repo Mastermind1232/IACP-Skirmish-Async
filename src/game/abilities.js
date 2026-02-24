@@ -40,7 +40,8 @@ export function resolveSurgeAbility(abilityId) {
 export function getSurgeAbilityLabel(abilityId) {
   const entry = getAbility(abilityId);
   if (entry?.label) return entry.label;
-  return abilityId || '';
+  // Strip double-surge prefix for display
+  return String(abilityId || '').replace(/^double:/, '');
 }
 
 /**

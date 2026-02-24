@@ -194,6 +194,7 @@ export async function handleDcUnactivate(interaction, ctx) {
   if (game.nextAttackBonusPierce?.[meta.playerNum]) delete game.nextAttackBonusPierce[meta.playerNum];
   if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
   if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
+  if (game.hitAndRunPendingMp?.msgId === msgId) delete game.hitAndRunPendingMp;
   // Stun: discarded at the end of the figure's activation
   if (game.figureConditions) {
     const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
@@ -772,10 +773,18 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const speed = getEffectiveSpeed(meta.dcName, figureKey, game, playerNum);
       const bank = game.movementBank?.[msgId];
       const currentMp = bank?.remaining ?? 0;
-      const mpRemaining = currentMp + speed;
+      let mpRemaining = currentMp + speed;
       const displayName = meta.displayName || meta.dcName;
       const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
       game.movementBank = game.movementBank || {};
+      // Vanish: grant bonus MP on first Move of the next activation, then clear immunity
+      if (!bank) {
+        const vanishBonus = game.vanishImmunityUntilNextActivation?.[playerNum];
+        if (vanishBonus?.msgId === msgId && vanishBonus.nextMp > 0) {
+          mpRemaining += vanishBonus.nextMp;
+          delete game.vanishImmunityUntilNextActivation[playerNum];
+        }
+      }
       if (!game.movementBank[msgId]) {
         game.movementBank[msgId] = {
           total: speed,
@@ -888,6 +897,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       return;
     }
     const enemyPlayerNum = playerNum === 1 ? 2 : 1;
+    // "No Cheating": debuffed player can only make melee attacks this activation
+    const noCheatingDebuff = game.roundDebuffNextHostileActivation;
+    if (noCheatingDebuff && (3 - noCheatingDebuff.playerNum) === playerNum && noCheatingDebuff.melee) {
+      if (stats.attack?.type === 'range') {
+        await interaction.followUp({ content: '⚠️ **No Cheating** is active — this figure can only make melee attacks this activation.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        return;
+      }
+    }
     const targets = [];
     const poses = game.figurePositions?.[enemyPlayerNum] || {};
     const dcList = enemyPlayerNum === 1 ? game.player1Squad?.dcList : game.player2Squad?.dcList || [];
@@ -897,11 +914,20 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       // Hidden figures cannot be declared as attack targets
       const targetCondsList = game.figureConditions?.[k] || [];
       if (targetCondsList.includes('Hide')) continue;
+      // Vanish: figure cannot be targeted until their next activation
+      const vanishImmunity = game.vanishImmunityUntilNextActivation?.[enemyPlayerNum];
+      if (vanishImmunity) {
+        const vanishMeta = dcMessageMeta.get(vanishImmunity.msgId);
+        if (vanishMeta && k.startsWith(`${vanishMeta.dcName}-`)) continue;
+      }
       const dcName = k.replace(/-\d+-\d+$/, '');
       const size = game.figureOrientations?.[k] || getFigureSize(dcName);
       const cells = getFootprintCells(coord, size);
       const dist = Math.min(...cells.map((c) => getRange(attackerPos, c)));
       if (dist < minRange || dist > effectiveMaxRange) continue;
+      // "I Must Go Alone": protected player's figures cannot be targeted from beyond N spaces
+      const iMustGoAlone = game.roundDefenderCannotBeTargetedUnlessWithinSpaces;
+      if (iMustGoAlone?.playerNum === enemyPlayerNum && dist > iMustGoAlone.spaces) continue;
       const los = hasLineOfSight(attackerPos, coord, ms);
       const m = k.match(/-(\d+)-(\d+)$/);
       const dg = m ? parseInt(m[1], 10) : 1;

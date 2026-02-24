@@ -223,6 +223,28 @@ export async function handleAttackTarget(interaction, ctx) {
   const defenderPassives = getDcStats(targetDcName).passives || [];
   applyDcPassivesToCombat(game.pendingCombat, attackerPassives, defenderPassives);
 
+  // Vanish: clear immunity when the protected figure starts attacking
+  const vanishEntry = game.vanishImmunityUntilNextActivation?.[attackerPlayerNum];
+  if (vanishEntry?.msgId === msgId) {
+    delete game.vanishImmunityUntilNextActivation[attackerPlayerNum];
+  }
+
+  // "No Cheating": remove N attack dice from debuffed player's attack
+  const noCheatingDebuff = game.roundDebuffNextHostileActivation;
+  if (noCheatingDebuff && (3 - noCheatingDebuff.playerNum) === attackerPlayerNum && noCheatingDebuff.removeAttackDie > 0) {
+    const dice = [...(game.pendingCombat.attackInfo.dice || [])];
+    const removeOrder = ['yellow', 'green', 'blue', 'red'];
+    let toRemove = noCheatingDebuff.removeAttackDie;
+    for (const color of removeOrder) {
+      if (toRemove <= 0) break;
+      const idx = dice.indexOf(color);
+      if (idx !== -1) { dice.splice(idx, 1); toRemove--; }
+    }
+    game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice };
+    delete game.roundDebuffNextHostileActivation;
+    await thread.send('⚠️ **No Cheating** is active — 1 attack die removed.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }
+
   // --- Passive-auto ability wiring ---
   const atkEff = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const defEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
@@ -949,7 +971,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   // Surge spending
   const surgeAbilities = getAttackerSurgeAbilities(combat);
   const remaining = totalSurge;
-  const affordable = surgeAbilities.filter((key) => (getAbility(key)?.surgeCost ?? 1) <= remaining);
+  const affordable = surgeAbilities.filter((key) => ((key?.startsWith?.('double:') ? 2 : (getAbility(key)?.surgeCost ?? 1))) <= remaining);
   if (totalSurge > 0 && (affordable.length > 0 || combat.attackerConds?.includes('Bleed'))) {
     combat.surgeRemaining = totalSurge;
     combat.surgeDamage = 0;
@@ -959,7 +981,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     const surgeRows = [];
     for (let i = 0; i < surgeAbilities.length; i++) {
       const key = surgeAbilities[i];
-      const cost = getAbility(key)?.surgeCost ?? 1;
+      const cost = (key?.startsWith?.('double:') ? 2 : (getAbility(key)?.surgeCost ?? 1));
       if (cost > remaining) continue;
       const label = (getSurgeLabel(key) || key).slice(0, 80);
       const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
@@ -1074,7 +1096,7 @@ export async function handleCombatSurge(interaction, ctx) {
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const key = surgeAbilities[idx];
     if (key) {
-      const cost = getAbility(key)?.surgeCost ?? 1;
+      const cost = (key?.startsWith?.('double:') ? 2 : (getAbility(key)?.surgeCost ?? 1));
       const mod = resolveSurge(key);
       combat.surgeDamage = (combat.surgeDamage || 0) + (mod.damage ?? 0);
       combat.surgePierce = (combat.surgePierce || 0) + (mod.pierce ?? 0);
@@ -1109,7 +1131,7 @@ export async function handleCombatSurge(interaction, ctx) {
     const surgeRows = [];
     for (let i = 0; i < surgeAbilities.length; i++) {
       const key = surgeAbilities[i];
-      const cost = getAbility(key)?.surgeCost ?? 1;
+      const cost = (key?.startsWith?.('double:') ? 2 : (getAbility(key)?.surgeCost ?? 1));
       if (cost > remaining) continue;
       const label = (getSurgeLabel(key) || key).slice(0, 80);
       const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
