@@ -79,16 +79,9 @@ export async function handleMoveMp(interaction, ctx) {
     await interaction.followUp({ content: `No spaces exactly **${mp}** MP away.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  // For multi-tile figures, filter buttons to only show the topLeft cell of each reachable
-  // placement. Without this, every footprint cell gets its own button (e.g. a 2x1 figure
-  // would show both A1 and A2 for the same placement, both resolving to topLeft=A1).
+  // cache.cells now only stores topLeft cells, so spaces is already topLeft-only.
   const isMultiTile = profile.size && profile.size !== '1x1';
-  const buttonSpaces = isMultiTile
-    ? spaces.filter((cell) => {
-        const info = cache.cells.get(normalizeCoord(cell));
-        return info && info.topLeft === normalizeCoord(cell);
-      })
-    : spaces;
+  const buttonSpaces = spaces;
   moveState.pendingMp = mp;
   await clearMoveGridMessages(game, moveKey, interaction.channel);
   game.moveGridMessageIds = game.moveGridMessageIds || {};
@@ -242,13 +235,10 @@ export async function handleMoveLetter(interaction, ctx) {
   game.moveGridMessageIds[moveKey] = (game.moveGridMessageIds[moveKey] || []).filter((id) => id !== currentMsgId);
   await clearMoveGridMessages(game, moveKey, interaction.channel);
   game.moveGridMessageIds[moveKey] = [];
-  // Filter button spaces to the selected column letter
-  const allCells = [...cache.cells.keys()];
+  // cache.cells only stores topLeft cells — no filtering needed.
   const isMultiTile = profile.size && profile.size !== '1x1';
-  const allButtonSpaces = isMultiTile
-    ? allCells.filter((cell) => { const info = cache.cells.get(cell); return info && info.topLeft === cell; })
-    : allCells;
-  const letterCells = allButtonSpaces.filter((c) => (c.match(/^([a-z]+)/)?.[1] ?? c[0]) === letter);
+  const allCells = [...cache.cells.keys()];
+  const letterCells = allCells.filter((c) => (c.match(/^([a-z]+)/)?.[1] ?? c[0]) === letter);
   const { rows: cellRows } = getMoveSpaceGridRows(msgId, figureIndex, letterCells, boardState.mapSpaces, profile.size);
   const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
   const actionRow = new ActionRowBuilder().addComponents(
@@ -325,13 +315,10 @@ export async function handleMoveLetterBack(interaction, ctx) {
   game.moveGridMessageIds[moveKey] = (game.moveGridMessageIds[moveKey] || []).filter((id) => id !== currentMsgId);
   await clearMoveGridMessages(game, moveKey, interaction.channel);
   game.moveGridMessageIds[moveKey] = [];
-  // Rebuild the letter grid from the current cache
+  // Rebuild the letter grid from the current cache.
+  // cache.cells only stores topLeft cells — no filtering needed.
   const allCells = [...cache.cells.keys()];
-  const isMultiTile = profile.size && profile.size !== '1x1';
-  const allButtonSpaces = isMultiTile
-    ? allCells.filter((cell) => { const info = cache.cells.get(cell); return info && info.topLeft === cell; })
-    : allCells;
-  const letterRows = buildLetterRows(allButtonSpaces, msgId, figureIndex);
+  const letterRows = buildLetterRows(allCells, msgId, figureIndex);
   const manualPickRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`move_adjust_mp_${msgId}_${figureIndex}`)
@@ -514,19 +501,14 @@ export async function handleMovePick(interaction, ctx) {
         } catch { /* already gone */ }
         moveState.distanceMessageId = null;
       }
-      // Show two-tier column picker for new position with remaining MP
-      const allNewCells = [...nextCache.cells.keys()];
+      // Show two-tier column picker for new position with remaining MP.
+      // cache.cells only stores topLeft cells — no filtering needed.
+      const newButtonSpaces = [...nextCache.cells.keys()];
       const newIsMultiTile = nextProfile.size && nextProfile.size !== '1x1';
-      const newButtonSpaces = newIsMultiTile
-        ? allNewCells.filter((cell) => {
-            const info = nextCache.cells.get(cell);
-            return info && info.topLeft === cell;
-          })
-        : allNewCells;
       const newMultiTileNote = newIsMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
       const newMinimapCells = newIsMultiTile
         ? newButtonSpaces.map((tl) => bottomLeftCoord(tl, nextProfile.size))
-        : allNewCells;
+        : newButtonSpaces;
       const newMinimap = await getMovementMinimapAttachment(game, msgId, figureKey, newMinimapCells);
       const newLetterRows = buildLetterRows(newButtonSpaces, msgId, figureIndex);
       const newManualPickRow = new ActionRowBuilder().addComponents(

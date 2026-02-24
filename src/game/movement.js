@@ -396,18 +396,21 @@ export function computeMovementCache(startCoord, mpLimit, board, profile) {
     const isOccupied = current.footprint.some((cell) => board.occupiedSet.has(cell));
     const canEnd = !isOccupied || profile.canEndOnOccupied;
     nodes.set(current.key, { ...current, isOccupied, canEnd });
-    if (canEnd) {
-      for (const cell of current.footprint) {
-        if (!board.spacesSet.has(cell)) continue;
-        if (current.cost === 0) continue; // never treat starting footprint as a destination
-        const prev = cells.get(cell);
-        if (!prev || current.cost < prev.cost) {
-          cells.set(cell, {
-            cost: current.cost,
-            topLeft: current.topLeft,
-            size: current.size,
-          });
-        }
+    // Only record the topLeft cell, never non-topLeft footprint cells.
+    // Recording all footprint cells causes permanent poisoning: a cell that is a
+    // non-topLeft member of a cheaper placement (lower cost) can never be updated
+    // when that same cell is the topLeft of a more-expensive placement, because
+    // the cost comparison (newCost < cheaperCost) always fails.  This would make
+    // destinations invisible for any multi-tile figure move beyond the first step
+    // in a straight line.
+    if (canEnd && current.cost > 0) {
+      const prev = cells.get(current.topLeft);
+      if (!prev || current.cost < prev.cost) {
+        cells.set(current.topLeft, {
+          cost: current.cost,
+          topLeft: current.topLeft,
+          size: current.size,
+        });
       }
     }
     const neighbors = getNeighborStates(current, board, profile);

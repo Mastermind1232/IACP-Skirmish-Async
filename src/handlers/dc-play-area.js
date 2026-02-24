@@ -808,15 +808,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       }
       game.moveInProgress = game.moveInProgress || {};
       const moveKey = `${msgId}_${figureIndex}`;
-      // Show all reachable cells directly — no MP pre-selection step
-      const allCacheCells = [...cache.cells.keys()];
+      // Show all reachable cells directly — no MP pre-selection step.
+      // cache.cells only stores topLeft cells, so no filtering needed.
       const isMultiTile = profile.size && profile.size !== '1x1';
-      const buttonSpaces = isMultiTile
-        ? allCacheCells.filter((cell) => {
-            const info = cache.cells.get(cell);
-            return info && info.topLeft === cell;
-          })
-        : allCacheCells;
+      const buttonSpaces = [...cache.cells.keys()];
       game.moveInProgress[moveKey] = {
         figureKey,
         playerNum,
