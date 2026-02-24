@@ -2431,7 +2431,7 @@
       "surgeCost": 1,
       "label": "Bargain",
       "description": "Spend 1 VP to roll 1 green die. For each Hit result, gain 1 VP.",
-      "wiredStatus": "informational"
+      "wiredStatus": "wired"
     },
     "harass": {
       "type": "surge",

@@ -1191,6 +1191,26 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeSuppressionStrain) combat.surgeSuppressionStrain = true;
       if (mod.surgeFightingKnife) combat.surgeFightingKnife = true;
       if (mod.surgeConcussiveBolt) combat.surgeConcussiveBolt = true;
+      // Bargain (Jawa Scavenger Elite): inline VP exchange during surge phase
+      if (mod.surgeBargain) {
+        const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+        game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+        const vp = game[vpKey];
+        if ((vp.total || 0) >= 1) {
+          vp.total -= 1;
+          if ((vp.objectives || 0) > 0) vp.objectives -= 1;
+          else vp.kills = Math.max(0, (vp.kills || 0) - 1);
+          const rollFn = ctx.rollSingleAttackDie;
+          const bargainDie = rollFn ? rollFn('green') : { dmg: 0, surge: 0 };
+          const gained = bargainDie.dmg || 0;
+          if (gained > 0) { vp.total += gained; vp.objectives += gained; }
+          const net = gained - 1;
+          await thread.send(`**Bargain** — Spent 1 VP, rolled green die (${bargainDie.dmg ?? 0}dmg): gained **${gained} VP** (net ${net >= 0 ? '+' : ''}${net}).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Bargain** — Spent 1 VP, gained ${gained} VP (net ${net >= 0 ? '+' : ''}${net})`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+        } else {
+          await thread.send('**Bargain** — No VP available to spend; ability has no effect.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }
+      }
       // Self-condition surges: apply condition to attacker's own figure
       if (mod.surgeSelfFocus && combat.attackerFigureKey) {
         game.figureConditions = game.figureConditions || {};

@@ -128,8 +128,10 @@ export function parseSurgeEffect(key) {
   if (k === 'fighting_knife') { out.surgeFightingKnife = true; return out; }
   // Concussive Bolt (4-LOM): push SMALL target 1 space after non-miss attack
   if (k === 'concussive_bolt') { out.surgeConcussiveBolt = true; return out; }
+  // Bargain (Jawa Scavenger Elite): spend 1 VP to roll 1 green die, gain VP per hit
+  if (k === 'bargain') { out.surgeBargain = true; return out; }
   // Complex surge effects: flag for informational display, resolve manually
-  if (['concussive_bolt', 'agitate', 'mastery', 'bargain',
+  if (['agitate', 'mastery',
        'fell_swoop', 'spread_the_pain', 'interrogate',
        'cancel 2', 'cleave x', 'recover x', 'evade token'].includes(k)) {
     out.surgeComplex = k; return out;
