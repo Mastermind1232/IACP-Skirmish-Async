@@ -6177,7 +6177,10 @@
       "attachment": false,
       "companion": true,
       "unique": true,
-      "affiliation": "Any"
+      "affiliation": "Any",
+      "specialAbilityIds": [
+        "force_heal"
+      ]
     },
     "Dio": {
       "abilityText": "Attached: When a friendly \"Iden Versio\" exits your space, interrupt to move up to 1 space.\n\nInsignificant: You cannot be the target of an attack while in the same space as a friendly figure.",

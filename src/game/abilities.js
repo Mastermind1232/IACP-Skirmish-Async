@@ -1841,6 +1841,87 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: msg, refreshDcEmbed: true, refreshDcEmbedMsgIds: [adjMsgId] };
   }
 
+  // dcSpecial: healAndClearConditionFriendlyAdjacent (Force Heal) — chosen adjacent friendly recovers 1 Damage and discards 1 HARMFUL condition
+  if (entry.type === 'dcSpecial' && entry.healAndClearConditionFriendlyAdjacent) {
+    const HARMFUL = ['Stun', 'Weaken', 'Bleed'];
+    const { game, msgId, meta, dcMessageMeta, dcHealthState, targetFigureKey } = context;
+    if (!game || !msgId || !meta || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const mapId = game.selectedMap?.id;
+    if (!mapId) return { applied: false, manualMessage: 'Resolve manually: no map selected.' };
+
+    // Helper to apply heal+condition-clear to a specific figureKey
+    const applyTo = (fk) => {
+      const fkMatch = fk.match(/^(.+)-(\d+)-(\d+)$/);
+      let adjMsgId = null;
+      if (fkMatch) {
+        const [, adjDcName, adjDgIndex] = fkMatch;
+        for (const [id, m] of dcMessageMeta) {
+          if (m.playerNum !== meta.playerNum) continue;
+          const mDg = (m.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+          if (m.dcName === adjDcName && mDg === adjDgIndex) { adjMsgId = id; break; }
+        }
+      }
+      const adjLabel = fk.match(/^(.+)-\d+-\d+$/)?.[1] || fk;
+      const parts = [];
+      if (adjMsgId) {
+        const adjHealth = dcHealthState.get(adjMsgId);
+        if (adjHealth?.length && Array.isArray(adjHealth[0])) {
+          const [cur, max] = adjHealth[0];
+          if (cur != null && max != null && cur < max) {
+            adjHealth[0] = [cur + 1, max];
+            dcHealthState.set(adjMsgId, adjHealth);
+            const adjMeta2 = dcMessageMeta.get(adjMsgId);
+            const dList = adjMeta2?.playerNum === 1 ? game.p1DcList : game.p2DcList;
+            const dIds = adjMeta2?.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+            const idx = (dIds || []).indexOf(adjMsgId);
+            if (idx >= 0 && dList?.[idx]) dList[idx].healthState = [...adjHealth];
+            parts.push('recovered 1 Damage');
+          } else {
+            parts.push('already at full health');
+          }
+        }
+      }
+      game.figureConditions = game.figureConditions || {};
+      const existing = game.figureConditions[fk] || [];
+      const harmfulIdx = existing.findIndex((c) => HARMFUL.includes(c));
+      if (harmfulIdx !== -1) {
+        const removed = existing[harmfulIdx];
+        game.figureConditions[fk] = existing.filter((_, i) => i !== harmfulIdx);
+        parts.push(`discarded ${removed}`);
+      } else {
+        parts.push('no HARMFUL condition to discard');
+      }
+      return { adjMsgId, adjLabel, parts };
+    };
+
+    // If a choice was already made (second call via handleDcAbilityChoice):
+    if (targetFigureKey != null) {
+      const { adjMsgId, adjLabel, parts } = applyTo(targetFigureKey);
+      const refreshIds = adjMsgId ? [adjMsgId] : [];
+      return { applied: true, logMessage: `**Force Heal** — ${adjLabel}: ${parts.join(', ')}.`, refreshDcEmbed: refreshIds.length > 0, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
+    }
+
+    // First call: enumerate adjacent friendly targets
+    const activatingKeys = getFigureKeysForDcMsg(game, meta.playerNum, meta);
+    const adjacentSet = new Set();
+    for (const fk of activatingKeys) {
+      const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+      for (const { figureKey, playerNum: p } of adj) {
+        if (p === meta.playerNum && !activatingKeys.includes(figureKey)) adjacentSet.add(figureKey);
+      }
+    }
+    const adjacent = [...adjacentSet];
+    if (adjacent.length === 0) return { applied: true, logMessage: '**Force Heal** — No adjacent friendly figure to heal.' };
+    if (adjacent.length === 1) {
+      const { adjMsgId, adjLabel, parts } = applyTo(adjacent[0]);
+      const refreshIds = adjMsgId ? [adjMsgId] : [];
+      return { applied: true, logMessage: `**Force Heal** — ${adjLabel}: ${parts.join(', ')}.`, refreshDcEmbed: refreshIds.length > 0, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
+    }
+    // Multiple options: show choice buttons
+    const choiceOptions = adjacent.map((fk) => fk.match(/^(.+)-\d+-\d+$/)?.[1] || fk);
+    return { applied: false, requiresChoice: true, choiceOptions, targetFigureKeys: adjacent };
+  }
+
   // dcSpecial: focusFriendlyAdjacent (Inform) — 1 adjacent friendly becomes Focused
   if (entry.type === 'dcSpecial' && typeof entry.focusFriendlyAdjacent === 'number' && entry.focusFriendlyAdjacent > 0) {
     const { game, msgId, meta } = context;

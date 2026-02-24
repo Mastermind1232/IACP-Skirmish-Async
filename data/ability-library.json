@@ -242,8 +242,12 @@
     },
     "force_heal": {
       "type": "dcSpecial",
-      "label": "Force Heal: An adjacent friendly figure recovers 1 Damage and discards a HARMFUL condition. (Resolve manually  target must be chosen.)",
-      "wiredStatus": "informational"
+      "category": "active",
+      "trigger": "activation",
+      "label": "Force Heal",
+      "description": "An adjacent friendly figure recovers 1 Damage and discards a HARMFUL condition.",
+      "healAndClearConditionFriendlyAdjacent": true,
+      "wiredStatus": "wired"
     },
     "cc:advance_warning": {
       "type": "ccEffect",
@@ -2656,11 +2660,14 @@
     },
     "indiscriminate_fire": {
       "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
       "label": "Indiscriminate Fire",
-      "description": "Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red die — each other figure within 2 spaces of the target (not the defender) suffers Damage = Hits and Strain = Surges on that die.",
-      "informational": true,
-      "logMessage": "**Indiscriminate Fire** — Click **Attack** to perform your attack. After it resolves (if not a miss), choose 1 non-red die from your roll — each figure within 2 spaces of the target (except the defender) suffers Damage equal to its Hit results and Strain equal to its Surge results. Apply splash damage manually to affected DC cards.",
-      "wiredStatus": "informational"
+      "description": "Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red die — each other figure within 2 spaces of the target suffers Damage = Hits and Strain = Surges on that die.",
+      "oncePer": null,
+      "wiredStatus": "wired",
+      "logMessage": "**Indiscriminate Fire** — Click **Attack** to perform your attack. After it resolves (if not a miss), you will be prompted to choose a die for splash damage.",
+      "freeAction": true
     },
     "missile_salvo": {
       "type": "dcSpecial",
