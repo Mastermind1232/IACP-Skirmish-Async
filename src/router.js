@@ -46,6 +46,8 @@ const BUTTON_PREFIXES = [
   'indiscriminate_skip_',
   'fighting_knife_target_',
   'fighting_knife_skip_',
+  'concussive_bolt_push_',
+  'concussive_bolt_skip_',
   'missile_salvo_die_',
   'missile_salvo_done_',
   'bleed_accept_',

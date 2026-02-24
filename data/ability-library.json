@@ -2382,7 +2382,7 @@
       "surgeCost": 1,
       "label": "Concussive Bolt",
       "description": "After this attack resolves, if you are targeting a SMALL figure and it did not miss, you may push that figure 1 space.",
-      "wiredStatus": "informational"
+      "wiredStatus": "wired"
     },
     "interrogate": {
       "type": "surge",

@@ -3468,6 +3468,47 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
       return true;
     }
   }
+  // Concussive Bolt (4-LOM): after non-miss on SMALL target, push target 1 space (attacker picks direction)
+  if (hit && combat.surgeConcussiveBolt && combat.target?.figureKey && game.selectedMap?.id) {
+    const targetDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const targetSize = getFigureSize(targetDcName);
+    if (targetSize === '1x1') {
+      const targetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+      const ms = getMapSpaces(game.selectedMap.id);
+      const adjSpaces = (ms?.adjacency?.[String(targetPos).toLowerCase()] || []).map((s) => String(s).toLowerCase());
+      if (adjSpaces.length > 0) {
+        const targetMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, combat.target.figureKey);
+        const defDcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+        const defDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const defIdx = (defDcIds || []).indexOf(targetMsgId);
+        const targetLabel = (defIdx >= 0 && defDcList?.[defIdx]?.displayName) ? defDcList[defIdx].displayName : targetDcName;
+        game.pendingConcussiveBolt = {
+          gameId: game.gameId,
+          combatThreadId: combat.combatThreadId,
+          attackerPlayerNum: combat.attackerPlayerNum,
+          defenderPlayerNum,
+          ownerId,
+          figureKey: combat.target.figureKey,
+          figureLabel: String(targetLabel).slice(0, 80),
+          currentPos: targetPos,
+          adjSpaces,
+          resultText,
+          combat,
+          initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
+        };
+        const btns = adjSpaces.slice(0, 4).map((sp) =>
+          new ButtonBuilder().setCustomId(`concussive_bolt_push_${game.gameId}_${sp}`).setLabel(sp.toUpperCase()).setStyle(ButtonStyle.Danger)
+        );
+        btns.push(new ButtonBuilder().setCustomId(`concussive_bolt_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        await thread.send({
+          content: `<@${ownerId}> **Concussive Bolt** — Push **${targetLabel}** 1 space. Choose a destination:`,
+          allowedMentions: { users: [ownerId] },
+          components: [new ActionRowBuilder().addComponents(btns)],
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        return true;
+      }
+    }
+  }
   return false;
 }
 
@@ -3934,6 +3975,50 @@ async function handleFightingKnifeSkip(interaction) {
   await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   await interaction.message.edit({ components: [] }).catch(() => {});
   delete game.pendingFightingKnife;
+  const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
+  await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
+  saveGames();
+}
+
+/** Concussive Bolt push target: concussive_bolt_push_{gameId}_{space} */
+async function handleConcussiveBoltPush(interaction) {
+  const m = interaction.customId.match(/^concussive_bolt_push_([^_]+)_([a-z0-9]+)$/);
+  if (!m) return;
+  const [, gameId, space] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingConcussiveBolt) return;
+  const pending = game.pendingConcussiveBolt;
+  if (!canActAsPlayer(game, interaction.user.id, pending.attackerPlayerNum)) {
+    await interaction.followUp({ content: 'Only the attacker can choose the Concussive Bolt push direction.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (!pending.adjSpaces.includes(space)) {
+    await interaction.followUp({ content: 'Invalid push destination.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(() => {});
+  delete game.pendingConcussiveBolt;
+  // Move the figure to the chosen space
+  game.figurePositions = game.figurePositions || {};
+  game.figurePositions[pending.defenderPlayerNum] = game.figurePositions[pending.defenderPlayerNum] || {};
+  game.figurePositions[pending.defenderPlayerNum][pending.figureKey] = space;
+  const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
+  await logGameAction(game, client, `**Concussive Bolt** — **${pending.figureLabel}** pushed from ${String(pending.currentPos).toUpperCase()} to **${space.toUpperCase()}**`, { phase: 'ROUND', icon: 'attack' });
+  await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
+  saveGames();
+}
+
+/** Concussive Bolt skip: concussive_bolt_skip_{gameId} */
+async function handleConcussiveBoltSkip(interaction) {
+  const m = interaction.customId.match(/^concussive_bolt_skip_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  if (!game?.pendingConcussiveBolt) return;
+  const pending = game.pendingConcussiveBolt;
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(() => {});
+  delete game.pendingConcussiveBolt;
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
   saveGames();
@@ -5895,6 +5980,8 @@ client.on('interactionCreate', async (interaction) => {
   if (buttonKey === 'indiscriminate_skip_') { await handleIndiscriminateFireSkip(interaction); return; }
   if (buttonKey === 'fighting_knife_target_') { await handleFightingKnifeTarget(interaction); return; }
   if (buttonKey === 'fighting_knife_skip_') { await handleFightingKnifeSkip(interaction); return; }
+  if (buttonKey === 'concussive_bolt_push_') { await handleConcussiveBoltPush(interaction); return; }
+  if (buttonKey === 'concussive_bolt_skip_') { await handleConcussiveBoltSkip(interaction); return; }
   if (buttonKey === 'missile_salvo_die_') { await handleMissileSalvoDie(interaction); return; }
   if (buttonKey === 'missile_salvo_done_') { await handleMissileSalvoDone(interaction); return; }
 

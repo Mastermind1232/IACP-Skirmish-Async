@@ -1190,6 +1190,7 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeCriticalHit) combat.surgeCriticalHit = true;
       if (mod.surgeSuppressionStrain) combat.surgeSuppressionStrain = true;
       if (mod.surgeFightingKnife) combat.surgeFightingKnife = true;
+      if (mod.surgeConcussiveBolt) combat.surgeConcussiveBolt = true;
       // Self-condition surges: apply condition to attacker's own figure
       if (mod.surgeSelfFocus && combat.attackerFigureKey) {
         game.figureConditions = game.figureConditions || {};

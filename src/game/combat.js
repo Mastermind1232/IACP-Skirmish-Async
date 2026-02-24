@@ -126,6 +126,8 @@ export function parseSurgeEffect(key) {
   if (k === 'surge 1') { out.surgeGrantExtraSurge = 1; return out; }
   // Fighting Knife (Verena Talos): post-attack roll 1 red die, hits applied to adjacent hostile
   if (k === 'fighting_knife') { out.surgeFightingKnife = true; return out; }
+  // Concussive Bolt (4-LOM): push SMALL target 1 space after non-miss attack
+  if (k === 'concussive_bolt') { out.surgeConcussiveBolt = true; return out; }
   // Complex surge effects: flag for informational display, resolve manually
   if (['concussive_bolt', 'agitate', 'mastery', 'bargain',
        'fell_swoop', 'spread_the_pain', 'interrogate',
