@@ -2346,10 +2346,14 @@
     },
     "field_report": {
       "type": "dcSpecial",
-      "informational": true,
       "label": "Field Report",
-      "logMessage": "Field Report: Choose up to 2 friendly figures within 4 spaces with 2 or fewer attack dice in their printed pool \u00e2\u20ac\u201d those figures become Hidden. Apply the Hidden condition to their DC cards.",
-      "wiredStatus": "informational"
+      "description": "Choose up to 2 friendly figures within 4 spaces with 2 or fewer attack dice in their printed pool \u2014 those figures become Hidden.",
+      "applyHideToFriendlyWithinRange": {
+        "range": 4,
+        "maxDiceCount": 2,
+        "maxTargets": 2
+      },
+      "wiredStatus": "wired"
     },
     "on_the_hunt": {
       "type": "dcSpecial",
@@ -2661,14 +2665,19 @@
     },
     "gifted_mechanic": {
       "type": "dcSpecial",
-      "category": "active",
-      "trigger": "activation",
       "label": "Gifted Mechanic",
       "description": "Choose an adjacent friendly DROID or VEHICLE. You and that figure each recover 1 Damage and gain 1 Hit Token.",
-      "oncePer": null,
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Gifted Mechanic** \u00e2\u20ac\u201d Choose an adjacent friendly DROID or VEHICLE. You and that figure each recover 1 Damage and gain 1 Hit Token.. Resolve manually and inform your opponent."
+      "targetFriendlyFigureAdjacent": {
+        "traits": [
+          "DROID",
+          "VEHICLE"
+        ],
+        "recoverSelf": 1,
+        "recoverTarget": 1,
+        "hitTokenSelf": 1,
+        "hitTokenTarget": 1
+      },
+      "wiredStatus": "wired"
     },
     "wall_run": {
       "type": "dcSpecial",

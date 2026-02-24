@@ -232,6 +232,118 @@ export function resolveAbility(abilityId, context) {
     return { applied: false, requiresChoice: true, choiceOptions: validTargets.map((t) => t.name), targetFigureKeys: validTargets.map((t) => t.fk) };
   }
 
+  // dcSpecial: targetFriendlyFigureAdjacent (Gifted Mechanic) — pick adjacent friendly figure with trait, apply effect to both
+  if (entry.type === 'dcSpecial' && entry.targetFriendlyFigureAdjacent && typeof entry.targetFriendlyFigureAdjacent === 'object') {
+    const { traits = [], recoverSelf = 0, recoverTarget = 0, hitTokenSelf = 0, hitTokenTarget = 0 } = entry.targetFriendlyFigureAdjacent;
+    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, choiceIndex, targetFigureKey } = context;
+    if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve ${entry.label} manually.` };
+    const mapId = game.selectedMap?.id;
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    // Helper: add hit tokens to a figure key (up to max 2)
+    function addHitToken(fk, n) {
+      if (n <= 0) return;
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+      const current = game.figurePowerTokens[fk].length;
+      for (let i = 0; i < Math.min(n, 2 - current); i++) game.figurePowerTokens[fk].push('Wild');
+    }
+    // Second call: apply effects to self + chosen target
+    if (choiceIndex != null && targetFigureKey) {
+      const parts = [];
+      // Recover self
+      if (recoverSelf > 0 && dcHealthState) {
+        const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+        const healthState = dcHealthState.get(msgId) || [];
+        let recovered = 0;
+        if (healthState[selectedFig]) {
+          const [cur, max] = healthState[selectedFig];
+          const heal = Math.min(recoverSelf, (max ?? cur) - cur);
+          if (heal > 0) { healthState[selectedFig] = [cur + heal, max ?? cur]; dcHealthState.set(msgId, healthState); recovered = heal; }
+        }
+        if (recovered > 0) parts.push(`you recovered ${recovered} Damage`);
+      }
+      // Recover target
+      if (recoverTarget > 0 && dcHealthState) {
+        const targetMsgId = findMsgIdForFigureKey(game, playerNum, targetFigureKey, dcMessageMeta);
+        if (targetMsgId) {
+          const healthState = dcHealthState.get(targetMsgId) || [];
+          const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
+          const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+          if (healthState[figIdx]) {
+            const [cur, max] = healthState[figIdx];
+            const heal = Math.min(recoverTarget, (max ?? cur) - cur);
+            if (heal > 0) { healthState[figIdx] = [cur + heal, max ?? cur]; dcHealthState.set(targetMsgId, healthState); }
+            const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+            const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+            const idx = (dcIds || []).indexOf(targetMsgId);
+            if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+          }
+        }
+        parts.push(`${targetFigureKey.replace(/-\d+-\d+$/, '')} recovered ${recoverTarget} Damage`);
+      }
+      // Hit tokens
+      if (hitTokenSelf > 0) { const sfk = activatingKeys[0]; if (sfk) { addHitToken(sfk, hitTokenSelf); parts.push(`you gained ${hitTokenSelf} Hit Token`); } }
+      if (hitTokenTarget > 0) { addHitToken(targetFigureKey, hitTokenTarget); parts.push(`${targetFigureKey.replace(/-\d+-\d+$/, '')} gained ${hitTokenTarget} Hit Token`); }
+      return { applied: true, logMessage: `**${entry.label}** — ${parts.join(', ')}.`, refreshDcEmbed: true };
+    }
+    // First call: enumerate adjacent friendly figures matching traits
+    const adjacentSet = new Set();
+    for (const fk of activatingKeys) {
+      if (!mapId) continue;
+      const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+      for (const { figureKey, playerNum: p } of adj) {
+        if (p === playerNum && !activatingKeys.includes(figureKey)) adjacentSet.add(figureKey);
+      }
+    }
+    const dcEffs = getDcEffects() || {};
+    const validTargets = [...adjacentSet].filter((fk) => {
+      const dn = fk.replace(/-\d+-\d+$/, '');
+      const kws = (dcEffs[dn]?.keywords || []).map((k) => String(k).toUpperCase());
+      return traits.length === 0 || traits.some((t) => kws.includes(t.toUpperCase()));
+    }).map((fk) => ({ fk, name: fk.replace(/-\d+-\d+$/, '') }));
+    if (validTargets.length === 0) {
+      return { applied: false, manualMessage: `No adjacent friendly ${traits.join('/')} found. Resolve **${entry.label}** manually.` };
+    }
+    return { applied: false, requiresChoice: true, choiceOptions: validTargets.map((t) => t.name), targetFigureKeys: validTargets.map((t) => t.fk) };
+  }
+
+  // dcSpecial: applyHideToFriendlyWithinRange (Field Report) — apply Hide condition to qualifying friendly figures within range
+  if (entry.type === 'dcSpecial' && entry.applyHideToFriendlyWithinRange && typeof entry.applyHideToFriendlyWithinRange === 'object') {
+    const { range: maxRange = 4, maxDiceCount = 2, maxTargets = 2 } = entry.applyHideToFriendlyWithinRange;
+    const { game, playerNum, meta, msgId, getRange: getRng } = context;
+    if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve ${entry.label} manually.` };
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const attackerKey = activatingKeys.find((k) => k.endsWith(`-${selectedFig}`)) || activatingKeys[0];
+    const attackerPos = attackerKey ? game.figurePositions?.[playerNum]?.[attackerKey] : null;
+    const allFriendlyPositions = game.figurePositions?.[playerNum] || {};
+    const dcEffs = getDcEffects() || {};
+    const candidates = [];
+    for (const [fk, coord] of Object.entries(allFriendlyPositions)) {
+      if (!coord || activatingKeys.includes(fk)) continue;
+      if (getRng && attackerPos) {
+        const dist = getRng(attackerPos, coord);
+        if (dist > maxRange) continue;
+      }
+      const dn = fk.replace(/-\d+-\d+$/, '');
+      const dcStats = dcEffs[dn];
+      const diceCount = dcStats?.attack?.dice?.length ?? (dcStats?.attack ? 1 : 0);
+      if (diceCount > maxDiceCount) continue;
+      candidates.push(fk);
+    }
+    if (candidates.length === 0) return { applied: true, logMessage: `**${entry.label}** — No qualifying friendly figures within ${maxRange} spaces (≤${maxDiceCount} attack dice).` };
+    const toHide = candidates.slice(0, maxTargets);
+    const skipped = candidates.length > maxTargets ? ` (${candidates.length - maxTargets} additional candidates not hidden — choose manually if needed)` : '';
+    game.figureConditions = game.figureConditions || {};
+    const hidden = [];
+    for (const fk of toHide) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Hide')) { game.figureConditions[fk] = [...existing, 'Hide']; hidden.push(fk.replace(/-\d+-\d+$/, '')); }
+    }
+    if (hidden.length === 0) return { applied: true, logMessage: `**${entry.label}** — Qualifying figures already Hidden.` };
+    return { applied: true, logMessage: `**${entry.label}** — **${hidden.join('**, **')}** became **Hidden**.${skipped}`, refreshDcEmbed: true };
+  }
+
   // dcSpecial: informational — manual resolution with instruction message (no automated game-state change)
   if (entry.type === 'dcSpecial' && entry.informational && !entry.freeMoveBonus && !entry.nextAttacksBonusHits) {
     return {
