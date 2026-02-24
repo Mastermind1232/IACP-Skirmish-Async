@@ -889,7 +889,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // Reach: melee figure can target 1–2 spaces away; no accuracy check (still counts as melee)
     const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
     const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
-    const hasReach = attackerKws.includes('REACH');
+    const hasReach = attackerKws.includes('REACH') || !!game.nextAttackReach?.[playerNum];
     const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
     const ms = getMapSpaces(game.selectedMap?.id);
     if (!ms) {
@@ -1046,6 +1046,29 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     abilityId = Array.isArray(ids) && ids[specialIdx] != null ? ids[specialIdx] : `dc_special:${meta.dcName}:${specialIdx}`;
   }
   const resolveResult = resolveAbility ? resolveAbility(abilityId, { game, msgId, meta, playerNum: meta.playerNum, dcMessageMeta, dcHealthState: ctx.dcHealthState, specialLabel: action }) : { applied: false, manualMessage: 'Resolve manually (see rules).' };
+  // Handle choice-required abilities (e.g. Dual-Bladed Fury: Focus or Reach+Cleave)
+  if (!resolveResult.applied && resolveResult.requiresChoice && Array.isArray(resolveResult.choiceOptions) && resolveResult.choiceOptions.length > 0) {
+    const choiceButtons = resolveResult.choiceOptions.map((label, i) =>
+      new ButtonBuilder()
+        .setCustomId(`dc_ability_choice_${game.gameId}_${msgId}_${specialIdx}_${i}`)
+        .setLabel(String(label).slice(0, 80))
+        .setStyle(ButtonStyle.Primary)
+    );
+    const rows = [];
+    for (let i = 0; i < choiceButtons.length; i += 5) {
+      rows.push(new ActionRowBuilder().addComponents(choiceButtons.slice(i, i + 5)));
+    }
+    game.pendingDcAbilityChoice = game.pendingDcAbilityChoice || {};
+    game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`] = { gameId: game.gameId, playerNum: meta.playerNum, abilityId, msgId, figureIndex, specialIdx };
+    // Refund the action since we haven't resolved yet — player commits when they pick
+    if (actionsData) {
+      actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
+      await updateDcActionsMessage(game, msgId, client);
+    }
+    await interaction.followUp({ content: `**${action}** — Choose one:`, components: rows.slice(0, 5), ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    saveGames();
+    return;
+  }
   // Handle space-choice abilities (e.g. Pounce teleport destination)
   if (resolveResult.requiresSpaceChoice && Array.isArray(resolveResult.validSpaces) && resolveResult.validSpaces.length > 0) {
     if (getSpaceChoiceRows && getMapAttachmentForSpaces) {
@@ -1088,6 +1111,62 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await ctx.sendBleedingPrompt(game, interaction.channel, figureKey, meta.playerNum, displayName);
     }
   }
+  saveGames();
+}
+
+/**
+ * Handle dc_ability_choice_ button: completes a DC special chooseOne ability when player picks an option.
+ * customId: dc_ability_choice_{gameId}_{msgId}_{specialIdx}_{choiceIndex}
+ */
+export async function handleDcAbilityChoice(interaction, ctx) {
+  const match = interaction.customId.match(/^dc_ability_choice_([^_]+)_([^_]+)_(\d+)_(\d+)$/);
+  if (!match) {
+    await interaction.followUp({ content: 'Invalid choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const [, gameId, msgId, specialIdxStr, choiceIndexStr] = match;
+  const specialIdx = parseInt(specialIdxStr, 10);
+  const choiceIndex = parseInt(choiceIndexStr, 10);
+  const { getGame, dcMessageMeta, dcHealthState, resolveAbility, updateDcActionsMessage, saveGames, client } = ctx;
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const pending = game.pendingDcAbilityChoice?.[`${msgId}_${specialIdx}`];
+  if (!pending || pending.gameId !== gameId) {
+    await interaction.followUp({ content: 'No pending ability choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const { playerNum, abilityId, figureIndex } = pending;
+  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the ability owner can choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  delete game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`];
+  const meta = dcMessageMeta.get(msgId);
+  const resolveResult = resolveAbility ? resolveAbility(abilityId, { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, choiceIndex }) : { applied: false, manualMessage: 'Resolve manually.' };
+  // Deduct action (was refunded when showing choice buttons)
+  const actionsData = game.dcActionsData?.[msgId];
+  if (actionsData) {
+    actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+    await updateDcActionsMessage(game, msgId, client);
+  }
+  if (resolveResult.freeAction && actionsData) {
+    actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
+    await updateDcActionsMessage(game, msgId, client);
+  }
+  const doneRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`special_done_${gameId}_${msgId}`)
+      .setLabel('Done')
+      .setStyle(ButtonStyle.Success)
+  );
+  await interaction.followUp({
+    content: `**Choice resolved** — ${resolveResult.logMessage || (resolveResult.applied ? 'Applied.' : resolveResult.manualMessage || 'Resolve manually.')} Click Done when finished.`,
+    components: [doneRow],
+    ephemeral: false,
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   saveGames();
 }
 

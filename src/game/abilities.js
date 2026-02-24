@@ -105,6 +105,61 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // dcSpecial: chooseOne — player picks an option (e.g. Dual-Bladed Fury); resolve chosen option on second call
+  if (entry.type === 'dcSpecial' && Array.isArray(entry.chooseOne) && entry.chooseOne.length > 0) {
+    const choiceIndex = context.choiceIndex;
+    if (choiceIndex == null || choiceIndex < 0 || choiceIndex >= entry.chooseOne.length) {
+      const choiceOptions = entry.chooseOne.map((o, i) => o.label || `Option ${i + 1}`);
+      return { applied: false, requiresChoice: true, choiceOptions, choiceCount: entry.chooseOne.length };
+    }
+    // Second call: resolve chosen sub-entry
+    const chosen = entry.chooseOne[choiceIndex];
+    // Apply Focus to self
+    const { game, msgId, meta, playerNum } = context;
+    const parts = [];
+    if (chosen.applyFocusToSelf && game && meta) {
+      const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+      game.figureConditions = game.figureConditions || {};
+      for (const fk of figureKeys) {
+        const existing = game.figureConditions[fk] || [];
+        if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+      }
+      parts.push('Became **Focused**');
+    }
+    // Grant bonus cleave for next attack via surge
+    if (typeof chosen.nextAttackCleave === 'number' && chosen.nextAttackCleave > 0 && game && playerNum) {
+      game.nextAttackBonusSurgeAbilities = game.nextAttackBonusSurgeAbilities || {};
+      const existing = game.nextAttackBonusSurgeAbilities[playerNum] || [];
+      game.nextAttackBonusSurgeAbilities[playerNum] = [...existing, `cleave ${chosen.nextAttackCleave}`];
+    }
+    // Grant Reach for next attack (melee range extended to 2, honor system for diagonal)
+    if (chosen.nextAttackReach && game && playerNum) {
+      game.nextAttackReach = game.nextAttackReach || {};
+      game.nextAttackReach[playerNum] = true;
+    }
+    if (chosen.nextAttackReach || chosen.nextAttackCleave) parts.push(`Next attack gains **${chosen.nextAttackReach ? 'Reach + ' : ''}Cleave ${chosen.nextAttackCleave || 0}** (attack targets up to 2 spaces away if Reach)`);
+    return { applied: true, logMessage: `**${entry.label}**: ${parts.join(' and ')}.`, refreshDcEmbed: !!chosen.applyFocusToSelf };
+  }
+
+  // dcSpecial: shuffleOneDiscardToDeck (Military Efficiency) — after attack, shuffle 1 CC from discard back to deck
+  if (entry.type === 'dcSpecial' && entry.shuffleOneDiscardToDeck) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const discard = game[discardKey] || [];
+    if (discard.length === 0) return { applied: true, logMessage: '**Military Efficiency** — No cards in discard to return.' };
+    // Shuffle the most-recently-discarded card back (player chooses in practice — honour system for which card)
+    const toReturn = discard[discard.length - 1];
+    const newDiscard = discard.slice(0, -1);
+    const deck = [...(game[deckKey] || [])];
+    const insertIdx = Math.floor(Math.random() * (deck.length + 1));
+    deck.splice(insertIdx, 0, toReturn);
+    game[discardKey] = newDiscard;
+    game[deckKey] = deck;
+    return { applied: true, logMessage: `**Military Efficiency** — **${toReturn}** shuffled from discard back into your Command deck. (Honour system: choose which card to return — bot uses most-recently-discarded.)`, refreshDiscard: true };
+  }
+
   // dcSpecial: informational — manual resolution with instruction message (no automated game-state change)
   if (entry.type === 'dcSpecial' && entry.informational && !entry.freeMoveBonus && !entry.nextAttacksBonusHits) {
     return {

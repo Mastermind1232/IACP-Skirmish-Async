@@ -2595,9 +2595,10 @@
       "label": "Mortar Launcher",
       "description": "At the end of the round, you may move up to 2 spaces. Then, choose a space within 3 spaces that contains a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Hit results.",
       "oncePer": null,
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Mortar Launcher** — At the end of the round, you may move up to 2 spaces. Then, choose a space within 3 spaces that contains a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Hit results.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired",
+      "logMessage": "**Mortar Launcher** — At the end of the round, you may move up to 2 spaces. Then, choose a space within 3 spaces that contains a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Hit results.. Resolve manually and inform your opponent.",
+      "rollOneDie": "red",
+      "rollOneDieNote": "You may move up to 2 spaces first. Then choose a space within 3 with a hostile figure. Each figure on or adjacent suffers Hit results as Damage."
     },
     "charge": {
       "type": "dcSpecial",
@@ -2689,14 +2690,19 @@
     },
     "dual_bladed_fury": {
       "type": "dcSpecial",
-      "category": "passive-reactive",
-      "trigger": "combat-declare",
       "label": "Dual-Bladed Fury",
-      "description": "Before you declare an attack, choose one: This attack gains Reach and Cleave 2, or you become Focused.",
-      "oncePer": null,
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Dual-Bladed Fury** — Before you declare an attack, choose one: This attack gains Reach and Cleave 2, or you become Focused.. Resolve manually and inform your opponent."
+      "chooseOne": [
+        {
+          "label": "Reach + Cleave 2",
+          "nextAttackReach": true,
+          "nextAttackCleave": 2
+        },
+        {
+          "label": "Become Focused",
+          "applyFocusToSelf": true
+        }
+      ],
+      "wiredStatus": "wired"
     },
     "shock_and_awe": {
       "type": "dcSpecial",
@@ -2920,9 +2926,10 @@
       "label": "Self-Destruct Protocol",
       "description": "When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.",
       "oncePer": null,
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Self-Destruct Protocol** — When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired",
+      "logMessage": "**Self-Destruct Protocol** — When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.. Resolve manually and inform your opponent.",
+      "rollOneDie": "red",
+      "rollOneDieNote": "Each figure adjacent to you suffers Hit results as Damage. Then this figure is defeated (resolve manually)."
     },
     "self_destruct_probe": {
       "type": "dcSpecial",
@@ -2931,9 +2938,10 @@
       "label": "Self-Destruct",
       "description": "At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.",
       "oncePer": null,
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Self-Destruct** — At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired",
+      "logMessage": "**Self-Destruct** — At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.. Resolve manually and inform your opponent.",
+      "rollOneDie": "red",
+      "rollOneDieNote": "Each adjacent figure suffers Hit results as Damage. Then this figure is defeated (resolve manually)."
     },
     "lasat_honor_guard": {
       "type": "dcSpecial",
@@ -2971,9 +2979,9 @@
       "label": "Military Efficiency",
       "description": "After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck.",
       "oncePer": null,
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Military Efficiency** — After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired",
+      "logMessage": "**Military Efficiency** — After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck.. Resolve manually and inform your opponent.",
+      "shuffleOneDiscardToDeck": true
     },
     "boltslinger": {
       "type": "dcSpecial",

@@ -128,6 +128,7 @@ import {
   handleDcCcEndOfActivation,
   handleDcCcDoubleAction,
   handleDcAction,
+  handleDcAbilityChoice,
   handleSquadModal,
   handleDeployModal,
   handleCcAttachTo,
@@ -5403,6 +5404,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'dc_cc_eoa_') await handleDcCcEndOfActivation(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_cc_double_') await handleDcCcDoubleAction(interaction, dcPlayAreaContext);
     else if (buttonKey === 'pounce_space_') await handlePounceSpacePick(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'dc_ability_choice_') await handleDcAbilityChoice(interaction, dcPlayAreaContext);
     else await handleDcAction(interaction, dcPlayAreaContext, buttonKey);
     return;
   }

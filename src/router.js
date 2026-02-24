@@ -17,6 +17,7 @@ const BUTTON_PREFIXES = [
   'dc_cc_eoa_',
   'dc_cc_double_',
   'dc_cc_defender_',
+  'dc_ability_choice_',
   'pounce_space_',
   'dc_move_',
   'dc_attack_',

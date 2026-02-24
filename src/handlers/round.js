@@ -247,6 +247,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.roundAttackRerollDice = {};
   game.freeAttackBonusPending = {};
   game.pendingOverrideAttackDice = {};
+  game.nextAttackReach = {};
   game.roundDefenderCannotBeTargetedUnlessWithinSpaces = null;
   game.roundDebuffNextHostileActivation = null;
   game.roundDroidExtraActionCostDamage = null;
