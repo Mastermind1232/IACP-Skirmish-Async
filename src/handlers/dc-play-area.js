@@ -1,7 +1,7 @@
 /**
  * DC Play Area handlers: dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_
  */
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder } from 'discord.js';
 import { truncateLabel } from '../discord/components.js';
 import { bottomLeftCoord } from '../game/coords.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
@@ -195,6 +195,7 @@ export async function handleDcUnactivate(interaction, ctx) {
   if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
   if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
   if (game.hitAndRunPendingMp?.msgId === msgId) delete game.hitAndRunPendingMp;
+  if (game.pendingOverrideAttackDice?.[msgId]) delete game.pendingOverrideAttackDice[msgId];
   // Stun: discarded at the end of the figure's activation
   if (game.figureConditions) {
     const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
@@ -673,6 +674,128 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
  * @param {object} ctx
  * @param {string} buttonKey - 'dc_move_' | 'dc_attack_' | 'dc_interact_' | 'dc_special_'
  */
+/** Build options for the Arsenal die-selection select menu. */
+function buildArsenalSelectOptions(diceCount) {
+  const colors = ['red', 'blue', 'yellow', 'green'];
+  const labels = { red: 'Red', blue: 'Blue', yellow: 'Yellow', green: 'Green' };
+  const options = [];
+  if (diceCount === 2) {
+    for (let i = 0; i < colors.length; i++) {
+      for (let j = i; j < colors.length; j++) {
+        const c1 = colors[i], c2 = colors[j];
+        options.push({ label: `${labels[c1]} + ${labels[c2]}`, value: `${c1},${c2}`, description: `Roll 1 ${labels[c1]} and 1 ${labels[c2]} die` });
+      }
+    }
+  } else {
+    // 3 dice, no more than 2 of same color
+    for (let i = 0; i < colors.length; i++) {
+      for (let j = i; j < colors.length; j++) {
+        for (let k = j; k < colors.length; k++) {
+          const c1 = colors[i], c2 = colors[j], c3 = colors[k];
+          if (c1 === c2 && c2 === c3) continue;
+          options.push({ label: `${labels[c1]} + ${labels[c2]} + ${labels[c3]}`, value: `${c1},${c2},${c3}`, description: `Roll those 3 dice` });
+        }
+      }
+    }
+  }
+  return options;
+}
+
+/** Build and display the attack target selector buttons. */
+async function buildAndSendAttackTargets(
+  interaction, ctx, game, meta, msgId, figureKey, figureIndex,
+  { dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats }
+) {
+  const { getDcEffects, getDcStats, getFigureSize, getFootprintCells, getRange, hasLineOfSight, dcMessageMeta, FIGURE_LETTERS } = ctx;
+  // Priority Target / MASSIVE: figure blocking exceptions
+  const attackerPassivesLower = (stats.passives || []).map(p => String(p).toLowerCase());
+  const attackerIgnoresFigureBlocking = attackerPassivesLower.includes('priority target') || attackerKws.includes('MASSIVE');
+  let allFigureBlockingCoords = null;
+  if (!attackerIgnoresFigureBlocking) {
+    allFigureBlockingCoords = new Set();
+    const attackerSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
+    const attackerFp = new Set(getFootprintCells(attackerPos, attackerSize).map(c => String(c).toLowerCase()));
+    for (const poses_ of [game.figurePositions?.[playerNum] || {}, game.figurePositions?.[enemyPlayerNum] || {}]) {
+      for (const [fk, pos] of Object.entries(poses_)) {
+        if (!pos || attackerFp.has(String(pos).toLowerCase())) continue;
+        const fkDcName = fk.replace(/-\d+-\d+$/, '');
+        const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
+        if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
+        const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
+        for (const cell of getFootprintCells(pos, fkSize)) allFigureBlockingCoords.add(String(cell).toLowerCase());
+      }
+    }
+  }
+  const targets = [];
+  const poses = game.figurePositions?.[enemyPlayerNum] || {};
+  const dcList = enemyPlayerNum === 1 ? game.player1Squad?.dcList : game.player2Squad?.dcList || [];
+  const totals = {};
+  for (const d of dcList) totals[d] = (totals[d] || 0) + 1;
+  for (const [k, coord] of Object.entries(poses)) {
+    const targetCondsList = game.figureConditions?.[k] || [];
+    if (targetCondsList.includes('Hide')) continue;
+    const vanishImmunity = game.vanishImmunityUntilNextActivation?.[enemyPlayerNum];
+    if (vanishImmunity) {
+      const vanishMeta = dcMessageMeta.get(vanishImmunity.msgId);
+      if (vanishMeta && k.startsWith(`${vanishMeta.dcName}-`)) continue;
+    }
+    const dcName = k.replace(/-\d+-\d+$/, '');
+    const size = game.figureOrientations?.[k] || getFigureSize(dcName);
+    const cells = getFootprintCells(coord, size);
+    const dist = Math.min(...cells.map((c) => getRange(attackerPos, c)));
+    if (dist < minRange || dist > effectiveMaxRange) continue;
+    const iMustGoAlone = game.roundDefenderCannotBeTargetedUnlessWithinSpaces;
+    if (iMustGoAlone?.playerNum === enemyPlayerNum && dist > iMustGoAlone.spaces) continue;
+    let losCoords = allFigureBlockingCoords;
+    if (allFigureBlockingCoords) {
+      const targetEff = getDcEffects()[dcName] || getDcEffects()[dcName.replace(/\s*\[.*\]\s*$/, '')];
+      if ((targetEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) {
+        losCoords = null;
+      } else {
+        const targetFp = new Set(getFootprintCells(coord, size).map(c => String(c).toLowerCase()));
+        losCoords = new Set([...allFigureBlockingCoords].filter(c => !targetFp.has(c)));
+      }
+    }
+    const los = hasLineOfSight(attackerPos, coord, ms, losCoords);
+    const m = k.match(/-(\d+)-(\d+)$/);
+    const dg = m ? parseInt(m[1], 10) : 1;
+    const fi = m ? parseInt(m[2], 10) : 0;
+    const figCount = getDcStats(dcName).figures ?? 1;
+    const label = figCount > 1 ? `${dg}${FIGURE_LETTERS[fi] || 'a'}` : (totals[dcName] > 1 ? `${dcName} [DG ${dg}]` : dcName);
+    targets.push({ figureKey: k, coord, label, hasLOS: los, dist });
+  }
+  if (targets.length === 0) {
+    await interaction.followUp({ content: 'No valid targets in range.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const displayName = meta.displayName || meta.dcName;
+  const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
+  const targetRows = [];
+  for (let i = 0; i < targets.length; i += 5) {
+    const chunk = targets.slice(i, i + 5);
+    targetRows.push(
+      new ActionRowBuilder().addComponents(
+        chunk.map((t, idx) => {
+          const targetIndex = i + idx;
+          const noLOS = t.hasLOS === false;
+          return new ButtonBuilder()
+            .setCustomId(`attack_target_${msgId}_${figureIndex}_${targetIndex}`)
+            .setLabel(`${t.label} (${t.coord.toUpperCase()})${noLOS ? ' [No LOS]' : ''}`.slice(0, 80))
+            .setStyle(noLOS ? ButtonStyle.Secondary : ButtonStyle.Danger)
+            .setDisabled(noLOS);
+        })
+      )
+    );
+  }
+  game.attackTargets = game.attackTargets || {};
+  game.attackTargets[`${msgId}_${figureIndex}`] = targets;
+  await interaction.followUp({
+    content: `**Attack** — Choose target for **${figLabel}**:`,
+    components: targetRows.slice(0, 5),
+    ephemeral: false,
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+}
+
 export async function handleDcAction(interaction, ctx, buttonKey) {
   const {
     getGame,
@@ -924,100 +1047,31 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         return;
       }
     }
-    // Priority Target passive: figures do not block LOS for this attacker's attacks.
-    // MASSIVE attackers also ignore figure blocking (rules: figures don't block LOS to/from MASSIVE).
-    const attackerPassivesLower = (getDcStats(meta.dcName).passives || []).map(p => String(p).toLowerCase());
-    const attackerIgnoresFigureBlocking = attackerPassivesLower.includes('priority target') || attackerKws.includes('MASSIVE');
-    // Build figure-blocking coord set: all occupied cells except attacker footprint and MASSIVE figures
-    let allFigureBlockingCoords = null;
-    if (!attackerIgnoresFigureBlocking) {
-      allFigureBlockingCoords = new Set();
-      const attackerSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
-      const attackerFp = new Set(getFootprintCells(attackerPos, attackerSize).map(c => String(c).toLowerCase()));
-      for (const poses_ of [game.figurePositions?.[playerNum] || {}, game.figurePositions?.[enemyPlayerNum] || {}]) {
-        for (const [fk, pos] of Object.entries(poses_)) {
-          if (!pos || attackerFp.has(String(pos).toLowerCase())) continue;
-          const fkDcName = fk.replace(/-\d+-\d+$/, '');
-          const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
-          if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
-          const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
-          for (const cell of getFootprintCells(pos, fkSize)) allFigureBlockingCoords.add(String(cell).toLowerCase());
-        }
-      }
-    }
-    const targets = [];
-    const poses = game.figurePositions?.[enemyPlayerNum] || {};
-    const dcList = enemyPlayerNum === 1 ? game.player1Squad?.dcList : game.player2Squad?.dcList || [];
-    const totals = {};
-    for (const d of dcList) totals[d] = (totals[d] || 0) + 1;
-    for (const [k, coord] of Object.entries(poses)) {
-      // Hidden figures cannot be declared as attack targets
-      const targetCondsList = game.figureConditions?.[k] || [];
-      if (targetCondsList.includes('Hide')) continue;
-      // Vanish: figure cannot be targeted until their next activation
-      const vanishImmunity = game.vanishImmunityUntilNextActivation?.[enemyPlayerNum];
-      if (vanishImmunity) {
-        const vanishMeta = dcMessageMeta.get(vanishImmunity.msgId);
-        if (vanishMeta && k.startsWith(`${vanishMeta.dcName}-`)) continue;
-      }
-      const dcName = k.replace(/-\d+-\d+$/, '');
-      const size = game.figureOrientations?.[k] || getFigureSize(dcName);
-      const cells = getFootprintCells(coord, size);
-      const dist = Math.min(...cells.map((c) => getRange(attackerPos, c)));
-      if (dist < minRange || dist > effectiveMaxRange) continue;
-      // "I Must Go Alone": protected player's figures cannot be targeted from beyond N spaces
-      const iMustGoAlone = game.roundDefenderCannotBeTargetedUnlessWithinSpaces;
-      if (iMustGoAlone?.playerNum === enemyPlayerNum && dist > iMustGoAlone.spaces) continue;
-      // Build per-target figure blocking: exclude target's footprint (a figure doesn't block LOS to itself)
-      // Also: MASSIVE targets don't block LOS to/from themselves
-      let losCoords = allFigureBlockingCoords;
-      if (allFigureBlockingCoords) {
-        const targetEff = getDcEffects()[dcName] || getDcEffects()[dcName.replace(/\s*\[.*\]\s*$/, '')];
-        if ((targetEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) {
-          losCoords = null; // MASSIVE targets: no figure blocking
-        } else {
-          const targetFp = new Set(getFootprintCells(coord, size).map(c => String(c).toLowerCase()));
-          losCoords = new Set([...allFigureBlockingCoords].filter(c => !targetFp.has(c)));
-        }
-      }
-      const los = hasLineOfSight(attackerPos, coord, ms, losCoords);
-      const m = k.match(/-(\d+)-(\d+)$/);
-      const dg = m ? parseInt(m[1], 10) : 1;
-      const fi = m ? parseInt(m[2], 10) : 0;
-      const figCount = getDcStats(dcName).figures ?? 1;
-      const label = figCount > 1 ? `${dg}${FIGURE_LETTERS[fi] || 'a'}` : (totals[dcName] > 1 ? `${dcName} [DG ${dg}]` : dcName);
-      targets.push({ figureKey: k, coord, label, hasLOS: los, dist });
-    }
-    if (targets.length === 0) {
-      await interaction.followUp({ content: 'No valid targets in range.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    // Arsenal / Epic Arsenal: player chooses attack dice before target selection.
+    // Uses pendingOverrideAttackDice[msgId] so handleAttackTarget applies them automatically.
+    const atkSpecialIds = attackerEffects?.specialAbilityIds || [];
+    const hasArsenal = atkSpecialIds.includes('arsenal');
+    const hasEpicArsenal = atkSpecialIds.includes('epic_arsenal');
+    if ((hasArsenal || hasEpicArsenal) && !game.pendingOverrideAttackDice?.[msgId]) {
+      const diceCount = hasEpicArsenal ? 3 : 2;
+      const abilityName = hasEpicArsenal ? 'Epic Arsenal' : 'Arsenal';
+      const displayName_ = meta.displayName || meta.dcName;
+      const selectRow = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`arsenal_pick_${meta.gameId}_${msgId}_${figureIndex}`)
+          .setPlaceholder(`Choose ${diceCount} attack dice…`)
+          .addOptions(buildArsenalSelectOptions(diceCount))
+      );
+      await interaction.followUp({
+        content: `**${displayName_} — ${abilityName}**: Choose your ${diceCount} attack dice:`,
+        components: [selectRow],
+        ephemeral: false,
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
-    const displayName = meta.displayName || meta.dcName;
-    const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
-    const targetRows = [];
-    for (let i = 0; i < targets.length; i += 5) {
-      const chunk = targets.slice(i, i + 5);
-      targetRows.push(
-        new ActionRowBuilder().addComponents(
-          chunk.map((t, idx) => {
-            const targetIndex = i + idx;
-            const noLOS = t.hasLOS === false;
-            return new ButtonBuilder()
-              .setCustomId(`attack_target_${msgId}_${figureIndex}_${targetIndex}`)
-              .setLabel(`${t.label} (${t.coord.toUpperCase()})${noLOS ? ' [No LOS]' : ''}`.slice(0, 80))
-              .setStyle(noLOS ? ButtonStyle.Secondary : ButtonStyle.Danger)
-              .setDisabled(noLOS);
-          })
-        )
-      );
-    }
-    game.attackTargets = game.attackTargets || {};
-    game.attackTargets[`${msgId}_${figureIndex}`] = targets;
-    await interaction.followUp({
-      content: `**Attack** — Choose target for **${figLabel}**:`,
-      components: targetRows.slice(0, 5),
-      ephemeral: false,
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await buildAndSendAttackTargets(interaction, ctx, game, meta, msgId, figureKey, figureIndex, {
+      dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats,
+    });
     return;
   }
 
@@ -1337,4 +1391,58 @@ export async function handlePounceSpacePick(interaction, ctx) {
     await interaction.message.edit({ content: `Pounce failed: ${result.manualMessage}`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
   saveGames();
+}
+
+/**
+ * Handle arsenal_pick_ select menu: store chosen dice in pendingOverrideAttackDice, then show target list.
+ * @param {import('discord.js').StringSelectMenuInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handleArsenalPick(interaction, ctx) {
+  // customId: arsenal_pick_{gameId}_{msgId}_{figureIndex}
+  const withoutPrefix = interaction.customId.replace('arsenal_pick_', '');
+  const parts = withoutPrefix.split('_');
+  const gameId = parts[0];
+  const figureIndex = parseInt(parts[parts.length - 1], 10);
+  const msgId = parts.slice(1, -1).join('_');
+
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+
+  const { getGame, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames, replyIfGameEnded } = ctx;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) return;
+  const game = getGame(gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+
+  const chosenDice = interaction.values[0].split(',');
+  game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+  game.pendingOverrideAttackDice[msgId] = { dice: chosenDice };
+  saveGames();
+
+  const stats = getDcStats(meta.dcName);
+  const attackInfo = stats.attack || { dice: ['red'], range: [1, 3] };
+  const [minRange, maxRange] = attackInfo.range || [1, 3];
+  const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
+  const hasReach = attackerKws.includes('REACH') || !!game.nextAttackReach?.[meta.playerNum];
+  const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
+  const ms = getMapSpaces(game.selectedMap?.id);
+  if (!ms) {
+    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const playerNum = meta.playerNum;
+  const enemyPlayerNum = playerNum === 1 ? 2 : 1;
+  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+  const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!attackerPos) {
+    await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+
+  await buildAndSendAttackTargets(interaction, ctx, game, meta, msgId, figureKey, figureIndex, {
+    dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats,
+  });
 }

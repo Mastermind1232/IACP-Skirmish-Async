@@ -129,6 +129,7 @@ import {
   handleDcCcDoubleAction,
   handleDcAction,
   handleDcAbilityChoice,
+  handleArsenalPick,
   handleSquadModal,
   handleDeployModal,
   handleCcAttachTo,
@@ -5190,6 +5191,14 @@ client.on('interactionCreate', async (interaction) => {
       game.dcActionsData[msgId].selectedFigure = selectedFigure;
       saveGames();
       await updateDcActionsMessage(game, msgId, interaction.client);
+      return;
+    }
+    if (selectKey === 'arsenal_pick_') {
+      const arsenalCtx = {
+        getGame, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames, replyIfGameEnded,
+        getFigureSize, getFootprintCells, getRange, hasLineOfSight, FIGURE_LETTERS,
+      };
+      await handleArsenalPick(interaction, arsenalCtx);
       return;
     }
     if (selectKey === 'map_selection_menu_' || selectKey === 'map_selection_draw_' || selectKey === 'map_selection_pick_') {

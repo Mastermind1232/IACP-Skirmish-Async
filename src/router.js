@@ -106,6 +106,7 @@ const MODAL_PREFIXES = [
 /** String select menu prefixes. */
 const SELECT_PREFIXES = [
   'dc_fig_select_',
+  'arsenal_pick_',
   'setup_attach_to_',
   'map_selection_draw_',
   'map_selection_pick_',
