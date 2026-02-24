@@ -37,6 +37,8 @@ import {
   getDcWinRates,
   getDcWinRatesPersonal,
   getLeaderboard,
+  getEarnedAchievements,
+  checkAndGrantAchievements,
 } from './src/db.js';
 import {
   getGame,
@@ -296,6 +298,9 @@ import { runEndOfRoundRules, runStartOfRoundRules } from './src/game/mission-rul
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname);
+
+// Resolved once at startup; undefined if env var not set
+let achievementsChannelId = process.env.ACHIEVEMENTS_CHANNEL_ID || null;
 
 /** Build embeds and files for the "Attachments" message under a DC: CC attachments then DC (Skirmish Upgrade) attachments. */
 async function buildAttachmentEmbedsAndFiles(ccNames, dcNames = []) {
@@ -2220,6 +2225,20 @@ async function checkWinConditions(game, client) {
   return { ended: false };
 }
 
+/** Post a public achievement unlock notification to #achievements. */
+async function postAchievementNotification(client, channelId, userId, def) {
+  try {
+    const ch = await client.channels.fetch(channelId);
+    const embed = new EmbedBuilder()
+      .setColor(0xffd700)
+      .setTitle(`${def.icon || '🏆'} Achievement Unlocked!`)
+      .setDescription(`<@${userId}> unlocked **${def.name}**\n${def.description}`);
+    await ch.send({ content: `<@${userId}>`, embeds: [embed], allowedMentions: { users: [userId] } });
+  } catch (err) {
+    console.error('[Achievements] Failed to post notification:', err.message);
+  }
+}
+
 async function postGameOver(game, client, winnerId, reason) {
   game.ended = true;
   game.winnerId = winnerId ?? game.winnerId ?? null;
@@ -2241,6 +2260,30 @@ async function postGameOver(game, client, winnerId, reason) {
   }
   if (isDbConfigured()) {
     insertCompletedGame(game).catch((err) => console.error('[DB] insertCompletedGame:', err));
+    if (achievementsChannelId && game.player1Id && game.player2Id) {
+      (async () => {
+        try {
+          const [stats1, stats2] = await Promise.all([
+            getStatsSummaryForPlayer(game.player1Id),
+            getStatsSummaryForPlayer(game.player2Id),
+          ]);
+          const [granted1, granted2] = await Promise.all([
+            checkAndGrantAchievements(game.player1Id, 'game_complete', stats1.games),
+            checkAndGrantAchievements(game.player2Id, 'game_complete', stats2.games),
+          ]);
+          for (const def of granted1) await postAchievementNotification(client, achievementsChannelId, game.player1Id, def);
+          for (const def of granted2) await postAchievementNotification(client, achievementsChannelId, game.player2Id, def);
+          const wId = game.winnerId;
+          if (wId) {
+            const winnerStats = wId === game.player1Id ? stats1 : stats2;
+            const grantedWin = await checkAndGrantAchievements(wId, 'game_win', winnerStats.wins);
+            for (const def of grantedWin) await postAchievementNotification(client, achievementsChannelId, wId, def);
+          }
+        } catch (err) {
+          console.error('[Achievements] postGameOver hook failed:', err.message);
+        }
+      })();
+    }
   }
   saveGames();
 }
@@ -3264,7 +3307,8 @@ async function resolveCombatAfterRolls(game, combat, client) {
   }
 
   // Bleed: attacker prompted to take 1 damage or prevent by discarding CC after Attack action
-  if (combat.attackerConds?.includes('Bleed')) {
+  // (skipped if player spent a surge to prevent Bleed during the surge window)
+  if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed) {
     const bleedThread = await client.channels.fetch(combat.combatThreadId);
     await sendBleedingPrompt(game, bleedThread, combat.attackerFigureKey, combat.attackerPlayerNum, combat.attackerDisplayName);
   }
@@ -4341,6 +4385,10 @@ client.once('ready', async () => {
       .setName('leaderboard')
       .setDescription('Top players by win rate (min. 5 completed games). Use in #statistics.')
       .addIntegerOption((o) => o.setName('limit').setDescription('Number of players to show (default 10)').setMinValue(3).setMaxValue(50));
+    const achievements = new SlashCommandBuilder()
+      .setName('achievements')
+      .setDescription('Show your earned achievements, or another player\'s.')
+      .addUserOption((o) => o.setName('player').setDescription('Show achievements for this player (optional)').setRequired(false));
     const powertoken = new SlashCommandBuilder()
       .setName('power-token')
       .setDescription('Add or remove a Power Token on a figure. Use in Game Log / Map Updates channel.')
@@ -4382,10 +4430,10 @@ client.once('ready', async () => {
         affiliationwinrateglobal.toJSON(), affiliationwinratepersonal.toJSON(),
         affiliationpickrateglobal.toJSON(), affiliationpickratepersonal.toJSON(),
         dcwinrateglobaltopten.toJSON(), dcwinratepersonaltopten.toJSON(),
-        leaderboard.toJSON(),
+        leaderboard.toJSON(), achievements.toJSON(),
       ],
     });
-    console.log('Slash commands registered: /botmenu, /statcheck, /power-token, /move-figure, /affiliationwinrateglobal, /affiliationwinratepersonal, /affiliationpickrateglobal, /affiliationpickratepersonal, /dcwinrateglobaltopten, /dcwinratepersonaltopten, /leaderboard');
+    console.log('Slash commands registered: /botmenu, /statcheck, /power-token, /move-figure, /affiliationwinrateglobal, /affiliationwinratepersonal, /affiliationpickrateglobal, /affiliationpickratepersonal, /dcwinrateglobaltopten, /dcwinratepersonaltopten, /leaderboard, /achievements');
   } catch (err) {
     console.error('Failed to register slash commands:', err.message);
   }
@@ -5061,6 +5109,30 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.editReply({
           content: `Something went wrong: ${err.message}`,
         }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
+      return;
+    }
+    if (cmd === 'achievements') {
+      if (!isDbConfigured()) {
+        await interaction.reply({ content: 'Achievements require a database (DATABASE_URL). No data available.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        return;
+      }
+      await interaction.deferReply({ ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      try {
+        const targetUser = interaction.options.getUser('player') || interaction.user;
+        const earned = await getEarnedAchievements(targetUser.id);
+        const embed = new EmbedBuilder()
+          .setColor(0xffd700)
+          .setTitle(`${targetUser.username}'s Achievements`)
+          .setDescription(
+            earned.length
+              ? earned.map((a) => `${a.icon || '🏆'} **${a.name}** — ${a.description} *(${new Date(a.earned_at).toLocaleDateString()})*`).join('\n')
+              : 'No achievements yet — play some games!'
+          );
+        await interaction.editReply({ embeds: [embed], allowedMentions: { users: [] } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      } catch (err) {
+        console.error('[Achievements] /achievements command failed:', err.message);
+        await interaction.editReply({ content: `Something went wrong: ${err.message}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
       return;
     }

@@ -996,8 +996,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   if (actionsData) {
     // Free pounce attack: Pounce special grants one free attack (already paid as special action)
     const isPounceAttack = action === 'Attack' && game.pounceAttackPending?.[msgId] != null;
+    // Free heroic attack: Heroic ability grants one free attack (action restored via freeAction flag on the special)
+    const isHeroicAttack = action === 'Attack' && game.freeAttackBonusPending?.[msgId] != null;
     if (isPounceAttack) {
       delete game.pounceAttackPending[msgId];
+    } else if (isHeroicAttack) {
+      delete game.freeAttackBonusPending[msgId];
     } else {
       const actionCost = buttonKey === 'dc_special_' ? (getDcStats(meta.dcName).specialCosts?.[specialIdx] ?? 1) : 1;
       actionsData.remaining = Math.max(0, actionsData.remaining - actionCost);

@@ -49,6 +49,27 @@ export async function initDb() {
     // DB3: optional indexes for active games / recent updates
     await pool.query('CREATE INDEX IF NOT EXISTS idx_games_updated_at ON games (updated_at)').catch((err) => { console.error('[discord]', err?.message ?? err); });
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_games_ended ON games ((game_data->>'ended'))`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    // Achievements tables
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS achievement_defs (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        icon TEXT DEFAULT '🏆',
+        trigger TEXT NOT NULL,
+        threshold INT NOT NULL DEFAULT 1
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_achievements (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        achievement_id TEXT NOT NULL REFERENCES achievement_defs(id),
+        earned_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(user_id, achievement_id)
+      )
+    `);
+    await seedAchievements();
     console.log('[DB] PostgreSQL connected, games and completed_games tables ready.');
   } catch (err) {
     console.error('[DB] Failed to connect:', err.message);
@@ -436,6 +457,83 @@ export async function getLeaderboard(limit = 10) {
     }));
   } catch (err) {
     console.error('[DB] getLeaderboard failed:', err.message);
+    return [];
+  }
+}
+
+// ── Achievements ─────────────────────────────────────────────────────────────
+
+const ACHIEVEMENT_SEED = [
+  { id: 'complete_1_game',  name: 'First Game',    description: 'Complete your first game',    icon: '🏆', trigger: 'game_complete', threshold: 1  },
+  { id: 'complete_5_games', name: 'Regular',       description: 'Complete 5 games',            icon: '🏆', trigger: 'game_complete', threshold: 5  },
+  { id: 'complete_10_games',name: 'Veteran',       description: 'Complete 10 games',           icon: '🏆', trigger: 'game_complete', threshold: 10 },
+  { id: 'complete_25_games',name: 'Hardened',      description: 'Complete 25 games',           icon: '🏆', trigger: 'game_complete', threshold: 25 },
+  { id: 'win_1_game',       name: 'First Victory', description: 'Win your first game',         icon: '🥇', trigger: 'game_win',      threshold: 1  },
+  { id: 'win_5_games',      name: 'On a Roll',     description: 'Win 5 games',                 icon: '🥇', trigger: 'game_win',      threshold: 5  },
+  { id: 'win_10_games',     name: 'Dominant',      description: 'Win 10 games',                icon: '🥇', trigger: 'game_win',      threshold: 10 },
+  { id: 'win_25_games',     name: 'Champion',      description: 'Win 25 games',                icon: '🥇', trigger: 'game_win',      threshold: 25 },
+];
+
+async function seedAchievements() {
+  if (!pool) return;
+  for (const def of ACHIEVEMENT_SEED) {
+    await pool.query(
+      `INSERT INTO achievement_defs (id, name, description, icon, trigger, threshold)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (id) DO NOTHING`,
+      [def.id, def.name, def.description, def.icon, def.trigger, def.threshold]
+    ).catch((err) => console.error('[DB] seedAchievements:', err.message));
+  }
+}
+
+/** Returns earned achievements for a user: [{id, name, description, icon, earned_at}] */
+export async function getEarnedAchievements(userId) {
+  if (!pool) return [];
+  try {
+    const res = await pool.query(
+      `SELECT d.id, d.name, d.description, d.icon, ua.earned_at
+       FROM user_achievements ua
+       JOIN achievement_defs d ON d.id = ua.achievement_id
+       WHERE ua.user_id = $1
+       ORDER BY ua.earned_at ASC`,
+      [userId]
+    );
+    return res.rows;
+  } catch (err) {
+    console.error('[DB] getEarnedAchievements failed:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Check which achievements for `trigger` are newly earned given `statCount`,
+ * insert them, and return the newly granted defs.
+ * @param {string} userId
+ * @param {'game_complete'|'game_win'} trigger
+ * @param {number} statCount
+ * @returns {Promise<Array<{id, name, description, icon}>>}
+ */
+export async function checkAndGrantAchievements(userId, trigger, statCount) {
+  if (!pool) return [];
+  try {
+    const res = await pool.query(
+      `INSERT INTO user_achievements (user_id, achievement_id)
+       SELECT $1, d.id
+       FROM achievement_defs d
+       WHERE d.trigger = $2 AND d.threshold <= $3
+       ON CONFLICT (user_id, achievement_id) DO NOTHING
+       RETURNING achievement_id`,
+      [userId, trigger, statCount]
+    );
+    if (res.rows.length === 0) return [];
+    const grantedIds = res.rows.map((r) => r.achievement_id);
+    const defs = await pool.query(
+      `SELECT id, name, description, icon FROM achievement_defs WHERE id = ANY($1)`,
+      [grantedIds]
+    );
+    return defs.rows;
+  } catch (err) {
+    console.error('[DB] checkAndGrantAchievements failed:', err.message);
     return [];
   }
 }

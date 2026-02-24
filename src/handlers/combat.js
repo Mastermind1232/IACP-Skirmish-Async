@@ -950,7 +950,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   const surgeAbilities = getAttackerSurgeAbilities(combat);
   const remaining = totalSurge;
   const affordable = surgeAbilities.filter((key) => (getAbility(key)?.surgeCost ?? 1) <= remaining);
-  if (totalSurge > 0 && affordable.length > 0) {
+  if (totalSurge > 0 && (affordable.length > 0 || combat.attackerConds?.includes('Bleed'))) {
     combat.surgeRemaining = totalSurge;
     combat.surgeDamage = 0;
     combat.surgePierce = 0;
@@ -967,6 +967,14 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
         new ButtonBuilder()
           .setCustomId(`combat_surge_${game.gameId}_${i}`)
           .setLabel(btnLabel.slice(0, 80))
+          .setStyle(ButtonStyle.Secondary)
+      );
+    }
+    if (combat.attackerConds?.includes('Bleed')) {
+      surgeRows.push(
+        new ButtonBuilder()
+          .setCustomId(`combat_surge_${game.gameId}_bleed_prevention`)
+          .setLabel('Spend 1 Surge — Prevent Bleed')
           .setStyle(ButtonStyle.Secondary)
       );
     }
@@ -1037,7 +1045,7 @@ export async function handleCombatSurge(interaction, ctx) {
   const getAbility = ctx.getAbility || (() => null);
   const resolveSurge = resolveSurgeAbility || parseSurgeEffect;
   const getSurgeLabel = getSurgeAbilityLabel || ((id) => (SURGE_LABELS && SURGE_LABELS[id]) || id);
-  const match = interaction.customId.match(/^combat_surge_([^_]+)_(done|\d+)$/);
+  const match = interaction.customId.match(/^combat_surge_([^_]+)_(done|\d+|bleed_prevention)$/);
   if (!match) return;
   const [, gameId, choice] = match;
   const game = getGame(gameId);
@@ -1057,7 +1065,11 @@ export async function handleCombatSurge(interaction, ctx) {
     return;
   }
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
-  if (choice !== 'done') {
+  if (choice === 'bleed_prevention') {
+    combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);
+    combat.surgePreventBleed = true;
+    await thread.send('Spent 1 surge — Bleeding will be prevented this activation.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+  } else if (choice !== 'done') {
     const idx = parseInt(choice, 10);
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const key = surgeAbilities[idx];
@@ -1105,6 +1117,14 @@ export async function handleCombatSurge(interaction, ctx) {
         new ButtonBuilder()
           .setCustomId(`combat_surge_${gameId}_${i}`)
           .setLabel(btnLabel.slice(0, 80))
+          .setStyle(ButtonStyle.Secondary)
+      );
+    }
+    if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed) {
+      surgeRows.push(
+        new ButtonBuilder()
+          .setCustomId(`combat_surge_${gameId}_bleed_prevention`)
+          .setLabel('Spend 1 Surge — Prevent Bleed')
           .setStyle(ButtonStyle.Secondary)
       );
     }

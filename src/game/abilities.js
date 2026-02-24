@@ -113,6 +113,37 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // dcSpecial: actionBonus (Expertise) — restore 1 action after using Special (grants an extra action for free)
+  if (entry.type === 'dcSpecial' && typeof entry.actionBonus === 'number' && entry.actionBonus > 0) {
+    const label = entry.label || 'Expertise';
+    return { applied: true, freeAction: true, logMessage: `**${label}** — You may perform ${entry.actionBonus} additional action${entry.actionBonus !== 1 ? 's' : ''} this activation. Action counter restored.` };
+  }
+
+  // dcSpecial: freeAttackBonus (Heroic) — next attack this activation costs no action
+  if (entry.type === 'dcSpecial' && entry.freeAttackBonus) {
+    const { game, msgId } = context;
+    if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[msgId] = true;
+    const label = entry.label || 'Heroic';
+    return { applied: true, freeAction: true, logMessage: `**${label}** — Your next attack costs no action. Click Attack when ready.` };
+  }
+
+  // dcSpecial: freeMoveEqualToSpeed (Wall Run) — gain free MP equal to DC's Speed; terrain-adjacent-to-walls is honour
+  if (entry.type === 'dcSpecial' && entry.freeMoveEqualToSpeed) {
+    const { game, msgId, meta } = context;
+    if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const dcStats = getStatsForDc(meta.dcName);
+    const speed = typeof dcStats?.speed === 'number' ? dcStats.speed : 4;
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    bank.total = (bank.total ?? 0) + speed;
+    bank.remaining = (bank.remaining ?? 0) + speed;
+    game.movementBank[msgId] = bank;
+    const label = entry.label || 'Wall Run';
+    return { applied: true, logMessage: `**${label}** — Gained ${speed} free movement points (your Speed). You may ignore terrain adjacent to walls during this movement (honour system).`, refreshMovementBank: true, activeMsgId: msgId };
+  }
+
   // dcSpecial: freeMoveBonus + nextAttacksBonusHits (On the Hunt — gain free MP, next attack gets +N Hit)
   if (entry.type === 'dcSpecial' && typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && entry.nextAttacksBonusHits) {
     const { game, msgId, meta } = context;
@@ -1119,6 +1150,92 @@ export function resolveAbility(abilityId, context) {
       logMessage: totalRecovered > 0 ? `Recovered ${totalRecovered} Damage.${freeMovePart}` : `Already at full health.${freeMovePart}`,
       refreshDcEmbed: true,
     };
+  }
+
+  // dcSpecial: healFriendlyAdjacent (Stim Canister) — one adjacent friendly recovers N damage
+  if (entry.type === 'dcSpecial' && typeof entry.healFriendlyAdjacent === 'number' && entry.healFriendlyAdjacent > 0) {
+    const { game, msgId, meta, dcMessageMeta, dcHealthState } = context;
+    if (!game || !msgId || !meta || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const mapId = game.selectedMap?.id;
+    if (!mapId) return { applied: false, manualMessage: 'Resolve manually: no map selected.' };
+    const activatingKeys = getFigureKeysForDcMsg(game, meta.playerNum, meta);
+    const adjacentSet = new Set();
+    for (const fk of activatingKeys) {
+      const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+      for (const { figureKey, playerNum: p } of adj) {
+        if (p === meta.playerNum && !activatingKeys.includes(figureKey)) adjacentSet.add(figureKey);
+      }
+    }
+    const adjacent = [...adjacentSet];
+    const label = entry.label || 'Stim Canister';
+    if (adjacent.length === 0) return { applied: true, logMessage: `**${label}** — No adjacent friendly figure to heal.` };
+    if (adjacent.length > 1) return { applied: false, manualMessage: `Choose 1 of ${adjacent.length} adjacent friendly figures to recover ${entry.healFriendlyAdjacent} Damage.` };
+    const adjacentFk = adjacent[0];
+    const fkMatch = adjacentFk.match(/^(.+)-(\d+)-(\d+)$/);
+    let adjMsgId = null;
+    if (fkMatch) {
+      const [, adjDcName, adjDgIndex] = fkMatch;
+      for (const [id, m] of dcMessageMeta) {
+        if (m.playerNum !== meta.playerNum) continue;
+        const mDg = (m.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        if (m.dcName === adjDcName && mDg === adjDgIndex) { adjMsgId = id; break; }
+      }
+    }
+    if (!adjMsgId) return { applied: false, manualMessage: `Resolve manually: could not locate DC for adjacent figure.` };
+    const adjHealthState = dcHealthState.get(adjMsgId);
+    if (!adjHealthState?.length || !Array.isArray(adjHealthState[0])) return { applied: false, manualMessage: `Resolve manually: health state not found for adjacent figure.` };
+    let remaining = entry.healFriendlyAdjacent;
+    let totalRecovered = 0;
+    for (let i = 0; i < adjHealthState.length && remaining > 0; i++) {
+      const [cur, max] = adjHealthState[i];
+      if (cur == null || max == null) continue;
+      const healed = Math.min(max - cur, remaining);
+      adjHealthState[i] = [cur + healed, max];
+      totalRecovered += healed;
+      remaining -= healed;
+    }
+    dcHealthState.set(adjMsgId, adjHealthState);
+    const adjMeta = dcMessageMeta.get(adjMsgId);
+    const dcMsgIds = adjMeta?.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcList = adjMeta?.playerNum === 1 ? game.p1DcList : game.p2DcList;
+    const idx = (dcMsgIds || []).indexOf(adjMsgId);
+    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...adjHealthState];
+    const adjLabel = adjacentFk.match(/^(.+)-\d+-\d+$/)?.[1] || adjacentFk;
+    const msg = totalRecovered > 0 ? `**${label}** — ${adjLabel} recovered ${totalRecovered} Damage.` : `**${label}** — ${adjLabel} is already at full health.`;
+    return { applied: true, logMessage: msg, refreshDcEmbed: true, refreshDcEmbedMsgIds: [adjMsgId] };
+  }
+
+  // dcSpecial: focusFriendlyAdjacent (Inform) — 1 adjacent friendly becomes Focused
+  if (entry.type === 'dcSpecial' && typeof entry.focusFriendlyAdjacent === 'number' && entry.focusFriendlyAdjacent > 0) {
+    const { game, msgId, meta } = context;
+    if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const mapId = game.selectedMap?.id;
+    if (!mapId) return { applied: false, manualMessage: 'Resolve manually: no map selected.' };
+    const activatingKeys = getFigureKeysForDcMsg(game, meta.playerNum, meta);
+    const adjacentSet = new Set();
+    for (const fk of activatingKeys) {
+      const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+      for (const { figureKey, playerNum: p } of adj) {
+        if (p === meta.playerNum && !activatingKeys.includes(figureKey)) adjacentSet.add(figureKey);
+      }
+    }
+    const adjacent = [...adjacentSet];
+    const label = entry.label || 'Inform';
+    if (adjacent.length === 0) return { applied: true, logMessage: `**${label}** — No adjacent friendly figure to apply Focused to.` };
+    if (adjacent.length > entry.focusFriendlyAdjacent) return { applied: false, manualMessage: `Choose 1 of ${adjacent.length} adjacent friendly figures to become Focused.` };
+    game.figureConditions = game.figureConditions || {};
+    const conditioned = [];
+    for (const fk of adjacent.slice(0, entry.focusFriendlyAdjacent)) {
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Focus')) {
+        game.figureConditions[fk] = [...existing, 'Focus'];
+        conditioned.push(fk.match(/^(.+)-\d+-\d+$/)?.[1] || fk);
+      }
+    }
+    const msg = conditioned.length > 0
+      ? `**${label}** — ${conditioned.join(', ')} became Focused.`
+      : `**${label}** — Adjacent figure is already Focused.`;
+    return { applied: true, logMessage: msg, refreshBoard: true, conditionCardsToPost: conditioned.length > 0 ? ['Focus'] : [] };
   }
 
   // dcSpecial: drawCCIfAdjacentTerminal — player draws N CC (adjacency check is on-honour; if condition not met, undo manually)
