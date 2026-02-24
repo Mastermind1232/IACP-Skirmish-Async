@@ -452,8 +452,163 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: entry.logMessage || `**${label}** — Gained ${speed} free movement points (your Speed).${extraMsg}`, refreshMovementBank: true, activeMsgId: msgId };
   }
 
-  // dcSpecial: rollOneDie (Slam, Smash, Electrified Knuckledusters, Parting Gift) — roll one die and report results
+  // dcSpecial: rollOneDie (Slam, Smash, Electrified Knuckledusters, Parting Gift) — roll one die with optional targeting
   if (entry.type === 'dcSpecial' && entry.rollOneDie) {
+    const { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, targetFigureKey, chosenSpace } = context;
+
+    // ── Electrified Knuckledusters style: pick adjacent hostile, then roll + apply ──
+    if (entry.rollOneDieTarget === 'adjacentHostile') {
+      // Phase 2: target chosen → roll die, apply damage + optional surge condition
+      if (targetFigureKey) {
+        const color = entry.rollOneDie;
+        const faces = getDiceData().attack?.[color.toLowerCase()];
+        if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die manually and apply results.` };
+        const face = faces[Math.floor(Math.random() * faces.length)];
+        const hits = face.dmg ?? 0;
+        const surges = face.surge ?? 0;
+        const dieParts = [];
+        if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+        if (surges) dieParts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
+        const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
+        const enemyPlayerNum = (playerNum || 1) === 1 ? 2 : 1;
+        const resultParts = [];
+        if (hits > 0) {
+          const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
+          if (dcHealthState && targetMsgId) {
+            const healthState = dcHealthState.get(targetMsgId) || [];
+            const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
+            const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+            const entryHp = healthState[figIdx];
+            if (entryHp) {
+              const [cur, max] = entryHp;
+              const newCur = Math.max(0, (cur ?? max) - hits);
+              healthState[figIdx] = [newCur, max ?? newCur];
+              dcHealthState.set(targetMsgId, healthState);
+              const dcIds = enemyPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+              const dcList = enemyPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+              const idx = (dcIds || []).indexOf(targetMsgId);
+              if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+              resultParts.push(`${hits} Damage (HP: ${cur ?? max} → ${newCur})`);
+            } else {
+              resultParts.push(`apply ${hits} Damage manually`);
+            }
+          } else {
+            resultParts.push(`apply ${hits} Damage manually`);
+          }
+        }
+        const surgeCondition = entry.rollOneDieSurgeCondition;
+        if (surgeCondition && surges >= 1) {
+          game.figureConditions = game.figureConditions || {};
+          const existing = game.figureConditions[targetFigureKey] || [];
+          if (!existing.includes(surgeCondition)) game.figureConditions[targetFigureKey] = [...existing, surgeCondition];
+          resultParts.push(`became **${surgeCondition}**`);
+        }
+        const targetName = targetFigureKey.replace(/-\d+-\d+$/, '');
+        return {
+          applied: true,
+          logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.`,
+          refreshDcEmbed: true,
+        };
+      }
+      // Phase 1: enumerate adjacent hostile figures
+      if (!game || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
+      const mapId = game.selectedMap?.id;
+      const actionsData = game.dcActionsData?.[msgId];
+      const selectedFig = actionsData?.selectedFigure ?? 0;
+      const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const dgIndex = dgMatch ? dgMatch[1] : '1';
+      const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+      if (!mapId) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (map not loaded).` };
+      const adjacentAll = getFiguresAdjacentToTarget(game, activatingFigureKey, mapId);
+      const enemyPlayerNum = (playerNum || 1) === 1 ? 2 : 1;
+      const validTargets = adjacentAll.filter((f) => f.playerNum === enemyPlayerNum);
+      if (validTargets.length === 0) return { applied: false, manualMessage: `No adjacent hostile figures. Resolve **${entry.label}** manually.` };
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: validTargets.map((t) => t.figureKey.replace(/-\d+-\d+$/, '')),
+        targetFigureKeys: validTargets.map((t) => t.figureKey),
+      };
+    }
+
+    // ── Parting Gift style: pick space within N, then roll + apply to figures on/adjacent ──
+    if (entry.rollOneDieTarget === 'spaceWithin') {
+      const range = entry.rollOneDieRange || 3;
+      // Phase 2: space chosen → roll die, apply damage to all figures on or adjacent to that space
+      if (chosenSpace) {
+        const color = entry.rollOneDie;
+        const faces = getDiceData().attack?.[color.toLowerCase()];
+        if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die manually and apply results.` };
+        const face = faces[Math.floor(Math.random() * faces.length)];
+        const hits = face.dmg ?? 0;
+        const surges = face.surge ?? 0;
+        const dieParts = [];
+        if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+        if (surges) dieParts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
+        const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
+        const spaceUpper = String(chosenSpace).toUpperCase();
+        const resultParts = [];
+        if (hits > 0) {
+          const boardState = getBoardStateForMovement(game, null);
+          const adj = boardState?.mapSpaces?.adjacency?.[spaceUpper.toLowerCase()] || [];
+          const affectedSpaces = new Set([spaceUpper.toLowerCase(), ...adj.map((s) => String(s).toLowerCase())]);
+          const affected = [];
+          for (const pn of [1, 2]) {
+            for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+              if (!coord || !affectedSpaces.has(String(coord).toLowerCase())) continue;
+              const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+              if (dcHealthState && figMsgId) {
+                const healthState = dcHealthState.get(figMsgId) || [];
+                const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+                const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+                const entryHp = healthState[figIdx];
+                if (entryHp) {
+                  const [cur, max] = entryHp;
+                  const newCur = Math.max(0, (cur ?? max) - hits);
+                  healthState[figIdx] = [newCur, max ?? newCur];
+                  dcHealthState.set(figMsgId, healthState);
+                  const dcIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+                  const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+                  const idx = (dcIds || []).indexOf(figMsgId);
+                  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+                  affected.push(`${fk.replace(/-\d+-\d+$/, '')} -${hits}HP (→${newCur})`);
+                } else {
+                  affected.push(`${fk.replace(/-\d+-\d+$/, '')} (-${hits}HP, apply manually)`);
+                }
+              } else {
+                affected.push(`${fk.replace(/-\d+-\d+$/, '')} (-${hits}HP, apply manually)`);
+              }
+            }
+          }
+          resultParts.push(affected.length ? affected.join(', ') : 'no figures in blast area');
+        }
+        return {
+          applied: true,
+          logMessage: `**${entry.label}** — Space **${spaceUpper}** targeted. Rolled 1 ${entry.rollOneDie} die: **${diceResult}**. ${resultParts.join('. ') || 'No effect.'}`,
+          refreshDcEmbed: hits > 0,
+        };
+      }
+      // Phase 1: enumerate valid spaces within N
+      if (!game || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
+      const actionsData = game.dcActionsData?.[msgId];
+      const selectedFig = actionsData?.selectedFigure ?? 0;
+      const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const dgIndex = dgMatch ? dgMatch[1] : '1';
+      const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+      const activatingPos = game.figurePositions?.[playerNum]?.[activatingFigureKey];
+      if (!activatingPos) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (position unknown).` };
+      const boardState = getBoardStateForMovement(game, null);
+      if (!boardState?.mapSpaces) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (map not loaded).` };
+      const occ = boardState.occupiedSet;
+      const occArr = occ instanceof Set ? [...occ] : (occ || []);
+      const reachable = getReachableSpaces(activatingPos, range, boardState.mapSpaces, occArr);
+      const validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
+      const validSpaces = [...validSet];
+      if (validSpaces.length === 0) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (no spaces in range).` };
+      return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**${entry.label}** — Choose a space within ${range}:` };
+    }
+
+    // ── Plain rollOneDie: report results only (Slam, Smash) ──
     const color = entry.rollOneDie;
     const faces = getDiceData().attack?.[color.toLowerCase()];
     if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die and apply results manually.` };
@@ -471,6 +626,20 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**${surgeMsg}${noteMsg}`,
+    };
+  }
+
+  // dcSpecial: missileSalvoStart (BT-1 Missile Salvo) — set up multi-attack salvo state
+  if (entry.type === 'dcSpecial' && entry.missileSalvoStart) {
+    const { game, msgId, meta, playerNum } = context;
+    if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const threadId = game.dcActionsData?.[msgId]?.threadId || null;
+    game.pendingMissileSalvo = game.pendingMissileSalvo || {};
+    game.pendingMissileSalvo[msgId] = { gameId: game.gameId, playerNum, threadId, diceAvailable: ['blue', 'red', 'yellow'], targetsFired: [] };
+    return {
+      applied: true,
+      missileSalvoStart: true,
+      logMessage: `**${entry.label}** — Salvo initiated. Choose a die color for each attack (+3 Accuracy per attack, different targets, each die color once).`,
     };
   }
 

@@ -43,6 +43,8 @@ const BUTTON_PREFIXES = [
   'boltslinger_skip_',
   'indiscriminate_die_',
   'indiscriminate_skip_',
+  'missile_salvo_die_',
+  'missile_salvo_done_',
   'bleed_accept_',
   'bleed_prevent_',
   'status_phase_',

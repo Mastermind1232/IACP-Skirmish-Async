@@ -192,6 +192,7 @@ export async function handleAttackTarget(interaction, ctx) {
   });
   const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
   const nextPierce = (game.nextAttackBonusPierce?.[attackerPlayerNum] || 0) + (overrideDice?.pierce || 0);
+  const nextBonusAcc = (game.nextAttackBonusAccuracy?.[attackerPlayerNum] || 0) + (overrideDice?.bonusAccuracy || 0);
   const [minRange, maxRange] = attackInfo.range || [1, 3];
   const isRanged = minRange >= 2 || maxRange >= 3;
   const distanceToTarget = target.dist ?? 1;
@@ -203,6 +204,7 @@ export async function handleAttackTarget(interaction, ctx) {
     attackerDcName: meta.dcName,
     bonusSurgeAbilities: [...nextSurge],
     bonusPierce: nextPierce,
+    bonusAccuracy: nextBonusAcc || undefined,
     attackerDisplayName,
     attackerFigureIndex: figureIndex,
     attackerFigureKey,
@@ -265,12 +267,14 @@ export async function handleAttackTarget(interaction, ctx) {
   const atkFigHp = atkHpArr[figureIndex];
   const atkDamageSuffered = atkFigHp ? Math.max(0, (atkFigHp[1] ?? atkFigHp[0] ?? 0) - (atkFigHp[0] ?? 0)) : 0;
 
-  // Battle Meditation (Diala Passil): auto-Focus before attacking
-  if (atkSpecialIds.includes('battle_meditation') && !game.pendingCombat.attackerConds.includes('Focus')) {
+  // Battle Meditation / Assassin (Diala Passil, BT-1): auto-Focus before attacking
+  if (atkSpecialIds.includes('battle_meditation') && !game.pendingCombat.attackerConds.includes('Focus') &&
+      !(game.figureConditions?.[attackerFigureKey] || []).includes('Focus')) {
     game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
     if (!game.figureConditions) game.figureConditions = {};
     game.figureConditions[attackerFigureKey] = [...(game.figureConditions[attackerFigureKey] || []).filter(c => c !== 'Focus'), 'Focus'];
-    await thread.send('**Battle Meditation** — Diala is **Focused** before attacking (+1 green die).');
+    const bm_label = meta.dcName === 'BT-1' ? 'Assassin' : 'Battle Meditation';
+    await thread.send(`**${bm_label}** — **${meta.dcName}** is **Focused** before attacking (+1 green die).`);
   }
 
   // Full of Rage (Krrsantan): auto-Focus if 3+ damage suffered
@@ -408,6 +412,7 @@ export async function handleAttackTarget(interaction, ctx) {
 
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
   if (nextPierce) delete game.nextAttackBonusPierce?.[attackerPlayerNum];
+  if (nextBonusAcc) delete game.nextAttackBonusAccuracy?.[attackerPlayerNum];
   if (game.nextAttackReach?.[attackerPlayerNum]) delete game.nextAttackReach[attackerPlayerNum];
   delete game.lastAttackTargetSpacesForRubble;
   delete game.lastAttackAttackerPlayerNum;

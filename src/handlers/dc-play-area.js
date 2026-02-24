@@ -1191,13 +1191,37 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const mapAttachment = await getMapAttachmentForSpaces(game, resolveResult.validSpaces);
       game.pendingPounceSpaceChoice = game.pendingPounceSpaceChoice || {};
       game.pendingPounceSpaceChoice[msgId] = { gameId: game.gameId, playerNum: meta.playerNum, figureIndex, msgId, abilityId, validSpaces: resolveResult.validSpaces };
-      const payload = { content: `**Pounce** — Pick a space to place your figure:`, components: rows.slice(0, 5), ephemeral: false, fetchReply: true };
+      const spacePickLabel = resolveResult.spaceChoiceLabel || `**Pounce** — Pick a space to place your figure:`;
+      const payload = { content: spacePickLabel, components: rows.slice(0, 5), ephemeral: false, fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
       await interaction.followUp(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
       saveGames();
       return;
     }
   }
+  // Missile Salvo: show die-color choice buttons in activation thread
+  if (resolveResult.missileSalvoStart) {
+    const ms = game.pendingMissileSalvo?.[msgId];
+    if (ms?.diceAvailable?.length > 0) {
+      const { ActionRowBuilder: AR, ButtonBuilder: BB, ButtonStyle: BS } = await import('discord.js');
+      const colorStyle = { blue: BS.Primary, red: BS.Danger, yellow: BS.Secondary };
+      const btns = ms.diceAvailable.map((c) =>
+        new BB().setCustomId(`missile_salvo_die_${c}_${game.gameId}_${msgId}`).setLabel(`${c.charAt(0).toUpperCase() + c.slice(1)} Die`).setStyle(colorStyle[c] || BS.Secondary)
+      );
+      btns.push(new BB().setCustomId(`missile_salvo_done_${game.gameId}_${msgId}`).setLabel('End Salvo').setStyle(BS.Success));
+      const threadId = ms.threadId || game.dcActionsData?.[msgId]?.threadId;
+      const salvoThread = threadId ? await client.channels.fetch(threadId).catch(() => null) : null;
+      const salvoMsg = `<@${ownerId}> **Missile Salvo** — Choose a die for your next ranged attack (+3 Accuracy, different targets). ${ms.diceAvailable.length} shot${ms.diceAvailable.length !== 1 ? 's' : ''} remaining.`;
+      if (salvoThread) {
+        await salvoThread.send({ content: salvoMsg, components: [new AR().addComponents(btns)], allowedMentions: { users: [ownerId] } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      } else {
+        await interaction.followUp({ content: salvoMsg, components: [new AR().addComponents(btns)], allowedMentions: { users: [ownerId] }, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
+      saveGames();
+      return;
+    }
+  }
+
   // If the resolved ability grants a free action, restore the action cost we decremented above
   if (resolveResult.freeAction && actionsData) {
     actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
@@ -1361,7 +1385,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
     return;
   }
   const meta = dcMessageMeta.get(msgId);
-  const result = resolveAbility(abilityId, { game, msgId, meta, playerNum, dcMessageMeta, chosenSpace });
+  const result = resolveAbility(abilityId, { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState: ctx.dcHealthState, chosenSpace });
   delete game.pendingPounceSpaceChoice[msgId];
   if (result.applied) {
     if (result.logMessage) {

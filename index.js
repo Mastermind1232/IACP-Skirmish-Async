@@ -295,6 +295,7 @@ import {
   isDcUnique,
   getTournamentRotation,
   getMissionRules,
+  getAbilityLibrary,
 } from './src/data-loader.js';
 import { runEndOfRoundRules, runStartOfRoundRules } from './src/game/mission-rules.js';
 
@@ -3529,6 +3530,28 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     }
   }
 
+  // Missile Salvo: after each salvo attack, record target + show remaining die buttons
+  if (combat.attackerMsgId && game.pendingMissileSalvo?.[combat.attackerMsgId]) {
+    const ms = game.pendingMissileSalvo[combat.attackerMsgId];
+    if (combat.target?.figureKey) ms.targetsFired = [...(ms.targetsFired || []), combat.target.figureKey];
+    if (ms.diceAvailable?.length > 0) {
+      const salvoOwnerId = combat.attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+      const colorStyle = { blue: ButtonStyle.Primary, red: ButtonStyle.Danger, yellow: ButtonStyle.Secondary };
+      const salvoBtns = ms.diceAvailable.map((c) =>
+        new ButtonBuilder().setCustomId(`missile_salvo_die_${c}_${game.gameId}_${combat.attackerMsgId}`).setLabel(`${c.charAt(0).toUpperCase() + c.slice(1)} Die`).setStyle(colorStyle[c] || ButtonStyle.Secondary)
+      );
+      salvoBtns.push(new ButtonBuilder().setCustomId(`missile_salvo_done_${game.gameId}_${combat.attackerMsgId}`).setLabel('End Salvo').setStyle(ButtonStyle.Success));
+      await thread.send({
+        content: `<@${salvoOwnerId}> **Missile Salvo** — ${ms.diceAvailable.length} shot${ms.diceAvailable.length !== 1 ? 's' : ''} remaining. Choose a die for your next attack (different target):`,
+        components: [new ActionRowBuilder().addComponents(salvoBtns)],
+        allowedMentions: { users: [salvoOwnerId] },
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    } else {
+      delete game.pendingMissileSalvo[combat.attackerMsgId];
+      await thread.send('**Missile Salvo** — All shots fired. Salvo complete.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
+  }
+
   delete game.pendingCombat;
   delete game.pendingCleave;
   if (combat.rollMessageId) {
@@ -3787,6 +3810,58 @@ async function handleIndiscriminateFireSkip(interaction) {
   saveGames();
 }
 
+/** Missile Salvo die choice: missile_salvo_die_{color}_{gameId}_{msgId} */
+async function handleMissileSalvoDie(interaction) {
+  const m = interaction.customId.match(/^missile_salvo_die_([a-z]+)_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, color, gameId, msgId] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingMissileSalvo?.[msgId]) return;
+  const { playerNum, diceAvailable } = game.pendingMissileSalvo[msgId];
+  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the activating player can choose the Missile Salvo die.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (!diceAvailable.includes(color)) {
+    await interaction.followUp({ content: `The ${color} die is no longer available for this salvo.`, ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  // Remove chosen die from available pool
+  game.pendingMissileSalvo[msgId].diceAvailable = diceAvailable.filter((c) => c !== color);
+  // Set up overridden ranged attack with this die + +3 accuracy
+  game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+  game.pendingOverrideAttackDice[msgId] = { dice: [color], type: 'ranged', bonusAccuracy: 3 };
+  game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+  game.freeAttackBonusPending[msgId] = true;
+  await interaction.message.edit({ components: [] }).catch(() => {});
+  const threadId = game.pendingMissileSalvo[msgId].threadId || game.dcActionsData?.[msgId]?.threadId;
+  const salvoThread = threadId ? await client.channels.fetch(threadId).catch(() => null) : null;
+  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const colorLabel = color.charAt(0).toUpperCase() + color.slice(1);
+  const msg = `<@${ownerId}> **Missile Salvo** — **${colorLabel} die** selected (+3 Accuracy). Click **Attack** to target a different hostile figure. This attack costs no action.`;
+  if (salvoThread) await salvoThread.send({ content: msg, allowedMentions: { users: [ownerId] } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  saveGames();
+}
+
+/** Missile Salvo done: missile_salvo_done_{gameId}_{msgId} */
+async function handleMissileSalvoDone(interaction) {
+  const m = interaction.customId.match(/^missile_salvo_done_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, msgId] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingMissileSalvo?.[msgId]) return;
+  const { playerNum } = game.pendingMissileSalvo[msgId];
+  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the activating player can end the salvo.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  delete game.pendingMissileSalvo[msgId];
+  await interaction.message.edit({ components: [] }).catch(() => {});
+  saveGames();
+}
+
 /** DCs whose image is in DC Skirmish Upgrades are figureless (incl. Squad Upgrades like [Flame Trooper]); if image is in dc-figures, it's a figure. */
 function isFigurelessDc(dcName) {
   if (!dcName || typeof dcName !== 'string') return false;
@@ -3826,6 +3901,23 @@ function getDcStats(dcName) {
     (ciKey ? effects[ciKey] : null) ||
     (typeof dcName === 'string' && !dcName.startsWith('[') ? effects[`[${dcName}]`] : null);
   if (eff) {
+    // Auto-generate specials labels from specialAbilityIds when specials array is absent.
+    // Skip passive-auto/passive-reactive categories and IDs that need no player-facing button.
+    const PASSIVE_ONLY_IDS = new Set(['battle_meditation','cunning_han','cunning_jyn','cunning_nexu_elite','cunning_nexu_reg',
+      'distracting_han','distracting_c3po','hunker_down','full_of_rage','fury_wookiee_elite','fury_wookiee_reg',
+      'relentless_trandoshan_elite','relentless_trandoshan_reg','relentless_ig88','fifth_brother_relentless',
+      'lasat_honor_guard','shock_and_awe','flawless_execution','expertise','regenerate_bossk',
+      'sidestep_nexu_elite','sidestep_nexu_reg']);
+    let specials = eff.specials;
+    if (!specials && eff.specialAbilityIds?.length) {
+      const lib = getAbilityLibrary() || {};
+      specials = eff.specialAbilityIds
+        .filter((id) => !PASSIVE_ONLY_IDS.has(id))
+        .map((id) => {
+          const entry = lib.abilities?.[id];
+          return entry?.label || id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        });
+    }
     return {
       health: eff.health ?? null,
       figures: isFigurelessDc(dcName) ? 0 : (eff.figures ?? 1),
@@ -3833,7 +3925,7 @@ function getDcStats(dcName) {
       cost: eff.cost ?? null,
       attack: eff.attack ?? null,
       defense: eff.defense ?? null,
-      specials: eff.specials || [],
+      specials: specials || [],
       specialCosts: eff.specialCosts || [],
       passives: eff.passives || [],
       abilityText: eff.abilityText || '',
@@ -5671,6 +5763,8 @@ client.on('interactionCreate', async (interaction) => {
   if (buttonKey === 'boltslinger_skip_') { await handleBoltslingerSkip(interaction); return; }
   if (buttonKey === 'indiscriminate_die_') { await handleIndiscriminateFireDie(interaction); return; }
   if (buttonKey === 'indiscriminate_skip_') { await handleIndiscriminateFireSkip(interaction); return; }
+  if (buttonKey === 'missile_salvo_die_') { await handleMissileSalvoDie(interaction); return; }
+  if (buttonKey === 'missile_salvo_done_') { await handleMissileSalvoDone(interaction); return; }
 
   if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_') {
     const combatContext = {

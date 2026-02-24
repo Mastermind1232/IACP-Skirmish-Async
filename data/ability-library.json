@@ -2571,9 +2571,8 @@
       "description": "Once during your activation, choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Hit results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.",
       "oncePer": "activation",
       "wiredStatus": "wired",
-      "logMessage": "**Electrified Knuckledusters** — Once during your activation, choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Hit results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.. Resolve manually and inform your opponent.",
       "rollOneDie": "blue",
-      "rollOneDieNote": "Deal Hit results as Damage to 1 adjacent hostile figure. If 1+ Surge rolled: that figure becomes Stunned.",
+      "rollOneDieTarget": "adjacentHostile",
       "rollOneDieSurgeCondition": "Stun"
     },
     "parting_gift": {
@@ -2584,9 +2583,9 @@
       "description": "Once during your activation, you may choose a space within 3 spaces and roll 1 green die. Each other figure and object on or adjacent to that space suffers Damage equal to the Hit results.",
       "oncePer": "activation",
       "wiredStatus": "wired",
-      "logMessage": "**Parting Gift** — Once during your activation, you may choose a space within 3 spaces and roll 1 green die. Each other figure and object on or adjacent to that space suffers Damage equal to the Hit results.. Resolve manually and inform your opponent.",
       "rollOneDie": "green",
-      "rollOneDieNote": "Choose a space within 3. Each figure on or adjacent to that space suffers Hit results as Damage."
+      "rollOneDieTarget": "spaceWithin",
+      "rollOneDieRange": 3
     },
     "demolish": {
       "type": "dcSpecial",
@@ -2650,6 +2649,16 @@
       "informational": true,
       "logMessage": "**Indiscriminate Fire** — Click **Attack** to perform your attack. After it resolves (if not a miss), choose 1 non-red die from your roll — each figure within 2 spaces of the target (except the defender) suffers Damage equal to its Hit results and Strain equal to its Surge results. Apply splash damage manually to affected DC cards.",
       "wiredStatus": "informational"
+    },
+    "missile_salvo": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Missile Salvo",
+      "description": "Perform up to 3 Ranged attacks with different targets, each using 1 blue, 1 red, or 1 yellow die (each color once). Apply +3 Accuracy to each attack. Limit once per activation.",
+      "oncePer": "activation",
+      "missileSalvoStart": true,
+      "wiredStatus": "wired"
     },
     "battlefield_leadership": {
       "type": "dcSpecial",

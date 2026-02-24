@@ -1262,7 +1262,11 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "missile_salvo",
+        "battle_meditation"
+      ]
     },
     "C-3P0": {
       "abilityText": "Special Action (Inform): Choose an adjacent friendly figure. That figure becomes Focused.\n\nCower: While defending, while adjacent to a friendly figure, you may reroll 1 defense die.\n\nDistracting: While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Evade to the defense results.\n\nNon-Combatant: You cannot attack.",
