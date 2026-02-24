@@ -1790,10 +1790,52 @@ export function resolveAbility(abilityId, context) {
 
   // dcSpecial: healFriendlyAdjacent (Stim Canister) — one adjacent friendly recovers N damage
   if (entry.type === 'dcSpecial' && typeof entry.healFriendlyAdjacent === 'number' && entry.healFriendlyAdjacent > 0) {
-    const { game, msgId, meta, dcMessageMeta, dcHealthState } = context;
+    const { game, msgId, meta, dcMessageMeta, dcHealthState, targetFigureKey } = context;
     if (!game || !msgId || !meta || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const mapId = game.selectedMap?.id;
     if (!mapId) return { applied: false, manualMessage: 'Resolve manually: no map selected.' };
+    const label = entry.label || 'Stim Canister';
+
+    // Helper: apply heal to a chosen figureKey
+    const applyHealTo = (fk) => {
+      const fkMatch = fk.match(/^(.+)-(\d+)-(\d+)$/);
+      let adjMsgId = null;
+      if (fkMatch) {
+        const [, adjDcName, adjDgIndex] = fkMatch;
+        for (const [id, m] of dcMessageMeta) {
+          if (m.playerNum !== meta.playerNum) continue;
+          const mDg = (m.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+          if (m.dcName === adjDcName && mDg === adjDgIndex) { adjMsgId = id; break; }
+        }
+      }
+      const adjLabel = fk.match(/^(.+)-\d+-\d+$/)?.[1] || fk;
+      if (!adjMsgId) return { applied: false, manualMessage: `Resolve manually: could not locate DC for ${adjLabel}.` };
+      const adjHealthState = dcHealthState.get(adjMsgId);
+      if (!adjHealthState?.length || !Array.isArray(adjHealthState[0])) return { applied: false, manualMessage: `Resolve manually: health state not found for ${adjLabel}.` };
+      let remaining = entry.healFriendlyAdjacent;
+      let totalRecovered = 0;
+      for (let i = 0; i < adjHealthState.length && remaining > 0; i++) {
+        const [cur, max] = adjHealthState[i];
+        if (cur == null || max == null) continue;
+        const healed = Math.min(max - cur, remaining);
+        adjHealthState[i] = [cur + healed, max];
+        totalRecovered += healed;
+        remaining -= healed;
+      }
+      dcHealthState.set(adjMsgId, adjHealthState);
+      const adjMeta2 = dcMessageMeta.get(adjMsgId);
+      const dcMsgIds = adjMeta2?.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const dcList = adjMeta2?.playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const idx = (dcMsgIds || []).indexOf(adjMsgId);
+      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...adjHealthState];
+      const msg = totalRecovered > 0 ? `**${label}** — ${adjLabel} recovered ${totalRecovered} Damage.` : `**${label}** — ${adjLabel} is already at full health.`;
+      return { applied: true, logMessage: msg, refreshDcEmbed: true, refreshDcEmbedMsgIds: [adjMsgId] };
+    };
+
+    // Second call: player chose a target
+    if (targetFigureKey != null) return applyHealTo(targetFigureKey);
+
+    // First call: enumerate adjacent friendly figures
     const activatingKeys = getFigureKeysForDcMsg(game, meta.playerNum, meta);
     const adjacentSet = new Set();
     for (const fk of activatingKeys) {
@@ -1803,42 +1845,11 @@ export function resolveAbility(abilityId, context) {
       }
     }
     const adjacent = [...adjacentSet];
-    const label = entry.label || 'Stim Canister';
     if (adjacent.length === 0) return { applied: true, logMessage: `**${label}** — No adjacent friendly figure to heal.` };
-    if (adjacent.length > 1) return { applied: false, manualMessage: `Choose 1 of ${adjacent.length} adjacent friendly figures to recover ${entry.healFriendlyAdjacent} Damage.` };
-    const adjacentFk = adjacent[0];
-    const fkMatch = adjacentFk.match(/^(.+)-(\d+)-(\d+)$/);
-    let adjMsgId = null;
-    if (fkMatch) {
-      const [, adjDcName, adjDgIndex] = fkMatch;
-      for (const [id, m] of dcMessageMeta) {
-        if (m.playerNum !== meta.playerNum) continue;
-        const mDg = (m.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-        if (m.dcName === adjDcName && mDg === adjDgIndex) { adjMsgId = id; break; }
-      }
-    }
-    if (!adjMsgId) return { applied: false, manualMessage: `Resolve manually: could not locate DC for adjacent figure.` };
-    const adjHealthState = dcHealthState.get(adjMsgId);
-    if (!adjHealthState?.length || !Array.isArray(adjHealthState[0])) return { applied: false, manualMessage: `Resolve manually: health state not found for adjacent figure.` };
-    let remaining = entry.healFriendlyAdjacent;
-    let totalRecovered = 0;
-    for (let i = 0; i < adjHealthState.length && remaining > 0; i++) {
-      const [cur, max] = adjHealthState[i];
-      if (cur == null || max == null) continue;
-      const healed = Math.min(max - cur, remaining);
-      adjHealthState[i] = [cur + healed, max];
-      totalRecovered += healed;
-      remaining -= healed;
-    }
-    dcHealthState.set(adjMsgId, adjHealthState);
-    const adjMeta = dcMessageMeta.get(adjMsgId);
-    const dcMsgIds = adjMeta?.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    const dcList = adjMeta?.playerNum === 1 ? game.p1DcList : game.p2DcList;
-    const idx = (dcMsgIds || []).indexOf(adjMsgId);
-    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...adjHealthState];
-    const adjLabel = adjacentFk.match(/^(.+)-\d+-\d+$/)?.[1] || adjacentFk;
-    const msg = totalRecovered > 0 ? `**${label}** — ${adjLabel} recovered ${totalRecovered} Damage.` : `**${label}** — ${adjLabel} is already at full health.`;
-    return { applied: true, logMessage: msg, refreshDcEmbed: true, refreshDcEmbedMsgIds: [adjMsgId] };
+    if (adjacent.length === 1) return applyHealTo(adjacent[0]);
+    // Multiple adjacents: let player choose
+    const choiceOptions = adjacent.map((fk) => fk.match(/^(.+)-\d+-\d+$/)?.[1] || fk);
+    return { applied: false, requiresChoice: true, choiceOptions, targetFigureKeys: adjacent };
   }
 
   // dcSpecial: healAndClearConditionFriendlyAdjacent (Force Heal) — chosen adjacent friendly recovers 1 Damage and discards 1 HARMFUL condition
@@ -1924,10 +1935,31 @@ export function resolveAbility(abilityId, context) {
 
   // dcSpecial: focusFriendlyAdjacent (Inform) — 1 adjacent friendly becomes Focused
   if (entry.type === 'dcSpecial' && typeof entry.focusFriendlyAdjacent === 'number' && entry.focusFriendlyAdjacent > 0) {
-    const { game, msgId, meta } = context;
+    const { game, msgId, meta, targetFigureKey } = context;
     if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const mapId = game.selectedMap?.id;
     if (!mapId) return { applied: false, manualMessage: 'Resolve manually: no map selected.' };
+    const label = entry.label || 'Inform';
+
+    const applyFocus = (targets) => {
+      game.figureConditions = game.figureConditions || {};
+      const conditioned = [];
+      for (const fk of targets) {
+        const existing = game.figureConditions[fk] || [];
+        if (!existing.includes('Focus')) {
+          game.figureConditions[fk] = [...existing, 'Focus'];
+          conditioned.push(fk.match(/^(.+)-\d+-\d+$/)?.[1] || fk);
+        }
+      }
+      const msg = conditioned.length > 0
+        ? `**${label}** — ${conditioned.join(', ')} became Focused.`
+        : `**${label}** — Adjacent figure is already Focused.`;
+      return { applied: true, logMessage: msg, refreshBoard: true, conditionCardsToPost: conditioned.length > 0 ? ['Focus'] : [] };
+    };
+
+    // Second call: player chose a target
+    if (targetFigureKey != null) return applyFocus([targetFigureKey]);
+
     const activatingKeys = getFigureKeysForDcMsg(game, meta.playerNum, meta);
     const adjacentSet = new Set();
     for (const fk of activatingKeys) {
@@ -1937,22 +1969,11 @@ export function resolveAbility(abilityId, context) {
       }
     }
     const adjacent = [...adjacentSet];
-    const label = entry.label || 'Inform';
     if (adjacent.length === 0) return { applied: true, logMessage: `**${label}** — No adjacent friendly figure to apply Focused to.` };
-    if (adjacent.length > entry.focusFriendlyAdjacent) return { applied: false, manualMessage: `Choose 1 of ${adjacent.length} adjacent friendly figures to become Focused.` };
-    game.figureConditions = game.figureConditions || {};
-    const conditioned = [];
-    for (const fk of adjacent.slice(0, entry.focusFriendlyAdjacent)) {
-      const existing = game.figureConditions[fk] || [];
-      if (!existing.includes('Focus')) {
-        game.figureConditions[fk] = [...existing, 'Focus'];
-        conditioned.push(fk.match(/^(.+)-\d+-\d+$/)?.[1] || fk);
-      }
-    }
-    const msg = conditioned.length > 0
-      ? `**${label}** — ${conditioned.join(', ')} became Focused.`
-      : `**${label}** — Adjacent figure is already Focused.`;
-    return { applied: true, logMessage: msg, refreshBoard: true, conditionCardsToPost: conditioned.length > 0 ? ['Focus'] : [] };
+    if (adjacent.length <= entry.focusFriendlyAdjacent) return applyFocus(adjacent.slice(0, entry.focusFriendlyAdjacent));
+    // Multiple options: let player choose
+    const choiceOptions = adjacent.map((fk) => fk.match(/^(.+)-\d+-\d+$/)?.[1] || fk);
+    return { applied: false, requiresChoice: true, choiceOptions, targetFigureKeys: adjacent };
   }
 
   // dcSpecial: drawCCIfAdjacentTerminal — player draws N CC (adjacency check is on-honour; if condition not met, undo manually)
