@@ -1506,10 +1506,8 @@
     },
     "Cal's Buddy": {
       "type": "ccEffect",
-      "label": "Deploy BD-1 to your or adjacent space; activates at start/end of your activation (manual)",
-      "wiredStatus": "unwired",
-      "informational": true,
-      "logMessage": "**Cal's Buddy** — Deploy BD-1 to your space or an adjacent empty space. BD-1 activates at the start or end of your activation. Resolve manually."
+      "label": "Deploy BD-1 to Cal's space or an adjacent space; BD-1 activates at start/end of Cal's activation",
+      "wiredStatus": "wired"
     },
     "Capitalize": {
       "type": "ccEffect",

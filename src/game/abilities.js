@@ -2,7 +2,7 @@
  * F1 Ability library: lookup by id, resolve surge (code-per-ability). No Discord.
  * Surge resolution uses combat.parseSurgeEffect; DCs still reference keys in dc-effects (surgeAbilities array).
  */
-import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect } from '../data-loader.js';
+import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getMapSpaces } from '../data-loader.js';
 
 /** Look up DC stats by name (handles display variants). */
 function getStatsForDc(dcName) {
@@ -4093,6 +4093,38 @@ export function resolveAbility(abilityId, context) {
       requiresChoice: true,
       choiceOptions: candidates.map((c) => c.label),
       choiceValues: candidates.map((c) => c.figureKey),
+    };
+  }
+
+  // Cal's Buddy: deploy BD-1 companion to Cal's space or an adjacent space
+  if (abilityId === "Cal's Buddy") {
+    const { game, playerNum, chosenSpace } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: "Resolve **Cal's Buddy** manually." };
+    const playerPositions = game.figurePositions?.[playerNum] || {};
+    const calFigKey = Object.keys(playerPositions).find((k) => k.startsWith('Cal Kestis-'));
+    const calPos = calFigKey ? playerPositions[calFigKey] : null;
+
+    if (!chosenSpace) {
+      // Phase 1: build valid deployment spaces (Cal's space + adjacent)
+      if (!calPos) return { applied: false, manualMessage: "**Cal's Buddy** — Cal Kestis has no position on the board. Resolve manually." };
+      const ms = getMapSpaces(game.selectedMap?.id);
+      const adjacent = ms?.adjacency?.[calPos] || [];
+      const validSpaces = [calPos, ...adjacent];
+      return {
+        requiresSpaceChoice: true,
+        validSpaces,
+        spaceChoiceLabel: `**Cal's Buddy** — Deploy BD-1 to Cal's space or an adjacent space:`,
+      };
+    }
+
+    // Phase 2: place BD-1 at chosen space
+    const existingBd1Key = Object.keys(playerPositions).find((k) => k.startsWith('BD-1-'));
+    const bd1Key = existingBd1Key || 'BD-1-1-0';
+    game.figurePositions[playerNum][bd1Key] = String(chosenSpace).toLowerCase();
+    return {
+      applied: true,
+      logMessage: `**Cal's Buddy** — BD-1 deployed to **${String(chosenSpace).toUpperCase()}**. BD-1 activates at the start or end of Cal's activation.`,
+      refreshBoard: true,
     };
   }
 
