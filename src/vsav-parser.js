@@ -73,22 +73,25 @@ export function parseIacpListPaste(content) {
   const dcSection = text.split(/Command Cards:/i)[0];
   const ccSection = text.split(/Command Cards:/i)[1]?.split(/Stats:/i)[0] || '';
 
-  const parseBullets = (section) => {
-    const lines = section.split('\n');
+  const parseSection = (section) => {
     const items = [];
-    for (const line of lines) {
+    for (const line of section.split('\n')) {
       const trimmed = line.trim();
-      const match = trimmed.match(/^-\s+(.+)$/);
-      if (match) {
-        const item = match[1].trim();
-        if (item && /[A-Za-z0-9]/.test(item)) items.push(item);
-      }
+      if (!trimmed || trimmed.endsWith(':') || trimmed.startsWith('--') || trimmed.startsWith('#')) continue;
+      // "- Card Name" (bullet format)
+      const bulletMatch = trimmed.match(/^-\s+(.+)$/);
+      if (bulletMatch) { items.push(bulletMatch[1].trim()); continue; }
+      // "12 Card Name" (cost-prefix format)
+      const costMatch = trimmed.match(/^\d+\s+(.+)$/);
+      if (costMatch) { items.push(costMatch[1].trim()); continue; }
+      // Plain "Card Name" (no prefix)
+      if (/[A-Za-z]/.test(trimmed)) items.push(trimmed);
     }
     return items;
   };
 
-  const dcList = parseBullets(dcSection);
-  const ccList = parseBullets(ccSection);
+  const dcList = parseSection(dcSection);
+  const ccList = parseSection(ccSection);
 
   if (dcList.length === 0 && ccList.length === 0) return null;
 
