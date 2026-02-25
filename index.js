@@ -3138,6 +3138,52 @@ async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, source
   }
 }
 
+/**
+ * Apply direct (non-combat) damage to a figure (reactions, post-combat effects, etc.).
+ * Handles HP reduction, death, VP award to the opponent, and thread logging.
+ * @param {object} game
+ * @param {number} playerNum - owning player of the figure taking damage
+ * @param {string} figKey
+ * @param {string|null} msgId - DC message ID (may be null; damage skipped if not found)
+ * @param {number} damage
+ * @param {object} client
+ * @param {object|null} thread - Discord thread to send result messages to
+ * @param {string} sourceName - label for messages (e.g. "Payback")
+ */
+async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage, client, thread, sourceName) {
+  if (!msgId) return;
+  const figMatch = figKey.match(/-\d+-(\d+)$/);
+  const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
+  const hs = dcHealthState.get(msgId) || [];
+  const entry = hs[figIdx];
+  if (!entry) return;
+  const [cur, max] = entry;
+  const newCur = Math.max(0, (cur ?? max) - damage);
+  hs[figIdx] = [newCur, max];
+  dcHealthState.set(msgId, hs);
+  const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+  const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+  const idx = (dcIds || []).indexOf(msgId);
+  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+  const figName = figKey.replace(/-\d+-\d+$/, '');
+  if (thread) await thread.send(`**${sourceName}** — ${figName} suffers **${damage} Damage**.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  if (newCur <= 0 && idx >= 0) {
+    if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figKey];
+    // VP goes to the opponent (the one dealing the damage)
+    const opponentPlayerNum = playerNum === 1 ? 2 : 1;
+    const vpKey = `player${opponentPlayerNum}VP`;
+    const stats = getDcStats(dcList[idx]?.dcName);
+    const effects = getDcEffects()?.[dcList[idx]?.dcName];
+    const figures = stats?.figures ?? 1;
+    const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
+    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[vpKey].kills += vp;
+    game[vpKey].total += vp;
+    if (thread) await thread.send(`**${sourceName}** — ${figName} was **defeated**! +${vp} VP.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await checkWinConditions(game, client);
+  }
+}
+
 /** Remove a specific condition from a figure. No-op if figure or condition not found. */
 function filterCondition(game, figureKey, cond) {
   if (!game.figureConditions?.[figureKey]) return;
@@ -3911,6 +3957,56 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
         return true;
       }
     }
+  }
+  // Post-attack reactions: check if defender has Payback, Dangerous Prey, or Right Back At Ya!
+  const defenderHand = defenderPlayerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+  const REACTION_CARDS = [
+    { name: 'Payback', targetDcName: 'Dengar' },
+    { name: 'Dangerous Prey', targetDcName: 'Bossk' },
+    { name: "Right Back At Ya!", targetDcName: 'Boba Fett' },
+  ];
+  combat.promptedReactions = combat.promptedReactions || new Set();
+  for (const { name, targetDcName } of REACTION_CARDS) {
+    if (combat.promptedReactions.has(name)) continue;
+    if (!defenderHand.includes(name)) continue;
+    const targetFigKey = combat.target?.figureKey || '';
+    if (!targetFigKey.startsWith(targetDcName + '-')) continue;
+    // Prompt the defender for this reaction
+    combat.promptedReactions.add(name);
+    const defOwnerId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
+    // Tentatively remove from hand to prevent double-prompt; restored on skip
+    const handKey = defenderPlayerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const cardIdx = (game[handKey] || []).indexOf(name);
+    if (cardIdx >= 0) game[handKey].splice(cardIdx, 1);
+    game.pendingReaction = {
+      gameId: game.gameId,
+      combatThreadId: combat.combatThreadId,
+      attackerPlayerNum: combat.attackerPlayerNum,
+      defenderPlayerNum,
+      ownerId: defOwnerId,
+      cardName: name,
+      targetDcName,
+      targetFigKey,
+      attackerFigKey: combat.attackerFigureKey,
+      attackerMsgId: combat.attackerMsgId,
+      resultText,
+      combat,
+      initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
+    };
+    const btnUse = new ButtonBuilder()
+      .setCustomId(`reaction_use_${game.gameId}`)
+      .setLabel(`React: ${name}`)
+      .setStyle(ButtonStyle.Danger);
+    const btnSkip = new ButtonBuilder()
+      .setCustomId(`reaction_skip_${game.gameId}`)
+      .setLabel('Skip')
+      .setStyle(ButtonStyle.Secondary);
+    await thread.send({
+      content: `<@${defOwnerId}> — You have **${name}** in hand! React to this attack?`,
+      allowedMentions: { users: [defOwnerId] },
+      components: [new ActionRowBuilder().addComponents(btnUse, btnSkip)],
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return true;
   }
   return false;
 }
@@ -6611,6 +6707,157 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  if (buttonKey === 'reaction_skip_') {
+    const gameId = interaction.customId.replace('reaction_skip_', '');
+    const game = getGame(gameId);
+    if (!game?.pendingReaction) { await interaction.followUp({ content: 'No pending reaction.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    const { ownerId, cardName } = game.pendingReaction;
+    if (interaction.user.id !== ownerId) { await interaction.followUp({ content: 'Only the reaction player can skip.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    await interaction.deferUpdate().catch(() => {});
+    const pending = game.pendingReaction;
+    delete game.pendingReaction;
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    // Restore the card to hand (it was tentatively removed when prompting)
+    const handKey = pending.defenderPlayerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    game[handKey] = game[handKey] || [];
+    game[handKey].push(cardName);
+    // Continue checking for more reactions or finish
+    const cThread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+    if (cThread) {
+      const triggered = await checkPostCombatSurges(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds), cThread, ownerId, pending.defenderPlayerNum);
+      if (triggered) { saveGames(); return; }
+    }
+    await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds), client);
+    saveGames();
+    return;
+  }
+
+  if (buttonKey === 'reaction_use_') {
+    const gameId = interaction.customId.replace('reaction_use_', '');
+    const game = getGame(gameId);
+    if (!game?.pendingReaction) { await interaction.followUp({ content: 'No pending reaction.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    const { ownerId, cardName, targetFigKey, attackerFigKey, attackerMsgId, defenderPlayerNum } = game.pendingReaction;
+    if (interaction.user.id !== ownerId) { await interaction.followUp({ content: 'Only the reaction player can use this.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    await interaction.deferUpdate().catch(() => {});
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    const pending = game.pendingReaction;
+    delete game.pendingReaction;
+    // Card was already removed from hand when prompting; discard it (add to discard pile)
+    const discardKey = defenderPlayerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    game[discardKey] = game[discardKey] || [];
+    game[discardKey].push(cardName);
+    const combat = pending.combat;
+    const attackerPlayerNum = combat.attackerPlayerNum;
+    const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+
+    if (cardName === 'Payback') {
+      // Payback: Dengar counter-attacks the attacker with +2 Surge bonus
+      // Set a pending bonus surge for Dengar's next attack (keyed by Dengar's DC msgId)
+      const dengarMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, targetFigKey);
+      if (dengarMsgId) {
+        game.paybackBonusSurge = game.paybackBonusSurge || {};
+        game.paybackBonusSurge[dengarMsgId] = (game.paybackBonusSurge[dengarMsgId] || 0) + 2;
+      }
+      const attackerName = attackerFigKey.replace(/-\d+-\d+$/, '');
+      if (thread) await thread.send(`**Payback** — Dengar may now counter-attack **${attackerName}**. Use the Attack button on Dengar's DC card. **+2 Surge** will be applied automatically to that attack.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    } else if (cardName === 'Dangerous Prey') {
+      // Dangerous Prey: attacker suffers 1 Damage (3 if adjacent to Bossk)
+      const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigKey];
+      const bosskPos = game.figurePositions?.[defenderPlayerNum]?.[targetFigKey];
+      const ms = getMapSpaces(game.selectedMap?.id);
+      const adjSet = new Set((ms?.adjacency?.[String(bosskPos).toLowerCase()] || []).map((s) => String(s).toLowerCase()));
+      const isAdj = attackerPos && bosskPos && adjSet.has(String(attackerPos).toLowerCase());
+      const dmg = isAdj ? 3 : 1;
+      const atkMsgId = attackerMsgId || findDcMessageIdForFigure(game.gameId, attackerPlayerNum, attackerFigKey);
+      const attackerName = attackerFigKey.replace(/-\d+-\d+$/, '');
+      if (thread) await thread.send(`**Dangerous Prey** — ${attackerName} suffers **${dmg} Damage**${isAdj ? ' (adjacent to Bossk)' : ''}. Bossk gains **2 MP**.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await applyDirectDamageToFigure(game, attackerPlayerNum, attackerFigKey, atkMsgId, dmg, client, null, 'Dangerous Prey');
+      // Add 2 MP to Bossk's movement bank
+      const bosskMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, targetFigKey);
+      if (bosskMsgId) {
+        game.movementBank = game.movementBank || {};
+        game.movementBank[bosskMsgId] = game.movementBank[bosskMsgId] || { remaining: 0, total: 0 };
+        game.movementBank[bosskMsgId].remaining += 2;
+        game.movementBank[bosskMsgId].total += 2;
+      }
+    } else if (cardName === "Right Back At Ya!") {
+      // Right Back At Ya!: attacker suffers 1 Damage (3 if Boba spends Block Token)
+      const bobaTokens = game.figurePowerTokens?.[targetFigKey] || [];
+      const hasBlock = bobaTokens.includes('Block');
+      if (hasBlock) {
+        // Prompt for block token choice
+        game.pendingRightBackAtYa = {
+          gameId: game.gameId,
+          combatThreadId: pending.combatThreadId,
+          attackerPlayerNum,
+          defenderPlayerNum,
+          ownerId,
+          attackerFigKey,
+          attackerMsgId: attackerMsgId || findDcMessageIdForFigure(game.gameId, attackerPlayerNum, attackerFigKey),
+          bobaFigKey: targetFigKey,
+          resultText: pending.resultText,
+          combat: pending.combat,
+          initialEmbedRefreshMsgIds: pending.initialEmbedRefreshMsgIds,
+        };
+        const btn3 = new ButtonBuilder().setCustomId(`right_back_block_${gameId}`).setLabel('Spend Block Token — 3 Damage').setStyle(ButtonStyle.Danger);
+        const btn1 = new ButtonBuilder().setCustomId(`right_back_nodmg_${gameId}`).setLabel('1 Damage (no token)').setStyle(ButtonStyle.Secondary);
+        if (thread) await thread.send({
+          content: `<@${ownerId}> **Right Back At Ya!** — Spend your Block Token for 3 Damage, or deal 1 Damage without spending it:`,
+          allowedMentions: { users: [ownerId] },
+          components: [new ActionRowBuilder().addComponents(btn3, btn1)],
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        saveGames();
+        return;
+      }
+      // No block token — just 1 damage
+      const atkMsgId2 = attackerMsgId || findDcMessageIdForFigure(game.gameId, attackerPlayerNum, attackerFigKey);
+      await applyDirectDamageToFigure(game, attackerPlayerNum, attackerFigKey, atkMsgId2, 1, client, thread, 'Right Back At Ya!');
+    }
+
+    // Check for more reactions or finish
+    if (thread) {
+      const triggered = await checkPostCombatSurges(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds), thread, ownerId, defenderPlayerNum);
+      if (triggered) { saveGames(); return; }
+    }
+    await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds), client);
+    saveGames();
+    return;
+  }
+
+  if (buttonKey === 'right_back_block_' || buttonKey === 'right_back_nodmg_') {
+    const isBlockVariant = buttonKey === 'right_back_block_';
+    const gameId = interaction.customId.replace(buttonKey, '');
+    const game = getGame(gameId);
+    if (!game?.pendingRightBackAtYa) { await interaction.followUp({ content: 'No pending Right Back At Ya! choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    const { ownerId, attackerPlayerNum, defenderPlayerNum, attackerFigKey, attackerMsgId, bobaFigKey } = game.pendingRightBackAtYa;
+    if (interaction.user.id !== ownerId) { await interaction.followUp({ content: 'Only the reaction player can choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    await interaction.deferUpdate().catch(() => {});
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    const rbPending = game.pendingRightBackAtYa;
+    delete game.pendingRightBackAtYa;
+    const thread = await client.channels.fetch(rbPending.combatThreadId).catch(() => null);
+    let dmg = 1;
+    if (isBlockVariant) {
+      // Spend Block token
+      const bobaTokens = game.figurePowerTokens?.[bobaFigKey] || [];
+      const blockIdx = bobaTokens.indexOf('Block');
+      if (blockIdx >= 0) bobaTokens.splice(blockIdx, 1);
+      if (!game.figurePowerTokens) game.figurePowerTokens = {};
+      game.figurePowerTokens[bobaFigKey] = bobaTokens;
+      dmg = 3;
+    }
+    const atkMsgId = attackerMsgId || findDcMessageIdForFigure(game.gameId, attackerPlayerNum, attackerFigKey);
+    await applyDirectDamageToFigure(game, attackerPlayerNum, attackerFigKey, atkMsgId, dmg, client, thread, 'Right Back At Ya!');
+    // Continue checking for more reactions or finish
+    if (thread) {
+      const triggered = await checkPostCombatSurges(game, rbPending.combat, rbPending.resultText, new Set(rbPending.initialEmbedRefreshMsgIds), thread, ownerId, defenderPlayerNum);
+      if (triggered) { saveGames(); return; }
+    }
+    await finishCombatResolution(game, rbPending.combat, rbPending.resultText, new Set(rbPending.initialEmbedRefreshMsgIds), client);
+    saveGames();
+    return;
+  }
+
   if (buttonKey === 'status_phase_' || buttonKey === 'pass_activation_turn_' || buttonKey === 'end_turn_' || buttonKey === 'dc_end_activation_' || buttonKey === 'confirm_activate_' || buttonKey === 'cancel_activate_') {
     const activationContext = {
       getGame,
@@ -6722,7 +6969,7 @@ client.on('interactionCreate', async (interaction) => {
     const lastUnderscore = beforePipe.lastIndexOf('_');
     const gameId = beforePipe.substring(0, lastUnderscore);
     const edgeA = beforePipe.substring(lastUnderscore + 1);
-    const edgeKey = `${edgeA}|${afterPipe}`;
+    const openedEdgeKey = edgeKey(edgeA, afterPipe);
     const game = getGame(gameId);
     if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
     const pending = game.pendingDoorSelections?.[0];
@@ -6730,7 +6977,7 @@ client.on('interactionCreate', async (interaction) => {
     if (!canActAsPlayer(game, interaction.user.id, pending.playerNum)) { await interaction.followUp({ content: 'Only the controlling player can select a door.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
     await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
     game.openedDoors = game.openedDoors || [];
-    if (!game.openedDoors.includes(edgeKey)) game.openedDoors.push(edgeKey);
+    if (!game.openedDoors.includes(openedEdgeKey)) game.openedDoors.push(openedEdgeKey);
     const pid = pending.playerNum === 1 ? game.player1Id : game.player2Id;
     await logGameAction(game, client, `🚪 <@${pid}> opened door **${edgeA.toUpperCase()}↔${afterPipe.toUpperCase()}** (Crate Rush — terminal effect).`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
     pending.doorsRemaining--;

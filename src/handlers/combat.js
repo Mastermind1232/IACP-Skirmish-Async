@@ -264,6 +264,14 @@ export async function handleAttackTarget(interaction, ctx) {
   const defenderPassives = target.isNpc ? [] : (getDcStats(targetDcName).passives || []);
   applyDcPassivesToCombat(game.pendingCombat, attackerPassives, defenderPassives);
 
+  // Payback (Dengar CC reaction): if attacker has a pending Payback surge bonus, apply it now
+  const paybackBonus = game.paybackBonusSurge?.[msgId];
+  if (paybackBonus) {
+    game.pendingCombat.surgeBonus = (game.pendingCombat.surgeBonus || 0) + paybackBonus;
+    delete game.paybackBonusSurge[msgId];
+    await thread.send(`**Payback** — +${paybackBonus} Surge applied to this counter-attack.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }
+
   // Vanish: clear immunity when the protected figure starts attacking
   const vanishEntry = game.vanishImmunityUntilNextActivation?.[attackerPlayerNum];
   if (vanishEntry?.msgId === msgId) {
@@ -435,7 +443,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const fkKeywords = (fkEff?.keywords || []).map((k) => String(k).toUpperCase());
         if (!fkKeywords.includes('HUNTER')) continue;
         if (getRange(attackerPos, pos) > 3) continue;
-        if (!hasLineOfSight(pos, targetCoord, mapSpaces)) continue;
+        if (!hasLineOfSight(pos, targetCoord, mapSpaces, null)) continue;
         game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
         await thread.send(`**Shared Intuition** — ${fkDcName} (HUNTER) is within 3 spaces with LOS to target: +1 Hit.`);
         found = true;
