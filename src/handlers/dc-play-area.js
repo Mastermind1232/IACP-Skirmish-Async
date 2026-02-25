@@ -715,6 +715,27 @@ async function buildAndSendAttackTargets(
   const attackerIgnoresFigureBlocking =
     (abilityTextLower.includes('priority target') && abilityTextLower.includes('line of sight')) ||
     attackerKws.includes('MASSIVE');
+  // Build effective mapSpaces: merge closed doors + energy shields into LOS-blocking data.
+  // Doors block LOS (rules: "Doors block line of sight and adjacency", p.27).
+  // Energy shields block LOS but not movement (rules: "A space containing an energy shield blocks LOS", p.29).
+  let effectiveMs = ms;
+  {
+    const losMapId = game.selectedMap?.id;
+    const allDoors = (getMapTokensData && losMapId) ? (getMapTokensData()[losMapId]?.doors || []) : [];
+    const openedSet = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
+    const closedEdges = allDoors.filter(e => {
+      const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase();
+      return !openedSet.has(`${a}|${b}`) && !openedSet.has(`${b}|${a}`);
+    });
+    const shieldSpaces = (game.ancillaryTokens?.energyShield || []).map(s => String(s).toLowerCase());
+    if (closedEdges.length > 0 || shieldSpaces.length > 0) {
+      effectiveMs = {
+        ...ms,
+        impassableEdges: closedEdges.length > 0 ? [...(ms?.impassableEdges || []), ...closedEdges] : ms?.impassableEdges,
+        blocking: shieldSpaces.length > 0 ? [...(ms?.blocking || []), ...shieldSpaces] : ms?.blocking,
+      };
+    }
+  }
   // attackerSize needed both for figureBlockingCoords exclusion and for multi-cell LOS.
   const attackerSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
   const attackerFpCells = getFootprintCells(attackerPos, attackerSize);
@@ -768,7 +789,7 @@ async function buildAndSendAttackTargets(
     let los = false;
     outer: for (const ac of attackerFpCells) {
       for (const tc of cells) {
-        if (hasLineOfSight(ac, tc, ms, losCoords)) { los = true; break outer; }
+        if (hasLineOfSight(ac, tc, effectiveMs, losCoords)) { los = true; break outer; }
       }
     }
     const m = k.match(/-(\d+)-(\d+)$/);
@@ -805,7 +826,7 @@ async function buildAndSendAttackTargets(
       const coord = String(npc.coord).toLowerCase();
       const dist = getRange(attackerPos, coord);
       if (dist < minRange || dist > effectiveMaxRange) continue;
-      const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, ms, allFigureBlockingCoords));
+      const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, effectiveMs, allFigureBlockingCoords));
       const label = `${npcType === 'thug' ? 'Thug' : 'Krykna'} ${i + 1} (${npc.hp}/${npc.maxHp} ${hpLabel})`;
       targets.push({ figureKey: `npc_${npcType}_${i}`, coord, label, hasLOS: los, dist, isNpc: true, npcType, npcIndex: i });
     }
@@ -818,7 +839,7 @@ async function buildAndSendAttackTargets(
       const coord = String(curCoord).toLowerCase();
       const dist = getRange(attackerPos, coord);
       if (dist < minRange || dist > effectiveMaxRange) continue;
-      const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, ms, allFigureBlockingCoords));
+      const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, effectiveMs, allFigureBlockingCoords));
       targets.push({ figureKey: `npc_crate_${origCoord}`, coord, label: `Crate @ ${coord.toUpperCase()} (${hp}/5 HP)`, hasLOS: los, dist, isNpc: true, npcType: 'crate', crateOrigCoord: origCoord });
     }
   }
