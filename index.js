@@ -5713,12 +5713,12 @@ client.on('interactionCreate', async (interaction) => {
           if (targetUser) {
             const s = await getStatsSummaryForPlayer(targetUser.id);
             await interaction.editReply({
-              content: `**Stats for ${targetUser.username}**\nGames: **${s.games}** | Wins: **${s.wins}** | Losses: **${s.losses}** | Draws: **${s.draws}** | Win rate: **${s.winRate}%**`,
+              content: `**Stats for ${targetUser.username}**\nGames: **${s.games}** | Wins: **${s.wins}** | Losses: **${s.losses}** | Win rate: **${s.winRate}%**`,
             }).catch((err) => { console.error('[discord]', err?.message ?? err); });
           } else {
-            const { totalGames, draws } = await getStatsSummary();
+            const { totalGames } = await getStatsSummary();
             await interaction.editReply({
-              content: `**Completed games:** ${totalGames}\n**Draws:** ${draws}`,
+              content: `**Completed games:** ${totalGames}`,
             }).catch((err) => { console.error('[discord]', err?.message ?? err); });
           }
         } else if (cmd === 'affiliationwinrateglobal') {
@@ -5764,7 +5764,7 @@ client.on('interactionCreate', async (interaction) => {
             content: `**Your win rate by Deployment Card** (top ${limit} by games played)\n${lines}`,
           }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         } else if (cmd === 'leaderboard') {
-          const limit = interaction.options.getInteger('limit') ?? 10;
+          const limit = interaction.options.getInteger('limit') ?? 5;
           const rows = await getLeaderboard(limit);
           const lines = rows.length
             ? rows.map((r, i) => `**${i + 1}.** <@${r.playerId}> — **${r.winRate}%** (${r.wins}W / ${r.losses}L / ${r.draws}D over ${r.games} games)`).join('\n')
