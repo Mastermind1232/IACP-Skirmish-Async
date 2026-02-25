@@ -1349,9 +1349,8 @@
     },
     "Face Me!": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Push unique hostile (speed spaces) to adjacent, then attack that figure",
-      "logMessage": "**Face Me!** — Choose a unique hostile figure you have line of sight to. Push that figure a number of spaces equal to its Speed to a space adjacent to Agent Kallus. Then perform a Melee attack targeting that figure. Trigger the push and attack manually using the Attack button.",
+      "faceMeEffect": true,
+      "label": "Push a unique hostile to adjacent (manual push), then perform a Melee attack",
       "wiredStatus": "wired"
     },
     "Feint": {
@@ -1402,9 +1401,8 @@
     },
     "Field Tactician": {
       "type": "ccEffect",
-      "informational": true,
+      "fieldTacticianEffect": true,
       "label": "A friendly figure within 2 spaces may interrupt to perform a move",
-      "logMessage": "**Field Tactician** — Choose a friendly figure within 2 spaces of the activating figure. That figure may interrupt the current activation to perform a move action. Trigger the interrupt manually by having that figureâ€™s DC take its movement.",
       "wiredStatus": "wired"
     },
     "Hunter Protocol": {
@@ -1442,9 +1440,8 @@
     },
     "Call the Vanguard": {
       "type": "ccEffect",
-      "informational": true,
+      "callTheVanguardEffect": true,
       "label": "A friendly TROOPER (cost 4+) interrupts to move and attack",
-      "logMessage": "**Call the Vanguard** — A friendly TROOPER figure with a cost of 4 or greater may interrupt the current activation to perform a move action and then an attack. Trigger this interrupt manually with that figureâ€™s DC.",
       "wiredStatus": "wired"
     },
     "Feral Swipes": {
@@ -2129,9 +2126,8 @@
     },
     "Pack Alpha": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Move up to 3 friendly CREATUREs 3 spaces; damage hostile = # adjacent to it",
-      "logMessage": "**Pack Alpha** — Up to 3 friendly CREATUREs within 3 spaces each move up to 3 spaces. Then choose a hostile figure — it suffers Damage equal to the number of those figures now adjacent to it. Resolve manually.",
+      "packAlphaEffect": true,
+      "label": "Move CREATUREs (manual), then pick hostile — deal damage = # CREATUREs adjacent",
       "wiredStatus": "wired"
     },
     "Parting Blow": {
@@ -2235,9 +2231,8 @@
     },
     "Support Specialist": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Choose a friendly DROID/TECHNICIAN/TROOPER within 3 spaces — it performs an action",
-      "logMessage": "**Support Specialist** — Choose a friendly DROID, TECHNICIAN, or TROOPER within 3 spaces. That figure interrupts to perform an action. Trigger the action from their DC thread manually.",
+      "supportSpecialistEffect": true,
+      "label": "Choose DROID/TECHNICIAN/TROOPER within 3 — grant free interrupt move",
       "wiredStatus": "wired"
     },
     "Terminal Network": {
@@ -2276,9 +2271,8 @@
     },
     "Triangulate": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Move up to 3 friendly DROIDs 1 space; damage hostile = # DROIDs with LOS to it",
-      "logMessage": "**Triangulate** — Up to 3 friendly DROIDs each move up to 1 space. Then choose a hostile within 5 spaces and LOS — it suffers Damage equal to the number of those DROIDs with LOS to it. Resolve manually.",
+      "triangulateEffect": true,
+      "label": "Move DROIDs (manual), then pick hostile — deal damage = # DROIDs in play (LOS honor system)",
       "wiredStatus": "wired"
     },
     "Unlimited Power": {

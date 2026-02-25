@@ -4557,6 +4557,243 @@ export function resolveAbility(abilityId, context) {
     return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: '**Set the Charges** — Choose a space within 3:' };
   }
 
+  // ccEffect: faceMeEffect (Face Me!) — pick a unique hostile in LOS; push them to adjacent (manual); grant free melee attack
+  if (entry.type === 'ccEffect' && entry.faceMeEffect) {
+    const { game, playerNum, dcMessageMeta, choiceIndex, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    // Phase 2: grant free attack
+    if (chosenFigureKey) {
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = true;
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Face Me!** — Move **${dcName}** adjacent manually (push = their Speed spaces). Then use your Melee Attack button for 1 free attack.` };
+    }
+    // Phase 1: hostile figure picker (unique figures only)
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const dcEffects = getDcEffects();
+    const hostileKeys = [];
+    const hostileLabels = [];
+    for (const [fk] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+      const dcN = fk.replace(/-\d+-\d+$/, '');
+      const eff = dcEffects[dcN] || {};
+      if (eff.unique) { hostileKeys.push(fk); hostileLabels.push(dcN); }
+    }
+    if (!hostileKeys.length) return { applied: false, manualMessage: 'No unique hostile figures in play. Resolve manually.' };
+    return { requiresChoice: true, choiceOptions: hostileLabels.map((n) => `Push & attack: ${n}`), choiceValues: hostileKeys };
+  }
+
+  // ccEffect: supportSpecialistEffect (Support Specialist) — choose DROID/TECHNICIAN/TROOPER within 3; grant free move (extra MP)
+  if (entry.type === 'ccEffect' && entry.supportSpecialistEffect) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Phase 2: grant bonus MP (free move) to chosen figure
+    if (chosenFigureKey) {
+      const figMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+      if (!figMsgId) return { applied: false, manualMessage: 'Could not find figure DC — apply action manually.' };
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      const figSpeed = getDcEffects()[dcName]?.speed ?? 3;
+      game.movementBank = game.movementBank || {};
+      const bank = game.movementBank[figMsgId] || { total: 0, remaining: 0 };
+      bank.total = (bank.total || 0) + figSpeed;
+      bank.remaining = (bank.remaining || 0) + figSpeed;
+      game.movementBank[figMsgId] = bank;
+      return { applied: true, logMessage: `**Support Specialist** — **${dcName}** gains ${figSpeed} MP (free interrupt move). Use their Move button to spend MP.` };
+    }
+    // Phase 1: find DROID/TECHNICIAN/TROOPER friendlies within 3
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta.get(msgId) : null;
+    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    const dcEffects = getDcEffects();
+    const validKeys = [];
+    const validLabels = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos || actKeys.includes(fk)) continue;
+      if (actPos) {
+        const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
+        const [fr, fc] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
+        if (Math.abs((ar?.charCodeAt(0) ?? 0) - (fr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(fc || '0')) > 3) continue;
+      }
+      const dcN = fk.replace(/-\d+-\d+$/, '');
+      const eff = dcEffects[dcN] || {};
+      const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
+      if (kws.includes('DROID') || kws.includes('TECHNICIAN') || kws.includes('TROOPER')) {
+        validKeys.push(fk); validLabels.push(dcN);
+      }
+    }
+    if (!validKeys.length) return { applied: false, manualMessage: 'No DROID/TECHNICIAN/TROOPER friendlies within 3 spaces.' };
+    return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Interrupt move: ${n}`), choiceValues: validKeys };
+  }
+
+  // ccEffect: fieldTacticianEffect (Field Tactician) — choose any friendly within 2; grant them free move
+  if (entry.type === 'ccEffect' && entry.fieldTacticianEffect) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Phase 2: grant move MP to chosen figure
+    if (chosenFigureKey) {
+      const figMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+      if (!figMsgId) return { applied: false, manualMessage: 'Could not find figure DC — apply move manually.' };
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      const figSpeed = getDcEffects()[dcName]?.speed ?? 3;
+      game.movementBank = game.movementBank || {};
+      const bank = game.movementBank[figMsgId] || { total: 0, remaining: 0 };
+      bank.total = (bank.total || 0) + figSpeed;
+      bank.remaining = (bank.remaining || 0) + figSpeed;
+      game.movementBank[figMsgId] = bank;
+      return { applied: true, logMessage: `**Field Tactician** — **${dcName}** gains ${figSpeed} MP (interrupt move). Use their Move button.` };
+    }
+    // Phase 1: any friendly within 2
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta.get(msgId) : null;
+    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    const validKeys = [];
+    const validLabels = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos || actKeys.includes(fk)) continue;
+      if (actPos) {
+        const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
+        const [fr, fc] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
+        if (Math.abs((ar?.charCodeAt(0) ?? 0) - (fr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(fc || '0')) > 2) continue;
+      }
+      validKeys.push(fk); validLabels.push(fk.replace(/-\d+-\d+$/, ''));
+    }
+    if (!validKeys.length) return { applied: false, manualMessage: 'No friendly figures within 2 spaces.' };
+    return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Interrupt move: ${n}`), choiceValues: validKeys };
+  }
+
+  // ccEffect: callTheVanguardEffect (Call the Vanguard) — choose TROOPER cost 4+ within range; grant move + free attack
+  if (entry.type === 'ccEffect' && entry.callTheVanguardEffect) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Phase 2: grant move MP + free attack to chosen figure
+    if (chosenFigureKey) {
+      const figMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+      if (!figMsgId) return { applied: false, manualMessage: 'Could not find TROOPER DC — apply interrupt manually.' };
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      const figSpeed = getDcEffects()[dcName]?.speed ?? 3;
+      game.movementBank = game.movementBank || {};
+      const bank = game.movementBank[figMsgId] || { total: 0, remaining: 0 };
+      bank.total = (bank.total || 0) + figSpeed;
+      bank.remaining = (bank.remaining || 0) + figSpeed;
+      game.movementBank[figMsgId] = bank;
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[figMsgId] = true;
+      return { applied: true, logMessage: `**Call the Vanguard** — **${dcName}** gains ${figSpeed} MP + 1 free attack (interrupt). Use their Move and Attack buttons.` };
+    }
+    // Phase 1: find TROOPER figures with cost 4+ (any range, any player's table)
+    const dcEffects = getDcEffects();
+    const validKeys = [];
+    const validLabels = [];
+    for (const [fk] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      const dcN = fk.replace(/-\d+-\d+$/, '');
+      const eff = dcEffects[dcN] || {};
+      const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
+      if (kws.includes('TROOPER') && (eff.cost ?? 0) >= 4) { validKeys.push(fk); validLabels.push(`${dcN} (cost ${eff.cost})`); }
+    }
+    if (!validKeys.length) return { applied: false, manualMessage: 'No TROOPER figures with cost 4+ in play.' };
+    return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Interrupt: ${n}`), choiceValues: validKeys };
+  }
+
+  // ccEffect: triangulateEffect (Triangulate) — move DROIDs manually (honor); pick hostile; deal damage = # friendly DROIDs in play (LOS honor)
+  if (entry.type === 'ccEffect' && entry.triangulateEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const dcEffects = getDcEffects();
+    // Phase 2: apply damage to chosen hostile = # friendly DROIDs in play
+    if (chosenFigureKey) {
+      const oppNum = playerNum === 1 ? 2 : 1;
+      const droidCount = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => {
+        const dcN = fk.replace(/-\d+-\d+$/, '');
+        const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
+        return kws.includes('DROID');
+      }).length;
+      if (!droidCount) return { applied: false, manualMessage: 'No friendly DROIDs in play to deal damage.' };
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      const figMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
+      let dmgNote = `${droidCount} Dmg to ${dcName} manually`;
+      if (figMsgId && dcHealthState) {
+        const hs = dcHealthState.get(figMsgId) || [];
+        const fkM = chosenFigureKey.match(/-(\d+)-(\d+)$/);
+        const fi = fkM ? parseInt(fkM[2], 10) : 0;
+        if (hs[fi]) {
+          const [cur, max] = hs[fi];
+          const newCur = Math.max(0, (cur ?? max) - droidCount);
+          hs[fi] = [newCur, max ?? newCur];
+          dcHealthState.set(figMsgId, hs);
+          const dcIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
+          const idx2 = (dcIds || []).indexOf(figMsgId);
+          if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+          dmgNote = `${droidCount} Dmg (HP: ${cur ?? max}→${newCur})`;
+        }
+      }
+      return { applied: true, logMessage: `**Triangulate** — **${dcName}**: ${dmgNote}. (Max = ${droidCount} DROIDs in play — verify LOS manually for each.)`, refreshDcEmbed: !!figMsgId };
+    }
+    // Phase 1: hostile figure picker (move DROIDs first manually)
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const hostileKeys = [];
+    const hostileLabels = [];
+    for (const [fk] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+      hostileKeys.push(fk); hostileLabels.push(fk.replace(/-\d+-\d+$/, ''));
+    }
+    if (!hostileKeys.length) return { applied: false, manualMessage: 'No hostile figures to target.' };
+    return { requiresChoice: true, choiceOptions: hostileLabels.map((n) => `Target: ${n} (move DROIDs first)`), choiceValues: hostileKeys };
+  }
+
+  // ccEffect: packAlphaEffect (Pack Alpha) — move CREATUREs manually; pick hostile; deal damage = # adjacent CREATUREs
+  if (entry.type === 'ccEffect' && entry.packAlphaEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const dcEffects = getDcEffects();
+    const oppNum = playerNum === 1 ? 2 : 1;
+    // Phase 2: count CREATUREs adjacent to chosen hostile, apply damage
+    if (chosenFigureKey) {
+      const targetPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
+      const boardState = getBoardStateForMovement(game, null);
+      const adjRaw = targetPos ? (boardState?.mapSpaces?.adjacency?.[String(targetPos).toLowerCase()] || []) : [];
+      const adjSet = new Set(adjRaw.map((s) => String(s).toLowerCase()));
+      const adjacentCreatures = Object.entries(game.figurePositions?.[playerNum] || {}).filter(([fk, pos]) => {
+        if (!pos || !adjSet.has(String(pos).toLowerCase())) return false;
+        const dcN = fk.replace(/-\d+-\d+$/, '');
+        const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
+        return kws.includes('CREATURE');
+      });
+      const dmg = adjacentCreatures.length;
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      if (!dmg) return { applied: true, logMessage: `**Pack Alpha** — No friendly CREATUREs adjacent to **${dcName}** (move them first next time).` };
+      const figMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
+      let dmgNote = `${dmg} Dmg to ${dcName} manually`;
+      if (figMsgId && dcHealthState) {
+        const hs = dcHealthState.get(figMsgId) || [];
+        const fkM = chosenFigureKey.match(/-(\d+)-(\d+)$/);
+        const fi = fkM ? parseInt(fkM[2], 10) : 0;
+        if (hs[fi]) {
+          const [cur, max] = hs[fi];
+          const newCur = Math.max(0, (cur ?? max) - dmg);
+          hs[fi] = [newCur, max ?? newCur];
+          dcHealthState.set(figMsgId, hs);
+          const dcIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
+          const idx2 = (dcIds || []).indexOf(figMsgId);
+          if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+          dmgNote = `${dmg} Dmg (HP: ${cur ?? max}→${newCur})`;
+        }
+      }
+      return { applied: true, logMessage: `**Pack Alpha** — **${dcName}**: ${dmgNote}. (${adjacentCreatures.map(([fk]) => fk.replace(/-\d+-\d+$/, '')).join(', ')} adjacent)`, refreshDcEmbed: !!figMsgId };
+    }
+    // Phase 1: hostile figure picker (move CREATUREs first manually)
+    const hostileKeys = [];
+    const hostileLabels = [];
+    for (const [fk] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+      hostileKeys.push(fk); hostileLabels.push(fk.replace(/-\d+-\d+$/, ''));
+    }
+    if (!hostileKeys.length) return { applied: false, manualMessage: 'No hostile figures to target.' };
+    return { requiresChoice: true, choiceOptions: hostileLabels.map((n) => `Target: ${n} (move CREATUREs first)`), choiceValues: hostileKeys };
+  }
+
   // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free
   if (entry.type === 'dcSpecial' && entry.pounceRange) {
     const { game, playerNum, dcMessageMeta, chosenSpace } = context;
