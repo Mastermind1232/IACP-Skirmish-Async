@@ -321,7 +321,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   // For cost > 0 with an ability: try to resolve before moving the card. If we can't apply (timing/context),
   // prompt "We don't think you can do this right now" with [Play anyway] / [Unplay] so the card isn't consumed.
   if (cost !== 0 && ctx.resolveAbility) {
-    const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, combat: game.combat || game.pendingCombat });
+    const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, dcExhaustedState: ctx.dcExhaustedState, combat: game.combat || game.pendingCombat });
     if (result.requiresChoice && result.choiceOptions?.length > 0) {
       // Choice required: we must commit the play first, then send choice buttons.
       hand.splice(idx, 1);
@@ -516,7 +516,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     return;
   }
   if (ctx.resolveAbility) {
-    const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, combat: game.combat || game.pendingCombat });
+    const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, dcExhaustedState: ctx.dcExhaustedState, combat: game.combat || game.pendingCombat });
     await applyAbilityResult(result, { game, playerNum, client: interaction.client, ctx });
     if (result.revealToPlayer) {
       await interaction.followUp({ content: result.revealToPlayer, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -630,6 +630,7 @@ export async function handleCcSpacePick(interaction, ctx) {
     playerNum,
     dcMessageMeta,
     dcHealthState,
+    dcExhaustedState,
     chosenSpace,
     chosenFigureKey: pending.chosenFigureKey ?? null,
     combat: game.combat || game.pendingCombat,
@@ -677,6 +678,7 @@ export async function handleCcChoice(interaction, ctx) {
     playerNum,
     dcMessageMeta,
     dcHealthState,
+    dcExhaustedState,
     choiceIndex,
     chosenOption,
     chosenFigureKey: pending.choiceValues?.[choiceIndex] ?? null,

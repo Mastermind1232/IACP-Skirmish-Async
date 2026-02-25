@@ -1547,9 +1547,8 @@
     },
     "Change of Plans": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Change of Plans",
-      "logMessage": "**Change of Plans** — After you resolve a group's activation, choose 1 of your Deployment cards; exhaust it to ready another DC that shares a trait with it. Resolve manually.",
+      "changeOfPlansEffect": true,
+      "label": "After activation: exhaust one of your DCs to ready another sharing a keyword/trait",
       "wiredStatus": "wired"
     },
     "Chaotic Force": {
@@ -1561,10 +1560,9 @@
     },
     "Cheat to Win": {
       "type": "ccEffect",
-      "label": "When you use Gambit after rolling: change that die to another result (manual)",
-      "wiredStatus": "wired",
-      "informational": true,
-      "logMessage": "**Cheat to Win** — After rolling the new die from Gambit, change that die's result to any other result on that die. Resolve manually."
+      "cheatToWinEffect": true,
+      "label": "After Gambit die rolled: choose any new face result for that die",
+      "wiredStatus": "wired"
     },
     "Choose a Side": {
       "type": "ccEffect",
@@ -1604,9 +1602,8 @@
     },
     "Comm Disruption": {
       "type": "ccEffect",
-      "label": "Discard that card and cancel its effects (when X cost card played, X â‰¤ friendly SPY groups)",
-      "informational": true,
-      "logMessage": "Resolve manually: discard the played card and cancel its effects (honor SPY count).",
+      "commDisruptionEffect": true,
+      "label": "Cancel an opponent CC play with cost <= your friendly SPY group count",
       "wiredStatus": "wired"
     },
     "Coordinated Attack": {
@@ -2146,7 +2143,7 @@
     "Reverse Engineer": {
       "type": "ccEffect",
       "reverseEngineerEffect": true,
-      "label": "Perform an attack with +1 Surge, using the defender's DC abilities instead of your own",
+      "label": "Free attack +1 Surge, using the defender's DC surge abilities instead of your own",
       "wiredStatus": "wired"
     },
     "Sarlacc Sweep": {
@@ -2164,9 +2161,8 @@
     },
     "Set a Trap": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Choose a tile; at round end a figure on that tile may interrupt to attack a hostile on it",
-      "logMessage": "**Set a Trap** — Choose a map tile. At end of round, choose one of your figures on that tile to interrupt to perform an attack targeting a hostile on that tile. Track manually.",
+      "setATrapEffect": true,
+      "label": "Choose a space; at round end a friendly on that space may interrupt to attack a hostile on it",
       "wiredStatus": "wired"
     },
     "Set the Charges": {

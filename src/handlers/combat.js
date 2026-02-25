@@ -209,6 +209,9 @@ export async function handleAttackTarget(interaction, ctx) {
     targetStats = getDcStats(targetDcName);
     targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName.replace(/\s*\[.*\]\s*$/, '')];
   }
+  // Reverse Engineer: capture flag before building pendingCombat, then clear it
+  const reverseEngineerActive = !!(game.reverseEngineerActive?.[attackerPlayerNum]);
+  if (reverseEngineerActive) delete game.reverseEngineerActive[attackerPlayerNum];
   const attackerDisplayName = meta.displayName || meta.dcName;
   const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const attackerFigureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
@@ -252,6 +255,8 @@ export async function handleAttackTarget(interaction, ctx) {
     defenderPlayerNum: attackerPlayerNum === 1 ? 2 : 1,
     attackerMsgId: msgId,
     attackerDcName: meta.dcName,
+    defenderDcName: targetDcName,
+    reverseEngineerActive: reverseEngineerActive || undefined,
     bonusSurgeAbilities: [...nextSurge],
     bonusPierce: nextPierce,
     bonusAccuracy: nextBonusAcc || undefined,

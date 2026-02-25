@@ -5292,7 +5292,7 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: ['SCUM: Personal Combat Shield (+1 Block for Mobile figures)', "IMPERIAL: Gar Saxon's Flamethrower (area attack)"] };
   }
 
-  // ccEffect: reverseEngineerEffect (Reverse Engineer) — free attack with +1 Surge; use defender's DC abilities (honor system)
+  // ccEffect: reverseEngineerEffect (Reverse Engineer) — free attack with +1 Surge using defender's surge abilities
   if (entry.type === 'ccEffect' && entry.reverseEngineerEffect) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
@@ -5302,8 +5302,11 @@ export function resolveAbility(abilityId, context) {
     game.freeAttackBonusPending[msgId] = true;
     game.roundAttackSurgeBonus = game.roundAttackSurgeBonus || {};
     game.roundAttackSurgeBonus[playerNum] = (game.roundAttackSurgeBonus[playerNum] || 0) + 1;
+    // Flag: swap to defender's surge abilities when attack resolves
+    game.reverseEngineerActive = game.reverseEngineerActive || {};
+    game.reverseEngineerActive[playerNum] = true;
     const meta = dcMessageMeta.get(msgId);
-    return { applied: true, logMessage: `**Reverse Engineer** — **${meta?.dcName || 'Figure'}** performs 1 free attack with +1 Surge. During this attack, use the **defender's** DC abilities (surge abilities, keywords, etc.) instead of your own — honor system.` };
+    return { applied: true, logMessage: `**Reverse Engineer** — **${meta?.dcName || 'Figure'}** performs 1 free attack with +1 Surge. The **defender's** DC surge abilities will be used instead of your own.` };
   }
 
   // ccEffect: navigationUpgradeEffect (Navigation Upgrade) — Strain 1 to self; choose friendly DROID for +1 MP
@@ -5416,6 +5419,108 @@ export function resolveAbility(abilityId, context) {
     }
     if (!opts.length) return { applied: false, manualMessage: 'No valid figure pairs found. Resolve manually.' };
     return { requiresChoice: true, choiceOptions: opts, choiceValues: vals };
+  }
+
+  // ccEffect: changeOfPlansEffect (Change of Plans) — exhaust one DC, ready another that shares a keyword/trait
+  if (entry.type === 'ccEffect' && entry.changeOfPlansEffect) {
+    const { game, playerNum, dcMessageMeta, dcExhaustedState, choiceIndex, chosenFigureKey } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    if (choiceIndex !== undefined && choiceIndex !== null && chosenFigureKey) {
+      // chosenFigureKey is encoded as "exhaustMsgId|readyMsgId"
+      const sep = chosenFigureKey.indexOf('|');
+      const exhaustMsgId = sep >= 0 ? chosenFigureKey.slice(0, sep) : chosenFigureKey;
+      const readyMsgId = sep >= 0 ? chosenFigureKey.slice(sep + 1) : '';
+      const exhaustMeta = dcMessageMeta?.get(exhaustMsgId);
+      const readyMeta = dcMessageMeta?.get(readyMsgId);
+      if (dcExhaustedState && exhaustMsgId) dcExhaustedState.set(exhaustMsgId, true);
+      if (dcExhaustedState && readyMsgId) dcExhaustedState.set(readyMsgId, false);
+      return { applied: true, logMessage: `**Change of Plans** — **${exhaustMeta?.dcName || exhaustMsgId}** exhausted → **${readyMeta?.dcName || readyMsgId}** readied (shared trait). DC embeds will update on next interaction.` };
+    }
+    // Phase 1: enumerate valid (exhaust→ready) pairs that share at least one keyword/trait
+    const dcEffects = getDcEffects();
+    const dcIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const playerDcs = dcIds.map((id, i) => ({ msgId: id, dcName: dcList[i]?.dcName })).filter((d) => d.dcName);
+    const opts = [];
+    const vals = [];
+    for (const dca of playerDcs) {
+      const kwA = new Set((dcEffects[dca.dcName]?.keywords || []).map((k) => String(k).toUpperCase()));
+      for (const dcb of playerDcs) {
+        if (dca.msgId === dcb.msgId) continue;
+        const kwB = (dcEffects[dcb.dcName]?.keywords || []).map((k) => String(k).toUpperCase());
+        const shared = kwB.find((k) => kwA.has(k));
+        if (shared && opts.length < 25) {
+          opts.push(`Exhaust ${dca.dcName} → Ready ${dcb.dcName} (${shared})`);
+          vals.push(`${dca.msgId}|${dcb.msgId}`);
+        }
+      }
+    }
+    if (!opts.length) return { applied: false, manualMessage: 'No valid exhaust→ready pairs with shared traits found. Resolve manually.' };
+    return { requiresChoice: true, choiceOptions: opts, choiceValues: vals };
+  }
+
+  // ccEffect: cheatToWinEffect (Cheat to Win) — after Gambit die rolled, choose its new result
+  if (entry.type === 'ccEffect' && entry.cheatToWinEffect) {
+    const { game, playerNum, choiceIndex, chosenOption } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      return { applied: true, logMessage: `**Cheat to Win** — Gambit die changed to: **${chosenOption}**. Apply this result in the combat thread.` };
+    }
+    // Show all die face results grouped by color (25 options max, 5 per row)
+    const opts = [
+      // Red attack die faces
+      'Red: 3 Hits + Surge', 'Red: 3 Hits', 'Red: 2 Hits + Surge', 'Red: 2 Hits', 'Red: 1 Hit',
+      // Blue attack die faces
+      'Blue: 2 Hits + 1 Acc', 'Blue: 1 Hit + Surge', 'Blue: 2 Hits', 'Blue: 1 Hit', 'Blue: 1 Acc',
+      // Green attack die faces
+      'Green: 2 Hits', 'Green: 1 Hit + Surge', 'Green: 1 Hit', 'Green: 2 Acc', 'Green: Surge',
+      // Black defense die faces
+      'Black: 1 Evade + 1 Block', 'Black: 2 Blocks', 'Black: 1 Block', 'Black: 1 Evade', 'Black: Blank',
+      // White defense die faces
+      'White: 2 Acc', 'White: 1 Acc + Surge', 'White: 1 Hit + Surge', 'White: Surge', 'White: 1 Acc',
+    ];
+    return { requiresChoice: true, choiceOptions: opts };
+  }
+
+  // ccEffect: commDisruptionEffect (Comm Disruption) — cancel an opponent CC play (cost ≤ friendly SPY groups)
+  if (entry.type === 'ccEffect' && entry.commDisruptionEffect) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const dcEffects = getDcEffects();
+    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const spyCount = dcList.filter((dc) => {
+      const kws = (dcEffects[dc.dcName]?.keywords || []).map((k) => String(k).toUpperCase());
+      return kws.includes('SPY');
+    }).length;
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppDiscard = oppNum === 1 ? (game.player1CcDiscard || []) : (game.player2CcDiscard || []);
+    const lastCard = oppDiscard[oppDiscard.length - 1] || null;
+    const cancelNote = lastCard ? `Opponent's most recent card: **${lastCard}**` : 'No recent opponent card found — identify the card manually.';
+    return { applied: true, logMessage: `**Comm Disruption** — You have **${spyCount}** friendly SPY group${spyCount !== 1 ? 's' : ''}: can cancel any opponent CC with cost ≤ ${spyCount}. ${cancelNote} Discard that card and cancel its effects (honor system if already applied).` };
+  }
+
+  // ccEffect: setATrapEffect (Set a Trap) — choose a space; at round end a friendly on that space may attack a hostile on it
+  if (entry.type === 'ccEffect' && entry.setATrapEffect) {
+    const { game, playerNum, chosenSpace } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    if (chosenSpace) {
+      game.setTrapSpace = game.setTrapSpace || {};
+      game.setTrapSpace[playerNum] = chosenSpace;
+      return { applied: true, logMessage: `**Set a Trap** — Trap placed at space **${chosenSpace}**. At end of round, if a friendly figure is on that space, they interrupt to attack a hostile on it (announce the interrupt at round end).` };
+    }
+    // Space picker: all currently occupied spaces (friendly + hostile) as candidates
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const occupied = new Set();
+    for (const [, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) { if (pos) occupied.add(String(pos).toLowerCase()); }
+    for (const [, pos] of Object.entries(game.figurePositions?.[oppNum] || {})) { if (pos) occupied.add(String(pos).toLowerCase()); }
+    if (!occupied.size) {
+      // Fall back to all map spaces
+      const boardState = getBoardStateForMovement(game, null);
+      const allSpaces = Object.keys(boardState?.mapSpaces?.spaces || {});
+      if (!allSpaces.length) return { applied: false, manualMessage: 'No map spaces found. Note the trap location manually.' };
+      return { requiresSpaceChoice: true, validSpaces: allSpaces.slice(0, 25) };
+    }
+    return { requiresSpaceChoice: true, validSpaces: [...occupied] };
   }
 
   // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free

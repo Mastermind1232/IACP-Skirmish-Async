@@ -1024,13 +1024,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const displayName = meta.displayName || meta.dcName;
       const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
       game.movementBank = game.movementBank || {};
-      // Vanish: grant bonus MP on first Move of the next activation, then clear immunity
-      if (!bank) {
-        const vanishBonus = game.vanishImmunityUntilNextActivation?.[playerNum];
-        if (vanishBonus?.msgId === msgId && vanishBonus.nextMp > 0) {
-          mpRemaining += vanishBonus.nextMp;
-          delete game.vanishImmunityUntilNextActivation[playerNum];
-        }
+      // Vanish: grant bonus MP at the start of next activation (first Move click), then clear immunity
+      // Check regardless of whether a bank already exists (CC free-move grants can pre-create a bank)
+      const vanishBonus = game.vanishImmunityUntilNextActivation?.[playerNum];
+      if (vanishBonus?.msgId === msgId) {
+        if (vanishBonus.nextMp > 0) mpRemaining += vanishBonus.nextMp;
+        delete game.vanishImmunityUntilNextActivation[playerNum];
       }
       if (!game.movementBank[msgId]) {
         game.movementBank[msgId] = {
