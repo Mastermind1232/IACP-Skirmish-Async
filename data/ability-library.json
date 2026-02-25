@@ -889,9 +889,8 @@
     },
     "Lord of the Sith": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "When hostile defeated (not your activation): interrupt to move 2, Force Choke or Melee attack",
-      "logMessage": "**Lord of the Sith** — When a hostile figure is defeated not during your activation, Darth Vader may interrupt to move up to 2 spaces. He may then use Force Choke or perform a Melee attack. Trigger the interrupt manually when a hostile is defeated during the opponentâ€™s activation.",
+      "lordOfTheSithEffect": true,
+      "label": "When hostile defeated (not your activation): interrupt to move 2, then Force Choke or free Melee attack",
       "wiredStatus": "wired"
     },
     "Retaliation": {
@@ -996,9 +995,8 @@
     },
     "Dangerous Prey": {
       "type": "ccEffect",
-      "informational": true,
+      "dangerousPreyEffect": true,
       "label": "After attack on you resolves: attacker suffers 1 Damage (3 if adjacent); move 2",
-      "logMessage": "**Dangerous Prey** — This card triggers automatically. After an attack targeting Bossk resolves, you will be prompted to deal 1 Damage (or 3 if adjacent) to the attacker and move 2 spaces.",
       "wiredStatus": "wired"
     },
     "Deflection": {
@@ -1019,16 +1017,14 @@
     },
     "Right Back At Ya!": {
       "type": "ccEffect",
-      "informational": true,
+      "rightBackAtYaEffect": true,
       "label": "When attack declared on you: attacker suffers 1 Damage (3 if you spend Block Token)",
-      "logMessage": "**Right Back At Ya!** — This card triggers automatically. When an attack targeting Boba Fett is declared, you will be prompted to deal 1 Damage to the attacker (or 3 if you spend a Block Token).",
       "wiredStatus": "wired"
     },
     "Payback": {
       "type": "ccEffect",
-      "informational": true,
+      "paybackEffect": true,
       "label": "After attack on you resolves: interrupt to attack the attacker (+2 Surge)",
-      "logMessage": "**Payback** — This card triggers automatically. After an attack targeting Dengar resolves, you will be prompted to use this card to counter-attack with +2 Surge.",
       "wiredStatus": "wired"
     },
     "Toxic Dart": {
@@ -1574,10 +1570,9 @@
     },
     "Choose a Side": {
       "type": "ccEffect",
-      "label": "This round friendly Mobile gain SCUM/IMPERIAL ability (manual)",
-      "wiredStatus": "wired",
-      "informational": true,
-      "logMessage": "**Choose a Side** — This round, other friendly Mobile figures gain abilities based on your affiliation: SCUM â†’ Personal Combat Shield; IMPERIAL â†’ Gar Saxon Flamethrower. Resolve manually."
+      "chooseASideEffect": true,
+      "label": "SCUM: +1 Block for Mobile figures this round. IMPERIAL: Mobile figures gain Flamethrower; Gar Saxon gets free Flamethrower attack.",
+      "wiredStatus": "wired"
     },
     "Collect Intel": {
       "type": "ccEffect",
@@ -2105,9 +2100,8 @@
     },
     "Overcharged Weapons": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Interrupt when hostile activates: attack with Pierce 2; then exhaust + Weaken",
-      "logMessage": "**Overcharged Weapons** — When a hostile figure activates, interrupt to attack it (gains Pierce 2). Then exhaust your Deployment card and become Weakened. Resolve manually.",
+      "overchargedWeaponsEffect": true,
+      "label": "Interrupt when hostile activates: attack with Pierce 2; then exhaust + Weaken self",
       "wiredStatus": "wired"
     },
     "Overheated": {
@@ -2124,9 +2118,8 @@
     },
     "Parting Blow": {
       "type": "ccEffect",
-      "informational": true,
+      "partingBlowEffect": true,
       "label": "Interrupt: attack hostile exiting adjacent space; you become Stunned",
-      "logMessage": "**Parting Blow** — Interrupt when a hostile exits an adjacent space. Before it moves, perform an attack targeting that figure. Then you become Stunned. Resolve manually.",
       "wiredStatus": "wired"
     },
     "Price on Their Heads": {

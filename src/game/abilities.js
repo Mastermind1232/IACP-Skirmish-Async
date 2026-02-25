@@ -4987,10 +4987,12 @@ export function resolveAbility(abilityId, context) {
     const ownVpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
     const oppVpKey = oppNum === 1 ? 'player1VP' : 'player2VP';
     const ownVp = game[ownVpKey]?.total ?? 0;
-    const maxPay = Math.min(ownVp, 5);
+    // Incoming hits = rolled dmg + bonus hits (before defense) — cap options to actual incoming hits
+    const incomingHits = Math.max(0, (combat?.attackRoll?.dmg || 0) + (combat?.bonusHits || 0) + (combat?.surgeDamage || 0));
+    const maxPay = Math.min(ownVp, incomingHits > 0 ? incomingHits : 5);
     // Phase 2: apply the deal
     if (choiceIndex !== undefined && choiceIndex !== null) {
-      const X = choiceIndex; // options: 0 VP (skip), 1 VP, 2 VP, etc.
+      const X = choiceIndex; // options: 0 VP (skip), 1 VP = index 1, 2 VP = index 2, etc.
       if (X > 0) {
         game[ownVpKey] = game[ownVpKey] || { total: 0, kills: 0, objectives: 0 };
         game[ownVpKey].total = Math.max(0, game[ownVpKey].total - X);
@@ -5006,12 +5008,11 @@ export function resolveAbility(abilityId, context) {
       actKeys.forEach((fk) => { game.figureConditions[fk] = [...new Set([...(game.figureConditions[fk] || []), 'Focus'])]; });
       const ownNew = game[ownVpKey]?.total ?? 0;
       const oppNew = game[oppVpKey]?.total ?? 0;
-      return { applied: true, logMessage: `**Let's Make a Deal** — Paid ${X} VP (your total: ${ownNew}, theirs: ${oppNew}). ${X > 0 ? `Applied −${X} Hits to attack.` : 'No VP paid.'} Hondo becomes Focused.` };
+      return { applied: true, logMessage: `**Let's Make a Deal** — Paid ${X} VP (your total: ${ownNew}, theirs: ${oppNew}). ${X > 0 ? `Applied −${X} Hits to this attack.` : 'No VP paid.'} Hondo becomes Focused.` };
     }
-    // Phase 1: show VP options
+    // Phase 1: show VP options matching incoming hits
     const options = ['Pay 0 VP (just apply Focus)'];
-    for (let i = 1; i <= maxPay; i++) options.push(`Pay ${i} VP → −${i} Hits`);
-    if (ownVp === 0) return { requiresChoice: true, choiceOptions: ['Pay 0 VP (just apply Focus)'] };
+    for (let i = 1; i <= maxPay; i++) options.push(`Pay ${i} VP → −${i} Hit${i !== 1 ? 's' : ''}`);
     return { requiresChoice: true, choiceOptions: options };
   }
 
@@ -5046,6 +5047,249 @@ export function resolveAbility(abilityId, context) {
       }
     }
     return { requiresChoice: true, choiceOptions: ['Reroll an attack die', 'Reroll a defense die'] };
+  }
+
+  // ccEffect: lordOfTheSithEffect (Lord of the Sith) — when hostile defeated: grant 2 MP + choice: Force Choke adjacent hostile OR free attack
+  if (entry.type === 'ccEffect' && entry.lordOfTheSithEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, choiceIndex, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
+    // Phase 3: Force Choke chosen figure (deal 2 Dmg + 2 Strain)
+    if (chosenFigureKey) {
+      const oppNum = playerNum === 1 ? 2 : 1;
+      const figMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
+      let dmgNote = 'apply 2 Dmg + 2 Strain manually';
+      if (figMsgId && dcHealthState) {
+        const hs = dcHealthState.get(figMsgId) || [];
+        const fkM = chosenFigureKey.match(/-(\d+)-(\d+)$/);
+        const fi = fkM ? parseInt(fkM[2], 10) : 0;
+        if (hs[fi]) {
+          const [cur, max] = hs[fi];
+          const newCur = Math.max(0, (cur ?? max) - 4); // 2 dmg + 2 strain = 4 total
+          hs[fi] = [newCur, max ?? newCur];
+          dcHealthState.set(figMsgId, hs);
+          const dcIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
+          const idx2 = (dcIds || []).indexOf(figMsgId);
+          if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+          dmgNote = `2 Dmg + 2 Strain (HP: ${cur ?? max}→${newCur})`;
+        }
+      }
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Lord of the Sith** — Force Choke **${dcName}**: ${dmgNote}. (2 MP already added)`, refreshDcEmbed: !!figMsgId };
+    }
+    // Grant 2 MP to Vader
+    game.movementBank = game.movementBank || {};
+    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    bank.total = (bank.total || 0) + 2;
+    bank.remaining = (bank.remaining || 0) + 2;
+    game.movementBank[msgId] = bank;
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      if (choiceIndex === 1) {
+        // Free melee attack
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[msgId] = true;
+        return { applied: true, logMessage: '**Lord of the Sith** — Darth Vader moves up to 2 spaces (MP added). Free Melee attack granted — use the Attack button.' };
+      }
+      // Force Choke: pick adjacent hostile
+      const meta = dcMessageMeta.get(msgId);
+      const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+      const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+      const boardState = getBoardStateForMovement(game, null);
+      const adjRaw = actPos ? (boardState?.mapSpaces?.adjacency?.[String(actPos).toLowerCase()] || []) : [];
+      const adjSet = new Set(adjRaw.map((s) => String(s).toLowerCase()));
+      const oppNum = playerNum === 1 ? 2 : 1;
+      const validKeys = [];
+      const validLabels = [];
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+        if (!pos || !adjSet.has(String(pos).toLowerCase())) continue;
+        validKeys.push(fk); validLabels.push(fk.replace(/-\d+-\d+$/, ''));
+      }
+      if (!validKeys.length) return { applied: true, logMessage: '**Lord of the Sith** — No adjacent hostile for Force Choke. 2 MP added.' };
+      return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Force Choke: ${n}`), choiceValues: validKeys };
+    }
+    return { requiresChoice: true, choiceOptions: ['Force Choke adjacent hostile (2 Dmg + 2 Strain)', 'Perform free Melee attack'] };
+  }
+
+  // ccEffect: dangerousPreyEffect (Dangerous Prey) — attacker in combat suffers 1 or 3 dmg; Fennec moves 2
+  if (entry.type === 'ccEffect' && entry.dangerousPreyEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, combat, choiceIndex } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta?.get(msgId) : null;
+    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    // Determine attacker info from combat
+    const attackerFk = combat?.attackerFigureKey || null;
+    const attackerPn = combat?.attackerPlayerNum || (playerNum === 1 ? 2 : 1);
+    // Check adjacency (for 3 dmg vs 1 dmg)
+    let isAdjacent = false;
+    if (actPos && attackerFk) {
+      const attackerPos = game.figurePositions?.[attackerPn]?.[attackerFk];
+      if (attackerPos) {
+        const boardState = getBoardStateForMovement(game, null);
+        const adjRaw = boardState?.mapSpaces?.adjacency?.[String(actPos).toLowerCase()] || [];
+        isAdjacent = adjRaw.map((s) => String(s).toLowerCase()).includes(String(attackerPos).toLowerCase());
+      }
+    }
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      const dmg = choiceIndex === 0 ? (isAdjacent ? 3 : 1) : 0;
+      let dmgNote = `Apply ${dmg} Dmg to attacker manually`;
+      if (dmg > 0 && attackerFk && dcHealthState) {
+        const figMsgId = findMsgIdForFigureKey(game, attackerPn, attackerFk, dcMessageMeta);
+        if (figMsgId) {
+          const hs = dcHealthState.get(figMsgId) || [];
+          const fkM = attackerFk.match(/-(\d+)-(\d+)$/);
+          const fi = fkM ? parseInt(fkM[2], 10) : 0;
+          if (hs[fi]) {
+            const [cur, max] = hs[fi];
+            const newCur = Math.max(0, (cur ?? max) - dmg);
+            hs[fi] = [newCur, max ?? newCur];
+            dcHealthState.set(figMsgId, hs);
+            const dcIds = attackerPn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+            const dcList = attackerPn === 1 ? game.p1DcList : game.p2DcList;
+            const idx2 = (dcIds || []).indexOf(figMsgId);
+            if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+            dmgNote = `${dmg} Dmg (HP: ${cur ?? max}→${newCur})`;
+          }
+        }
+      }
+      // Grant 2 MP to Fennec
+      if (msgId) {
+        game.movementBank = game.movementBank || {};
+        const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+        bank.total = (bank.total || 0) + 2;
+        bank.remaining = (bank.remaining || 0) + 2;
+        game.movementBank[msgId] = bank;
+      }
+      const atkName = attackerFk ? attackerFk.replace(/-\d+-\d+$/, '') : 'attacker';
+      return { applied: true, logMessage: `**Dangerous Prey** — **${atkName}**: ${dmgNote}${isAdjacent ? ' (adjacent — 3 dmg)' : ' (within 4 — 1 dmg)'}. Fennec gains 2 MP.`, refreshDcEmbed: dmg > 0 };
+    }
+    const dmgLabel = isAdjacent ? '3 Damage (adjacent)' : attackerFk ? '1 Damage (within 4)' : '1 Damage';
+    return { requiresChoice: true, choiceOptions: [`Apply ${dmgLabel} to attacker + move 2`, 'Just move 2 (skip damage)'] };
+  }
+
+  // ccEffect: rightBackAtYaEffect (Right Back At Ya!) — attacker suffers 1 dmg (3 if Block Token spent)
+  if (entry.type === 'ccEffect' && entry.rightBackAtYaEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, combat, choiceIndex } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const attackerFk = combat?.attackerFigureKey || null;
+    const attackerPn = combat?.attackerPlayerNum || (playerNum === 1 ? 2 : 1);
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      const dmg = choiceIndex === 0 ? 1 : 3; // 0 = "1 dmg", 1 = "spent Block Token → 3 dmg"
+      let dmgNote = `Apply ${dmg} Dmg to attacker manually`;
+      if (attackerFk && dcHealthState) {
+        const figMsgId = findMsgIdForFigureKey(game, attackerPn, attackerFk, dcMessageMeta);
+        if (figMsgId) {
+          const hs = dcHealthState.get(figMsgId) || [];
+          const fkM = attackerFk.match(/-(\d+)-(\d+)$/);
+          const fi = fkM ? parseInt(fkM[2], 10) : 0;
+          if (hs[fi]) {
+            const [cur, max] = hs[fi];
+            const newCur = Math.max(0, (cur ?? max) - dmg);
+            hs[fi] = [newCur, max ?? newCur];
+            dcHealthState.set(figMsgId, hs);
+            const dcIds = attackerPn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+            const dcList = attackerPn === 1 ? game.p1DcList : game.p2DcList;
+            const idx2 = (dcIds || []).indexOf(figMsgId);
+            if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+            dmgNote = `${dmg} Dmg (HP: ${cur ?? max}→${newCur})`;
+          }
+        }
+      }
+      const atkName = attackerFk ? attackerFk.replace(/-\d+-\d+$/, '') : 'attacker';
+      return { applied: true, logMessage: `**Right Back At Ya!** — **${atkName}**: ${dmgNote}${choiceIndex === 1 ? ' (Block Token spent)' : ''}.`, refreshDcEmbed: !!attackerFk };
+    }
+    // Check if Ahsoka has a Block Token to offer 3 dmg option
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta?.get(msgId) : null;
+    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const hasBlockToken = actKeys.some((fk) => (game.figurePowerTokens?.[fk] || []).includes('Block'));
+    const opts = ['1 Damage to attacker'];
+    if (hasBlockToken) opts.push('Spend Block Token → 3 Damage to attacker');
+    return { requiresChoice: true, choiceOptions: opts };
+  }
+
+  // ccEffect: paybackEffect (Payback) — after attack: Dengar interrupts to attack attacker with +2 Surge
+  if (entry.type === 'ccEffect' && entry.paybackEffect) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[msgId] = true;
+    game.roundAttackSurgeBonus = game.roundAttackSurgeBonus || {};
+    game.roundAttackSurgeBonus[playerNum] = (game.roundAttackSurgeBonus[playerNum] || 0) + 2;
+    const meta = dcMessageMeta.get(msgId);
+    return { applied: true, logMessage: `**Payback** — **${meta?.dcName || 'Dengar'}** may perform 1 free attack against the attacker. +2 Surge applied to that attack.` };
+  }
+
+  // ccEffect: overchargedWeaponsEffect (Overcharged Weapons) — interrupt: free attack with Pierce 2 + exhaust + Weaken self
+  if (entry.type === 'ccEffect' && entry.overchargedWeaponsEffect) {
+    const { game, playerNum, dcMessageMeta, dcExhaustedState } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
+    const meta = dcMessageMeta.get(msgId);
+    // Grant free attack with Pierce 2
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[msgId] = true;
+    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+    game.pendingOverrideAttackDice[msgId] = { ...(game.pendingOverrideAttackDice[msgId] || {}), bonusPierce: (game.pendingOverrideAttackDice[msgId]?.bonusPierce || 0) + 2 };
+    // Apply Weaken to activating figure
+    const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    game.figureConditions = game.figureConditions || {};
+    actKeys.forEach((fk) => { game.figureConditions[fk] = [...new Set([...(game.figureConditions[fk] || []), 'Weaken'])]; });
+    // Exhaust the DC card (if dcExhaustedState is available)
+    if (dcExhaustedState) dcExhaustedState.set(msgId, true);
+    return { applied: true, logMessage: `**Overcharged Weapons** — **${meta?.dcName || 'VEHICLE'}** gains 1 free attack (+Pierce 2). ${meta?.dcName || 'Vehicle'} is exhausted and Weakened.` };
+  }
+
+  // ccEffect: partingBlowEffect (Parting Blow) — interrupt: free attack on hostile exiting adjacent + become Stunned
+  if (entry.type === 'ccEffect' && entry.partingBlowEffect) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
+    const meta = dcMessageMeta.get(msgId);
+    // Grant free attack
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[msgId] = true;
+    // Apply Stun to activating figure
+    const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    game.figureConditions = game.figureConditions || {};
+    actKeys.forEach((fk) => { game.figureConditions[fk] = [...new Set([...(game.figureConditions[fk] || []), 'Stun'])]; });
+    return { applied: true, logMessage: `**Parting Blow** — **${meta?.dcName || 'BRAWLER'}** gains 1 free attack before the hostile finishes exiting. ${meta?.dcName || 'Figure'} becomes Stunned.` };
+  }
+
+  // ccEffect: chooseASideEffect (Choose a Side) — SCUM: round defense block +1 for Mobile friendlies; IMPERIAL: free flamethrower-style attack
+  if (entry.type === 'ccEffect' && entry.chooseASideEffect) {
+    const { game, playerNum, dcMessageMeta, choiceIndex } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      const dcEffects = getDcEffects();
+      const mobileKeys = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => {
+        const dcN = fk.replace(/-\d+-\d+$/, '');
+        const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
+        return kws.includes('MOBILE') && (msgId ? !getFigureKeysForDcMsg(game, playerNum, dcMessageMeta?.get(msgId)).includes(fk) : true);
+      });
+      if (choiceIndex === 0) {
+        // SCUM: Personal Combat Shield — +1 Block per attack for Mobile friendlies (approximate with roundDefenseBonusBlock)
+        game.roundDefenseBonusBlock = game.roundDefenseBonusBlock || {};
+        game.roundDefenseBonusBlock[playerNum] = (game.roundDefenseBonusBlock[playerNum] || 0) + 1;
+        return { applied: true, logMessage: `**Choose a Side (SCUM)** — This round, +1 Block when defending for your figures (${mobileKeys.length} Mobile figure${mobileKeys.length !== 1 ? 's' : ''} benefit). [Personal Combat Shield effect approximated for full team.]` };
+      } else {
+        // IMPERIAL: Gar Saxon Flamethrower — grant free fixedAreaEffect-style attack (honor system)
+        if (msgId) {
+          game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+          game.freeAttackBonusPending[msgId] = true;
+        }
+        return { applied: true, logMessage: `**Choose a Side (IMPERIAL)** — This round, Mobile friendlies gain Gar Saxon's Flamethrower. Gar Saxon gains 1 free Flamethrower attack (use Special). For other Mobile figures, apply Flamethrower manually.` };
+      }
+    }
+    return { requiresChoice: true, choiceOptions: ['SCUM: Personal Combat Shield (+1 Block for Mobile figures)', "IMPERIAL: Gar Saxon's Flamethrower (area attack)"] };
   }
 
   // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free
