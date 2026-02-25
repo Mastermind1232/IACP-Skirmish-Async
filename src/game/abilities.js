@@ -4300,6 +4300,263 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: '**Droid Mastery** — J4X-7 is now **Focused**. J4X-7 may perform 1 free attack (use J4X-7\'s Attack button).' };
   }
 
+  // ccEffect: hiddenTrapEffect (Hidden Trap) — pick a terminal space, deal 2 damage to all adjacent figures
+  if (entry.type === 'ccEffect' && entry.hiddenTrapEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenSpace } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    if (chosenSpace) {
+      // Phase 2: apply 2 damage to all figures adjacent to chosen space
+      if (!dcHealthState) return { applied: false, manualMessage: 'Apply 2 Damage to each figure adjacent to the terminal manually.' };
+      const boardState = getBoardStateForMovement(game, null);
+      const spaceNorm = String(chosenSpace).toLowerCase();
+      const adjRaw = boardState?.mapSpaces?.adjacency?.[spaceNorm] || [];
+      const adjSet = new Set(adjRaw.map((s) => String(s).toLowerCase()));
+      const results = [];
+      for (const pn of [1, 2]) {
+        for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+          if (!coord || !adjSet.has(String(coord).toLowerCase())) continue;
+          const dcName = fk.replace(/-\d+-\d+$/, '');
+          const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+          if (figMsgId) {
+            const hs = dcHealthState.get(figMsgId) || [];
+            const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+            const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+            const hp = hs[figIdx];
+            if (hp) {
+              const [cur, max] = hp;
+              const newCur = Math.max(0, (cur ?? max) - 2);
+              hs[figIdx] = [newCur, max ?? newCur];
+              dcHealthState.set(figMsgId, hs);
+              const dcIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+              const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+              const idx2 = (dcIds || []).indexOf(figMsgId);
+              if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+              results.push(`**${dcName}**: 2 Dmg (HP: ${cur ?? max}→${newCur})`);
+            } else {
+              results.push(`**${dcName}**: apply 2 Dmg manually`);
+            }
+          } else {
+            results.push(`apply 2 Dmg to ${dcName.replace(/-\d+-\d+$/, '')} manually`);
+          }
+        }
+      }
+      return { applied: true, logMessage: `**Hidden Trap** — Terminal at **${String(chosenSpace).toUpperCase()}**. ${results.length ? results.join('; ') : 'No figures adjacent.'}`, refreshDcEmbed: results.length > 0 };
+    }
+    // Phase 1: space picker — show all spaces within 8 of activating figure
+    const boardState = getBoardStateForMovement(game, null);
+    const adj = boardState?.mapSpaces?.adjacency;
+    if (!adj) return { applied: false, manualMessage: 'Apply Hidden Trap manually (no map data).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta?.get(msgId) : null;
+    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    const allSpaces = Object.keys(adj);
+    let validSpaces = allSpaces;
+    if (actPos) {
+      const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
+      validSpaces = allSpaces.filter((sp) => {
+        const [sr, sc] = String(sp).toUpperCase().split(/(\d+)/).filter(Boolean);
+        return Math.abs((ar?.charCodeAt(0) ?? 0) - (sr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(sc || '0')) <= 8;
+      });
+    }
+    if (!validSpaces.length) validSpaces = allSpaces.slice(0, 25);
+    return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: '**Hidden Trap** — Choose the terminal space:' };
+  }
+
+  // ccEffect: fieldSupplyEffect (Field Supply) — up to 2 friendly figures within 3 each gain 1 Hit Token
+  if (entry.type === 'ccEffect' && entry.fieldSupplyEffect) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Phase 2: grant Hit Token to chosen figure
+    if (chosenFigureKey) {
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[chosenFigureKey] = [...(game.figurePowerTokens[chosenFigureKey] || []), 'Hit'];
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Field Supply** — **${dcName}** gained 1 Hit Token. (Surge Token also allowed; for a 2nd figure, apply manually.)` };
+    }
+    // Phase 1: find friendly figures within 3
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta?.get(msgId) : null;
+    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    if (!actPos) {
+      // Auto-grant to nearest friendly if no position data
+      const fks = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => !actKeys.includes(fk));
+      if (!fks.length) return { applied: false, manualMessage: 'No friendly figures to grant tokens to.' };
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      const targets = fks.slice(0, 2);
+      const names = targets.map((fk) => { game.figurePowerTokens[fk] = [...(game.figurePowerTokens[fk] || []), 'Hit']; return fk.replace(/-\d+-\d+$/, ''); });
+      return { applied: true, logMessage: `**Field Supply** — Hit Token granted to: ${names.join(', ')}.` };
+    }
+    const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
+    const nearbyKeys = [];
+    const nearbyLabels = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos || actKeys.includes(fk)) continue;
+      const [fr, fc] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
+      if (Math.abs((ar?.charCodeAt(0) ?? 0) - (fr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(fc || '0')) > 3) continue;
+      nearbyKeys.push(fk);
+      nearbyLabels.push(fk.replace(/-\d+-\d+$/, ''));
+    }
+    if (!nearbyKeys.length) return { applied: false, manualMessage: 'No friendly figures within 3 spaces.' };
+    return { requiresChoice: true, choiceOptions: nearbyLabels.map((n) => `Hit Token → ${n}`), choiceValues: nearbyKeys };
+  }
+
+  // ccEffect: feralSwipesEffect (Feral Swipes) — 1 Melee attack per die in pool, each using 1 red die
+  if (entry.type === 'ccEffect' && entry.feralSwipesEffect) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const dcName = meta.dcName;
+    const dcEffects = getDcEffects();
+    const normalDice = dcEffects[dcName]?.attack?.dice || ['red'];
+    const diceCount = normalDice.length;
+    // Override first attack to 1 red die (melee)
+    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+    game.pendingOverrideAttackDice[msgId] = { dice: ['red'], type: 'melee' };
+    // Grant (diceCount - 1) more free attacks
+    if (diceCount > 1) {
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = diceCount - 1;
+    }
+    return { applied: true, logMessage: `**Feral Swipes** — **${dcName}** performs ${diceCount} Melee attack${diceCount !== 1 ? 's' : ''} (1 red die each). First attack override set. Each remaining free attack: use 1 red die.` };
+  }
+
+  // ccEffect: optimalBombardmentEffect (Optimal Bombardment) — adjacent VEHICLE/DROID/HEAVY WEAPON figures may each perform 1 free attack
+  if (entry.type === 'ccEffect' && entry.optimalBombardmentEffect) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta.get(msgId) : null;
+    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    if (!actPos || !meta) return { applied: false, manualMessage: 'Resolve manually: no activation position.' };
+    const boardState = getBoardStateForMovement(game, null);
+    const adjRaw = boardState?.mapSpaces?.adjacency?.[String(actPos).toLowerCase()] || [];
+    const adjSet = new Set(adjRaw.map((s) => String(s).toLowerCase()));
+    const dcEffects = getDcEffects();
+    const targets = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos || actKeys.includes(fk) || !adjSet.has(String(pos).toLowerCase())) continue;
+      const dcN = fk.replace(/-\d+-\d+$/, '');
+      const eff = dcEffects[dcN] || {};
+      const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
+      if (kws.includes('VEHICLE') || kws.includes('DROID') || kws.includes('HEAVY WEAPON')) {
+        targets.push(fk);
+      }
+    }
+    if (!targets.length) return { applied: false, manualMessage: 'No adjacent VEHICLE/DROID/HEAVY WEAPON figures to activate.' };
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    const names = [];
+    let count = 0;
+    for (const fk of targets.slice(0, 3)) {
+      const figMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
+      if (figMsgId) { game.freeAttackBonusPending[figMsgId] = true; count++; }
+      names.push(fk.replace(/-\d+-\d+$/, ''));
+    }
+    return { applied: true, logMessage: `**Optimal Bombardment** — Free attack granted to: ${names.join(', ')} (${count} figure${count !== 1 ? 's' : ''}, up to 3).` };
+  }
+
+  // ccEffect: overheatedEffect (Overheated) — Strain 4; override next attack(s) to Melee; 2 total attacks if originally Ranged
+  if (entry.type === 'ccEffect' && entry.overheatedEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Apply 4 Strain to activating figure
+    let strainNote = '4 Strain applied manually (HP not found)';
+    if (dcHealthState) {
+      const actData = game.dcActionsData?.[msgId];
+      const figIdx = actData?.selectedFigure ?? 0;
+      const hs = dcHealthState.get(msgId) || [];
+      if (hs[figIdx]) {
+        const [cur, max] = hs[figIdx];
+        const newCur = Math.max(0, (cur ?? max) - 4);
+        hs[figIdx] = [newCur, max ?? newCur];
+        dcHealthState.set(msgId, hs);
+        const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const idx2 = (dcIds || []).indexOf(msgId);
+        if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+        strainNote = `4 Strain (HP: ${cur ?? max}→${newCur})`;
+      }
+    }
+    // Override next attack to melee; grant 1 free attack (for 2 total)
+    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+    game.pendingOverrideAttackDice[msgId] = { type: 'melee' };
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[msgId] = true;
+    return { applied: true, logMessage: `**Overheated** — **${meta.dcName}**: ${strainNote}. 2 Melee attacks queued (apply −1 Hit per attack manually). Attack type is now Melee.`, refreshDcEmbed: true };
+  }
+
+  // ccEffect: setTheChargesEffect (Set the Charges) — pick a space within 3; roll blue die; apply Hit+Surge as damage; open doors (honor)
+  if (entry.type === 'ccEffect' && entry.setTheChargesEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenSpace } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    if (chosenSpace) {
+      // Phase 2: roll blue die, apply total to adjacent figures
+      const diceData = getDiceData?.();
+      const blueFaces = diceData?.attack?.blue || [];
+      const faceIdx = Math.floor(Math.random() * Math.max(blueFaces.length, 1));
+      const face = blueFaces[faceIdx] || {};
+      const hitsFromDie = (face.hits || 0) + (face.surge ? 1 : 0);
+      const dieLabel = face.label || JSON.stringify(face);
+      const boardState = getBoardStateForMovement(game, null);
+      const spaceNorm = String(chosenSpace).toLowerCase();
+      const adjRaw = boardState?.mapSpaces?.adjacency?.[spaceNorm] || [];
+      const affectedSpaces = new Set([spaceNorm, ...adjRaw.map((s) => String(s).toLowerCase())]);
+      const results = [];
+      if (dcHealthState && hitsFromDie > 0) {
+        for (const pn of [1, 2]) {
+          for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+            if (!coord || !affectedSpaces.has(String(coord).toLowerCase())) continue;
+            const dcN = fk.replace(/-\d+-\d+$/, '');
+            const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+            if (figMsgId) {
+              const hs = dcHealthState.get(figMsgId) || [];
+              const fkM = fk.match(/-(\d+)-(\d+)$/);
+              const fi = fkM ? parseInt(fkM[2], 10) : 0;
+              const hp = hs[fi];
+              if (hp) {
+                const [cur, max] = hp;
+                const newCur = Math.max(0, (cur ?? max) - hitsFromDie);
+                hs[fi] = [newCur, max ?? newCur];
+                dcHealthState.set(figMsgId, hs);
+                const dcIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+                const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+                const idx2 = (dcIds || []).indexOf(figMsgId);
+                if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+                results.push(`**${dcN}**: ${hitsFromDie} Dmg (HP: ${cur ?? max}→${newCur})`);
+              } else { results.push(`**${dcN}**: apply ${hitsFromDie} Dmg manually`); }
+            }
+          }
+        }
+      }
+      const noFigures = hitsFromDie === 0 ? '0 Hits+Surges — no damage.' : results.length ? results.join('; ') : 'No figures in area.';
+      return { applied: true, logMessage: `**Set the Charges** — Space **${String(chosenSpace).toUpperCase()}**, rolled blue die: **${dieLabel}** (${hitsFromDie} dmg). ${noFigures} Open adjacent unlocked doors manually.`, refreshDcEmbed: results.length > 0 };
+    }
+    // Phase 1: space picker within 3 of activating figure
+    const boardState = getBoardStateForMovement(game, null);
+    if (!boardState?.mapSpaces) return { applied: false, manualMessage: 'Resolve Set the Charges manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta?.get(msgId) : null;
+    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    if (!actPos) return { applied: false, manualMessage: 'Resolve Set the Charges manually (no position).' };
+    const occ = boardState.occupiedSet;
+    const occArr = occ instanceof Set ? [...occ] : (occ || []);
+    const reachable = getReachableSpaces(actPos, 3, boardState.mapSpaces, occArr);
+    const validSet = new Set([String(actPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
+    const validSpaces = [...validSet];
+    if (!validSpaces.length) return { applied: false, manualMessage: 'Resolve Set the Charges manually (no spaces in range).' };
+    return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: '**Set the Charges** — Choose a space within 3:' };
+  }
+
   // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free
   if (entry.type === 'dcSpecial' && entry.pounceRange) {
     const { game, playerNum, dcMessageMeta, chosenSpace } = context;

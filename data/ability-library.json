@@ -1294,7 +1294,11 @@
     "Close the Gap": {
       "type": "ccEffect",
       "label": "Each friendly BRAWLER may move 2 spaces; then gains an Armor Token",
-      "grantMpToFriendliesByKeyword": { "keyword": "BRAWLER", "mp": 2, "grantBlockToken": true },
+      "grantMpToFriendliesByKeyword": {
+        "keyword": "BRAWLER",
+        "mp": 2,
+        "grantBlockToken": true
+      },
       "wiredStatus": "wired"
     },
     "Covering Fire": {
@@ -1307,7 +1311,11 @@
       "type": "ccEffect",
       "label": "Ranged attack at 5+ spaces without an action; remove 1 red die from pool",
       "freeAttackBonus": true,
-      "attackOverrideOpts": { "type": "ranged", "minRange": 5, "removeDieColor": "red" },
+      "attackOverrideOpts": {
+        "type": "ranged",
+        "minRange": 5,
+        "removeDieColor": "red"
+      },
       "wiredStatus": "wired"
     },
     "Deploy the Garrison": {
@@ -1369,8 +1377,8 @@
     },
     "Hidden Trap": {
       "type": "ccEffect",
-      "informational": true,
-      "logMessage": "**Hidden Trap** — Choose a terminal. Each figure adjacent to that terminal suffers 2 Damage (apply manually for each adjacent figure).",
+      "hiddenTrapEffect": true,
+      "label": "Choose a terminal; each adjacent figure suffers 2 Damage",
       "wiredStatus": "wired"
     },
     "Jundland Terror": {
@@ -1388,9 +1396,8 @@
     },
     "Field Supply": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Up to 2 figures within 3 each gain 1 Hit or Surge Token; ongoing trigger this round",
-      "logMessage": "**Field Supply** — Up to 2 other friendly figures within 3 spaces each gain 1 Hit Token or 1 Surge Token (your choice per figure). Distribute tokens manually. Also, during this round, when a figure uses a Command card, they may place 1 of their tokens on this card — track that manually.",
+      "fieldSupplyEffect": true,
+      "label": "Up to 2 friendlies within 3 each gain 1 Hit or Surge Token",
       "wiredStatus": "wired"
     },
     "Field Tactician": {
@@ -1416,7 +1423,11 @@
       "type": "ccEffect",
       "label": "Free Ranged attack: 1 blue + 1 red + 1 green die, +2 Accuracy (only built-in abilities apply)",
       "freeAttackBonus": true,
-      "overrideAttackDice": ["blue", "red", "green"],
+      "overrideAttackDice": [
+        "blue",
+        "red",
+        "green"
+      ],
       "overrideAttackType": "Ranged",
       "overrideBonusAccuracy": 2,
       "wiredStatus": "wired"
@@ -1438,9 +1449,8 @@
     },
     "Feral Swipes": {
       "type": "ccEffect",
-      "informational": true,
+      "feralSwipesEffect": true,
       "label": "Perform a Melee attack using 1 die; repeat once per die in your pool",
-      "logMessage": "**Feral Swipes** — You may perform a Melee attack once per die in your attack pool. Each attack uses only 1 attack die of your choice. Perform each attack manually using the Attack button.",
       "wiredStatus": "wired"
     },
     "Flurry of Blades": {
@@ -2062,7 +2072,10 @@
     "Improvised Weapons": {
       "type": "ccEffect",
       "label": "Ranged attack using 1 green + 1 yellow die",
-      "overrideAttackDice": ["green", "yellow"],
+      "overrideAttackDice": [
+        "green",
+        "yellow"
+      ],
       "overrideAttackType": "Ranged",
       "freeAttackBonus": true,
       "wiredStatus": "wired"
@@ -2096,9 +2109,9 @@
     },
     "Optimal Bombardment": {
       "type": "ccEffect",
-      "informational": true,
+      "optimalBombardmentEffect": true,
       "label": "Up to 3 adjacent VEHICLES/DROIDS/HEAVY WEAPONs each attack with Blast 1",
-      "logMessage": "**Optimal Bombardment** — Choose up to 3 VEHICLES, DROIDS, or HEAVY WEAPONs adjacent to you. Each may interrupt to perform an attack with Blast 1. Resolve each attack manually.",
+      "logMessage": "Blast 1 is honor system — apply manually after each attack.",
       "wiredStatus": "wired"
     },
     "Overcharged Weapons": {
@@ -2110,9 +2123,8 @@
     },
     "Overheated": {
       "type": "ccEffect",
-      "informational": true,
+      "overheatedEffect": true,
       "label": "Strain 4; if Ranged: 2 attacks with -1 Hit; attack type becomes Melee",
-      "logMessage": "**Overheated** — Strain 4. If you have the Ranged attack type, perform 2 attacks (apply -1 Hit to results). Then your attack type becomes Melee. Resolve manually.",
       "wiredStatus": "wired"
     },
     "Pack Alpha": {
@@ -2183,9 +2195,8 @@
     },
     "Set the Charges": {
       "type": "ccEffect",
-      "informational": true,
+      "setTheChargesEffect": true,
       "label": "Roll blue die: open adjacent doors; Hit+Surge Damage to figures on/adjacent to chosen space",
-      "logMessage": "**Set the Charges** — Choose a space within 3 spaces. Roll a blue die. Open any unlocked doors adjacent to that space. Each figure/object on or adjacent to it suffers Damage equal to Hit+Surge results. Resolve manually.",
       "wiredStatus": "wired"
     },
     "Signal Jammer": {
