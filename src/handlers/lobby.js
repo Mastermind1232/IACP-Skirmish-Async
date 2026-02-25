@@ -21,7 +21,7 @@ export async function handleLobbyJoin(interaction, ctx) {
   const threadId = interaction.customId.replace('lobby_join_', '');
   const lobby = lobbies.get(threadId);
   if (!lobby) {
-    await interaction.followUp({ content: 'This lobby no longer exists.', ephemeral: true });
+    await interaction.followUp({ content: 'This lobby has expired (bot was restarted). Please ask your opponent to create a new game.', ephemeral: true });
     return;
   }
   if (lobby.joinedId) {

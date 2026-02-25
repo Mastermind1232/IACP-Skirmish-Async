@@ -6171,6 +6171,7 @@
       "keywords": [
         "FORCE USER"
       ],
+      "cost": 0,
       "health": 2,
       "speed": 3,
       "defense": [

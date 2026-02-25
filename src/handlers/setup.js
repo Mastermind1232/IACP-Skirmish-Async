@@ -20,10 +20,14 @@ export function buildPlayableMissionOptions(getPlayReadyMaps, getMissionCardsDat
     for (const variant of ['a', 'b']) {
       const mission = variants[variant];
       if (!mission?.name) continue;
-      options.push({
-        value: `${map.id}:${variant}`,
-        label: `${map.name} — ${mission.name}`,
-      });
+      const variantUpper = variant.toUpperCase();
+      // Prefix variant letter if not already present in the mission name
+      const missionDisplay = /^[AB][.:)]\s/i.test(mission.name) ? mission.name : `${variantUpper}: ${mission.name}`;
+      const rawLabel = `${map.name} — ${missionDisplay}`;
+      const label = rawLabel.length > 100 ? rawLabel.slice(0, 97) + '...' : rawLabel;
+      const rawDesc = (mission.endOfRound || mission.setup || '').replace(/\n/g, ' ').trim();
+      const description = rawDesc ? (rawDesc.length > 100 ? rawDesc.slice(0, 97) + '...' : rawDesc) : undefined;
+      options.push({ value: `${map.id}:${variant}`, label, description });
     }
   }
   return options;
