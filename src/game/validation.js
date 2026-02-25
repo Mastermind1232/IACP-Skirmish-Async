@@ -21,9 +21,11 @@ export function validateDeckLegal(squad) {
   const errors = [];
   let dcTotal = 0;
   const dcList = squad?.dcList || [];
+  const dcEffects = getDcEffects();
   for (const entry of dcList) {
     const name = resolveDcName(entry);
-    const stats = getDcEffects()[name];
+    // Bracket fallback: "Black Market" → "[Black Market]" for attachment/upgrade cards
+    const stats = dcEffects[name] || (!name.startsWith('[') ? dcEffects[`[${name}]`] : null);
     const cost = stats?.cost;
     if (cost == null) {
       errors.push(`Unknown Deployment Card: "${name}" (cost not found).`);
@@ -38,7 +40,8 @@ export function validateDeckLegal(squad) {
   let ccCost = 0;
   const unknownCc = [];
   for (const name of ccList) {
-    const effect = getCcEffect(name);
+    // Punctuation fallback: "Get Behind Me" → "Get Behind Me!" for cards with trailing punctuation in data
+    const effect = getCcEffect(name) || getCcEffect(name + '!');
     if (!effect) {
       unknownCc.push(name);
     } else {

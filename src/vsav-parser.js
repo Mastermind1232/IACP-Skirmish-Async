@@ -4,6 +4,27 @@
  */
 
 /**
+ * Normalize a card name exported by IACP List Builder to match bot data keys.
+ *   - Strip trailing " IACP" suffix (e.g. "Leia Organa IACP" → "Leia Organa")
+ *   - Strip single-letter faction/variant suffix like " (M)", " (F)", " (I)" etc.
+ *     (e.g. "Temporary Alliance (M)" → "Temporary Alliance")
+ *   - Convert " [E]" → " (Elite)"  (e.g. "Hired Gun [E]" → "Hired Gun (Elite)")
+ *   - Convert " [R]" → " (Regular)"
+ * Bracket-prefixed attachment names ("[Black Market]") are handled by the lookup
+ * fallback in validation.js and getDcStats().
+ */
+function normalizeCardName(name) {
+  let n = name.replace(/\s+IACP$/i, '').trim();
+  // Strip single-letter faction/variant suffixes like " (M)", " (F)", " (R)", " (I)"
+  // The regex matches a space + one uppercase letter in parens at the end of the string.
+  n = n.replace(/\s+\([A-Z]\)$/i, '').trim();
+  // Convert elite/regular bracket notation to paren notation used in the data
+  n = n.replace(/\s+\[E\]$/i, ' (Elite)');
+  n = n.replace(/\s+\[R\]$/i, ' (Regular)');
+  return n;
+}
+
+/**
  * Parse vsav file content and extract DC/CC lists.
  * @param {string} content - Raw vsav file content (UTF-8)
  * @returns {{ dcList: string[], ccList: string[], squadName?: string } | null}
@@ -20,20 +41,20 @@ export function parseVsav(content) {
   const dcRegex = /D card-[^;]+\.(?:jpg|png|gif);([^/\\]+?)(?:\/|;;|$)/g;
   let m;
   while ((m = dcRegex.exec(content)) !== null) {
-    const name = m[1].trim();
-    if (name && !dcSeen.has(name) && !/^[;\s]*$|^;?true$/i.test(name) && /[A-Za-z]/.test(name) && name.length > 2) {
-      dcSeen.add(name);
-      dcList.push(name);
+    const raw = m[1].trim();
+    if (raw && !/^[;\s]*$|^;?true$/i.test(raw) && /[A-Za-z]/.test(raw) && raw.length > 2) {
+      const name = normalizeCardName(raw);
+      if (!dcSeen.has(name)) { dcSeen.add(name); dcList.push(name); }
     }
   }
 
   // Command cards: C card--Name.jpg;Name/
   const ccRegex = /C card--[^;]+\.(?:jpg|png|gif);([^/\\]+?)(?:\/|;;|$)/g;
   while ((m = ccRegex.exec(content)) !== null) {
-    const name = m[1].trim();
-    if (name && !ccSeen.has(name) && !/^[;\s]*$|^;?true$/i.test(name) && /[A-Za-z]/.test(name) && name.length > 2) {
-      ccSeen.add(name);
-      ccList.push(name);
+    const raw = m[1].trim();
+    if (raw && !/^[;\s]*$|^;?true$/i.test(raw) && /[A-Za-z]/.test(raw) && raw.length > 2) {
+      const name = normalizeCardName(raw);
+      if (!ccSeen.has(name)) { ccSeen.add(name); ccList.push(name); }
     }
   }
 
@@ -80,12 +101,12 @@ export function parseIacpListPaste(content) {
       if (!trimmed || trimmed.endsWith(':') || trimmed.startsWith('--') || trimmed.startsWith('#')) continue;
       // "- Card Name" (bullet format)
       const bulletMatch = trimmed.match(/^-\s+(.+)$/);
-      if (bulletMatch) { items.push(bulletMatch[1].trim()); continue; }
+      if (bulletMatch) { items.push(normalizeCardName(bulletMatch[1].trim())); continue; }
       // "12 Card Name" (cost-prefix format)
       const costMatch = trimmed.match(/^\d+\s+(.+)$/);
-      if (costMatch) { items.push(costMatch[1].trim()); continue; }
+      if (costMatch) { items.push(normalizeCardName(costMatch[1].trim())); continue; }
       // Plain "Card Name" (no prefix)
-      if (/[A-Za-z]/.test(trimmed)) items.push(trimmed);
+      if (/[A-Za-z]/.test(trimmed)) items.push(normalizeCardName(trimmed));
     }
     return items;
   };
