@@ -740,7 +740,12 @@ async function buildAndSendAttackTargets(
   const attackerSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
   const attackerFpCells = getFootprintCells(attackerPos, attackerSize);
   let allFigureBlockingCoords = null;
-  if (!attackerIgnoresFigureBlocking) {
+  // Marksman CC card: figures do not block LOS for this attack
+  const marksmanActive = game.nextAttackIgnoreFigureLOS?.[msgId];
+  if (marksmanActive) {
+    delete game.nextAttackIgnoreFigureLOS[msgId];
+    // allFigureBlockingCoords stays null — figures don't block LOS
+  } else if (!attackerIgnoresFigureBlocking) {
     allFigureBlockingCoords = new Set();
     const attackerFpSet = new Set(attackerFpCells.map(c => String(c).toLowerCase()));
     for (const poses_ of [game.figurePositions?.[playerNum] || {}, game.figurePositions?.[enemyPlayerNum] || {}]) {

@@ -565,10 +565,12 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, freeAction: true, logMessage: `**${label}** — You may perform ${entry.actionBonus} additional action${entry.actionBonus !== 1 ? 's' : ''} this activation. Action counter restored.` };
   }
 
-  // dcSpecial: overrideAttackDice (Saber Strike, Bo-Rifle Staff Strike, Brutal Cleave) — next attack uses specific dice/type/pierce
+  // dcSpecial/ccEffect: overrideAttackDice (Saber Strike, Bo-Rifle Staff Strike, Brutal Cleave, Improvised Weapons) — next attack uses specific dice/type/pierce
   // Must run BEFORE freeAttackBonus to take precedence when both are present.
-  if (entry.type === 'dcSpecial' && Array.isArray(entry.overrideAttackDice)) {
-    const { game, msgId, dcHealthState, playerNum } = context;
+  if ((entry.type === 'dcSpecial' || entry.type === 'ccEffect') && Array.isArray(entry.overrideAttackDice)) {
+    const { game, playerNum, dcMessageMeta } = context;
+    const msgId = context.msgId ?? (playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null);
+    const dcHealthState = context.dcHealthState;
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[msgId] = true;
@@ -605,9 +607,10 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // dcSpecial: freeAttackBonus (Heroic, Rapid Fire, Brutality) — next attack this activation costs no action
-  if (entry.type === 'dcSpecial' && entry.freeAttackBonus) {
-    const { game, msgId } = context;
+  // dcSpecial/ccEffect: freeAttackBonus (Heroic, Rapid Fire, Brutality, etc.) — next attack this activation costs no action
+  if ((entry.type === 'dcSpecial' || entry.type === 'ccEffect') && entry.freeAttackBonus) {
+    const { game, playerNum, dcMessageMeta } = context;
+    const msgId = context.msgId ?? (playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null);
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[msgId] = true;
@@ -3630,6 +3633,60 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.roundSmugglersTricksPlayerNum = playerNum;
     return { applied: true, logMessage: 'Choose a tile or token you are on or adjacent to; until start of next round, opponent counts 1 fewer figure on or adjacent to it.' };
+  }
+
+  // ccEffect: roundEfficientTravel (Efficient Travel CC) — until end of round all friendly figures ignore Difficult Terrain and hostile figure entry costs
+  if (entry.type === 'ccEffect' && entry.roundEfficientTravel) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.roundEfficientTravel = game.roundEfficientTravel || {};
+    game.roundEfficientTravel[playerNum] = true;
+    return { applied: true, logMessage: `**Efficient Travel** — Until end of round, your figures ignore Difficult Terrain and hostile figure entry costs.` };
+  }
+
+  // ccEffect: applyBlockAndHideToIsolatedFriendlies (Guerilla Warfare) — figures with no adjacent friendly gain Block Token + Hidden
+  if (entry.type === 'ccEffect' && entry.applyBlockAndHideToIsolatedFriendlies) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const allFriendlyPositions = game.figurePositions?.[playerNum] || {};
+    const friendlyKeys = Object.keys(allFriendlyPositions);
+    const qualified = [];
+    for (const fk of friendlyKeys) {
+      const pos = allFriendlyPositions[fk];
+      if (!pos) continue;
+      const hasAdjacentFriendly = friendlyKeys.some((otherFk) => {
+        if (otherFk === fk) return false;
+        const otherPos = allFriendlyPositions[otherFk];
+        if (!otherPos) return false;
+        try {
+          const pa = parseCoord(pos);
+          const pb = parseCoord(otherPos);
+          return Math.abs(pa.col - pb.col) + Math.abs(pa.row - pb.row) === 1;
+        } catch { return false; }
+      });
+      if (!hasAdjacentFriendly) qualified.push(fk);
+    }
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    game.figureConditions = game.figureConditions || {};
+    for (const fk of qualified) {
+      game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+      game.figurePowerTokens[fk].push('Block');
+      const existing = game.figureConditions[fk] || [];
+      if (!existing.includes('Hide')) game.figureConditions[fk] = [...existing, 'Hide'];
+    }
+    if (qualified.length === 0) return { applied: true, logMessage: `**Guerilla Warfare** — No isolated friendly figures (all have adjacent friendlies).` };
+    const names = qualified.map((fk) => fk.replace(/-\d+-\d+$/, '')).join(', ');
+    return { applied: true, logMessage: `**Guerilla Warfare** — Applied Block Token and Hidden to **${qualified.length}** isolated friendly figure(s): ${names}.` };
+  }
+
+  // ccEffect: nextAttackIgnoreFigureLOS (Marksman) — for next attack, figures do not block line of sight
+  if (entry.type === 'ccEffect' && entry.nextAttackIgnoreFigureLOS) {
+    const { game, playerNum, dcMessageMeta } = context;
+    const msgId = playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null;
+    if (!game || !msgId) return { applied: false, manualMessage: 'Resolve manually: play before declaring your attack this activation.' };
+    game.nextAttackIgnoreFigureLOS = game.nextAttackIgnoreFigureLOS || {};
+    game.nextAttackIgnoreFigureLOS[msgId] = true;
+    return { applied: true, logMessage: `**Marksman** — For your next Ranged attack this activation, figures do not block line of sight.` };
   }
 
   // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free

@@ -181,7 +181,16 @@ export function getMovementProfile(dcName, figureKey, game) {
   const keywords = getMovementKeywords(dcName);
   const isMassive = keywords.has('massive');
   const isMobile = keywords.has('mobile');
-  const hasEfficientTravel = keywords.has('efficient travel');
+  let hasEfficientTravel = keywords.has('efficient travel');
+  // Check round flag from Efficient Travel CC card
+  if (!hasEfficientTravel && figureKey) {
+    for (const pn of [1, 2]) {
+      if (figureKey in (game.figurePositions?.[pn] || {})) {
+        if (game.roundEfficientTravel?.[pn]) hasEfficientTravel = true;
+        break;
+      }
+    }
+  }
   return {
     size: storedSize,
     cols,

@@ -299,6 +299,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.whenDefeatHostileWithin3GainBlockTokens = null;
   game.overrunThisActivation = {};
   game.roundFigureAbilityUsed = {};
+  game.roundEfficientTravel = {};
+  game.nextAttackIgnoreFigureLOS = {};
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
   }

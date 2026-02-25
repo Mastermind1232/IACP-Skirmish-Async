@@ -1001,7 +1001,7 @@
       "type": "ccEffect",
       "informational": true,
       "label": "After attack on you resolves: attacker suffers 1 Damage (3 if adjacent); move 2",
-      "logMessage": "**Dangerous Prey** — After an attack targeting you resolves: the attacker suffers 1 Damage (or 3 Damage if adjacent to you). You may then move up to 2 spaces. Apply damage manually; use your movement bank for the 2 spaces.",
+      "logMessage": "**Dangerous Prey** — This card triggers automatically. After an attack targeting Bossk resolves, you will be prompted to deal 1 Damage (or 3 if adjacent) to the attacker and move 2 spaces.",
       "wiredStatus": "wired"
     },
     "Deflection": {
@@ -1024,14 +1024,14 @@
       "type": "ccEffect",
       "informational": true,
       "label": "When attack declared on you: attacker suffers 1 Damage (3 if you spend Block Token)",
-      "logMessage": "**Right Back At Ya!** — When an attack targeting you is declared: the attacker suffers 1 Damage. If you spend a Block Power Token, the attacker suffers 3 Damage instead. Apply damage manually to the attacker's DC health tracker.",
+      "logMessage": "**Right Back At Ya!** — This card triggers automatically. When an attack targeting Boba Fett is declared, you will be prompted to deal 1 Damage to the attacker (or 3 if you spend a Block Token).",
       "wiredStatus": "wired"
     },
     "Payback": {
       "type": "ccEffect",
       "informational": true,
       "label": "After attack on you resolves: interrupt to attack the attacker (+2 Surge)",
-      "logMessage": "**Payback** — After an attack targeting you resolves, Dengar may interrupt to perform an attack targeting the attacker. Apply +2 Surge to that attackâ€™s results. Declare the counter-attack manually using the Attack button, then apply +2 Surge in the surge step.",
+      "logMessage": "**Payback** — This card triggers automatically. After an attack targeting Dengar resolves, you will be prompted to use this card to counter-attack with +2 Surge.",
       "wiredStatus": "wired"
     },
     "Toxic Dart": {
@@ -1258,9 +1258,8 @@
     },
     "Guerilla Warfare": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Each friendly with no adjacent friendly gains a Block Token and Hidden",
-      "logMessage": "**Guerilla Warfare** — Each of your friendly figures with no other friendly figure within 2 spaces gains 1 Block Power Token and becomes Hidden. Apply the Block token and Hidden condition to each qualifying figure manually.",
+      "applyBlockAndHideToIsolatedFriendlies": true,
       "wiredStatus": "wired"
     },
     "Arcing Shot": {
@@ -1530,9 +1529,8 @@
     },
     "Efficient Travel": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Until end of round: your figures ignore Difficult Terrain and hostile figure entry cost",
-      "logMessage": "**Efficient Travel** — Until the end of this round, each of your figures ignores the additional movement point cost for Difficult Terrain and for entering spaces occupied by hostile figures. Track this rule change manually for the rest of the round.",
+      "roundEfficientTravel": true,
       "wiredStatus": "wired"
     },
     "Elusive": {
@@ -1691,9 +1689,8 @@
     },
     "Marksman": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Marksman",
-      "logMessage": "**Marksman** — During this Ranged attack, figures do not block line of sight. Announce to opponent before declaring the attack.",
+      "label": "Marksman: next attack figures do not block LOS",
+      "nextAttackIgnoreFigureLOS": true,
       "wiredStatus": "wired"
     },
     "Ready Weapons": {
@@ -2070,9 +2067,10 @@
     },
     "Improvised Weapons": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Ranged attack using 1 green + 1 yellow die (no abilities)",
-      "logMessage": "**Improvised Weapons** — Perform a Ranged attack using 1 green and 1 yellow die. No abilities allowed during this attack. Use the Attack button and resolve manually.",
+      "label": "Ranged attack using 1 green + 1 yellow die",
+      "overrideAttackDice": ["green", "yellow"],
+      "overrideAttackType": "Ranged",
+      "freeAttackBonus": true,
       "wiredStatus": "wired"
     },
     "Induce Rage": {
