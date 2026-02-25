@@ -158,6 +158,7 @@ import {
   handleCelebrationPass,
   handleFastForward,
   handleDefenderCcPlay,
+  handleSpreadThePainCondPick,
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
@@ -3509,6 +3510,58 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
       }
     }
   }
+  // Spread the Pain (Dengar): after non-miss, apply each chosen HARMFUL condition to a figure on/adjacent to target
+  if (hit && combat.spreadThePainConditions?.length > 0 && combat.target?.figureKey && game.selectedMap?.id) {
+    const conditions = [...combat.spreadThePainConditions];
+    const targetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+    if (targetPos) {
+      const ms = getMapSpaces(game.selectedMap.id);
+      const adjacency = ms?.adjacency || {};
+      const candSpaces = new Set([String(targetPos).toLowerCase(), ...(adjacency[String(targetPos).toLowerCase()] || []).map((s) => String(s).toLowerCase())]);
+      const figuresAtSpaces = [];
+      for (const p of [1, 2]) {
+        for (const [figKey, figPos] of Object.entries(game.figurePositions?.[p] || {})) {
+          if (candSpaces.has(String(figPos).toLowerCase())) {
+            const mid = findDcMessageIdForFigure(game.gameId, p, figKey);
+            const dcList = p === 1 ? game.p1DcList : game.p2DcList;
+            const dcIds = p === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+            const idx = (dcIds || []).indexOf(mid);
+            const dcName = figKey.replace(/-\d+-\d+$/, '');
+            const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : dcName;
+            figuresAtSpaces.push({ figureKey: figKey, playerNum: p, label: String(label).slice(0, 70), msgId: mid });
+          }
+        }
+      }
+      if (figuresAtSpaces.length > 0) {
+        const firstCond = conditions[0];
+        game.pendingSpreadThePain = {
+          gameId: game.gameId,
+          combatThreadId: combat.combatThreadId,
+          attackerPlayerNum: combat.attackerPlayerNum,
+          defenderPlayerNum,
+          ownerId,
+          conditions,
+          conditionIdx: 0,
+          resultText,
+          combat,
+          initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
+        };
+        const btns = figuresAtSpaces.slice(0, 4).map((f) =>
+          new ButtonBuilder()
+            .setCustomId(`spread_pain_fig_${game.gameId}_${f.figureKey}`)
+            .setLabel(f.label)
+            .setStyle(f.playerNum === defenderPlayerNum ? ButtonStyle.Danger : ButtonStyle.Secondary)
+        );
+        btns.push(new ButtonBuilder().setCustomId(`spread_pain_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        await thread.send({
+          content: `<@${ownerId}> **Spread the Pain** — Apply **${firstCond}** to a figure at or adjacent to target (${String(targetPos).toUpperCase()}):`,
+          allowedMentions: { users: [ownerId] },
+          components: [new ActionRowBuilder().addComponents(btns)],
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        return true;
+      }
+    }
+  }
   return false;
 }
 
@@ -4022,6 +4075,97 @@ async function handleConcussiveBoltSkip(interaction) {
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
   saveGames();
+}
+
+/** Internal: show next Spread the Pain figure-pick prompt, or finish if all conditions applied. */
+async function advanceSpreadThePain(game, pending) {
+  const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+  if (!thread) { await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client); saveGames(); return; }
+  if (pending.conditionIdx >= pending.conditions.length) {
+    delete game.pendingSpreadThePain;
+    await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client);
+    saveGames();
+    return;
+  }
+  const nextCond = pending.conditions[pending.conditionIdx];
+  // Rebuild figure list for the next condition
+  const targetPos = game.figurePositions?.[pending.defenderPlayerNum]?.[pending.combat.target?.figureKey];
+  const figuresAtSpaces = [];
+  if (targetPos && game.selectedMap?.id) {
+    const ms = getMapSpaces(game.selectedMap.id);
+    const adjacency = ms?.adjacency || {};
+    const candSpaces = new Set([String(targetPos).toLowerCase(), ...(adjacency[String(targetPos).toLowerCase()] || []).map((s) => String(s).toLowerCase())]);
+    for (const p of [1, 2]) {
+      for (const [figKey, figPos] of Object.entries(game.figurePositions?.[p] || {})) {
+        if (candSpaces.has(String(figPos).toLowerCase())) {
+          const mid = findDcMessageIdForFigure(game.gameId, p, figKey);
+          const dcList = p === 1 ? game.p1DcList : game.p2DcList;
+          const dcIds = p === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const idx = (dcIds || []).indexOf(mid);
+          const dcName = figKey.replace(/-\d+-\d+$/, '');
+          const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : dcName;
+          figuresAtSpaces.push({ figureKey: figKey, playerNum: p, label: String(label).slice(0, 70) });
+        }
+      }
+    }
+  }
+  if (figuresAtSpaces.length === 0) {
+    delete game.pendingSpreadThePain;
+    await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client);
+    saveGames();
+    return;
+  }
+  const btns = figuresAtSpaces.slice(0, 4).map((f) =>
+    new ButtonBuilder()
+      .setCustomId(`spread_pain_fig_${game.gameId}_${f.figureKey}`)
+      .setLabel(f.label)
+      .setStyle(f.playerNum === pending.defenderPlayerNum ? ButtonStyle.Danger : ButtonStyle.Secondary)
+  );
+  btns.push(new ButtonBuilder().setCustomId(`spread_pain_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+  await thread.send({
+    content: `<@${pending.ownerId}> **Spread the Pain** — Apply **${nextCond}** to a figure at or adjacent to target (${String(targetPos).toUpperCase()}):`,
+    allowedMentions: { users: [pending.ownerId] },
+    components: [new ActionRowBuilder().addComponents(btns)],
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  saveGames();
+}
+
+/** Spread the Pain figure pick: spread_pain_fig_{gameId}_{figureKey} */
+async function handleSpreadThePainFigPick(interaction) {
+  const m = interaction.customId.match(/^spread_pain_fig_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, figureKey] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingSpreadThePain) return;
+  const pending = game.pendingSpreadThePain;
+  if (!canActAsPlayer(game, interaction.user.id, pending.attackerPlayerNum)) {
+    await interaction.followUp({ content: 'Only the attacker can choose the Spread the Pain target.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(() => {});
+  const cond = pending.conditions[pending.conditionIdx];
+  // Apply condition to figureKey
+  game.figureConditions = game.figureConditions || {};
+  const existing = game.figureConditions[figureKey] || [];
+  if (!existing.includes(cond)) game.figureConditions[figureKey] = [...existing, cond];
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  await logGameAction(game, client, `**Spread the Pain** — **${dcName}** gains **${cond}**`, { phase: 'ROUND', icon: 'attack' });
+  pending.conditionIdx++;
+  await advanceSpreadThePain(game, pending);
+}
+
+/** Spread the Pain skip: spread_pain_skip_{gameId} */
+async function handleSpreadThePainSkip(interaction) {
+  const m = interaction.customId.match(/^spread_pain_skip_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  if (!game?.pendingSpreadThePain) return;
+  const pending = game.pendingSpreadThePain;
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(() => {});
+  pending.conditionIdx++;
+  await advanceSpreadThePain(game, pending);
 }
 
 /** Missile Salvo die choice: missile_salvo_die_{color}_{gameId}_{msgId} */
@@ -5982,10 +6126,12 @@ client.on('interactionCreate', async (interaction) => {
   if (buttonKey === 'fighting_knife_skip_') { await handleFightingKnifeSkip(interaction); return; }
   if (buttonKey === 'concussive_bolt_push_') { await handleConcussiveBoltPush(interaction); return; }
   if (buttonKey === 'concussive_bolt_skip_') { await handleConcussiveBoltSkip(interaction); return; }
+  if (buttonKey === 'spread_pain_fig_') { await handleSpreadThePainFigPick(interaction); return; }
+  if (buttonKey === 'spread_pain_skip_') { await handleSpreadThePainSkip(interaction); return; }
   if (buttonKey === 'missile_salvo_die_') { await handleMissileSalvoDie(interaction); return; }
   if (buttonKey === 'missile_salvo_done_') { await handleMissileSalvoDone(interaction); return; }
 
-  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_') {
+  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_' || buttonKey === 'spread_pain_cond_') {
     const combatContext = {
       getGame,
       replyIfGameEnded,
@@ -6031,6 +6177,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'combat_surge_') await handleCombatSurge(interaction, combatContext);
     else if (buttonKey === 'combat_reroll_') await handleCombatReroll(interaction, combatContext);
     else if (buttonKey === 'combat_token_') await handleCombatToken(interaction, combatContext);
+    else if (buttonKey === 'spread_pain_cond_') await handleSpreadThePainCondPick(interaction, combatContext);
     return;
   }
 

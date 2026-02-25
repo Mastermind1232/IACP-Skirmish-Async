@@ -1265,6 +1265,25 @@ export async function handleCombatSurge(interaction, ctx) {
         saveGames();
         return; // wait for player to choose token type before continuing surge
       }
+      // Spread the Pain (Dengar): prompt attacker to choose a HARMFUL condition
+      if (mod.surgeSpreadThePain) {
+        const already = combat.spreadThePainConditions || [];
+        const available = ['Stun', 'Weaken', 'Bleed'].filter((c) => !already.includes(c));
+        game.pendingSpreadThePainCondPick = { gameId, combatThreadId: combat.combatThreadId, attackerPlayerNum: combat.attackerPlayerNum };
+        const btns = available.map((c) =>
+          new ButtonBuilder()
+            .setCustomId(`spread_pain_cond_${gameId}_${c.toLowerCase()}`)
+            .setLabel(c)
+            .setStyle(ButtonStyle.Primary)
+        );
+        btns.push(new ButtonBuilder().setCustomId(`spread_pain_cond_${gameId}_skip`).setLabel('Skip (no condition)').setStyle(ButtonStyle.Secondary));
+        await thread.send({
+          content: `**Spread the Pain** — Choose a HARMFUL condition (not already chosen this attack):`,
+          components: [new ActionRowBuilder().addComponents(btns.slice(0, 5))],
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        saveGames();
+        return; // wait for player to choose condition before continuing surge
+      }
     }
   }
   if (combat.surgeRemaining <= 0 || choice === 'done') {
@@ -1550,6 +1569,60 @@ export async function handlePowerTokenChoice(interaction, ctx) {
       const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
       await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
+  }
+  saveGames();
+}
+
+/**
+ * Handle Spread the Pain condition choice during surge phase.
+ * Custom ID: spread_pain_cond_{gameId}_{stun|weaken|bleed|skip}
+ */
+export async function handleSpreadThePainCondPick(interaction, ctx) {
+  await interaction.deferUpdate().catch(() => {});
+  const { getGame, saveGames } = ctx;
+  const m = interaction.customId.match(/^spread_pain_cond_([^_]+)_(stun|weaken|bleed|skip)$/);
+  if (!m) return;
+  const [, gameId, condRaw] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingSpreadThePainCondPick) return;
+  const { attackerPlayerNum, combatThreadId } = game.pendingSpreadThePainCondPick;
+  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) return;
+  await interaction.message.edit({ components: [] }).catch(() => {});
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) return;
+  game.pendingSpreadThePainCondPick = null;
+
+  const thread = await interaction.client.channels.fetch(combatThreadId).catch(() => null);
+  if (!thread) { saveGames(); return; }
+
+  if (condRaw !== 'skip') {
+    const cond = condRaw[0].toUpperCase() + condRaw.slice(1); // 'Stun' | 'Weaken' | 'Bleed'
+    combat.spreadThePainConditions = [...(combat.spreadThePainConditions || []), cond];
+    await thread.send(`**Spread the Pain** — **${cond}** chosen. Will apply post-combat.`).catch(() => {});
+  }
+
+  // Resume surge phase
+  if ((combat.surgeRemaining || 0) > 0) {
+    const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS?.[id]) || id);
+    const surgeAbilities = ctx.getAttackerSurgeAbilities ? ctx.getAttackerSurgeAbilities(combat) : [];
+    const remaining = combat.surgeRemaining;
+    const surgeRows = [];
+    for (let i = 0; i < surgeAbilities.length; i++) {
+      const k = surgeAbilities[i];
+      const cost = (k?.startsWith?.('double:') ? 2 : (ctx.getAbility?.(k)?.surgeCost ?? 1));
+      if (cost > remaining) continue;
+      const label = (getSurgeLabel(k) || k).slice(0, 80);
+      const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
+      surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_${i}`).setLabel(btnLabel.slice(0, 80)).setStyle(ButtonStyle.Secondary));
+    }
+    if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed) {
+      surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_bleed_prevention`).setLabel('Spend 1 Surge — Prevent Bleed').setStyle(ButtonStyle.Secondary));
+    }
+    surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
+    const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
+    await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch(() => {});
+  } else {
+    await sendReadyToResolveRolls(thread, gameId);
   }
   saveGames();
 }

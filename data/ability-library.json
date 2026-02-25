@@ -2417,7 +2417,7 @@
       "surgeCost": 1,
       "label": "Spread the Pain",
       "description": "Choose a HARMFUL condition not already chosen this attack. After this attack resolves, if it did not miss, a figure on or adjacent to the target space gains the chosen condition. Can be used multiple times per attack.",
-      "wiredStatus": "informational"
+      "wiredStatus": "wired"
     },
     "shrapnel": {
       "type": "surge",

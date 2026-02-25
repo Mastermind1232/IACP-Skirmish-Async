@@ -130,9 +130,11 @@ export function parseSurgeEffect(key) {
   if (k === 'concussive_bolt') { out.surgeConcussiveBolt = true; return out; }
   // Bargain (Jawa Scavenger Elite): spend 1 VP to roll 1 green die, gain VP per hit
   if (k === 'bargain') { out.surgeBargain = true; return out; }
+  // Spread the Pain (Dengar): choose a HARMFUL condition; apply to figure on/adjacent to target post-combat
+  if (k === 'spread_the_pain') { out.surgeSpreadThePain = true; return out; }
   // Complex surge effects: flag for informational display, resolve manually
   if (['agitate', 'mastery',
-       'fell_swoop', 'spread_the_pain', 'interrogate',
+       'fell_swoop', 'interrogate',
        'cancel 2', 'cleave x', 'recover x', 'evade token'].includes(k)) {
     out.surgeComplex = k; return out;
   }
