@@ -306,7 +306,7 @@ import {
   getMissionRules,
   getAbilityLibrary,
 } from './src/data-loader.js';
-import { runEndOfRoundRules, runStartOfRoundRules, runNpcThugActivation } from './src/game/mission-rules.js';
+import { runEndOfRoundRules, runStartOfRoundRules, runNpcThugActivation, runNpcKryknaActivation } from './src/game/mission-rules.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname);
@@ -2254,11 +2254,108 @@ function getCrateDeploymentVpBonus(game) {
   return { p1, p2 };
 }
 
+/**
+ * Post Devaron Garrison B door-selection buttons for the next player in game.pendingDoorSelections.
+ * @param {object} game
+ * @param {Array} allDoors - from map-tokens.json, array of [a, b] coordinate pairs
+ * @param {import('discord.js').TextChannel} channel - general channel
+ * @param {string} gameId
+ */
+async function postDevaronDoorButtons(game, allDoors, channel, gameId) {
+  if (!game.pendingDoorSelections || game.pendingDoorSelections.length === 0) return;
+  const pending = game.pendingDoorSelections[0];
+  const { playerNum, doorsRemaining } = pending;
+  const pid = playerNum === 1 ? game.player1Id : game.player2Id;
+  const openedSet = new Set((game.openedDoors || []).map((k) => String(k).toLowerCase()));
+  const available = (allDoors || []).filter(([a, b]) => {
+    const ek1 = `${a}|${b}`.toLowerCase();
+    const ek2 = `${b}|${a}`.toLowerCase();
+    return !openedSet.has(ek1) && !openedSet.has(ek2);
+  });
+  if (available.length === 0) {
+    game.pendingDoorSelections.shift();
+    await channel.send({ content: `<@${pid}> — All doors are already open (no more selections needed).`, allowedMentions: { users: [pid] } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const rows = [];
+  for (let i = 0; i < Math.min(available.length, 20); i += 5) {
+    const chunk = available.slice(i, i + 5);
+    rows.push(new ActionRowBuilder().addComponents(
+      chunk.map(([a, b]) => new ButtonBuilder()
+        .setCustomId(`devaron_door_open_${gameId}_${a.toLowerCase()}|${b.toLowerCase()}`)
+        .setLabel(`Open door ${a.toUpperCase()}↔${b.toUpperCase()}`)
+        .setStyle(ButtonStyle.Primary)
+      )
+    ));
+  }
+  await channel.send({
+    content: `<@${pid}> — **Crate Rush (EoR)**: You control ${doorsRemaining} terminal${doorsRemaining !== 1 ? 's' : ''}. Choose a door to open (${doorsRemaining} remaining):`,
+    components: rows,
+    allowedMentions: { users: [pid] },
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+}
+
+/**
+ * Post crate-push buttons for Devaron Garrison B end-of-round crate push phase.
+ * @param {object} game
+ * @param {import('discord.js').TextChannel} channel - general channel
+ * @param {string} gameId
+ */
+async function postDevaronCratePushPrompts(game, channel, gameId) {
+  const mapData = getMapTokensData()['devaron-garrison'];
+  const allOrigCoords = Object.values(mapData?.missionB?.positions || {}).flat().filter(Boolean).map((c) => String(c).toLowerCase());
+  if (allOrigCoords.length === 0) return;
+  for (const pn of [1, 2]) {
+    const pid = pn === 1 ? game.player1Id : game.player2Id;
+    const controlled = allOrigCoords.filter((origCoord) => {
+      const cur = String(game.cratePositions?.[origCoord] || origCoord).toLowerCase();
+      return getSpaceController(game, 'devaron-garrison', cur) === pn;
+    });
+    if (controlled.length === 0) continue;
+    const rows = [];
+    for (let i = 0; i < Math.min(controlled.length, 20); i += 5) {
+      const chunk = controlled.slice(i, i + 5);
+      rows.push(new ActionRowBuilder().addComponents(
+        chunk.map((origCoord) => {
+          const cur = String(game.cratePositions?.[origCoord] || origCoord).toLowerCase();
+          return new ButtonBuilder()
+            .setCustomId(`devaron_crate_push_${gameId}_${origCoord}`)
+            .setLabel(`Push crate @ ${cur.toUpperCase()}`)
+            .setStyle(ButtonStyle.Secondary);
+        })
+      ));
+    }
+    await channel.send({
+      content: `<@${pid}> — **Crate Rush (EoR)**: Push each controlled crate up to 3 spaces. Select a crate:`,
+      components: rows,
+      allowedMentions: { users: [pid] },
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }
+}
+
 /** Check win conditions. Returns { ended, winnerId?, reason? }. Posts game-over and sets game.ended if ended. */
+/**
+ * Compute persistent VP bonus from Anchorhead A patron tokens.
+ * Table: 0 patrons=0VP, 1=2VP, 2=5VP, 3=10VP, 4=20VP.
+ */
+function getAnchorheadPatronVpBonus(game) {
+  if (game.selectedMap?.id !== 'anchorhead-cantina-bar' || game.selectedMission?.variant !== 'a') return { p1: 0, p2: 0 };
+  const VP_TABLE = [0, 2, 5, 10, 20];
+  const patronTokens = game.anchorheadPatronTokens || {};
+  let p1 = 0;
+  let p2 = 0;
+  for (const owner of Object.values(patronTokens)) {
+    if (owner === 1) p1++;
+    else if (owner === 2) p2++;
+  }
+  return { p1: VP_TABLE[Math.min(p1, 4)] || 0, p2: VP_TABLE[Math.min(p2, 4)] || 0 };
+}
+
 async function checkWinConditions(game, client) {
   const crateBonus = getCrateDeploymentVpBonus(game);
-  const vp1 = (game.player1VP?.total ?? 0) + crateBonus.p1;
-  const vp2 = (game.player2VP?.total ?? 0) + crateBonus.p2;
+  const patronBonus = getAnchorheadPatronVpBonus(game);
+  const vp1 = (game.player1VP?.total ?? 0) + crateBonus.p1 + patronBonus.p1;
+  const vp2 = (game.player2VP?.total ?? 0) + crateBonus.p2 + patronBonus.p2;
   const p1Figures = Object.keys(game.figurePositions?.[1] || {}).length;
   const p2Figures = Object.keys(game.figurePositions?.[2] || {}).length;
 
@@ -3244,6 +3341,66 @@ async function resolveCombatAfterRolls(game, combat, client) {
 /** Apply damage, conditions, defeat logic, and finish combat resolution. Called from resolveCombatAfterRolls and handleFigureheadDecision. */
 async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client) {
   const thread = await client.channels.fetch(combat.combatThreadId);
+
+  // NPC target (thug / Krykna / Crate): apply damage directly, skip dcHealthState
+  if (combat.target?.isNpc) {
+    // Crate target (Devaron B)
+    if (combat.target.npcType === 'crate') {
+      const origCoord = combat.target.crateOrigCoord;
+      if (origCoord && game.cratePositions?.[origCoord] !== undefined) {
+        game.crateHealth = game.crateHealth || {};
+        if (typeof game.crateHealth[origCoord] !== 'number') game.crateHealth[origCoord] = 5;
+        if (damage > 0 && hit) {
+          game.crateHealth[origCoord] = Math.max(0, game.crateHealth[origCoord] - damage);
+          const curCoord = String(game.cratePositions[origCoord] || origCoord).toUpperCase();
+          resultText += ` — Crate @ ${curCoord}: ${game.crateHealth[origCoord]}/5 HP remaining.`;
+          if (game.crateHealth[origCoord] <= 0) {
+            resultText += ` **Crate DESTROYED! Adjacent figures suffer 2 Damage.**`;
+            const curCoordLow = String(game.cratePositions[origCoord] || origCoord).toLowerCase();
+            delete game.cratePositions[origCoord];
+            await logGameAction(game, client, `💥 Crate at **${curCoord}** destroyed! All adjacent figures suffer 2 Damage.`, { phase: 'ROUND', icon: 'attack' });
+            for (const pn of [1, 2]) {
+              for (const figKey of getFiguresOnOrAdjacentToSpace(game, pn, curCoordLow, 'devaron-garrison')) {
+                await applyNpcDamageToFigure(game, pn, figKey, 2, 'Crate explosion', logGameAction, client, dcHealthState, dcMessageMeta);
+              }
+            }
+            await checkWinConditions(game, client);
+          }
+        }
+      }
+      await thread.send({ content: resultText || '(No effect)', components: [] });
+      saveGames();
+      return;
+    }
+    // Thug / Krykna
+    const npcArray = combat.target.npcType === 'thug' ? game.npcThugs : game.npcKrykna;
+    const npc = npcArray?.[combat.target.npcIndex];
+    if (npc && !npc.defeated) {
+      if (damage > 0 && hit) {
+        npc.hp = Math.max(0, npc.hp - damage);
+        resultText += ` — ${combat.target.label}: ${npc.hp}/${npc.maxHp} HP remaining.`;
+        if (npc.hp <= 0) {
+          npc.defeated = true;
+          const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+          game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+          game[vpKey].kills += 2;
+          game[vpKey].total += 2;
+          resultText += ` **${combat.target.label} defeated! +2 VP**`;
+          // Krykna claim: track on game state for end-of-round deploy option
+          if (combat.target.npcType === 'krykna') {
+            game.claimedKrykna = game.claimedKrykna || { 1: 0, 2: 0 };
+            game.claimedKrykna[attackerPlayerNum] = (game.claimedKrykna[attackerPlayerNum] || 0) + 1;
+          }
+          await logGameAction(game, client, `<@${ownerId}> defeated **${combat.target.label}** (+2 VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+          await checkWinConditions(game, client);
+        }
+      }
+    }
+    await thread.send({ content: resultText || '(No effect)', components: [] });
+    saveGames();
+    return;
+  }
+
   if (damage > 0 && targetMsgId) {
     const healthState = dcHealthState.get(targetMsgId) || [];
     const entry = healthState[targetFigIndex];
@@ -5943,6 +6100,28 @@ client.on('interactionCreate', async (interaction) => {
     };
     if (modalKey === 'squad_modal_') await handleSquadModal(interaction, ccHandContext);
     else if (modalKey === 'deploy_modal_') await handleDeployModal(interaction, ccHandContext);
+    else if (modalKey === 'devaron_crate_modal_') {
+      // customId: devaron_crate_modal_{gameId}_{origCoord}
+      const rest2 = interaction.customId.replace('devaron_crate_modal_', '');
+      const lu = rest2.lastIndexOf('_');
+      const gameId2 = rest2.substring(0, lu);
+      const origCoord2 = rest2.substring(lu + 1);
+      const game2 = getGame(gameId2);
+      if (!game2) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      const targetRaw = interaction.fields.getTextInputValue('target_coord').trim().toLowerCase();
+      const curCoord2 = String(game2.cratePositions?.[origCoord2] || origCoord2).toLowerCase();
+      const dist = getRange(curCoord2, targetRaw);
+      if (dist === 0) { await interaction.reply({ content: `Crate stays at ${curCoord2.toUpperCase()} — no change.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      if (dist > 3) { await interaction.reply({ content: `❌ ${targetRaw.toUpperCase()} is ${dist} spaces from ${curCoord2.toUpperCase()} (max 3). Try again.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      await interaction.deferReply({ ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      game2.cratePositions = game2.cratePositions || {};
+      game2.cratePositions[origCoord2] = targetRaw;
+      const ctrl = getSpaceController(game2, 'devaron-garrison', curCoord2);
+      const pid2 = ctrl ? (ctrl === 1 ? game2.player1Id : game2.player2Id) : interaction.user.id;
+      await logGameAction(game2, client, `📦 <@${pid2}> pushed crate from **${curCoord2.toUpperCase()}** → **${targetRaw.toUpperCase()}** (${dist} space${dist !== 1 ? 's' : ''}).`, { allowedMentions: { users: [pid2] }, phase: 'ROUND', icon: 'round' });
+      await interaction.editReply({ content: `Crate pushed: ${curCoord2.toUpperCase()} → ${targetRaw.toUpperCase()} ✓` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      saveGames();
+    }
     return;
   }
 
@@ -6425,6 +6604,7 @@ client.on('interactionCreate', async (interaction) => {
       runStartOfRoundRules,
       getFiguresOnOrAdjacentToSpace,
       runNpcThugActivation,
+      runNpcKryknaActivation,
       applyNpcDamageToFigure,
       getMapSpaces,
       getMapRegistry,
@@ -6434,6 +6614,8 @@ client.on('interactionCreate', async (interaction) => {
       buildHandDisplayPayload,
       sendRoundActivationPhaseMessage,
       buildBoardMapPayload,
+      postDevaronDoorButtons,
+      postDevaronCratePushPrompts,
       client,
     };
     await handleEndEndOfRound(interaction, roundContext);
@@ -6454,6 +6636,70 @@ client.on('interactionCreate', async (interaction) => {
       client,
     };
     await handleEndStartOfRound(interaction, startOfRoundContext);
+    return;
+  }
+
+  if (buttonKey === 'devaron_door_open_') {
+    // customId: devaron_door_open_{gameId}_{a}|{b}
+    const rest = interaction.customId.replace('devaron_door_open_', '');
+    const pipeIdx = rest.indexOf('|');
+    if (pipeIdx < 0) return;
+    const beforePipe = rest.substring(0, pipeIdx);
+    const afterPipe = rest.substring(pipeIdx + 1);
+    const lastUnderscore = beforePipe.lastIndexOf('_');
+    const gameId = beforePipe.substring(0, lastUnderscore);
+    const edgeA = beforePipe.substring(lastUnderscore + 1);
+    const edgeKey = `${edgeA}|${afterPipe}`;
+    const game = getGame(gameId);
+    if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    const pending = game.pendingDoorSelections?.[0];
+    if (!pending) { await interaction.followUp({ content: 'No pending door selections.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    if (!canActAsPlayer(game, interaction.user.id, pending.playerNum)) { await interaction.followUp({ content: 'Only the controlling player can select a door.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+    game.openedDoors = game.openedDoors || [];
+    if (!game.openedDoors.includes(edgeKey)) game.openedDoors.push(edgeKey);
+    const pid = pending.playerNum === 1 ? game.player1Id : game.player2Id;
+    await logGameAction(game, client, `🚪 <@${pid}> opened door **${edgeA.toUpperCase()}↔${afterPipe.toUpperCase()}** (Crate Rush — terminal effect).`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+    pending.doorsRemaining--;
+    if (pending.doorsRemaining <= 0) game.pendingDoorSelections.shift();
+    await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    const allDoors = getMapTokensData()['devaron-garrison']?.doors || [];
+    const generalCh = await client.channels.fetch(game.generalId);
+    if (game.pendingDoorSelections.length > 0) {
+      await postDevaronDoorButtons(game, allDoors, generalCh, gameId);
+    } else {
+      await postDevaronCratePushPrompts(game, generalCh, gameId);
+    }
+    saveGames();
+    return;
+  }
+
+  if (buttonKey === 'devaron_crate_push_') {
+    // customId: devaron_crate_push_{gameId}_{origCoord}
+    const rest = interaction.customId.replace('devaron_crate_push_', '');
+    const lastUnderscore = rest.lastIndexOf('_');
+    const gameId = rest.substring(0, lastUnderscore);
+    const origCoord = rest.substring(lastUnderscore + 1);
+    const game = getGame(gameId);
+    if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    const curCoord = String(game.cratePositions?.[origCoord] || origCoord).toLowerCase();
+    const controller = getSpaceController(game, 'devaron-garrison', curCoord);
+    if (!controller) { await interaction.followUp({ content: 'No one controls this crate currently.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    if (!canActAsPlayer(game, interaction.user.id, controller)) { await interaction.followUp({ content: 'Only the controlling player can push this crate.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    const modal = new ModalBuilder()
+      .setCustomId(`devaron_crate_modal_${gameId}_${origCoord}`)
+      .setTitle(`Push crate (at ${curCoord.toUpperCase()})`);
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('target_coord')
+          .setLabel(`Target space (up to 3 spaces, e.g. K12)`)
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder(curCoord.toUpperCase())
+          .setRequired(true)
+      )
+    );
+    await interaction.showModal(modal).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
 

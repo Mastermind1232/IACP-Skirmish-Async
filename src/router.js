@@ -62,6 +62,8 @@ const BUTTON_PREFIXES = [
   'false_orders_action_',
   'false_orders_space_',
   'false_orders_atk_',
+  'devaron_door_open_',
+  'devaron_crate_push_',
   'status_phase_',
   'dc_end_activation_',
   'end_end_of_round_',
@@ -120,6 +122,7 @@ const BUTTON_PREFIXES = [
 const MODAL_PREFIXES = [
   'squad_modal_',
   'deploy_modal_',
+  'devaron_crate_modal_',
 ];
 
 /** String select menu prefixes. */

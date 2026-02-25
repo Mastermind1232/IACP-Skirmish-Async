@@ -162,9 +162,32 @@ export async function handleAttackTarget(interaction, ctx) {
     if (overrideDice.type === 'melee') attackInfo = { ...attackInfo, range: [1, 1] };
     delete game.pendingOverrideAttackDice[msgId];
   }
-  const targetDcName = target.figureKey.replace(/-\d+-\d+$/, '');
-  const targetStats = getDcStats(targetDcName);
-  const targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName.replace(/\s*\[.*\]\s*$/, '')];
+  // NPC targets (thugs, Krykna) have synthesized stats — no DC lookup
+  let targetDcName, targetStats, targetEff, npcDefenseBonus;
+  if (target.isNpc) {
+    if (target.npcType === 'crate') {
+      // Crate (Devaron B): Health 5, Defense 1 Block (fixed), no die
+      targetDcName = 'Crate';
+      targetStats = { defense: null, cost: 0, subCost: null, figures: 1 };
+      npcDefenseBonus = 1; // 1 fixed block result
+      targetEff = {};
+    } else {
+      targetDcName = target.npcType === 'thug' ? 'Thug' : 'Krykna';
+      // Thug: Health 4, Defense 1 black die. Krykna: Health 8, Defense 2 blocks (no dice, +2 bonusBlock).
+      targetStats = {
+        defense: target.npcType === 'thug' ? 'black' : null,
+        cost: 0, // VP awarded separately from NPC HP tracking
+        subCost: null,
+        figures: 1,
+      };
+      if (target.npcType === 'krykna') npcDefenseBonus = 2; // 2 fixed block results
+      targetEff = {};
+    }
+  } else {
+    targetDcName = target.figureKey.replace(/-\d+-\d+$/, '');
+    targetStats = getDcStats(targetDcName);
+    targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName.replace(/\s*\[.*\]\s*$/, '')];
+  }
   const attackerDisplayName = meta.displayName || meta.dcName;
   const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const attackerFigureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
@@ -218,11 +241,12 @@ export async function handleAttackTarget(interaction, ctx) {
     defenderConds,
     target: { ...target },
     targetStats: {
-      defense: targetStats.defense || 'white',
-      cost: targetStats.cost ?? 5,
-      subCost: targetEff?.subCost,
-      figures: targetStats.figures ?? 1,
+      defense: target.isNpc ? (targetStats.defense || null) : (targetStats.defense || 'white'),
+      cost: target.isNpc ? 2 : (targetStats.cost ?? 5), // NPC kill = 2 VP
+      subCost: target.isNpc ? null : targetEff?.subCost,
+      figures: 1,
     },
+    bonusBlock: npcDefenseBonus || undefined, // Krykna: 2 fixed blocks
     attackInfo,
     isRanged,
     distanceToTarget,
@@ -235,9 +259,9 @@ export async function handleAttackTarget(interaction, ctx) {
     defenseRoll: null,
     attackTargetMsgId: interaction.message.id,
   };
-  // Apply printed passive stat bonuses from both figures' deployment cards
+  // Apply printed passive stat bonuses from attacker only (NPC has no passives)
   const attackerPassives = getDcStats(meta.dcName).passives || [];
-  const defenderPassives = getDcStats(targetDcName).passives || [];
+  const defenderPassives = target.isNpc ? [] : (getDcStats(targetDcName).passives || []);
   applyDcPassivesToCombat(game.pendingCombat, attackerPassives, defenderPassives);
 
   // Vanish: clear immunity when the protected figure starts attacking

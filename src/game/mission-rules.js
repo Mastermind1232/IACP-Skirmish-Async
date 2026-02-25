@@ -438,6 +438,60 @@ export async function runStartOfRoundRules(game, mapId, variant, rules, ctx = {}
 }
 
 /**
+ * Process end-of-round Krykna effects for Chopper Base A.
+ * Lazy-inits game.npcKrykna from missionA token positions.
+ * Emits damage events for all non-Krykna figures adjacent to any Krykna.
+ * (The player-driven push phase is handled interactively via pendingKryknaPush — see round.js)
+ * @returns { logs, damageEvents }
+ */
+export function runNpcKryknaActivation(game, mapId, ctx = {}) {
+  const { getMapTokensData, getMapSpaces, getMapRegistry, filterMapSpacesByBounds } = ctx;
+
+  // Lazy-init from missionA token positions
+  if (!game.npcKrykna) {
+    const missionData = getMapTokensData?.()[mapId]?.missionA;
+    const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
+    if (positions.length === 0) return { logs: [], damageEvents: [] };
+    game.npcKrykna = positions.map((coord, i) => ({ id: `krykna-${i + 1}`, coord: normalizeCoord(coord), hp: 8, maxHp: 8, defeated: false }));
+  }
+
+  const activeKrykna = game.npcKrykna.filter((k) => !k.defeated);
+  if (activeKrykna.length === 0) return { logs: [`All Krykna defeated.`], damageEvents: [] };
+
+  const rawMapSpaces = getMapSpaces?.(mapId);
+  if (!rawMapSpaces?.adjacency) return { logs: ['No adjacency data — Krykna damage skipped'], damageEvents: [] };
+  const mapDef = getMapRegistry?.()?.find?.((m) => m.id === mapId);
+  const mapSpaces = filterMapSpacesByBounds?.(rawMapSpaces, mapDef?.gridBounds) || rawMapSpaces;
+  const adjacency = mapSpaces.adjacency || {};
+
+  const kryknaCoords = new Set(activeKrykna.map((k) => normalizeCoord(k.coord)));
+  const logs = [];
+  const damageEvents = [];
+
+  for (const pn of [1, 2]) {
+    for (const [figKey, figCoord] of Object.entries(game.figurePositions?.[pn] || {})) {
+      const fc = normalizeCoord(figCoord);
+      const adjToKrykna = (adjacency[fc] || []).some((n) => kryknaCoords.has(normalizeCoord(n)));
+      if (adjToKrykna) damageEvents.push({ figureKey: figKey, playerNum: pn, damage: 2 });
+    }
+  }
+
+  if (damageEvents.length > 0) {
+    logs.push(`${damageEvents.length} hostile figure(s) adjacent to Krykna each suffer **2 damage**.`);
+  }
+
+  // Deployment prompt for claimed Krykna
+  const claimed1 = game.claimedKrykna?.[1] || 0;
+  const claimed2 = game.claimedKrykna?.[2] || 0;
+  if (claimed1 > 0 || claimed2 > 0) {
+    if (claimed1 > 0) logs.push(`Player 1 has ${claimed1} claimed Krykna — may deploy in opponent's deployment zone (honor system).`);
+    if (claimed2 > 0) logs.push(`Player 2 has ${claimed2} claimed Krykna — may deploy in opponent's deployment zone (honor system).`);
+  }
+
+  return { logs, damageEvents };
+}
+
+/**
  * Advance all NPC thugs toward the nearest hostile figure, then emit damage events for adjacent hostiles.
  * Returns { logs, damageEvents } — damage is NOT applied here; round.js handles it.
  * Lazily initializes game.npcThugs from map-tokens if not already set.

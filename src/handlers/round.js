@@ -6,7 +6,7 @@ import { getDcEffects } from '../data-loader.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getFiguresOnOrAdjacentToSpace, runNpcThugActivation, applyNpcDamageToFigure, getMapSpaces, getMapRegistry, filterMapSpacesByBounds, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, buildBoardMapPayload, client
+ * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getFiguresOnOrAdjacentToSpace, runNpcThugActivation, applyNpcDamageToFigure, getMapSpaces, getMapRegistry, filterMapSpacesByBounds, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, buildBoardMapPayload, postDevaronDoorButtons, postDevaronCratePushPrompts, client
  */
 export async function handleEndEndOfRound(interaction, ctx) {
   const {
@@ -33,6 +33,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     runStartOfRoundRules,
     getFiguresOnOrAdjacentToSpace,
     runNpcThugActivation,
+    runNpcKryknaActivation,
     applyNpcDamageToFigure,
     getMapSpaces,
     getMapRegistry,
@@ -42,6 +43,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
     buildHandDisplayPayload,
     sendRoundActivationPhaseMessage,
     buildBoardMapPayload,
+    postDevaronDoorButtons,
+    postDevaronCratePushPrompts,
     client,
   } = ctx;
   const gameId = interaction.customId.replace('end_end_of_round_', '');
@@ -240,7 +243,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     }
   }
 
-  // NPC thug activation (Corellian Underground A): thugs move toward hostiles then deal damage
+  // NPC thug activation (Corellian Underground A)
   if (runNpcThugActivation && mapId === 'corellian-underground' && variant === 'a') {
     const { logs: thugLogs, damageEvents } = runNpcThugActivation(game, mapId, { getMapTokensData, getMapSpaces, getMapRegistry, filterMapSpacesByBounds });
     for (const line of thugLogs) {
@@ -250,6 +253,25 @@ export async function handleEndEndOfRound(interaction, ctx) {
       await applyNpcDamageToFigure(game, playerNum, figureKey, damage, 'Thug', logGameAction, client, dcHealthState, dcMessageMeta);
     }
     if (damageEvents.length > 0) {
+      await checkWinConditions(game, client);
+      if (game.ended) {
+        await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        saveGames();
+        return;
+      }
+    }
+  }
+
+  // NPC Krykna activation (Chopper Base A): adjacent-damage phase (push handled separately)
+  if (runNpcKryknaActivation && mapId === 'chopper-base-atollon' && variant === 'a') {
+    const { logs: kryknaLogs, damageEvents: kryknaEvt } = runNpcKryknaActivation(game, mapId, { getMapTokensData, getMapSpaces, getMapRegistry, filterMapSpacesByBounds });
+    for (const line of kryknaLogs) {
+      await logGameAction(game, client, `🕷️ **Krykna:** ${line}`, { phase: 'ROUND', icon: 'attack' });
+    }
+    for (const { figureKey, playerNum, damage } of kryknaEvt) {
+      await applyNpcDamageToFigure(game, playerNum, figureKey, damage, 'Krykna', logGameAction, client, dcHealthState, dcMessageMeta);
+    }
+    if (kryknaEvt.length > 0) {
       await checkWinConditions(game, client);
       if (game.ended) {
         await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -323,6 +345,29 @@ export async function handleEndEndOfRound(interaction, ctx) {
   const initNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
   await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
   await sendRoundActivationPhaseMessage(game, client);
+
+  // Devaron Garrison B: terminal→door selection + crate push prompts (posted after round starts)
+  if (mapId === 'devaron-garrison' && variant === 'b') {
+    if (!game.cratePositions) {
+      const dMap = getMapTokensData()['devaron-garrison'];
+      const allCrates = Object.values(dMap?.missionB?.positions || {}).flat().filter(Boolean).map((c) => String(c).toLowerCase());
+      game.cratePositions = {};
+      for (const c of allCrates) game.cratePositions[c] = c;
+    }
+    const p1T = countTerminalsControlledByPlayer(game, 1, mapId);
+    const p2T = countTerminalsControlledByPlayer(game, 2, mapId);
+    if ((p1T > 0 || p2T > 0) && postDevaronDoorButtons) {
+      game.pendingDoorSelections = [];
+      if (p1T > 0) game.pendingDoorSelections.push({ playerNum: 1, doorsRemaining: p1T });
+      if (p2T > 0) game.pendingDoorSelections.push({ playerNum: 2, doorsRemaining: p2T });
+      const dDoors = getMapTokensData()['devaron-garrison']?.doors || [];
+      await postDevaronDoorButtons(game, dDoors, generalChannel, gameId);
+    }
+    if (postDevaronCratePushPrompts) {
+      await postDevaronCratePushPrompts(game, generalChannel, gameId);
+    }
+  }
+
   await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   saveGames();
 }

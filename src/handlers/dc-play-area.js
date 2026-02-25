@@ -771,6 +771,32 @@ async function buildAndSendAttackTargets(
     const excluded = new Set(excludeFigureKeys);
     targets.splice(0, targets.length, ...targets.filter(t => !excluded.has(t.figureKey)));
   }
+  // NPC targets: thugs (Corellian A) and Krykna (Chopper A) — added after player targets
+  for (const [npcArray, npcType, hpLabel] of [[game.npcThugs, 'thug', 'HP'], [game.npcKrykna, 'krykna', 'HP']]) {
+    if (!Array.isArray(npcArray)) continue;
+    for (let i = 0; i < npcArray.length; i++) {
+      const npc = npcArray[i];
+      if (npc.defeated) continue;
+      const coord = String(npc.coord).toLowerCase();
+      const dist = getRange(attackerPos, coord);
+      if (dist < minRange || dist > effectiveMaxRange) continue;
+      const los = hasLineOfSight(attackerPos, coord, ms, allFigureBlockingCoords);
+      const label = `${npcType === 'thug' ? 'Thug' : 'Krykna'} ${i + 1} (${npc.hp}/${npc.maxHp} ${hpLabel})`;
+      targets.push({ figureKey: `npc_${npcType}_${i}`, coord, label, hasLOS: los, dist, isNpc: true, npcType, npcIndex: i });
+    }
+  }
+  // Crate targets (Devaron Garrison B): cratePositions keyed by orig coord, value = current coord
+  if (game.cratePositions && typeof game.cratePositions === 'object') {
+    for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
+      const hp = typeof game.crateHealth?.[origCoord] === 'number' ? game.crateHealth[origCoord] : 5;
+      if (hp <= 0) continue;
+      const coord = String(curCoord).toLowerCase();
+      const dist = getRange(attackerPos, coord);
+      if (dist < minRange || dist > effectiveMaxRange) continue;
+      const los = hasLineOfSight(attackerPos, coord, ms, allFigureBlockingCoords);
+      targets.push({ figureKey: `npc_crate_${origCoord}`, coord, label: `Crate @ ${coord.toUpperCase()} (${hp}/5 HP)`, hasLOS: los, dist, isNpc: true, npcType: 'crate', crateOrigCoord: origCoord });
+    }
+  }
   if (targets.length === 0) {
     await interaction.followUp({ content: 'No valid targets in range.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
