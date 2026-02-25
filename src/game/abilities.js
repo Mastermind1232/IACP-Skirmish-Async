@@ -4794,6 +4794,132 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: hostileLabels.map((n) => `Target: ${n} (move CREATUREs first)`), choiceValues: hostileKeys };
   }
 
+  // ccEffect: coordinatedAttackEffect (Coordinated Attack) — pick friendly within 3; grant both Loku and that figure 1 free attack
+  if (entry.type === 'ccEffect' && entry.coordinatedAttackEffect) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Phase 2: grant free attack to both figures
+    if (chosenFigureKey) {
+      const friendlyMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = true;
+      if (friendlyMsgId) game.freeAttackBonusPending[friendlyMsgId] = true;
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Coordinated Attack** — **${meta.dcName}** and **${dcName}** each gain 1 free attack. Both must target the same hostile figure. LOS: figures don't block for these attacks (honor system).` };
+    }
+    // Phase 1: friendly figure picker within 3
+    const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    const validKeys = [];
+    const validLabels = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos || actKeys.includes(fk)) continue;
+      if (actPos) {
+        const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
+        const [fr, fc] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
+        if (Math.abs((ar?.charCodeAt(0) ?? 0) - (fr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(fc || '0')) > 3) continue;
+      }
+      validKeys.push(fk); validLabels.push(fk.replace(/-\d+-\d+$/, ''));
+    }
+    if (!validKeys.length) return { applied: false, manualMessage: 'No friendly figures within 3 spaces for Coordinated Attack.' };
+    return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Co-attacker: ${n}`), choiceValues: validKeys };
+  }
+
+  // ccEffect: forcePushEffect (Force Push) — pick SMALL figure within 3; pick destination within 2 of target; move target
+  if (entry.type === 'ccEffect' && entry.forcePushEffect) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Phase 3: move target figure to chosen space
+    if (chosenFigureKey && chosenSpace) {
+      const targetPn = game.figurePositions?.[1]?.[chosenFigureKey] != null ? 1 : 2;
+      const oldPos = game.figurePositions?.[targetPn]?.[chosenFigureKey];
+      game.figurePositions = game.figurePositions || {};
+      game.figurePositions[targetPn] = game.figurePositions[targetPn] || {};
+      game.figurePositions[targetPn][chosenFigureKey] = String(chosenSpace).toLowerCase();
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Force Push** — **${dcName}** pushed from **${String(oldPos || '?').toUpperCase()}** to **${String(chosenSpace).toUpperCase()}**.`, refreshBoard: true };
+    }
+    // Phase 2: space picker within 2 of chosen figure's current position
+    if (chosenFigureKey) {
+      const targetPn = game.figurePositions?.[1]?.[chosenFigureKey] != null ? 1 : 2;
+      const targetPos = game.figurePositions?.[targetPn]?.[chosenFigureKey];
+      if (!targetPos) return { applied: false, manualMessage: 'Could not locate target figure position. Push manually.' };
+      const boardState = getBoardStateForMovement(game, null);
+      if (!boardState?.mapSpaces) return { applied: false, manualMessage: 'Push manually (no map data).' };
+      const occ = boardState.occupiedSet;
+      const occArr = occ instanceof Set ? [...occ] : (occ || []);
+      const reachable = getReachableSpaces(targetPos, 2, boardState.mapSpaces, occArr);
+      const validSpaces = reachable.map((s) => String(s).toLowerCase()).filter((s) => !occArr.includes(s));
+      if (!validSpaces.length) return { applied: false, manualMessage: 'No empty spaces within 2 to push the figure to.' };
+      return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**Force Push** — Choose destination (within 2 of ${chosenFigureKey.replace(/-\d+-\d+$/, '')}):`, chosenFigureKey };
+    }
+    // Phase 1: pick SMALL figure within 3
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta.get(msgId) : null;
+    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    const dcEffects = getDcEffects();
+    const validKeys = [];
+    const validLabels = [];
+    for (const pn of [1, 2]) {
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!pos || actKeys.includes(fk)) continue;
+        const dcN = fk.replace(/-\d+-\d+$/, '');
+        const eff = dcEffects[dcN] || {};
+        const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
+        if (kws.includes('MASSIVE') || kws.includes('LARGE')) continue; // only SMALL figures
+        if (actPos) {
+          const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
+          const [fr, fc] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
+          if (Math.abs((ar?.charCodeAt(0) ?? 0) - (fr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(fc || '0')) > 3) continue;
+        }
+        validKeys.push(fk); validLabels.push(`${dcN} (P${pn})`);
+      }
+    }
+    if (!validKeys.length) return { applied: false, manualMessage: 'No SMALL figures within 3 spaces to push.' };
+    return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Push: ${n}`), choiceValues: validKeys };
+  }
+
+  // ccEffect: devotionEffect (Devotion) — pick adjacent friendly; note trait to search; shuffle deck
+  if (entry.type === 'ccEffect' && entry.devotionEffect) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Phase 2: log trait to search for + shuffle deck
+    if (chosenFigureKey) {
+      const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+      const deck = [...(game[deckKey] || [])];
+      // Shuffle deck (Fisher-Yates)
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      game[deckKey] = deck;
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Devotion** — Search your Command deck for a card with **${dcName}** as a trait and draw it (honor system). Deck shuffled (${deck.length} cards).` };
+    }
+    // Phase 1: adjacent friendly picker
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta.get(msgId) : null;
+    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    const boardState = getBoardStateForMovement(game, null);
+    const adjRaw = actPos ? (boardState?.mapSpaces?.adjacency?.[String(actPos).toLowerCase()] || []) : [];
+    const adjSet = new Set(adjRaw.map((s) => String(s).toLowerCase()));
+    const validKeys = [];
+    const validLabels = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos || actKeys.includes(fk)) continue;
+      if (!adjSet.has(String(pos).toLowerCase())) continue;
+      validKeys.push(fk); validLabels.push(fk.replace(/-\d+-\d+$/, ''));
+    }
+    if (!validKeys.length) return { applied: false, manualMessage: 'No adjacent friendly figures. Resolve Devotion manually.' };
+    return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Search for: ${n} trait`), choiceValues: validKeys };
+  }
+
   // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free
   if (entry.type === 'dcSpecial' && entry.pounceRange) {
     const { game, playerNum, dcMessageMeta, chosenSpace } = context;

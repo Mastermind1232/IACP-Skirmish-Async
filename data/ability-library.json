@@ -1163,9 +1163,8 @@
     },
     "Devotion": {
       "type": "ccEffect",
-      "label": "Search Command deck for card with chosen figure's trait; draw it (manual search)",
-      "informational": true,
-      "logMessage": "**Devotion** — Choose an adjacent friendly figure. Search your Command deck for 1 card that has that figure's name as a trait; draw it, then shuffle your deck (honor — resolve the search manually).",
+      "devotionEffect": true,
+      "label": "Search Command deck for card with chosen figure's trait; draw it then shuffle deck",
       "wiredStatus": "wired"
     },
     "Whistling Birds": {
@@ -1622,9 +1621,8 @@
     },
     "Coordinated Attack": {
       "type": "ccEffect",
+      "coordinatedAttackEffect": true,
       "label": "You and a friendly within 3 each perform an attack (same target)",
-      "informational": true,
-      "logMessage": "Resolve manually: you and a friendly figure within 3 spaces each perform an attack targeting the same figure.",
       "wiredStatus": "wired"
     },
     "Data Theft": {
@@ -1677,9 +1675,8 @@
     },
     "Force Push": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Force Push",
-      "logMessage": "**Force Push** — Choose another SMALL figure within 3 spaces. Push that figure up to 2 spaces in a straight line (each space must be empty). Resolve manually.",
+      "forcePushEffect": true,
+      "label": "Push a SMALL figure within 3 up to 2 spaces",
       "wiredStatus": "wired"
     },
     "Harsh Environment": {
