@@ -713,6 +713,9 @@ async function buildAndSendAttackTargets(
   { dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats, excludeFigureKeys }
 ) {
   const { getDcEffects, getDcStats, getFigureSize, getFootprintCells, getRange, hasLineOfSight, dcMessageMeta, FIGURE_LETTERS, getMapTokensData } = ctx;
+  // Definition: 'Love' (attackOverrideOpts.minRange) — override minRange before target filtering
+  const _overrideMinRange = game.pendingOverrideAttackDice?.[msgId]?.minRange;
+  if (_overrideMinRange != null && _overrideMinRange > minRange) minRange = _overrideMinRange;
   // Priority Target (LOS-ignoring): Loku Kanoloa + Rebel Saboteur Elite have it in abilityText.
   // MASSIVE figures also ignore figure blocking. (Intercept-defender PT is checked separately below.)
   const abilityTextLower = (stats.abilityText || '').toLowerCase();
@@ -1270,7 +1273,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     if (isPounceAttack) {
       delete game.pounceAttackPending[msgId];
     } else if (isHeroicAttack) {
-      delete game.freeAttackBonusPending[msgId];
+      const _fabCount = game.freeAttackBonusPending[msgId];
+      if (typeof _fabCount === 'number' && _fabCount > 1) {
+        game.freeAttackBonusPending[msgId] = _fabCount - 1;
+      } else {
+        delete game.freeAttackBonusPending[msgId];
+      }
     } else {
       const actionCost = buttonKey === 'dc_special_' ? (getDcStats(meta.dcName).specialCosts?.[specialIdx] ?? 1) : 1;
       actionsData.remaining = Math.max(0, actionsData.remaining - actionCost);

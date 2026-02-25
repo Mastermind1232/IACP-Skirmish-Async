@@ -155,11 +155,18 @@ export async function handleAttackTarget(interaction, ctx) {
   const attackerStats = getDcStats(meta.dcName);
   let attackInfo = attackerStats.attack || { dice: ['red'], range: [1, 3] };
 
-  // pendingOverrideAttackDice (Saber Strike, Bo-Rifle Staff Strike): replace dice/type/pierce for this attack
+  // pendingOverrideAttackDice (Saber Strike, Bo-Rifle Staff Strike, Definition: 'Love'): replace dice/type/pierce for this attack
   const overrideDice = game.pendingOverrideAttackDice?.[msgId];
   if (overrideDice) {
     if (overrideDice.dice) attackInfo = { ...attackInfo, dice: overrideDice.dice };
     if (overrideDice.type === 'melee') attackInfo = { ...attackInfo, range: [1, 1] };
+    if (overrideDice.type === 'ranged') attackInfo = { ...attackInfo, attackType: 'Ranged', range: [attackInfo.range?.[0] ?? 1, Math.max(attackInfo.range?.[1] ?? 3, 99)] };
+    if (overrideDice.removeDieColor) {
+      const newDice = [...(attackInfo.dice || [])];
+      const idx = newDice.indexOf(overrideDice.removeDieColor);
+      if (idx >= 0) newDice.splice(idx, 1);
+      attackInfo = { ...attackInfo, dice: newDice };
+    }
     delete game.pendingOverrideAttackDice[msgId];
   }
   // NPC targets (thugs, Krykna) have synthesized stats — no DC lookup

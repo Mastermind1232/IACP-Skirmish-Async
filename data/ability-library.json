@@ -1288,9 +1288,9 @@
     },
     "Burst Fire": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Special Action: attack; if target suffers damage, adjacent figures become Stunned",
-      "logMessage": "**Burst Fire** — Perform an attack as a Special Action. If the target suffers 1 or more Damage, each figure (friendly and hostile) adjacent to the targetâ€™s space becomes Stunned. Perform the attack using the Attack button, then manually apply Stun to adjacent figures if damage was dealt.",
+      "label": "Free attack; if target suffers damage, manually apply Stun to all adjacent figures",
+      "freeAttackBonus": true,
+      "logMessage": "**Burst Fire** — Attack granted (no action cost). If the target suffers 1+ Damage, manually apply **Stun** to each figure adjacent to the target's space (friendly and hostile).",
       "wiredStatus": "wired"
     },
     "Close the Gap": {
@@ -1307,16 +1307,15 @@
     },
     "Definition: 'Love'": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Ranged attack at 5+ spaces without an action; remove 1 red die from pool",
-      "logMessage": "**Definition: 'Love'** — You may perform a Ranged attack without spending an action. The target must be 5+ spaces away. During this attack, remove 1 red die from your attack pool. Perform the attack using the Attack button.",
+      "freeAttackBonus": true,
+      "attackOverrideOpts": { "type": "ranged", "minRange": 5, "removeDieColor": "red" },
       "wiredStatus": "wired"
     },
     "Deploy the Garrison": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Each TROOPER/GUARDIAN within 4 gains 2 MP or 1 Hit Token (your choice)",
-      "logMessage": "**Deploy the Garrison** — Each friendly TROOPER or GUARDIAN figure within 4 spaces of you gains 2 movement points or 1 Hit Power Token (your choice per figure). Apply MP or the Hit token to each qualifying figure manually.",
+      "deployGarrisonEffect": true,
       "wiredStatus": "wired"
     },
     "Disorient": {
@@ -1419,8 +1418,11 @@
     },
     "Lightbow": {
       "type": "ccEffect",
-      "informational": true,
-      "logMessage": "**Lightbow** — Perform a Ranged attack using 1 blue, 1 red, and 1 green die. Only these abilities apply: +2 Accuracy; Surge: +1 Hit; Surge: Pierce 4 (declare target and roll dice manually).",
+      "label": "Free Ranged attack: 1 blue + 1 red + 1 green die, +2 Accuracy (only built-in abilities apply)",
+      "freeAttackBonus": true,
+      "overrideAttackDice": ["blue", "red", "green"],
+      "overrideAttackType": "Ranged",
+      "overrideBonusAccuracy": 2,
       "wiredStatus": "wired"
     },
     "Lure of the Dark Side": {
@@ -1559,10 +1561,10 @@
     },
     "Chaotic Force": {
       "type": "ccEffect",
-      "label": "Start of round SCUM: each player chooses 3 figures, roll green, strain = Accuracy. Resolve manually.",
-      "wiredStatus": "wired",
-      "informational": true,
-      "logMessage": "**Chaotic Force** — Each player chooses up to 3 figures. Roll 1 green die. Each chosen figure suffers Strain equal to the Accuracy result. Resolve manually."
+      "label": "Roll 1 green die; each player's chosen figures suffer Strain = Accuracy result",
+      "rollOneDie": "green",
+      "rollOneDieNote": "Each player chooses up to 3 figures. Each chosen figure suffers Strain equal to the Accuracy result above.",
+      "wiredStatus": "wired"
     },
     "Cheat to Win": {
       "type": "ccEffect",
@@ -1587,10 +1589,10 @@
     },
     "Corrupting Force": {
       "type": "ccEffect",
-      "label": "Start of round IMPERIAL: each player chooses 3 figures, roll blue, damage = Hits. Resolve manually.",
-      "wiredStatus": "wired",
-      "informational": true,
-      "logMessage": "**Corrupting Force** — Each player chooses up to 3 figures. Roll 1 blue die. Each chosen figure suffers Damage equal to the Hit results. Resolve manually."
+      "label": "Roll 1 blue die; each player's chosen figures suffer Damage = Hit results",
+      "rollOneDie": "blue",
+      "rollOneDieNote": "Each player chooses up to 3 figures. Each chosen figure suffers Damage equal to the Hit results above.",
+      "wiredStatus": "wired"
     },
     "Cut Lines": {
       "type": "ccEffect",
@@ -2169,16 +2171,15 @@
     },
     "Sarlacc Sweep": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Perform 2 attacks, each targeting a different figure",
-      "logMessage": "**Sarlacc Sweep** — Perform 2 attacks, each targeting a different figure. Use the Attack button twice, targeting different figures each time.",
+      "label": "2 free attacks, each targeting a different figure",
+      "freeAttackBonus": true,
+      "freeAttackBonusCount": 2,
       "wiredStatus": "wired"
     },
     "Self-Augmentation": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Attachment: gain DROID trait; reroll 1 attack die while attacking",
-      "logMessage": "**Self-Augmentation** — Place on your DC as an Attachment. You gain the DROID trait. While attacking, you may reroll one attack die. Resolve manually.",
+      "roundAttackRerollDice": 1,
       "wiredStatus": "wired"
     },
     "Set a Trap": {

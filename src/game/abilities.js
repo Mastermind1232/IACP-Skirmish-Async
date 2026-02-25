@@ -579,6 +579,7 @@ export function resolveAbility(abilityId, context) {
       dice: entry.overrideAttackDice,
       type: entry.overrideAttackType || null,
       pierce: entry.overrideAttackPierce || 0,
+      bonusAccuracy: entry.overrideBonusAccuracy || 0,
     };
     // strainCostToSelf (Brutal Cleave): reduce activating figure's HP by strain amount
     let strainNote = '';
@@ -613,9 +614,11 @@ export function resolveAbility(abilityId, context) {
     const msgId = context.msgId ?? (playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null);
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[msgId] = true;
+    // freeAttackBonusCount > 1 (e.g. Sarlacc Sweep: 2 free attacks): store count, each attack decrements by 1
+    game.freeAttackBonusPending[msgId] = entry.freeAttackBonusCount ?? true;
     const label = entry.label || 'Heroic';
-    return { applied: true, freeAction: true, logMessage: entry.logMessage || `**${label}** — Your next attack costs no action. Click Attack when ready.` };
+    const countNote = (entry.freeAttackBonusCount ?? 1) > 1 ? ` (${entry.freeAttackBonusCount} times, each targeting a different figure)` : '';
+    return { applied: true, freeAction: true, logMessage: entry.logMessage || `**${label}** — Your next attack${countNote} costs no action. Click Attack when ready.` };
   }
 
   // dcSpecial: freeMoveEqualToSpeed (Wall Run, Charge) — gain free MP equal to DC's Speed
@@ -3767,6 +3770,116 @@ export function resolveAbility(abilityId, context) {
     game.nextAttackIgnoreFigureLOS = game.nextAttackIgnoreFigureLOS || {};
     game.nextAttackIgnoreFigureLOS[msgId] = true;
     return { applied: true, logMessage: `**Marksman** — For your next Ranged attack this activation, figures do not block line of sight.` };
+  }
+
+  // ccEffect: attackOverrideOpts (Definition: 'Love') — store pending attack override (type, minRange, removeDieColor) + free attack
+  if (entry.type === 'ccEffect' && entry.attackOverrideOpts) {
+    const { game, playerNum, dcMessageMeta } = context;
+    const msgId = playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null;
+    if (!game || !msgId) return { applied: false, manualMessage: 'Resolve manually: play before declaring your attack this activation.' };
+    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+    game.pendingOverrideAttackDice[msgId] = { ...entry.attackOverrideOpts };
+    if (entry.freeAttackBonus) {
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = true;
+    }
+    const rangeNote = entry.attackOverrideOpts.minRange ? ` Target must be **${entry.attackOverrideOpts.minRange}+** spaces away.` : '';
+    const dieNote = entry.attackOverrideOpts.removeDieColor ? ` Remove 1 **${entry.attackOverrideOpts.removeDieColor}** die from your attack pool.` : '';
+    const freeNote = entry.freeAttackBonus ? ' Your next attack costs no action.' : '';
+    return { applied: true, logMessage: `**${entry.label}** —${freeNote}${rangeNote}${dieNote} Use the Attack button.` };
+  }
+
+  // ccEffect: deployGarrisonEffect (Deploy the Garrison) — each friendly Trooper/Guardian within 4 gains 2 MP or 1 Hit Token (choice)
+  if (entry.type === 'ccEffect' && entry.deployGarrisonEffect) {
+    const { game, playerNum, dcMessageMeta, choiceIndex } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta?.dcName) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const actData = game.dcActionsData?.[msgId];
+    const selfFigIdx = actData?.selectedFigure ?? 0;
+    const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIndex = dgMatch ? dgMatch[1] : '1';
+    const selfFigKey = `${meta.dcName}-${dgIndex}-${selfFigIdx}`;
+    const selfPos = game.figurePositions?.[playerNum]?.[selfFigKey];
+    if (!selfPos) return { applied: false, manualMessage: 'Resolve manually: activated figure has no position.' };
+    const boardState = getBoardStateForMovement(game, null);
+    const mapSpaces = boardState?.mapSpaces;
+
+    // Helper: collect qualifying friendly figures within 4 (TROOPER or GUARDIAN keyword, not the activating figure)
+    const dcEffects = getDcEffects();
+    const qualifyingMsgIds = [];
+    const qualifyingNames = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos) continue;
+      const dcName = fk.replace(/-\d+-\d+$/, '');
+      const eff = dcEffects[dcName] || dcEffects[dcName.replace(/\s*\[.*\]\s*$/, '')] || {};
+      const kws = (eff.keywords || []).map(k => String(k).toUpperCase());
+      if (!kws.includes('TROOPER') && !kws.includes('GUARDIAN')) continue;
+      // Compute distance via getRange if available (Manhattan); fallback to include all
+      const dist = mapSpaces ? null : 0; // we'll use getRange from context if present
+      // Use getRange from imports if possible — it's not directly imported but we can compute
+      const [r1, c1] = String(selfPos).toUpperCase().split(/(\d+)/).filter(Boolean);
+      const [r2, c2] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
+      const rowDist = Math.abs((r1?.charCodeAt(0) ?? 0) - (r2?.charCodeAt(0) ?? 0));
+      const colDist = Math.abs(parseInt(c1 || '0') - parseInt(c2 || '0'));
+      const approxDist = rowDist + colDist;
+      if (approxDist > 4) continue;
+      // Find the msgId for this figure
+      const figMid = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
+      if (!figMid) continue;
+      if (!qualifyingMsgIds.includes(figMid)) {
+        qualifyingMsgIds.push(figMid);
+        qualifyingNames.push(dcName);
+      }
+    }
+    if (qualifyingMsgIds.length === 0) {
+      return { applied: true, logMessage: `**Deploy the Garrison** — No friendly Trooper/Guardian figures within 4 spaces.` };
+    }
+
+    if (choiceIndex === undefined || choiceIndex === null) {
+      // Phase 1: ask player to choose MP or Hit Token
+      return {
+        requiresChoice: true,
+        choiceOptions: [`2 Movement Points to each (${qualifyingNames.join(', ')})`, `1 Hit Token to each (${qualifyingNames.join(', ')})`],
+      };
+    }
+
+    // Phase 2: apply chosen effect to all qualifying figures
+    const grantMp = choiceIndex === 0;
+    const results = [];
+    for (let i = 0; i < qualifyingMsgIds.length; i++) {
+      const mid = qualifyingMsgIds[i];
+      const nm = qualifyingNames[i];
+      if (grantMp) {
+        game.movementBank = game.movementBank || {};
+        const bank = game.movementBank[mid] || { total: 0, remaining: 0 };
+        bank.total = (bank.total ?? 0) + 2;
+        bank.remaining = (bank.remaining ?? 0) + 2;
+        game.movementBank[mid] = bank;
+        results.push(`**${nm}** +2 MP`);
+      } else {
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        // Grant Hit token to the first figure in that DC group (index 0)
+        const metaForMid = dcMessageMeta.get(mid);
+        if (metaForMid?.dcName) {
+          const actD = game.dcActionsData?.[mid];
+          const figIdx = actD?.selectedFigure ?? 0;
+          const fkForMid = Object.keys(game.figurePositions?.[playerNum] || {}).find(fk => fk.startsWith(`${metaForMid.dcName}-`) && fk.endsWith(`-${figIdx}`));
+          if (fkForMid) {
+            game.figurePowerTokens[fkForMid] = [...(game.figurePowerTokens[fkForMid] || []), 'Hit'];
+            results.push(`**${nm}** +Hit Token`);
+          }
+        }
+      }
+    }
+    const effectLabel = grantMp ? '2 MP each' : '1 Hit Token each';
+    return {
+      applied: true,
+      logMessage: `**Deploy the Garrison** — Granted ${effectLabel}: ${results.join(', ')}.`,
+      refreshMovementBank: grantMp,
+    };
   }
 
   // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free
