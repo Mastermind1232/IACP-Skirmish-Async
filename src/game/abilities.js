@@ -2,7 +2,8 @@
  * F1 Ability library: lookup by id, resolve surge (code-per-ability). No Discord.
  * Surge resolution uses combat.parseSurgeEffect; DCs still reference keys in dc-effects (surgeAbilities array).
  */
-import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getMapSpaces } from '../data-loader.js';
+import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getMapSpaces, getMapTokensData } from '../data-loader.js';
+import { parseCoord } from './coords.js';
 
 /** Look up DC stats by name (handles display variants). */
 function getStatsForDc(dcName) {
@@ -2159,16 +2160,36 @@ export function resolveAbility(abilityId, context) {
     return { applied: false, requiresChoice: true, choiceOptions, targetFigureKeys: adjacent };
   }
 
-  // dcSpecial: drawCCIfAdjacentTerminal — player draws N CC (adjacency check is on-honour; if condition not met, undo manually)
+  // dcSpecial: drawCCIfAdjacentTerminal (Scomp Link) — draw N CC only if the activating figure is adjacent to a terminal
   if (entry.type === 'dcSpecial' && typeof entry.drawCCIfAdjacentTerminal === 'number' && entry.drawCCIfAdjacentTerminal > 0) {
-    const { game, meta } = context;
+    const { game, meta, msgId } = context;
     if (!game || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    // Find activating figure's position
+    const figureKeys = getFigureKeysForDcMsg(game, meta.playerNum, meta);
+    const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const figKey = figureKeys[selectedFig] || figureKeys[0];
+    const figPos = figKey ? game.figurePositions?.[meta.playerNum]?.[figKey] : null;
+    // Get terminal positions for current map
+    const mapId = game.selectedMap?.id;
+    const terminals = (mapId && getMapTokensData) ? (getMapTokensData()[mapId]?.terminals || []) : [];
+    // Check adjacency: Manhattan distance === 1 to any terminal
+    let adjacentTerminal = null;
+    if (figPos && terminals.length > 0) {
+      const fp = parseCoord(figPos);
+      for (const t of terminals) {
+        const tp = parseCoord(String(t).toLowerCase());
+        if (Math.abs(fp.col - tp.col) + Math.abs(fp.row - tp.row) === 1) { adjacentTerminal = t; break; }
+      }
+    }
+    if (!adjacentTerminal) {
+      return { applied: false, manualMessage: `**Scomp Link** — R2-D2 is not adjacent to a terminal${terminals.length === 0 ? ' (no terminals found for this map)' : ''}.` };
+    }
     const n = entry.drawCCIfAdjacentTerminal;
     const drew = drawCards(game, meta.playerNum, n);
     if (!drew.length) return { applied: false, manualMessage: 'No Command cards left in deck to draw.' };
     return {
       applied: true,
-      logMessage: `Drew ${drew.length} Command card${drew.length !== 1 ? 's' : ''}. *(Only valid if adjacent to a terminal — undo if not.)*`,
+      logMessage: `**Scomp Link** — R2-D2 is adjacent to terminal **${String(adjacentTerminal).toUpperCase()}**. Drew ${drew.length} Command card${drew.length !== 1 ? 's' : ''}.`,
       drewCards: drew,
     };
   }
