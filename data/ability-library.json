@@ -2493,9 +2493,17 @@
       "type": "dcSpecial",
       "label": "Wrist Cord",
       "description": "Spend 2 MP to push a SMALL figure within 3 spaces adjacent to you.",
-      "informational": true,
-      "logMessage": "**Wrist Cord** — Spend 2 MP. Choose a SMALL figure within 3 spaces and in your line of sight. Push that figure up to 3 spaces into a space adjacent to you. Resolve the push manually on the map.",
-      "wiredStatus": "informational"
+      "mpCostToActivate": 2,
+      "pushTargetWithinRange": {
+        "range": 3,
+        "requiresSmall": true,
+        "requiresLos": true
+      },
+      "pushLandingEffect": {
+        "mustAdjacentToActivator": true,
+        "maxDistanceFromTarget": 3
+      },
+      "wiredStatus": "wired"
     },
     "wrist_flamethrower": {
       "type": "dcSpecial",
@@ -2509,7 +2517,9 @@
       "fixedAreaRange": 2,
       "fixedAreaDamage": 1,
       "fixedAreaStrain": 1,
-      "fixedAreaConditions": ["Weaken"],
+      "fixedAreaConditions": [
+        "Weaken"
+      ],
       "mpCost": 2
     },
     "bo_rifle_staff_strike": {
@@ -2569,10 +2579,16 @@
       "type": "dcSpecial",
       "label": "Force Throw",
       "description": "Suffer 1 Strain to push a SMALL figure within 3 spaces up to 2 spaces.",
-      "informational": true,
-      "logMessage": "**Force Throw** — Choose a SMALL figure within 3 spaces and push it up to 2 spaces. Resolve the push manually on the map.",
-      "wiredStatus": "partial",
-      "strainCostToSelf": 1
+      "strainCostToSelf": 1,
+      "pushTargetWithinRange": {
+        "range": 3,
+        "requiresSmall": true,
+        "requiresLos": false
+      },
+      "pushLandingEffect": {
+        "maxDistanceFromTarget": 2
+      },
+      "wiredStatus": "wired"
     },
     "electrified_knuckledusters": {
       "type": "dcSpecial",
@@ -2776,9 +2792,7 @@
       "label": "Arsenal",
       "description": "Your attack pool consists of any combination of 2 attack dice.",
       "oncePer": null,
-      "wiredStatus": "passive-reminder",
-      "informational": true,
-      "logMessage": "**Arsenal** — Your attack pool consists of any combination of 2 attack dice.. Resolve manually and inform your opponent.",
+      "wiredStatus": "wired",
       "freeAction": true
     },
     "epic_arsenal": {
@@ -2788,9 +2802,7 @@
       "label": "Epic Arsenal",
       "description": "Your attack pool consists of any combination of 3 attack dice. You cannot roll more than 2 dice of a single color.",
       "oncePer": null,
-      "wiredStatus": "passive-reminder",
-      "informational": true,
-      "logMessage": "**Epic Arsenal** — Your attack pool consists of any combination of 3 attack dice. You cannot roll more than 2 dice of a single color.. Resolve manually and inform your opponent.",
+      "wiredStatus": "wired",
       "freeAction": true
     },
     "soresu_form": {
@@ -2827,9 +2839,7 @@
       "type": "dcSpecial",
       "label": "Figurehead",
       "description": "Before a friendly figure within 4 spaces suffers Damage or Strain, you may suffer that Damage or Strain instead to prevent 1 of it.",
-      "informational": true,
-      "logMessage": "**Figurehead** — (Interrupt/Passive: before a friendly within 4 suffers Damage or Strain, you may suffer that Damage or Strain to prevent 1 of it.) Resolve manually: reduce friendly's incoming damage/strain by 1 and apply 1 damage/strain to this figure instead.",
-      "wiredStatus": "passive-reminder",
+      "wiredStatus": "wired",
       "freeAction": true
     },
     "executor": {
@@ -3064,25 +3074,21 @@
     "acp_scattergun": {
       "type": "dcSpecial",
       "category": "passive-auto",
-      "trigger": "combat-dice",
+      "trigger": "combat-declare",
       "label": "ACP Scattergun",
-      "description": "Named surge ability - see surgeAbilities for effect.",
+      "description": "While attacking, if you are adjacent to the target, apply +2 Hits to the attack results.",
       "oncePer": null,
-      "wiredStatus": "passive-reminder",
-      "informational": true,
-      "logMessage": "**ACP Scattergun** — Named surge ability - see surgeAbilities for effect.. Resolve manually and inform your opponent.",
+      "wiredStatus": "wired",
       "freeAction": true
     },
     "scattergun": {
       "type": "dcSpecial",
       "category": "passive-auto",
-      "trigger": "combat-dice",
+      "trigger": "combat-declare",
       "label": "Scattergun",
-      "description": "Named surge ability - see surgeAbilities for effect.",
+      "description": "While attacking, if you are adjacent to the target, apply +1 Hit to the attack results.",
       "oncePer": null,
-      "wiredStatus": "passive-reminder",
-      "informational": true,
-      "logMessage": "**Scattergun** — Named surge ability - see surgeAbilities for effect.. Resolve manually and inform your opponent.",
+      "wiredStatus": "wired",
       "freeAction": true
     },
     "cunning_han": {
@@ -3164,9 +3170,7 @@
       "label": "Sustained by Rage",
       "description": "You cannot recover Damage. If you have not resolved an activation this round, you cannot be defeated.",
       "oncePer": null,
-      "wiredStatus": "passive-reminder",
-      "informational": true,
-      "logMessage": "**Sustained by Rage** — You cannot recover Damage. If you have not resolved an activation this round, you cannot be defeated.. Resolve manually and inform your opponent.",
+      "wiredStatus": "wired",
       "freeAction": true
     },
     "deflect": {
@@ -3216,9 +3220,7 @@
       "label": "Shared Intuition",
       "description": "While attacking, if another friendly HUNTER within 3 spaces has line of sight to the target space, apply +1 Hit to your attack results.",
       "oncePer": null,
-      "wiredStatus": "passive-reminder",
-      "informational": true,
-      "logMessage": "**Shared Intuition** (passive) — While attacking, if another friendly HUNTER within 3 has LOS to the target, +1 Hit is automatically applied. No manual action needed.",
+      "wiredStatus": "wired",
       "freeAction": true
     }
   }

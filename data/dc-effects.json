@@ -5409,7 +5409,8 @@
       "elite": true,
       "affiliation": "Scum",
       "specialAbilityIds": [
-        "relentless_trandoshan_elite"
+        "relentless_trandoshan_elite",
+        "acp_scattergun"
       ]
     },
     "Trandoshan Hunter (Regular)": {
@@ -5440,7 +5441,8 @@
       "attachment": false,
       "affiliation": "Scum",
       "specialAbilityIds": [
-        "relentless_trandoshan_reg"
+        "relentless_trandoshan_reg",
+        "scattergun"
       ]
     },
     "Tress Hacnua": {

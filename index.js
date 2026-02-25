@@ -159,6 +159,7 @@ import {
   handleFastForward,
   handleDefenderCcPlay,
   handleSpreadThePainCondPick,
+  handleFigureheadDecision,
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
@@ -3022,6 +3023,33 @@ async function handleBleedResolve(interaction) {
   saveGames();
 }
 
+/** Check if a Figurehead-capable figure is available to intercept damage for targetFigureKey. Returns { figureKey, msgId, figIndex, label } or null. */
+function findFigureheadFigure(game, defenderPlayerNum, targetFigureKey) {
+  if (!game.selectedMap?.id) return null;
+  const targetPos = game.figurePositions?.[defenderPlayerNum]?.[targetFigureKey];
+  if (!targetPos) return null;
+  const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+  if (!dcList) return null;
+  for (let i = 0; i < dcList.length; i++) {
+    const dc = dcList[i];
+    if (!dc) continue;
+    const dcName = dc.dcName;
+    const eff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if (!(eff?.specialAbilityIds || []).includes('figurehead')) continue;
+    const figures = game.figurePositions?.[defenderPlayerNum] || {};
+    for (const [fk, pos] of Object.entries(figures)) {
+      if (fk === targetFigureKey) continue;
+      if (fk.replace(/-\d+-\d+$/, '') !== dcName) continue;
+      if (!isWithinN(pos, targetPos, 4, game.selectedMap.id)) continue;
+      const msgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, fk);
+      const fm = fk.match(/-(\d+)-(\d+)$/);
+      const figIndex = fm ? parseInt(fm[2], 10) : 0;
+      return { figureKey: fk, msgId, figIndex, label: dc.displayName || dcName };
+    }
+  }
+  return null;
+}
+
 /** Resolve combat after rolls (and optional surge). Applies damage, VP, updates embeds/board, clears pendingCombat. */
 async function resolveCombatAfterRolls(game, combat, client) {
   // Beatdown / nextAttacksBonusHits: consume one charge and add bonus to this attack
@@ -3079,6 +3107,35 @@ async function resolveCombatAfterRolls(game, combat, client) {
   const tm = combat.target.figureKey.match(/-(\d+)-(\d+)$/);
   const targetFigIndex = tm ? parseInt(tm[2], 10) : 0;
 
+  // Figurehead (Murne Rin): before friendly figure suffers damage, may redirect to self (prevent 1)
+  if (damage > 0 && hit) {
+    const fhResult = findFigureheadFigure(game, defenderPlayerNum, combat.target.figureKey);
+    if (fhResult) {
+      const fhOwnerId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
+      const fhThread = await client.channels.fetch(combat.combatThreadId);
+      game.pendingFigurehead = {
+        damage, hit, resultText, totalBlast,
+        defenderPlayerNum, attackerPlayerNum, ownerId,
+        targetMsgId, targetFigIndex,
+        fhFigKey: fhResult.figureKey, fhMsgId: fhResult.msgId, fhFigIndex: fhResult.figIndex,
+        fhLabel: fhResult.label,
+      };
+      await fhThread.send({
+        content: `<@${fhOwnerId}> — **Figurehead**: **${combat.target.label}** is about to suffer **${damage} damage**. Murne Rin suffers **${Math.max(0, damage - 1)} damage** instead (prevents 1)?`,
+        components: [new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`figurehead_use_${game.gameId}`).setLabel('Use Figurehead').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId(`figurehead_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary),
+        )],
+        allowedMentions: { users: [fhOwnerId] },
+      });
+      return;
+    }
+  }
+  await applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
+}
+
+/** Apply damage, conditions, defeat logic, and finish combat resolution. Called from resolveCombatAfterRolls and handleFigureheadDecision. */
+async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client) {
   const thread = await client.channels.fetch(combat.combatThreadId);
   if (damage > 0 && targetMsgId) {
     const healthState = dcHealthState.get(targetMsgId) || [];
@@ -5998,6 +6055,9 @@ client.on('interactionCreate', async (interaction) => {
       getFootprintCells,
       getRange,
       hasLineOfSight,
+      isDcUnique,
+      getCelebrationButtons,
+      applyDamageAndFinishCombat,
       getEffectiveSpeed,
       ensureMovementBankMessage,
       getBoardStateForMovement,
@@ -6131,7 +6191,7 @@ client.on('interactionCreate', async (interaction) => {
   if (buttonKey === 'missile_salvo_die_') { await handleMissileSalvoDie(interaction); return; }
   if (buttonKey === 'missile_salvo_done_') { await handleMissileSalvoDone(interaction); return; }
 
-  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_' || buttonKey === 'spread_pain_cond_') {
+  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_' || buttonKey === 'spread_pain_cond_' || buttonKey === 'figurehead_use_' || buttonKey === 'figurehead_skip_') {
     const combatContext = {
       getGame,
       replyIfGameEnded,
@@ -6178,6 +6238,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'combat_reroll_') await handleCombatReroll(interaction, combatContext);
     else if (buttonKey === 'combat_token_') await handleCombatToken(interaction, combatContext);
     else if (buttonKey === 'spread_pain_cond_') await handleSpreadThePainCondPick(interaction, combatContext);
+    else if (buttonKey === 'figurehead_use_' || buttonKey === 'figurehead_skip_') await handleFigureheadDecision(interaction, combatContext);
     return;
   }
 

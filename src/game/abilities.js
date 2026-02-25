@@ -160,6 +160,117 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Military Efficiency** — **${toReturn}** shuffled from discard back into your Command deck. (Honour system: choose which card to return — bot uses most-recently-discarded.)`, refreshDiscard: true };
   }
 
+  // dcSpecial: pushTargetWithinRange (Force Throw, Wrist Cord) — pick a SMALL enemy, then pick landing space, then push.
+  // Phase 1 (no targetFigureKey): enumerate valid SMALL enemies → requiresChoice.
+  // Phase 2 (targetFigureKey set, no chosenSpace): enumerate valid landing spaces → requiresSpaceChoice.
+  // Phase 3 (targetFigureKey + chosenSpace set): apply position update.
+  if (entry.type === 'dcSpecial' && entry.pushTargetWithinRange && typeof entry.pushTargetWithinRange === 'object') {
+    const { range = 3, requiresSmall = false, requiresLos = false } = entry.pushTargetWithinRange;
+    const { mustAdjacentToActivator = false, maxDistanceFromTarget } = entry.pushLandingEffect || {};
+    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSight: losCheck, getRange: getRng, getMapSpaces: getMs, targetFigureKey, chosenSpace } = context;
+    if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
+    const enemyNum = playerNum === 1 ? 2 : 1;
+    const label = entry.label || 'Push';
+
+    // Phase 3: apply push to chosen space
+    if (targetFigureKey && chosenSpace) {
+      game.figurePositions = game.figurePositions || {};
+      game.figurePositions[enemyNum] = game.figurePositions[enemyNum] || {};
+      const prevPos = game.figurePositions[enemyNum][targetFigureKey];
+      game.figurePositions[enemyNum][targetFigureKey] = chosenSpace;
+      // Deduct MP cost if applicable
+      if (entry.mpCostToActivate && game.movementBank?.[msgId]) {
+        game.movementBank[msgId].remaining = Math.max(0, game.movementBank[msgId].remaining - entry.mpCostToActivate);
+      }
+      const dcDisplay = meta?.displayName || meta?.dcName || label;
+      const targetName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return {
+        applied: true,
+        logMessage: `**${label}** — **${dcDisplay}** pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} to ${String(chosenSpace).toUpperCase()}.`,
+        refreshBoard: true,
+        refreshMovementBank: !!entry.mpCostToActivate,
+        activeMsgId: msgId,
+      };
+    }
+
+    // Phase 2: target chosen — enumerate valid landing spaces
+    if (targetFigureKey && !chosenSpace) {
+      const targetPos = game.figurePositions?.[enemyNum]?.[targetFigureKey];
+      if (!targetPos) return { applied: false, manualMessage: `**${label}** — target figure has no position.` };
+      const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+      const attackerKey = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
+      const attackerPos = attackerKey ? game.figurePositions?.[playerNum]?.[attackerKey] : null;
+      const mapSpaces = getMs ? getMs(game.selectedMap?.id) : null;
+      if (!mapSpaces) return { applied: false, manualMessage: `**${label}** — map data not available. Resolve manually.` };
+      // All occupied positions except the target (it can vacate its own space)
+      const occupiedSet = new Set([
+        ...Object.values(game.figurePositions?.[1] || {}),
+        ...Object.values(game.figurePositions?.[2] || {}),
+      ].filter(Boolean));
+      occupiedSet.delete(targetPos);
+      const validSpaces = [];
+      for (const coord of Object.keys(mapSpaces)) {
+        if (occupiedSet.has(coord)) continue;
+        if (maxDistanceFromTarget != null && getRng) {
+          if (getRng(targetPos, coord) > maxDistanceFromTarget) continue;
+        }
+        if (mustAdjacentToActivator && attackerPos && getRng) {
+          if (getRng(attackerPos, coord) !== 1) continue;
+        }
+        validSpaces.push(coord);
+      }
+      if (validSpaces.length === 0) return { applied: false, manualMessage: `**${label}** — no valid landing spaces. Resolve manually.` };
+      return { applied: false, requiresSpaceChoice: true, validSpaces, targetFigureKey, spaceChoiceLabel: `**${label}** — Pick a landing space for **${targetFigureKey.replace(/-\d+-\d+$/, '')}**:` };
+    }
+
+    // Phase 1: enumerate valid SMALL hostile targets within range
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const attackerKey = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
+    const attackerPos = attackerKey ? game.figurePositions?.[playerNum]?.[attackerKey] : null;
+    const mapSpaces = getMs ? getMs(game.selectedMap?.id) : null;
+    const validTargets = [];
+    for (const [fk, coord] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
+      if (!coord) continue;
+      // SMALL check: figures with LARGE or MASSIVE keywords are not small
+      const targetDcName = fk.replace(/-\d+-\d+$/, '');
+      const targetStats = getStatsForDc(targetDcName);
+      const kwds = (targetStats?.keywords || []).map((k) => String(k).toUpperCase());
+      if (requiresSmall && (kwds.includes('LARGE') || kwds.includes('MASSIVE'))) continue;
+      // Range check
+      if (getRng && attackerPos && getRng(attackerPos, coord) > range) continue;
+      // LOS check
+      if (requiresLos && losCheck && attackerPos && mapSpaces) {
+        if (!losCheck(attackerPos, coord, mapSpaces)) continue;
+      }
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: `**${label}** — no valid SMALL targets in range. Resolve manually if applicable.` };
+    // Deduct strain cost on activation (paid when ability is triggered, not when target is resolved)
+    let strainApplied = false;
+    if (entry.strainCostToSelf > 0 && dcHealthState && msgId) {
+      const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const healthState = dcHealthState.get(msgId) || [];
+      if (healthState[selectedFig]) {
+        const [cur, max] = healthState[selectedFig];
+        const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
+        healthState[selectedFig] = [newCur, max ?? newCur];
+        dcHealthState.set(msgId, healthState);
+        const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const idx = dcIds ? dcIds.indexOf(msgId) : -1;
+        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+        strainApplied = true;
+      }
+    }
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+      refreshDcEmbed: strainApplied,
+    };
+  }
+
   // dcSpecial: targetHostileFigure (Force Choke, Force Lightning) — pick enemy target, apply damage/strain/condition
   // First call: returns requiresChoice with enemy figure list; second call: applies effect to chosen figure.
   if (entry.type === 'dcSpecial' && entry.targetHostileFigure && typeof entry.targetHostileFigure === 'object') {

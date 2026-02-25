@@ -217,8 +217,10 @@ test('resolveAbility Battle Scars with active activation gains 1 Power Token', (
   const dcMessageMeta = new Map([[msgId, { gameId: 'g5', playerNum: 1, dcName: 'Wookiee Warrior (Elite)', displayName: 'Wookiee [DG 1]' }]]);
   const result = resolveAbility('Battle Scars', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.strictEqual(result.logMessage, 'Gained 1 Power Token.');
-  assert.deepStrictEqual(game.figurePowerTokens['Wookiee Warrior (Elite)-1-0'], ['Wild']);
+  assert.strictEqual(result.logMessage, 'Gained 1 Power Token — choose type.');
+  assert.strictEqual(result.requiresPowerTokenChoice, true);
+  assert.strictEqual(game.pendingPowerTokenGrant?.grants?.[0]?.figureKey, 'Wookiee Warrior (Elite)-1-0');
+  assert.strictEqual(game.pendingPowerTokenGrant?.grants?.[0]?.count, 1);
 });
 
 test('resolveAbility Battle Scars with 3+ damage gains 2 Power Tokens', () => {
@@ -233,8 +235,10 @@ test('resolveAbility Battle Scars with 3+ damage gains 2 Power Tokens', () => {
   const dcMessageMeta = new Map([[msgId, { gameId: 'g6', playerNum: 1, dcName: 'Wookiee Warrior (Regular)', displayName: 'Wookiee [DG 1]' }]]);
   const result = resolveAbility('Battle Scars', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.strictEqual(result.logMessage, 'Gained 2 Power Tokens.');
-  assert.deepStrictEqual(game.figurePowerTokens['Wookiee Warrior (Regular)-1-0'], ['Wild', 'Wild']);
+  assert.strictEqual(result.logMessage, 'Gained 2 Power Tokens — choose type.');
+  assert.strictEqual(result.requiresPowerTokenChoice, true);
+  assert.strictEqual(game.pendingPowerTokenGrant?.grants?.[0]?.figureKey, 'Wookiee Warrior (Regular)-1-0');
+  assert.strictEqual(game.pendingPowerTokenGrant?.grants?.[0]?.count, 2);
 });
 
 test('resolveAbility Against the Odds when VP condition met applies Focus to all figures', () => {
@@ -466,7 +470,9 @@ test('resolveAbility Apex Predator applies Focus, Hide, 2 Power Tokens, 2 MP', (
   assert.ok(result.logMessage?.includes('MP'));
   assert.strictEqual(game.figureConditions['Nexu-1-0']?.includes('Focus'), true);
   assert.strictEqual(game.figureConditions['Nexu-1-0']?.includes('Hide'), true);
-  assert.strictEqual(game.figurePowerTokens['Nexu-1-0']?.length, 2);
+  assert.strictEqual(result.requiresPowerTokenChoice, true);
+  assert.strictEqual(game.pendingPowerTokenGrant?.grants?.[0]?.figureKey, 'Nexu-1-0');
+  assert.strictEqual(game.pendingPowerTokenGrant?.grants?.[0]?.count, 2);
   assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
 });
 

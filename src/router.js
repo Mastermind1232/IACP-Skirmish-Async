@@ -55,6 +55,8 @@ const BUTTON_PREFIXES = [
   'missile_salvo_done_',
   'bleed_accept_',
   'bleed_prevent_',
+  'figurehead_use_',
+  'figurehead_skip_',
   'status_phase_',
   'dc_end_activation_',
   'end_end_of_round_',

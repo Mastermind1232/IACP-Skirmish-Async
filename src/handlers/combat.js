@@ -381,6 +381,17 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
+  // ACP Scattergun (Trandoshan Hunter Elite) / Scattergun (Trandoshan Hunter Regular): +Hits when adjacent to target
+  if (distanceToTarget <= 1) {
+    if (atkSpecialIds.includes('acp_scattergun')) {
+      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 2;
+      await thread.send('**ACP Scattergun** — adjacent to target: +2 Hits.');
+    } else if (atkSpecialIds.includes('scattergun')) {
+      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+      await thread.send('**Scattergun** — adjacent to target: +1 Hit.');
+    }
+  }
+
   // Shared Intuition (Tress Hacnua): +1 Hit while attacking if another friendly HUNTER within 3 has LOS to target
   if (atkSpecialIds.includes('shared_intuition') && getRange && hasLineOfSight && mapSpaces && targetCoord) {
     const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
@@ -1624,5 +1635,104 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
   } else {
     await sendReadyToResolveRolls(thread, gameId);
   }
+  saveGames();
+}
+
+/**
+ * Handle Figurehead ability decision (use or skip).
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - combat context
+ */
+export async function handleFigureheadDecision(interaction, ctx) {
+  const { getGame, client, saveGames, applyDamageAndFinishCombat, isDcUnique, getCelebrationButtons, dcHealthState, findDcMessageIdForFigure, logGameAction, isGroupDefeated, checkWinConditions, updateActivationsMessage, updateAttachmentMessageForDc, getDcStats, getDcEffects } = ctx;
+  const isUse = interaction.customId.startsWith('figurehead_use_');
+  const gameId = interaction.customId.replace(/^figurehead_(?:use|skip)_/, '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate().catch(() => {});
+  const pending = game.pendingFigurehead;
+  if (!pending) {
+    await interaction.followUp({ content: 'No pending Figurehead decision.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  delete game.pendingFigurehead;
+  const combat = game.pendingCombat;
+  if (!combat) {
+    await interaction.followUp({ content: 'Combat data missing.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex, fhFigKey, fhMsgId, fhFigIndex, fhLabel } = pending;
+  const thread = await client.channels.fetch(combat.combatThreadId);
+
+  if (isUse) {
+    const fhDamage = Math.max(0, damage - 1);
+    let fhResultText = '';
+    if (fhMsgId && fhFigKey) {
+      const fhHS = (dcHealthState && dcHealthState.get(fhMsgId)) || [];
+      const fhEntry = fhHS[fhFigIndex];
+      if (fhEntry) {
+        const [fhCur, fhMax] = fhEntry;
+        const fhNew = Math.max(0, (fhCur ?? fhMax) - fhDamage);
+        fhHS[fhFigIndex] = [fhNew, fhMax ?? fhNew];
+        if (dcHealthState) dcHealthState.set(fhMsgId, fhHS);
+        const fhDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const fhDcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+        const fhIdx = (fhDcIds || []).indexOf(fhMsgId);
+        if (fhIdx >= 0 && fhDcList?.[fhIdx]) fhDcList[fhIdx].healthState = [...fhHS];
+        fhResultText = `**Figurehead** — ${fhLabel || 'Murne Rin'} suffers **${fhDamage} damage** (${fhCur ?? fhMax} — ${fhNew} HP); ${combat.target.label} suffers 0.`;
+        if (fhNew <= 0) {
+          // Murne Rin defeated
+          if (game.figurePositions?.[defenderPlayerNum]) delete game.figurePositions[defenderPlayerNum][fhFigKey];
+          if (game.figureConditions?.[fhFigKey]) delete game.figureConditions[fhFigKey];
+          const fhDcName = fhFigKey.replace(/-\d+-\d+$/, '');
+          const fhStats = getDcStats?.(fhDcName);
+          const fhEff = getDcEffects?.()?.[fhDcName];
+          const fhFigures = fhStats?.figures ?? 1;
+          const fhVp = (fhFigures > 1 && fhEff?.subCost != null) ? fhEff.subCost : (fhStats?.cost ?? 4);
+          const fhVpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+          game[fhVpKey] = game[fhVpKey] || { total: 0, kills: 0, objectives: 0 };
+          game[fhVpKey].kills += fhVp;
+          game[fhVpKey].total += fhVp;
+          fhResultText += ` — **${fhLabel || 'Murne Rin'} defeated!** +${fhVp} VP`;
+          if (logGameAction) await logGameAction(game, client, `**Figurehead** — ${fhLabel || 'Murne Rin'} was defeated! +${fhVp} VP`, { phase: 'ROUND', icon: 'attack' });
+          if (fhIdx >= 0 && isGroupDefeated?.(game, defenderPlayerNum, fhIdx)) {
+            const fhActivated = defenderPlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+            if (!fhActivated.includes(fhIdx)) {
+              if (defenderPlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
+              else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+              if (updateActivationsMessage) await updateActivationsMessage(game, defenderPlayerNum, client);
+            }
+            const fhCcAttachKey = defenderPlayerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+            if (game[fhCcAttachKey]?.[fhMsgId]?.length) {
+              delete game[fhCcAttachKey][fhMsgId];
+              if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, defenderPlayerNum, fhMsgId, client);
+            }
+          }
+          await checkWinConditions?.(game, client);
+          const fhAtkerOwnerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+          if (!game.pendingCelebration && isDcUnique?.(fhDcName)) {
+            game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
+            await thread.send({
+              content: `<@${fhAtkerOwnerId}> — You defeated a unique figure (Figurehead). Play **Celebration** to gain 4 VP?`,
+              components: [getCelebrationButtons(game.gameId)],
+              allowedMentions: { users: [fhAtkerOwnerId] },
+            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }
+        }
+      }
+    }
+    if (fhResultText) await thread.send(fhResultText);
+    await applyDamageAndFinishCombat(game, combat, { damage: 0, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
+  } else {
+    await thread.send('**Figurehead** skipped.');
+    await applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
+  }
+  if (isUse && fhMsgId && ctx.updateAttachmentMessageForDc) {
+    await ctx.updateAttachmentMessageForDc(game, defenderPlayerNum, fhMsgId, client).catch(() => {});
+  }
+  await interaction.editReply({ components: [] }).catch(() => {});
   saveGames();
 }

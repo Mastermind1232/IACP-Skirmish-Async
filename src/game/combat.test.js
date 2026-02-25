@@ -84,7 +84,7 @@ test('computeCombatResult bonusPierce', () => {
   });
   assert.strictEqual(r.hit, true);
   assert.strictEqual(r.damage, 2); // 3 dmg - (3 block - 2 pierce) = 3 - 1 = 2
-  assert.ok(r.resultText.includes('CC bonus: +2 pierce'));
+  assert.ok(r.resultText.includes('bonus: +2 pierce'));
 });
 
 test('computeCombatResult bonusAccuracy (Deadeye)', () => {
@@ -95,7 +95,7 @@ test('computeCombatResult bonusAccuracy (Deadeye)', () => {
   });
   assert.strictEqual(r.hit, true); // 0 + 2 >= 2
   assert.strictEqual(r.damage, 1); // 2 - 1 block
-  assert.ok(r.resultText.includes('CC bonus: +2 acc'));
+  assert.ok(r.resultText.includes('bonus: +2 acc'));
 });
 
 test('computeCombatResult bonusHits (Beatdown)', () => {
@@ -106,7 +106,7 @@ test('computeCombatResult bonusHits (Beatdown)', () => {
   });
   assert.strictEqual(r.hit, true);
   assert.strictEqual(r.damage, 1); // 2 dmg + 1 bonus - 2 block = 1
-  assert.ok(r.resultText.includes('CC bonus: +1 Hit'));
+  assert.ok(r.resultText.includes('bonus: +1 Hit'));
 });
 
 test('computeCombatResult bonusBlock (Brace Yourself)', () => {
@@ -118,7 +118,7 @@ test('computeCombatResult bonusBlock (Brace Yourself)', () => {
   assert.strictEqual(r.hit, true);
   assert.strictEqual(r.effectiveBlock, 4); // 2 + 2 block
   assert.strictEqual(r.damage, 0); // 4 dmg - 4 block = 0
-  assert.ok(r.resultText.includes('CC bonus: +2 Block'));
+  assert.ok(r.resultText.includes('bonus: +2 Block'));
 });
 
 test('computeCombatResult bonusEvade display and surge cancellation', () => {
@@ -129,7 +129,7 @@ test('computeCombatResult bonusEvade display and surge cancellation', () => {
     evadeCancelledSurge: 1,
   });
   assert.strictEqual(r.hit, true);
-  assert.ok(r.resultText.includes('CC bonus: +1 Evade'));
+  assert.ok(r.resultText.includes('bonus: +1 Evade'));
   assert.ok(r.resultText.includes('Evade cancelled 1 surge'));
 });
 

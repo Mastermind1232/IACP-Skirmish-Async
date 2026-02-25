@@ -835,6 +835,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     resolveAbility,
     getSpaceChoiceRows,
     getMapAttachmentForSpaces,
+    pushUndo,
   } = ctx;
 
   let msgId, action, figureIndex = 0, specialIdx = -1;
@@ -898,6 +899,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await interaction.followUp({ content: `**${action}** costs both actions — you only have ${actionsRemaining} action(s) remaining this activation.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
+    // Snapshot state before any DC special changes (undo restores from this)
+    if (pushUndo) pushUndo(game, { type: 'dc_special', label: action, msgId, gameLogMessageId: null });
     if (!Array.isArray(actionsData.specialsUsed)) actionsData.specialsUsed = [];
     actionsData.specialsUsed.push(specialIdx);
   }
@@ -1108,6 +1111,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         }
       }
     }
+    // Snapshot state before attack begins (undo restores health/VP/conditions/hand)
+    if (pushUndo) pushUndo(game, { type: 'attack', label: 'Attack', msgId, gameLogMessageId: null });
     await buildAndSendAttackTargets(interaction, ctx, game, meta, msgId, figureKey, figureIndex, {
       dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats,
       excludeFigureKeys: game.pendingMissileSalvo?.[msgId]?.targetsFired,
@@ -1218,6 +1223,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
       await updateDcActionsMessage(game, msgId, client);
     }
+    // Refresh DC embed if strain was deducted during ability activation (e.g. Force Throw)
+    if (resolveResult.refreshDcEmbed && ctx.updateAttachmentMessageForDc) {
+      await ctx.updateAttachmentMessageForDc(game, meta?.playerNum, msgId, client).catch(() => {});
+    }
     await interaction.followUp({ content: `**${action}** — Choose one:`, components: rows.slice(0, 5), ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
     return;
@@ -1230,7 +1239,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const { rows } = getSpaceChoiceRows(`pounce_space_${game.gameId}_${msgId}_${figureIndex}_`, resolveResult.validSpaces, mapSpaces);
       const mapAttachment = await getMapAttachmentForSpaces(game, resolveResult.validSpaces);
       game.pendingPounceSpaceChoice = game.pendingPounceSpaceChoice || {};
-      game.pendingPounceSpaceChoice[msgId] = { gameId: game.gameId, playerNum: meta.playerNum, figureIndex, msgId, abilityId, validSpaces: resolveResult.validSpaces };
+      game.pendingPounceSpaceChoice[msgId] = { gameId: game.gameId, playerNum: meta.playerNum, figureIndex, msgId, abilityId, validSpaces: resolveResult.validSpaces, targetFigureKey: resolveResult.targetFigureKey || null };
       const spacePickLabel = resolveResult.spaceChoiceLabel || `**Pounce** — Pick a space to place your figure:`;
       const payload = { content: spacePickLabel, components: rows.slice(0, 5), ephemeral: false, fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
@@ -1341,7 +1350,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   const [, gameId, msgId, specialIdxStr, choiceIndexStr] = match;
   const specialIdx = parseInt(specialIdxStr, 10);
   const choiceIndex = parseInt(choiceIndexStr, 10);
-  const { getGame, dcMessageMeta, dcHealthState, resolveAbility, updateDcActionsMessage, saveGames, client } = ctx;
+  const { getGame, dcMessageMeta, dcHealthState, resolveAbility, updateDcActionsMessage, saveGames, client, getSpaceChoiceRows, getMapAttachmentForSpaces, getBoardStateForMovement } = ctx;
   const game = getGame(gameId);
   if (!game) {
     await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -1365,6 +1374,29 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapSpaces: ctx.getMapSpaces,
     findDcMessageIdForFigure: ctx.findDcMessageIdForFigure,
   }) : { applied: false, manualMessage: 'Resolve manually.' };
+
+  // Push ability Phase 2: figure chosen, now pick landing space
+  if (!resolveResult.applied && resolveResult.requiresSpaceChoice && Array.isArray(resolveResult.validSpaces) && resolveResult.validSpaces.length > 0) {
+    if (getSpaceChoiceRows && getMapAttachmentForSpaces) {
+      const boardState = getBoardStateForMovement ? getBoardStateForMovement(game, null) : null;
+      const mapSpaces = boardState?.mapSpaces || {};
+      const { rows } = getSpaceChoiceRows(`pounce_space_${game.gameId}_${msgId}_${figureIndex}_`, resolveResult.validSpaces, mapSpaces);
+      const mapAttachment = await getMapAttachmentForSpaces(game, resolveResult.validSpaces);
+      game.pendingPounceSpaceChoice = game.pendingPounceSpaceChoice || {};
+      game.pendingPounceSpaceChoice[msgId] = { gameId: game.gameId, playerNum, figureIndex, msgId, abilityId, validSpaces: resolveResult.validSpaces, targetFigureKey: resolveResult.targetFigureKey || null };
+      const spacePickLabel = resolveResult.spaceChoiceLabel || `Pick a landing space:`;
+      const payload = { content: spacePickLabel, components: rows.slice(0, 5), ephemeral: false };
+      if (mapAttachment) payload.files = [mapAttachment];
+      await interaction.followUp(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      saveGames();
+      return;
+    }
+    // Fallback if space choice helpers not available
+    await interaction.followUp({ content: `${resolveResult.spaceChoiceLabel || 'Pick a landing space'} (resolve manually — space picker unavailable).`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    saveGames();
+    return;
+  }
+
   // Deduct action (was refunded when showing choice buttons)
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {
@@ -1414,18 +1446,18 @@ export async function handlePounceSpacePick(interaction, ctx) {
     await interaction.followUp({ content: 'No pending pounce space choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const { playerNum, abilityId, validSpaces } = pending;
+  const { playerNum, abilityId, validSpaces, targetFigureKey } = pending;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the activating player can choose the pounce destination.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the activating player can choose the destination.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const validLower = (validSpaces || []).map((s) => String(s).toLowerCase());
   if (!validLower.includes(chosenSpace)) {
-    await interaction.followUp({ content: 'That space is not a valid pounce destination.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'That space is not a valid destination.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const meta = dcMessageMeta.get(msgId);
-  const result = resolveAbility(abilityId, { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState: ctx.dcHealthState, chosenSpace });
+  const result = resolveAbility(abilityId, { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState: ctx.dcHealthState, chosenSpace, targetFigureKey: targetFigureKey || null });
   delete game.pendingPounceSpaceChoice[msgId];
   if (result.applied) {
     if (result.logMessage) {

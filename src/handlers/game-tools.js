@@ -99,6 +99,14 @@ export async function handleUndo(interaction, ctx) {
     return;
   }
 
+  // Guard: deploy_pick can only be undone during the setup phase (before game rounds begin).
+  // Check BEFORE snapshot restore so we inspect current game state, not the snapshot's.
+  if (last.type === 'deploy_pick' && game.currentRound) {
+    game.undoStack.push(last); // put it back
+    await interaction.followUp({ content: 'Deployment undo is only available before the game starts.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+
   /** F14 time-travel: remove the original action message from Game Log so it looks exactly as before. */
   if (last.gameLogMessageId && game.generalId) {
     try {
@@ -110,8 +118,20 @@ export async function handleUndo(interaction, ctx) {
     }
   }
 
+  // === UNIVERSAL SNAPSHOT RESTORE ===
+  // Restore entire game state from snapshot. Discord UI refresh is handled per-type below.
+  if (last.snapshot) {
+    const savedStack = game.undoStack; // already has `last` popped off
+    for (const key of Object.keys(game)) {
+      if (key !== 'undoStack') delete game[key];
+    }
+    Object.assign(game, last.snapshot);
+    game.undoStack = savedStack;
+  }
+  // ===================================
+
+  // Per-type Discord UI sync (game state is already restored above)
   if (last.type === 'pass_turn') {
-    game.currentActivationTurnPlayerId = last.previousTurnPlayerId;
     if (last.roundMessageId && last.roundContentBefore != null && game.generalId) {
       try {
         const ch = await client.channels.fetch(game.generalId);
@@ -138,19 +158,8 @@ export async function handleUndo(interaction, ctx) {
     return;
   }
   if (last.type === 'move') {
-    if (game.figurePositions?.[last.playerNum]) {
-      game.figurePositions[last.playerNum][last.figureKey] = last.previousTopLeft;
-    }
-    if (last.previousSize && game.figureOrientations) {
-      game.figureOrientations[last.figureKey] = last.previousSize;
-    }
-    const moveKey = `${last.msgId}_${last.figureIndex}`;
-    delete game.moveInProgress?.[moveKey];
-    if (game.movementBank?.[last.msgId] != null && last.mpRemainingBefore != null) {
-      game.movementBank[last.msgId].remaining = last.mpRemainingBefore;
-      try {
-        await updateMovementBankMessage(game, last.msgId, client);
-      } catch (e) { /* ignore */ }
+    if (game.movementBank?.[last.msgId] != null) {
+      try { await updateMovementBankMessage(game, last.msgId, client); } catch { /* ignore */ }
     }
     if (game.boardId && game.selectedMap) {
       try {
@@ -165,17 +174,7 @@ export async function handleUndo(interaction, ctx) {
     await interaction.followUp({ content: 'Movement undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  if (game.currentRound) {
-    await interaction.followUp({ content: 'Undo is only available during deployment for that action.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
-    return;
-  }
   if (last.type === 'deploy_pick') {
-    if (game.figurePositions?.[last.playerNum]) {
-      delete game.figurePositions[last.playerNum][last.figureKey];
-    }
-    if (game.figureOrientations?.[last.figureKey]) {
-      delete game.figureOrientations[last.figureKey];
-    }
     await updateDeployPromptMessages(game, last.playerNum, client);
     if (game.boardId && game.selectedMap) {
       try {
@@ -191,37 +190,12 @@ export async function handleUndo(interaction, ctx) {
     return;
   }
   if (last.type === 'interact') {
-    const actionsData = game.dcActionsData?.[last.msgId];
-    if (actionsData != null) actionsData.remaining = last.previousRemaining ?? (actionsData.remaining + 1);
-    if (last.optionId === 'retrieve_contraband' && last.figureKey != null) {
-      if (game.figureContraband) delete game.figureContraband[last.figureKey];
-    }
-    if (last.optionId?.startsWith('launch_panel_') && last.launchPanelCoord != null) {
-      if (last.previousLaunchPanelState !== undefined) {
-        game.launchPanelState = game.launchPanelState || {};
-        game.launchPanelState[last.launchPanelCoord] = last.previousLaunchPanelState;
-      } else if (game.launchPanelState) delete game.launchPanelState[last.launchPanelCoord];
-      if (last.previousP1LaunchFlipped !== undefined) game.p1LaunchPanelFlippedThisRound = last.previousP1LaunchFlipped;
-      if (last.previousP2LaunchFlipped !== undefined) game.p2LaunchPanelFlippedThisRound = last.previousP2LaunchFlipped;
-    }
-    if (last.optionId?.startsWith('open_door_') && last.openDoorEdgeKey != null && Array.isArray(last.previousOpenedDoors)) {
-      game.openedDoors = last.previousOpenedDoors.slice();
-    }
     if (updateDcActionsMessage && last.msgId) await updateDcActionsMessage(game, last.msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
     await interaction.followUp({ content: 'Interact undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (last.type === 'cc_play') {
-    const handKey = last.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-    const discardKey = last.playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
-    const hand = (game[handKey] || []).slice();
-    hand.push(last.card);
-    game[handKey] = hand;
-    const discard = (game[discardKey] || []).slice();
-    const idx = discard.lastIndexOf(last.card);
-    if (idx >= 0) discard.splice(idx, 1);
-    game[discardKey] = discard;
     if (updateHandVisualMessage) await updateHandVisualMessage(game, last.playerNum, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     if (updateDiscardPileMessage) await updateDiscardPileMessage(game, last.playerNum, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
@@ -229,14 +203,7 @@ export async function handleUndo(interaction, ctx) {
     return;
   }
   if (last.type === 'cc_play_dc') {
-    const handKey = last.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-    const discardKey = last.playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
-    if (last.previousHand) game[handKey] = last.previousHand.slice();
-    if (last.previousDiscard) game[discardKey] = last.previousDiscard.slice();
     if (last.previousAttachments != null && last.msgId != null) {
-      const attachKey = last.playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
-      game[attachKey] = game[attachKey] || {};
-      game[attachKey][last.msgId] = last.previousAttachments.slice();
       if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, last.playerNum, last.msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
     if (updateHandVisualMessage) await updateHandVisualMessage(game, last.playerNum, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -244,6 +211,28 @@ export async function handleUndo(interaction, ctx) {
     if (updateDcActionsMessage && last.msgId) await updateDcActionsMessage(game, last.msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
     await interaction.followUp({ content: 'Command card (Special) play undone.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  if (last.type === 'attack' || last.type === 'dc_special' || last.type === 'end_activation') {
+    // Refresh DC action counter if we have the msgId
+    if (last.msgId && updateDcActionsMessage) await updateDcActionsMessage(game, last.msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    // Refresh board if figures may have moved (dc_special with push, etc.)
+    if (last.type === 'dc_special' && game.boardId && game.selectedMap && buildBoardMapPayload) {
+      try {
+        const boardChannel = await client.channels.fetch(game.boardId);
+        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+        await boardChannel.send(payload);
+      } catch { /* ignore */ }
+    }
+    const label = last.label || last.type.replace('_', ' ');
+    saveGames();
+    await interaction.followUp({ content: `${label} undone.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  // Unknown type but snapshot was restored — still valid, just no specific Discord cleanup
+  if (last.snapshot) {
+    saveGames();
+    await interaction.followUp({ content: `${last.label || 'Action'} undone.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.followUp({ content: 'That action cannot be undone yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });

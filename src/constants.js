@@ -9,4 +9,4 @@ export const MAX_ACTIVE_GAMES_PER_PLAYER = 3;
 export const PENDING_ILLEGAL_TTL_MS = 60 * 60 * 1000;
 
 /** Max undo entries kept per game. Older entries are dropped when exceeded. */
-export const MAX_UNDO_DEPTH = 50;
+export const MAX_UNDO_DEPTH = 10;
