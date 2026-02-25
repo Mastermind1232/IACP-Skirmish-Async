@@ -17,6 +17,13 @@ export const CURRENT_GAME_VERSION = 1;
 /** gameId -> game object */
 const games = new Map();
 
+/**
+ * Set to true after loadGames() completes successfully.
+ * saveGames() bails out early when false, preventing a cold-start
+ * empty-map save from wiping the DB.
+ */
+let gamesLoadedOk = false;
+
 /** Run migrations on a loaded game so old saves keep working (DB4). */
 function migrateGame(g) {
   if (!g || typeof g !== 'object') return;
@@ -73,6 +80,10 @@ function syncHealthStateToGames() {
 
 /** Persist all games to DB or file. */
 export function saveGames() {
+  if (!gamesLoadedOk) {
+    console.warn('[Games] saveGames() called before load completed — skipping to protect DB.');
+    return;
+  }
   syncHealthStateToGames();
   if (isDbConfigured()) {
     void saveGamesToDb(games);
@@ -99,6 +110,7 @@ export async function loadGames() {
         }
         games.set(id, g);
       }
+      gamesLoadedOk = true;
       console.log(`[Games] Loaded ${games.size} game(s) from PostgreSQL.`);
     } catch (err) {
       console.error('Failed to load games from DB:', err);
@@ -107,7 +119,10 @@ export async function loadGames() {
     return;
   }
   try {
-    if (!existsSync(GAMES_STATE_PATH)) return;
+    if (!existsSync(GAMES_STATE_PATH)) {
+      gamesLoadedOk = true;
+      return;
+    }
     const raw = readFileSync(GAMES_STATE_PATH, 'utf8');
     const data = JSON.parse(raw);
     if (data && typeof data === 'object') {
@@ -119,6 +134,7 @@ export async function loadGames() {
         games.set(id, g);
       }
     }
+    gamesLoadedOk = true;
     repopulateDcMapsFromGames();
   } catch (err) {
     console.error('Failed to load games state:', err);
