@@ -5921,6 +5921,74 @@ client.on('messageCreate', async (message) => {
   }
 });
 
+// ── Auto-refresh: serialization maps for minimap (one message, rapid edits) ──
+const _minimapInFlight = new Map();    // msgId → Promise
+const _minimapLatestToken = new Map(); // msgId → Symbol (newest request wins)
+
+async function _serializedMinimapUpdate(game, msgId) {
+  const token = Symbol();
+  _minimapLatestToken.set(msgId, token);
+  const prev = _minimapInFlight.get(msgId);
+  if (prev) await prev.catch(() => {});
+  if (_minimapLatestToken.get(msgId) !== token) return; // superseded by newer request
+  const p = updateDcActionsMessage(game, msgId, client).catch(err => console.error('[refresh:minimap]', err?.message ?? err));
+  _minimapInFlight.set(msgId, p);
+  await p;
+  if (_minimapLatestToken.get(msgId) === token) { _minimapInFlight.delete(msgId); _minimapLatestToken.delete(msgId); }
+}
+
+/**
+ * Fire-and-forget: post new board map, refresh minimap(s), rebuild all DC play-area embeds.
+ * Called in the finally block of every interactionCreate — no awaiting, no blocking.
+ */
+async function refreshGameVisuals(game) {
+  if (!game?.gameId || !game.selectedMap) return;
+
+  // 1. Board map — new post to board channel (running timeline)
+  if (game.boardId) {
+    (async () => {
+      try {
+        const ch = await client.channels.fetch(game.boardId);
+        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+        await ch.send(payload);
+      } catch (err) { console.error('[refresh:board]', err?.message ?? err); }
+    })();
+  }
+
+  // 2. Minimap — serialized edit-in-place for every active activation thread
+  for (const msgId of Object.keys(game.dcActionsData || {})) {
+    _serializedMinimapUpdate(game, msgId).catch(err => console.error('[refresh:minimap]', err?.message ?? err));
+  }
+
+  // 3. DC play-area embeds — rebuild all deployed DCs for both players
+  for (const playerNum of [1, 2]) {
+    const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+    if (!channelId || !msgIds.length) continue;
+    (async () => {
+      try {
+        const ch = await client.channels.fetch(channelId);
+        for (const id of msgIds) {
+          if (!id) continue;
+          const meta = dcMessageMeta.get(id);
+          if (!meta || meta.gameId !== game.gameId) continue;
+          try {
+            const msg = await ch.messages.fetch(id);
+            const healthState = dcHealthState.get(id) || [];
+            const exhausted = dcExhaustedState.get(id) || false;
+            const { embed, files } = await buildDcEmbedAndFiles(
+              meta.dcName, exhausted, meta.displayName, healthState,
+              getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, id)
+            );
+            const components = getDcPlayAreaComponents(id, exhausted, game, meta.dcName);
+            await msg.edit({ embeds: [embed], files, components }).catch(err => console.error('[refresh:dc-embed]', id, err?.message ?? err));
+          } catch (err) { console.error('[refresh:dc-embed] fetch failed', id, err?.message ?? err); }
+        }
+      } catch (err) { console.error('[refresh:dc-embeds] channel fetch failed', channelId, err?.message ?? err); }
+    })();
+  }
+}
+
 client.on('interactionCreate', async (interaction) => {
   try {
   if (interaction.isChatInputCommand()) {
@@ -7312,6 +7380,15 @@ client.on('interactionCreate', async (interaction) => {
       content: 'An error occurred. It has been logged to bot-logs.',
       ephemeral: true,
     });
+  } finally {
+    // Auto-refresh: after every interaction, fire board map + minimap + DC embeds (fire-and-forget)
+    try {
+      const _refreshGameId = extractGameIdFromInteraction(interaction);
+      if (_refreshGameId) {
+        const _refreshGame = getGame(_refreshGameId);
+        if (_refreshGame) refreshGameVisuals(_refreshGame).catch(err => console.error('[refresh]', err?.message ?? err));
+      }
+    } catch (_) {}
   }
 });
 
