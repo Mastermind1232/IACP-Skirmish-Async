@@ -4925,7 +4925,7 @@ async function applySquadSubmission(game, isP1, squad, client) {
   const botMsg = handMessages.find((m) => m.author.bot && m.components.length > 0);
   if (botMsg) {
     await botMsg.edit({
-      embeds: [getHandTooltipEmbed(game, isP1 ? 1 : 2), getSquadSelectEmbed(isP1 ? 1 : 2, squad)],
+      embeds: [getHandTooltipEmbed(game, isP1 ? 1 : 2, squad)],
       components: [],
     });
   }
@@ -5888,7 +5888,6 @@ client.on('interactionCreate', async (interaction) => {
         createBoardChannel,
         createHandThreads,
         getHandTooltipEmbed,
-        getSquadSelectEmbed,
         getHandSquadButtons,
         client,
         saveGames,
@@ -5964,7 +5963,6 @@ client.on('interactionCreate', async (interaction) => {
       sendDeckIllegalAlert,
       applySquadSubmission,
       getHandTooltipEmbed,
-      getSquadSelectEmbed,
       getHandSquadButtons,
       shuffleArray,
       buildHandDisplayPayload,
@@ -6364,7 +6362,6 @@ client.on('interactionCreate', async (interaction) => {
       createBoardChannel,
       createHandThreads,
       getHandTooltipEmbed,
-      getSquadSelectEmbed,
       getHandSquadButtons,
       runDraftRandom,
       logGameErrorToBotLogs,

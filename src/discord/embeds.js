@@ -89,7 +89,17 @@ export function getPlayAreaTooltipEmbed(game, playerNum) {
 }
 
 /** Tooltip embed for Hand thread. */
-export function getHandTooltipEmbed(game, playerNum) {
+export function getHandTooltipEmbed(game, playerNum, squad) {
+  if (squad) {
+    return new EmbedBuilder()
+      .setTitle('Your Hand')
+      .setDescription(
+        `**Squad:** ${squad.name || 'Unnamed'}\n` +
+        `**Deployment Cards:** ${squad.dcCount ?? '—'}\n` +
+        `**Command Cards:** ${squad.ccCount ?? '—'}\n\n✓ Squad submitted.`
+      )
+      .setColor(0x57f287);
+  }
   return new EmbedBuilder()
     .setTitle('Your Hand')
     .setDescription(

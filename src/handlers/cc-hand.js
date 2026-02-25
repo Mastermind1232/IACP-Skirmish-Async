@@ -1004,7 +1004,7 @@ export async function handleDeckIllegalPlay(interaction, ctx) {
 
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleDeckIllegalRedo(interaction, ctx) {
-  const { getGame, pendingIllegalSquad, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, saveGames } = ctx;
+  const { getGame, pendingIllegalSquad, getHandTooltipEmbed, getHandSquadButtons, saveGames } = ctx;
   const parts = interaction.customId.replace('deck_illegal_redo_', '').split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
@@ -1026,10 +1026,10 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
   const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
   const handChannel = await interaction.client.channels.fetch(handChannelId);
   const handMessages = await handChannel.messages.fetch({ limit: 15 });
-  const botMsg = handMessages.find((m) => m.author.bot && m.embeds?.some((e) => e.title?.includes('Deck Selection')));
+  const botMsg = handMessages.find((m) => m.author.bot && m.embeds?.some((e) => e.title?.includes('Your Hand')));
   if (botMsg) {
     await botMsg.edit({
-      embeds: [getHandTooltipEmbed(game, playerNum), getSquadSelectEmbed(playerNum, null)],
+      embeds: [getHandTooltipEmbed(game, playerNum)],
       components: [getHandSquadButtons(game.gameId, playerNum)],
     }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }

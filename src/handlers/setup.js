@@ -87,7 +87,6 @@ export async function handleMapSelectionChoice(interaction, ctx) {
     createPlayAreaChannels,
     createHandThreads,
     getHandTooltipEmbed,
-    getSquadSelectEmbed,
     getHandSquadButtons,
     client,
     saveGames,
@@ -180,7 +179,6 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     createBoardChannel,
     createHandThreads,
     getHandTooltipEmbed,
-    getSquadSelectEmbed,
     getHandSquadButtons,
     saveGames,
   } = ctx;
@@ -244,13 +242,13 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     await p1Hand.send({
       content: `<@${p1Id}>, this is your hand — pick your squad below!${isTest ? ' *(Test — you play as P1 vs the bot as P2. Use Select Squad or Default deck for each side.)*' : ''}`,
       allowedMentions: { users: [p1Id] },
-      embeds: [getHandTooltipEmbed(game, 1), getSquadSelectEmbed(1, null)],
+      embeds: [getHandTooltipEmbed(game, 1)],
       components: [getHandSquadButtons(game.gameId, 1)],
     });
     await p2Hand.send({
       content: `<@${p2Id}>, this is your hand — pick your squad below!${isTest ? ' *(Test — P2 (bot) hand. Use Select Squad or Default deck for the bot\'s side.)*' : ''}`,
       allowedMentions: { users: [p2Id] },
-      embeds: [getHandTooltipEmbed(game, 2), getSquadSelectEmbed(2, null)],
+      embeds: [getHandTooltipEmbed(game, 2)],
       components: [getHandSquadButtons(game.gameId, 2)],
     });
   } catch (err) {
