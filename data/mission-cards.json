@@ -56,7 +56,16 @@
         "setup": "Thugs are hostile to all figures except other thugs.\nA figure can attack a thug (Health: 4, Defense: 1 black die)",
         "persistent": "Thugs are hostile to all figures except other thugs.\nA figure can attack a thug (Health: 4, Defense: 1 black die)",
         "startOfRound": "",
-        "endOfRound": "Move each thug 2 spaces to the closest hostile figure. Then, each hostile figure adjacent to a thug suffers 2 Damage. (If multiple hostile figures are tied for closest to the thug, then the player with Initiative decides which figure is targeted.)\nThe player who controls the Cantina gains 6 VPs."
+        "endOfRound": "Move each thug 2 spaces to the closest hostile figure. Then, each hostile figure adjacent to a thug suffers 2 Damage. (If multiple hostile figures are tied for closest to the thug, then the player with Initiative decides which figure is targeted.)\nThe player who controls the Cantina gains 6 VPs.",
+        "rules": {
+          "endOfRound": {
+            "vpForControllingNamedArea": {
+              "areaName": "Cantina",
+              "vp": 6,
+              "vpMessage": "controlling the Cantina (6 VP)"
+            }
+          }
+        }
       },
       "b": {
         "name": "Sabacc Standoff",
@@ -66,7 +75,22 @@
         "setup": "",
         "persistent": "",
         "startOfRound": "The player with the Initiative places 1 token next to the Cantina for each Command card in their hand.",
-        "endOfRound": "Until the end of the next round, the player who controls the Sabacc table is considered to have 1 additional VP for each token next to the Cantina."
+        "endOfRound": "Until the end of the next round, the player who controls the Sabacc table is considered to have 1 additional VP for each token next to the Cantina.",
+        "rules": {
+          "startOfRound": {
+            "setTokenCountFromInitiativeHand": {
+              "gameKey": "sabaccTokenCount"
+            }
+          },
+          "endOfRound": {
+            "vpPerTokenForControllingCell": {
+              "controlCell": "m14",
+              "tokenCountKey": "sabaccTokenCount",
+              "vpPerToken": 1,
+              "vpMessage": "controlling the Sabacc table ({count} Cantina token(s) at 1 VP each)"
+            }
+          }
+        }
       }
     },
     "chopper-base-atollon": {
@@ -86,7 +110,21 @@
         "setup": "Set aside 1 blue, 1 green, and 1 red neutral mission token face down.",
         "persistent": "",
         "startOfRound": "Each player randomly reveals 1 set aside mission token. Place 1 strain token on each signal market that matches a revealed mission token. Flip the revealed tokens face down.",
-        "endOfRound": "Each player removes all Strain tokens from signal markers they control, gaining 2 VPs for each Strain token removed this way."
+        "endOfRound": "Each player removes all Strain tokens from signal markers they control, gaining 2 VPs for each Strain token removed this way.",
+        "rules": {
+          "startOfRound": {
+            "randomRevealAndPlaceStrain": {
+              "strainStateKey": "signalMarkerStrain"
+            }
+          },
+          "endOfRound": {
+            "vpPerStrainOnControlledSpaces": {
+              "vpPerStrain": 2,
+              "strainStateKey": "signalMarkerStrain",
+              "vpMessage": "signal markers controlled ({count} strain removed × 2 VP)"
+            }
+          }
+        }
       }
     },
     "lothal-wastes": {
@@ -97,7 +135,15 @@
         "setup": "Players do not deploy normally. instead, players alternate deploying groups, following the rules for passing. When a figure is deployed, it may move up to 8 spaces.",
         "persistent": "",
         "startOfRound": "",
-        "endOfRound": "Each player gains 2 VPs for each critical position that player controls."
+        "endOfRound": "Each player gains 2 VPs for each critical position that player controls.",
+        "rules": {
+          "endOfRound": {
+            "vpPerControlledSpaceInList": {
+              "vp": 2,
+              "vpMessage": "critical positions controlled ({count} × 2 VP)"
+            }
+          }
+        }
       },
       "b": {
         "name": "Fluctuations",
@@ -106,7 +152,16 @@
         "setup": "",
         "persistent": "",
         "startOfRound": "",
-        "endOfRound": "Each player gains 1 VP for each fluctuation they control. Each figure on a fluctuation gains a Power Token based on its color: (Blue: Evade Token), (Green: Block Token), (Red: Hit Token), (Yellow: Surge Token)\n\nThen, in order of initiative, each player may swap 1 fluctuation with another. A fluctuation cannot be moved twice in the same round."
+        "endOfRound": "Each player gains 1 VP for each fluctuation they control. Each figure on a fluctuation gains a Power Token based on its color: (Blue: Evade Token), (Green: Block Token), (Red: Hit Token), (Yellow: Surge Token)\n\nThen, in order of initiative, each player may swap 1 fluctuation with another. A fluctuation cannot be moved twice in the same round.",
+        "rules": {
+          "endOfRound": {
+            "vpPerControlledFluctuation": {
+              "vp": 1,
+              "grantPowerToken": true,
+              "vpMessage": "fluctuations controlled ({count} × 1 VP)"
+            }
+          }
+        }
       }
     },
     "development-facility": {
@@ -131,20 +186,30 @@
     },
     "devaron-garrison": {
       "a": {
-        "name": "",
-        "tokenLabel": "",
+        "name": "Crate Control",
+        "tokenLabel": "Crate",
         "imagePath": "",
         "setup": "",
         "persistent": "",
         "startOfRound": "Place 1 Power Token on each crate, according to that crate's color: (Red: Hit Token), (Yellow: Surge Token), (Blue: Block Token)",
-        "endOfRound": "For each crate a player controls, that player may distribute the Power Tokens on that create among friendly figures on or adjacent to that crate. Then, that player gains 2 VPs."
+        "endOfRound": "For each crate a player controls, that player may distribute the Power Tokens on that crate among friendly figures on or adjacent to that crate. Then, that player gains 2 VPs.",
+        "rules": {
+          "startOfRound": {
+            "placeTokensOnCrates": true
+          },
+          "endOfRound": {
+            "autoDistributeCrateTokens": {
+              "vpPerCrate": 2
+            }
+          }
+        }
       },
       "b": {
-        "name": "",
-        "tokenLabel": "",
+        "name": "Crate Rush",
+        "tokenLabel": "Crate",
         "imagePath": "",
         "setup": "",
-        "persistent": "Doors are locked.\n\nA figure can attack a crate (Health: 5, Defense: 1 Block). When a create is destroyed, all figures and objects on or adjacent to that create suffer 2 Damage.\n\nFor each create in a players deployment zone, that player counts as having 6 additional VPs.",
+        "persistent": "Doors are locked.\n\nA figure can attack a crate (Health: 5, Defense: 1 Block). When a crate is destroyed, all figures and objects on or adjacent to that crate suffer 2 Damage.\n\nFor each crate in a player's deployment zone, that player counts as having 6 additional VPs.",
         "startOfRound": "",
         "endOfRound": "For each terminal a player controls, that player chooses and opens 1 door. Then, each player pushes each crate they control up to 3 spaces."
       }

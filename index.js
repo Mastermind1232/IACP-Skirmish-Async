@@ -306,7 +306,7 @@ import {
   getMissionRules,
   getAbilityLibrary,
 } from './src/data-loader.js';
-import { runEndOfRoundRules, runStartOfRoundRules } from './src/game/mission-rules.js';
+import { runEndOfRoundRules, runStartOfRoundRules, runNpcThugActivation } from './src/game/mission-rules.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname);
@@ -666,6 +666,23 @@ function getSpaceController(game, mapId, coord) {
   if (p1Has && !p2Has) return 1;
   if (p2Has && !p1Has) return 2;
   return null;
+}
+
+/** Returns array of figure keys for playerNum whose positions are on or adjacent to coord. */
+function getFiguresOnOrAdjacentToSpace(game, playerNum, coord, mapId) {
+  const rawMapSpaces = getMapSpaces(mapId);
+  if (!rawMapSpaces?.adjacency) return [];
+  const mapDef = getMapRegistry().find((m) => m.id === mapId);
+  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+  const adjacency = mapSpaces?.adjacency || {};
+  const t = normalizeCoord(coord);
+  const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
+  const result = [];
+  const poses = game.figurePositions?.[playerNum] || {};
+  for (const [figKey, figCoord] of Object.entries(poses)) {
+    if (controlSet.has(normalizeCoord(figCoord))) result.push(figKey);
+  }
+  return result;
 }
 
 /** Count terminals exclusively controlled by player (on or adjacent; only they have presence). */
@@ -2212,10 +2229,36 @@ async function getDeploymentMapAttachment(game, zone) {
   }
 }
 
+/**
+ * Compute persistent VP bonus from crates in deployment zones (Devaron Garrison B).
+ * "For each crate in a player's deployment zone, that player counts as having 6 additional VPs."
+ */
+function getCrateDeploymentVpBonus(game) {
+  if (game.selectedMap !== 'devaron-garrison' || game.selectedMission?.variant !== 'b') return { p1: 0, p2: 0 };
+  const mapData = getMapTokensData()['devaron-garrison'];
+  const allCrateCoords = Object.values(mapData?.missionB?.positions || {}).flat().filter(Boolean);
+  // Apply any pushed positions tracked in game.cratePositions
+  const cratePositions = allCrateCoords.map((c) => normalizeCoord(game.cratePositions?.[normalizeCoord(c)] || c));
+  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const zones = getDeploymentZones()['devaron-garrison'] || {};
+  const p1Zone = initPlayerNum === 1 ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+  const p2Zone = p1Zone === 'red' ? 'blue' : 'red';
+  const p1ZoneSet = new Set((zones[p1Zone] || []).map((c) => normalizeCoord(c)));
+  const p2ZoneSet = new Set((zones[p2Zone] || []).map((c) => normalizeCoord(c)));
+  let p1 = 0;
+  let p2 = 0;
+  for (const coord of cratePositions) {
+    if (p1ZoneSet.has(coord)) p1 += 6;
+    else if (p2ZoneSet.has(coord)) p2 += 6;
+  }
+  return { p1, p2 };
+}
+
 /** Check win conditions. Returns { ended, winnerId?, reason? }. Posts game-over and sets game.ended if ended. */
 async function checkWinConditions(game, client) {
-  const vp1 = game.player1VP?.total ?? 0;
-  const vp2 = game.player2VP?.total ?? 0;
+  const crateBonus = getCrateDeploymentVpBonus(game);
+  const vp1 = (game.player1VP?.total ?? 0) + crateBonus.p1;
+  const vp2 = (game.player2VP?.total ?? 0) + crateBonus.p2;
   const p1Figures = Object.keys(game.figurePositions?.[1] || {}).length;
   const p2Figures = Object.keys(game.figurePositions?.[2] || {}).length;
 
@@ -2907,6 +2950,66 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
     if (meta.dcName === dcName && dn && String(dn[1]) === String(dgIndex)) return msgId;
   }
   return null;
+}
+
+/**
+ * Apply direct damage to a figure (NPC damage, env hazards, etc.).
+ * Handles HP reduction, death, VP award, and logging.
+ * @param {object} game
+ * @param {number} playerNum - owning player
+ * @param {string} figureKey
+ * @param {number} damage
+ * @param {string} sourceLabel - shown in log (e.g., "Thug")
+ * @param {function} logGameAction
+ * @param {object} client
+ * @param {Map} dcHealthState
+ * @param {Map} dcMessageMeta
+ */
+async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, sourceLabel, logGameAction, client, dcHealthState, dcMessageMeta) {
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
+  const figureIndex = figMatch ? parseInt(figMatch[2], 10) : 0;
+  const dgIndex = figMatch ? figMatch[1] : '1';
+
+  // Locate the DC message for this figure
+  let msgId = null;
+  for (const [mid, meta] of dcMessageMeta) {
+    if (meta.gameId !== game.gameId || meta.playerNum !== playerNum) continue;
+    const dn = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    if (meta.dcName === dcName && dn && String(dn[1]) === String(dgIndex)) { msgId = mid; break; }
+  }
+
+  if (msgId) {
+    const healthState = dcHealthState.get(msgId) || [];
+    const entry = healthState[figureIndex];
+    if (entry) {
+      const [cur, max] = entry;
+      const newCur = Math.max(0, cur - damage);
+      healthState[figureIndex] = [newCur, max];
+      dcHealthState.set(msgId, healthState);
+      const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const idx = (dcIds || []).indexOf(msgId);
+      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+      if (newCur <= 0) {
+        if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figureKey];
+        const opponentPlayerNum = playerNum === 1 ? 2 : 1;
+        const stats = getDcStats(dcName);
+        const effects = getDcEffects()?.[dcName];
+        const figures = stats?.figures ?? 1;
+        const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
+        const vpKey = `player${opponentPlayerNum}VP`;
+        game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+        game[vpKey].kills += vp;
+        game[vpKey].total += vp;
+        await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** was defeated! +${vp} VP to Player ${opponentPlayerNum}.`, { phase: 'ROUND', icon: 'attack' });
+      } else {
+        await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** suffered **${damage} damage** (${newCur}/${max} HP remaining).`, { phase: 'ROUND', icon: 'attack' });
+      }
+    }
+  } else {
+    await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** suffered **${damage} damage** (HP not found in memory — update DC card manually).`, { phase: 'ROUND', icon: 'attack' });
+  }
 }
 
 /** Remove a specific condition from a figure. No-op if figure or condition not found. */
@@ -6320,6 +6423,12 @@ client.on('interactionCreate', async (interaction) => {
       getMissionRules,
       runEndOfRoundRules,
       runStartOfRoundRules,
+      getFiguresOnOrAdjacentToSpace,
+      runNpcThugActivation,
+      applyNpcDamageToFigure,
+      getMapSpaces,
+      getMapRegistry,
+      filterMapSpacesByBounds,
       getInitiativePlayerZoneLabel,
       updateHandVisualMessage,
       buildHandDisplayPayload,

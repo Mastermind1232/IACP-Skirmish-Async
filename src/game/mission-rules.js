@@ -174,20 +174,194 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
     }
   }
 
+  // vpPerControlledSpaceInList: iterate all mission token positions, award vp to controller of each space.
+  // Used by Lothal Wastes A (Blitz): 2 VP per critical position controlled.
+  if (rules.vpPerControlledSpaceInList && mapId) {
+    const { vp, vpMessage } = rules.vpPerControlledSpaceInList;
+    if (typeof vp === 'number') {
+      const missionSide = variant === 'a' ? 'missionA' : 'missionB';
+      const missionData = getMapTokensData()[mapId]?.[missionSide];
+      const allSpaces = Object.values(missionData?.positions || {}).flat().filter(Boolean);
+      const vpByPlayer = { 1: 0, 2: 0 };
+      for (const coord of allSpaces) {
+        const controller = getSpaceController(game, mapId, coord);
+        if (controller) vpByPlayer[controller] += vp;
+      }
+      for (const pn of [1, 2]) {
+        if (vpByPlayer[pn] > 0) {
+          const vpVal = vpByPlayer[pn];
+          const count = vpByPlayer[pn] / vp;
+          const pid = pn === 1 ? game.player1Id : game.player2Id;
+          game[`player${pn}VP`] = game[`player${pn}VP`] || { total: 0, kills: 0, objectives: 0 };
+          game[`player${pn}VP`].total += vpVal;
+          game[`player${pn}VP`].objectives += vpVal;
+          const msg = vpMessage
+            ? vpMessage.replace('{vp}', String(vpVal)).replace('{count}', String(count))
+            : `mission objective (${count} position${count !== 1 ? 's' : ''} × ${vp} VP)`;
+          await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** — ${msg}.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+          await checkWinConditions(game, client);
+          if (game.ended) return { gameEnded: true };
+        }
+      }
+    }
+  }
+
+  // vpPerControlledFluctuation: for each fluctuation space, award vp to controller and grant a color-matched
+  // power token to any figure standing on that space. Used by Lothal Wastes B (Fluctuations).
+  if (rules.vpPerControlledFluctuation && mapId) {
+    const { vp, grantPowerToken, vpMessage } = rules.vpPerControlledFluctuation;
+    if (typeof vp === 'number') {
+      const missionSide = variant === 'a' ? 'missionA' : 'missionB';
+      const missionData = getMapTokensData()[mapId]?.[missionSide];
+      const tokenTypes = missionData?.tokenTypes || [];
+      const positions = missionData?.positions || {};
+      const colorToPowerToken = { yellow: 'Surge', blue: 'Evade', green: 'Block', red: 'Hit' };
+      const vpByPlayer = { 1: 0, 2: 0 };
+      const tokensGranted = [];
+      for (const [id, coords] of Object.entries(positions)) {
+        if (!Array.isArray(coords) || coords.length === 0) continue;
+        const typeInfo = tokenTypes[parseInt(id)];
+        const imageMatch = (typeInfo?.image || '').match(/Neutral (\w+)\./i);
+        const color = imageMatch ? imageMatch[1].toLowerCase() : null;
+        const powerToken = color ? (colorToPowerToken[color] || null) : null;
+        for (const coord of coords) {
+          const controller = getSpaceController(game, mapId, coord);
+          if (controller) vpByPlayer[controller] += vp;
+          if (grantPowerToken && powerToken) {
+            for (const pn of [1, 2]) {
+              const poses = game.figurePositions?.[pn] || {};
+              for (const [figKey, figCoord] of Object.entries(poses)) {
+                if (normalizeCoord(figCoord) === normalizeCoord(coord)) {
+                  game.figurePowerTokens = game.figurePowerTokens || {};
+                  game.figurePowerTokens[figKey] = game.figurePowerTokens[figKey] || [];
+                  game.figurePowerTokens[figKey].push(powerToken);
+                  tokensGranted.push(`${figKey} → ${powerToken}`);
+                }
+              }
+            }
+          }
+        }
+      }
+      for (const pn of [1, 2]) {
+        if (vpByPlayer[pn] > 0) {
+          const vpVal = vpByPlayer[pn];
+          const count = vpByPlayer[pn] / vp;
+          const pid = pn === 1 ? game.player1Id : game.player2Id;
+          game[`player${pn}VP`] = game[`player${pn}VP`] || { total: 0, kills: 0, objectives: 0 };
+          game[`player${pn}VP`].total += vpVal;
+          game[`player${pn}VP`].objectives += vpVal;
+          const msg = vpMessage
+            ? vpMessage.replace('{vp}', String(vpVal)).replace('{count}', String(count))
+            : `mission objective (${count} fluctuation${count !== 1 ? 's' : ''} controlled)`;
+          await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** — ${msg}.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+          await checkWinConditions(game, client);
+          if (game.ended) return { gameEnded: true };
+        }
+      }
+      if (grantPowerToken) {
+        await logGameAction(game, client, `**Fluctuations:** Figures on fluctuation spaces received power tokens (Yellow→Surge, Blue→Evade, Green→Block, Red→Hit). _(Reminder: each player may now swap 1 fluctuation — honor system)_`, { phase: 'ROUND', icon: 'round' });
+      }
+    }
+  }
+
+  // vpPerStrainOnControlledSpaces: score 2 VP per strain token on each signal marker the player controls.
+  // Strain is removed after scoring. Used by Chopper Base B (Powered Perimeter).
+  if (rules.vpPerStrainOnControlledSpaces && mapId) {
+    const { vpPerStrain = 2, strainStateKey = 'signalMarkerStrain', vpMessage } = rules.vpPerStrainOnControlledSpaces;
+    const strainMap = game[strainStateKey];
+    if (strainMap && typeof strainMap === 'object') {
+      const vpByPlayer = { 1: 0, 2: 0 };
+      const strainRemovedByPlayer = { 1: 0, 2: 0 };
+      for (const [coord, strainCount] of Object.entries(strainMap)) {
+        if (!strainCount || strainCount <= 0) continue;
+        const controller = getSpaceController(game, mapId, coord);
+        if (!controller) { game[strainStateKey][coord] = 0; continue; }
+        vpByPlayer[controller] += vpPerStrain * strainCount;
+        strainRemovedByPlayer[controller] += strainCount;
+        game[strainStateKey][coord] = 0;
+      }
+      for (const pn of [1, 2]) {
+        if (vpByPlayer[pn] > 0) {
+          const vpVal = vpByPlayer[pn];
+          const removed = strainRemovedByPlayer[pn];
+          const pid = pn === 1 ? game.player1Id : game.player2Id;
+          game[`player${pn}VP`] = game[`player${pn}VP`] || { total: 0, kills: 0, objectives: 0 };
+          game[`player${pn}VP`].total += vpVal;
+          game[`player${pn}VP`].objectives += vpVal;
+          const msg = vpMessage
+            ? vpMessage.replace('{vp}', String(vpVal)).replace('{count}', String(removed))
+            : `signal markers controlled (${removed} strain removed × ${vpPerStrain} VP)`;
+          await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** — ${msg}.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+          await checkWinConditions(game, client);
+          if (game.ended) return { gameEnded: true };
+        }
+      }
+    }
+  }
+
+  // autoDistributeCrateTokens: for each crate with accumulated tokens, find the controller,
+  // then auto-give all tokens to the first friendly figure on or adjacent to the crate.
+  // Also awards 2 VP per controlled crate. Used by Devaron Garrison A.
+  if (rules.autoDistributeCrateTokens && mapId) {
+    const { vpPerCrate = 2 } = rules.autoDistributeCrateTokens;
+    const { getFiguresOnOrAdjacentToSpace } = ctx;
+    const crateTokens = game.crateTokens;
+    if (crateTokens && typeof crateTokens === 'object') {
+      const vpByPlayer = { 1: 0, 2: 0 };
+      const distributionLog = [];
+      for (const [coord, tokens] of Object.entries(crateTokens)) {
+        if (!Array.isArray(tokens) || tokens.length === 0) continue;
+        const controller = getSpaceController(game, mapId, coord);
+        if (!controller) { game.crateTokens[coord] = []; continue; }
+        vpByPlayer[controller] += vpPerCrate;
+        // Find first friendly figure on or adjacent to this crate
+        const nearbyFigs = getFiguresOnOrAdjacentToSpace ? getFiguresOnOrAdjacentToSpace(game, controller, coord, mapId) : [];
+        if (nearbyFigs.length > 0) {
+          const recipient = nearbyFigs[0];
+          game.figurePowerTokens = game.figurePowerTokens || {};
+          game.figurePowerTokens[recipient] = game.figurePowerTokens[recipient] || [];
+          for (const tok of tokens) game.figurePowerTokens[recipient].push(tok);
+          distributionLog.push(`${coord}: [${tokens.join(', ')}] → ${recipient}`);
+        } else {
+          distributionLog.push(`${coord}: [${tokens.join(', ')}] — no adjacent friendly, tokens lost`);
+        }
+        game.crateTokens[coord] = [];
+      }
+      if (distributionLog.length > 0) {
+        await logGameAction(game, client, `**Crate tokens distributed:** ${distributionLog.join(' | ')}`, { phase: 'ROUND', icon: 'round' });
+      }
+      for (const pn of [1, 2]) {
+        if (vpByPlayer[pn] > 0) {
+          const vpVal = vpByPlayer[pn];
+          const count = vpByPlayer[pn] / vpPerCrate;
+          const pid = pn === 1 ? game.player1Id : game.player2Id;
+          game[`player${pn}VP`] = game[`player${pn}VP`] || { total: 0, kills: 0, objectives: 0 };
+          game[`player${pn}VP`].total += vpVal;
+          game[`player${pn}VP`].objectives += vpVal;
+          await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** — ${count} crate${count !== 1 ? 's' : ''} controlled (${vpPerCrate} VP each).`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+          await checkWinConditions(game, client);
+          if (game.ended) return { gameEnded: true };
+        }
+      }
+    }
+  }
+
   return { gameEnded };
 }
 
 /**
- * Run start-of-round rules (e.g. set token count from initiative player's hand).
- * Call when a new round has started (after advancing currentRound).
- * @param {object} game - Game state
- * @param {string} mapId - Selected map id
- * @param {string} variant - 'a' or 'b'
- * @param {object} rules - getMissionRules(mapId, variant).startOfRound (object keyed by effect type)
- * @param {object} ctx - { logGameAction, client } (optional)
+ * Run start-of-round rules.
+ * Now async so rules can log via logGameAction.
+ * @param {object} game
+ * @param {string} mapId
+ * @param {string} variant - 'a' | 'b'
+ * @param {object} rules - getMissionRules(mapId, variant).startOfRound
+ * @param {object} ctx - { logGameAction, client, getMapTokensData }
  */
-export function runStartOfRoundRules(game, mapId, variant, rules, ctx = {}) {
+export async function runStartOfRoundRules(game, mapId, variant, rules, ctx = {}) {
   if (!rules || typeof rules !== 'object') return;
+  const { logGameAction, client, getMapTokensData } = ctx;
+
   if (rules.setTokenCountFromInitiativeHand) {
     const { gameKey } = rules.setTokenCountFromInitiativeHand;
     if (gameKey) {
@@ -196,4 +370,160 @@ export function runStartOfRoundRules(game, mapId, variant, rules, ctx = {}) {
       game[gameKey] = hand.length;
     }
   }
+
+  // randomRevealAndPlaceStrain: each player randomly reveals one token from the face-down set.
+  // +1 strain placed on each signal marker matching the revealed color.
+  // Used by Chopper Base B (Powered Perimeter).
+  if (rules.randomRevealAndPlaceStrain && mapId && getMapTokensData) {
+    const { strainStateKey = 'signalMarkerStrain' } = rules.randomRevealAndPlaceStrain;
+    const missionSide = variant === 'a' ? 'missionA' : 'missionB';
+    const missionData = getMapTokensData()[mapId]?.[missionSide];
+    const tokenTypes = missionData?.tokenTypes || [];
+    const positions = missionData?.positions || {};
+    // Build list of color groups (skip empty position groups)
+    const colorGroups = [];
+    for (const [id, coords] of Object.entries(positions)) {
+      if (!Array.isArray(coords) || coords.length === 0) continue;
+      const typeInfo = tokenTypes[parseInt(id)];
+      const imageMatch = (typeInfo?.image || '').match(/Neutral (\w+)\./i);
+      const color = imageMatch ? imageMatch[1].toLowerCase() : null;
+      if (color) colorGroups.push({ id, color, coords });
+    }
+    if (colorGroups.length > 0) {
+      game[strainStateKey] = game[strainStateKey] || {};
+      const reveals = [];
+      for (let p = 1; p <= 2; p++) {
+        const pick = colorGroups[Math.floor(Math.random() * colorGroups.length)];
+        reveals.push({ player: p, color: pick.color, coords: pick.coords });
+        for (const coord of pick.coords) {
+          const c = normalizeCoord(coord);
+          game[strainStateKey][c] = (game[strainStateKey][c] || 0) + 1;
+        }
+      }
+      const lines = reveals.map((r) => `Player ${r.player} revealed **${r.color.toUpperCase()}** (+1 strain on ${r.coords.join(', ')})`);
+      if (logGameAction && client) {
+        await logGameAction(game, client, `**Powered Perimeter — token reveal:** ${lines.join(' | ')}`, { phase: 'ROUND', icon: 'round' });
+      }
+    }
+  }
+
+  // placeTokensOnCrates: each start-of-round, +1 power token on each crate matching its color.
+  // Used by Devaron Garrison A.
+  if (rules.placeTokensOnCrates && mapId && getMapTokensData) {
+    const missionSide = variant === 'a' ? 'missionA' : 'missionB';
+    const missionData = getMapTokensData()[mapId]?.[missionSide];
+    const tokenTypes = missionData?.tokenTypes || [];
+    const positions = missionData?.positions || {};
+    const colorToPowerToken = { blue: 'Block', red: 'Hit', yellow: 'Surge' };
+    game.crateTokens = game.crateTokens || {};
+    const placed = [];
+    for (const [id, coords] of Object.entries(positions)) {
+      if (!Array.isArray(coords) || coords.length === 0) continue;
+      const typeInfo = tokenTypes[parseInt(id)];
+      const imageMatch = (typeInfo?.image || '').match(/(Blue|Red|Yellow)/i);
+      const color = imageMatch ? imageMatch[1].toLowerCase() : null;
+      const token = color ? (colorToPowerToken[color] || null) : null;
+      if (!token) continue;
+      for (const coord of coords) {
+        const c = normalizeCoord(coord);
+        game.crateTokens[c] = game.crateTokens[c] || [];
+        game.crateTokens[c].push(token);
+        placed.push(`${c} (${token})`);
+      }
+    }
+    if (placed.length > 0 && logGameAction && client) {
+      await logGameAction(game, client, `**Crate tokens placed:** ${placed.join(', ')}`, { phase: 'ROUND', icon: 'round' });
+    }
+  }
+}
+
+/**
+ * Advance all NPC thugs toward the nearest hostile figure, then emit damage events for adjacent hostiles.
+ * Returns { logs, damageEvents } — damage is NOT applied here; round.js handles it.
+ * Lazily initializes game.npcThugs from map-tokens if not already set.
+ * @param {object} game
+ * @param {string} mapId
+ * @param {object} ctx - { getMapSpaces, getMapRegistry, filterMapSpacesByBounds, getMapTokensData }
+ */
+export function runNpcThugActivation(game, mapId, ctx = {}) {
+  const { getMapSpaces, getMapRegistry, filterMapSpacesByBounds, getMapTokensData } = ctx;
+
+  // Lazy-init: create npcThugs from missionA token positions if not yet set
+  if (!game.npcThugs) {
+    const missionData = getMapTokensData?.()[mapId]?.missionA;
+    const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
+    if (positions.length === 0) return { logs: [], damageEvents: [] };
+    game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: normalizeCoord(coord), hp: 4, maxHp: 4, defeated: false }));
+  }
+
+  const activeThugs = game.npcThugs.filter((t) => !t.defeated);
+  if (activeThugs.length === 0) return { logs: [], damageEvents: [] };
+
+  const rawMapSpaces = getMapSpaces?.(mapId);
+  if (!rawMapSpaces?.adjacency) return { logs: ['No map adjacency — thug movement skipped'], damageEvents: [] };
+  const mapDef = getMapRegistry?.()?.find?.((m) => m.id === mapId);
+  const mapSpaces = filterMapSpacesByBounds?.(rawMapSpaces, mapDef?.gridBounds) || rawMapSpaces;
+  const adjacency = mapSpaces.adjacency || {};
+
+  // Map coord → { figureKey, playerNum } for all hostile figures
+  const hostileByCoord = new Map();
+  for (const pn of [1, 2]) {
+    for (const [figKey, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+      hostileByCoord.set(normalizeCoord(coord), { figureKey: figKey, playerNum: pn });
+    }
+  }
+  const allHostileCoords = new Set(hostileByCoord.keys());
+
+  const logs = [];
+
+  for (const thug of activeThugs) {
+    const startCoord = normalizeCoord(thug.coord);
+
+    // BFS from thug to find nearest hostile
+    const visited = new Map([[startCoord, null]]);
+    const queue = [startCoord];
+    let targetCoord = null;
+    outer: while (queue.length > 0) {
+      const curr = queue.shift();
+      for (const neighbor of (adjacency[curr] || [])) {
+        const n = normalizeCoord(neighbor);
+        if (visited.has(n)) continue;
+        visited.set(n, curr);
+        if (allHostileCoords.has(n)) { targetCoord = n; break outer; }
+        queue.push(n);
+      }
+    }
+    if (!targetCoord) { logs.push(`Thug at ${thug.coord}: no hostile found, stays put.`); continue; }
+
+    // Reconstruct path (list of spaces from start to target, not including start)
+    const path = [];
+    let cur = targetCoord;
+    while (cur && cur !== startCoord) {
+      const prev = visited.get(cur);
+      if (prev !== undefined && prev !== null) path.unshift(cur);
+      cur = visited.get(cur);
+    }
+
+    // Move up to 2 steps, stopping 1 space short of the hostile (to be adjacent)
+    const maxSteps = Math.min(2, Math.max(0, path.length - 1));
+    if (maxSteps > 0) {
+      thug.coord = path[maxSteps - 1];
+      logs.push(`Thug moved ${startCoord} → **${thug.coord}** (${maxSteps} step${maxSteps !== 1 ? 's' : ''} toward ${targetCoord}).`);
+    } else {
+      logs.push(`Thug at **${startCoord}**: already adjacent to hostile at ${targetCoord}.`);
+    }
+  }
+
+  // Emit damage events: each hostile adjacent to any active thug takes 2 damage
+  const thugCoords = new Set(game.npcThugs.filter((t) => !t.defeated).map((t) => normalizeCoord(t.coord)));
+  const damageEvents = [];
+  for (const pn of [1, 2]) {
+    for (const [figKey, figCoord] of Object.entries(game.figurePositions?.[pn] || {})) {
+      const fc = normalizeCoord(figCoord);
+      const adjToThug = (adjacency[fc] || []).some((n) => thugCoords.has(normalizeCoord(n)));
+      if (adjToThug) damageEvents.push({ figureKey: figKey, playerNum: pn, damage: 2 });
+    }
+  }
+
+  return { logs, damageEvents };
 }

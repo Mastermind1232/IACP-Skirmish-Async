@@ -6,7 +6,7 @@ import { getDcEffects } from '../data-loader.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, buildBoardMapPayload, client
+ * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getFiguresOnOrAdjacentToSpace, runNpcThugActivation, applyNpcDamageToFigure, getMapSpaces, getMapRegistry, filterMapSpacesByBounds, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, buildBoardMapPayload, client
  */
 export async function handleEndEndOfRound(interaction, ctx) {
   const {
@@ -31,6 +31,12 @@ export async function handleEndEndOfRound(interaction, ctx) {
     getMissionRules,
     runEndOfRoundRules,
     runStartOfRoundRules,
+    getFiguresOnOrAdjacentToSpace,
+    runNpcThugActivation,
+    applyNpcDamageToFigure,
+    getMapSpaces,
+    getMapRegistry,
+    filterMapSpacesByBounds,
     getInitiativePlayerZoneLabel,
     updateHandVisualMessage,
     buildHandDisplayPayload,
@@ -225,7 +231,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   const missionRules = getMissionRules?.(mapId, variant) ?? {};
   const endOfRoundRules = missionRules.endOfRound;
   if (endOfRoundRules && runEndOfRoundRules) {
-    const ruleCtx = { logGameAction, checkWinConditions, getMapTokensData, getSpaceController, isFigureInDeploymentZone, client };
+    const ruleCtx = { logGameAction, checkWinConditions, getMapTokensData, getSpaceController, isFigureInDeploymentZone, getFiguresOnOrAdjacentToSpace, client };
     const { gameEnded } = await runEndOfRoundRules(game, mapId, variant, endOfRoundRules, ruleCtx);
     if (gameEnded) {
       await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -233,6 +239,26 @@ export async function handleEndEndOfRound(interaction, ctx) {
       return;
     }
   }
+
+  // NPC thug activation (Corellian Underground A): thugs move toward hostiles then deal damage
+  if (runNpcThugActivation && mapId === 'corellian-underground' && variant === 'a') {
+    const { logs: thugLogs, damageEvents } = runNpcThugActivation(game, mapId, { getMapTokensData, getMapSpaces, getMapRegistry, filterMapSpacesByBounds });
+    for (const line of thugLogs) {
+      await logGameAction(game, client, `🔫 **Thug:** ${line}`, { phase: 'ROUND', icon: 'attack' });
+    }
+    for (const { figureKey, playerNum, damage } of damageEvents) {
+      await applyNpcDamageToFigure(game, playerNum, figureKey, damage, 'Thug', logGameAction, client, dcHealthState, dcMessageMeta);
+    }
+    if (damageEvents.length > 0) {
+      await checkWinConditions(game, client);
+      if (game.ended) {
+        await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        saveGames();
+        return;
+      }
+    }
+  }
+
   game.p1LaunchPanelFlippedThisRound = false;
   game.p2LaunchPanelFlippedThisRound = false;
   const prevInitiative = game.initiativePlayerId;
@@ -268,7 +294,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.overrunThisActivation = {};
   game.roundFigureAbilityUsed = {};
   if (runStartOfRoundRules && missionRules?.startOfRound) {
-    runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client });
+    await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
   }
   await updateHandVisualMessage(game, 1, client);
   await updateHandVisualMessage(game, 2, client);
