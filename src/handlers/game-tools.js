@@ -307,13 +307,12 @@ export async function handleDefaultDeck(interaction, ctx) {
     await interaction.followUp({ content: 'Unknown faction.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  await interaction.deferReply({ ephemeral: true });
   try {
     await applySquadSubmission(game, isP1, { ...squad }, client);
-    await interaction.editReply({ content: `Loaded **${squad.name}** (${squad.dcCount} DCs, ${squad.ccCount} CCs).` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `Loaded **${squad.name}** (${squad.dcCount} DCs, ${squad.ccCount} CCs).`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   } catch (err) {
     console.error('Failed to apply default deck:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'default_deck');
-    await interaction.editReply({ content: `Failed to load deck: ${err.message}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `Failed to load deck: ${err.message}`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
 }

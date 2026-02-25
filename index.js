@@ -6578,19 +6578,19 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   if (buttonKey === 'create_game') {
-    await interaction.deferReply({ ephemeral: true });
-    await interaction.editReply({
+    await interaction.followUp({
       content: 'Go to **#new-games** and click **Create Post** to start a lobby. The bot will add the Join Game button.',
       components: [getMainMenu()],
-    });
+      ephemeral: true,
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   if (buttonKey === 'join_game') {
-    await interaction.deferReply({ ephemeral: true });
-    await interaction.editReply({
+    await interaction.followUp({
       content: 'Browse **#new-games** and click **Join Game** on a lobby post that needs an opponent.',
       components: [getMainMenu()],
-    });
+      ephemeral: true,
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
 
@@ -6607,6 +6607,13 @@ client.on('interactionCreate', async (interaction) => {
       ephemeral: true,
     });
   }
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[Process] Unhandled promise rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[Process] Uncaught exception:', err);
 });
 
 if (process.argv.includes('--test-movement')) {
