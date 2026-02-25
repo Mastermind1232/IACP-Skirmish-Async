@@ -715,16 +715,19 @@ async function buildAndSendAttackTargets(
   const attackerIgnoresFigureBlocking =
     (abilityTextLower.includes('priority target') && abilityTextLower.includes('line of sight')) ||
     attackerKws.includes('MASSIVE');
+  // attackerSize needed both for figureBlockingCoords exclusion and for multi-cell LOS.
+  const attackerSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
+  const attackerFpCells = getFootprintCells(attackerPos, attackerSize);
   let allFigureBlockingCoords = null;
   if (!attackerIgnoresFigureBlocking) {
     allFigureBlockingCoords = new Set();
-    const attackerSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
-    const attackerFp = new Set(getFootprintCells(attackerPos, attackerSize).map(c => String(c).toLowerCase()));
+    const attackerFpSet = new Set(attackerFpCells.map(c => String(c).toLowerCase()));
     for (const poses_ of [game.figurePositions?.[playerNum] || {}, game.figurePositions?.[enemyPlayerNum] || {}]) {
       for (const [fk, pos] of Object.entries(poses_)) {
-        if (!pos || attackerFp.has(String(pos).toLowerCase())) continue;
+        if (!pos || attackerFpSet.has(String(pos).toLowerCase())) continue;
         const fkDcName = fk.replace(/-\d+-\d+$/, '');
         const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
+        if (fkEff?.companion === true) continue; // companions don't block LOS (rules: "non-companion figure")
         if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
         const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
         for (const cell of getFootprintCells(pos, fkSize)) allFigureBlockingCoords.add(String(cell).toLowerCase());
@@ -761,7 +764,13 @@ async function buildAndSendAttackTargets(
         losCoords = new Set([...allFigureBlockingCoords].filter(c => !targetFp.has(c)));
       }
     }
-    const los = hasLineOfSight(attackerPos, coord, ms, losCoords);
+    // Large figures: LOS from any attacker cell to any target cell (rules: "may be traced from any space it occupies")
+    let los = false;
+    outer: for (const ac of attackerFpCells) {
+      for (const tc of cells) {
+        if (hasLineOfSight(ac, tc, ms, losCoords)) { los = true; break outer; }
+      }
+    }
     const m = k.match(/-(\d+)-(\d+)$/);
     const dg = m ? parseInt(m[1], 10) : 1;
     const fi = m ? parseInt(m[2], 10) : 0;
@@ -796,7 +805,7 @@ async function buildAndSendAttackTargets(
       const coord = String(npc.coord).toLowerCase();
       const dist = getRange(attackerPos, coord);
       if (dist < minRange || dist > effectiveMaxRange) continue;
-      const los = hasLineOfSight(attackerPos, coord, ms, allFigureBlockingCoords);
+      const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, ms, allFigureBlockingCoords));
       const label = `${npcType === 'thug' ? 'Thug' : 'Krykna'} ${i + 1} (${npc.hp}/${npc.maxHp} ${hpLabel})`;
       targets.push({ figureKey: `npc_${npcType}_${i}`, coord, label, hasLOS: los, dist, isNpc: true, npcType, npcIndex: i });
     }
@@ -809,7 +818,7 @@ async function buildAndSendAttackTargets(
       const coord = String(curCoord).toLowerCase();
       const dist = getRange(attackerPos, coord);
       if (dist < minRange || dist > effectiveMaxRange) continue;
-      const los = hasLineOfSight(attackerPos, coord, ms, allFigureBlockingCoords);
+      const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, ms, allFigureBlockingCoords));
       targets.push({ figureKey: `npc_crate_${origCoord}`, coord, label: `Crate @ ${coord.toUpperCase()} (${hp}/5 HP)`, hasLOS: los, dist, isNpc: true, npcType: 'crate', crateOrigCoord: origCoord });
     }
   }
