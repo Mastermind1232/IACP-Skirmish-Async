@@ -3635,6 +3635,86 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Choose a tile or token you are on or adjacent to; until start of next round, opponent counts 1 fewer figure on or adjacent to it.' };
   }
 
+  // ccEffect: grantMpToFriendliesWithin2 (Forward March) — grant N MP to each friendly DC within 2 spaces of activated figure
+  if (entry.type === 'ccEffect' && typeof entry.grantMpToFriendliesWithin2 === 'number' && entry.grantMpToFriendliesWithin2 > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const activeMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!activeMsgId) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const activeMeta = dcMessageMeta.get(activeMsgId);
+    const activeKeys = getFigureKeysForDcMsg(game, playerNum, activeMeta);
+    const selectedFig = game.dcActionsData?.[activeMsgId]?.selectedFigure ?? 0;
+    const activeFigKey = activeKeys[selectedFig] || activeKeys[0];
+    const activePos = activeFigKey ? game.figurePositions?.[playerNum]?.[activeFigKey] : null;
+    if (!activePos) return { applied: false, manualMessage: 'Resolve manually: activated figure has no position.' };
+    const n = entry.grantMpToFriendliesWithin2;
+    const grantedNames = [];
+    game.pendingMpBonus = game.pendingMpBonus || {};
+    for (const [mid, meta] of dcMessageMeta) {
+      if (meta.playerNum !== playerNum || meta.gameId !== game.gameId || mid === activeMsgId) continue;
+      const figKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+      let anyWithin = false;
+      for (const fk of figKeys) {
+        const pos = game.figurePositions?.[playerNum]?.[fk];
+        if (!pos) continue;
+        try {
+          const pa = parseCoord(activePos);
+          const pb = parseCoord(pos);
+          if (Math.abs(pa.col - pb.col) + Math.abs(pa.row - pb.row) <= 2) { anyWithin = true; break; }
+        } catch { continue; }
+      }
+      if (!anyWithin) continue;
+      // If already activated (bank exists and has a thread), add directly; otherwise store as pending
+      const existingBank = game.movementBank?.[mid];
+      if (existingBank?.threadId) {
+        existingBank.total = (existingBank.total || 0) + n;
+        existingBank.remaining = (existingBank.remaining || 0) + n;
+      } else {
+        game.pendingMpBonus[mid] = (game.pendingMpBonus[mid] || 0) + n;
+      }
+      grantedNames.push(meta.displayName || meta.dcName);
+    }
+    if (grantedNames.length === 0) return { applied: true, logMessage: `**Forward March** — No other friendly figures within 2 spaces.` };
+    return { applied: true, logMessage: `**Forward March** — Granted +${n} MP to **${grantedNames.length}** friendly figure(s): ${grantedNames.join(', ')}.`, refreshMovementBank: true };
+  }
+
+  // ccEffect: grantMpToFriendliesByKeyword (Close the Gap) — grant N MP to each friendly DC with a given keyword
+  if (entry.type === 'ccEffect' && entry.grantMpToFriendliesByKeyword) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const { keyword, mp, grantBlockToken } = entry.grantMpToFriendliesByKeyword;
+    const dcEffects = getDcEffects();
+    const grantedNames = [];
+    game.pendingMpBonus = game.pendingMpBonus || {};
+    for (const [mid, meta] of dcMessageMeta) {
+      if (meta.playerNum !== playerNum || meta.gameId !== game.gameId) continue;
+      const eff = dcEffects[meta.dcName] || dcEffects[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const kws = (eff?.keywords || []).map((k) => String(k).toUpperCase());
+      if (!kws.includes(keyword.toUpperCase())) continue;
+      // Grant MP
+      const existingBank = game.movementBank?.[mid];
+      if (existingBank?.threadId) {
+        existingBank.total = (existingBank.total || 0) + mp;
+        existingBank.remaining = (existingBank.remaining || 0) + mp;
+      } else {
+        game.pendingMpBonus[mid] = (game.pendingMpBonus[mid] || 0) + mp;
+      }
+      // Grant Block Token (stand-in for Armor Token)
+      if (grantBlockToken) {
+        const figKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        for (const fk of figKeys) {
+          game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+          game.figurePowerTokens[fk].push('Block');
+        }
+      }
+      grantedNames.push(meta.displayName || meta.dcName);
+    }
+    if (grantedNames.length === 0) return { applied: true, logMessage: `**${entry.label || 'Close the Gap'}** — No friendly ${keyword} figures found.` };
+    const tokenNote = grantBlockToken ? ' and gained a Block Token (Armor Token)' : '';
+    return { applied: true, logMessage: `**Close the Gap** — Granted +${mp} MP${tokenNote} to **${grantedNames.length}** friendly ${keyword} figure(s): ${grantedNames.join(', ')}.`, refreshMovementBank: true };
+  }
+
   // ccEffect: roundEfficientTravel (Efficient Travel CC) — until end of round all friendly figures ignore Difficult Terrain and hostile figure entry costs
   if (entry.type === 'ccEffect' && entry.roundEfficientTravel) {
     const { game, playerNum } = context;

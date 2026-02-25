@@ -88,7 +88,9 @@ export async function handleDcActivate(interaction, ctx) {
     const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
     const thread = await msg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
     game.movementBank = game.movementBank || {};
-    game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
+    const _pendingMp1 = game.pendingMpBonus?.[msgId] ?? 0;
+    if (_pendingMp1) delete game.pendingMpBonus[msgId];
+    game.movementBank[msgId] = { total: _pendingMp1, remaining: _pendingMp1, threadId: thread.id, messageId: null, displayName };
     game.dcActionsData = game.dcActionsData || {};
     game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
     const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
@@ -311,7 +313,9 @@ export async function handleDcToggle(interaction, ctx) {
       const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
       const thread = await interaction.message.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
       game.movementBank = game.movementBank || {};
-      game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
+      const _pendingMp2 = game.pendingMpBonus?.[msgId] ?? 0;
+      if (_pendingMp2) delete game.pendingMpBonus[msgId];
+      game.movementBank[msgId] = { total: _pendingMp2, remaining: _pendingMp2, threadId: thread.id, messageId: null, displayName };
       game.dcActionsData = game.dcActionsData || {};
       game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
       const pingContent = `<@${meta.playerNum === 1 ? game.player1Id : game.player2Id}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;

@@ -840,9 +840,8 @@
     },
     "Forward March": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Each friendly figure within 2 spaces of you gains 1 MP",
-      "logMessage": "**Forward March** — Each of your friendly figures within 2 spaces of the activating VEHICLE figure gains 1 movement point. Apply 1 MP to each qualifying figureâ€™s movement bank manually from their DC.",
+      "grantMpToFriendliesWithin2": 1,
       "wiredStatus": "wired"
     },
     "Let's Make a Deal": {
@@ -1296,9 +1295,8 @@
     },
     "Close the Gap": {
       "type": "ccEffect",
-      "informational": true,
       "label": "Each friendly BRAWLER may move 2 spaces; then gains an Armor Token",
-      "logMessage": "**Close the Gap** — Each of your friendly BRAWLER figures may move up to 2 spaces. After each BRAWLER resolves their movement, they gain an Armor Token. Trigger each BRAWLERâ€™s movement manually from their DC.",
+      "grantMpToFriendliesByKeyword": { "keyword": "BRAWLER", "mp": 2, "grantBlockToken": true },
       "wiredStatus": "wired"
     },
     "Covering Fire": {
