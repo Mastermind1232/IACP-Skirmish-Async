@@ -2343,10 +2343,9 @@
     },
     "false_orders": {
       "type": "dcSpecial",
-      "informational": true,
       "label": "False Orders",
-      "logMessage": "False Orders: Choose a hostile figure with a cost of 4 or less within 4 spaces. Perform a move or attack with that figure (resolve manually).",
-      "wiredStatus": "informational"
+      "description": "Choose a hostile figure with a cost of 4 or less within 4 spaces. Perform a move or attack with that figure.",
+      "wiredStatus": "wired"
     },
     "field_report": {
       "type": "dcSpecial",
@@ -2702,9 +2701,7 @@
       "label": "Battlefield Leadership",
       "description": "Perform an attack, then choose another friendly figure within 3 spaces. That figure may interrupt to move up to 1 space and then perform an attack with the same target.",
       "oncePer": null,
-      "wiredStatus": "informational",
-      "informational": true,
-      "logMessage": "**Battlefield Leadership** — Perform an attack, then choose another friendly figure within 3 spaces. That figure may interrupt to move up to 1 space and then perform an attack with the same target.. Resolve manually and inform your opponent."
+      "wiredStatus": "wired"
     },
     "gifted_mechanic": {
       "type": "dcSpecial",
@@ -2809,12 +2806,10 @@
       "type": "dcSpecial",
       "category": "passive-reactive",
       "trigger": "combat-dice",
-      "informational": true,
       "label": "Soresu Form",
       "description": "While a friendly figure within 3 spaces is defending, it may reroll 1 die. If it does, convert each Dodge result to 2 Block and 1 Evade and, if that figure is not FORCE USER, you suffer 1 Strain.",
-      "logMessage": "**Soresu Form** — While a friendly figure within 3 spaces is defending, it may reroll 1 die. If it does, convert each Dodge result to 2 Block and 1 Evade and, if that figure is not FORCE USER, Kanan suffers 1 Strain. Resolve manually and inform your opponent.",
       "oncePer": null,
-      "wiredStatus": "passive-reminder",
+      "wiredStatus": "wired",
       "freeAction": true
     },
     "inspiring": {
@@ -2992,9 +2987,7 @@
       "label": "Lasat-Honor Guard",
       "description": "While attacking, after any rerolls, you may turn 1 die showing only a single attack icon to any other side.",
       "oncePer": null,
-      "wiredStatus": "passive-reminder",
-      "informational": true,
-      "logMessage": "**Lasat-Honor Guard** — While attacking, after any rerolls, you may turn 1 die showing only a single attack icon to any other side.. Resolve manually and inform your opponent.",
+      "wiredStatus": "wired",
       "freeAction": true
     },
     "hunker_down": {

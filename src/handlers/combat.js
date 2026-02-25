@@ -142,8 +142,14 @@ export async function handleAttackTarget(interaction, ctx) {
   delete game.attackTargets[`${msgId}_${figureIndex}`];
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {
-    actionsData.remaining = Math.max(0, actionsData.remaining - 1);
-    await updateDcActionsMessage(game, msgId, interaction.client);
+    const pendingBL = game.pendingBattlefieldLeadership;
+    const isBLFreeAttack = pendingBL?.forMsgId === msgId;
+    if (isBLFreeAttack) {
+      delete game.pendingBattlefieldLeadership;
+    } else {
+      actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+      await updateDcActionsMessage(game, msgId, interaction.client);
+    }
   }
 
   const attackerStats = getDcStats(meta.dcName);
@@ -530,10 +536,11 @@ export async function handleCombatRoll(interaction, ctx) {
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  const effectiveAttackerPlayerNum = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
 
   if (!combat.attackRoll) {
-    if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-      await interaction.followUp({ content: `Only the attacker (P${attackerPlayerNum}) may roll attack dice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    if (!canActAsPlayer(game, interaction.user.id, effectiveAttackerPlayerNum)) {
+      await interaction.followUp({ content: `Only the attacker (P${effectiveAttackerPlayerNum}) may roll attack dice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     const baseDice = combat.attackInfo?.dice || [];
@@ -774,7 +781,8 @@ export async function handleCombatReroll(interaction, ctx) {
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
-  const expectedPlayer = side === 'atk' ? attackerPlayerNum : defenderPlayerNum;
+  const effectiveAtk = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
+  const expectedPlayer = side === 'atk' ? effectiveAtk : defenderPlayerNum;
   if (!canActAsPlayer(game, interaction.user.id, expectedPlayer)) {
     await interaction.followUp({ content: `Only P${expectedPlayer} can reroll ${side === 'atk' ? 'attack' : 'defense'} dice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
@@ -990,6 +998,29 @@ async function advanceTokenPhase(thread, game, combat, completedRole, ctx) {
  * After rerolls are complete: check dodge, then gate through token windows if eligible tokens exist.
  */
 async function proceedAfterRerolls(thread, game, combat, ctx) {
+  const saveGames = ctx.saveGames;
+
+  // Lasat Honor Guard (Zeb Orrelios): after rerolls, may turn 1 die showing only a single attack icon to any other side
+  if (!combat.lasatHonorGuardUsed && combat.attackDiceResults?.length > 0) {
+    const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const atkDcName = (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+    const atkEff = getDcEff[atkDcName] || getDcEff[atkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if ((atkEff?.specialAbilityIds || []).includes('lasat_honor_guard')) {
+      const eligibleIdxs = combat.attackDiceResults
+        .map((d, i) => ({ d, i }))
+        .filter(({ d }) => (d.acc || 0) + (d.dmg || 0) + (d.surge || 0) === 1)
+        .map(({ i }) => i);
+      if (eligibleIdxs.length > 0) {
+        combat.lasatHonorGuardPhase = true;
+        combat.lasatHonorGuardUsed = true;
+        combat.lasatEligibleDiceIndices = eligibleIdxs;
+        await sendLasatDiePicker(thread, game.gameId, combat, eligibleIdxs, ctx);
+        saveGames?.();
+        return;
+      }
+    }
+  }
+
   const defRoll = combat.defenseRoll;
 
   // Defensive Stance (Diala Passil): if a Dodge is rolled while defending, convert it to +2 Block, +1 Evade
@@ -1001,6 +1032,24 @@ async function proceedAfterRerolls(thread, game, combat, ctx) {
       combat.defenseRoll = { block: (defRoll.block || 0) + 2, evade: (defRoll.evade || 0) + 1, dodge: false };
       await thread.send('**Defensive Stance** — Dodge converted to +2 Block, +1 Evade.');
     }
+  }
+
+  // Soresu Form (Kanan Jarrus): if Kanan granted a reroll (soresuFormFigKey set) and a Dodge result remains, convert it
+  if (combat.soresuFormFigKey && combat.defenseRoll.dodge && combat.target?.figureKey) {
+    const sr = combat.defenseRoll;
+    combat.defenseRoll = { block: (sr.block || 0) + 2, evade: (sr.evade || 0) + 1, dodge: false };
+    const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const defDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const defEff = getDcEff[defDcName] || getDcEff[defDcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const allKws = [...(defEff?.keywords || []), ...(defEff?.traits || [])].map((k) => String(k).toUpperCase());
+    const isFORCE_USER = allKws.includes('FORCE USER');
+    const kananPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+    const strainNote = isFORCE_USER ? '' : ' Kanan suffers 1 Strain.';
+    await thread.send(`**Soresu Form** — Dodge converted to +2 Block, +1 Evade.${strainNote}`);
+    if (!isFORCE_USER) {
+      await applyStrainToFigure(game, kananPlayerNum, combat.soresuFormFigKey, 1, 'Soresu Form', 'Kanan Jarrus', ctx, thread);
+    }
+    combat.soresuFormFigKey = null;
   }
 
   // Dodge check (now AFTER rerolls and Defensive Stance conversion)
@@ -1169,7 +1218,8 @@ export async function handleCombatSurge(interaction, ctx) {
     return;
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
-  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
+  const effectiveAttackerForSurge = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
+  if (!canActAsPlayer(game, interaction.user.id, effectiveAttackerForSurge)) {
     await interaction.followUp({ content: 'Only the attacker may spend surge.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
@@ -1380,7 +1430,8 @@ export async function handleCombatToken(interaction, ctx) {
   const isAttacker = role === 'att';
   const expectedPhase = isAttacker ? 'attacker' : 'defender';
   if (combat.tokenPhase !== expectedPhase) return;
-  const playerNum = isAttacker ? combat.attackerPlayerNum : (combat.attackerPlayerNum === 1 ? 2 : 1);
+  const atkPlayerNum = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
+  const playerNum = isAttacker ? atkPlayerNum : (combat.attackerPlayerNum === 1 ? 2 : 1);
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
     await interaction.followUp({ content: 'Only the correct player may spend their token.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
@@ -1734,5 +1785,230 @@ export async function handleFigureheadDecision(interaction, ctx) {
     await ctx.updateAttachmentMessageForDc(game, defenderPlayerNum, fhMsgId, client).catch(() => {});
   }
   await interaction.editReply({ components: [] }).catch(() => {});
+  saveGames();
+}
+
+// ─── Lasat Honor Guard helpers ────────────────────────────────────────────────
+
+/** Send die picker for Lasat Honor Guard (multiple eligible dice). */
+async function sendLasatDiePicker(thread, gameId, combat, eligibleIdxs, ctx) {
+  if (eligibleIdxs.length === 1) {
+    await sendLasatFacePicker(thread, gameId, combat, eligibleIdxs[0], ctx);
+    return;
+  }
+  const buttons = eligibleIdxs.map((idx) => {
+    const die = combat.attackDiceResults[idx];
+    const face = `${die.acc || 0}a/${die.dmg || 0}d/${die.surge || 0}s`;
+    return new ButtonBuilder()
+      .setCustomId(`lasat_die_${gameId}_${idx}`)
+      .setLabel(`${(die.color || 'die').charAt(0).toUpperCase() + (die.color || 'die').slice(1)} [${face}]`)
+      .setStyle(ButtonStyle.Secondary);
+  });
+  const rows = buildActionRows(buttons);
+  await thread.send({ content: '**Lasat Honor Guard** — Choose which die to turn:', components: rows });
+}
+
+/** Send face picker for Lasat Honor Guard (player selects new face). */
+async function sendLasatFacePicker(thread, gameId, combat, dieIdx, ctx) {
+  const getDiceData = ctx.getDiceData;
+  if (!getDiceData) {
+    await thread.send('**Lasat Honor Guard** — Resolve manually (dice data unavailable).');
+    return;
+  }
+  const die = combat.attackDiceResults[dieIdx];
+  const faces = getDiceData().attack?.[die.color] || [];
+  const currentKey = `${die.acc || 0}/${die.dmg || 0}/${die.surge || 0}`;
+  const otherFaces = faces
+    .map((f, i) => ({ f, i }))
+    .filter(({ f }) => `${f.acc || 0}/${f.dmg || 0}/${f.surge || 0}` !== currentKey);
+  if (otherFaces.length === 0) {
+    await thread.send('**Lasat Honor Guard** — No other faces available. Resolve manually.');
+    return;
+  }
+  const buttons = otherFaces.map(({ f, i }) =>
+    new ButtonBuilder()
+      .setCustomId(`lasat_face_${gameId}_${dieIdx}_${i}`)
+      .setLabel(`${f.acc || 0}a/${f.dmg || 0}d/${f.surge || 0}s`)
+      .setStyle(ButtonStyle.Primary)
+  );
+  const rows = buildActionRows(buttons.slice(0, 25));
+  await thread.send({ content: `**Lasat Honor Guard** — Turn die ${dieIdx + 1} (${die.color || '?'}) to:`, components: rows });
+}
+
+/**
+ * Handle lasat_die_ button: player selects which eligible die to turn.
+ * customId: lasat_die_{gameId}_{dieIdx}
+ */
+export async function handleLasatDiePick(interaction, ctx) {
+  const m = interaction.customId.match(/^lasat_die_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, idxStr] = m;
+  const dieIdx = parseInt(idxStr, 10);
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const game = getGame(gameId);
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId || !combat.lasatHonorGuardPhase) {
+    await interaction.followUp({ content: 'No Lasat die choice active.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const effectiveAttacker = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
+  if (!canActAsPlayer(game, interaction.user.id, effectiveAttacker)) {
+    await interaction.followUp({ content: 'Only the attacker may choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  if (!(combat.lasatEligibleDiceIndices || []).includes(dieIdx)) {
+    await interaction.followUp({ content: 'That die is not eligible.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  await interaction.deferUpdate().catch(() => {});
+  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  combat.lasatChosenDieIndex = dieIdx;
+  await sendLasatFacePicker(thread, gameId, combat, dieIdx, ctx);
+  saveGames();
+}
+
+/**
+ * Handle lasat_face_ button: player selects the new face for the chosen die.
+ * customId: lasat_face_{gameId}_{dieIdx}_{faceIdx}
+ */
+export async function handleLasatFacePick(interaction, ctx) {
+  const m = interaction.customId.match(/^lasat_face_([^_]+)_(\d+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, dieIdxStr, faceIdxStr] = m;
+  const dieIdx = parseInt(dieIdxStr, 10);
+  const faceIdx = parseInt(faceIdxStr, 10);
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const game = getGame(gameId);
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId || !combat.lasatHonorGuardPhase) {
+    await interaction.followUp({ content: 'No Lasat face choice active.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const effectiveAttacker = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
+  if (!canActAsPlayer(game, interaction.user.id, effectiveAttacker)) {
+    await interaction.followUp({ content: 'Only the attacker may choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const getDiceData = ctx.getDiceData;
+  if (!getDiceData) { await interaction.followUp({ content: 'Dice data unavailable.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  const die = combat.attackDiceResults?.[dieIdx];
+  if (!die) { await interaction.followUp({ content: 'Die not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  const faces = getDiceData().attack?.[die.color] || [];
+  const newFace = faces[faceIdx];
+  if (!newFace) { await interaction.followUp({ content: 'Invalid face selection.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  // Subtract old face contribution, add new face values
+  combat.attackRoll.acc = Math.max(0, (combat.attackRoll.acc || 0) - (die.acc || 0)) + (newFace.acc || 0);
+  combat.attackRoll.dmg = Math.max(0, (combat.attackRoll.dmg || 0) - (die.dmg || 0)) + (newFace.dmg || 0);
+  combat.attackRoll.surge = Math.max(0, (combat.attackRoll.surge || 0) - (die.surge || 0)) + (newFace.surge || 0);
+  combat.attackDiceResults[dieIdx] = { ...die, acc: newFace.acc || 0, dmg: newFace.dmg || 0, surge: newFace.surge || 0 };
+  combat.lasatHonorGuardPhase = false;
+  await interaction.deferUpdate().catch(() => {});
+  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  await thread.send(`**Lasat Honor Guard** — Turned die to ${newFace.acc || 0}a/${newFace.dmg || 0}d/${newFace.surge || 0}s. New total: ${combat.attackRoll.acc}a/${combat.attackRoll.dmg}d/${combat.attackRoll.surge}s.`);
+  await proceedAfterRerolls(thread, game, combat, ctx);
+  saveGames();
+}
+
+// ─── False Orders combat handler ──────────────────────────────────────────────
+
+/**
+ * Handle false_orders_atk_ button: set up combat with the controlled figure attacking a target.
+ * customId: false_orders_atk_{gameId}_{msgId}_{targetIdx}
+ */
+export async function handleFalseOrdersAtkPick(interaction, ctx) {
+  const m = interaction.customId.match(/^false_orders_atk_([^_]+)_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, msgId, targetIdxStr] = m;
+  const targetIdx = parseInt(targetIdxStr, 10);
+  const { getGame, replyIfGameEnded, getDcStats, getDcEffects, dcHealthState, logGameAction, ACTION_ICONS, ThreadAutoArchiveDuration, saveGames, client } = ctx;
+  const game = getGame(gameId);
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (await replyIfGameEnded(game, interaction)) return;
+  const fo = game.pendingFalseOrders;
+  if (!fo || fo.murneRinMsgId !== msgId) {
+    await interaction.followUp({ content: 'No pending False Orders.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const { controllerPlayerNum, controlledFigureKey, controlledPlayerNum } = fo;
+  if (!canActAsPlayer(game, interaction.user.id, controllerPlayerNum)) {
+    await interaction.followUp({ content: 'Only the controller may choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const targets = game.falseOrdersAttackTargets?.[msgId];
+  const target = targets?.[targetIdx];
+  if (!target) {
+    await interaction.followUp({ content: 'Target no longer valid.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  delete game.falseOrdersAttackTargets?.[msgId];
+  delete game.pendingFalseOrders;
+  const controlledName = controlledFigureKey.replace(/-\d+-\d+$/, '');
+  const controlledStats = getDcStats(controlledName);
+  const attackInfo = controlledStats?.attack || { dice: ['red'], range: [1, 3] };
+  const targetDcName = target.figureKey.replace(/-\d+-\d+$/, '');
+  const targetStats = getDcStats(targetDcName);
+  const targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const defenderPlayerNum = controlledPlayerNum === 1 ? 2 : 1;
+  const combatDeclare = `**False Orders** — P${controllerPlayerNum} controls "${controlledName}" attacking "${target.label}"!`;
+  const generalChannel = await client.channels.fetch(game.generalId);
+  const declareMsg = await generalChannel.send({
+    content: `${ACTION_ICONS?.attack || '⚔️'} <t:${Math.floor(Date.now() / 1000)}:t> — ${combatDeclare}`,
+    allowedMentions: { users: [game.player1Id, game.player2Id] },
+  });
+  const thread = await declareMsg.startThread({
+    name: `Combat (False Orders): P${controllerPlayerNum} vs P${defenderPlayerNum}`,
+    autoArchiveDuration: ThreadAutoArchiveDuration?.OneWeek ?? 10080,
+  });
+  const readyRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`combat_ready_${gameId}`)
+      .setLabel('Ready to roll combat dice')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  const preCombatMsg = await thread.send({
+    content: '**Pre-combat window** — Both players: resolve any Command Cards, etc. When ready, click **Ready to roll combat dice** below.',
+    components: [readyRow],
+  });
+  const [minRange, maxRange] = attackInfo.range || [1, 3];
+  const isRanged = minRange >= 2 || maxRange >= 3;
+  game.pendingCombat = {
+    gameId,
+    attackerPlayerNum: controlledPlayerNum,
+    defenderPlayerNum,
+    attackerMsgId: msgId,
+    attackerDcName: controlledName,
+    attackerDisplayName: controlledName,
+    attackerFigureKey: controlledFigureKey,
+    attackerConds: game.figureConditions?.[controlledFigureKey] || [],
+    defenderConds: game.figureConditions?.[target.figureKey] || [],
+    target: { ...target },
+    targetStats: {
+      defense: targetStats?.defense || 'white',
+      cost: targetStats?.cost ?? 5,
+      subCost: targetEff?.subCost,
+      figures: targetStats?.figures ?? 1,
+    },
+    attackInfo,
+    isRanged,
+    distanceToTarget: target.dist ?? 1,
+    combatThreadId: thread.id,
+    combatDeclareMsgId: declareMsg.id,
+    combatPreMsgId: preCombatMsg.id,
+    p1Ready: false,
+    p2Ready: false,
+    attackRoll: null,
+    defenseRoll: null,
+    attackTargetMsgId: interaction.message.id,
+    falseOrdersControllerPlayerNum: controllerPlayerNum,
+  };
+  const controlledEff = getDcEffects()[controlledName] || getDcEffects()[controlledName?.replace(/\s*\[.*\]\s*$/, '')];
+  const defEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
+  applyDcPassivesToCombat(game.pendingCombat, controlledStats?.passives || [], targetStats?.passives || []);
+  await interaction.message.edit({ content: '**False Orders — Attack declared**. See thread in Game Log.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  if (logGameAction) await logGameAction(game, client, `⚔️ **False Orders** — P${controllerPlayerNum} controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
   saveGames();
 }

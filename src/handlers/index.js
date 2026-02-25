@@ -15,7 +15,7 @@ import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
 import { handleEndEndOfRound, handleEndStartOfRound } from './round.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
-import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision } from './combat.js';
+import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick } from './combat.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate } from './activation.js';
 import {
   handleMapSelection,
@@ -40,6 +40,8 @@ import {
   handlePounceSpacePick,
   handleArsenalPick,
   handleEe3DiePick,
+  handleFalseOrdersAction,
+  handleFalseOrdersMovePick,
 } from './dc-play-area.js';
 import {
   handleSquadModal,
@@ -115,6 +117,11 @@ register('power_token_choice_', handlePowerTokenChoice);
 register('spread_pain_cond_', handleSpreadThePainCondPick);
 register('figurehead_use_', handleFigureheadDecision);
 register('figurehead_skip_', handleFigureheadDecision);
+register('lasat_die_', handleLasatDiePick);
+register('lasat_face_', handleLasatFacePick);
+register('false_orders_action_', handleFalseOrdersAction);
+register('false_orders_space_', handleFalseOrdersMovePick);
+register('false_orders_atk_', handleFalseOrdersAtkPick);
 register('status_phase_', handleStatusPhase);
 register('pass_activation_turn_', handlePassActivationTurn);
 register('end_turn_', handleEndTurn);
@@ -191,7 +198,7 @@ export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
 export { handleEndEndOfRound, handleEndStartOfRound } from './round.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
-export { handleAttackTarget, handleCleaveTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision } from './combat.js';
+export { handleAttackTarget, handleCleaveTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick } from './combat.js';
 export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate } from './activation.js';
 export {
   handleMapSelection,
@@ -220,6 +227,8 @@ export {
   handleDcAbilityChoice,
   handleArsenalPick,
   handleEe3DiePick,
+  handleFalseOrdersAction,
+  handleFalseOrdersMovePick,
 } from './dc-play-area.js';
 export {
   handleSquadModal,

@@ -443,7 +443,7 @@ export async function getLeaderboard(limit = 10) {
         FROM completed_games
       ) t
       GROUP BY player_id
-      HAVING COUNT(*) > 5
+      HAVING COUNT(*) >= 5
       ORDER BY win_rate DESC NULLS LAST, wins DESC
       LIMIT $1
     `, [limit]);

@@ -1375,6 +1375,32 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     findDcMessageIdForFigure: ctx.findDcMessageIdForFigure,
   }) : { applied: false, manualMessage: 'Resolve manually.' };
 
+  // False Orders Phase 2: figure chosen → show Move/Attack choice buttons
+  if (!resolveResult.applied && resolveResult.falseOrdersActionPick) {
+    const fo = game.pendingFalseOrders;
+    if (!fo) {
+      await interaction.followUp({ content: 'False Orders state lost.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      saveGames();
+      return;
+    }
+    const controlledName = fo.controlledFigureKey.replace(/-\d+-\d+$/, '');
+    const moveBtn = new ButtonBuilder()
+      .setCustomId(`false_orders_action_${gameId}_${msgId}_move`)
+      .setLabel(`Move — ${controlledName}`)
+      .setStyle(ButtonStyle.Primary);
+    const atkBtn = new ButtonBuilder()
+      .setCustomId(`false_orders_action_${gameId}_${msgId}_attack`)
+      .setLabel(`Attack — ${controlledName}`)
+      .setStyle(ButtonStyle.Danger);
+    await interaction.followUp({
+      content: `**False Orders** — Choose action for **${controlledName}**:`,
+      components: [new ActionRowBuilder().addComponents(moveBtn, atkBtn)],
+      ephemeral: false,
+    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    saveGames();
+    return;
+  }
+
   // Push ability Phase 2: figure chosen, now pick landing space
   if (!resolveResult.applied && resolveResult.requiresSpaceChoice && Array.isArray(resolveResult.validSpaces) && resolveResult.validSpaces.length > 0) {
     if (getSpaceChoiceRows && getMapAttachmentForSpaces) {
@@ -1609,4 +1635,185 @@ export async function handleEe3DiePick(interaction, ctx) {
     dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats,
     excludeFigureKeys: game.pendingMissileSalvo?.[msgId]?.targetsFired,
   });
+}
+
+/**
+ * Handle false_orders_action_ button: choose Move or Attack for the controlled figure.
+ * customId: false_orders_action_{gameId}_{msgId}_{move|attack}
+ */
+export async function handleFalseOrdersAction(interaction, ctx) {
+  const m = interaction.customId.match(/^false_orders_action_([^_]+)_([^_]+)_(move|attack)$/);
+  if (!m) return;
+  const [, gameId, msgId, choice] = m;
+  const {
+    getGame, replyIfGameEnded, getDcStats, getDcEffects, getMapSpaces,
+    getFigureSize, getFootprintCells, getRange, hasLineOfSight,
+    getBoardStateForMovement, getMovementProfile, computeMovementCache,
+    getSpaceChoiceRows, getMapAttachmentForSpaces,
+    saveGames, FIGURE_LETTERS,
+  } = ctx;
+  const game = getGame(gameId);
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (await replyIfGameEnded(game, interaction)) return;
+  const fo = game.pendingFalseOrders;
+  if (!fo || fo.murneRinMsgId !== msgId) {
+    await interaction.followUp({ content: 'No pending False Orders.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const { controlledFigureKey, controlledPlayerNum, controllerPlayerNum } = fo;
+  if (!canActAsPlayer(game, interaction.user.id, controllerPlayerNum)) {
+    await interaction.followUp({ content: 'Only the controller may choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const controlledName = controlledFigureKey.replace(/-\d+-\d+$/, '');
+  const controlledStats = getDcStats(controlledName);
+  const controlledPos = game.figurePositions?.[controlledPlayerNum]?.[controlledFigureKey];
+
+  if (choice === 'move') {
+    if (!controlledPos) {
+      await interaction.followUp({ content: `${controlledName} has no position — resolve manually.`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
+    const boardState = getBoardStateForMovement(game, controlledFigureKey);
+    if (!boardState) {
+      await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
+    const moveSpeed = controlledStats?.move ?? 3;
+    const profile = getMovementProfile(controlledName, controlledFigureKey, game);
+    const cache = computeMovementCache(controlledPos, moveSpeed, boardState, profile);
+    const reachableSpaces = [...cache.cells.keys()];
+    if (reachableSpaces.length === 0) {
+      await interaction.followUp({ content: `${controlledName} cannot move (no valid spaces).`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
+    const prefix = `false_orders_space_${gameId}_${msgId}_`;
+    let rows = [];
+    if (getSpaceChoiceRows) {
+      const mapSpaces = boardState?.mapSpaces || {};
+      ({ rows } = getSpaceChoiceRows(prefix, reachableSpaces, mapSpaces));
+    }
+    const mapAttachment = getMapAttachmentForSpaces ? await getMapAttachmentForSpaces(game, reachableSpaces) : null;
+    const payload = {
+      content: `**False Orders** — Choose a space for **${controlledName}** to move to:`,
+      components: rows.slice(0, 5),
+      ephemeral: false,
+    };
+    if (mapAttachment) payload.files = [mapAttachment];
+    await interaction.followUp(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    saveGames();
+    return;
+  }
+
+  // Attack case
+  if (!controlledPos) {
+    await interaction.followUp({ content: `${controlledName} has no position — resolve manually.`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const controlledAttackInfo = controlledStats?.attack || { dice: ['red'], range: [1, 3] };
+  const [foMinRange, foMaxRange] = controlledAttackInfo.range || [1, 3];
+  const controlledEff = getDcEffects()[controlledName] || getDcEffects()[controlledName?.replace(/\s*\[.*\]\s*$/, '')];
+  const controlledKws = (controlledEff?.keywords || []).map((k) => String(k).toUpperCase());
+  const foHasReach = controlledKws.includes('REACH') || (controlledEff?.passives || []).some((p) => String(p).toUpperCase() === 'REACH');
+  const foEffectiveMaxRange = foHasReach && foMaxRange < 2 ? 2 : foMaxRange;
+  const ms = getMapSpaces(game.selectedMap?.id);
+  if (!ms) {
+    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  // Collect all other figures as potential targets
+  const allOtherPositions = {};
+  for (const [figKey, pos] of Object.entries(game.figurePositions?.[1] || {})) {
+    if (figKey !== controlledFigureKey) allOtherPositions[figKey] = pos;
+  }
+  for (const [figKey, pos] of Object.entries(game.figurePositions?.[2] || {})) {
+    if (figKey !== controlledFigureKey) allOtherPositions[figKey] = pos;
+  }
+  const foTargets = [];
+  for (const [figKey, targetPos] of Object.entries(allOtherPositions)) {
+    const dist = getRange ? getRange(controlledPos, targetPos, ms) : 1;
+    if (dist < foMinRange || dist > foEffectiveMaxRange) continue;
+    const los = hasLineOfSight ? hasLineOfSight(controlledPos, targetPos, ms, []) : true;
+    const fkMatch = figKey.match(/^(.+)-(\d+)-(\d+)$/);
+    const targetDcName = fkMatch ? figKey.replace(/-\d+-\d+$/, '') : figKey;
+    const dg = fkMatch ? fkMatch[2] : '1';
+    const fi = fkMatch ? parseInt(fkMatch[3], 10) : 0;
+    const figCount = getDcStats(targetDcName)?.figures ?? 1;
+    const label = figCount > 1 ? `${targetDcName} ${dg}${FIGURE_LETTERS?.[fi] || 'a'}` : targetDcName;
+    foTargets.push({ figureKey: figKey, label, coord: targetPos, dist, hasLOS: los });
+  }
+  if (foTargets.length === 0) {
+    await interaction.followUp({ content: `No valid targets for **${controlledName}** in range.`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  game.falseOrdersAttackTargets = game.falseOrdersAttackTargets || {};
+  game.falseOrdersAttackTargets[msgId] = foTargets;
+  const targetRows = [];
+  for (let i = 0; i < foTargets.length; i += 5) {
+    const chunk = foTargets.slice(i, i + 5);
+    targetRows.push(new ActionRowBuilder().addComponents(
+      chunk.map((t, idx) => {
+        const targetIndex = i + idx;
+        const noLOS = t.hasLOS === false;
+        return new ButtonBuilder()
+          .setCustomId(`false_orders_atk_${gameId}_${msgId}_${targetIndex}`)
+          .setLabel(`${t.label} (${String(t.coord).toUpperCase()})${noLOS ? ' [No LOS]' : ''}`.slice(0, 80))
+          .setStyle(noLOS ? ButtonStyle.Secondary : ButtonStyle.Danger)
+          .setDisabled(noLOS);
+      })
+    ));
+  }
+  await interaction.followUp({
+    content: `**False Orders** — Choose attack target for **${controlledName}**:`,
+    components: targetRows.slice(0, 5),
+    ephemeral: false,
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  saveGames();
+}
+
+/**
+ * Handle false_orders_space_ button: complete the False Orders Move when a space is chosen.
+ * customId: false_orders_space_{gameId}_{msgId}_{space}
+ */
+export async function handleFalseOrdersMovePick(interaction, ctx) {
+  const m = interaction.customId.match(/^false_orders_space_([^_]+)_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, msgId, space] = m;
+  const chosenSpace = String(space).toLowerCase();
+  const { getGame, replyIfGameEnded, logGameAction, buildBoardMapPayload, saveGames, client } = ctx;
+  const game = getGame(gameId);
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (await replyIfGameEnded(game, interaction)) return;
+  const fo = game.pendingFalseOrders;
+  if (!fo || fo.murneRinMsgId !== msgId) {
+    await interaction.followUp({ content: 'No pending False Orders move.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const { controlledFigureKey, controlledPlayerNum, controllerPlayerNum } = fo;
+  if (!canActAsPlayer(game, interaction.user.id, controllerPlayerNum)) {
+    await interaction.followUp({ content: 'Only the controller may choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const controlledName = controlledFigureKey.replace(/-\d+-\d+$/, '');
+  game.figurePositions = game.figurePositions || {};
+  game.figurePositions[controlledPlayerNum] = game.figurePositions[controlledPlayerNum] || {};
+  game.figurePositions[controlledPlayerNum][controlledFigureKey] = chosenSpace;
+  delete game.pendingFalseOrders;
+  if (logGameAction) await logGameAction(game, client, `🎯 **False Orders** — P${controllerPlayerNum} moved **${controlledName}** to **${chosenSpace.toUpperCase()}**.`, { phase: 'ROUND', icon: 'move' }).catch(() => {});
+  const doneRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`special_done_${gameId}_${msgId}`)
+      .setLabel('Done')
+      .setStyle(ButtonStyle.Success)
+  );
+  let boardPayload = null;
+  if (buildBoardMapPayload) boardPayload = await buildBoardMapPayload(game).catch(() => null);
+  const replyPayload = {
+    content: `**False Orders** — **${controlledName}** moved to **${chosenSpace.toUpperCase()}**. Click Done when finished.`,
+    components: [doneRow],
+    ephemeral: false,
+  };
+  if (boardPayload?.files) replyPayload.files = boardPayload.files;
+  await interaction.followUp(replyPayload).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  saveGames();
 }

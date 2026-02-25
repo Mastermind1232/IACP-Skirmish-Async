@@ -160,6 +160,11 @@ import {
   handleDefenderCcPlay,
   handleSpreadThePainCondPick,
   handleFigureheadDecision,
+  handleLasatDiePick,
+  handleLasatFacePick,
+  handleFalseOrdersAtkPick,
+  handleFalseOrdersAction,
+  handleFalseOrdersMovePick,
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
@@ -6013,7 +6018,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_cc_double_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_' || buttonKey === 'dc_ability_choice_' || buttonKey === 'ee3_pick_die_') {
+  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_cc_double_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_' || buttonKey === 'dc_ability_choice_' || buttonKey === 'ee3_pick_die_' || buttonKey === 'false_orders_action_' || buttonKey === 'false_orders_space_') {
     const dcPlayAreaContext = {
       getGame,
       replyIfGameEnded,
@@ -6078,6 +6083,8 @@ client.on('interactionCreate', async (interaction) => {
       findDcMessageIdForFigure,
       isGroupDefeated,
       checkWinConditions,
+      getSpaceChoiceRows,
+      getMapAttachmentForSpaces,
     };
     if (buttonKey === 'dc_activate_') await handleDcActivate(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_unactivate_') await handleDcUnactivate(interaction, dcPlayAreaContext);
@@ -6089,6 +6096,8 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'pounce_space_') await handlePounceSpacePick(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_ability_choice_') await handleDcAbilityChoice(interaction, dcPlayAreaContext);
     else if (buttonKey === 'ee3_pick_die_') await handleEe3DiePick(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'false_orders_action_') await handleFalseOrdersAction(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'false_orders_space_') await handleFalseOrdersMovePick(interaction, dcPlayAreaContext);
     else await handleDcAction(interaction, dcPlayAreaContext, buttonKey);
     return;
   }
@@ -6191,7 +6200,7 @@ client.on('interactionCreate', async (interaction) => {
   if (buttonKey === 'missile_salvo_die_') { await handleMissileSalvoDie(interaction); return; }
   if (buttonKey === 'missile_salvo_done_') { await handleMissileSalvoDone(interaction); return; }
 
-  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_' || buttonKey === 'spread_pain_cond_' || buttonKey === 'figurehead_use_' || buttonKey === 'figurehead_skip_') {
+  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_' || buttonKey === 'spread_pain_cond_' || buttonKey === 'figurehead_use_' || buttonKey === 'figurehead_skip_' || buttonKey === 'lasat_die_' || buttonKey === 'lasat_face_' || buttonKey === 'false_orders_atk_') {
     const combatContext = {
       getGame,
       replyIfGameEnded,
@@ -6228,6 +6237,7 @@ client.on('interactionCreate', async (interaction) => {
       getSurgeAbilityLabel,
       getRange,
       hasLineOfSight,
+      getDiceData,
     };
     if (buttonKey === 'cleave_target_') await handleCleaveTarget(interaction, combatContext);
     else if (buttonKey === 'attack_target_') await handleAttackTarget(interaction, combatContext);
@@ -6239,6 +6249,9 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'combat_token_') await handleCombatToken(interaction, combatContext);
     else if (buttonKey === 'spread_pain_cond_') await handleSpreadThePainCondPick(interaction, combatContext);
     else if (buttonKey === 'figurehead_use_' || buttonKey === 'figurehead_skip_') await handleFigureheadDecision(interaction, combatContext);
+    else if (buttonKey === 'lasat_die_') await handleLasatDiePick(interaction, combatContext);
+    else if (buttonKey === 'lasat_face_') await handleLasatFacePick(interaction, combatContext);
+    else if (buttonKey === 'false_orders_atk_') await handleFalseOrdersAtkPick(interaction, combatContext);
     return;
   }
 

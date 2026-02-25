@@ -455,6 +455,78 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**${entry.label}** — **${hidden.join('**, **')}** became **Hidden**.${skipped}`, refreshDcEmbed: true };
   }
 
+  // battlefield_leadership (Leia Organa): pick a friendly figure within 3 spaces; it gets a free attack
+  if (abilityId === 'battlefield_leadership') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Battlefield Leadership** manually.' };
+    // Phase 2: figure chosen — set pending flag and return applied
+    if (choiceIndex != null && targetFigureKey) {
+      const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
+      if (chosenMsgId) {
+        game.pendingBattlefieldLeadership = { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId };
+      }
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Battlefield Leadership** — **${chosenName}** may interrupt to move up to 1 space and perform a free attack (no action cost). Use their **Attack** button.` };
+    }
+    // Phase 1: enumerate friendly figures within 3 spaces (not Leia herself)
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+    if (!activatingPos) return { applied: false, manualMessage: '**Battlefield Leadership** — Leia has no position on the board. Resolve manually.' };
+    const validTargets = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (fk === activatingKey || !pos) continue;
+      if (getRng && getRng(activatingPos, pos) > 3) continue;
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Battlefield Leadership** — No other friendly figures within 3 spaces.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // false_orders (Murne Rin): choose a hostile figure (cost ≤ 4, within 4 spaces); perform move or attack with it
+  if (abilityId === 'false_orders') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **False Orders** manually.' };
+    const enemyNum = playerNum === 1 ? 2 : 1;
+    // Phase 2: figure chosen — set pending state and return marker for Move/Attack choice
+    if (choiceIndex != null && targetFigureKey) {
+      game.pendingFalseOrders = {
+        controlledFigureKey: targetFigureKey,
+        controlledPlayerNum: enemyNum,
+        controllerPlayerNum: playerNum,
+        murneRinMsgId: msgId,
+      };
+      const controlledName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: false, falseOrdersActionPick: true, logMessage: `**False Orders** — Choose Move or Attack with **${controlledName}**.` };
+    }
+    // Phase 1: enumerate hostile figures with cost ≤ 4 within 4 spaces
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+    if (!activatingPos) return { applied: false, manualMessage: '**False Orders** — Murne Rin has no position on the board. Resolve manually.' };
+    const validTargets = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
+      if (!pos) continue;
+      const targetDcName = fk.replace(/-\d+-\d+$/, '');
+      const targetStats = getStatsForDc(targetDcName);
+      if ((targetStats?.cost ?? 99) > 4) continue;
+      if (getRng && getRng(activatingPos, pos) > 4) continue;
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**False Orders** — No hostile figures with cost ≤ 4 within 4 spaces.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
   // dcSpecial: informational — manual resolution with instruction message (no automated game-state change)
   // Supports strainCostToSelf: auto-deducts HP from activating figure if specified.
   if (entry.type === 'dcSpecial' && entry.informational && !entry.freeMoveBonus && !entry.nextAttacksBonusHits) {
