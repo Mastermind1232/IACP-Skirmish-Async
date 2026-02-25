@@ -150,7 +150,7 @@ export async function handleLobbyStart(interaction, ctx) {
           .setDescription(
             isTestGame
               ? '**Test game** — Complete **MAP SELECTION** first (button below). This will randomly select a Map and its A or B mission variant. Play Areas with **Your Hand** threads will then appear for picking decks.'
-              : 'Complete **MAP SELECTION** first (button below). This will randomly select a Map and its A or B mission variant. Play Areas will appear — pick your deck in the **Your Hand** thread (Select Squad or default deck buttons).'
+              : 'Complete **MAP SELECTION** first (button below). Play Areas will appear — pick your deck in the **Your Hand** thread (Select Squad or default deck buttons).'
           )
           .setColor(0x2f3136),
       ],
