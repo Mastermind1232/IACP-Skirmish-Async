@@ -139,6 +139,20 @@ export async function handleAttackTarget(interaction, ctx) {
     await interaction.followUp({ content: '🚫 No line of sight to that target. You cannot attack through blocking terrain or solid walls.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
+  // Etiquette and Protocol: block attacks between paired figures this round
+  const etiqPairs = game.etiquetteBlockPairs || [];
+  if (etiqPairs.length && target.figureKey) {
+    const dgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+    const atkFkCheck = `${meta.dcName}-${dgIdx}-${figureIndex}`;
+    const tgtFkCheck = target.figureKey;
+    const blocked = etiqPairs.some(([a, b]) => (a === atkFkCheck && b === tgtFkCheck) || (b === atkFkCheck && a === tgtFkCheck));
+    if (blocked) {
+      await interaction.followUp({ content: '🚫 **Etiquette and Protocol**: these two figures cannot attack each other this round.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
+  }
+  // Ballistics Matrix: clear per-attack flag after this attack proceeds
+  if (game.nextAttackIgnoreFigureLOS?.[attackerPlayerNum]) delete game.nextAttackIgnoreFigureLOS[attackerPlayerNum];
   delete game.attackTargets[`${msgId}_${figureIndex}`];
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {

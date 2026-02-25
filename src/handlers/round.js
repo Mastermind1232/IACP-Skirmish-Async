@@ -301,6 +301,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.roundFigureAbilityUsed = {};
   game.roundEfficientTravel = {};
   game.nextAttackIgnoreFigureLOS = {};
+  game.findsmanMeditationTarget = {};
+  game.etiquetteBlockPairs = [];
   game.pendingMpBonus = {};
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });

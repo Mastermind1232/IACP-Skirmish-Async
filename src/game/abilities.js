@@ -5236,7 +5236,7 @@ export function resolveAbility(abilityId, context) {
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[msgId] = true;
     game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-    game.pendingOverrideAttackDice[msgId] = { ...(game.pendingOverrideAttackDice[msgId] || {}), bonusPierce: (game.pendingOverrideAttackDice[msgId]?.bonusPierce || 0) + 2 };
+    game.pendingOverrideAttackDice[msgId] = { ...(game.pendingOverrideAttackDice[msgId] || {}), pierce: (game.pendingOverrideAttackDice[msgId]?.pierce || 0) + 2 };
     // Apply Weaken to activating figure
     const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     game.figureConditions = game.figureConditions || {};
@@ -5290,6 +5290,132 @@ export function resolveAbility(abilityId, context) {
       }
     }
     return { requiresChoice: true, choiceOptions: ['SCUM: Personal Combat Shield (+1 Block for Mobile figures)', "IMPERIAL: Gar Saxon's Flamethrower (area attack)"] };
+  }
+
+  // ccEffect: reverseEngineerEffect (Reverse Engineer) — free attack with +1 Surge; use defender's DC abilities (honor system)
+  if (entry.type === 'ccEffect' && entry.reverseEngineerEffect) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[msgId] = true;
+    game.roundAttackSurgeBonus = game.roundAttackSurgeBonus || {};
+    game.roundAttackSurgeBonus[playerNum] = (game.roundAttackSurgeBonus[playerNum] || 0) + 1;
+    const meta = dcMessageMeta.get(msgId);
+    return { applied: true, logMessage: `**Reverse Engineer** — **${meta?.dcName || 'Figure'}** performs 1 free attack with +1 Surge. During this attack, use the **defender's** DC abilities (surge abilities, keywords, etc.) instead of your own — honor system.` };
+  }
+
+  // ccEffect: navigationUpgradeEffect (Navigation Upgrade) — Strain 1 to self; choose friendly DROID for +1 MP
+  if (entry.type === 'ccEffect' && entry.navigationUpgradeEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, choiceIndex, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta.get(msgId) : null;
+    const applyStrain = () => {
+      let strainNote = 'apply 1 Strain manually';
+      if (msgId && dcHealthState) {
+        const hs = dcHealthState.get(msgId) || [];
+        if (hs[0]) {
+          const [cur, max] = hs[0];
+          const newCur = Math.max(0, (cur ?? max) - 1);
+          hs[0] = [newCur, max ?? newCur];
+          dcHealthState.set(msgId, hs);
+          const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+          const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const idx = (dcIds || []).indexOf(msgId);
+          if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+          strainNote = `1 Strain (HP: ${cur ?? max}→${newCur})`;
+        }
+      }
+      return strainNote;
+    };
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      const strainNote = applyStrain();
+      let mpNote = '';
+      if (chosenFigureKey) {
+        const droidMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+        if (droidMsgId) {
+          game.movementBank = game.movementBank || {};
+          const bank = game.movementBank[droidMsgId] || { total: 0, remaining: 0 };
+          bank.total = (bank.total || 0) + 1;
+          bank.remaining = (bank.remaining || 0) + 1;
+          game.movementBank[droidMsgId] = bank;
+          mpNote = ` **${chosenFigureKey.replace(/-\d+-\d+$/, '')}** gains 1 MP.`;
+        }
+      }
+      return { applied: true, logMessage: `**Navigation Upgrade** — ${strainNote}.${mpNote} Placed as Attachment — exhaust during any friendly DROID's activation for +1 MP (honor system).`, refreshDcEmbed: true };
+    }
+    const dcEffects = getDcEffects();
+    const droidFks = [];
+    const droidLabels = [];
+    for (const [fk] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      const dcN = fk.replace(/-\d+-\d+$/, '');
+      const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
+      if (kws.includes('DROID')) { droidFks.push(fk); droidLabels.push(dcN); }
+    }
+    if (!droidFks.length) {
+      const strainNote = applyStrain();
+      return { applied: true, logMessage: `**Navigation Upgrade** — ${strainNote}. No friendly DROIDs on board. Placed as Attachment (exhaust during DROID activation for +1 MP — honor system).`, refreshDcEmbed: true };
+    }
+    return { requiresChoice: true, choiceOptions: droidLabels.map((n) => `Give 1 MP to ${n}`), choiceValues: droidFks };
+  }
+
+  // ccEffect: findsmanMeditationEffect (Findsman Meditation) — pick opponent group; Zuckuss may interrupt their first action
+  if (entry.type === 'ccEffect' && entry.findsmanMeditationEffect) {
+    const { game, playerNum, choiceIndex, chosenOption } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      const chosenDcName = String(chosenOption ?? '').replace(/^Watch:\s*/, '');
+      game.findsmanMeditationTarget = game.findsmanMeditationTarget || {};
+      game.findsmanMeditationTarget[playerNum] = chosenDcName;
+      return { applied: true, logMessage: `**Findsman Meditation** — Zuckuss will interrupt when **${chosenDcName}** activates this round. Before their first action, announce the interrupt: Zuckuss may move up to 2 spaces or perform an attack.` };
+    }
+    const oppIds = oppNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const oppList = oppNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const oppNames = oppIds.map((id, i) => oppList[i]?.dcName).filter(Boolean);
+    if (!oppNames.length) return { applied: false, manualMessage: 'No opponent deployment groups found. Resolve manually.' };
+    return { requiresChoice: true, choiceOptions: oppNames.map((n) => `Watch: ${n}`) };
+  }
+
+  // ccEffect: ballisticsMatrixEffect (Ballistics Matrix) — next attack ignores figure LOS blocking
+  if (entry.type === 'ccEffect' && entry.ballisticsMatrixEffect) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    game.nextAttackIgnoreFigureLOS = game.nextAttackIgnoreFigureLOS || {};
+    game.nextAttackIgnoreFigureLOS[playerNum] = true;
+    return { applied: true, logMessage: `**Ballistics Matrix** — For your next attack, intervening figures do **not** block line of sight. Declare your attack normally.` };
+  }
+
+  // ccEffect: etiquetteAndProtocolEffect (Etiquette and Protocol) — block attacks between one hostile and one friendly this round
+  if (entry.type === 'ccEffect' && entry.etiquetteAndProtocolEffect) {
+    const { game, playerNum, choiceIndex, chosenFigureKey } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    if (choiceIndex !== undefined && choiceIndex !== null && chosenFigureKey) {
+      // chosenFigureKey is encoded as "hostileFk|friendlyFk"
+      const sep = chosenFigureKey.indexOf('|');
+      const hostileFk = sep >= 0 ? chosenFigureKey.slice(0, sep) : chosenFigureKey;
+      const friendlyFk = sep >= 0 ? chosenFigureKey.slice(sep + 1) : '';
+      game.etiquetteBlockPairs = game.etiquetteBlockPairs || [];
+      game.etiquetteBlockPairs.push([hostileFk, friendlyFk]);
+      const hName = hostileFk.replace(/-\d+-\d+$/, '');
+      const fName = friendlyFk.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Etiquette and Protocol** — **${hName}** and **${fName}** cannot declare attacks targeting each other until end of round.` };
+    }
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const hostileFks = Object.keys(game.figurePositions?.[oppNum] || {}).filter((fk) => game.figurePositions[oppNum][fk]);
+    const friendlyFks = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => game.figurePositions[playerNum][fk]);
+    const opts = [];
+    const vals = [];
+    for (const hfk of hostileFks) {
+      for (const ffk of friendlyFks) {
+        opts.push(`${hfk.replace(/-\d+-\d+$/, '')} ↔ ${ffk.replace(/-\d+-\d+$/, '')}`);
+        vals.push(`${hfk}|${ffk}`);
+      }
+    }
+    if (!opts.length) return { applied: false, manualMessage: 'No valid figure pairs found. Resolve manually.' };
+    return { requiresChoice: true, choiceOptions: opts, choiceValues: vals };
   }
 
   // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free
