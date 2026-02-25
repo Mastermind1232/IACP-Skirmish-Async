@@ -3882,6 +3882,257 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: grantHitTokensToActivating (Transmit the Plans) — grant N Hit Tokens to activating figure
+  if (entry.type === 'ccEffect' && typeof entry.grantHitTokensToActivating === 'number') {
+    const { game, playerNum, dcMessageMeta } = context;
+    const msgId = playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null;
+    if (!game || !msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (!figureKeys.length) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const fk = figureKeys[0];
+    const count = entry.grantHitTokensToActivating;
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    game.figurePowerTokens[fk] = [...(game.figurePowerTokens[fk] || [])];
+    for (let i = 0; i < count; i++) game.figurePowerTokens[fk].push('Hit');
+    const vpNote = entry.vpNoteIfAdjacentTerminal ? ` If adjacent to a terminal, use \`/editvp +${entry.vpNoteIfAdjacentTerminal}\` to gain ${entry.vpNoteIfAdjacentTerminal} VP.` : '';
+    return { applied: true, logMessage: `**${entry.label}** — Granted **${count} Hit Token${count !== 1 ? 's' : ''}** to ${meta.dcName}.${vpNote}` };
+  }
+
+  // ccEffect: protectOldWaysBonus (Protect the Old Ways) — +X Block this round (X = 1 + FORCE USER CCs in discard)
+  if (entry.type === 'ccEffect' && entry.protectOldWaysBonus) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const discard = game[discardKey] || [];
+    const forceUserCount = discard.filter((cardName) => {
+      const eff = getCcEffect(cardName);
+      return eff?.playableBy && String(eff.playableBy).toUpperCase().includes('FORCE USER');
+    }).length;
+    const bonus = 1 + forceUserCount;
+    game.roundDefenseBonusBlock = game.roundDefenseBonusBlock || {};
+    game.roundDefenseBonusBlock[playerNum] = (game.roundDefenseBonusBlock[playerNum] || 0) + bonus;
+    return { applied: true, logMessage: `**Protect the Old Ways** — +**${bonus}** Block to your defense this round (1 + ${forceUserCount} FORCE USER CC${forceUserCount !== 1 ? 's' : ''} in discard).` };
+  }
+
+  // ccEffect: staticPulseEffect (Static Pulse) — for each hostile adjacent to Dio: 2 Strain or Weaken (single choice for all)
+  if (entry.type === 'ccEffect' && entry.staticPulseEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, choiceIndex } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const mapId = game.selectedMap?.id;
+    const dioCandidates = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => fk.startsWith('Dio-'));
+    if (dioCandidates.length === 0) {
+      return { applied: true, logMessage: '**Static Pulse** — Dio is not in play. Deploy Dio to your space then apply the effect manually.' };
+    }
+    const dioFk = dioCandidates[0];
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const adjAll = mapId ? getFiguresAdjacentToTarget(game, dioFk, mapId) : [];
+    const hostiles = adjAll.filter(({ playerNum: p }) => p !== playerNum).map((a) => a.figureKey);
+    if (hostiles.length === 0) {
+      return { applied: true, logMessage: '**Static Pulse** — No hostile figures adjacent to Dio.' };
+    }
+    if (choiceIndex === undefined || choiceIndex === null) {
+      const hostileNames = hostiles.map((fk) => fk.replace(/-\d+-\d+$/, '')).join(', ');
+      return {
+        requiresChoice: true,
+        choiceOptions: [
+          `2 Strain to each (${hostileNames})`,
+          `Weaken each (${hostileNames})`,
+        ],
+      };
+    }
+    const applyStrain = choiceIndex === 0;
+    const results = [];
+    for (const fk of hostiles) {
+      const dcName = fk.replace(/-\d+-\d+$/, '');
+      if (applyStrain) {
+        const figMsgId = dcHealthState ? findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta) : null;
+        if (figMsgId && dcHealthState) {
+          const hs = dcHealthState.get(figMsgId) || [];
+          const figMatch = fk.match(/-(\d+)-(\d+)$/);
+          const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
+          const hp = hs[figIdx];
+          if (hp) {
+            const [cur, max] = hp;
+            const newCur = Math.max(0, (cur ?? max) - 2);
+            hs[figIdx] = [newCur, max ?? newCur];
+            dcHealthState.set(figMsgId, hs);
+            const dcIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+            const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
+            const idx2 = (dcIds || []).indexOf(figMsgId);
+            if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+            results.push(`**${dcName}** 2 Strain (${cur ?? max}→${newCur})`);
+          } else {
+            results.push(`**${dcName}** 2 Strain (apply manually)`);
+          }
+        } else {
+          results.push(`**${dcName}** 2 Strain (apply manually)`);
+        }
+      } else {
+        game.figureConditions = game.figureConditions || {};
+        const existing = game.figureConditions[fk] || [];
+        if (!existing.includes('Weaken')) game.figureConditions[fk] = [...existing, 'Weaken'];
+        results.push(`**${dcName}** Weakened`);
+      }
+    }
+    return { applied: true, logMessage: `**Static Pulse** — ${results.join(', ')}.`, refreshDcEmbed: true };
+  }
+
+  // ccEffect: terminalProtocolEffect (Terminal Protocol) — roll 1 green die, adjacent figures suffer Damage = result, self is defeated
+  if (entry.type === 'ccEffect' && entry.terminalProtocolEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (!figureKeys.length) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const mapId = game.selectedMap?.id;
+    if (!mapId) return { applied: false, manualMessage: 'Resolve manually: map not loaded.' };
+    const faces = getDiceData().attack?.green;
+    if (!faces?.length) return { applied: false, manualMessage: 'Resolve manually: dice data missing.' };
+    const face = faces[Math.floor(Math.random() * faces.length)];
+    const dmg = face.dmg ?? 0;
+    const results = [];
+    const seenMsgIds = new Set();
+    for (const selfFk of figureKeys) {
+      const adjAll = getFiguresAdjacentToTarget(game, selfFk, mapId);
+      for (const { figureKey: fk, playerNum: p } of adjAll) {
+        const dcName = fk.replace(/-\d+-\d+$/, '');
+        if (dmg > 0) {
+          const figMsgId = findMsgIdForFigureKey(game, p, fk, dcMessageMeta);
+          if (figMsgId) {
+            const hs = dcHealthState.get(figMsgId) || [];
+            const figMatch = fk.match(/-(\d+)-(\d+)$/);
+            const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
+            const hp = hs[figIdx];
+            if (hp) {
+              const [cur, max] = hp;
+              const newCur = Math.max(0, (cur ?? max) - dmg);
+              hs[figIdx] = [newCur, max ?? newCur];
+              dcHealthState.set(figMsgId, hs);
+              const dcIds = p === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+              const dcList = p === 1 ? game.p1DcList : game.p2DcList;
+              const idx2 = (dcIds || []).indexOf(figMsgId);
+              if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+              seenMsgIds.add(figMsgId);
+              results.push(`**${dcName}** ${dmg} Dmg (${cur ?? max}→${newCur})`);
+            } else {
+              results.push(`**${dcName}** ${dmg} Dmg (apply manually)`);
+            }
+          }
+        }
+      }
+    }
+    // Defeat activating figure (set HP to 0)
+    const selfHs = dcHealthState.get(msgId) || [];
+    const actData = game.dcActionsData?.[msgId];
+    const selfFigIdx = actData?.selectedFigure ?? 0;
+    if (selfHs[selfFigIdx]) {
+      const [cur, max] = selfHs[selfFigIdx];
+      selfHs[selfFigIdx] = [0, max ?? cur];
+      dcHealthState.set(msgId, selfHs);
+      const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const idx2 = (dcIds || []).indexOf(msgId);
+      if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...selfHs];
+    }
+    const dieDesc = dmg > 0 ? `${dmg} Damage` : 'blank (0 Damage)';
+    const adjDesc = results.length ? results.join(', ') : 'No adjacent figures affected.';
+    return {
+      applied: true,
+      logMessage: `**Terminal Protocol** — Rolled 1 green die: **${dieDesc}**. ${adjDesc} **${meta.dcName}** is defeated (HP → 0).`,
+      refreshDcEmbed: true,
+    };
+  }
+
+  // ccEffect: jundlandTerrorEffect (Jundland Terror) — grant 2 MP + free attack to Tusken Raider / Bantha Rider next activation
+  if (entry.type === 'ccEffect' && entry.jundlandTerrorEffect) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const traits = ['Tusken Raider', 'Bantha Rider'];
+    const dcEffects = getDcEffects();
+    const squadDcList = playerNum === 1 ? (game.player1Squad?.dcList || []) : (game.player2Squad?.dcList || []);
+    const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const matchingMsgIds = [];
+    const matchingNames = [];
+    for (let i = 0; i < squadDcList.length; i++) {
+      const dcName = squadDcList[i];
+      if (!dcIds?.[i]) continue;
+      const eff = dcEffects[dcName] || dcEffects[dcName?.replace(/\s*\[.*\]\s*$/, '')] || {};
+      const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
+      const matchesTrait = traits.some((t) => kws.includes(t.toUpperCase()) || dcName?.toUpperCase().includes(t.toUpperCase()));
+      if (matchesTrait) {
+        matchingMsgIds.push(dcIds[i]);
+        matchingNames.push(dcName);
+      }
+    }
+    if (matchingMsgIds.length === 0) {
+      return { applied: false, manualMessage: 'Resolve manually: no friendly Tusken Raider or Bantha Rider found.' };
+    }
+    game.pendingMpBonus = game.pendingMpBonus || {};
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    for (const mid of matchingMsgIds) {
+      game.pendingMpBonus[mid] = (game.pendingMpBonus[mid] || 0) + 2;
+      game.freeAttackBonusPending[mid] = true;
+    }
+    return { applied: true, logMessage: `**Jundland Terror** — **${matchingNames.join(', ')}**: next activation +2 MP and 1 free attack.` };
+  }
+
+  // ccEffect: foreseeEffect (Foresee) — look at top 2 of opponent's deck, discard 1; if cost ≤1, draw 1 from own deck
+  if (entry.type === 'ccEffect' && entry.foreseeEffect) {
+    const { game, playerNum, choiceIndex } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppDeckKey = oppNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const oppDiscardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const ownDeckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const ownHandKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const oppDeck = [...(game[oppDeckKey] || [])];
+    if (oppDeck.length === 0) return { applied: true, logMessage: "**Foresee** — Opponent's deck is empty." };
+    const top2 = oppDeck.slice(-Math.min(2, oppDeck.length));
+    // Helper: discard a card from opponent deck and optionally draw for self
+    const resolveDiscard = (cardName) => {
+      const idx = oppDeck.lastIndexOf(cardName);
+      if (idx >= 0) oppDeck.splice(idx, 1);
+      game[oppDeckKey] = oppDeck;
+      const oppDiscard = [...(game[oppDiscardKey] || [])];
+      oppDiscard.push(cardName);
+      game[oppDiscardKey] = oppDiscard;
+      const cardEff = getCcEffect(cardName);
+      const cost = cardEff?.cost ?? 99;
+      let drawNote = '';
+      if (cost <= 1) {
+        const ownDeck = [...(game[ownDeckKey] || [])];
+        if (ownDeck.length > 0) {
+          const drawn = ownDeck.pop();
+          game[ownDeckKey] = ownDeck;
+          const ownHand = [...(game[ownHandKey] || [])];
+          ownHand.push(drawn);
+          game[ownHandKey] = ownHand;
+          drawNote = ` Cost ≤1 — You drew **${drawn}**.`;
+        } else {
+          drawNote = ' Cost ≤1 but your deck is empty (no draw).';
+        }
+      }
+      return { discardedCard: cardName, cost, drawNote };
+    };
+    if (top2.length === 1 || (choiceIndex !== undefined && choiceIndex !== null)) {
+      // Auto-resolve or chosen: discard selected card
+      const cardName = top2[choiceIndex ?? 0];
+      if (!cardName) return { applied: false, manualMessage: 'Invalid choice for Foresee.' };
+      const { cost, drawNote } = resolveDiscard(cardName);
+      return { applied: true, logMessage: `**Foresee** — Discarded opponent's **${cardName}** (cost ${cost}).${drawNote}` };
+    }
+    // Phase 1: ask player which to discard
+    return {
+      requiresChoice: true,
+      choiceOptions: top2.map((card) => `Discard "${card}" (cost: ${getCcEffect(card)?.cost ?? '?'})`),
+    };
+  }
+
   // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free
   if (entry.type === 'dcSpecial' && entry.pounceRange) {
     const { game, playerNum, dcMessageMeta, chosenSpace } = context;

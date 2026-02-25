@@ -551,9 +551,8 @@
     },
     "Foresee": {
       "type": "ccEffect",
-      "label": "Look at top 2 of opponent's deck, discard 1; if cost â‰¤1, draw 1 (fully manual)",
-      "informational": true,
-      "logMessage": "**Foresee** — Look at the top 2 cards of your opponent's Command deck; discard 1 of them. If the discarded card's cost is 1 or less, draw 1 Command card from your own deck (honor).",
+      "label": "Look at top 2 of opponent's deck, choose 1 to discard; if cost ≤1, draw 1 from own deck",
+      "foreseeEffect": true,
       "wiredStatus": "wired"
     },
     "Preservation Protocol": {
@@ -1378,9 +1377,8 @@
     },
     "Jundland Terror": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Chosen Tusken Raider/Bantha Rider gains 2 MP and may interrupt to Melee attack",
-      "logMessage": "**Jundland Terror** — Choose a friendly Tusken Raider or Bantha Rider. During their next activation, that figure gains 2 movement points. Once during this activation, when a hostile figure attacks, this figure may interrupt to perform a Melee attack. Apply 2 MP and the interrupt manually.",
+      "label": "Tusken Raider/Bantha Rider: next activation +2 MP + 1 free attack",
+      "jundlandTerrorEffect": true,
       "wiredStatus": "wired"
     },
     "Demoralizing Monologue": {
@@ -2145,9 +2143,8 @@
     },
     "Protect the Old Ways": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "+X Block when a figure within 3 spaces defends (X = 1 + FORCE USER CCs in discard)",
-      "logMessage": "**Protect the Old Ways** — While a friendly figure within 3 spaces is defending, apply +X Block (X = 1 + number of FORCE USER CCs in your discard pile). Resolve manually during the defense roll.",
+      "label": "+X Block this round (X = 1 + FORCE USER CCs in your discard pile)",
+      "protectOldWaysBonus": true,
       "wiredStatus": "wired"
     },
     "Reinforcements": {
@@ -2212,16 +2209,15 @@
     },
     "Static Pulse": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "For each hostile adjacent to Dio: Strain 2 or Weaken; if Dio not in play, place Dio",
-      "logMessage": "**Static Pulse** — For each hostile adjacent to 'Dio': choose — it suffers 2 Strain or becomes Weakened. If Dio is not in play, place Dio in your space instead. Resolve manually.",
+      "label": "For each hostile adjacent to Dio: choose 2 Strain or Weaken (all get same choice)",
+      "staticPulseEffect": true,
       "wiredStatus": "wired"
     },
     "Stay Down": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "After Close and Personal: if target survived, attack again; you become Stunned",
-      "logMessage": "**Stay Down** — After resolving **Close and Personal**, if the target was not defeated, perform an additional attack on the same target. Then you become Stunned. Resolve manually.",
+      "label": "After Close and Personal (target survived): free attack, then you become Stunned (manual)",
+      "freeAttackBonus": true,
+      "logMessage": "**Stay Down** — Free attack granted (after Close and Personal, if target survived — target the same figure). After this attack resolves, manually apply **Stun** to your own figure.",
       "wiredStatus": "wired"
     },
     "Still Faster Than You": {
@@ -2247,9 +2243,8 @@
     },
     "Terminal Protocol": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Roll green die: Damage equal to Hit results to all figures/objects in/adjacent to your space; then defeated",
-      "logMessage": "**Terminal Protocol** — Roll 1 green die. Each figure and object in or adjacent to your space suffers Damage equal to the Damage results. Then you are defeated. Resolve manually.",
+      "label": "Roll 1 green die; adjacent figures suffer Damage = result; activating figure defeated",
+      "terminalProtocolEffect": true,
       "wiredStatus": "wired"
     },
     "There Is No Try": {
@@ -2268,9 +2263,9 @@
     },
     "Transmit the Plans": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Distribute 2 Hit Tokens among friendly figures; if adjacent terminal, gain 2 VP",
-      "logMessage": "**Transmit the Plans** — Distribute 2 Hit Tokens among your friendly figures (track manually). If adjacent to a terminal, gain 2 VP — use `/editvp +2`.",
+      "label": "Grant 2 Hit Tokens to activating figure; if adjacent terminal, gain 2 VP (use /editvp +2)",
+      "grantHitTokensToActivating": 2,
+      "vpNoteIfAdjacentTerminal": 2,
       "wiredStatus": "wired"
     },
     "Triangulate": {
