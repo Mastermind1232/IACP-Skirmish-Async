@@ -170,8 +170,8 @@ export function getMapSelectionMenu(gameId) {
     .setCustomId(`map_selection_menu_${gameId}`)
     .setPlaceholder('Choose how to select the map')
     .addOptions(
-      { label: 'Random', value: 'random', description: 'Random map and mission (A or B)' },
       { label: 'Competitive', value: 'competitive', description: 'Random from tournament rotation' },
+      { label: 'Random', value: 'random', description: 'Random map and mission (A or B)' },
       { label: 'Select Draw', value: 'select_draw', description: 'Pick several, then random draw' },
       { label: 'Selection', value: 'selection', description: 'Pick one mission' },
     );

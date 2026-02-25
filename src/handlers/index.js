@@ -1,6 +1,6 @@
 /**
  * Handler registry: map handler key (prefix) to async (interaction, context) => void.
- * Single place to register all handlers; index builds context and calls getHandler(key)(interaction, context).
+ * Single place to register all handlers. index.js dispatches via if-chains with hand-built context objects.
  */
 import { handleLobbyJoin, handleLobbyStart } from './lobby.js';
 import { handleRequestResolve, handleRequestReject } from './requests.js';
