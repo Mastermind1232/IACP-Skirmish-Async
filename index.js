@@ -2333,6 +2333,35 @@ async function postDevaronCratePushPrompts(game, channel, gameId) {
   }
 }
 
+/**
+ * Post Krykna push selection buttons for Chopper Base A end-of-round push phase.
+ * Shows the next player in game.pendingKryknaPushQueue buttons for each un-pushed Krykna.
+ */
+async function postKryknaPushButtons(game, channel, gameId) {
+  if (!game.pendingKryknaPushQueue || game.pendingKryknaPushQueue.length === 0) return;
+  const playerNum = game.pendingKryknaPushQueue[0];
+  const pid = playerNum === 1 ? game.player1Id : game.player2Id;
+  const pushedIds = new Set(game.kryknaPushedIds || []);
+  const activeKrykna = (game.npcKrykna || []).filter((k) => !k.defeated && !pushedIds.has(k.id));
+  if (activeKrykna.length === 0) return;
+  const remaining = game.pendingKryknaPushQueue.length;
+  const buttons = activeKrykna.map((k) =>
+    new ButtonBuilder()
+      .setCustomId(`krykna_push_${gameId}_${k.id}`)
+      .setLabel(`Push ${k.id} @ ${String(k.coord).toUpperCase()}`)
+      .setStyle(ButtonStyle.Danger)
+  );
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 5) {
+    rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+  }
+  await channel.send({
+    content: `🕷️ **Krykna Push Phase** (${remaining} push${remaining !== 1 ? 'es' : ''} remaining) — <@${pid}>, choose a Krykna to push up to 3 spaces (end adjacent to most figures if possible):`,
+    components: rows,
+    allowedMentions: { users: [pid] },
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+}
+
 /** Check win conditions. Returns { ended, winnerId?, reason? }. Posts game-over and sets game.ended if ended. */
 /**
  * Compute persistent VP bonus from Anchorhead A patron tokens.
@@ -6121,6 +6150,48 @@ client.on('interactionCreate', async (interaction) => {
       await logGameAction(game2, client, `📦 <@${pid2}> pushed crate from **${curCoord2.toUpperCase()}** → **${targetRaw.toUpperCase()}** (${dist} space${dist !== 1 ? 's' : ''}).`, { allowedMentions: { users: [pid2] }, phase: 'ROUND', icon: 'round' });
       await interaction.editReply({ content: `Crate pushed: ${curCoord2.toUpperCase()} → ${targetRaw.toUpperCase()} ✓` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       saveGames();
+    } else if (modalKey === 'krykna_push_modal_') {
+      // customId: krykna_push_modal_{gameId}_krykna-{N}
+      const rest2 = interaction.customId.replace('krykna_push_modal_', '');
+      const kryknaIdx2 = rest2.indexOf('krykna-');
+      if (kryknaIdx2 < 0) return;
+      const gameId2 = rest2.substring(0, kryknaIdx2 - 1);
+      const kryknaId2 = rest2.substring(kryknaIdx2);
+      const game2 = getGame(gameId2);
+      if (!game2) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      const krykna2 = (game2.npcKrykna || []).find((k) => k.id === kryknaId2);
+      if (!krykna2) { await interaction.reply({ content: 'Krykna not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      const targetRaw2 = interaction.fields.getTextInputValue('target_coord').trim().toLowerCase();
+      const dist2 = getRange(String(krykna2.coord).toLowerCase(), targetRaw2);
+      if (dist2 === 0) { await interaction.reply({ content: `Krykna stays at ${String(krykna2.coord).toUpperCase()} — no change.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      if (dist2 === null || dist2 > 3) { await interaction.reply({ content: `❌ ${targetRaw2.toUpperCase()} is ${dist2 ?? '?'} spaces away (max 3). Try again.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      await interaction.deferReply({ ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      const oldCoord2 = String(krykna2.coord).toUpperCase();
+      krykna2.coord = targetRaw2;
+      game2.kryknaPushedIds = game2.kryknaPushedIds || [];
+      game2.kryknaPushedIds.push(kryknaId2);
+      game2.pendingKryknaPushQueue.shift();
+      const pnActor2 = game2.player1Id === interaction.user.id ? 1 : 2;
+      await logGameAction(game2, client, `🕷️ **Krykna Push:** P${pnActor2} pushed ${kryknaId2} from **${oldCoord2}** → **${targetRaw2.toUpperCase()}** (${dist2} space${dist2 !== 1 ? 's' : ''}).`, { phase: 'ROUND', icon: 'move' });
+      await interaction.editReply({ content: `${kryknaId2} pushed: ${oldCoord2} → ${targetRaw2.toUpperCase()} ✓` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      const generalCh2 = await client.channels.fetch(game2.generalId).catch(() => null);
+      if (game2.pendingKryknaPushQueue.length > 0) {
+        // More pushes needed — post next player's buttons
+        if (generalCh2) await postKryknaPushButtons(game2, generalCh2, gameId2);
+      } else {
+        // All pushes done — run damage phase
+        game2.kryknaPushedIds = null;
+        const mapId2 = game2.selectedMap?.id;
+        const { logs: kryknaLogs2, damageEvents: kryknaEvt2 } = runNpcKryknaActivation(game2, mapId2, { getMapTokensData, getMapSpaces, getMapRegistry, filterMapSpacesByBounds });
+        for (const line of kryknaLogs2) {
+          if (generalCh2) await logGameAction(game2, client, `🕷️ **Krykna:** ${line}`, { phase: 'ROUND', icon: 'attack' });
+        }
+        for (const { figureKey, playerNum: pnDmg, damage } of kryknaEvt2) {
+          await applyNpcDamageToFigure(game2, pnDmg, figureKey, damage, 'Krykna', logGameAction, client, dcHealthState, dcMessageMeta);
+        }
+        if (kryknaEvt2.length > 0) await checkWinConditions(game2, client);
+      }
+      saveGames();
     }
     return;
   }
@@ -6616,6 +6687,7 @@ client.on('interactionCreate', async (interaction) => {
       buildBoardMapPayload,
       postDevaronDoorButtons,
       postDevaronCratePushPrompts,
+      postKryknaPushButtons,
       client,
     };
     await handleEndEndOfRound(interaction, roundContext);
@@ -6696,6 +6768,41 @@ client.on('interactionCreate', async (interaction) => {
           .setLabel(`Target space (up to 3 spaces, e.g. K12)`)
           .setStyle(TextInputStyle.Short)
           .setPlaceholder(curCoord.toUpperCase())
+          .setRequired(true)
+      )
+    );
+    await interaction.showModal(modal).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+
+  if (buttonKey === 'krykna_push_') {
+    // customId: krykna_push_{gameId}_krykna-{N}
+    const rest = interaction.customId.replace('krykna_push_', '');
+    const kryknaIdx = rest.indexOf('krykna-');
+    if (kryknaIdx < 0) return;
+    const gameId = rest.substring(0, kryknaIdx - 1);
+    const kryknaId = rest.substring(kryknaIdx);
+    const game = getGame(gameId);
+    if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    if (!game.pendingKryknaPushQueue || game.pendingKryknaPushQueue.length === 0) {
+      await interaction.followUp({ content: 'No Krykna push pending.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return;
+    }
+    const expectedPlayerNum = game.pendingKryknaPushQueue[0];
+    if (!canActAsPlayer(game, interaction.user.id, expectedPlayerNum)) {
+      await interaction.followUp({ content: `It's Player ${expectedPlayerNum}'s turn to push a Krykna.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return;
+    }
+    const krykna = (game.npcKrykna || []).find((k) => k.id === kryknaId);
+    if (!krykna || krykna.defeated) { await interaction.followUp({ content: 'Krykna not found or already defeated.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    const modal = new ModalBuilder()
+      .setCustomId(`krykna_push_modal_${gameId}_${kryknaId}`)
+      .setTitle(`Push ${kryknaId} (at ${String(krykna.coord).toUpperCase()})`);
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('target_coord')
+          .setLabel(`Target space (up to 3 spaces from ${String(krykna.coord).toUpperCase()})`)
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder(String(krykna.coord).toUpperCase())
           .setRequired(true)
       )
     );

@@ -6,7 +6,7 @@ import { getDcEffects } from '../data-loader.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getFiguresOnOrAdjacentToSpace, runNpcThugActivation, applyNpcDamageToFigure, getMapSpaces, getMapRegistry, filterMapSpacesByBounds, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, buildBoardMapPayload, postDevaronDoorButtons, postDevaronCratePushPrompts, client
+ * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getFiguresOnOrAdjacentToSpace, runNpcThugActivation, applyNpcDamageToFigure, getMapSpaces, getMapRegistry, filterMapSpacesByBounds, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, buildBoardMapPayload, postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, client
  */
 export async function handleEndEndOfRound(interaction, ctx) {
   const {
@@ -45,6 +45,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     buildBoardMapPayload,
     postDevaronDoorButtons,
     postDevaronCratePushPrompts,
+    postKryknaPushButtons,
     client,
   } = ctx;
   const gameId = interaction.customId.replace('end_end_of_round_', '');
@@ -262,24 +263,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     }
   }
 
-  // NPC Krykna activation (Chopper Base A): adjacent-damage phase (push handled separately)
-  if (runNpcKryknaActivation && mapId === 'chopper-base-atollon' && variant === 'a') {
-    const { logs: kryknaLogs, damageEvents: kryknaEvt } = runNpcKryknaActivation(game, mapId, { getMapTokensData, getMapSpaces, getMapRegistry, filterMapSpacesByBounds });
-    for (const line of kryknaLogs) {
-      await logGameAction(game, client, `🕷️ **Krykna:** ${line}`, { phase: 'ROUND', icon: 'attack' });
-    }
-    for (const { figureKey, playerNum, damage } of kryknaEvt) {
-      await applyNpcDamageToFigure(game, playerNum, figureKey, damage, 'Krykna', logGameAction, client, dcHealthState, dcMessageMeta);
-    }
-    if (kryknaEvt.length > 0) {
-      await checkWinConditions(game, client);
-      if (game.ended) {
-        await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
-        saveGames();
-        return;
-      }
-    }
-  }
+  // NPC Krykna push+damage phase (Chopper Base A): build push queue here; damage runs after all pushes (in modal handler)
 
   game.p1LaunchPanelFlippedThisRound = false;
   game.p2LaunchPanelFlippedThisRound = false;
@@ -365,6 +349,20 @@ export async function handleEndEndOfRound(interaction, ctx) {
     }
     if (postDevaronCratePushPrompts) {
       await postDevaronCratePushPrompts(game, generalChannel, gameId);
+    }
+  }
+
+  // Chopper Base A: build Krykna push queue and post buttons (damage fires after all pushes in modal handler)
+  if (mapId === 'chopper-base-atollon' && variant === 'a' && postKryknaPushButtons) {
+    const activeKrykna = (game.npcKrykna || []).filter((k) => !k.defeated);
+    if (activeKrykna.length > 0) {
+      const initNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+      const otherNum = initNum === 1 ? 2 : 1;
+      const queue = [];
+      for (let i = 0; i < activeKrykna.length; i++) queue.push(i % 2 === 0 ? initNum : otherNum);
+      game.pendingKryknaPushQueue = queue;
+      game.kryknaPushedIds = [];
+      await postKryknaPushButtons(game, generalChannel, gameId);
     }
   }
 
