@@ -4920,6 +4920,134 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Search for: ${n} trait`), choiceValues: validKeys };
   }
 
+  // ccEffect: learnByExampleEffect (Learn by Example) — copy a FORCE USER CC in any discard pile
+  if (entry.type === 'ccEffect' && entry.learnByExampleEffect) {
+    const { game, playerNum, choiceIndex } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const allDiscards = [...new Set([...(game.player1CcDiscard || []), ...(game.player2CcDiscard || [])])];
+    const forceUserCards = allDiscards.filter((card) => {
+      const eff = getCcEffect(card);
+      return eff && (String(eff.playableBy || '').includes('FORCE USER') || String(eff.playableBy || '').includes('Force User'));
+    });
+    if (!forceUserCards.length) return { applied: false, manualMessage: 'No FORCE USER Command cards in any discard pile.' };
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      const chosenCard = forceUserCards[choiceIndex];
+      if (!chosenCard) return { applied: false, manualMessage: 'Invalid choice.' };
+      const chosenAbilityId = getCcEffect(chosenCard)?.abilityId ?? chosenCard;
+      // Recursively resolve the chosen card's ability with same context
+      const result = resolveAbility(chosenAbilityId, { ...context, cardName: chosenCard });
+      if (result.applied || result.requiresChoice || result.requiresSpaceChoice) return result;
+      return { applied: true, logMessage: `**Learn by Example** — Copying **${chosenCard}**. ${result.manualMessage || result.logMessage || 'Apply effect manually.'}` };
+    }
+    return { requiresChoice: true, choiceOptions: forceUserCards.map((c) => `Copy: ${c} (${getCcEffect(c)?.playableBy ?? '?'})`) };
+  }
+
+  // ccEffect: battlefieldAwarenessEffect (Battlefield Awareness) — grant +1 attack reroll to a friendly figure within 3
+  if (entry.type === 'ccEffect' && entry.battlefieldAwarenessEffect) {
+    const { game, playerNum, dcMessageMeta, combat, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Phase 2: apply the reroll
+    if (chosenFigureKey) {
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      if (combat?.attackerRerollsRemaining != null) {
+        // Mid-combat: add directly to attacker rerolls (the friendly just rolled dice)
+        combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
+        return { applied: true, logMessage: `**Battlefield Awareness** — Added 1 reroll for **${dcName}** in the current attack.` };
+      }
+      // Otherwise: grant +1 to round attack reroll pool for this player
+      game.roundAttackRerollDice = game.roundAttackRerollDice || {};
+      game.roundAttackRerollDice[playerNum] = (game.roundAttackRerollDice[playerNum] || 0) + 1;
+      return { applied: true, logMessage: `**Battlefield Awareness** — +1 attack reroll granted (for **${dcName}**'s next attack this round).` };
+    }
+    // Phase 1: pick friendly within 3
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta.get(msgId) : null;
+    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    const validKeys = [];
+    const validLabels = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos || actKeys.includes(fk)) continue;
+      if (actPos) {
+        const [ar, ac] = String(actPos).toUpperCase().split(/(\d+)/).filter(Boolean);
+        const [fr, fc] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
+        if (Math.abs((ar?.charCodeAt(0) ?? 0) - (fr?.charCodeAt(0) ?? 0)) + Math.abs(parseInt(ac || '0') - parseInt(fc || '0')) > 3) continue;
+      }
+      validKeys.push(fk); validLabels.push(fk.replace(/-\d+-\d+$/, ''));
+    }
+    if (!validKeys.length) return { applied: false, manualMessage: 'No friendly figures within 3 spaces. Resolve manually.' };
+    return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Grant reroll: ${n}`), choiceValues: validKeys };
+  }
+
+  // ccEffect: letsMakeADealEffect (Let's Make a Deal) — pay X VP to opponent for -X Hits in combat + become Focused
+  if (entry.type === 'ccEffect' && entry.letsMakeADealEffect) {
+    const { game, playerNum, dcMessageMeta, choiceIndex, combat } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || "Resolve manually — pay VP to opponent to reduce hits, then become Focused." };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const ownVpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    const oppVpKey = oppNum === 1 ? 'player1VP' : 'player2VP';
+    const ownVp = game[ownVpKey]?.total ?? 0;
+    const maxPay = Math.min(ownVp, 5);
+    // Phase 2: apply the deal
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      const X = choiceIndex; // options: 0 VP (skip), 1 VP, 2 VP, etc.
+      if (X > 0) {
+        game[ownVpKey] = game[ownVpKey] || { total: 0, kills: 0, objectives: 0 };
+        game[ownVpKey].total = Math.max(0, game[ownVpKey].total - X);
+        game[oppVpKey] = game[oppVpKey] || { total: 0, kills: 0, objectives: 0 };
+        game[oppVpKey].total = (game[oppVpKey].total || 0) + X;
+        if (combat) combat.bonusHits = (combat.bonusHits || 0) - X;
+      }
+      // Apply Focus to Hondo's figure
+      const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      const meta = msgId ? dcMessageMeta?.get(msgId) : null;
+      const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+      game.figureConditions = game.figureConditions || {};
+      actKeys.forEach((fk) => { game.figureConditions[fk] = [...new Set([...(game.figureConditions[fk] || []), 'Focus'])]; });
+      const ownNew = game[ownVpKey]?.total ?? 0;
+      const oppNew = game[oppVpKey]?.total ?? 0;
+      return { applied: true, logMessage: `**Let's Make a Deal** — Paid ${X} VP (your total: ${ownNew}, theirs: ${oppNew}). ${X > 0 ? `Applied −${X} Hits to attack.` : 'No VP paid.'} Hondo becomes Focused.` };
+    }
+    // Phase 1: show VP options
+    const options = ['Pay 0 VP (just apply Focus)'];
+    for (let i = 1; i <= maxPay; i++) options.push(`Pay ${i} VP → −${i} Hits`);
+    if (ownVp === 0) return { requiresChoice: true, choiceOptions: ['Pay 0 VP (just apply Focus)'] };
+    return { requiresChoice: true, choiceOptions: options };
+  }
+
+  // ccEffect: demoralizingMonologueEffect (Demoralizing Monologue) — force defender to reroll 1 die during attack
+  if (entry.type === 'ccEffect' && entry.demoralizingMonologueEffect) {
+    const { game, playerNum, combat } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    if (!combat) return { applied: false, manualMessage: 'Play during an attack. No active combat found.' };
+    // Add 1 forced reroll to defender's pool
+    if (combat.defenderRerollsRemaining != null) {
+      combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
+    } else {
+      combat.defenderRerollDiceMax = (combat.defenderRerollDiceMax || 0) + 1;
+    }
+    return { applied: true, logMessage: "**Demoralizing Monologue** — Defender gains +1 forced reroll. Moff Gideon chooses which die to reroll (honor system). If 2+ cards revealed, remove that die's result (honor system)." };
+  }
+
+  // ccEffect: doubleOrNothingEffect (Double or Nothing) — choose a die; reroll it; if same icon type, may double those icons
+  if (entry.type === 'ccEffect' && entry.doubleOrNothingEffect) {
+    const { game, playerNum, combat, choiceIndex } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    if (!combat) return { applied: false, manualMessage: 'Play during an attack. No active combat found.' };
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      if (choiceIndex === 0) {
+        // Attacker die
+        combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
+        return { applied: true, logMessage: "**Double or Nothing** — Attacker rerolls 1 die of choice. If same icon type, attacker may double those icons (honor system)." };
+      } else {
+        // Defender die
+        combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
+        return { applied: true, logMessage: "**Double or Nothing** — Defender rerolls 1 die of choice. If same icon type, defender may double those icons (honor system)." };
+      }
+    }
+    return { requiresChoice: true, choiceOptions: ['Reroll an attack die', 'Reroll a defense die'] };
+  }
+
   // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free
   if (entry.type === 'dcSpecial' && entry.pounceRange) {
     const { game, playerNum, dcMessageMeta, chosenSpace } = context;

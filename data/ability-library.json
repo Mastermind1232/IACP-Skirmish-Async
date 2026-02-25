@@ -845,9 +845,8 @@
     },
     "Let's Make a Deal": {
       "type": "ccEffect",
-      "informational": true,
+      "letsMakeADealEffect": true,
       "label": "While defending: pay X VP for -X Hits; then become Focused",
-      "logMessage": "**Letâ€™s Make a Deal** — While defending, pay your opponent X Victory Points to apply -X Hits to the attack results (VP must be applied manually using your channel). Then, Hondo Ohnaka becomes Focused. Apply the Focused condition manually to Hondoâ€™s figure.",
       "wiredStatus": "wired"
     },
     "Marked Territory": {
@@ -1387,9 +1386,8 @@
     },
     "Demoralizing Monologue": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Reroll 1 defense die; if you reveal 2+ hand cards, remove that die",
-      "logMessage": "**Demoralizing Monologue** — Choose and reroll 1 defense die. You may then reveal your hand. If you reveal 2 or more Command cards this way, remove that dieâ€™s results from the defense pool. Reroll the die manually and apply the reveal+remove step manually if applicable.",
+      "demoralizingMonologueEffect": true,
+      "label": "Force defender to reroll 1 die during this attack (reveal condition honor system)",
       "wiredStatus": "wired"
     },
     "Field Supply": {
@@ -1479,9 +1477,8 @@
     },
     "Battlefield Awareness": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Battlefield Awareness",
-      "logMessage": "**Battlefield Awareness** — After a friendly figure within 3 spaces rolls dice, choose 1 of those dice and reroll it. Announce before the roll resolves.",
+      "battlefieldAwarenessEffect": true,
+      "label": "Grant +1 attack reroll to a friendly figure within 3 spaces",
       "wiredStatus": "wired"
     },
     "Behind Enemy Lines": {
@@ -1662,9 +1659,8 @@
     },
     "Double or Nothing": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Double or Nothing",
-      "logMessage": "**Double or Nothing** — During an attack, choose any die. Its controller rerolls it. If the same number of symbols appear, double that die's results; otherwise cancel all results on it. Resolve manually.",
+      "doubleOrNothingEffect": true,
+      "label": "Choose a die to reroll; if same icon type, double those icons (honor system)",
       "wiredStatus": "wired"
     },
     "Expose Weakness": {
@@ -2082,9 +2078,8 @@
     },
     "Learn by Example": {
       "type": "ccEffect",
-      "informational": true,
-      "label": "Play as a copy of a FORCE USER CC in any discard pile",
-      "logMessage": "**Learn by Example** — Play as a copy of a FORCE USER Command card from any discard pile, ignoring faction restrictions. Announce which card you're copying and resolve its effect manually.",
+      "learnByExampleEffect": true,
+      "label": "Copy a FORCE USER CC from any discard pile and execute its effect",
       "wiredStatus": "wired"
     },
     "Mandalorian Steel": {
