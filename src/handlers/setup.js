@@ -186,7 +186,6 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
   } = ctx;
   const map = game.selectedMap;
   const mapName = map?.name ?? 'Map';
-  await logGameAction(game, client, `Map selected: **${mapName}** — View in Map Updates channel.`, { phase: 'SETUP', icon: 'map' });
   if (game.generalSetupMessageId) {
     try {
       const generalChannel = await client.channels.fetch(game.generalId);

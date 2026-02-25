@@ -2563,7 +2563,6 @@ async function runDraftRandom(game, client, options = {}) {
     game.selectedMap = { id: map.id, name: map.name, imagePath: map.imagePath };
     game.mapSelected = true;
     await postMissionCardAfterMapSelection(game, client, map);
-    await logGameAction(game, client, `Map selected: **${map.name}** — View in Map Updates channel.`, { phase: 'SETUP', icon: 'map' });
   }
 
   // Play areas first (hand threads live inside them)
