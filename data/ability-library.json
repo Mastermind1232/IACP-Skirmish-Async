@@ -1280,9 +1280,8 @@
     },
     "Built on Hope": {
       "type": "ccEffect",
-      "label": "Look at top 3 of your deck; place 1 in hand, rest on top/bottom in any order (manual)",
-      "informational": true,
-      "logMessage": "**Built on Hope** — Look at the top 3 cards of your Command deck; place 1 in your hand and put the others on the top or bottom of your deck in any order (honor — resolve manually). Passive: when this card is discarded from your deck, re-draw it.",
+      "label": "Look at top 3 of your deck; choose 1 to add to hand (others returned to top)",
+      "builtOnHopeEffect": true,
       "wiredStatus": "wired"
     },
     "Burst Fire": {
@@ -1336,9 +1335,8 @@
     },
     "Droid Mastery": {
       "type": "ccEffect",
-      "informational": true,
+      "droidMasteryEffect": true,
       "label": "J4X-7 becomes Focused, then interrupts to attack; or deploy J4X-7 if not in play",
-      "logMessage": "**Droid Mastery** — J4X-7 becomes Focused. J4X-7 may then interrupt to perform an attack. If J4X-7 is not in play, deploy it to Jarrod Kelvinâ€™s space instead. Apply the Focused condition to J4X-7 manually and trigger the interrupt from J4X-7â€™s DC.",
       "wiredStatus": "wired"
     },
     "Face Me!": {
@@ -2044,16 +2042,14 @@
     },
     "Evacuate": {
       "type": "ccEffect",
-      "informational": true,
+      "evacuateEffect": true,
       "label": "Defeat a friendly figure within 2 spaces; opponent gains only half VP",
-      "logMessage": "**Evacuate** — Choose a friendly figure within 2 spaces. That figure is defeated. Opponent gains only half the VPs they would normally gain (rounded down). Resolve manually.",
       "wiredStatus": "wired"
     },
     "Ferocity": {
       "type": "ccEffect",
-      "informational": true,
+      "ferocityEffect": true,
       "label": "Choose a CREATURE — it performs 1 attack",
-      "logMessage": "**Ferocity** — Choose 1 of your or your opponent's CREATUREs. That figure performs 1 attack. Resolve manually using the Attack button.",
       "wiredStatus": "wired"
     },
     "Hold Ground": {
@@ -2073,9 +2069,8 @@
     },
     "Induce Rage": {
       "type": "ccEffect",
-      "informational": true,
+      "induceRageEffect": true,
       "label": "Up to 2 figures: discard all conditions; gain 1 Hit Token per condition discarded",
-      "logMessage": "**Induce Rage** — Choose up to 2 figures. Each discards all conditions, then gains 1 Hit Token per condition discarded. Resolve manually.",
       "wiredStatus": "wired"
     },
     "Learn by Example": {

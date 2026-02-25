@@ -4133,6 +4133,173 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: builtOnHopeEffect (Built on Hope) — look at top 3 of own deck, put 1 in hand, others returned to top
+  if (entry.type === 'ccEffect' && entry.builtOnHopeEffect) {
+    const { game, playerNum, choiceIndex } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const deck = [...(game[deckKey] || [])];
+    if (deck.length === 0) return { applied: true, logMessage: '**Built on Hope** — Your deck is empty.' };
+    const top3 = deck.slice(-Math.min(3, deck.length));
+    if (top3.length === 1 || (choiceIndex !== undefined && choiceIndex !== null)) {
+      const chosen = top3[choiceIndex ?? 0];
+      if (!chosen) return { applied: false, manualMessage: 'Invalid choice for Built on Hope.' };
+      // Remove the top 3 from deck (they may be at end), put chosen in hand, others back on top
+      deck.splice(deck.length - top3.length, top3.length);
+      const remaining = top3.filter((c) => c !== chosen || (() => { const i = top3.indexOf(chosen); top3.splice(i, 1); return false; })());
+      const remaining2 = top3.filter((c) => c !== chosen);
+      if (remaining2.length) deck.push(...remaining2); // put non-chosen back on top (end of array)
+      const hand = [...(game[handKey] || [])];
+      hand.push(chosen);
+      game[deckKey] = deck;
+      game[handKey] = hand;
+      return { applied: true, logMessage: `**Built on Hope** — Drew **${chosen}** from top 3. Other card(s) returned to top of deck.` };
+    }
+    return {
+      requiresChoice: true,
+      choiceOptions: top3.map((card) => `Add "${card}" to hand (cost: ${getCcEffect(card)?.cost ?? '?'})`),
+    };
+  }
+
+  // ccEffect: evacuateEffect (Evacuate) — defeat a chosen friendly within 2 spaces; opponent gains only half VP
+  if (entry.type === 'ccEffect' && entry.evacuateEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, choiceIndex, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Phase 2: defeat chosen figure
+    if (chosenFigureKey) {
+      const targetMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+      if (!targetMsgId || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually: could not locate chosen figure.' };
+      const hs = dcHealthState.get(targetMsgId) || [];
+      const figMatch = chosenFigureKey.match(/-(\d+)-(\d+)$/);
+      const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
+      if (hs[figIdx]) {
+        const [cur, max] = hs[figIdx];
+        hs[figIdx] = [0, max ?? cur];
+        dcHealthState.set(targetMsgId, hs);
+        const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const idx2 = (dcIds || []).indexOf(targetMsgId);
+        if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+      }
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      const targetStats = getDcEffects()[dcName]?.cost ?? 0;
+      const halfVp = Math.ceil((typeof targetStats === 'number' ? targetStats : 0) / 2);
+      return { applied: true, logMessage: `**Evacuate** — **${dcName}** is defeated. Opponent gains ${halfVp > 0 ? halfVp + ' VP (half the deployment cost — use `/editvp -' + halfVp + '` to adjust)' : 'no VP'} from this defeat.`, refreshDcEmbed: true };
+    }
+    // Phase 1: find friendly figures within 2 spaces (not self)
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingPos = activatingKeys.length ? game.figurePositions?.[playerNum]?.[activatingKeys[0]] : null;
+    if (!activatingPos) return { applied: false, manualMessage: 'Resolve manually: activating figure has no position.' };
+    const friendlyFigureKeys = [];
+    const friendlyLabels = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos || activatingKeys.includes(fk)) continue;
+      const dcName = fk.replace(/-\d+-\d+$/, '');
+      // Rough distance check (Manhattan)
+      const [r1, c1] = String(activatingPos).toUpperCase().split(/(\d+)/).filter(Boolean);
+      const [r2, c2] = String(pos).toUpperCase().split(/(\d+)/).filter(Boolean);
+      const rowDist = Math.abs((r1?.charCodeAt(0) ?? 0) - (r2?.charCodeAt(0) ?? 0));
+      const colDist = Math.abs(parseInt(c1 || '0') - parseInt(c2 || '0'));
+      if (rowDist + colDist > 2) continue;
+      friendlyFigureKeys.push(fk);
+      friendlyLabels.push(dcName);
+    }
+    if (friendlyFigureKeys.length === 0) return { applied: false, manualMessage: 'No friendly figures within 2 spaces to evacuate.' };
+    return { requiresChoice: true, choiceOptions: friendlyLabels.map((n) => `Defeat ${n}`), choiceValues: friendlyFigureKeys };
+  }
+
+  // ccEffect: induceRageEffect (Induce Rage) — chosen figures discard all conditions, gain 1 Hit Token per condition
+  if (entry.type === 'ccEffect' && entry.induceRageEffect) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const results = [];
+    let figuresProcessed = 0;
+    for (const pn of [1, 2]) {
+      for (const fk of Object.keys(game.figurePositions?.[pn] || {})) {
+        const conds = game.figureConditions?.[fk] || [];
+        if (!conds.length || figuresProcessed >= 2) continue;
+        const count = conds.length;
+        game.figureConditions[fk] = [];
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        game.figurePowerTokens[fk] = [...(game.figurePowerTokens[fk] || [])];
+        for (let i = 0; i < count; i++) game.figurePowerTokens[fk].push('Hit');
+        const dcName = fk.replace(/-\d+-\d+$/, '');
+        results.push(`**${dcName}** lost [${conds.join(', ')}] → +${count} Hit Token${count !== 1 ? 's' : ''}`);
+        figuresProcessed++;
+      }
+    }
+    if (!results.length) return { applied: true, logMessage: '**Induce Rage** — No figures with conditions found.' };
+    return { applied: true, logMessage: `**Induce Rage** — ${results.join('; ')}.` };
+  }
+
+  // ccEffect: ferocityEffect (Ferocity) — choose a CREATURE figure, it performs 1 free attack
+  if (entry.type === 'ccEffect' && entry.ferocityEffect) {
+    const { game, playerNum, dcMessageMeta, choiceIndex, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Phase 2: grant free attack to chosen figure's DC
+    if (chosenFigureKey) {
+      const creatureMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta) ||
+        findMsgIdForFigureKey(game, playerNum === 1 ? 2 : 1, chosenFigureKey, dcMessageMeta);
+      if (!creatureMsgId) return { applied: false, manualMessage: 'Resolve manually: could not locate creature figure.' };
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[creatureMsgId] = true;
+      const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Ferocity** — **${dcName}** may perform 1 free attack (use their Attack button).` };
+    }
+    // Phase 1: find CREATURE figures from both players
+    const dcEffects = getDcEffects();
+    const creatureKeys = [];
+    const creatureLabels = [];
+    for (const pn of [1, 2]) {
+      for (const fk of Object.keys(game.figurePositions?.[pn] || {})) {
+        const dcName = fk.replace(/-\d+-\d+$/, '');
+        const eff = dcEffects[dcName] || dcEffects[dcName.replace(/\s*\[.*\]\s*$/, '')] || {};
+        const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
+        if (kws.includes('CREATURE')) {
+          creatureKeys.push(fk);
+          creatureLabels.push(`${dcName} (P${pn})`);
+        }
+      }
+    }
+    if (creatureKeys.length === 0) return { applied: false, manualMessage: 'No CREATURE figures in play.' };
+    if (creatureKeys.length === 1) {
+      // Auto-apply
+      const mid = findMsgIdForFigureKey(game, 1, creatureKeys[0], dcMessageMeta) || findMsgIdForFigureKey(game, 2, creatureKeys[0], dcMessageMeta);
+      if (mid) {
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[mid] = true;
+        return { applied: true, logMessage: `**Ferocity** — **${creatureKeys[0].replace(/-\d+-\d+$/, '')}** may perform 1 free attack (use their Attack button).` };
+      }
+    }
+    return { requiresChoice: true, choiceOptions: creatureLabels, choiceValues: creatureKeys };
+  }
+
+  // ccEffect: droidMasteryEffect (Droid Mastery) — J4X-7 gains Focus; may then perform 1 free attack
+  if (entry.type === 'ccEffect' && entry.droidMasteryEffect) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Find J4X-7 figure
+    const j4xFk = Object.keys(game.figurePositions?.[playerNum] || {}).find((fk) => fk.startsWith('J4X-7-'));
+    if (!j4xFk) {
+      return { applied: true, logMessage: '**Droid Mastery** — J4X-7 is not in play. Deploy J4X-7 to Jarrod Kelvin\'s space manually, then apply this card again.' };
+    }
+    game.figureConditions = game.figureConditions || {};
+    const existing = game.figureConditions[j4xFk] || [];
+    if (!existing.includes('Focus')) game.figureConditions[j4xFk] = [...existing, 'Focus'];
+    // Grant free attack to J4X-7's DC
+    const j4xMsgId = findMsgIdForFigureKey(game, playerNum, j4xFk, dcMessageMeta);
+    if (j4xMsgId) {
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[j4xMsgId] = true;
+    }
+    return { applied: true, logMessage: '**Droid Mastery** — J4X-7 is now **Focused**. J4X-7 may perform 1 free attack (use J4X-7\'s Attack button).' };
+  }
+
   // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free
   if (entry.type === 'dcSpecial' && entry.pounceRange) {
     const { game, playerNum, dcMessageMeta, chosenSpace } = context;
