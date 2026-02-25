@@ -709,9 +709,12 @@ async function buildAndSendAttackTargets(
   { dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats, excludeFigureKeys }
 ) {
   const { getDcEffects, getDcStats, getFigureSize, getFootprintCells, getRange, hasLineOfSight, dcMessageMeta, FIGURE_LETTERS, getMapTokensData } = ctx;
-  // Priority Target / MASSIVE: figure blocking exceptions
-  const attackerPassivesLower = (stats.passives || []).map(p => String(p).toLowerCase());
-  const attackerIgnoresFigureBlocking = attackerPassivesLower.includes('priority target') || attackerKws.includes('MASSIVE');
+  // Priority Target (LOS-ignoring): Loku Kanoloa + Rebel Saboteur Elite have it in abilityText.
+  // MASSIVE figures also ignore figure blocking. (Intercept-defender PT is checked separately below.)
+  const abilityTextLower = (stats.abilityText || '').toLowerCase();
+  const attackerIgnoresFigureBlocking =
+    (abilityTextLower.includes('priority target') && abilityTextLower.includes('line of sight')) ||
+    attackerKws.includes('MASSIVE');
   let allFigureBlockingCoords = null;
   if (!attackerIgnoresFigureBlocking) {
     allFigureBlockingCoords = new Set();
@@ -809,6 +812,17 @@ async function buildAndSendAttackTargets(
       const los = hasLineOfSight(attackerPos, coord, ms, allFigureBlockingCoords);
       targets.push({ figureKey: `npc_crate_${origCoord}`, coord, label: `Crate @ ${coord.toUpperCase()} (${hp}/5 HP)`, hasLOS: los, dist, isNpc: true, npcType: 'crate', crateOrigCoord: origCoord });
     }
+  }
+  // Priority Target intercept: if any enemy figures with "Priority Target" passive are among
+  // valid targets, the attacker must target those figures only (other targets suppressed).
+  {
+    const ptTargets = targets.filter(t => {
+      if (t.isNpc) return false;
+      const dcN = t.figureKey.replace(/-\d+-\d+$/, '');
+      const eff = getDcEffects()[dcN] || getDcEffects()[dcN.replace(/\s*\[.*\]\s*$/, '')];
+      return (eff?.passives || []).some(p => String(p).toLowerCase() === 'priority target');
+    });
+    if (ptTargets.length > 0) targets.splice(0, targets.length, ...ptTargets);
   }
   if (targets.length === 0) {
     await interaction.followUp({ content: 'No valid targets in range.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
