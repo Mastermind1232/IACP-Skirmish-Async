@@ -6435,6 +6435,7 @@ client.on('interactionCreate', async (interaction) => {
       checkWinConditions,
       getSpaceChoiceRows,
       getMapAttachmentForSpaces,
+      getMapTokensData,
     };
     if (buttonKey === 'dc_activate_') await handleDcActivate(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_unactivate_') await handleDcUnactivate(interaction, dcPlayAreaContext);

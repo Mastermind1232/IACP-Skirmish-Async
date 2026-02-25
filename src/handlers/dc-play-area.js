@@ -708,7 +708,7 @@ async function buildAndSendAttackTargets(
   interaction, ctx, game, meta, msgId, figureKey, figureIndex,
   { dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats, excludeFigureKeys }
 ) {
-  const { getDcEffects, getDcStats, getFigureSize, getFootprintCells, getRange, hasLineOfSight, dcMessageMeta, FIGURE_LETTERS } = ctx;
+  const { getDcEffects, getDcStats, getFigureSize, getFootprintCells, getRange, hasLineOfSight, dcMessageMeta, FIGURE_LETTERS, getMapTokensData } = ctx;
   // Priority Target / MASSIVE: figure blocking exceptions
   const attackerPassivesLower = (stats.passives || []).map(p => String(p).toLowerCase());
   const attackerIgnoresFigureBlocking = attackerPassivesLower.includes('priority target') || attackerKws.includes('MASSIVE');
@@ -772,6 +772,19 @@ async function buildAndSendAttackTargets(
     targets.splice(0, targets.length, ...targets.filter(t => !excluded.has(t.figureKey)));
   }
   // NPC targets: thugs (Corellian A) and Krykna (Chopper A) — added after player targets
+  // Lazy-init NPC arrays if not yet created (so players can attack them before the first EoR)
+  const mapId = game.selectedMap?.id;
+  const variant = game.selectedMission?.variant;
+  if (getMapTokensData && mapId) {
+    if (!game.npcThugs && mapId === 'corellian-underground' && variant === 'a') {
+      const positions = Object.values(getMapTokensData()[mapId]?.missionA?.positions || {}).flat().filter(Boolean);
+      if (positions.length > 0) game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: String(coord).toLowerCase(), hp: 4, maxHp: 4, defeated: false }));
+    }
+    if (!game.npcKrykna && mapId === 'chopper-base-atollon' && variant === 'a') {
+      const positions = Object.values(getMapTokensData()[mapId]?.missionA?.positions || {}).flat().filter(Boolean);
+      if (positions.length > 0) game.npcKrykna = positions.map((coord, i) => ({ id: `krykna-${i + 1}`, coord: String(coord).toLowerCase(), hp: 8, maxHp: 8, defeated: false }));
+    }
+  }
   for (const [npcArray, npcType, hpLabel] of [[game.npcThugs, 'thug', 'HP'], [game.npcKrykna, 'krykna', 'HP']]) {
     if (!Array.isArray(npcArray)) continue;
     for (let i = 0; i < npcArray.length; i++) {

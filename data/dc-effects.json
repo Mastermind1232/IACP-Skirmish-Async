@@ -998,9 +998,7 @@
       "cost": 9,
       "health": 21,
       "speed": 5,
-      "passives": [
-        "Habitat: Desert"
-      ],
+      "passives": [],
       "figures": 1,
       "attack": {
         "dice": [
@@ -5516,9 +5514,7 @@
       "subCost": 2,
       "health": 4,
       "speed": 4,
-      "passives": [
-        "Habitat: Desert"
-      ],
+      "passives": [],
       "figures": 2,
       "attack": {
         "dice": [
@@ -5694,7 +5690,7 @@
       "affiliation": "Scum"
     },
     "Wampa (Regular)": {
-      "abilityText": "Efficient Travel: You ignore additional movement point costs for difficult terrain and hostile figures.\n\nHunger: At the start of your activation, if there are no hostile figures within 3 spaces, gain 2 movement points.\n\nNon-Sentient: You cannot interact.\n\nHabitat: Snow.",
+      "abilityText": "Efficient Travel: You ignore additional movement point costs for difficult terrain and hostile figures.\n\nHunger: At the start of your activation, if there are no hostile figures within 3 spaces, gain 2 movement points.\n\nNon-Sentient: You cannot interact.",
       "keywords": [
         "CREATURE",
         "BRAWLER"
@@ -5703,8 +5699,7 @@
       "health": 9,
       "speed": 3,
       "passives": [
-        "+1 Hit",
-        "Habitat: Snow"
+        "+1 Hit"
       ],
       "figures": 1,
       "attack": {
