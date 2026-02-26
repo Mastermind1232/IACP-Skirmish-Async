@@ -300,13 +300,22 @@ export function getDeploymentZoneButtons(gameId) {
   );
 }
 
-export function getDeploymentDoneButton(gameId) {
-  return new ActionRowBuilder().addComponents(
+export function getDeploymentDoneButton(gameId, playerNum) {
+  const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`deployment_done_${gameId}`)
       .setLabel('Deployment Completed')
-      .setStyle(ButtonStyle.Success)
+      .setStyle(ButtonStyle.Success),
   );
+  if (playerNum != null) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`auto_deploy_${gameId}_${playerNum}`)
+        .setLabel('Auto-Deploy')
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  return row;
 }
 
 export function getMainMenu() {
@@ -423,24 +432,12 @@ export function getSelectSquadButton(gameId, playerNum) {
   );
 }
 
-/** Select Squad + Default Rebels/Scum/Imperial for testing. */
+/** Select Squad button for hand thread. */
 export function getHandSquadButtons(gameId, playerNum) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`squad_select_${gameId}_${playerNum}`)
       .setLabel('Select Squad')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`default_deck_${gameId}_${playerNum}_rebel`)
-      .setLabel('Default Rebels')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(`default_deck_${gameId}_${playerNum}_scum`)
-      .setLabel('Default Scum')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`default_deck_${gameId}_${playerNum}_imperial`)
-      .setLabel('Default Imperial')
       .setStyle(ButtonStyle.Primary),
   );
 }
@@ -658,7 +655,7 @@ export function getDeployButtonRows(gameId, playerNum, dcList, zone, figurePosit
       )
     );
   }
-  const doneRow = getDeploymentDoneButton(gameId);
+  const doneRow = getDeploymentDoneButton(gameId, playerNum);
   return { deployRows, doneRow };
 }
 

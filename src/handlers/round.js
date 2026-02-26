@@ -332,6 +332,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.findsmanMeditationTarget = {};
   game.etiquetteBlockPairs = [];
   game.vanishImmunityUntilNextActivation = {};
+  game.falseOrdersUpgrade = {};
   game.setTrapSpace = {};
   game.reverseEngineerActive = {};
   game.pendingMpBonus = {};

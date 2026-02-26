@@ -144,10 +144,13 @@ export function parseSurgeEffect(key) {
   if (k === 'mastery') { out.surgeMastery = true; return out; }
   // Interrogate (Agent Blaise): look at opponent's hand, choose a CC; may discard equal/greater cost CC to force discard.
   if (k === 'interrogate') { out.surgeInterrogate = true; return out; }
-  // Complex surge effects: flag for informational display, resolve manually
-  if (['cancel 2', 'cleave x', 'recover x', 'evade token'].includes(k)) {
-    out.surgeComplex = k; return out;
-  }
+  // Cancel N: remove N results from the attacker's roll (defender surge, e.g. Kuiil)
+  const cancelMatch = k.match(/^cancel\s+(\d+)$/);
+  if (cancelMatch) { out.surgeCancel = parseInt(cancelMatch[1], 10); return out; }
+  // Evade token: attacker gains an Evade power token
+  if (k === 'evade token') { out.surgeGrantEvade = 1; return out; }
+  // Variable cleave/recover (cleave x, recover x): flag as complex since the value depends on context
+  if (k === 'cleave x' || k === 'recover x') { out.surgeComplex = k; return out; }
   const parts = k.split(/\s*,\s*/);
   for (const p of parts) {
     const dmg = p.match(/^damage\s+(\d+)$/); if (dmg) { out.damage += parseInt(dmg[1], 10); continue; }
@@ -163,10 +166,16 @@ export function parseSurgeEffect(key) {
     // hide/focus in combos: self-effect (attacker gains condition, not target)
     else if (p === 'hide') out.surgeSelfHide = true;
     else if (p === 'focus') out.surgeSelfFocus = true;
-    // Token/complex effects within a combo — flag for manual resolution
-    else if (['block token', 'hit token', 'hit token 2', 'evade token', 'power token', 'surge 1', 'evade', 'block 1', 'cancel 2'].includes(p)) {
-      out.surgeComplex = out.surgeComplex || p;
-    }
+    // Token/power grants within a combo — wire each token type
+    else if (p === 'block token') out.surgeGrantBlockToken = (out.surgeGrantBlockToken || 0) + 1;
+    else if (p === 'hit token') out.surgeGrantHitToken = (out.surgeGrantHitToken || 0) + 1;
+    else if (p === 'hit token 2') out.surgeGrantHitToken = (out.surgeGrantHitToken || 0) + 2;
+    else if (p === 'evade token') out.surgeGrantEvade = (out.surgeGrantEvade || 0) + 1;
+    else if (p === 'power token') out.surgeGrantPowerToken = (out.surgeGrantPowerToken || 0) + 1;
+    else if (p === 'surge 1') out.surgeGrantExtraSurge = (out.surgeGrantExtraSurge || 0) + 1;
+    else if (p === 'evade') out.surgeGrantEvade = (out.surgeGrantEvade || 0) + 1;
+    else if (p === 'block 1') out.surgeAttackerBlock = (out.surgeAttackerBlock || 0) + 1;
+    else { const cm = p.match(/^cancel\s+(\d+)$/); if (cm) out.surgeCancel = (out.surgeCancel || 0) + parseInt(cm[1], 10); }
   }
   return out;
 }
@@ -205,12 +214,14 @@ export function computeCombatResult(combat) {
     }
   }
   const pierceToUse = combat.defenderIgnorePierce ? 0 : totalPierce;
+  // Cancel (Kuiil): remove N block results from defender's roll (applied before pierce)
+  const surgeCancel = combat.surgeCancel || 0;
   // Cunning: +1 Block per rolled Evade result while defending (Han Solo, Jyn Odan, Nexu)
   const cunningBonus = (combat.hasCunning) ? defRoll.evade : 0;
   const blockForCalc = combat.ignoreDefenseResultsNotOnDice
     ? (defRoll.block + cunningBonus)
     : (defRoll.block + bonusBlock + cunningBonus);
-  let effectiveBlock = Math.max(0, blockForCalc - pierceToUse);
+  let effectiveBlock = Math.max(0, blockForCalc - surgeCancel - pierceToUse);
   // Weakened on defender: -1 from their block result
   const defenderWeakened = combat.defenderConds?.includes('Weaken');
   if (defenderWeakened) {
@@ -251,6 +262,7 @@ export function computeCombatResult(combat) {
   if (bonusPierce) resultText += ` | bonus: +${bonusPierce} pierce`;
   if (bonusBlast) resultText += ` | bonus: Blast ${bonusBlast}`;
   if ((combat.bonusConditions || []).length) resultText += ` | CC bonus: ${combat.bonusConditions.join(', ')}`;
+  if (surgeCancel) resultText += ` | **Cancel ${surgeCancel}**: -${surgeCancel} block`;
   if (surgeD || surgeP || surgeA || conditionsText || blastText || recoverText || cleaveText) {
     resultText += ` | Surge: +${surgeD} dmg, +${surgeP} pierce, +${surgeA} acc${conditionsText}${blastText}${recoverText}${cleaveText}`;
   }

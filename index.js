@@ -119,6 +119,7 @@ import {
   handleDeploymentOrient,
   handleDeployPick,
   handleDeploymentDone,
+  handleAutoDeploy,
   handleSetupAttachTo,
   handleDcActivate,
   handleDcUnactivate,
@@ -3540,6 +3541,22 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           await logGameAction(game, client, `**You Will Not Deny Me** — Fifth Brother cannot be defeated! HP restored to 1.`, { phase: 'ROUND', icon: 'card' });
         }
       }
+      // Sustained by Rage (Maul): cannot be defeated if has not activated this round — set HP to 1
+      let _sbrImmune = false;
+      if (newCur <= 0) {
+        const _sbrDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _sbrEff = getDcEffects()?.[_sbrDcName];
+        if ((_sbrEff?.specialAbilityIds || []).includes('sustained_by_rage')) {
+          const _sbrActivatedIndices = defenderPlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+          if (idx >= 0 && !_sbrActivatedIndices.includes(idx)) {
+            _sbrImmune = true;
+            healthState[targetFigIndex] = [1, max ?? 1];
+            dcHealthState.set(targetMsgId, healthState);
+            if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+            await logGameAction(game, client, `**Sustained by Rage** — **${_sbrDcName}** cannot be defeated (has not activated this round)! HP set to 1.`, { phase: 'ROUND', icon: 'card' });
+          }
+        }
+      }
       // Self-Destruct Protocol: pre-defeat interrupt — prompt owner to use ability before defeat
       if (newCur <= 0 && !game.selfDestructProtocolTriggered?.[targetMsgId]) {
         const _sdpDcName2 = idx >= 0 ? dcList?.[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
@@ -3558,7 +3575,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           return;
         }
       }
-      if (newCur <= 0 && !(game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum && ((idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, ''))?.toLowerCase().includes('fifth')))) {
+      if (newCur <= 0 && !_sbrImmune && !(game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum && ((idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, ''))?.toLowerCase().includes('fifth')))) {
         // F7: Keep healthState, figurePositions, and DC embed in sync when one figure in a group dies.
         if (game.figurePositions?.[defenderPlayerNum]) delete game.figurePositions[defenderPlayerNum][combat.target.figureKey];
         if (game.figureConditions?.[combat.target.figureKey]) delete game.figureConditions[combat.target.figureKey];
@@ -3693,9 +3710,40 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             allowedMentions: { users: [ownerId] },
           }).catch((err) => { console.error('[discord]', err?.message ?? err); });
         }
+        // Auto-prompt for defeat-triggered reaction cards
+        try {
+          const ccCards = getCcEffectsData?.()?.cards || {};
+          const _defeatTimings = new Set([
+            'whenHostileFigureDefeatedNotYourActivation',
+            'whenHostileFigureWithin3SpacesDefeated',
+            'afterUniqueHostileDefeated',
+          ]);
+          const _ownDefeatTimings = new Set([
+            'whenOneOfYourFiguresDefeated',
+          ]);
+          // Notify attacker about hostile-defeat reactions in hand
+          const atkHand = attackerPlayerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+          const atkDefeatCards = [...new Set(atkHand)].filter(c => ccCards[c]?.timing && _defeatTimings.has(ccCards[c].timing));
+          if (atkDefeatCards.length) {
+            const cardList = atkDefeatCards.map(c => `**${c}** (cost ${ccCards[c].cost ?? 0})`).join(', ');
+            await thread.send({ content: `<@${ownerId}> — Hostile defeated! Reaction card(s) in hand: ${cardList}. Play from Hand if desired.`, allowedMentions: { users: [ownerId] } }).catch(() => {});
+          }
+          // Notify defender about own-figure-defeat reactions in hand
+          const defId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
+          const defHand = defenderPlayerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+          const defDefeatCards = [...new Set(defHand)].filter(c => ccCards[c]?.timing && _ownDefeatTimings.has(ccCards[c].timing));
+          if (defDefeatCards.length) {
+            const cardList = defDefeatCards.map(c => `**${c}** (cost ${ccCards[c].cost ?? 0})`).join(', ');
+            await thread.send({ content: `<@${defId}> — Your figure was defeated! Reaction card(s) in hand: ${cardList}. Play from Hand if desired.`, allowedMentions: { users: [defId] } }).catch(() => {});
+          }
+        } catch (_defeatPromptErr) {
+          console.error('Defeat reaction prompt error:', _defeatPromptErr?.message ?? _defeatPromptErr);
+        }
       }
     }
-    if (combat.surgeRecover > 0 && combat.attackerMsgId != null) {
+    // Sustained by Rage: block recovery for figures with this passive
+    const _sbrBlockRecover = getDcEffects()?.[combat.attackerDcName]?.specialAbilityIds?.includes('sustained_by_rage');
+    if (combat.surgeRecover > 0 && combat.attackerMsgId != null && !_sbrBlockRecover) {
       const attMsgId = combat.attackerMsgId;
       const attIdx = combat.attackerFigureIndex ?? 0;
       const attHS = dcHealthState.get(attMsgId) || [];
@@ -4494,6 +4542,38 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
       delete game.pendingMissileSalvo[combat.attackerMsgId];
       await thread.send('**Missile Salvo** — All shots fired. Salvo complete.').catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
+  }
+
+  // Auto-prompt for post-attack reaction cards (Counter Attack, Dangerous Prey, Payback, etc.)
+  try {
+    const _ccCardsAll = getCcEffectsData?.()?.cards || {};
+    const _postAtkTimings = new Set([
+      'afterAttackTargetingYouResolved',
+      'afterAttack',
+      'afterDamage',
+      'afterHostileFigureSuffersDamage',
+      'afterYouResolveAttackTargetingFigure',
+    ]);
+    // Defender: cards triggered by being attacked
+    const _defPostPn = combat.defenderPlayerNum ?? (combat.attackerPlayerNum === 1 ? 2 : 1);
+    const _defPostId = _defPostPn === 1 ? game.player1Id : game.player2Id;
+    const _defPostHand = _defPostPn === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+    const _defPostCards = [...new Set(_defPostHand)].filter(c => _ccCardsAll[c]?.timing && _postAtkTimings.has(_ccCardsAll[c].timing));
+    if (_defPostCards.length) {
+      const _cardList = _defPostCards.map(c => `**${c}** (cost ${_ccCardsAll[c].cost ?? 0})`).join(', ');
+      await thread.send({ content: `<@${_defPostId}> — Attack resolved! Reaction card(s) in hand: ${_cardList}. Play from Hand if desired.`, allowedMentions: { users: [_defPostId] } }).catch(() => {});
+    }
+    // Attacker: cards triggered by resolving an attack
+    const _atkPostTimings = new Set(['afterAttack', 'afterYouResolveAttackTargetingFigure', 'afterYouResolveAttackThatDidNotMissDueToAccuracy']);
+    const _atkPostId = combat.attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+    const _atkPostHand = combat.attackerPlayerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+    const _atkPostCards = [...new Set(_atkPostHand)].filter(c => _ccCardsAll[c]?.timing && _atkPostTimings.has(_ccCardsAll[c].timing));
+    if (_atkPostCards.length) {
+      const _cardList = _atkPostCards.map(c => `**${c}** (cost ${_ccCardsAll[c].cost ?? 0})`).join(', ');
+      await thread.send({ content: `<@${_atkPostId}> — Attack resolved! Reaction card(s) in hand: ${_cardList}. Play from Hand if desired.`, allowedMentions: { users: [_atkPostId] } }).catch(() => {});
+    }
+  } catch (_postAtkErr) {
+    console.error('Post-attack reaction prompt error:', _postAtkErr?.message ?? _postAtkErr);
   }
 
   delete game.pendingCombat;
@@ -5423,7 +5503,7 @@ async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState,
       ].filter(Boolean);
   const embed = new EmbedBuilder()
     .setTitle(`${status} — ${displayName}`)
-    .setDescription(lines.length ? lines.join('\n') : '*Upgrade — no figure*')
+    .setDescription(lines.length ? lines.join('\n') : '\u200b')
     .setColor(color);
 
   let files = [];
@@ -5662,15 +5742,7 @@ async function populatePlayAreas(game, client) {
     game.p1DcMessageIds.push(msg.id);
     // Attachments: only create when DC has attachments; create on demand in updateAttachmentMessageForDc
     game.p1DcAttachmentMessageIds.push(null);
-    const p1CompanionDesc = getCompanionDescriptionForDc(dcName);
-    if (p1CompanionDesc !== '*None*') {
-      const companionMsg = await p1PlayArea.send({
-        embeds: [new EmbedBuilder().setTitle('Companion').setDescription(p1CompanionDesc).setColor(0x2f3136)],
-      });
-      game.p1DcCompanionMessageIds.push(companionMsg.id);
-    } else {
-      game.p1DcCompanionMessageIds.push(null);
-    }
+    game.p1DcCompanionMessageIds.push(null);
   }
   for (const { dcName, displayName, healthState } of p2Dcs) {
     const { embed, files } = await buildDcEmbedAndFiles(dcName, false, displayName, healthState);
@@ -5684,15 +5756,7 @@ async function populatePlayAreas(game, client) {
     game.p2DcMessageIds.push(msg.id);
     // Attachments: only create when DC has attachments; create on demand in updateAttachmentMessageForDc
     game.p2DcAttachmentMessageIds.push(null);
-    const p2CompanionDesc = getCompanionDescriptionForDc(dcName);
-    if (p2CompanionDesc !== '*None*') {
-      const companionMsg = await p2PlayArea.send({
-        embeds: [new EmbedBuilder().setTitle('Companion').setDescription(p2CompanionDesc).setColor(0x2f3136)],
-      });
-      game.p2DcCompanionMessageIds.push(companionMsg.id);
-    } else {
-      game.p2DcCompanionMessageIds.push(null);
-    }
+    game.p2DcCompanionMessageIds.push(null);
   }
 
 }
@@ -8228,7 +8292,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'map_selection_' || buttonKey === 'draft_random_' || buttonKey === 'determine_initiative_' || buttonKey === 'deployment_zone_red_' || buttonKey === 'deployment_zone_blue_' || buttonKey === 'deployment_fig_' || buttonKey === 'deployment_orient_' || buttonKey === 'deploy_pick_' || buttonKey === 'deployment_done_') {
+  if (buttonKey === 'map_selection_' || buttonKey === 'draft_random_' || buttonKey === 'determine_initiative_' || buttonKey === 'deployment_zone_red_' || buttonKey === 'deployment_zone_blue_' || buttonKey === 'deployment_fig_' || buttonKey === 'deployment_orient_' || buttonKey === 'deploy_pick_' || buttonKey === 'deployment_done_' || buttonKey === 'auto_deploy_') {
     const setupContext = {
       getGame,
       getPlayReadyMaps,
@@ -8255,6 +8319,7 @@ client.on('interactionCreate', async (interaction) => {
       getFigureSize,
       getFootprintCells,
       filterValidTopLeftSpaces,
+      parseCoord,
       getDeploySpaceGridRows,
       pushUndo,
       updateDeployPromptMessages,
@@ -8275,6 +8340,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'deployment_orient_') await handleDeploymentOrient(interaction, setupContext);
     else if (buttonKey === 'deploy_pick_') await handleDeployPick(interaction, setupContext);
     else if (buttonKey === 'deployment_done_') await handleDeploymentDone(interaction, setupContext);
+    else if (buttonKey === 'auto_deploy_') await handleAutoDeploy(interaction, setupContext);
     return;
   }
 

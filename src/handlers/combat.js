@@ -3,7 +3,43 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getMapSpaces } from '../data-loader.js';
+import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal } from '../data-loader.js';
+
+/**
+ * Check a player's hand for CC cards that match a timing trigger.
+ * Returns an array of { cardName, timing, playableBy, cost } for cards that are playable.
+ * @param {object} game - Game state
+ * @param {number} playerNum - 1 or 2
+ * @param {string[]} timingTriggers - Timing values to match (e.g. ['whenAttackDeclaredOnYou'])
+ * @returns {{ cardName: string, timing: string, playableBy: string, cost: number }[]}
+ */
+function getPlayableReactionCards(game, playerNum, timingTriggers) {
+  const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+  if (!hand.length) return [];
+  const ccData = getCcEffectsData()?.cards || {};
+  const triggerSet = new Set(timingTriggers);
+  const results = [];
+  const seen = new Set();
+  for (const cardName of hand) {
+    if (seen.has(cardName)) continue;
+    seen.add(cardName);
+    const card = ccData[cardName];
+    if (!card || !card.timing) continue;
+    if (!triggerSet.has(card.timing)) continue;
+    results.push({ cardName, timing: card.timing, playableBy: card.playableBy || 'Any Figure', cost: card.cost ?? 0 });
+  }
+  return results;
+}
+
+/**
+ * Build a formatted notification for playable reaction cards.
+ * @returns {string|null} - Message text or null if no cards are playable
+ */
+function buildReactionPrompt(cards, playerLabel) {
+  if (!cards.length) return null;
+  const cardList = cards.map(c => `**${c.cardName}** (cost ${c.cost})`).join(', ');
+  return `${playerLabel} — you have reaction card(s) in hand: ${cardList}. Play from your Hand channel if desired.`;
+}
 
 /** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after. */
 export async function sendReadyToResolveRolls(thread, gameId) {
@@ -531,6 +567,39 @@ export async function handleAttackTarget(interaction, ctx) {
     content: `**Combat declared** — See thread in Game Log.`,
     components: [],
   }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+
+  // Auto-prompt defender for playable reaction cards (whenAttackDeclaredOnYou, etc.)
+  try {
+    const defReactions = getPlayableReactionCards(game, defenderPlayerNum, [
+      'whenAttackDeclaredOnYou',
+      'whenAttackDeclaredOnAdjacentFriendly',
+      'whenAttackDeclaredTargetingFriendlySmallFigureCost10OrLessWithin3Spaces',
+      'whenFigureWithin3SpacesDefending',
+      'whileDefending',
+      'whileAdjacentFriendlyFigureDefending',
+    ]);
+    const defOwnerId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
+    const defPrompt = buildReactionPrompt(defReactions, `<@${defOwnerId}>`);
+    if (defPrompt) {
+      await thread.send({ content: defPrompt, allowedMentions: { users: [defOwnerId] } }).catch(() => {});
+    }
+    // Auto-prompt attacker for whenYouDeclareAttack cards
+    const atkReactions = getPlayableReactionCards(game, attackerPlayerNum, [
+      'whenYouDeclareAttack',
+      'whenYouDeclareAttackTargetingHostileWithHighestFigureCost',
+      'beforeYouDeclareAttack',
+      'duringAttack',
+      'whenAnotherFriendlyTrooperDeclaresAttackTargetingInYourLineOfSight',
+    ]);
+    const atkOwnerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+    const atkPrompt = buildReactionPrompt(atkReactions, `<@${atkOwnerId}>`);
+    if (atkPrompt) {
+      await thread.send({ content: atkPrompt, allowedMentions: { users: [atkOwnerId] } }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('Reaction prompt error:', err?.message ?? err);
+  }
+
   saveGames();
 }
 
@@ -1466,6 +1535,8 @@ export async function handleCombatSurge(interaction, ctx) {
       combat.surgeBlast = (combat.surgeBlast || 0) + (mod.blast ?? 0);
       combat.surgeRecover = (combat.surgeRecover || 0) + (mod.recover ?? 0);
       combat.surgeCleave = (combat.surgeCleave || 0) + (mod.cleave ?? 0);
+      // Cancel: remove N block results from defender (like Pierce but applied to results)
+      if (mod.surgeCancel) combat.surgeCancel = (combat.surgeCancel || 0) + mod.surgeCancel;
       // Named surge flags
       if (mod.replaceWithStun) combat.attackResultReplaceWithStun = true;
       if (mod.surgeCancelDodge) combat.surgeCancelDodge = true;

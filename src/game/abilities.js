@@ -547,7 +547,10 @@ export function resolveAbility(abilityId, context) {
       const controlledName = targetFigureKey.replace(/-\d+-\d+$/, '');
       return { applied: false, falseOrdersActionPick: true, logMessage: `**False Orders** — Choose Move or Attack with **${controlledName}**.` };
     }
-    // Phase 1: enumerate hostile figures with cost ≤ 4 within 4 spaces
+    // Phase 1: enumerate hostile figures with cost ≤ N within N spaces (default 4; Fatal Deception upgrades to 5)
+    const foUpgrade = game.falseOrdersUpgrade?.[playerNum];
+    const foMaxCost = foUpgrade?.maxCost ?? 4;
+    const foMaxRange = foUpgrade?.maxRange ?? 4;
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
     const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
@@ -557,8 +560,8 @@ export function resolveAbility(abilityId, context) {
       if (!pos) continue;
       const targetDcName = fk.replace(/-\d+-\d+$/, '');
       const targetStats = getStatsForDc(targetDcName);
-      if ((targetStats?.cost ?? 99) > 4) continue;
-      if (getRng && getRng(activatingPos, pos) > 4) continue;
+      if ((targetStats?.cost ?? 99) > foMaxCost) continue;
+      if (getRng && getRng(activatingPos, pos) > foMaxRange) continue;
       validTargets.push(fk);
     }
     if (validTargets.length === 0) return { applied: false, manualMessage: '**False Orders** — No hostile figures with cost ≤ 4 within 4 spaces.' };
@@ -1856,6 +1859,12 @@ export function resolveAbility(abilityId, context) {
     const actMsgId = msgId || findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!actMsgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: recovery requires health state.' };
+    // Sustained by Rage: cannot recover damage
+    const actMeta = dcMessageMeta.get(actMsgId);
+    const _sbrRecoverDcEff = actMeta?.dcName ? (getDcEffects()?.[actMeta.dcName]) : null;
+    if ((_sbrRecoverDcEff?.specialAbilityIds || []).includes('sustained_by_rage')) {
+      return { applied: true, logMessage: '**Sustained by Rage** — cannot recover Damage.' };
+    }
     const healthState = dcHealthState.get(actMsgId) || [];
     if (!healthState.length) return { applied: false, manualMessage: 'Resolve manually: no health state for this DC.' };
     const n = entry.recoverDamage;
@@ -1971,7 +1980,14 @@ export function resolveAbility(abilityId, context) {
     const healthState = dcHealthState.get(targetMsgId) || [];
     const entry_ = healthState[targetIdx];
     if (!Array.isArray(entry_) || entry_.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for defender.' };
-    const n = entry.defenderStrain;
+    let n = entry.defenderStrain;
+    // Escalating Hostility: +1 Strain per other copy of this card in the discard pile
+    if (entry.defenderStrainPlusDiscardCopies && context.cardName && playerNum) {
+      const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+      const discard = game[discardKey] || [];
+      const copiesInDiscard = discard.filter(c => c === context.cardName).length;
+      n += copiesInDiscard;
+    }
     const [cur, max] = entry_;
     const newCur = Math.max(0, (cur ?? max ?? 0) - n);
     healthState[targetIdx] = [newCur, max];
@@ -1980,9 +1996,10 @@ export function resolveAbility(abilityId, context) {
     const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
     const idx = (dcMessageIds || []).indexOf(targetMsgId);
     if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    const bonusNote = n > entry.defenderStrain ? ` (+${n - entry.defenderStrain} from copies in discard)` : '';
     return {
       applied: true,
-      logMessage: `Defender suffered ${n} Strain.`,
+      logMessage: `Defender suffered ${n} Strain${bonusNote}.`,
       refreshDcEmbed: true,
       refreshDcEmbedMsgIds: [targetMsgId],
     };
@@ -1994,6 +2011,26 @@ export function resolveAbility(abilityId, context) {
     const cbt = combat || game?.pendingCombat || game?.combat;
     if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
       return { applied: false, manualMessage: 'Resolve manually: play when declaring attack (as the attacker).' };
+    }
+    // Primary Target: validate target is the highest-cost hostile figure on the map
+    if (entry.requireHighestCostTarget && dcMessageMeta) {
+      const defPn = cbt.defenderPlayerNum ?? (playerNum === 1 ? 2 : 1);
+      const targetDcName = (cbt.target?.figureKey || '').replace(/-\d+-\d+$/, '');
+      const allEffects = getDcEffects() || {};
+      const targetCost = allEffects[targetDcName]?.cost ?? 0;
+      // Check all living hostile figures for any with higher cost
+      const defDcIds = defPn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const defDcList = defPn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      let higherExists = false;
+      for (let i = 0; i < defDcIds.length; i++) {
+        const dc = defDcList[i];
+        if (!dc || dc.defeated) continue;
+        const eff = allEffects[dc.dcName] || {};
+        if ((eff.cost ?? 0) > targetCost) { higherExists = true; break; }
+      }
+      if (higherExists) {
+        return { applied: false, manualMessage: `Cannot play: target (${targetDcName}, cost ${targetCost}) is not the highest-cost hostile figure on the map.` };
+      }
     }
     let focusApplied = false;
     if (dcMessageMeta) {
@@ -2110,6 +2147,12 @@ export function resolveAbility(abilityId, context) {
       game.nextActivationFreeAttack = game.nextActivationFreeAttack || {};
       game.nextActivationFreeAttack[playerNum] = entry.nextActivationFreeAttack;
     }
+    // Fatal Deception: upgrade False Orders targeting (cost 5, range 5) this round
+    if (entry.falseOrdersUpgrade) {
+      game.falseOrdersUpgrade = game.falseOrdersUpgrade || {};
+      game.falseOrdersUpgrade[playerNum] = entry.falseOrdersUpgrade;
+      extraParts.push('False Orders upgraded to cost 5, range 5 this round.');
+    }
     const baseMsg = entry.logMessage || 'Became Focused.';
     const fullMsg = extraParts.length > 0 ? `${baseMsg} ${extraParts.join(' ')}` : baseMsg;
     return { applied: true, logMessage: fullMsg, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true, conditionCardsToPost: ['Focus'] };
@@ -2155,6 +2198,11 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'dcSpecial' && typeof entry.recoverSelf === 'number' && entry.recoverSelf > 0) {
     const { game, msgId, meta, dcHealthState } = context;
     if (!game || !msgId || !meta || !dcHealthState) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    // Sustained by Rage: cannot recover damage
+    const _sbrDcEff = meta?.dcName ? (getDcEffects()?.[meta.dcName]) : null;
+    if ((_sbrDcEff?.specialAbilityIds || []).includes('sustained_by_rage')) {
+      return { applied: true, logMessage: '**Sustained by Rage** — cannot recover Damage.' };
+    }
     const healthState = dcHealthState.get(msgId);
     if (!healthState?.length || !Array.isArray(healthState[0])) return { applied: false, manualMessage: 'Resolve manually: no health state found for this figure.' };
     let remaining = entry.recoverSelf;

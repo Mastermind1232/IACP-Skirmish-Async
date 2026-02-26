@@ -172,6 +172,25 @@ export async function handleDcActivate(interaction, ctx) {
       }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       game.pendingStillFaster = { gameId, activatingMsgId: msgId, activatingPlayerNum: playerNum, sftPlayerNum };
     }
+    // Auto-prompt opponent for hostile-activation reaction cards (Overcharged Weapons, etc.)
+    try {
+      const { getCcEffectsData } = await import('../data-loader.js');
+      const ccCards = getCcEffectsData?.()?.cards || {};
+      const oppNum = playerNum === 1 ? 2 : 1;
+      const oppHand = oppNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+      const activationTimings = new Set(['whenEnemyFigureActivates', 'atStartOfHostileFigureActivation', 'atStartOfActivationOfHostileFigureInYourLineOfSight']);
+      const reactCards = [...new Set(oppHand)].filter(c => ccCards[c]?.timing && activationTimings.has(ccCards[c].timing));
+      if (reactCards.length) {
+        const oppId = oppNum === 1 ? game.player1Id : game.player2Id;
+        const cardList = reactCards.map(c => `**${c}** (cost ${ccCards[c].cost ?? 0})`).join(', ');
+        await thread.send({
+          content: `<@${oppId}> — Hostile activated! Reaction card(s) in hand: ${cardList}. Play from Hand if desired.`,
+          allowedMentions: { users: [oppId] },
+        }).catch(() => {});
+      }
+    } catch (_actReactErr) {
+      console.error('Activation reaction prompt error:', _actReactErr?.message ?? _actReactErr);
+    }
     const activateRows = getActivateDcButtons(game, playerNum);
     await interaction.editReply({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   } catch (err) {

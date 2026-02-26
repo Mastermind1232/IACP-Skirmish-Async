@@ -244,13 +244,13 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     const p1Id = game.player1Id;
     const p2Id = game.player2Id;
     await p1Hand.send({
-      content: `<@${p1Id}>, this is your hand — pick your squad below!${isTest ? ' *(Test — you play as P1 vs the bot as P2. Use Select Squad or Default deck for each side.)*' : ''}`,
+      content: `<@${p1Id}>, this is your hand — pick your squad below!`,
       allowedMentions: { users: [p1Id] },
       embeds: [getHandTooltipEmbed(game, 1)],
       components: [getHandSquadButtons(game.gameId, 1)],
     });
     await p2Hand.send({
-      content: `<@${p2Id}>, this is your hand — pick your squad below!${isTest ? ' *(Test — P2 (bot) hand. Use Select Squad or Default deck for the bot\'s side.)*' : ''}`,
+      content: `<@${p2Id}>, this is your hand — pick your squad below!`,
       allowedMentions: { users: [p2Id] },
       embeds: [getHandTooltipEmbed(game, 2)],
       components: [getHandSquadButtons(game.gameId, 2)],
@@ -517,7 +517,7 @@ export async function handleDeploymentZone(interaction, ctx) {
         const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
         const components = isLastChunk ? [...chunk, doneRow] : chunk;
         const payload = {
-          content: i === 0 ? `${initiativePing} — You chose the **${zone}** zone. Deploy each figure below (one per row), then click **Deployment Completed** when finished.` : null,
+          content: i === 0 ? `${initiativePing} — You chose the **${zone}** zone. Deploy each figure below (one per row), then click **Deployment Completed** when finished.\n-# *Auto-Deploy places all figures at your zone entrance(s).*` : null,
           components,
           allowedMentions: { users: [game.initiativePlayerId] },
         };
@@ -981,7 +981,7 @@ export async function handleDeploymentDone(interaction, ctx) {
           const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
           const components = isLastChunk ? [...chunk, doneRow] : chunk;
           const payload = {
-            content: i === 0 ? `${nonInitiativePing} — Your opponent has deployed. Deploy each figure in the **${otherZone}** zone below (one per row), then click **Deployment Completed** when finished.` : null,
+            content: i === 0 ? `${nonInitiativePing} — Your opponent has deployed. Deploy each figure in the **${otherZone}** zone below (one per row), then click **Deployment Completed** when finished.\n-# *Auto-Deploy places all figures at your zone entrance(s).*` : null,
             components,
             allowedMentions: { users: [nonInitiativePlayerId] },
           };
@@ -1086,6 +1086,133 @@ export async function handleDeploymentDone(interaction, ctx) {
     console.error('Failed to send CC deck prompt:', err);
   }
   saveGames();
+}
+
+/**
+ * Auto-deploy: place all undeployed figures at entrance spaces (closest to opponent zone centroid).
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - getGame, getDeploymentZones, getDeployFigureLabels, getFigureSize, getFootprintCells, filterValidTopLeftSpaces, parseCoord, getDeployButtonRows, buildBoardMapPayload, logGameAction, client, saveGames
+ */
+export async function handleAutoDeploy(interaction, ctx) {
+  const {
+    getGame,
+    getDeploymentZones,
+    getDeployFigureLabels,
+    getFigureSize,
+    getFootprintCells,
+    filterValidTopLeftSpaces,
+    parseCoord,
+    getDeployButtonRows,
+    buildBoardMapPayload,
+    logGameAction,
+    client,
+    saveGames,
+  } = ctx;
+  const parts = interaction.customId.split('_');
+  const gameId = parts[2];
+  const playerNum = parseInt(parts[3], 10);
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const mapId = game.selectedMap?.id;
+  const zones = mapId ? getDeploymentZones()[mapId] : null;
+  if (!zones) {
+    await interaction.followUp({ content: 'Deployment zones not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+  const opponentZone = playerZone === 'red' ? 'blue' : 'red';
+  if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
+  if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
+  game.figureOrientations = game.figureOrientations || {};
+
+  const squad = playerNum === 1 ? game.player1Squad : game.player2Squad;
+  const dcList = squad?.dcList || [];
+  const { metadata } = getDeployFigureLabels(dcList);
+
+  // Compute centroid of opponent zone to rank spaces by proximity to "entrance"
+  const oppZoneCoords = (zones?.[opponentZone] || []).map((s) => parseCoord(String(s).toLowerCase()));
+  const oppCx = oppZoneCoords.length ? oppZoneCoords.reduce((s, c) => s + c.col, 0) / oppZoneCoords.length : 0;
+  const oppCy = oppZoneCoords.length ? oppZoneCoords.reduce((s, c) => s + c.row, 0) / oppZoneCoords.length : 0;
+
+  let placed = 0;
+  for (const meta of metadata) {
+    const figureKey = `${meta.dcName}-${meta.dgIndex}-${meta.figureIndex}`;
+    if (game.figurePositions[playerNum][figureKey]) continue; // already deployed
+    const occupied = [];
+    for (const p of [1, 2]) {
+      for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
+        const dcName = k.replace(/-\d+-\d+$/, '');
+        const size = game.figureOrientations?.[k] || getFigureSize(dcName);
+        occupied.push(...getFootprintCells(s, size));
+      }
+    }
+    const baseSize = getFigureSize(meta.dcName);
+    const size = baseSize === '2x3' ? '2x3' : baseSize;
+    const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
+    const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, size);
+    if (!validSpaces.length) continue;
+    validSpaces.sort((a, b) => {
+      const pa = parseCoord(a), pb = parseCoord(b);
+      const da = Math.abs(pa.col - oppCx) + Math.abs(pa.row - oppCy);
+      const db = Math.abs(pb.col - oppCx) + Math.abs(pb.row - oppCy);
+      return da - db;
+    });
+    game.figurePositions[playerNum][figureKey] = validSpaces[0];
+    if (baseSize === '2x3') game.figureOrientations[figureKey] = size;
+    placed++;
+  }
+
+  // Refresh the deploy buttons to show updated positions
+  const isInitiative = playerNum === initiativePlayerNum;
+  const idsKey = isInitiative ? 'initiativeDeployMessageIds' : 'nonInitiativeDeployMessageIds';
+  const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+  try {
+    const handChannel = await client.channels.fetch(handId);
+    // Delete old deploy messages
+    const toDelete = game[idsKey] || [];
+    for (const msgId of toDelete) {
+      try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
+    }
+    game[idsKey] = [];
+    // Re-post deploy buttons with updated positions
+    const { deployRows, doneRow } = getDeployButtonRows(gameId, playerNum, dcList, playerZone, game.figurePositions);
+    const DEPLOY_ROWS_PER_MSG = 4;
+    const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+    for (let i = 0; i < deployRows.length; i += DEPLOY_ROWS_PER_MSG) {
+      const chunk = deployRows.slice(i, i + DEPLOY_ROWS_PER_MSG);
+      const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
+      const components = isLastChunk ? [...chunk, doneRow] : chunk;
+      const msg = await handChannel.send({
+        content: i === 0 ? `Auto-deployed ${placed} figure(s) to the **${playerZone}** zone entrance. You can re-place any figure, then click **Deployment Completed**.` : null,
+        components,
+      });
+      game[idsKey].push(msg.id);
+    }
+  } catch (err) {
+    console.error('Failed to update deploy UI after auto-deploy:', err);
+  }
+
+  // Post board update
+  if (game.boardId && game.selectedMap) {
+    try {
+      const boardChannel = await client.channels.fetch(game.boardId);
+      const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+      await boardChannel.send(payload);
+    } catch {}
+  }
+
+  await logGameAction(game, client, `<@${interaction.user.id}> auto-deployed ${placed} figure(s) in the ${playerZone} zone`, { phase: 'DEPLOYMENT', icon: 'deploy' });
+  saveGames();
+  await interaction.followUp({ content: `Auto-deployed ${placed} figure(s) at the ${playerZone} zone entrance.`, ephemeral: true }).catch(() => {});
 }
 
 /**

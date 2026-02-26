@@ -13,7 +13,7 @@
       "keywords": [
         "LEADER"
       ],
-      "cost": 1,
+      "cost": 0,
       "attachment": true,
       "unique": true,
       "affiliation": "Imperial"
@@ -1237,7 +1237,7 @@
         "HUNTER"
       ],
       "subname": "DESTRUCTIVE ASSASSIN",
-      "cost": 6,
+      "cost": 5,
       "health": 10,
       "speed": 4,
       "figures": 1,

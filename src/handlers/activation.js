@@ -3,6 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
+import { getCcEffectsData } from '../data-loader.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -443,6 +444,24 @@ export async function handleDcEndActivation(interaction, ctx) {
         allowedMentions: { users: [ownerId] },
       });
     }
+  }
+
+  // Auto-prompt owner for post-activation reaction cards (Change of Plans, Provoke, etc.)
+  try {
+    const ccCards = getCcEffectsData?.()?.cards || {};
+    const _endActTimings = new Set(['afterYouResolveGroupsActivation', 'afterActivationResolves', 'endOfActivation']);
+    const hand = meta.playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+    const reactCards = [...new Set(hand)].filter(c => ccCards[c]?.timing && _endActTimings.has(ccCards[c].timing));
+    if (reactCards.length) {
+      const cardList = reactCards.map(c => `**${c}** (cost ${ccCards[c].cost ?? 0})`).join(', ');
+      await logGameAction(game, client, `<@${ownerId}> — Activation ended! Reaction card(s) in hand: ${cardList}. Play from Hand if desired.`, {
+        allowedMentions: { users: [ownerId] },
+        phase: 'ROUND',
+        icon: 'card',
+      });
+    }
+  } catch (_endActErr) {
+    console.error('End-activation reaction prompt error:', _endActErr?.message ?? _endActErr);
   }
 
   saveGames();

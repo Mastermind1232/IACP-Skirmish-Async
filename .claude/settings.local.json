@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "Bash(*)",
-      "WebSearch"
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "WebSearch",
+      "WebFetch",
+      "mcp__ide__getDiagnostics",
+      "mcp__ide__executeCode"
     ]
   }
 }
