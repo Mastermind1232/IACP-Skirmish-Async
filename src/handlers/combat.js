@@ -151,6 +151,14 @@ export async function handleAttackTarget(interaction, ctx) {
       return;
     }
   }
+  // Still Faster Than You: free attack must target a different hostile than the activating one
+  if (game.fellSwoopFreeAttack?.[msgId] && game.stillFasterExcludeMsgId && target.figureKey && !target.isNpc) {
+    const excMeta = dcMessageMeta?.get(game.stillFasterExcludeMsgId);
+    if (excMeta && target.figureKey.startsWith(`${excMeta.dcName}-`)) {
+      await interaction.followUp({ content: '🚫 **Still Faster Than You** — must target a **different** hostile figure than the one that just activated.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
+  }
   // Ballistics Matrix: clear per-attack flag after this attack proceeds
   if (game.nextAttackIgnoreFigureLOS?.[attackerPlayerNum]) delete game.nextAttackIgnoreFigureLOS[attackerPlayerNum];
   delete game.attackTargets[`${msgId}_${figureIndex}`];
@@ -163,6 +171,8 @@ export async function handleAttackTarget(interaction, ctx) {
       delete game.pendingBattlefieldLeadership;
     } else if (isFellSwoopFreeAttack) {
       delete game.fellSwoopFreeAttack[msgId];
+      // Clear SFTY exclude once the free attack fires
+      if (game.stillFasterExcludeMsgId) game.stillFasterExcludeMsgId = null;
     } else {
       actionsData.remaining = Math.max(0, actionsData.remaining - 1);
       await updateDcActionsMessage(game, msgId, interaction.client);
@@ -1290,6 +1300,12 @@ export async function handleCombatSurge(interaction, ctx) {
     combat.surgePreventBleed = true;
     await thread.send('Spent 1 surge — Bleeding will be prevented this activation.').catch((err) => { console.error('[discord]', err?.message ?? err); });
   } else if (choice !== 'done') {
+    // Disable: disabled figures cannot use Surge abilities
+    if (game.disabledFigures?.includes(combat.attackerDisplayName)) {
+      await thread.send(`**${combat.attackerDisplayName}** is Disabled — cannot use Surge abilities this round.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.deferUpdate().catch(() => {});
+      return;
+    }
     const idx = parseInt(choice, 10);
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const key = surgeAbilities[idx];
@@ -1529,6 +1545,8 @@ export async function handleCombatToken(interaction, ctx) {
   applyTokenBonus(combat, tokenType);
   removeSpentToken(game, figureKey, tokenIndex);
   await thread.send(`**Power Token spent:** +1 ${tokenType}`);
+  // Track Block token spending for Mandalorian Steel
+  if (!isAttacker && tokenType === 'Block') combat.defenderSpentBlock = true;
   await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);
   saveGames();
 }

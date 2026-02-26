@@ -294,6 +294,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.provokeNextActivation = null;
   game.agitateNextActivation = null;
   game.fellSwoopFreeAttack = {};
+  game.stillFasterExcludeMsgId = null;
+  game.pendingStillFaster = null;
   game.roundAttackSurgeBonus = {};
   game.roundUtinniJawaBuffs = null;
   game.roundSmugglersTricksPlayerNum = null;

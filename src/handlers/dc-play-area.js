@@ -131,6 +131,21 @@ export async function handleDcActivate(interaction, ctx) {
     });
     game.dcActivationLogMessageIds = game.dcActivationLogMessageIds || {};
     game.dcActivationLogMessageIds[msgId] = logMsg.id;
+    // Still Faster Than You: if the opponent has SFTY active, post an interrupt prompt in the thread
+    if (game.stillFasterPlayerNum && game.stillFasterPlayerNum !== playerNum) {
+      const sftPlayerNum = game.stillFasterPlayerNum;
+      const sftOwnerId = sftPlayerNum === 1 ? game.player1Id : game.player2Id;
+      const sftRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`still_faster_use_${gameId}_${msgId}`).setLabel('Use Still Faster Than You').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`still_faster_skip_${gameId}_${msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({
+        content: `<@${sftOwnerId}> — **Still Faster Than You**: interrupt now (move 2 + attack a different hostile) or skip?`,
+        components: [sftRow],
+        allowedMentions: { users: [sftOwnerId] },
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      game.pendingStillFaster = { gameId, activatingMsgId: msgId, activatingPlayerNum: playerNum, sftPlayerNum };
+    }
     const activateRows = getActivateDcButtons(game, playerNum);
     await interaction.editReply({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   } catch (err) {
@@ -1004,6 +1019,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await interaction.followUp({ content: "That special has already been used this activation (each special once per activation unless a card says otherwise).", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
+    // Disable: cannot use Special Actions this round
+    const dispNameForDisable = meta.displayName || meta.dcName;
+    if (game.disabledFigures?.includes(dispNameForDisable)) {
+      await interaction.followUp({ content: `**${dispNameForDisable}** is Disabled — cannot use Special Actions this round.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
     const specialCosts = getDcStats(meta.dcName).specialCosts || [];
     const actionCost = specialCosts[specialIdx] ?? 1;
     if (actionsRemaining < actionCost) {
@@ -1483,6 +1504,21 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   }
   delete game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`];
   const meta = dcMessageMeta.get(msgId);
+
+  // Wreak Vengeance: when dual_bladed_fury is used and wreakVengeanceActive is set, resolve BOTH chooseOne options
+  if (abilityId === 'dual_bladed_fury' && game.wreakVengeanceActive?.playerNum === playerNum && resolveAbility) {
+    const commonCtx = { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapSpaces: ctx.getMapSpaces, findDcMessageIdForFigure: ctx.findDcMessageIdForFigure };
+    const r0 = resolveAbility(abilityId, { ...commonCtx, choiceIndex: 0 });
+    const r1 = resolveAbility(abilityId, { ...commonCtx, choiceIndex: 1 });
+    delete game.wreakVengeanceActive;
+    const logParts = [r0.logMessage, r1.logMessage].filter(Boolean);
+    const wvLog = `**Wreak Vengeance** — Both Dual-Bladed Fury effects applied:\n${logParts.join('\n')}`;
+    await interaction.deferUpdate().catch(() => {});
+    await interaction.followUp({ content: wvLog, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    saveGames();
+    return;
+  }
+
   const resolveResult = resolveAbility ? resolveAbility(abilityId, {
     game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, choiceIndex,
     targetFigureKey: targetFigureKeys?.[choiceIndex] || null,

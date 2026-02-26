@@ -360,6 +360,7 @@ export async function handleMovePick(interaction, ctx) {
     buildLetterRows,
     getMovementMinimapAttachment,
     buildBoardMapPayload,
+    getDcStats,
     saveGames,
     client,
   } = ctx;
@@ -423,6 +424,38 @@ export async function handleMovePick(interaction, ctx) {
   }
   moveState.pendingMp = null;
   const mapId = game.selectedMap?.id;
+
+  // Cripple: figure cannot voluntarily exit its current space this round
+  if (game.crippledFigures?.includes(displayName)) {
+    const currentPos = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
+    if (currentPos && targetInfo.topLeft !== currentPos) {
+      await interaction.followUp({ content: `**${displayName}** is Crippled — cannot voluntarily exit its space this round.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
+  }
+
+  // Hold Ground: SMALL hostile figures cannot voluntarily exit spaces adjacent to the Hold Ground player's figures
+  if (game.holdGroundPlayerNum && game.holdGroundPlayerNum !== playerNum) {
+    const isSMALL = getDcStats ? !((getDcStats(meta.dcName)?.keywords || []).some((k) => k === 'LARGE' || k === 'MASSIVE')) : false;
+    if (isSMALL) {
+      const holdPlayerPositions = Object.values(game.figurePositions?.[game.holdGroundPlayerNum] || {}).filter(Boolean);
+      if (holdPlayerPositions.length > 0 && mapId) {
+        const boardState = getBoardStateForMovement(game, null);
+        const adjacency = boardState?.mapSpaces?.adjacency || {};
+        const adjacentToHolder = new Set();
+        for (const hPos of holdPlayerPositions) {
+          const hLow = String(hPos).toLowerCase();
+          for (const adj of adjacency[hLow] || []) adjacentToHolder.add(String(adj).toLowerCase());
+        }
+        const currentPos = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
+        if (currentPos && adjacentToHolder.has(String(currentPos).toLowerCase()) && targetInfo.topLeft !== currentPos) {
+          await interaction.followUp({ content: `**${displayName}** cannot voluntarily exit this space — **Hold Ground** is active.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          return;
+        }
+      }
+    }
+  }
+
   const terminalsBefore = mapId ? countTerminalsControlledByPlayer(game, playerNum, mapId) : 0;
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
   if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};

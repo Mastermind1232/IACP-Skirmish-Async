@@ -3687,6 +3687,26 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
     }
   }
+  // Mandalorian Steel: if defender spent a Block Token this attack, recover 1 Damage on the defending figure
+  if (combat.defenderSpentBlock && game.mandaAsteelPlayerNum === defenderPlayerNum && targetMsgId) {
+    const msHS = dcHealthState.get(targetMsgId) || [];
+    const msEntry = msHS[targetFigIndex];
+    if (msEntry) {
+      const [msC, msM] = msEntry;
+      const msNew = Math.min(msM ?? msC ?? 99, (msC ?? msM ?? 0) + 1);
+      if (msNew > (msC ?? msM ?? 0)) {
+        msHS[targetFigIndex] = [msNew, msM ?? msNew];
+        dcHealthState.set(targetMsgId, msHS);
+        const msDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const msDcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+        const msIdx = (msDcIds || []).indexOf(targetMsgId);
+        if (msIdx >= 0 && msDcList?.[msIdx]) msDcList[msIdx].healthState = [...msHS];
+        embedRefreshMsgIds.add(targetMsgId);
+        await logGameAction(game, client, `**Mandalorian Steel** — **${combat.target.label}** spent a Block Token; recovered 1 Damage`, { phase: 'ROUND', icon: 'card' });
+      }
+    }
+  }
+
   // Stalk Prey: attacker gains +2 MP and +1 Hit Token on hit
   if (hit && combat.surgeStalkPrey && combat.attackerMsgId) {
     game.movementBank = game.movementBank || {};
@@ -6773,6 +6793,7 @@ client.on('interactionCreate', async (interaction) => {
       buildBoardMapPayload,
       updateDcActionsMessage,
       sendBleedingPrompt,
+      getDcStats,
       saveGames,
       client,
     };
@@ -7125,6 +7146,105 @@ client.on('interactionCreate', async (interaction) => {
     if (intTriggered) { saveGames(); return; }
     await finishCombatResolution(intGame, intCombat, intRT, new Set(intEmbed), client);
     saveGames();
+    return;
+  }
+
+  // Still Faster Than You: interrupt prompt response handlers
+  if (buttonKey === 'still_faster_use_' || buttonKey === 'still_faster_skip_' || buttonKey === 'still_faster_dc_pick_') {
+    const sftParts = interaction.customId.split('_');
+    // still_faster_use_{gameId}_{activatingMsgId}
+    // still_faster_skip_{gameId}_{activatingMsgId}
+    // still_faster_dc_pick_{gameId}_{sftDcMsgId}_{activatingMsgId}
+    let sftGameId, sftActivatingMsgId, sftPickedMsgId;
+    if (buttonKey === 'still_faster_dc_pick_') {
+      // still_faster_dc_pick_ prefix is 21 chars; remainder: gameId_sftDcMsgId_activatingMsgId
+      const rem = interaction.customId.slice('still_faster_dc_pick_'.length);
+      const remParts = rem.split('_');
+      sftGameId = remParts[0];
+      sftPickedMsgId = remParts[1];
+      sftActivatingMsgId = remParts.slice(2).join('_');
+    } else {
+      const rem = interaction.customId.slice(buttonKey.length);
+      const remParts = rem.split('_');
+      sftGameId = remParts[0];
+      sftActivatingMsgId = remParts.slice(1).join('_');
+    }
+    const sftGame = getGame(sftGameId);
+    if (!sftGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+
+    if (buttonKey === 'still_faster_skip_') {
+      const sftPlayerNum = sftGame.pendingStillFaster?.sftPlayerNum;
+      if (!canActAsPlayer(sftGame, interaction.user.id, sftPlayerNum)) { await interaction.followUp({ content: 'Only the Still Faster Than You player may respond.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      delete sftGame.pendingStillFaster;
+      sftGame.stillFasterPlayerNum = null;
+      await interaction.deferUpdate().catch(() => {});
+      await interaction.followUp({ content: '**Still Faster Than You** — Skipped.', ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      saveGames();
+      return;
+    }
+
+    if (buttonKey === 'still_faster_use_') {
+      const sftPending = sftGame.pendingStillFaster;
+      if (!sftPending) { await interaction.followUp({ content: 'No pending Still Faster Than You.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      const { sftPlayerNum } = sftPending;
+      if (!canActAsPlayer(sftGame, interaction.user.id, sftPlayerNum)) { await interaction.followUp({ content: 'Only the Still Faster Than You player may respond.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      // Show the SFTY player's non-exhausted DCs as picker buttons
+      const sftDcList = sftPlayerNum === 1 ? (sftGame.p1DcList || []) : (sftGame.p2DcList || []);
+      const sftMsgIds = sftPlayerNum === 1 ? (sftGame.p1DcMessageIds || []) : (sftGame.p2DcMessageIds || []);
+      const sftActivatedIndices = sftPlayerNum === 1 ? (sftGame.p1ActivatedDcIndices || []) : (sftGame.p2ActivatedDcIndices || []);
+      const sftButtons = [];
+      for (let i = 0; i < sftDcList.length; i++) {
+        const dc = sftDcList[i];
+        if (!dc || dc.defeated || sftActivatedIndices.includes(i)) continue;
+        const dcMsgId = sftMsgIds[i];
+        if (!dcMsgId) continue;
+        sftButtons.push(new ButtonBuilder()
+          .setCustomId(`still_faster_dc_pick_${sftGameId}_${dcMsgId}_${sftActivatingMsgId}`)
+          .setLabel((dc.displayName || dc.dcName).slice(0, 80))
+          .setStyle(ButtonStyle.Primary));
+      }
+      if (sftButtons.length === 0) {
+        delete sftGame.pendingStillFaster;
+        sftGame.stillFasterPlayerNum = null;
+        await interaction.deferUpdate().catch(() => {});
+        await interaction.followUp({ content: '**Still Faster Than You** — No eligible figures to interrupt with.', ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        saveGames();
+        return;
+      }
+      const sftRows = [];
+      for (let i = 0; i < sftButtons.length; i += 5) sftRows.push(new ActionRowBuilder().addComponents(sftButtons.slice(i, i + 5)));
+      await interaction.deferUpdate().catch(() => {});
+      await interaction.followUp({ content: '**Still Faster Than You** — Choose which figure interrupts (move 2 + attack):', components: sftRows.slice(0, 5), ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      saveGames();
+      return;
+    }
+
+    if (buttonKey === 'still_faster_dc_pick_') {
+      const sftPending = sftGame.pendingStillFaster;
+      if (!sftPending) { await interaction.followUp({ content: 'No pending Still Faster Than You.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      const { sftPlayerNum } = sftPending;
+      if (!canActAsPlayer(sftGame, interaction.user.id, sftPlayerNum)) { await interaction.followUp({ content: 'Only the Still Faster Than You player may respond.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      // Grant 2MP to the picked DC's movement bank and a free attack (excluding the activating hostile)
+      sftGame.movementBank = sftGame.movementBank || {};
+      const sftBank = sftGame.movementBank[sftPickedMsgId] || { total: 0, remaining: 0 };
+      sftBank.total = (sftBank.total ?? 0) + 2;
+      sftBank.remaining = (sftBank.remaining ?? 0) + 2;
+      sftGame.movementBank[sftPickedMsgId] = sftBank;
+      // Free attack: mark this DC with a free attack, excluding the activating hostile
+      sftGame.fellSwoopFreeAttack = sftGame.fellSwoopFreeAttack || {};
+      sftGame.fellSwoopFreeAttack[sftPickedMsgId] = true;
+      // Store exclusion so handleAttackTarget can reject wrong target
+      sftGame.stillFasterExcludeMsgId = sftActivatingMsgId;
+      // Clear the flag (once-per-round CC; clear so it can't be used again)
+      sftGame.stillFasterPlayerNum = null;
+      delete sftGame.pendingStillFaster;
+      const sftMeta = dcMessageMeta.get(sftPickedMsgId);
+      const sftLabel = sftMeta?.displayName || sftMeta?.dcName || sftPickedMsgId;
+      await interaction.deferUpdate().catch(() => {});
+      await interaction.followUp({ content: `**Still Faster Than You** — **${sftLabel}** gains 2 MP and a free Attack. The attack must target a **different hostile** than the one that just activated.`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      saveGames();
+      return;
+    }
     return;
   }
 

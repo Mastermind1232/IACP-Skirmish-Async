@@ -275,7 +275,7 @@ export function resolveAbility(abilityId, context) {
   // dcSpecial: targetHostileFigure (Force Choke, Force Lightning) — pick enemy target, apply damage/strain/condition
   // First call: returns requiresChoice with enemy figure list; second call: applies effect to chosen figure.
   if (entry.type === 'dcSpecial' && entry.targetHostileFigure && typeof entry.targetHostileFigure === 'object') {
-    const { damage = 0, strain = 0, applyCondition, requiresLos = false, range: maxRange = 999, splashDamageNote } = entry.targetHostileFigure;
+    const { damage = 0, strain = 0, applyCondition, requiresLos = false, range: maxRange = 999, splashDamageNote, splashDamage = 0, splashConditions = [] } = entry.targetHostileFigure;
     const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSight: losCheck, getRange: getRng, getMapSpaces: getMs, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.logMessage || `Resolve ${entry.label} manually.` };
     const enemyPlayerNum = playerNum === 1 ? 2 : 1;
@@ -317,8 +317,50 @@ export function resolveAbility(abilityId, context) {
         }
       }
       const dcName = targetFigureKey.replace(/-\d+-\d+$/, '');
-      const splashNote = splashDamageNote ? `\n> ${splashDamageNote}` : '';
-      return { applied: true, freeAction: !!entry.freeAction, logMessage: `**${entry.label}** — **${dcName}** ${parts.join(', ') || 'targeted'}.${splashNote}`, refreshDcEmbed: true };
+      // Splash damage: apply splashDamage to all figures adjacent to the chosen target
+      const splashParts = [];
+      if (splashDamage > 0 || splashConditions.length > 0) {
+        const mapId = game.selectedMap?.id;
+        if (mapId) {
+          const adjacent = getFiguresAdjacentToTarget(game, targetFigureKey, mapId);
+          for (const { figureKey: adjFk, playerNum: adjPnum } of adjacent) {
+            const adjMsgId = findMsgIdForFigureKey(game, adjPnum, adjFk, dcMessageMeta);
+            const adjName = adjFk.replace(/-\d+-\d+$/, '');
+            if (splashDamage > 0 && dcHealthState && adjMsgId) {
+              const adjHs = dcHealthState.get(adjMsgId) || [];
+              const adjFkMatch = adjFk.match(/-(\d+)-(\d+)$/);
+              const adjFigIdx = adjFkMatch ? parseInt(adjFkMatch[2], 10) : 0;
+              const adjEntry = adjHs[adjFigIdx];
+              if (adjEntry) {
+                const [aCur, aMax] = adjEntry;
+                const aNew = Math.max(0, (aCur ?? aMax) - splashDamage);
+                adjHs[adjFigIdx] = [aNew, aMax ?? aNew];
+                dcHealthState.set(adjMsgId, adjHs);
+                const adjDcIds = adjPnum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+                const adjDcList = adjPnum === 1 ? game.p1DcList : game.p2DcList;
+                const adjIdx = (adjDcIds || []).indexOf(adjMsgId);
+                if (adjIdx >= 0 && adjDcList?.[adjIdx]) adjDcList[adjIdx].healthState = [...adjHs];
+                splashParts.push(`**${adjName}** ${splashDamage} Damage (${aCur ?? aMax}→${aNew})`);
+              } else {
+                splashParts.push(`**${adjName}** (apply ${splashDamage} Damage manually)`);
+              }
+            } else if (splashDamage > 0) {
+              splashParts.push(`**${adjName}** (apply ${splashDamage} Damage manually)`);
+            }
+            if (splashConditions.length > 0) {
+              game.figureConditions = game.figureConditions || {};
+              const adjExisting = game.figureConditions[adjFk] || [];
+              const adjToAdd = splashConditions.filter((c) => !adjExisting.includes(c));
+              if (adjToAdd.length > 0) {
+                game.figureConditions[adjFk] = [...adjExisting, ...adjToAdd];
+                splashParts.push(`**${adjName}** gains ${adjToAdd.join(', ')}`);
+              }
+            }
+          }
+        }
+      }
+      const splashLog = splashParts.length > 0 ? `\nSplash — ${splashParts.join('; ')}` : splashDamageNote ? `\n> ${splashDamageNote}` : '';
+      return { applied: true, freeAction: !!entry.freeAction, logMessage: `**${entry.label}** — **${dcName}** ${parts.join(', ') || 'targeted'}.${splashLog}`, refreshDcEmbed: true };
     }
     // First call: enumerate valid enemy targets with range/LOS filter
     const activatingKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
@@ -2831,7 +2873,57 @@ export function resolveAbility(abilityId, context) {
         return { applied: true, logMessage: `**${tName}** becomes Stunned.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: tMsgId ? [tMsgId] : [] };
       }
       const strainKey = typeof chosenFigureKey === 'string' && chosenFigureKey.startsWith('strain:') ? chosenFigureKey.slice(7) : chosenFigureKey;
-      return applyToFigureKey(strainKey);
+      const mainResult = applyToFigureKey(strainKey);
+      // Splash: apply cah.splashDamage / cah.splashConditions to figures adjacent to the chosen target
+      const splashDmg = cah.splashDamage ?? 0;
+      const splashConds = cah.splashConditions ?? [];
+      if ((splashDmg > 0 || splashConds.length > 0) && mainResult.applied) {
+        const mapId = game.selectedMap?.id;
+        if (mapId) {
+          const adjacent = getFiguresAdjacentToTarget(game, strainKey, mapId);
+          const splashParts = [];
+          for (const { figureKey: adjFk, playerNum: adjPnum } of adjacent) {
+            const adjMsgId = findMsgIdForFigureKey(game, adjPnum, adjFk, dcMessageMeta);
+            const adjName = adjFk.replace(/-\d+-\d+$/, '');
+            if (splashDmg > 0 && dcHealthState && adjMsgId) {
+              const adjHs = (dcHealthState.get(adjMsgId) || []).slice();
+              const adjMatch = adjFk.match(/-(\d+)-(\d+)$/);
+              const adjFi = adjMatch ? parseInt(adjMatch[2], 10) : 0;
+              const adjE = adjHs[adjFi];
+              if (adjE) {
+                const [aCur, aMax] = adjE;
+                const aNew = Math.max(0, (aCur ?? aMax) - splashDmg);
+                adjHs[adjFi] = [aNew, aMax ?? aNew];
+                dcHealthState.set(adjMsgId, adjHs);
+                const adjIds = adjPnum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+                const adjList = adjPnum === 1 ? game.p1DcList : game.p2DcList;
+                const adjI = (adjIds || []).indexOf(adjMsgId);
+                if (adjI >= 0 && adjList?.[adjI]) adjList[adjI].healthState = [...adjHs];
+                splashParts.push(`**${adjName}** ${splashDmg} Damage (${aCur ?? aMax}→${aNew})`);
+              }
+            } else if (splashDmg > 0) {
+              splashParts.push(`**${adjName}** (apply ${splashDmg} Damage manually)`);
+            }
+            if (splashConds.length > 0) {
+              game.figureConditions = game.figureConditions || {};
+              const adjEx = game.figureConditions[adjFk] || [];
+              const toAdd = splashConds.filter((c) => !adjEx.includes(c));
+              if (toAdd.length > 0) game.figureConditions[adjFk] = [...adjEx, ...toAdd];
+            }
+          }
+          if (splashParts.length > 0 && mainResult.logMessage) {
+            mainResult.logMessage += `\nSplash — ${splashParts.join('; ')}`;
+          }
+          if (mainResult.refreshDcEmbedMsgIds) {
+            // also refresh any adjacent DC embeds
+            for (const { figureKey: adjFk, playerNum: adjPnum } of adjacent) {
+              const adjMsgId = findMsgIdForFigureKey(game, adjPnum, adjFk, dcMessageMeta);
+              if (adjMsgId && !mainResult.refreshDcEmbedMsgIds.includes(adjMsgId)) mainResult.refreshDcEmbedMsgIds.push(adjMsgId);
+            }
+          }
+        }
+      }
+      return mainResult;
     }
     // First pass: find adjacent hostiles
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
