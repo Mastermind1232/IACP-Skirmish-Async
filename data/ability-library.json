@@ -3591,6 +3591,357 @@
       "oncePer": null,
       "wiredStatus": "wired",
       "freeAction": true
+    },
+    "leaping_slash": {
+      "type": "dcSpecial",
+      "label": "Leaping Slash",
+      "description": "Move up to 2 spaces, then perform an attack.",
+      "freeMoveBonus": 2,
+      "freeAttackBonus": true,
+      "logMessage": "**Leaping Slash** — Gained 2 free MP. Your next attack costs no action.",
+      "wiredStatus": "wired"
+    },
+    "boulder_barrage": {
+      "type": "dcSpecial",
+      "label": "Boulder Barrage",
+      "description": "Choose a space in your LOS. Any figure on that space suffers 2 Damage. Then place a Rubble token in or adjacent to that space.",
+      "fixedAreaEffect": true,
+      "fixedAreaRange": 99,
+      "fixedAreaDamage": 2,
+      "fixedAreaStrain": 0,
+      "placesRubble": true,
+      "fixedAreaTargetOnly": true,
+      "logMessage": "**Boulder Barrage** — Choose a space in LOS. The figure on it suffers 2 Damage, then place a Rubble token.",
+      "wiredStatus": "wired"
+    },
+    "coordinated_raid_elite": {
+      "type": "dcSpecial",
+      "label": "Coordinated Raid",
+      "description": "Another friendly IMPERIAL figure (cost ≤4) within 4 spaces interrupts to perform an attack. Limit once per group per round.",
+      "wiredStatus": "wired"
+    },
+    "coordinated_raid_regular": {
+      "type": "dcSpecial",
+      "label": "Coordinated Raid",
+      "description": "Another figure in your group interrupts to perform an attack targeting a hostile figure in your LOS. Limit once per group per round.",
+      "wiredStatus": "wired"
+    },
+    "bartered_information": {
+      "type": "dcSpecial",
+      "label": "Bartered Information",
+      "description": "Choose another friendly SCUM figure within 2 spaces. Then, you may spend 1 VP to choose another such figure. Each chosen figure becomes Focused.",
+      "wiredStatus": "wired"
+    },
+    "force_leap_ahsoka": {
+      "type": "dcSpecial",
+      "label": "Force Leap",
+      "description": "Place your figure in an empty space within 6 spaces.",
+      "pounceRange": 6,
+      "pounceNoAttack": true,
+      "wiredStatus": "wired"
+    },
+    "force_leap_second_sister": {
+      "type": "dcSpecial",
+      "label": "Force Leap",
+      "description": "Place your figure in an empty space within 6 spaces.",
+      "pounceRange": 6,
+      "pounceNoAttack": true,
+      "wiredStatus": "wired"
+    },
+    "saber_orbit": {
+      "type": "dcSpecial",
+      "label": "Saber Orbit",
+      "description": "Choose up to 3 adjacent hostile figures. For each, perform a Melee attack using 1 red die.",
+      "informational": true,
+      "logMessage": "**Saber Orbit** — Choose up to 3 adjacent hostile figures. For each, perform a Melee attack using 1 red die. *(Resolve each attack manually.)*",
+      "wiredStatus": "wired"
+    },
+    "continually_unexpected": {
+      "type": "dcSpecial",
+      "label": "Continually Unexpected",
+      "description": "If you have any combination of 2 Hit Tokens or 2 Surge Tokens, perform a Ranged attack using your attack pool.",
+      "wiredStatus": "wired"
+    },
+    "crippling_blow": {
+      "type": "dcSpecial",
+      "label": "Crippling Blow",
+      "description": "Perform an attack. After the attack resolves, if it did not miss, the defender becomes Stunned.",
+      "freeAttackBonus": true,
+      "logMessage": "**Crippling Blow** — Your next attack costs no action. After it resolves: if it didn't miss, the defender becomes **Stunned**. *(Stun application: honor system.)*",
+      "wiredStatus": "wired"
+    },
+    "disruptor_rifle_snowtrooper": {
+      "type": "dcSpecial",
+      "label": "Disruptor Rifle",
+      "description": "Perform an attack. After it resolves, if it did not miss and the target has suffered Damage equal to its Health minus 1, the target suffers 1 Damage.",
+      "freeAttackBonus": true,
+      "logMessage": "**Disruptor Rifle** — Your next attack costs no action. After it resolves: if it didn't miss and target HP = 1, the target suffers 1 additional Damage. *(Extra damage: honor system.)*",
+      "wiredStatus": "wired"
+    },
+    "improved_smugglers_instincts": {
+      "type": "dcSpecial",
+      "label": "Improved Smuggler's Instincts",
+      "description": "Perform an interact, then move up to 3 spaces.",
+      "informational": true,
+      "logMessage": "**Improved Smuggler's Instincts** — Perform an Interact action (honor system), then gain 3 free MP.",
+      "freeMoveBonus": 3,
+      "wiredStatus": "wired"
+    },
+    "smugglers_instincts": {
+      "type": "dcSpecial",
+      "label": "Smuggler's Instincts",
+      "description": "Perform an attack, then move up to 2 spaces.",
+      "freeMoveBonus": 2,
+      "freeAttackBonus": true,
+      "logMessage": "**Smuggler's Instincts** — Gained 2 free MP. Your next attack costs no action. *(Attack first, then use the MP.)*",
+      "wiredStatus": "wired"
+    },
+    "multi_fire": {
+      "type": "dcSpecial",
+      "label": "Multi-Fire",
+      "description": "Perform 2 attacks. Each attack must have a different target. Apply -1 Hit to each attack's results.",
+      "informational": true,
+      "logMessage": "**Multi-Fire** — Perform 2 attacks (different targets, -1 Hit each). *(Resolve manually: use Attack button twice, apply -1 Hit to each result.)*",
+      "wiredStatus": "wired"
+    },
+    "barrage_ct1701": {
+      "type": "dcSpecial",
+      "label": "Barrage",
+      "description": "Perform 2 attacks. The second target must be within 3 spaces of the first target and adds 1 white die to the defense pool.",
+      "informational": true,
+      "logMessage": "**Barrage** — Perform 2 attacks (2nd target within 3 of 1st, +1 white defense die on 2nd). *(Resolve manually: use Attack button twice.)*",
+      "wiredStatus": "wired"
+    },
+    "rush_onar": {
+      "type": "dcSpecial",
+      "label": "Rush",
+      "description": "Move up to 4 spaces, then push an adjacent SMALL figure up to 1 space. Both suffer 1 Damage.",
+      "freeMoveBonus": 4,
+      "logMessage": "**Rush** — Gained 4 free MP. After moving, you may push an adjacent SMALL figure 1 space; if you do, both suffer 1 Damage. *(Push + damage: honor system.)*",
+      "wiredStatus": "wired"
+    },
+    "ram_chopper": {
+      "type": "dcSpecial",
+      "label": "Ram",
+      "description": "Move up to 2 spaces, then choose an adjacent figure. If hostile, roll 1 green die — it suffers Damage equal to Hit results. If SMALL, push it up to 1 space.",
+      "freeMoveBonus": 2,
+      "rollOneDie": "green",
+      "rollOneDieTarget": "adjacentHostile",
+      "rollOneDieNote": "If SMALL, push up to 1 space.",
+      "logMessage": "**Ram** — Gained 2 free MP. Then choose an adjacent figure and roll 1 green die for damage. Push if SMALL.",
+      "wiredStatus": "wired"
+    },
+    "system_shock_chopper": {
+      "type": "dcSpecial",
+      "label": "System Shock",
+      "description": "Use while on or adjacent to a terminal. Choose a figure on or adjacent to any terminal. That figure suffers 2 Damage and 1 Strain.",
+      "informational": true,
+      "logMessage": "**System Shock** — Choose a figure on/adjacent to any terminal. That figure suffers **2 Damage** and **1 Strain**. *(Must be on/adjacent to a terminal yourself. Apply damage manually.)*",
+      "wiredStatus": "wired"
+    },
+    "mandalorian_whip": {
+      "type": "dcSpecial",
+      "label": "Mandalorian Whip",
+      "description": "Choose a SMALL hostile figure within 3 spaces and LOS. Push it up to 3 spaces adjacent to you. Then, perform an attack targeting that figure.",
+      "freeAttackBonus": true,
+      "logMessage": "**Mandalorian Whip** — Choose a SMALL hostile within 3 spaces/LOS. Push it adjacent to you (honor system), then your next attack costs no action and must target that figure.",
+      "wiredStatus": "wired"
+    },
+    "tonfa_strike": {
+      "type": "dcSpecial",
+      "label": "Tonfa Strike",
+      "description": "Move up to 2 spaces, then perform a Melee attack using 1 red + 1 green die. After, you may perform an additional attack.",
+      "freeMoveBonus": 2,
+      "freeAttackBonus": true,
+      "overrideAttackDice": ["red", "green"],
+      "overrideAttackType": "melee",
+      "logMessage": "**Tonfa Strike** — Gained 2 free MP. Your next attack is free and uses [Red, Green] dice (Melee). *(After it resolves, you may perform another attack: honor system — use Attack again.)*",
+      "wiredStatus": "wired"
+    },
+    "close_quarters": {
+      "type": "dcSpecial",
+      "label": "Close Quarters",
+      "description": "Move up to 1 space. Perform an attack using an adjacent hostile's attack type and pool, removing 1 defense die and applying +1 Accuracy.",
+      "freeMoveBonus": 1,
+      "freeAttackBonus": true,
+      "logMessage": "**Close Quarters** — Gained 1 free MP. Your next attack costs no action. *(Use the adjacent hostile's attack type/pool, remove 1 defense die, +1 Accuracy: honor system.)*",
+      "wiredStatus": "wired"
+    },
+    "spot_weld": {
+      "type": "dcSpecial",
+      "label": "Spot Weld",
+      "description": "Place a Junk Droid companion in an adjacent space.",
+      "informational": true,
+      "logMessage": "**Spot Weld** — Place your Junk Droid companion in an adjacent space. *(Companion placement: honor system.)*",
+      "wiredStatus": "wired"
+    },
+    "overclock": {
+      "type": "dcSpecial",
+      "label": "Overclock",
+      "description": "Your Junk Droid companion may interrupt to perform a move or attack.",
+      "informational": true,
+      "logMessage": "**Overclock** — Your Junk Droid companion may interrupt to perform a move or attack. *(Resolve manually.)*",
+      "wiredStatus": "wired"
+    },
+    "focus_fire_tank": {
+      "type": "dcSpecial",
+      "label": "Focus Fire",
+      "description": "(Double Action) Perform 2 attacks, targeting the same figure.",
+      "informational": true,
+      "logMessage": "**Focus Fire** — (Double Action) Perform 2 attacks targeting the same figure. *(Costs both actions. Resolve manually: use Attack button twice.)*",
+      "wiredStatus": "wired"
+    },
+    "elite_sniper": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Elite Sniper",
+      "description": "While attacking, if the target is 5+ spaces away, reroll up to 2 attack dice.",
+      "wiredStatus": "wired"
+    },
+    "sniper": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Sniper",
+      "description": "While attacking, if the target is 5+ spaces away, reroll 1 attack die.",
+      "wiredStatus": "wired"
+    },
+    "protector": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-defense",
+      "label": "Protector",
+      "description": "While a friendly figure is defending and you are adjacent to the target space, apply +1 Block.",
+      "wiredStatus": "wired"
+    },
+    "front_line": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Front Line",
+      "description": "While attacking within 3 spaces, replace 1 blue die with 1 red die.",
+      "wiredStatus": "wired"
+    },
+    "cortosis_weave": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-defense",
+      "label": "Cortosis Weave",
+      "description": "While defending, reduce Pierce by 2.",
+      "wiredStatus": "wired"
+    },
+    "forest_fighters": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Forest Fighters",
+      "description": "While performing a melee attack while Hidden, apply +1 Hit.",
+      "wiredStatus": "wired"
+    },
+    "much_to_learn": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Much to Learn",
+      "description": "While attacking with a friendly unique figure within 3 spaces, reroll 1 die. If FORCE USER, may reroll additional.",
+      "wiredStatus": "wired"
+    },
+    "sharpshooter": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Sharpshooter",
+      "description": "When declaring an attack at 5+ spaces, become Focused.",
+      "wiredStatus": "wired"
+    },
+    "gamorrean_honor_guard": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-defense",
+      "label": "Gamorrean Honor Guard",
+      "description": "While defending against a Ranged attack, apply +1 Block.",
+      "wiredStatus": "wired"
+    },
+    "composite_plating": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-defense",
+      "label": "Composite Plating",
+      "description": "While defending, if the attacker is 4+ spaces away, apply +1 Block.",
+      "wiredStatus": "wired"
+    },
+    "disposable": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-defense",
+      "label": "Disposable",
+      "description": "While defending, apply -1 Evade to defense results.",
+      "wiredStatus": "wired"
+    },
+    "conclusion": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Conclusion",
+      "description": "While attacking, apply -1 Evade to defense results.",
+      "wiredStatus": "wired"
+    },
+    "query_hk47": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Query",
+      "description": "When declaring an attack, apply +1 Hit unless the defender becomes Bleeding.",
+      "wiredStatus": "wired"
+    },
+    "sentinel": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-defense",
+      "label": "Sentinel",
+      "description": "While a friendly non-GUARDIAN figure is defending and you are adjacent to the target space, apply +1 Block.",
+      "wiredStatus": "wired"
+    },
+    "find_weakness": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Find Weakness",
+      "description": "While attacking, apply +3 Accuracy and -1 Evade to defense results.",
+      "wiredStatus": "wired"
+    },
+    "exploit_weakness": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Exploit Weakness",
+      "description": "While attacking a figure with a HARMFUL condition, apply +1 Surge.",
+      "wiredStatus": "wired"
+    },
+    "keep_the_peace_elite": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-defense",
+      "label": "Keep the Peace",
+      "description": "When a hostile figure attacks a space adjacent to you, the attacker suffers 1 Strain.",
+      "wiredStatus": "wired"
+    },
+    "keep_the_peace_regular": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-defense",
+      "label": "Keep the Peace",
+      "description": "When a hostile figure attacks a space adjacent to you, you may suffer 1 Strain. If you do, the attacker suffers 1 Strain.",
+      "wiredStatus": "wired"
+    },
+    "bespin_security": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Bespin Security",
+      "description": "While an adjacent friendly LEADER or SCUM TROOPER is attacking, it may reroll 1 attack die.",
+      "wiredStatus": "wired"
     }
   }
 }

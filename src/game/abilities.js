@@ -914,6 +914,131 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // coordinated_raid_elite (ISB Infiltrator Elite): choose a friendly IMPERIAL figure (cost ≤4) within 4 spaces → interrupt to attack
+  if (abilityId === 'coordinated_raid_elite') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng, getDcEffects: getEff } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Coordinated Raid** manually.' };
+    if (choiceIndex != null && targetFigureKey) {
+      const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
+      if (chosenMsgId) {
+        game.pendingCoordinatedRaid = { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId };
+      }
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
+    }
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+    if (!activatingPos) return { applied: false, manualMessage: '**Coordinated Raid** — No position. Resolve manually.' };
+    const dcEffects = typeof getEff === 'function' ? getEff() : null;
+    const validTargets = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (fk === activatingKey || !pos) continue;
+      if (getRng && getRng(activatingPos, pos) > 4) continue;
+      const fkDcName = fk.replace(/-\d+-\d+$/, '');
+      const fkEff = dcEffects?.[fkDcName];
+      if (!fkEff) continue;
+      if (fkEff.affiliation !== 'Imperial') continue;
+      if ((fkEff.subCost || fkEff.cost || 99) > 4) continue;
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Coordinated Raid** — No friendly IMPERIAL figure (cost ≤4) within 4 spaces.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // coordinated_raid_regular (ISB Infiltrator Regular): another figure in your group interrupts to attack
+  if (abilityId === 'coordinated_raid_regular') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Coordinated Raid** manually.' };
+    if (choiceIndex != null && targetFigureKey) {
+      const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
+      if (chosenMsgId) {
+        game.pendingCoordinatedRaid = { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId };
+      }
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
+    }
+    // Find other figures in the same group (same DC message ID)
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const otherGroupFigures = figureKeys.filter(fk => fk !== activatingKey && game.figurePositions?.[playerNum]?.[fk]);
+    if (otherGroupFigures.length === 0) return { applied: false, manualMessage: '**Coordinated Raid** — No other figures in your group on the board.' };
+    if (otherGroupFigures.length === 1) {
+      // Auto-select the only other figure
+      const onlyFk = otherGroupFigures[0];
+      game.pendingCoordinatedRaid = { forMsgId: msgId, chosenFigureKey: onlyFk, triggeredByMsgId: msgId };
+      const chosenName = onlyFk.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
+    }
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: otherGroupFigures.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: otherGroupFigures,
+    };
+  }
+
+  // bartered_information (Bib Fortuna): choose a friendly SCUM figure within 2 → Focus
+  if (abilityId === 'bartered_information') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng, getDcEffects: getEff } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Bartered Information** manually.' };
+    if (choiceIndex != null && targetFigureKey) {
+      game.figureConditions = game.figureConditions || {};
+      game.figureConditions[targetFigureKey] = game.figureConditions[targetFigureKey] || [];
+      if (!game.figureConditions[targetFigureKey].includes('Focus')) game.figureConditions[targetFigureKey].push('Focus');
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Bartered Information** — **${chosenName}** is now **Focused**. *(You may spend 1 VP to Focus another friendly SCUM within 2: honor system.)*`, refreshDcEmbed: true };
+    }
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+    if (!activatingPos) return { applied: false, manualMessage: '**Bartered Information** — No position. Resolve manually.' };
+    const dcEffects = typeof getEff === 'function' ? getEff() : null;
+    const validTargets = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (fk === activatingKey || !pos) continue;
+      if (getRng && getRng(activatingPos, pos) > 2) continue;
+      const fkDcName = fk.replace(/-\d+-\d+$/, '');
+      const fkEff = dcEffects?.[fkDcName];
+      if (!fkEff) continue;
+      if (fkEff.affiliation !== 'Scum') continue;
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Bartered Information** — No friendly SCUM figure within 2 spaces.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // continually_unexpected (K-2S0): if 2+ Hit/Surge tokens, perform a free Ranged attack
+  if (abilityId === 'continually_unexpected') {
+    const { game, playerNum, meta, msgId } = context;
+    if (!game || !playerNum || !meta) return { applied: false, manualMessage: 'Resolve **Continually Unexpected** manually.' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const fk = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    if (!fk) return { applied: false, manualMessage: '**Continually Unexpected** — No figure found.' };
+    const tokens = game.figurePowerTokens?.[fk] || [];
+    const hitCount = tokens.filter(t => t === 'Hit').length;
+    const surgeCount = tokens.filter(t => t === 'Surge').length;
+    if (hitCount + surgeCount < 2) {
+      return { applied: false, manualMessage: `**Continually Unexpected** — Need 2 Hit/Surge Tokens (have ${hitCount} Hit + ${surgeCount} Surge).` };
+    }
+    // Grant free Ranged attack using own attack pool
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[msgId] = true;
+    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+    game.pendingOverrideAttackDice[msgId] = { type: 'ranged', dice: null, pierce: 0, bonusAccuracy: 0 };
+    return { applied: true, logMessage: `**Continually Unexpected** — K-2S0 has ${hitCount} Hit + ${surgeCount} Surge Tokens. Your next attack costs no action and is **Ranged** (uses your normal dice pool). *(Token requirement met — no tokens consumed.)*` };
+  }
+
   // false_orders (Murne Rin): choose a hostile figure (cost ≤ 4, within 4 spaces); perform move or attack with it
   if (abilityId === 'false_orders') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng } = context;
@@ -1326,7 +1451,7 @@ export function resolveAbility(abilityId, context) {
       if (!game || !dcHealthState) return { applied: false, manualMessage: `Apply ${entry.label} effects manually.` };
       const boardState = getBoardStateForMovement(game, null);
       const spaceNorm = String(chosenSpace).toLowerCase();
-      const adj = boardState?.mapSpaces?.adjacency?.[spaceNorm] || [];
+      const adj = entry.fixedAreaTargetOnly ? [] : (boardState?.mapSpaces?.adjacency?.[spaceNorm] || []);
       const affectedSpaces = new Set([spaceNorm, ...adj.map((s) => String(s).toLowerCase())]);
       const results = [];
       for (const pn of [1, 2]) {
@@ -6858,10 +6983,17 @@ export function resolveAbility(abilityId, context) {
       if (!validSpaces.length) return { applied: false, manualMessage: 'No empty spaces within 3 to pounce to.' };
       return { requiresSpaceChoice: true, validSpaces };
     }
-    // Second call: teleport figure to chosen space, grant free pounce attack
+    // Second call: teleport figure to chosen space, grant free pounce attack (unless pounceNoAttack)
     game.figurePositions = game.figurePositions || {};
     game.figurePositions[playerNum] = game.figurePositions[playerNum] || {};
     game.figurePositions[playerNum][fk] = chosenSpace;
+    if (entry.pounceNoAttack) {
+      return {
+        applied: true,
+        logMessage: `**${entry.label || 'Force Leap'}**: placed at **${String(chosenSpace).toUpperCase()}**.`,
+        refreshBoard: true,
+      };
+    }
     game.pounceAttackPending = game.pounceAttackPending || {};
     game.pounceAttackPending[msgId] = { figureKey: fk, figureIndex: 0 };
     return {

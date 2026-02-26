@@ -252,6 +252,21 @@ export async function handleEndTurn(interaction, ctx) {
     }
   }
 
+  // In The Shadows (ISB Infiltrator Elite): become Hidden at end of activation
+  if (meta.dcName === 'ISB Infiltrator (Elite)') {
+    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const prefix = `${meta.dcName}-${dgIndex}-`;
+    const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(k => k.startsWith(prefix));
+    for (const fk of figureKeys) {
+      game.figureConditions = game.figureConditions || {};
+      game.figureConditions[fk] = game.figureConditions[fk] || [];
+      if (!game.figureConditions[fk].includes('Hide')) game.figureConditions[fk].push('Hide');
+    }
+    if (figureKeys.length > 0) {
+      await logGameAction(game, client, `🥷 **In The Shadows** — **ISB Infiltrator (Elite)** figures became **Hidden** at end of activation.`, { phase: 'ROUND', icon: 'activate' });
+    }
+  }
+
   const actionsData = game.dcActionsData?.[dcMsgId];
   if (actionsData?.threadId) {
     try {
@@ -588,6 +603,36 @@ export async function handleConfirmActivate(interaction, ctx) {
     game.movementBank[msgId].total += 3;
     game.movementBank[msgId].remaining += 3;
     await thread.send({ content: `🐎 **Mounted** — **${displayName}** gains **3 movement points** at the start of activation.` }).catch(() => {});
+  }
+  // Vigor (Ahsoka Tano): gain 2 MP or 1 Block Token at start of activation
+  if (meta.dcName === 'Ahsoka Tano') {
+    // Auto-grant 2 MP (the more common/useful choice); Block Token is honor system option
+    game.movementBank = game.movementBank || {};
+    game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    game.movementBank[msgId].total += 2;
+    game.movementBank[msgId].remaining += 2;
+    await thread.send({ content: `✨ **Vigor** — **${displayName}** gains **2 movement points** at the start of activation. *(Or choose 1 Block Token instead: honor system.)*` }).catch(() => {});
+  }
+  // Madness (Taron Malicos): if ≤2 CC cards in hand, suffer 1 Strain and become Focused
+  if (meta.dcName === 'Taron Malicos') {
+    const hand = meta.playerNum === 1 ? (game.p1Hand || []) : (game.p2Hand || []);
+    if (hand.length <= 2) {
+      const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(fk => fk.startsWith('Taron Malicos-'));
+      for (const fk of figureKeys) {
+        game.figureConditions = game.figureConditions || {};
+        game.figureConditions[fk] = game.figureConditions[fk] || [];
+        if (!game.figureConditions[fk].includes('Focus')) game.figureConditions[fk].push('Focus');
+      }
+      await thread.send({ content: `😤 **Madness** — **${displayName}** has ${hand.length} CC card${hand.length !== 1 ? 's' : ''} in hand (≤2). Suffers 1 Strain and becomes **Focused**. *(Apply 1 Strain via HP buttons.)*` }).catch(() => {});
+    }
+  }
+  // Responsive (Shyla Varad): gain 1 MP or recover 1 Damage at start of activation
+  if (meta.dcName === 'Shyla Varad') {
+    game.movementBank = game.movementBank || {};
+    game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    game.movementBank[msgId].total += 1;
+    game.movementBank[msgId].remaining += 1;
+    await thread.send({ content: `🏃 **Responsive** — **${displayName}** gains **1 movement point** at the start of activation. *(Or recover 1 Damage instead: honor system.)*` }).catch(() => {});
   }
   const logCh = await client.channels.fetch(game.generalId);
   const icon = ACTION_ICONS.activate || '⚡';

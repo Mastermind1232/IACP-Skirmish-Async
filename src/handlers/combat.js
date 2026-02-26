@@ -207,6 +207,7 @@ export async function handleAttackTarget(interaction, ctx) {
     const isExecOrderFreeAttack = game.pendingExecutiveOrder?.forMsgId === msgId;
     const isBombardmentFreeAttack = game.pendingBombardmentSorin?.forMsgId === msgId;
     const isFiringSquadFreeAttack = (game.pendingFiringSquad || []).some(p => p.forMsgId === msgId);
+    const isCoordinatedRaidFreeAttack = game.pendingCoordinatedRaid?.forMsgId === msgId;
     if (isBLFreeAttack) {
       delete game.pendingBattlefieldLeadership;
     } else if (isFellSwoopFreeAttack) {
@@ -222,6 +223,8 @@ export async function handleAttackTarget(interaction, ctx) {
     } else if (isFiringSquadFreeAttack) {
       game.pendingFiringSquad = (game.pendingFiringSquad || []).filter(p => p.forMsgId !== msgId);
       if (game.pendingFiringSquad.length === 0) delete game.pendingFiringSquad;
+    } else if (isCoordinatedRaidFreeAttack) {
+      delete game.pendingCoordinatedRaid;
     } else {
       actionsData.remaining = Math.max(0, actionsData.remaining - 1);
       await updateDcActionsMessage(game, msgId, interaction.client);
