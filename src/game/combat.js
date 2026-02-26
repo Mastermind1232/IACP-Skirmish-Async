@@ -83,6 +83,7 @@ export const SURGE_LABELS = {
   'cleave 1': 'Cleave 1', 'cleave 2': 'Cleave 2',
   '+1 hit': '+1 Hit', '+2 hits': '+2 Hits', '+1 hit, stun': '+1 Hit, Stun', '+1 hit, pierce 1': '+1 Hit, Pierce 1',
   'accuracy 2, surge 1': '+2 Accuracy, +1 Surge', 'damage 2, hide': '+2 Hits, Hide',
+  'agitate': 'Agitate', 'fell_swoop': 'Fell Swoop', 'mastery': 'Mastery', 'interrogate': 'Interrogate',
 };
 
 /** Get attacker's surge abilities from dc-effects + combat.bonusSurgeAbilities (CCs like Spinning Kick).
@@ -134,10 +135,16 @@ export function parseSurgeEffect(key) {
   if (k === 'bargain') { out.surgeBargain = true; return out; }
   // Spread the Pain (Dengar): choose a HARMFUL condition; apply to figure on/adjacent to target post-combat
   if (k === 'spread_the_pain') { out.surgeSpreadThePain = true; return out; }
+  // Agitate (Cam Droid): on hit, defender's group must activate next, if able
+  if (k === 'agitate') { out.surgeAgitate = true; return out; }
+  // Fell Swoop (Davith Elso): after attack, become Hidden, gain 2 MP, free attack. Limit once per round.
+  if (k === 'fell_swoop') { out.surgeFellSwoop = true; return out; }
+  // Mastery (Second Sister): redraw a FORCE USER CC of cost ≤ 1 from discard. Limit once per round.
+  if (k === 'mastery') { out.surgeMastery = true; return out; }
+  // Interrogate (Agent Blaise): look at opponent's hand, choose a CC; may discard equal/greater cost CC to force discard.
+  if (k === 'interrogate') { out.surgeInterrogate = true; return out; }
   // Complex surge effects: flag for informational display, resolve manually
-  if (['agitate', 'mastery',
-       'fell_swoop', 'interrogate',
-       'cancel 2', 'cleave x', 'recover x', 'evade token'].includes(k)) {
+  if (['cancel 2', 'cleave x', 'recover x', 'evade token'].includes(k)) {
     out.surgeComplex = k; return out;
   }
   const parts = k.split(/\s*,\s*/);

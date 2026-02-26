@@ -158,8 +158,11 @@ export async function handleAttackTarget(interaction, ctx) {
   if (actionsData) {
     const pendingBL = game.pendingBattlefieldLeadership;
     const isBLFreeAttack = pendingBL?.forMsgId === msgId;
+    const isFellSwoopFreeAttack = !!game.fellSwoopFreeAttack?.[msgId];
     if (isBLFreeAttack) {
       delete game.pendingBattlefieldLeadership;
+    } else if (isFellSwoopFreeAttack) {
+      delete game.fellSwoopFreeAttack[msgId];
     } else {
       actionsData.remaining = Math.max(0, actionsData.remaining - 1);
       await updateDcActionsMessage(game, msgId, interaction.client);
@@ -1310,6 +1313,10 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeSuppressionStrain) combat.surgeSuppressionStrain = true;
       if (mod.surgeFightingKnife) combat.surgeFightingKnife = true;
       if (mod.surgeConcussiveBolt) combat.surgeConcussiveBolt = true;
+      if (mod.surgeAgitate) combat.surgeAgitate = true;
+      if (mod.surgeFellSwoop) combat.surgeFellSwoop = true;
+      if (mod.surgeMastery) combat.surgeMastery = true;
+      if (mod.surgeInterrogate) combat.surgeInterrogate = true;
       // Bargain (Jawa Scavenger Elite): inline VP exchange during surge phase
       if (mod.surgeBargain) {
         const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';

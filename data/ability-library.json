@@ -2354,7 +2354,7 @@
       "surgeCost": 1,
       "label": "Interrogate",
       "description": "Look at your opponent's hand and choose a Command card. You may discard a card of equal or greater cost from your hand to discard the chosen card.",
-      "wiredStatus": "informational"
+      "wiredStatus": "wired"
     },
     "suppression": {
       "type": "surge",
@@ -2368,14 +2368,14 @@
       "surgeCost": 1,
       "label": "Agitate",
       "description": "If this attack does not miss, the defending figure's group must be the next group to activate, if able.",
-      "wiredStatus": "informational"
+      "wiredStatus": "wired"
     },
     "fell_swoop": {
       "type": "surge",
       "surgeCost": 1,
       "label": "Fell Swoop",
       "description": "After this attack resolves, become Hidden, move up to 2 spaces, then perform an attack. Limit once per round.",
-      "wiredStatus": "informational"
+      "wiredStatus": "wired"
     },
     "spread_the_pain": {
       "type": "surge",
@@ -2431,7 +2431,7 @@
       "surgeCost": 1,
       "label": "Mastery",
       "description": "Choose and re-draw a FORCE USER Command card of cost 1 or less from your discard pile. Limit once per round.",
-      "wiredStatus": "informational"
+      "wiredStatus": "wired"
     },
     "deadly_spin": {
       "type": "surge",

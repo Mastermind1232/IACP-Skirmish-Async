@@ -64,6 +64,21 @@ export async function handleDcActivate(interaction, ctx) {
     await interaction.followUp({ content: 'DC message not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
+  // Agitate: if the opponent's surge forced this player's group to activate next
+  if (game.agitateNextActivation && game.agitateNextActivation.playerNum === playerNum) {
+    const forcedDcName = game.agitateNextActivation.dcName;
+    if (dcName !== forcedDcName) {
+      const activatedKey = `p${playerNum}ActivatedDcIndices`;
+      const forcedIdx = dcList.findIndex((d) => d.dcName === forcedDcName);
+      if (forcedIdx >= 0 && !(game[activatedKey] || []).includes(forcedIdx)) {
+        await interaction.followUp({ content: `**Agitate** — **${forcedDcName}** must be the next group to activate, if able.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        return;
+      }
+      game.agitateNextActivation = null;
+    } else {
+      game.agitateNextActivation = null;
+    }
+  }
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const isMyTurn = ownerId === turnPlayerId;
   if (!isMyTurn) {
@@ -976,7 +991,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
   const actionsData = game.dcActionsData?.[msgId];
   const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
-  if (actionsRemaining <= 0) {
+  const hasFellSwoopFreeAttack = action === 'Attack' && !!game.fellSwoopFreeAttack?.[msgId];
+  if (actionsRemaining <= 0 && !hasFellSwoopFreeAttack) {
     await interaction.followUp({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }

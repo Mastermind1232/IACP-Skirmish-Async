@@ -292,6 +292,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.roundInTheShadowsPlayerNum = null;
   game.strengthInNumbersPlayerNum = null;
   game.provokeNextActivation = null;
+  game.agitateNextActivation = null;
+  game.fellSwoopFreeAttack = {};
   game.roundAttackSurgeBonus = {};
   game.roundUtinniJawaBuffs = null;
   game.roundSmugglersTricksPlayerNum = null;

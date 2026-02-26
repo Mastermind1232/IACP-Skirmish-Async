@@ -4008,6 +4008,86 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
     }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return true;
   }
+  // Agitate (Cam Droid): on hit, defender's group must activate next, if able
+  if (hit && combat.surgeAgitate && combat.target?.figureKey) {
+    const defenderDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    game.agitateNextActivation = { playerNum: defenderPlayerNum, dcName: defenderDcName };
+    const defLabel = combat.target.label || defenderDcName;
+    await thread.send(`**Agitate** — **${defLabel}**'s group must be the next to activate this round, if able.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }
+  // Fell Swoop (Davith Elso): after attack, become Hidden, gain 2 MP, free attack. Limit once per round.
+  if (combat.surgeFellSwoop && combat.attackerFigureKey) {
+    game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+    const fsKey = `${combat.attackerFigureKey}_fell_swoop`;
+    if (!game.roundFigureAbilityUsed[fsKey]) {
+      game.roundFigureAbilityUsed[fsKey] = true;
+      game.figureConditions = game.figureConditions || {};
+      const existing = game.figureConditions[combat.attackerFigureKey] || [];
+      if (!existing.includes('Hide')) game.figureConditions[combat.attackerFigureKey] = [...existing, 'Hide'];
+      if (game.movementBank?.[combat.attackerMsgId]) {
+        game.movementBank[combat.attackerMsgId].remaining += 2;
+        game.movementBank[combat.attackerMsgId].total += 2;
+        updateMovementBankMessage(game, combat.attackerMsgId, client).catch(() => {});
+      }
+      game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
+      game.fellSwoopFreeAttack[combat.attackerMsgId] = true;
+      const attName = combat.attackerDisplayName || combat.attackerFigureKey.replace(/-\d+-\d+$/, '');
+      await thread.send(`**Fell Swoop** — **${attName}** becomes **Hidden** and gains **2 Movement Points**. Use Move in the DC thread, then click Attack for a free Fell Swoop attack (costs no action).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
+  }
+  // Mastery (Second Sister): redraw a FORCE USER CC of cost ≤ 1 from discard. Limit once per round.
+  if (combat.surgeMastery && combat.attackerFigureKey) {
+    game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+    const mastKey = `${combat.attackerFigureKey}_mastery`;
+    if (!game.roundFigureAbilityUsed[mastKey]) {
+      game.roundFigureAbilityUsed[mastKey] = true;
+      const mastPlayerNum = combat.attackerPlayerNum;
+      const mastDiscardKey = mastPlayerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+      const mastDiscard = game[mastDiscardKey] || [];
+      const mastEligible = mastDiscard.filter((cardName) => {
+        const entry = getCcEffect(cardName);
+        return entry && (entry.cost ?? 99) <= 1 && String(entry.playableBy || '').toUpperCase().includes('FORCE USER');
+      });
+      if (mastEligible.length === 0) {
+        await thread.send(`**Mastery** — No eligible FORCE USER Command cards (cost ≤ 1) in your discard pile.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      } else {
+        game.pendingMastery = { gameId: game.gameId, attackerPlayerNum: mastPlayerNum, discardKey: mastDiscardKey, eligible: mastEligible, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum };
+        const mastOwnerId = mastPlayerNum === 1 ? game.player1Id : game.player2Id;
+        const mastBtns = mastEligible.slice(0, 4).map((cardName, i) =>
+          new ButtonBuilder().setCustomId(`mastery_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Primary)
+        );
+        mastBtns.push(new ButtonBuilder().setCustomId(`mastery_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        await thread.send({
+          content: `<@${mastOwnerId}> **Mastery** — Choose a FORCE USER CC (cost ≤ 1) from your discard pile to return to hand:`,
+          allowedMentions: { users: [mastOwnerId] },
+          components: [new ActionRowBuilder().addComponents(mastBtns)],
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        return true;
+      }
+    }
+  }
+  // Interrogate (Agent Blaise): look at opponent's hand, choose a CC; may discard equal/greater cost to force discard.
+  if (combat.surgeInterrogate) {
+    const intAttackerPlayerNum = combat.attackerPlayerNum;
+    const intOpponentPlayerNum = defenderPlayerNum;
+    const intOpponentHandKey = intOpponentPlayerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const intOpponentHand = game[intOpponentHandKey] || [];
+    if (intOpponentHand.length === 0) {
+      await thread.send(`**Interrogate** — Opponent's hand is empty; no card to choose.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    } else {
+      game.pendingInterrogate = { gameId: game.gameId, attackerPlayerNum: intAttackerPlayerNum, opponentPlayerNum: intOpponentPlayerNum, opponentHandSnapshot: [...intOpponentHand], chosenCardName: null, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum };
+      const intOwnerId = intAttackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+      const intBtns = intOpponentHand.slice(0, 4).map((cardName, i) =>
+        new ButtonBuilder().setCustomId(`interrogate_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Danger)
+      );
+      await thread.send({
+        content: `<@${intOwnerId}> **Interrogate** — ⚠️ *Opponent: look away!* Pick the card you want to target:`,
+        allowedMentions: { users: [intOwnerId] },
+        components: [new ActionRowBuilder().addComponents(intBtns)],
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return true;
+    }
+  }
   return false;
 }
 
@@ -6922,6 +7002,128 @@ client.on('interactionCreate', async (interaction) => {
       if (triggered) { saveGames(); return; }
     }
     await finishCombatResolution(game, rbPending.combat, rbPending.resultText, new Set(rbPending.initialEmbedRefreshMsgIds), client);
+    saveGames();
+    return;
+  }
+
+  if (buttonKey === 'mastery_pick_' || buttonKey === 'mastery_skip_') {
+    const isMasterySkip = buttonKey === 'mastery_skip_';
+    const mastGameId = isMasterySkip ? interaction.customId.replace('mastery_skip_', '') : interaction.customId.match(/^mastery_pick_([^_]+)_\d+$/)?.[1];
+    if (!mastGameId) { await interaction.followUp({ content: 'Invalid mastery interaction.', ephemeral: true }).catch(() => {}); return; }
+    const mastGame = getGame(mastGameId);
+    if (!mastGame?.pendingMastery) { await interaction.followUp({ content: 'No pending Mastery choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    const { attackerPlayerNum: mastAPN, discardKey: mastDK, eligible: mastEl, resultText: mastRT, combat: mastCombat, initialEmbedRefreshMsgIds: mastEmbed, defenderPlayerNum: mastDPN } = mastGame.pendingMastery;
+    const mastOwnerId = mastAPN === 1 ? mastGame.player1Id : mastGame.player2Id;
+    if (interaction.user.id !== mastOwnerId) { await interaction.followUp({ content: 'Only the attacker can resolve Mastery.', ephemeral: true }).catch(() => {}); return; }
+    await interaction.deferUpdate().catch(() => {});
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    delete mastGame.pendingMastery;
+    if (!isMasterySkip) {
+      const mastCardIdx = parseInt(interaction.customId.split('_').pop(), 10);
+      const mastCard = mastEl[mastCardIdx];
+      if (mastCard) {
+        const mastDiscard = mastGame[mastDK] || [];
+        const mastIdx = mastDiscard.indexOf(mastCard);
+        if (mastIdx >= 0) mastDiscard.splice(mastIdx, 1);
+        mastGame[mastDK] = mastDiscard;
+        const mastHandKey = mastAPN === 1 ? 'player1CcHand' : 'player2CcHand';
+        mastGame[mastHandKey] = mastGame[mastHandKey] || [];
+        mastGame[mastHandKey].push(mastCard);
+        const mastThread = await client.channels.fetch(mastCombat.combatThreadId).catch(() => null);
+        if (mastThread) await mastThread.send(`**Mastery** — **${mastCard}** returned from discard to hand.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await updateHandChannelMessages(mastGame, mastAPN, client).catch(() => {});
+      }
+    }
+    const mastCThread = await client.channels.fetch(mastCombat.combatThreadId).catch(() => null);
+    if (mastCThread) {
+      const triggered = await checkPostCombatSurges(mastGame, mastCombat, mastRT, new Set(mastEmbed), mastCThread, mastOwnerId, mastDPN);
+      if (triggered) { saveGames(); return; }
+    }
+    await finishCombatResolution(mastGame, mastCombat, mastRT, new Set(mastEmbed), client);
+    saveGames();
+    return;
+  }
+
+  if (buttonKey === 'interrogate_pick_' || buttonKey === 'interrogate_discard_' || buttonKey === 'interrogate_skip_') {
+    const intGameId = interaction.customId.match(/^interrogate_(?:pick|discard|skip)_([^_]+)/)?.[1];
+    if (!intGameId) { await interaction.followUp({ content: 'Invalid interrogate interaction.', ephemeral: true }).catch(() => {}); return; }
+    const intGame = getGame(intGameId);
+    if (!intGame?.pendingInterrogate) { await interaction.followUp({ content: 'No pending Interrogate choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    const { attackerPlayerNum: intAPN, opponentPlayerNum: intOPN, opponentHandSnapshot: intOHS, chosenCardName: intChosen, ownEligibleSnapshot: intOES, resultText: intRT, combat: intCombat, initialEmbedRefreshMsgIds: intEmbed, defenderPlayerNum: intDPN } = intGame.pendingInterrogate;
+    const intOwnerId = intAPN === 1 ? intGame.player1Id : intGame.player2Id;
+    if (interaction.user.id !== intOwnerId) { await interaction.followUp({ content: 'Only the attacker can resolve Interrogate.', ephemeral: true }).catch(() => {}); return; }
+    await interaction.deferUpdate().catch(() => {});
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    const intThread = await client.channels.fetch(intCombat.combatThreadId).catch(() => null);
+
+    if (buttonKey === 'interrogate_pick_') {
+      // Step 1: attacker chose a card from opponent's hand. Show own hand to optionally discard.
+      const intPickIdx = parseInt(interaction.customId.split('_').pop(), 10);
+      const intChosenCard = intOHS[intPickIdx];
+      if (!intChosenCard) { delete intGame.pendingInterrogate; saveGames(); return; }
+      intGame.pendingInterrogate.chosenCardName = intChosenCard;
+      const intChosenCost = getCcEffect(intChosenCard)?.cost ?? 0;
+      const intHandKey = intAPN === 1 ? 'player1CcHand' : 'player2CcHand';
+      const intOwnHand = intGame[intHandKey] || [];
+      const intEligible = intOwnHand.filter((c) => (getCcEffect(c)?.cost ?? 0) >= intChosenCost);
+      if (intEligible.length === 0) {
+        // Can't afford to discard — just log and finish
+        if (intThread) await intThread.send(`**Interrogate** — You chose **${intChosenCard}** (cost ${intChosenCost}). No cards in your hand with equal or greater cost to force the discard.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        delete intGame.pendingInterrogate;
+        const triggered = intThread ? await checkPostCombatSurges(intGame, intCombat, intRT, new Set(intEmbed), intThread, intOwnerId, intDPN) : false;
+        if (triggered) { saveGames(); return; }
+        await finishCombatResolution(intGame, intCombat, intRT, new Set(intEmbed), client);
+        saveGames();
+        return;
+      }
+      intGame.pendingInterrogate.ownEligibleSnapshot = intEligible;
+      const intStep2Btns = intEligible.slice(0, 4).map((cardName, i) =>
+        new ButtonBuilder().setCustomId(`interrogate_discard_${intGameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Danger)
+      );
+      intStep2Btns.push(new ButtonBuilder().setCustomId(`interrogate_skip_${intGameId}`).setLabel("Skip (don't discard)").setStyle(ButtonStyle.Secondary));
+      if (intThread) await intThread.send({
+        content: `<@${intOwnerId}> **Interrogate** — You chose **${intChosenCard}** (cost ${intChosenCost}). Discard a card (cost ≥ ${intChosenCost}) from your hand to force-discard it?`,
+        allowedMentions: { users: [intOwnerId] },
+        components: [new ActionRowBuilder().addComponents(intStep2Btns)],
+      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      saveGames();
+      return;
+    }
+
+    // Step 2: interrogate_discard_ or interrogate_skip_
+    if (!intChosen) { delete intGame.pendingInterrogate; saveGames(); return; }
+    if (buttonKey === 'interrogate_discard_') {
+      const intDisIdx = parseInt(interaction.customId.split('_').pop(), 10);
+      const intOwnCard = (intOES || [])[intDisIdx];
+      if (intOwnCard) {
+        // Discard attacker's card from hand
+        const intHandKey = intAPN === 1 ? 'player1CcHand' : 'player2CcHand';
+        const intOwnHandArr = intGame[intHandKey] || [];
+        const intOwnIdx = intOwnHandArr.indexOf(intOwnCard);
+        if (intOwnIdx >= 0) intOwnHandArr.splice(intOwnIdx, 1);
+        const intOwnDiscardKey = intAPN === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+        intGame[intOwnDiscardKey] = intGame[intOwnDiscardKey] || [];
+        intGame[intOwnDiscardKey].push(intOwnCard);
+        // Discard opponent's chosen card from hand
+        const intOppHandKey = intOPN === 1 ? 'player1CcHand' : 'player2CcHand';
+        const intOppHandArr = intGame[intOppHandKey] || [];
+        const intOppIdx = intOppHandArr.indexOf(intChosen);
+        if (intOppIdx >= 0) intOppHandArr.splice(intOppIdx, 1);
+        const intOppDiscardKey = intOPN === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+        intGame[intOppDiscardKey] = intGame[intOppDiscardKey] || [];
+        intGame[intOppDiscardKey].push(intChosen);
+        if (intThread) await intThread.send(`**Interrogate** — Discarded **${intOwnCard}** from your hand; **${intChosen}** removed from opponent's hand.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await updateHandChannelMessages(intGame, intAPN, client).catch(() => {});
+        await updateHandChannelMessages(intGame, intOPN, client).catch(() => {});
+      }
+    } else {
+      // Skip — just log
+      if (intThread) await intThread.send(`**Interrogate** — Chose to see **${intChosen}** from opponent's hand; no discard.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
+    delete intGame.pendingInterrogate;
+    const intTriggered = intThread ? await checkPostCombatSurges(intGame, intCombat, intRT, new Set(intEmbed), intThread, intOwnerId, intDPN) : false;
+    if (intTriggered) { saveGames(); return; }
+    await finishCombatResolution(intGame, intCombat, intRT, new Set(intEmbed), client);
     saveGames();
     return;
   }
