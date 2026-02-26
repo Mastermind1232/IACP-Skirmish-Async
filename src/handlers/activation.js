@@ -296,7 +296,28 @@ export async function handleEndTurn(interaction, ctx) {
   }
   // Hold the Line (Baze Malbus): at end of activation, gain 1 Block Token per hostile with LOS
   if (meta.dcName === 'Baze Malbus') {
-    await logGameAction(game, client, `🛡️ **Hold the Line** — **${meta.displayName || 'Baze Malbus'}** gains 1 **Block Token** for each hostile with LOS. *(Count hostiles and apply Block Tokens manually.)*`, { phase: 'ROUND', icon: 'activate' });
+    const _htlHasLos = ctx.hasLineOfSight;
+    const _htlMapSpaces = ctx.getMapSpaces?.(game.selectedMap?.id);
+    const _htlDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _htlFk = `Baze Malbus-${_htlDgIndex}-0`;
+    const _htlPos = game.figurePositions?.[meta.playerNum]?.[_htlFk];
+    let _htlBlockCount = 0;
+    if (_htlPos && _htlHasLos && _htlMapSpaces) {
+      const _htlEnemyNum = meta.playerNum === 1 ? 2 : 1;
+      const _htlAllFigCoords = [];
+      for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _htlAllFigCoords.push(String(fp).toLowerCase());
+      for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _htlAllFigCoords.push(String(fp).toLowerCase());
+      for (const [, ePos] of Object.entries(game.figurePositions?.[_htlEnemyNum] || {})) {
+        if (!ePos) continue;
+        if (_htlHasLos(String(_htlPos).toLowerCase(), String(ePos).toLowerCase(), _htlMapSpaces, _htlAllFigCoords)) _htlBlockCount++;
+      }
+    }
+    if (_htlBlockCount > 0) {
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[_htlFk] = game.figurePowerTokens[_htlFk] || [];
+      for (let i = 0; i < _htlBlockCount; i++) game.figurePowerTokens[_htlFk].push('Block');
+    }
+    await logGameAction(game, client, `🛡️ **Hold the Line** — **${meta.displayName || 'Baze Malbus'}** gained **${_htlBlockCount} Block Token${_htlBlockCount !== 1 ? 's' : ''}** (${_htlBlockCount} hostile${_htlBlockCount !== 1 ? 's' : ''} with LOS).`, { phase: 'ROUND', icon: 'activate' });
   }
 
   const actionsData = game.dcActionsData?.[dcMsgId];
@@ -636,35 +657,42 @@ export async function handleConfirmActivate(interaction, ctx) {
     game.movementBank[msgId].remaining += 3;
     await thread.send({ content: `🐎 **Mounted** — **${displayName}** gains **3 movement points** at the start of activation.` }).catch(() => {});
   }
-  // Vigor (Ahsoka Tano): gain 2 MP or 1 Block Token at start of activation
-  if (meta.dcName === 'Ahsoka Tano') {
-    // Auto-grant 2 MP (the more common/useful choice); Block Token is honor system option
-    game.movementBank = game.movementBank || {};
-    game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    game.movementBank[msgId].total += 2;
-    game.movementBank[msgId].remaining += 2;
-    await thread.send({ content: `✨ **Vigor** — **${displayName}** gains **2 movement points** at the start of activation. *(Or choose 1 Block Token instead: honor system.)*` }).catch(() => {});
+  // Vigor (Ahsoka Tano, Fifth Brother): choose 2 MP or 1 Block Token
+  if (meta.dcName === 'Ahsoka Tano' || meta.dcName === 'Fifth Brother') {
+    const vigorRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_vigor_mp`).setLabel('Gain 2 MP').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_vigor_block`).setLabel('Gain 1 Block Token').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({ content: `✨ **Vigor** — **${displayName}**: Choose one:`, components: [vigorRow] }).catch(() => {});
   }
   // Madness (Taron Malicos): if ≤2 CC cards in hand, suffer 1 Strain and become Focused
   if (meta.dcName === 'Taron Malicos') {
     const hand = meta.playerNum === 1 ? (game.p1Hand || []) : (game.p2Hand || []);
     if (hand.length <= 2) {
       const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(fk => fk.startsWith('Taron Malicos-'));
+      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       for (const fk of figureKeys) {
         game.figureConditions = game.figureConditions || {};
         game.figureConditions[fk] = game.figureConditions[fk] || [];
         if (!game.figureConditions[fk].includes('Focus')) game.figureConditions[fk].push('Focus');
+        // Apply 1 Strain (= 1 HP damage)
+        const fkMsgId = msgId;
+        const fkIdx = parseInt(fk.split('-').pop(), 10) || 0;
+        const hs = dcHealthState.get(fkMsgId);
+        if (hs?.[fkIdx]) {
+          hs[fkIdx].current = Math.max(0, hs[fkIdx].current - 1);
+        }
       }
-      await thread.send({ content: `😤 **Madness** — **${displayName}** has ${hand.length} CC card${hand.length !== 1 ? 's' : ''} in hand (≤2). Suffers 1 Strain and becomes **Focused**. *(Apply 1 Strain via HP buttons.)*` }).catch(() => {});
+      await thread.send({ content: `😤 **Madness** — **${displayName}** has ${hand.length} CC card${hand.length !== 1 ? 's' : ''} in hand (≤2). Suffered **1 Strain** and became **Focused**.` }).catch(() => {});
     }
   }
-  // Responsive (Shyla Varad): gain 1 MP or recover 1 Damage at start of activation
+  // Responsive (Shyla Varad): choose 1 MP or recover 1 Damage
   if (meta.dcName === 'Shyla Varad') {
-    game.movementBank = game.movementBank || {};
-    game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    game.movementBank[msgId].total += 1;
-    game.movementBank[msgId].remaining += 1;
-    await thread.send({ content: `🏃 **Responsive** — **${displayName}** gains **1 movement point** at the start of activation. *(Or recover 1 Damage instead: honor system.)*` }).catch(() => {});
+    const respRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_responsive_mp`).setLabel('Gain 1 MP').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_responsive_heal`).setLabel('Recover 1 Damage').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({ content: `🏃 **Responsive** — **${displayName}**: Choose one:`, components: [respRow] }).catch(() => {});
   }
   // Fulcrum (Agent Kallus): at start of activation, each player draws 1 CC
   if (meta.dcName === 'Agent Kallus') {
@@ -683,29 +711,65 @@ export async function handleConfirmActivate(interaction, ctx) {
     }
     await thread.send({ content: `🕵️ **Fulcrum** — Each player draws 1 Command card. (${_fParts.join(', ')})` }).catch(() => {});
   }
-  // Hunger (Wampa Regular): if no hostile within 3 spaces, gain 2 MP
-  if (meta.dcName === 'Wampa') {
-    game.movementBank[msgId].total += 2;
-    game.movementBank[msgId].remaining += 2;
-    await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **2 MP**. *(Applies only if no hostile within 3 spaces — honor system check.)*` }).catch(() => {});
+  // Hunger (Wampa Regular/Elite): position-aware hostile proximity check
+  {
+    const _getRange = ctx.getRange;
+    const _hungerCheck = (dcName, range, mpGain, elite) => {
+      if (meta.dcName !== dcName) return false;
+      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const figureKey = `${dcName}-${dgIndex}-0`;
+      const pos = game.figurePositions?.[meta.playerNum]?.[figureKey];
+      if (!pos || !_getRange) return false;
+      const enemyNum = meta.playerNum === 1 ? 2 : 1;
+      const hostilePos = Object.values(game.figurePositions?.[enemyNum] || {});
+      const anyHostileInRange = hostilePos.some(hp => hp && _getRange(pos, hp) <= range);
+      return !anyHostileInRange;
+    };
+    if (meta.dcName === 'Wampa' && _hungerCheck('Wampa', 3, 2, false)) {
+      game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
+      game.movementBank[msgId].total += 2;
+      game.movementBank[msgId].remaining += 2;
+      await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **2 MP** (no hostile within 3 spaces).` }).catch(() => {});
+    } else if (meta.dcName === 'Wampa' && !_hungerCheck('Wampa', 3, 2, false)) {
+      await thread.send({ content: `🐻 **Hunger** — Hostile figure within 3 spaces; **${displayName}** does not gain MP.` }).catch(() => {});
+    }
+    if (meta.dcName === 'Wampa (Elite)') {
+      if (_hungerCheck('Wampa (Elite)', 2, 3, true)) {
+        game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
+        game.movementBank[msgId].total += 3;
+        game.movementBank[msgId].remaining += 3;
+        // Also gain 1 Block or Evade Token — choice buttons
+        const hungerRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_hunger_block`).setLabel('Block Token').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_hunger_evade`).setLabel('Evade Token').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **3 MP** (no hostile within 2 spaces). Choose a token:`, components: [hungerRow] }).catch(() => {});
+      } else {
+        await thread.send({ content: `🐻 **Hunger** — Hostile figure within 2 spaces; **${displayName}** does not gain MP or tokens.` }).catch(() => {});
+      }
+    }
   }
-  // Hunger (Wampa Elite): if no hostile within 2 spaces, gain 3 MP + 1 Block/Evade Token
-  if (meta.dcName === 'Wampa (Elite)') {
-    game.movementBank[msgId].total += 3;
-    game.movementBank[msgId].remaining += 3;
-    await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **3 MP** + 1 **Block** or **Evade** Token. *(Applies only if no hostile within 2 spaces — honor system check. Apply token manually.)*` }).catch(() => {});
-  }
-  // Vigor (Fifth Brother): gain 2 MP or 1 Block Token at start of activation
-  if (meta.dcName === 'Fifth Brother') {
-    game.movementBank = game.movementBank || {};
-    game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    game.movementBank[msgId].total += 2;
-    game.movementBank[msgId].remaining += 2;
-    await thread.send({ content: `✨ **Vigor** — **${displayName}** gains **2 movement points** at the start of activation. *(Or choose 1 Block Token instead: honor system.)*` }).catch(() => {});
-  }
-  // Tactical Movement (Fenn Signis): choose a friendly within 3 → that figure gains 2 MP
+  // Tactical Movement (Fenn Signis): choose a friendly figure within 3 → gains 2 MP
   if (meta.dcName === 'Fenn Signis') {
-    await thread.send({ content: `🎯 **Tactical Movement** — Choose a friendly figure within 3 spaces. That figure gains **2 MP**. *(Apply manually via the target figure's movement controls.)*` }).catch(() => {});
+    const _getRange = ctx.getRange;
+    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const selfFk = `${meta.dcName}-${dgIndex}-0`;
+    const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
+    if (selfPos && _getRange) {
+      const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
+        .filter(([fk, fp]) => fk !== selfFk && fp && _getRange(selfPos, fp) <= 3);
+      if (friendlyFigs.length > 0) {
+        const btns = friendlyFigs.slice(0, 4).map(([fk]) => {
+          const label = fk.replace(/-\d+-\d+$/, '');
+          return new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tacmove_${fk}`).setLabel(label).setStyle(ButtonStyle.Primary);
+        });
+        btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tacmove_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        const tmRow = new ActionRowBuilder().addComponents(btns);
+        await thread.send({ content: `🎯 **Tactical Movement** — Choose a friendly figure within 3 spaces to gain **2 MP**:`, components: [tmRow] }).catch(() => {});
+      } else {
+        await thread.send({ content: `🎯 **Tactical Movement** — No friendly figures within 3 spaces.` }).catch(() => {});
+      }
+    }
   }
   // Into the Fray (Baze Malbus): gain 1 Surge Token per hostile with LOS, then gain 1 MP
   if (meta.dcName === 'Baze Malbus') {
@@ -713,11 +777,52 @@ export async function handleConfirmActivate(interaction, ctx) {
     game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
     game.movementBank[msgId].total += 1;
     game.movementBank[msgId].remaining += 1;
-    await thread.send({ content: `🔥 **Into the Fray** — **${displayName}** gains **1 MP**. Also gain 1 **Surge Token** for each hostile with LOS to you. *(Count hostiles with LOS and apply Surge Tokens manually.)*` }).catch(() => {});
+    // Count hostiles with LOS
+    const _hasLos = ctx.hasLineOfSight;
+    const _mapSpaces = ctx.getMapSpaces?.(game.selectedMap?.id);
+    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const selfFk = `Baze Malbus-${dgIndex}-0`;
+    const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
+    let surgeCount = 0;
+    if (selfPos && _hasLos && _mapSpaces) {
+      const enemyNum = meta.playerNum === 1 ? 2 : 1;
+      const allFigCoords = [];
+      for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) allFigCoords.push(String(fp).toLowerCase());
+      for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) allFigCoords.push(String(fp).toLowerCase());
+      for (const [, ePos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
+        if (!ePos) continue;
+        if (_hasLos(String(selfPos).toLowerCase(), String(ePos).toLowerCase(), _mapSpaces, allFigCoords)) surgeCount++;
+      }
+    }
+    if (surgeCount > 0) {
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[selfFk] = game.figurePowerTokens[selfFk] || [];
+      for (let i = 0; i < surgeCount; i++) game.figurePowerTokens[selfFk].push('Surge');
+    }
+    await thread.send({ content: `🔥 **Into the Fray** — **${displayName}** gains **1 MP** and **${surgeCount} Surge Token${surgeCount !== 1 ? 's' : ''}** (${surgeCount} hostile${surgeCount !== 1 ? 's' : ''} with LOS).` }).catch(() => {});
   }
   // Advanced Weapons Research (Director Krennic): friendly within 2 gains 1 Hit or Surge Token
   if (meta.dcName === 'Director Krennic') {
-    await thread.send({ content: `🔬 **Advanced Weapons Research** — A friendly figure within 2 spaces may gain 1 **Hit Token** or 1 **Surge Token**. *(Apply the chosen token to the target figure manually.)*` }).catch(() => {});
+    const _getRange = ctx.getRange;
+    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const selfFk = `Director Krennic-${dgIndex}-0`;
+    const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
+    if (selfPos && _getRange) {
+      const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
+        .filter(([fk, fp]) => fk !== selfFk && fp && _getRange(selfPos, fp) <= 2);
+      if (friendlyFigs.length > 0) {
+        const btns = friendlyFigs.slice(0, 3).map(([fk]) => {
+          const label = fk.replace(/-\d+-\d+$/, '');
+          return new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_${fk}`).setLabel(label).setStyle(ButtonStyle.Primary);
+        });
+        btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        const awrRow = new ActionRowBuilder().addComponents(btns);
+        game.pendingAwr = { gameId: game.gameId, msgId, playerNum: meta.playerNum };
+        await thread.send({ content: `🔬 **Advanced Weapons Research** — Choose a friendly figure within 2 spaces to grant a **Hit Token** or **Surge Token**:`, components: [awrRow] }).catch(() => {});
+      } else {
+        await thread.send({ content: `🔬 **Advanced Weapons Research** — No friendly figures within 2 spaces.` }).catch(() => {});
+      }
+    }
   }
   const logCh = await client.channels.fetch(game.generalId);
   const icon = ACTION_ICONS.activate || '⚡';
@@ -748,4 +853,124 @@ export async function handleCancelActivate(interaction, _ctx) {
   const [, gameId, ownerId] = match;
   if (interaction.user.id !== ownerId) return;
   await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+}
+
+/**
+ * Handle activation-passive choice buttons (act_passive_).
+ * Covers: Vigor, Responsive, Hunger (Elite token choice), Tactical Movement, Advanced Weapons Research.
+ */
+export async function handleActPassive(interaction, ctx) {
+  await interaction.deferUpdate().catch(() => {});
+  const { getGame, dcMessageMeta, dcHealthState, saveGames, logGameAction, client, buildDcEmbedAndFiles, getDcPlayAreaComponents } = ctx;
+  // Parse: act_passive_{gameId}_{msgId}_{ability}_{choice}
+  const parts = interaction.customId.replace(/^act_passive_/, '').split('_');
+  if (parts.length < 3) return;
+  const gameId = parts[0];
+  const msgId = parts[1];
+  const ability = parts[2];
+  const choice = parts.slice(3).join('_');
+  const game = getGame(gameId);
+  if (!game) return;
+  const meta = dcMessageMeta?.get(msgId);
+  if (!meta) return;
+  const displayName = meta.displayName || meta.dcName;
+  // Remove buttons from message
+  await interaction.message.edit({ components: [] }).catch(() => {});
+
+  if (ability === 'vigor') {
+    if (choice === 'mp') {
+      game.movementBank = game.movementBank || {};
+      game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
+      game.movementBank[msgId].total += 2;
+      game.movementBank[msgId].remaining += 2;
+      await interaction.message.edit({ content: `✨ **Vigor** — **${displayName}** gained **2 MP**.`, components: [] }).catch(() => {});
+    } else if (choice === 'block') {
+      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const fk = `${meta.dcName}-${dgIndex}-0`;
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+      game.figurePowerTokens[fk].push('Block');
+      await interaction.message.edit({ content: `✨ **Vigor** — **${displayName}** gained **1 Block Token**.`, components: [] }).catch(() => {});
+    }
+  } else if (ability === 'responsive') {
+    if (choice === 'mp') {
+      game.movementBank = game.movementBank || {};
+      game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
+      game.movementBank[msgId].total += 1;
+      game.movementBank[msgId].remaining += 1;
+      await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** gained **1 MP**.`, components: [] }).catch(() => {});
+    } else if (choice === 'heal') {
+      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const fk = `${meta.dcName}-${dgIndex}-0`;
+      const fkIdx = 0;
+      const hs = dcHealthState.get(msgId);
+      if (hs?.[fkIdx]) {
+        const max = hs[fkIdx].max ?? hs[fkIdx].current;
+        hs[fkIdx].current = Math.min(max, hs[fkIdx].current + 1);
+      }
+      await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** recovered **1 Damage**.`, components: [] }).catch(() => {});
+    }
+  } else if (ability === 'hunger') {
+    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const fk = `${meta.dcName}-${dgIndex}-0`;
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+    if (choice === 'block') {
+      game.figurePowerTokens[fk].push('Block');
+      await interaction.message.edit({ content: `🐻 **Hunger** — **${displayName}** gained 3 MP and **1 Block Token**.`, components: [] }).catch(() => {});
+    } else if (choice === 'evade') {
+      game.figurePowerTokens[fk].push('Evade');
+      await interaction.message.edit({ content: `🐻 **Hunger** — **${displayName}** gained 3 MP and **1 Evade Token**.`, components: [] }).catch(() => {});
+    }
+  } else if (ability === 'tacmove') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `🎯 **Tactical Movement** — Skipped.`, components: [] }).catch(() => {});
+    } else {
+      // choice is the figureKey of the target
+      const targetFk = choice;
+      const targetDcName = targetFk.replace(/-\d+-\d+$/, '');
+      // Find the target's msgId to add MP to their movement bank
+      let targetMsgId = null;
+      for (const [mId, mMeta] of dcMessageMeta) {
+        if (mMeta.gameId !== gameId) continue;
+        if (mMeta.dcName === targetDcName && mMeta.playerNum === meta.playerNum) {
+          targetMsgId = mId;
+          break;
+        }
+      }
+      if (targetMsgId) {
+        game.movementBank = game.movementBank || {};
+        game.movementBank[targetMsgId] = game.movementBank[targetMsgId] || { total: 0, remaining: 0 };
+        game.movementBank[targetMsgId].total += 2;
+        game.movementBank[targetMsgId].remaining += 2;
+      }
+      await interaction.message.edit({ content: `🎯 **Tactical Movement** — **${targetDcName}** gained **2 MP**.`, components: [] }).catch(() => {});
+    }
+  } else if (ability === 'awr') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — Skipped.`, components: [] }).catch(() => {});
+      delete game.pendingAwr;
+    } else {
+      // choice is the figureKey of the target — now offer Hit or Surge token choice
+      game.pendingAwr = game.pendingAwr || {};
+      game.pendingAwr.targetFk = choice;
+      const targetDcName = choice.replace(/-\d+-\d+$/, '');
+      const tokenRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awrtoken_hit`).setLabel('Hit Token').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awrtoken_surge`).setLabel('Surge Token').setStyle(ButtonStyle.Primary),
+      );
+      await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}**: Choose token type:`, components: [tokenRow] }).catch(() => {});
+    }
+  } else if (ability === 'awrtoken') {
+    const targetFk = game.pendingAwr?.targetFk;
+    if (!targetFk) return;
+    const targetDcName = targetFk.replace(/-\d+-\d+$/, '');
+    const tokenType = choice === 'hit' ? 'Hit' : 'Surge';
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    game.figurePowerTokens[targetFk] = game.figurePowerTokens[targetFk] || [];
+    game.figurePowerTokens[targetFk].push(tokenType);
+    delete game.pendingAwr;
+    await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(() => {});
+  }
+  saveGames();
 }

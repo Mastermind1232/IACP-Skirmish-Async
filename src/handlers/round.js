@@ -389,6 +389,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.pendingBombardmentSorin = null;
   game.pendingFiringSquad = null;
   game.pendingCoordinatedRaid = null;
+  game.pendingAwr = null;
   game.sonOfSkywalkerActive = null;
   game.dataTheftStolenCard = null;
   game.pendingPostAttackConditions = {};

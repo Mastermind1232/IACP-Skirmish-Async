@@ -94,6 +94,7 @@ const BUTTON_PREFIXES = [
   'devaron_door_open_',
   'devaron_crate_push_',
   'krykna_push_',
+  'act_passive_',
   'status_phase_',
   'dc_end_activation_',
   'end_end_of_round_',

@@ -108,6 +108,7 @@ import {
   handleDcEndActivation,
   handleConfirmActivate,
   handleCancelActivate,
+  handleActPassive,
   handleMapSelection,
   handleMapSelectionChoice,
   handleMapSelectionDraw,
@@ -8272,7 +8273,7 @@ client.on('interactionCreate', async (interaction) => {
     saveGames(); return;
   }
 
-  if (buttonKey === 'status_phase_' || buttonKey === 'pass_activation_turn_' || buttonKey === 'end_turn_' || buttonKey === 'dc_end_activation_' || buttonKey === 'confirm_activate_' || buttonKey === 'cancel_activate_') {
+  if (buttonKey === 'act_passive_' || buttonKey === 'status_phase_' || buttonKey === 'pass_activation_turn_' || buttonKey === 'end_turn_' || buttonKey === 'dc_end_activation_' || buttonKey === 'confirm_activate_' || buttonKey === 'cancel_activate_') {
     const activationContext = {
       getGame,
       replyIfGameEnded,
@@ -8302,8 +8303,15 @@ client.on('interactionCreate', async (interaction) => {
       ThreadAutoArchiveDuration,
       ACTION_ICONS,
       getDcStats,
+      getRange,
+      hasLineOfSight,
+      getMapSpaces,
+      ButtonBuilder,
+      ActionRowBuilder,
+      ButtonStyle,
     };
-    if (buttonKey === 'status_phase_') await handleStatusPhase(interaction, activationContext);
+    if (buttonKey === 'act_passive_') await handleActPassive(interaction, activationContext);
+    else if (buttonKey === 'status_phase_') await handleStatusPhase(interaction, activationContext);
     else if (buttonKey === 'pass_activation_turn_') await handlePassActivationTurn(interaction, activationContext);
     else if (buttonKey === 'end_turn_') await handleEndTurn(interaction, activationContext);
     else if (buttonKey === 'dc_end_activation_') await handleDcEndActivation(interaction, activationContext);
