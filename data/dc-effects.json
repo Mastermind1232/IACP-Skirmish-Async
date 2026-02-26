@@ -1228,7 +1228,8 @@
       "speed": 4,
       "passives": [
         "+2 Accuracy",
-        "Block 1"
+        "Block 1",
+        "Regenerate"
       ],
       "figures": 1,
       "attack": {
@@ -1869,6 +1870,9 @@
       "cost": 5,
       "health": 8,
       "speed": 4,
+      "passives": [
+        "Open-Minded"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3891,7 +3895,8 @@
       "health": 5,
       "speed": 5,
       "passives": [
-        "Pierce 1"
+        "Pierce 1",
+        "Curious"
       ],
       "figures": 2,
       "attack": {
@@ -3929,7 +3934,8 @@
       "health": 3,
       "speed": 4,
       "passives": [
-        "Pierce 1"
+        "Pierce 1",
+        "Curious"
       ],
       "figures": 2,
       "attack": {
@@ -5567,6 +5573,9 @@
       "cost": 6,
       "health": 10,
       "speed": 4,
+      "passives": [
+        "Beskar Armor"
+      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -5683,6 +5692,9 @@
         "cleave X",
         "recover X",
         "+1 hit, stun"
+      ],
+      "passives": [
+        "Leg Hydraulics"
       ],
       "attachment": false,
       "elite": true,
@@ -6335,6 +6347,9 @@
       "cost": 8,
       "health": 12,
       "speed": 4,
+      "passives": [
+        "Beskar Armor"
+      ],
       "figures": 1,
       "attack": {
         "dice": [

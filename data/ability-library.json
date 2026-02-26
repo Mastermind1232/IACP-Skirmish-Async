@@ -4031,6 +4031,54 @@
       "label": "Locked and Loaded",
       "description": "You may have up to 3 Power Tokens. After you resolve an attack, gain 2 Power Tokens.",
       "wiredStatus": "wired"
+    },
+    "leg_hydraulics": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-after",
+      "label": "Leg Hydraulics",
+      "description": "After you resolve an attack, move up to 1 space.",
+      "wiredStatus": "wired"
+    },
+    "open_minded": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-after",
+      "label": "Open-Minded",
+      "description": "After this attack resolves, gain 1 movement point or Power Token.",
+      "wiredStatus": "wired"
+    },
+    "hardy_trandoshan": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "end-of-round",
+      "label": "Hardy",
+      "description": "At the end of each round, discard all HARMFUL conditions.",
+      "wiredStatus": "wired"
+    },
+    "regenerate_bossk": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "end-of-round",
+      "label": "Regenerate",
+      "description": "At the end of each round, recover 2 Damage and discard all Harmful conditions.",
+      "wiredStatus": "wired"
+    },
+    "curious_lothcat": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "post-interact",
+      "label": "Curious",
+      "description": "After you interact, suffer 1 Strain.",
+      "wiredStatus": "wired"
+    },
+    "beskar_armor": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "post-deploy",
+      "label": "Beskar Armor",
+      "description": "After deployment, you gain 2 Block Tokens.",
+      "wiredStatus": "wired"
     }
   }
 }

@@ -3602,6 +3602,20 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           }
         }
       }
+      // Leg Hydraulics (Tress Hacnua): after attack, gain 1 MP
+      {
+        const _lhAtkEff = getDcEffects()?.[combat.attackerDcName];
+        if ((_lhAtkEff?.passives || []).includes('Leg Hydraulics')) {
+          const _lhMsgId = combat.attackerMsgId;
+          if (_lhMsgId) {
+            game.movementBank = game.movementBank || {};
+            game.movementBank[_lhMsgId] = game.movementBank[_lhMsgId] || { total: 0, remaining: 0 };
+            game.movementBank[_lhMsgId].total = (game.movementBank[_lhMsgId].total || 0) + 1;
+            game.movementBank[_lhMsgId].remaining = (game.movementBank[_lhMsgId].remaining || 0) + 1;
+            await logGameAction(game, client, `🦿 **Leg Hydraulics** — **${combat.attackerDcName}** gains 1 MP after attack.`, { phase: 'ROUND', icon: 'attack' });
+          }
+        }
+      }
       // Locked and Loaded (Migs Mayfeld): after attack, gain 2 Power Tokens (max 3 total)
       {
         const _llAtkEff = getDcEffects()?.[combat.attackerDcName];
@@ -3624,6 +3638,24 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             } else {
               await logGameAction(game, client, `🔫 **Locked and Loaded** — **${combat.attackerDcName}** already at max 3 Power Tokens; no tokens gained.`, { phase: 'ROUND', icon: 'attack' });
             }
+          }
+        }
+      }
+      // Open-Minded (Del Meeko): after attack, gain 1 MP or 1 Power Token (choice)
+      {
+        const _omAtkEff = getDcEffects()?.[combat.attackerDcName];
+        if ((_omAtkEff?.passives || []).includes('Open-Minded')) {
+          const _omMsgId = combat.attackerMsgId;
+          const _omFk = combat.attackerFigureKey;
+          if (_omMsgId && _omFk) {
+            const _omBtns = [
+              new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${_omMsgId}_openminded_mp`).setLabel('Gain 1 MP').setStyle(ButtonStyle.Primary),
+              new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${_omMsgId}_openminded_token`).setLabel('Gain 1 Power Token').setStyle(ButtonStyle.Secondary),
+            ];
+            await thread.send({
+              content: `🧠 **Open-Minded** — **${combat.attackerDcName}**: Choose one:`,
+              components: [new ActionRowBuilder().addComponents(_omBtns)],
+            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
           }
         }
       }
@@ -8545,8 +8577,10 @@ client.on('interactionCreate', async (interaction) => {
     const interactContext = {
       getGame,
       dcMessageMeta,
+      dcHealthState,
       getLegalInteractOptions,
       getDcStats,
+      getDcEffects,
       updateDcActionsMessage,
       logGameAction,
       sendBleedingPrompt,

@@ -150,5 +150,24 @@ export async function handleInteractChoice(interaction, ctx) {
   if ((game.figureConditions?.[figureKey] || []).includes('Bleed') && ctx.sendBleedingPrompt) {
     await ctx.sendBleedingPrompt(game, interaction.channel, figureKey, playerNum, displayName);
   }
+  // Curious (Loth-cat E/R): after interact, suffer 1 Strain (= 1 HP damage)
+  if (ctx.getDcEffects) {
+    const _curEff = ctx.getDcEffects()?.[meta.dcName];
+    if ((_curEff?.passives || []).includes('Curious')) {
+      const _curMsgId = msgId;
+      const _curHS = ctx.dcHealthState?.get(_curMsgId);
+      if (_curHS?.[figureIndex]) {
+        const [_curCur, _curMax] = _curHS[figureIndex];
+        const _curNew = Math.max(0, (_curCur || 0) - 1);
+        _curHS[figureIndex] = [_curNew, _curMax || _curCur];
+        ctx.dcHealthState?.set(_curMsgId, _curHS);
+        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const dcIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+        const _curIdx = dcIds.indexOf(_curMsgId);
+        if (_curIdx >= 0 && dcList?.[_curIdx]) dcList[_curIdx].healthState = [..._curHS];
+        await logGameAction(game, interaction.client, `😿 **Curious** — **${shortName}** suffers 1 Strain after interacting.`, { phase: 'ROUND', icon: 'activate' });
+      }
+    }
+  }
   saveGames();
 }

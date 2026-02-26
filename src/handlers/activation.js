@@ -971,6 +971,28 @@ export async function handleActPassive(interaction, ctx) {
     game.figurePowerTokens[targetFk].push(tokenType);
     delete game.pendingAwr;
     await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(() => {});
+  } else if (ability === 'openminded') {
+    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const fk = `${meta.dcName}-${dgIndex}-0`;
+    if (choice === 'mp') {
+      game.movementBank = game.movementBank || {};
+      game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
+      game.movementBank[msgId].total += 1;
+      game.movementBank[msgId].remaining += 1;
+      await interaction.message.edit({ content: `🧠 **Open-Minded** — **${displayName}** gained **1 MP**.`, components: [] }).catch(() => {});
+    } else if (choice === 'token') {
+      // Grant 1 Power Token — player chooses type via power_token_choice_ flow
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+      game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: meta.dcName, count: 1 }], channelId: interaction.channelId, playerNum: meta.playerNum };
+      const { ActionRowBuilder: AR, ButtonBuilder: BB, ButtonStyle: BS } = await import('discord.js');
+      const tokenBtns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+        new BB().setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(BS.Secondary)
+      );
+      await interaction.message.edit({ content: `🧠 **Open-Minded** — **${displayName}**: Choose Power Token type:`, components: [new AR().addComponents(tokenBtns)] }).catch(() => {});
+      saveGames();
+      return; // Don't save twice
+    }
   }
   saveGames();
 }

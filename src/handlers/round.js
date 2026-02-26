@@ -325,6 +325,55 @@ export async function handleEndEndOfRound(interaction, ctx) {
 
   // NPC Krykna push+damage phase (Chopper Base A): build push queue here; damage runs after all pushes (in modal handler)
 
+  // Hardy + Regenerate: end-of-round passive effects
+  {
+    const _harmfulConds = ['Bleed', 'Stun', 'Weaken'];
+    const _allEff = getDcEffects() || {};
+    for (const pn of [1, 2]) {
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!pos) continue;
+        const dcName = fk.replace(/-\d+-\d+$/, '');
+        const passives = _allEff[dcName]?.passives || [];
+        // Hardy: discard all harmful conditions
+        if (passives.includes('Hardy')) {
+          const conds = game.figureConditions?.[fk] || [];
+          const removed = conds.filter(c => _harmfulConds.includes(c));
+          if (removed.length > 0) {
+            game.figureConditions[fk] = conds.filter(c => !_harmfulConds.includes(c));
+            await logGameAction(game, client, `💪 **Hardy** — **${dcName}** discarded harmful conditions: ${removed.join(', ')}.`, { phase: 'ROUND', icon: 'round' });
+          }
+        }
+        // Regenerate: recover 2 HP + discard all harmful conditions
+        if (passives.includes('Regenerate')) {
+          const dcIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+          const dcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+          const _regMsgId = dcIds.find((id, i) => dcList[i]?.dcName === dcName);
+          if (_regMsgId) {
+            const _regHS = dcHealthState.get(_regMsgId);
+            const _regFigIdx = parseInt(fk.split('-').pop(), 10) || 0;
+            if (_regHS?.[_regFigIdx]) {
+              const [cur, max] = _regHS[_regFigIdx];
+              const newCur = Math.min((cur || 0) + 2, max || cur);
+              _regHS[_regFigIdx] = [newCur, max || cur];
+              dcHealthState.set(_regMsgId, _regHS);
+              const idx = dcIds.indexOf(_regMsgId);
+              if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [..._regHS];
+              if (newCur > (cur || 0)) {
+                await logGameAction(game, client, `🩹 **Regenerate** — **${dcName}** recovered ${newCur - (cur || 0)} HP (${cur} → ${newCur}).`, { phase: 'ROUND', icon: 'round' });
+              }
+            }
+          }
+          const conds = game.figureConditions?.[fk] || [];
+          const removed = conds.filter(c => _harmfulConds.includes(c));
+          if (removed.length > 0) {
+            game.figureConditions[fk] = conds.filter(c => !_harmfulConds.includes(c));
+            await logGameAction(game, client, `🩹 **Regenerate** — **${dcName}** discarded harmful conditions: ${removed.join(', ')}.`, { phase: 'ROUND', icon: 'round' });
+          }
+        }
+      }
+    }
+  }
+
   game.p1LaunchPanelFlippedThisRound = false;
   game.p2LaunchPanelFlippedThisRound = false;
   const prevInitiative = game.initiativePlayerId;
@@ -526,6 +575,28 @@ export async function handleEndStartOfRound(interaction, ctx) {
     return;
   }
   game.startOfRoundWhoseTurn = null;
+
+  // Post-deploy effects: fire once at the start of round 1
+  if (game.currentRound === 1 && !game.postDeployEffectsFired) {
+    game.postDeployEffectsFired = true;
+    const _pdEff = getDcEffects() || {};
+    for (const pn of [1, 2]) {
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!pos) continue;
+        const dcName = fk.replace(/-\d+-\d+$/, '');
+        const passives = _pdEff[dcName]?.passives || [];
+        // Beskar Armor (The Mandalorian / The Armorer): gain 2 Block Tokens
+        if (passives.includes('Beskar Armor')) {
+          game.figurePowerTokens = game.figurePowerTokens || {};
+          game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+          game.figurePowerTokens[fk].push('Block');
+          game.figurePowerTokens[fk].push('Block');
+          await logGameAction(game, client, `🛡️ **Beskar Armor** — **${dcName}** gains **2 Block Tokens** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
+        }
+      }
+    }
+  }
+
   const generalChannel = await client.channels.fetch(game.generalId);
   const roundEmbed = new EmbedBuilder()
     .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound} - Start of Round`)
