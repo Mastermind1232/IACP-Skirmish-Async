@@ -203,12 +203,25 @@ export async function handleAttackTarget(interaction, ctx) {
     const pendingBL = game.pendingBattlefieldLeadership;
     const isBLFreeAttack = pendingBL?.forMsgId === msgId;
     const isFellSwoopFreeAttack = !!game.fellSwoopFreeAttack?.[msgId];
+    const isEmperorFreeAttack = game.pendingEmperorInterrupt?.forMsgId === msgId;
+    const isExecOrderFreeAttack = game.pendingExecutiveOrder?.forMsgId === msgId;
+    const isBombardmentFreeAttack = game.pendingBombardmentSorin?.forMsgId === msgId;
+    const isFiringSquadFreeAttack = (game.pendingFiringSquad || []).some(p => p.forMsgId === msgId);
     if (isBLFreeAttack) {
       delete game.pendingBattlefieldLeadership;
     } else if (isFellSwoopFreeAttack) {
       delete game.fellSwoopFreeAttack[msgId];
       // Clear SFTY exclude once the free attack fires
       if (game.stillFasterExcludeMsgId) game.stillFasterExcludeMsgId = null;
+    } else if (isEmperorFreeAttack) {
+      delete game.pendingEmperorInterrupt;
+    } else if (isExecOrderFreeAttack) {
+      delete game.pendingExecutiveOrder;
+    } else if (isBombardmentFreeAttack) {
+      delete game.pendingBombardmentSorin;
+    } else if (isFiringSquadFreeAttack) {
+      game.pendingFiringSquad = (game.pendingFiringSquad || []).filter(p => p.forMsgId !== msgId);
+      if (game.pendingFiringSquad.length === 0) delete game.pendingFiringSquad;
     } else {
       actionsData.remaining = Math.max(0, actionsData.remaining - 1);
       await updateDcActionsMessage(game, msgId, interaction.client);

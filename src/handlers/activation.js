@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getCcEffectsData } from '../data-loader.js';
+import { getCcEffectsData, getDcEffects } from '../data-loader.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -232,6 +232,26 @@ export async function handleEndTurn(interaction, ctx) {
       await endTurnMsg.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch {}
   }
+  // Shield (Riot Trooper E/R): at end of activation, if no Block tokens, gain 1 Block token
+  const _shieldEff = getDcEffects()?.[meta.dcName];
+  if ((_shieldEff?.passives || []).includes('Shield')) {
+    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const prefix = `${meta.dcName}-${dgIndex}-`;
+    const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(k => k.startsWith(prefix));
+    for (const fk of figureKeys) {
+      const tokens = game.figurePowerTokens?.[fk] || [];
+      if (!tokens.includes('Block')) {
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+        if (game.figurePowerTokens[fk].length < 2) {
+          game.figurePowerTokens[fk].push('Block');
+          const fkName = fk.replace(/-\d+-\d+$/, '');
+          await logGameAction(game, client, `🛡️ **Shield** — **${fkName}** gained 1 **Block Token** at end of activation.`, { phase: 'ROUND', icon: 'activate' });
+        }
+      }
+    }
+  }
+
   const actionsData = game.dcActionsData?.[dcMsgId];
   if (actionsData?.threadId) {
     try {
@@ -559,6 +579,16 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (actMinimap) actionsPayload.files = [actMinimap];
   const actionsMsg = await thread.send(actionsPayload);
   game.dcActionsData[msgId].messageId = actionsMsg.id;
+  // Mounted (Captain Terro, Kuiil): gain 3 MP at start of activation
+  const _mountedEff = getDcEffects()?.[meta.dcName];
+  const _mountedIds = _mountedEff?.specialAbilityIds || [];
+  if (_mountedIds.includes('mounted_terro') || _mountedIds.includes('mounted_kuiil')) {
+    game.movementBank = game.movementBank || {};
+    game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    game.movementBank[msgId].total += 3;
+    game.movementBank[msgId].remaining += 3;
+    await thread.send({ content: `🐎 **Mounted** — **${displayName}** gains **3 movement points** at the start of activation.` }).catch(() => {});
+  }
   const logCh = await client.channels.fetch(game.generalId);
   const icon = ACTION_ICONS.activate || '⚡';
   const pLabel = `P${meta.playerNum}`;

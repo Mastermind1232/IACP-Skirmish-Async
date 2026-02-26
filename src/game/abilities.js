@@ -531,6 +531,298 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // emperor_interrupt (Emperor Palpatine): choose a friendly figure within 4 spaces; it gets a free attack
+  if (abilityId === 'emperor_interrupt') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Emperor** manually.' };
+    if (choiceIndex != null && targetFigureKey) {
+      const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
+      if (chosenMsgId) {
+        game.pendingEmperorInterrupt = { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId };
+      }
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Emperor** — **${chosenName}** may interrupt to perform a free attack (no action cost). Use their **Attack** button.` };
+    }
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+    if (!activatingPos) return { applied: false, manualMessage: '**Emperor** — No position on the board. Resolve manually.' };
+    const validTargets = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (fk === activatingKey || !pos) continue;
+      if (getRng && getRng(activatingPos, pos) > 4) continue;
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Emperor** — No other friendly figures within 4 spaces.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // tempt (Emperor Palpatine): choose any figure within 4 spaces; 1 damage + 1 Hit Token
+  if (abilityId === 'tempt') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Tempt** manually.' };
+    const enemyNum = playerNum === 1 ? 2 : 1;
+    if (choiceIndex != null && targetFigureKey) {
+      // Apply 1 damage to target (direct damage — reduce HP)
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      // Grant 1 Hit Token to target
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
+      if (game.figurePowerTokens[targetFigureKey].length < 2) game.figurePowerTokens[targetFigureKey].push('Hit');
+      return { applied: true, logMessage: `**Tempt** — **${chosenName}** suffers 1 Damage and gains 1 Hit Token. *(Apply 1 damage manually via HP buttons.)*`, refreshDcEmbed: true };
+    }
+    // Enumerate all figures (friendly + hostile) within 4 spaces except self
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+    if (!activatingPos) return { applied: false, manualMessage: '**Tempt** — No position on the board. Resolve manually.' };
+    const validTargets = [];
+    for (const pn of [playerNum, enemyNum]) {
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (fk === activatingKey || !pos) continue;
+        if (getRng && getRng(activatingPos, pos) > 4) continue;
+        validTargets.push(fk);
+      }
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Tempt** — No figures within 4 spaces.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // on_my_mark (Gideon Argus): choose a friendly figure — it becomes Focused
+  if (abilityId === 'on_my_mark') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **On My Mark** manually.' };
+    if (choiceIndex != null && targetFigureKey) {
+      game.figureConditions = game.figureConditions || {};
+      game.figureConditions[targetFigureKey] = game.figureConditions[targetFigureKey] || [];
+      if (!game.figureConditions[targetFigureKey].includes('Focus')) game.figureConditions[targetFigureKey].push('Focus');
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**On My Mark** — **${chosenName}** is now **Focused** (+1 green die on next attack).`, refreshDcEmbed: true };
+    }
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const validTargets = Object.keys(game.figurePositions?.[playerNum] || {}).filter(fk => fk !== activatingKey && game.figurePositions[playerNum][fk]);
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**On My Mark** — No other friendly figures on the board.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // tactical_maneuver (Gideon Argus): choose a friendly figure — it gains 2 MP
+  if (abilityId === 'tactical_maneuver') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Tactical Maneuver** manually.' };
+    if (choiceIndex != null && targetFigureKey) {
+      const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
+      if (chosenMsgId) {
+        game.movementBank = game.movementBank || {};
+        game.movementBank[chosenMsgId] = game.movementBank[chosenMsgId] || { total: 0, remaining: 0 };
+        game.movementBank[chosenMsgId].total += 2;
+        game.movementBank[chosenMsgId].remaining += 2;
+      }
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Tactical Maneuver** — **${chosenName}** gained **2 movement points**.` };
+    }
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const validTargets = Object.keys(game.figurePositions?.[playerNum] || {}).filter(fk => fk !== activatingKey && game.figurePositions[playerNum][fk]);
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Tactical Maneuver** — No other friendly figures on the board.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // executive_order (Imperial Officer Elite): choose an Imperial figure within 2 spaces; it interrupts to move or attack
+  if (abilityId === 'executive_order') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng, getDcEffects: getEff } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Executive Order** manually.' };
+    if (choiceIndex != null && targetFigureKey) {
+      const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
+      if (chosenMsgId) {
+        game.pendingExecutiveOrder = { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId };
+      }
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Executive Order** — **${chosenName}** may interrupt to perform a free move or attack (no action cost). Use their **Move** or **Attack** button.` };
+    }
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+    if (!activatingPos) return { applied: false, manualMessage: '**Executive Order** — No position on the board. Resolve manually.' };
+    const validTargets = [];
+    const dcEffects = typeof getEff === 'function' ? getEff() : null;
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (fk === activatingKey || !pos) continue;
+      if (getRng && getRng(activatingPos, pos) > 2) continue;
+      // Must be Imperial affiliation
+      const fkDcName = fk.replace(/-\d+-\d+$/, '');
+      const fkEff = dcEffects?.[fkDcName];
+      if (fkEff?.affiliation && fkEff.affiliation !== 'Imperial') continue;
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Executive Order** — No friendly Imperial figures within 2 spaces.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // officer_order (Imperial Officer Regular): choose a friendly figure within 2 spaces; it gains 2 MP
+  if (abilityId === 'officer_order') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Order** manually.' };
+    if (choiceIndex != null && targetFigureKey) {
+      const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
+      if (chosenMsgId) {
+        game.movementBank = game.movementBank || {};
+        game.movementBank[chosenMsgId] = game.movementBank[chosenMsgId] || { total: 0, remaining: 0 };
+        game.movementBank[chosenMsgId].total += 2;
+        game.movementBank[chosenMsgId].remaining += 2;
+      }
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Order** — **${chosenName}** gained **2 movement points**.` };
+    }
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+    if (!activatingPos) return { applied: false, manualMessage: '**Order** — No position on the board. Resolve manually.' };
+    const validTargets = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (fk === activatingKey || !pos) continue;
+      if (getRng && getRng(activatingPos, pos) > 2) continue;
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Order** — No other friendly figures within 2 spaces.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // bombardment_sorin (General Sorin): choose an adjacent friendly; it interrupts to attack with Blast 1 + Accuracy 1
+  if (abilityId === 'bombardment_sorin') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Bombardment** manually.' };
+    if (choiceIndex != null && targetFigureKey) {
+      const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
+      if (chosenMsgId) {
+        game.pendingBombardmentSorin = { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId };
+        // Grant Blast 1 + Accuracy 1 bonus for the next attack
+        game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
+        game.nextAttacksBonusHits[playerNum] = { count: 1, bonus: 0, blast: 1, accuracy: 1 };
+      }
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Bombardment** — **${chosenName}** may interrupt to perform a free attack with **+1 Accuracy** and **Blast 1** (no action cost). Use their **Attack** button.` };
+    }
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+    if (!activatingPos) return { applied: false, manualMessage: '**Bombardment** — No position on the board. Resolve manually.' };
+    const validTargets = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (fk === activatingKey || !pos) continue;
+      if (getRng && getRng(activatingPos, pos) > 1) continue; // adjacent = within 1
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Bombardment** — No adjacent friendly figures.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // firing_squad (Kayn Somos): choose up to 2 adjacent Troopers; each interrupts to attack same target
+  if (abilityId === 'firing_squad') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getRange: getRng, getDcEffects: getEff } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Firing Squad** manually.' };
+    // Phase 2: first trooper chosen
+    if (choiceIndex != null && targetFigureKey) {
+      const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
+      if (chosenMsgId) {
+        game.pendingFiringSquad = game.pendingFiringSquad || [];
+        game.pendingFiringSquad.push({ forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
+      }
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      // Check if this is the second pick or if we should offer another
+      if ((game.pendingFiringSquad || []).length >= 2) {
+        const names = game.pendingFiringSquad.map(p => p.chosenFigureKey.replace(/-\d+-\d+$/, ''));
+        return { applied: true, logMessage: `**Firing Squad** — **${names.join('** and **')}** may each interrupt to perform a free attack targeting the same hostile figure (no action cost). Use their **Attack** buttons.` };
+      }
+      // Offer second pick (or allow finishing with 1)
+      const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+      const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+      const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+      const alreadyChosen = new Set((game.pendingFiringSquad || []).map(p => p.chosenFigureKey));
+      const dcEffects = typeof getEff === 'function' ? getEff() : null;
+      const moreTargets = [];
+      if (activatingPos) {
+        for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+          if (fk === activatingKey || !pos || alreadyChosen.has(fk)) continue;
+          if (getRng && getRng(activatingPos, pos) > 1) continue;
+          const fkDcName = fk.replace(/-\d+-\d+$/, '');
+          const fkEff = dcEffects?.[fkDcName];
+          const fkKeywords = (fkEff?.keywords || []).map(k => k.toUpperCase());
+          if (!fkKeywords.includes('TROOPER')) continue;
+          moreTargets.push(fk);
+        }
+      }
+      if (moreTargets.length === 0) {
+        return { applied: true, logMessage: `**Firing Squad** — **${chosenName}** may interrupt to perform a free attack (no action cost). Use their **Attack** button.` };
+      }
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: ['(Done — no second Trooper)', ...moreTargets.map((fk) => fk.replace(/-\d+-\d+$/, ''))],
+        targetFigureKeys: [null, ...moreTargets],
+      };
+    }
+    // Phase 1: enumerate adjacent Troopers
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+    if (!activatingPos) return { applied: false, manualMessage: '**Firing Squad** — No position on the board. Resolve manually.' };
+    const dcEffects = typeof getEff === 'function' ? getEff() : null;
+    const validTargets = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (fk === activatingKey || !pos) continue;
+      if (getRng && getRng(activatingPos, pos) > 1) continue; // adjacent
+      const fkDcName = fk.replace(/-\d+-\d+$/, '');
+      const fkEff = dcEffects?.[fkDcName];
+      const fkKeywords = (fkEff?.keywords || []).map(k => k.toUpperCase());
+      if (!fkKeywords.includes('TROOPER')) continue;
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Firing Squad** — No adjacent friendly Troopers.' };
+    game.pendingFiringSquad = [];
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
   // false_orders (Murne Rin): choose a hostile figure (cost ≤ 4, within 4 spaces); perform move or attack with it
   if (abilityId === 'false_orders') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng } = context;

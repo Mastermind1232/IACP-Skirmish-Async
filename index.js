@@ -3509,7 +3509,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     const entry = healthState[targetFigIndex];
     if (entry) {
       const [cur, max] = entry;
-      const newCur = Math.max(0, (cur ?? max) - damage);
+      let newCur = Math.max(0, (cur ?? max) - damage);
       healthState[targetFigIndex] = [newCur, max ?? newCur];
       dcHealthState.set(targetMsgId, healthState);
       const dcMessageIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
@@ -3531,6 +3531,26 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           await logGameAction(game, client, `**Furious Charge** — **${combat.target.label}** is now **Focused** (suffered ${damage} Damage).`, { phase: 'ROUND', icon: 'card' });
         }
         game.conditionalFocusIfDamagedGte = null;
+      }
+      // Stun Batons (Riot Trooper E/R): after attack, if target suffered damage, target suffers 1 Strain
+      if (damage > 0) {
+        const _sbAttDcName = combat.attackerDcName || '';
+        const _sbAttEff = getDcEffects()?.[_sbAttDcName];
+        if ((_sbAttEff?.passives || []).includes('Stun Batons')) {
+          game.figureConditions = game.figureConditions || {};
+          game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
+          // Strain = 1 direct HP damage (apply via health reduction)
+          const _sbHs = dcHealthState.get(targetMsgId);
+          if (_sbHs?.[targetFigIndex]) {
+            const [_sbCur, _sbMax] = _sbHs[targetFigIndex];
+            const _sbNew = Math.max(0, (_sbCur ?? _sbMax) - 1);
+            _sbHs[targetFigIndex] = [_sbNew, _sbMax ?? _sbCur];
+            dcHealthState.set(targetMsgId, _sbHs);
+            if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [..._sbHs];
+            newCur = _sbNew;
+          }
+          await logGameAction(game, client, `⚡ **Stun Batons** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`, { phase: 'ROUND', icon: 'attack' });
+        }
       }
       // You Will Not Deny Me: prevent Fifth Brother from being defeated (restore HP to 1)
       if (newCur <= 0 && game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum) {
@@ -3685,6 +3705,25 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             }
           }
           delete game.recoverOnHostileDefeat[attackerPlayerNum];
+        }
+        // Last Stand (Stormtrooper Elite): when defeated, another figure in the group becomes Focused
+        const _lsDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _lsEff = getDcEffects()?.[_lsDcName];
+        if ((_lsEff?.passives || []).includes('Last Stand')) {
+          const _lsDgMatch = (combat.target.figureKey || '').match(/-(\d+)-\d+$/);
+          const _lsDgIdx = _lsDgMatch ? _lsDgMatch[1] : '1';
+          const _lsPrefix = `${_lsDcName}-${_lsDgIdx}-`;
+          const _lsAlive = Object.keys(game.figurePositions?.[defenderPlayerNum] || {}).filter(k => k.startsWith(_lsPrefix) && k !== combat.target.figureKey);
+          if (_lsAlive.length > 0) {
+            const _lsTarget = _lsAlive[0];
+            game.figureConditions = game.figureConditions || {};
+            game.figureConditions[_lsTarget] = game.figureConditions[_lsTarget] || [];
+            if (!game.figureConditions[_lsTarget].includes('Focus')) {
+              game.figureConditions[_lsTarget].push('Focus');
+              const _lsName = _lsTarget.replace(/-\d+-\d+$/, '');
+              await logGameAction(game, client, `⚡ **Last Stand** — **${_lsName}** becomes **Focused** (another figure in the group was defeated).`, { phase: 'ROUND', icon: 'card' });
+            }
+          }
         }
         resultText += ` — **${combat.target.label} defeated!** +${vp} VP`;
         await logGameAction(game, client, `<@${ownerId}> defeated **${combat.target.label}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });

@@ -365,6 +365,10 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.applySelfStunAfterAttackPlayerNum = {};
   game.postActivationConditions = {};
   game.pendingCombatResupply = {};
+  game.pendingEmperorInterrupt = null;
+  game.pendingExecutiveOrder = null;
+  game.pendingBombardmentSorin = null;
+  game.pendingFiringSquad = null;
   game.sonOfSkywalkerActive = null;
   game.dataTheftStolenCard = null;
   game.pendingPostAttackConditions = {};

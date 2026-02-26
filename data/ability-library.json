@@ -2759,6 +2759,95 @@
       "missileSalvoStart": true,
       "wiredStatus": "wired"
     },
+    "emperor_interrupt": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Emperor",
+      "description": "Choose a friendly figure within 4 spaces. That figure may interrupt to perform an attack.",
+      "oncePer": null,
+      "wiredStatus": "wired"
+    },
+    "tempt": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Tempt",
+      "description": "Choose any figure within 4 spaces. That figure suffers 1 Damage and gains 1 Hit Token.",
+      "oncePer": null,
+      "wiredStatus": "wired"
+    },
+    "tactical_maneuver": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Tactical Maneuver",
+      "description": "Choose a friendly figure within line of sight. That figure gains 2 movement points.",
+      "oncePer": null,
+      "wiredStatus": "wired"
+    },
+    "on_my_mark": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "On My Mark",
+      "description": "Choose a friendly figure within line of sight. That figure becomes Focused.",
+      "oncePer": null,
+      "wiredStatus": "wired"
+    },
+    "executive_order": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Executive Order",
+      "description": "Choose a friendly Imperial figure within 2 spaces. That figure may interrupt to perform a move or an attack.",
+      "oncePer": null,
+      "wiredStatus": "wired"
+    },
+    "officer_order": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Order",
+      "description": "Choose a friendly figure within 2 spaces. That figure gains 2 movement points.",
+      "freeMoveBonus": 2,
+      "oncePer": null,
+      "wiredStatus": "wired"
+    },
+    "bombardment_sorin": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Bombardment",
+      "description": "Choose an adjacent friendly figure. That figure may interrupt to perform an attack. While attacking, that figure applies +1 Accuracy and Blast 1 to the attack results.",
+      "oncePer": null,
+      "wiredStatus": "wired"
+    },
+    "firing_squad": {
+      "type": "dcSpecial",
+      "category": "active",
+      "trigger": "activation",
+      "label": "Firing Squad",
+      "description": "Choose up to 2 adjacent friendly Troopers. Each chosen figure may interrupt to perform an attack targeting the same hostile figure.",
+      "oncePer": null,
+      "wiredStatus": "wired"
+    },
+    "mounted_terro": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "trigger": "startOfActivation",
+      "label": "Mounted",
+      "description": "At the start of your activation, gain 3 movement points.",
+      "wiredStatus": "wired"
+    },
+    "mounted_kuiil": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "trigger": "startOfActivation",
+      "label": "Mounted",
+      "description": "At the start of your activation, gain 3 movement points.",
+      "wiredStatus": "wired"
+    },
     "battlefield_leadership": {
       "type": "dcSpecial",
       "category": "active",

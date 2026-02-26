@@ -1140,7 +1140,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         return;
       }
       const actData = game.dcActionsData?.[msgId];
-      if (actData) {
+      const isExecOrderFreeMove = game.pendingExecutiveOrder?.forMsgId === msgId;
+      if (isExecOrderFreeMove) {
+        delete game.pendingExecutiveOrder;
+      } else if (actData) {
         actData.remaining = Math.max(0, actData.remaining - 1);
         await updateDcActionsMessage(game, msgId, client);
       }
