@@ -544,6 +544,111 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
+  // Find Weakness (Scout Trooper Elite): -1 Evade to defense results (accuracy handled via passives)
+  if (atkSpecialIds.includes('find_weakness')) {
+    game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) - 1;
+    await thread.send('**Find Weakness** — −1 Evade applied to defense results.');
+  }
+
+  // Exploit Weakness (Scout Trooper Elite): +1 Surge if defender has a harmful condition
+  if (atkSpecialIds.includes('exploit_weakness')) {
+    const harmfulConds = ['Bleed', 'Stun', 'Weaken'];
+    const defConds = game.figureConditions?.[target.figureKey] || [];
+    if (defConds.some(c => harmfulConds.includes(c))) {
+      game.pendingCombat.surgeBonus = (game.pendingCombat.surgeBonus || 0) + 1;
+      await thread.send('**Exploit Weakness** — defender has a harmful condition, +1 Surge.');
+    }
+  }
+
+  // Conclusion (HK-47): -1 Evade to defense results while attacking
+  if (atkSpecialIds.includes('conclusion')) {
+    game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) - 1;
+    await thread.send('**Conclusion** — −1 Evade applied to defense results.');
+  }
+
+  // Query (HK-47): +1 Hit unless defender becomes Bleeding
+  if (atkSpecialIds.includes('query_hk47')) {
+    game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+    await thread.send('**Query** — +1 Hit applied. (Note: if defender becomes Bleeding, this +1 Hit should not apply — honor system.)');
+  }
+
+  // Disposable (Hired Gun Regular): -1 Evade to own defense results
+  if (defSpecialIds.includes('disposable')) {
+    game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) - 1;
+    await thread.send('**Disposable** — −1 Evade applied to defender\'s defense results.');
+  }
+
+  // Front Line (Echo Base Trooper): within 3 spaces, replace 1 blue die with red
+  if (atkSpecialIds.includes('front_line') && distanceToTarget <= 3) {
+    const dice = game.pendingCombat.attackInfo.dice || [];
+    const blueIdx = dice.findIndex(d => d === 'blue');
+    if (blueIdx >= 0) {
+      const newDice = [...dice];
+      newDice[blueIdx] = 'red';
+      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: newDice };
+      await thread.send(`**Front Line** — 1 blue die replaced with red (target within ${distanceToTarget} spaces).`);
+    }
+  }
+
+  // Cortosis Weave (Echo Base Trooper Elite): reduce Pierce by 2
+  if (defSpecialIds.includes('cortosis_weave')) {
+    game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) - 2;
+    await thread.send('**Cortosis Weave** — Pierce reduced by 2 (min 0).');
+  }
+
+  // Gamorrean Honor Guard: +1 Block while defending during Ranged attack
+  if (defSpecialIds.includes('gamorrean_honor_guard') && isRanged) {
+    game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
+    await thread.send('**Gamorrean Honor Guard** — +1 Block (defending against Ranged attack).');
+  }
+
+  // Composite Plating (Heavy Stormtrooper Regular): +1 Block if attacker 4+ spaces away
+  if (defSpecialIds.includes('composite_plating') && distanceToTarget >= 4) {
+    game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
+    await thread.send(`**Composite Plating** — +1 Block (attacker ${distanceToTarget} spaces away).`);
+  }
+
+  // Sniper (Alliance Ranger Regular): forced +1 reroll at 5+ spaces (no "may")
+  if (atkSpecialIds.includes('sniper') && distanceToTarget >= 5) {
+    game.pendingCombat.rerollOneAttackDie = (game.pendingCombat.rerollOneAttackDie || 0) + 1;
+    await thread.send(`**Sniper** — +1 attack reroll (target ${distanceToTarget} spaces away).`);
+  }
+
+  // Elite Sniper (Alliance Ranger Elite): +2 reroll at 5+ spaces
+  if (atkSpecialIds.includes('elite_sniper') && distanceToTarget >= 5) {
+    game.pendingCombat.rerollOneAttackDie = (game.pendingCombat.rerollOneAttackDie || 0) + 2;
+    await thread.send(`**Elite Sniper** — +2 attack rerolls (target ${distanceToTarget} spaces away).`);
+  }
+
+  // Much to Learn (Ezra Bridger): +1 reroll if friendly unique within 3 spaces
+  if (atkSpecialIds.includes('much_to_learn') && getRange && mapSpaces) {
+    const atkPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
+    if (atkPos) {
+      const friendlyPos = game.figurePositions?.[attackerPlayerNum] || {};
+      for (const [fk, pos] of Object.entries(friendlyPos)) {
+        if (fk === attackerFigureKey) continue;
+        const fkDcName = fk.replace(/-\d+-\d+$/, '');
+        const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+        if (!fkEff?.unique) continue;
+        if (getRange(atkPos, pos) > 3) continue;
+        game.pendingCombat.rerollOneAttackDie = (game.pendingCombat.rerollOneAttackDie || 0) + 1;
+        const isFU = (fkEff?.keywords || []).map(k => String(k).toUpperCase()).includes('FORCE USER');
+        const note = isFU ? ' (FORCE USER nearby — may turn die to any side instead)' : '';
+        await thread.send(`**Much to Learn** — ${fkDcName} is within 3 spaces, +1 attack reroll${note}.`);
+        break;
+      }
+    }
+  }
+
+  // Forest Fighters (Ewok Warrior Elite): +1 Hit during melee attack if Hidden
+  if (atkSpecialIds.includes('forest_fighters') && !isRanged) {
+    const atkConds = game.figureConditions?.[attackerFigureKey] || [];
+    if (atkConds.includes('Hide')) {
+      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+      await thread.send('**Forest Fighters** — +1 Hit (Hidden, Melee attack).');
+    }
+  }
+
   // Sentinel / Protector: scan defender's friendlies for adjacent-to-target, +1 Block. Limit 1 per attack.
   if (mapSpaces && targetCoord && !target.isNpc) {
     const adjToTargetSP = new Set((mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase()));

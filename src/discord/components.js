@@ -184,6 +184,10 @@ export function getMapConfirmButton(gameId) {
       .setCustomId(`map_confirm_${gameId}`)
       .setLabel('Confirm Selection')
       .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`map_goback_${gameId}`)
+      .setLabel('Go Back')
+      .setStyle(ButtonStyle.Secondary),
   );
 }
 

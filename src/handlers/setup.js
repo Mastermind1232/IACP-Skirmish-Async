@@ -405,6 +405,34 @@ export async function handleMapConfirm(interaction, ctx) {
 }
 
 /**
+ * F17 Go Back: clear pending map selection and return to the initial map selection dropdown.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - getGame, getMapSelectionMenu, saveGames
+ */
+export async function handleMapGoBack(interaction, ctx) {
+  const { getGame, getMapSelectionMenu } = ctx;
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  const gameId = interaction.customId.replace('map_goback_', '');
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (game.mapSelected) {
+    await interaction.followUp({ content: 'Map already confirmed.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  // Clear pending selection
+  delete game.selectedMap;
+  delete game.selectedMission;
+  ctx.saveGames();
+  await interaction.editReply({
+    content: 'Choose how to select the map:',
+    components: [getMapSelectionMenu(gameId)],
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+}
+
+/**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, runDraftRandom, getGeneralSetupButtons, logGameErrorToBotLogs, extractGameIdFromInteraction, client, saveGames
  */

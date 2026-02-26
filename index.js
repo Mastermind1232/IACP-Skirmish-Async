@@ -121,6 +121,7 @@ import {
   handleDeploymentDone,
   handleAutoDeploy,
   handleMapConfirm,
+  handleMapGoBack,
   handleSetupAttachTo,
   handleDcActivate,
   handleDcUnactivate,
@@ -1239,6 +1240,7 @@ const CATEGORIES = {
 
 const GAME_TAGS = [
   { name: 'Slow' },
+  { name: 'Normal' },
   { name: 'Fast' },
   { name: 'Hyperspeed' },
 ];
@@ -8294,7 +8296,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'map_selection_' || buttonKey === 'map_confirm_' || buttonKey === 'draft_random_' || buttonKey === 'determine_initiative_' || buttonKey === 'deployment_zone_red_' || buttonKey === 'deployment_zone_blue_' || buttonKey === 'deployment_fig_' || buttonKey === 'deployment_orient_' || buttonKey === 'deploy_pick_' || buttonKey === 'deployment_done_' || buttonKey === 'auto_deploy_') {
+  if (buttonKey === 'map_selection_' || buttonKey === 'map_confirm_' || buttonKey === 'map_goback_' || buttonKey === 'draft_random_' || buttonKey === 'determine_initiative_' || buttonKey === 'deployment_zone_red_' || buttonKey === 'deployment_zone_blue_' || buttonKey === 'deployment_fig_' || buttonKey === 'deployment_orient_' || buttonKey === 'deploy_pick_' || buttonKey === 'deployment_done_' || buttonKey === 'auto_deploy_') {
     const setupContext = {
       getGame,
       getPlayReadyMaps,
@@ -8339,6 +8341,7 @@ client.on('interactionCreate', async (interaction) => {
     };
     if (buttonKey === 'map_selection_') await handleMapSelection(interaction, setupContext);
     else if (buttonKey === 'map_confirm_') await handleMapConfirm(interaction, setupContext);
+    else if (buttonKey === 'map_goback_') await handleMapGoBack(interaction, setupContext);
     else if (buttonKey === 'draft_random_') await handleDraftRandom(interaction, setupContext);
     else if (buttonKey === 'determine_initiative_') await handleDetermineInitiative(interaction, setupContext);
     else if (buttonKey === 'deployment_zone_red_' || buttonKey === 'deployment_zone_blue_') await handleDeploymentZone(interaction, setupContext);

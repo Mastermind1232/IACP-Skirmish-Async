@@ -768,6 +768,7 @@
         "TROOPER",
         "HUNTER"
       ],
+      "specialAbilityIds": ["elite_sniper"],
       "cost": 12,
       "subCost": 4,
       "health": 7,
@@ -802,6 +803,7 @@
         "TROOPER",
         "HUNTER"
       ],
+      "specialAbilityIds": ["sniper"],
       "cost": 9,
       "subCost": 3,
       "health": 5,
@@ -2149,6 +2151,7 @@
       "keywords": [
         "TROOPER"
       ],
+      "specialAbilityIds": ["front_line", "cortosis_weave"],
       "cost": 7,
       "subCost": 4,
       "health": 8,
@@ -2181,6 +2184,7 @@
       "keywords": [
         "TROOPER"
       ],
+      "specialAbilityIds": ["front_line"],
       "cost": 6,
       "subCost": 3,
       "health": 5,
@@ -2249,6 +2253,7 @@
       "keywords": [
         "BRAWLER"
       ],
+      "specialAbilityIds": ["forest_fighters"],
       "cost": 6,
       "subCost": 2,
       "health": 3,
@@ -2281,6 +2286,7 @@
         "FORCE USER",
         "SMUGGLER"
       ],
+      "specialAbilityIds": ["much_to_learn"],
       "subname": "SPECTRE-6",
       "cost": 7,
       "health": 10,
@@ -2460,12 +2466,14 @@
         "BRAWLER",
         "GUARDIAN"
       ],
+      "specialAbilityIds": ["gamorrean_honor_guard"],
       "cost": 7,
       "subCost": 4,
       "health": 8,
       "speed": 4,
       "passives": [
-        "Reach"
+        "Reach",
+        "Professional"
       ],
       "figures": 2,
       "attack": {
@@ -2729,6 +2737,7 @@
         "TROOPER",
         "HEAVY WEAPON"
       ],
+      "specialAbilityIds": ["composite_plating"],
       "cost": 6,
       "subCost": 3,
       "health": 6,
@@ -2823,6 +2832,7 @@
       "keywords": [
         "SMUGGLER"
       ],
+      "specialAbilityIds": ["disposable"],
       "cost": 4,
       "subCost": 2,
       "health": 3,
@@ -2890,6 +2900,7 @@
         "DROID",
         "HUNTER"
       ],
+      "specialAbilityIds": ["conclusion", "query_hk47"],
       "subname": "FAITHFUL MEATBAG EXTERMINATOR",
       "cost": 7,
       "health": 11,
@@ -4893,12 +4904,14 @@
         "SPY",
         "TROOPER"
       ],
+      "specialAbilityIds": ["find_weakness", "exploit_weakness"],
       "cost": 8,
       "subCost": 4,
       "health": 7,
       "speed": 4,
       "passives": [
-        "Professional"
+        "Professional",
+        "+3 Accuracy"
       ],
       "figures": 2,
       "attack": {

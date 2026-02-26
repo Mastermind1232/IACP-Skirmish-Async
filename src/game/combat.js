@@ -191,7 +191,7 @@ export function computeCombatResult(combat) {
   const surgeD = combat.surgeDamage || 0;
   const surgeP = combat.surgePierce || 0;
   const bonusPierce = combat.bonusPierce || 0;
-  const totalPierce = surgeP + bonusPierce;
+  const totalPierce = Math.max(0, surgeP + bonusPierce);
   const surgeA = combat.surgeAccuracy || 0;
   const bonusAcc = combat.bonusAccuracy || 0;
   const bonusHits = combat.bonusHits || 0;
