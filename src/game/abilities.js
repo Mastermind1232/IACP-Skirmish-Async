@@ -1619,6 +1619,98 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: entry.logMessage || msg, refreshMovementBank: true, activeMsgId: msgId };
   }
 
+  // ccEffect: distributeHitTokensEqualToRound (Combat Resupply) — 1 Power Token + distribute Hit tokens = round# among friendly figures within 3 spaces
+  if (entry.type === 'ccEffect' && entry.distributeHitTokensEqualToRound && typeof entry.powerTokenGain === 'number') {
+    const { game, playerNum, dcMessageMeta, choiceIndex, targetFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta?.dcName) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const fk = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const activatorPos = fk ? game.figurePositions?.[playerNum]?.[fk] : null;
+    const roundNum = game.currentRound || 1;
+    const getRng = context.getRange ?? ((c1, c2) => { const a = parseCoord(c1); const b = parseCoord(c2); return (a.col < 0 || b.col < 0) ? 999 : Math.abs(a.col - b.col) + Math.abs(a.row - b.row); });
+
+    // Find friendly figures within 3 spaces (including self)
+    const eligible = [];
+    for (const [efk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos || !activatorPos) continue;
+      if (getRng(activatorPos, pos) > 3) continue;
+      const existing = (game.figurePowerTokens?.[efk] || []).length;
+      if (existing >= 2) continue; // already at max tokens
+      eligible.push(efk);
+    }
+
+    // Phase 2+: sequential allocation — player picks one figure at a time to receive a Hit token
+    const pending = game.pendingCombatResupply?.[msgId];
+    if (pending && choiceIndex != null && targetFigureKey) {
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
+      if (game.figurePowerTokens[targetFigureKey].length < 2) {
+        game.figurePowerTokens[targetFigureKey].push('Hit');
+      }
+      pending.remaining -= 1;
+      const tName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      if (pending.remaining <= 0) {
+        delete game.pendingCombatResupply[msgId];
+        return { applied: true, logMessage: `**Combat Resupply** — **${tName}** gained 1 Hit Token. Distribution complete.`, refreshDcEmbed: true };
+      }
+      // Still more to distribute — re-check eligible (some may now be full)
+      const stillEligible = eligible.filter((efk) => (game.figurePowerTokens[efk] || []).length < 2);
+      if (stillEligible.length === 0) {
+        delete game.pendingCombatResupply[msgId];
+        return { applied: true, logMessage: `**Combat Resupply** — **${tName}** gained 1 Hit Token. No more eligible figures (all at max tokens).`, refreshDcEmbed: true };
+      }
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: stillEligible.map((efk) => efk.replace(/-\d+-\d+$/, '')),
+        targetFigureKeys: stillEligible,
+        logMessage: `**${tName}** gained 1 Hit Token. ${pending.remaining} more to assign.`,
+      };
+    }
+
+    // Phase 1: initial call — grant Power Token + start Hit token distribution
+    // Grant the 1 Power Token first
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+    const current = game.figurePowerTokens[fk].length;
+    const ptToAdd = Math.min(entry.powerTokenGain, 2 - current);
+    if (ptToAdd > 0) {
+      game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: fk, count: ptToAdd }], channelId: null, playerNum };
+    }
+
+    if (eligible.length === 0) {
+      return { applied: true, requiresPowerTokenChoice: ptToAdd > 0, logMessage: `Gained ${ptToAdd > 0 ? ptToAdd + ' Power Token(s)' : 'no Power Tokens (max)'}. No friendly figures within 3 spaces eligible for Hit tokens.` };
+    }
+
+    // Auto-distribute if only 1 eligible figure
+    if (eligible.length === 1) {
+      const tokensToAdd = Math.min(roundNum, 2 - (game.figurePowerTokens[eligible[0]] || []).length);
+      for (let i = 0; i < tokensToAdd; i++) {
+        game.figurePowerTokens[eligible[0]] = game.figurePowerTokens[eligible[0]] || [];
+        if (game.figurePowerTokens[eligible[0]].length < 2) game.figurePowerTokens[eligible[0]].push('Hit');
+      }
+      const eName = eligible[0].replace(/-\d+-\d+$/, '');
+      return { applied: true, requiresPowerTokenChoice: ptToAdd > 0, logMessage: `Gained ${ptToAdd} Power Token(s). **${eName}** gained ${tokensToAdd} Hit Token(s) (round ${roundNum}).`, refreshDcEmbed: true };
+    }
+
+    // Multiple eligible — start sequential picker
+    game.pendingCombatResupply = game.pendingCombatResupply || {};
+    game.pendingCombatResupply[msgId] = { remaining: roundNum };
+    return {
+      applied: false,
+      requiresChoice: true,
+      requiresPowerTokenChoice: ptToAdd > 0,
+      choiceOptions: eligible.map((efk) => efk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: eligible,
+      logMessage: `Gained ${ptToAdd} Power Token(s). Distribute ${roundNum} Hit Token(s) among friendly figures within 3 spaces (round ${roundNum}). Pick a figure:`,
+    };
+  }
+
   // ccEffect: Power Token gain (Battle Scars, etc.) — requires active activation
   if (entry.type === 'ccEffect' && (typeof entry.powerTokenGain === 'number' || entry.powerTokenGainIfDamagedGte)) {
     const { game, playerNum, dcMessageMeta } = context;
@@ -6422,9 +6514,11 @@ export function resolveAbility(abilityId, context) {
     if (idx >= 0 && Array.isArray(game[activatedKey])) {
       game[activatedKey] = game[activatedKey].filter((i) => i !== idx);
     }
+    // Set persistent flag so Luke's DC auto-readies after every subsequent activation this round
+    game.sonOfSkywalkerActive = { playerNum, dcMsgId: msgId };
     return {
       applied: true,
-      logMessage: 'Your Deployment card is now **Readied**. Use **Refresh All** to update the DC embed.',
+      logMessage: 'Your Deployment card is now **Readied** and will auto-ready after each activation this round.',
       refreshDcEmbed: true,
     };
   }
@@ -6633,12 +6727,14 @@ export function resolveAbility(abilityId, context) {
     game[oppDiscardKey] = oppDiscard;
     const ownHandKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
     game[ownHandKey] = [...(game[ownHandKey] || []), chosenOption];
+    // Track stolen card for end-of-round return if unplayed
+    game.dataTheftStolenCard = { playerNum, cardName: chosenOption };
     return {
       applied: true,
       drewCards: [chosenOption],
       refreshHand: true,
       refreshDiscard: true,
-      logMessage: `Took **${chosenOption}** from opponent's discard. It may be played once this round.`,
+      logMessage: `Took **${chosenOption}** from opponent's discard. It may be played once this round (returns at end of round if unplayed).`,
     };
   }
 

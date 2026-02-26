@@ -1602,7 +1602,7 @@
       "label": "Distribute Hit Tokens = round number to friendly figures within 3 + gain 1 Power Token",
       "powerTokenGain": 1,
       "wiredStatus": "wired",
-      "logMessage": "Gained **1 Power Token**. Distribute Hit tokens equal to the current round number among friendly figures within 3 spaces (honor — agree with opponent on distribution).",
+      "logMessage": "Gained **1 Power Token**. Distribute Hit tokens equal to the current round number among friendly figures within 3 spaces.",
       "distributeHitTokensEqualToRound": true
     },
     "Deadly Precision": {

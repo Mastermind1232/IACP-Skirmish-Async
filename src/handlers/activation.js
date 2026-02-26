@@ -262,6 +262,25 @@ export async function handleEndTurn(interaction, ctx) {
   } catch (err) {
     console.error('Failed to update DC card after End Turn:', err);
   }
+  // Son of Skywalker: auto-ready Luke's DC after any activation ends
+  if (game.sonOfSkywalkerActive) {
+    const sos = game.sonOfSkywalkerActive;
+    const sosDcMsgId = sos.dcMsgId;
+    const sosPlayerNum = sos.playerNum;
+    // Don't re-ready if this IS Luke's activation ending (he just activated, should stay exhausted)
+    if (sosDcMsgId !== dcMsgId) {
+      const sosActivatedKey = sosPlayerNum === 1 ? 'p1ActivatedDcIndices' : 'p2ActivatedDcIndices';
+      const sosDcIds = sosPlayerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const sosIdx = sosDcIds.indexOf(sosDcMsgId);
+      if (sosIdx >= 0 && Array.isArray(game[sosActivatedKey]) && game[sosActivatedKey].includes(sosIdx)) {
+        game[sosActivatedKey] = game[sosActivatedKey].filter((i) => i !== sosIdx);
+        const sosMeta = dcMessageMeta.get(sosDcMsgId);
+        const sosName = sosMeta?.displayName || sosMeta?.dcName || 'Luke Skywalker';
+        await logGameAction(game, client, `⚡ **Son of Skywalker** — **${sosName}** is automatically **Readied**.`, { phase: 'ROUND', icon: 'activate' });
+      }
+    }
+  }
+
   game.currentActivationTurnPlayerId = otherPlayerId;
   await logGameAction(game, client, `<@${otherPlayerId}> (**Player ${otherPlayerNum}'s turn**) **${pending.displayName}** finished all actions — your turn to activate a figure!`, {
     allowedMentions: { users: [otherPlayerId] },

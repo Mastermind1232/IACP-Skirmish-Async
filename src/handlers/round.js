@@ -239,6 +239,23 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.youWillNotDenyMeActive = null;
   game.mandaAsteelPlayerNum = null;
   game.stillFasterPlayerNum = null;
+
+  // Data Theft: return stolen card to opponent's discard if still in hand at end of round
+  if (game.dataTheftStolenCard) {
+    const dt = game.dataTheftStolenCard;
+    const dtHandKey = dt.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const dtOppDiscardKey = dt.playerNum === 1 ? 'player2CcDiscard' : 'player1CcDiscard';
+    const dtHand = game[dtHandKey] || [];
+    const dtIdx = dtHand.indexOf(dt.cardName);
+    if (dtIdx >= 0) {
+      dtHand.splice(dtIdx, 1);
+      game[dtHandKey] = dtHand;
+      game[dtOppDiscardKey] = (game[dtOppDiscardKey] || []).concat([dt.cardName]);
+      await logGameAction(game, client, `📋 **Data Theft** — **${dt.cardName}** returned to opponent's discard (unplayed).`, { phase: 'ROUND' });
+    }
+    game.dataTheftStolenCard = null;
+  }
+
   const p1Deck = game.player1CcDeck || [];
   const p2Deck = game.player2CcDeck || [];
   const p1Drawn = [];
@@ -347,6 +364,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.selfDefeatsAfterAttackMsgId = {};
   game.applySelfStunAfterAttackPlayerNum = {};
   game.postActivationConditions = {};
+  game.pendingCombatResupply = {};
+  game.sonOfSkywalkerActive = null;
+  game.dataTheftStolenCard = null;
   game.pendingPostAttackConditions = {};
   game.nextActivationFreeAttack = {};
   game.conditionalFocusIfDamagedGte = null;
