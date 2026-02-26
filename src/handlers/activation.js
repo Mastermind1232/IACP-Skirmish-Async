@@ -416,6 +416,35 @@ export async function handleDcEndActivation(interaction, ctx) {
     }
   }
   await maybeShowEndActivationPhaseButton(game, client);
+
+  // Squad Swarm: after ending activation, offer to activate another DC with the same name (combined cost ≤ 15)
+  if (game.squadSwarmPlayerNum === meta.playerNum) {
+    const _sqDcList = meta.playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const _sqDcIds = meta.playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const sameNameIds = _sqDcIds.filter((id, i) => {
+      if (!id || id === msgId) return false;
+      const dc = _sqDcList[i];
+      if (!dc || dc.defeated || dc.dcName !== meta.dcName) return false;
+      return !ctx.dcExhaustedState?.get(id);
+    });
+    const activatedCost = ctx.getDcStats?.(meta.dcName)?.cost ?? 0;
+    const eligibleIds = sameNameIds.filter(() => (activatedCost + (ctx.getDcStats?.(meta.dcName)?.cost ?? 0)) <= 15);
+    if (eligibleIds.length > 0) {
+      const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+      const btns = eligibleIds.slice(0, 4).map((id) =>
+        new ButtonBuilder()
+          .setCustomId(`squad_swarm_yes_${gameId}_${msgId}_${id}`)
+          .setLabel(`Activate ${ctx.dcMessageMeta?.get(id)?.displayName || meta.dcName}`.slice(0, 80))
+          .setStyle(ButtonStyle.Success)
+      );
+      btns.push(new ButtonBuilder().setCustomId(`squad_swarm_no_${gameId}_${msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+      await logGameAction(game, client, `<@${ownerId}> **Squad Swarm** — activate another **${meta.dcName}**?`, {
+        components: [new ActionRowBuilder().addComponents(...btns)],
+        allowedMentions: { users: [ownerId] },
+      });
+    }
+  }
+
   saveGames();
 }
 

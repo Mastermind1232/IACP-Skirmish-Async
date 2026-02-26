@@ -442,6 +442,24 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       if (result.revealToPlayer) {
         await interaction.followUp({ content: result.revealToPlayer, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
+      // Behind Enemy Lines reorder: if result has requiresReorder, post card-order picker buttons
+      if (result.requiresReorder?.cards?.length > 1) {
+        const _belCards = result.requiresReorder.cards;
+        const _belDeckKey = result.requiresReorder.deckKey;
+        game.pendingBELReorder = { deckKey: _belDeckKey, cards: _belCards, picked: [], playerNum, gameId };
+        const _belBtns = _belCards.map((c, i) =>
+          new ButtonBuilder()
+            .setCustomId(`bel_reorder_1_${gameId}_${i}`)
+            .setLabel(`1st: ${c}`.slice(0, 80))
+            .setStyle(ButtonStyle.Primary)
+        );
+        const _belHandId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+        const _belHandCh = await interaction.client.channels.fetch(_belHandId);
+        await _belHandCh.send({
+          content: `**Behind Enemy Lines** — Choose which card goes **on top** of the opponent's deck:`,
+          components: [new ActionRowBuilder().addComponents(..._belBtns.slice(0, 5))],
+        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
       // Windfall: award VP to windfall owner when a cost > 0 card is played (skip when Windfall itself is played)
       if (game.windfallActive && cost > 0 && card !== 'Windfall') {
         const wfNum = game.windfallActive.playerNum;

@@ -1483,7 +1483,7 @@
     "Behind Enemy Lines": {
       "type": "ccEffect",
       "label": "Look at the top 3 of opponent's Command deck and return in any order",
-      "logMessage": "Look at the top 3 of opponent's Command deck and return in any order (resolve deck order manually).",
+      "logMessage": "Look at the top 3 of opponent's Command deck and return in any order. You will be prompted to choose the order.",
       "wiredStatus": "wired",
       "revealsOpponentDeckTop": 3
     },
@@ -2122,7 +2122,7 @@
     "Price on Their Heads": {
       "type": "ccEffect",
       "label": "Place bounty on hostile DC: +4 VP when that group is defeated",
-      "logMessage": "**Price on Their Heads** \u00e2\u20ac\u201d Place on a hostile Deployment card. When the last figure in that group is defeated, you gain +4 VP. Use `/editvp +4` when triggered; track manually.",
+      "logMessage": "**Price on Their Heads** \u00e2\u20ac\u201d Place on a hostile Deployment card. When the last figure in that group is defeated, you gain +4 VP automatically.",
       "wiredStatus": "wired",
       "setsBounty": true
     },
@@ -2197,9 +2197,9 @@
     },
     "Stay Down": {
       "type": "ccEffect",
-      "label": "After Close and Personal (target survived): free attack, then you become Stunned (manual)",
+      "label": "After Close and Personal (target survived): free attack, then you become Stunned",
       "freeAttackBonus": true,
-      "logMessage": "**Stay Down** \u00e2\u20ac\u201d Free attack granted (after Close and Personal, if target survived \u00e2\u20ac\u201d target the same figure). After this attack resolves, manually apply **Stun** to your own figure.",
+      "logMessage": "**Stay Down** \u00e2\u20ac\u201d Free attack granted (after Close and Personal, if target survived \u00e2\u20ac\u201d target the same figure). After this attack resolves, your figure becomes Stunned automatically.",
       "wiredStatus": "wired"
     },
     "Still Faster Than You": {
@@ -2231,14 +2231,14 @@
     "There Is No Try": {
       "type": "ccEffect",
       "label": "When a friendly REBEL FORCE USER rolls dice: set 1 die to any side + convert Dodge results",
-      "logMessage": "**There Is No Try** \u00e2\u20ac\u201d When a friendly REBEL FORCE USER within 4 spaces rolls dice, choose one die and turn it to any side. On that die, convert each Dodge to 2 Blocks + 1 Evade. Resolve manually during the roll.",
+      "logMessage": "**There Is No Try** \u00e2\u20ac\u201d When a friendly REBEL FORCE USER within 4 spaces rolls dice, choose one die and turn it to any side. On that die, convert each Dodge to 2 Blocks + 1 Evade. You will be prompted when a qualifying figure rolls dice.",
       "wiredStatus": "wired",
       "setsTherIsNoTry": true
     },
     "Tough Luck": {
       "type": "ccEffect",
       "label": "After opponent rerolls a die: remove that die from the results",
-      "logMessage": "**Tough Luck** \u00e2\u20ac\u201d After your opponent rerolls a die, remove that die's result entirely from the results. Announce before they reroll. Resolve manually during combat.",
+      "logMessage": "**Tough Luck** \u00e2\u20ac\u201d After your opponent rerolls a die, remove that die's result entirely from the results. You will be prompted after each opponent reroll.",
       "wiredStatus": "wired",
       "setsToughLuck": true
     },

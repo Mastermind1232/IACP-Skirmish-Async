@@ -658,6 +658,11 @@ export function resolveAbility(abilityId, context) {
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     // freeAttackBonusCount > 1 (e.g. Sarlacc Sweep: 2 free attacks): store count, each attack decrements by 1
     game.freeAttackBonusPending[msgId] = entry.freeAttackBonusCount ?? true;
+    // Stay Down: mark to apply Stun to the attacker figure when the free attack is consumed
+    if (entry.label === 'Stay Down') {
+      game.stayDownPendingMsgId = game.stayDownPendingMsgId || {};
+      game.stayDownPendingMsgId[msgId] = true;
+    }
     const label = entry.label || 'Heroic';
     const countNote = (entry.freeAttackBonusCount ?? 1) > 1 ? ` (${entry.freeAttackBonusCount} times, each targeting a different figure)` : '';
     return { applied: true, freeAction: true, logMessage: entry.logMessage || `**${label}** — Your next attack${countNote} costs no action. Click Attack when ready.` };
@@ -4578,12 +4583,12 @@ export function resolveAbility(abilityId, context) {
         strainNote = `4 Strain (HP: ${cur ?? max}→${newCur})`;
       }
     }
-    // Override next attack to melee; grant 1 free attack (for 2 total)
+    // Override next attack to melee (with -1 Hit); grant 1 free attack (for 2 total)
     game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-    game.pendingOverrideAttackDice[msgId] = { type: 'melee' };
+    game.pendingOverrideAttackDice[msgId] = { type: 'melee', bonusHits: -1 };
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[msgId] = true;
-    return { applied: true, logMessage: `**Overheated** — **${meta.dcName}**: ${strainNote}. 2 Melee attacks queued (apply −1 Hit per attack manually). Attack type is now Melee.`, refreshDcEmbed: true };
+    return { applied: true, logMessage: `**Overheated** — **${meta.dcName}**: ${strainNote}. 2 Melee attacks queued; −1 Hit applied automatically per attack.`, refreshDcEmbed: true };
   }
 
   // ccEffect: setTheChargesEffect (Set the Charges) — pick a space within 3; roll blue die; apply Hit+Surge as damage; open doors (honor)
@@ -5829,10 +5834,10 @@ export function resolveAbility(abilityId, context) {
       return { requiresChoice: true, choiceOptions: options };
     }
     game.priceBounties = game.priceBounties || {};
-    game.priceBounties[chosenOption] = (game.priceBounties[chosenOption] || 0) + 4;
+    game.priceBounties[chosenOption] = { amount: 4, playerNum };
     return {
       applied: true,
-      logMessage: `Bounty on **${chosenOption}**: +4 VP when that group is defeated — apply via **/editvp** when it happens.`,
+      logMessage: `Bounty on **${chosenOption}**: +4 VP when that group is defeated (auto-awarded on defeat).`,
     };
   }
 
@@ -5872,7 +5877,8 @@ export function resolveAbility(abilityId, context) {
     const deckText = topCards.length > 0 ? topCards.map((c) => `**${c}**`).join(', ') : '*(empty)*';
     return {
       applied: true,
-      revealToPlayer: `**Top ${topCards.length} card${topCards.length !== 1 ? 's' : ''} of opponent's deck:** ${deckText}\nReturn them in any order (honor).`,
+      requiresReorder: topCards.length > 1 ? { cards: topCards, deckKey: oppDeckKey } : null,
+      revealToPlayer: `**Top ${topCards.length} card${topCards.length !== 1 ? 's' : ''} of opponent's deck:** ${deckText}`,
       logMessage: `Looked at top ${topCards.length} card(s) of opponent's Command deck.`,
     };
   }

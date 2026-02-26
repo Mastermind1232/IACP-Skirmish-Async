@@ -818,6 +818,22 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       rows.push(new ActionRowBuilder().addComponents(...eoaBtns));
     }
   }
+  // Overdrive: DROID may take 1 damage for +1 action (shown when CC is active and actions remain)
+  if (game?.roundDroidExtraActionCostDamage && !noActions && rows.length < 5) {
+    const dcKws = (getDcStats(dcName)?.keywords || []).map((k) => String(k).toUpperCase());
+    if (dcKws.includes('DROID')) {
+      const _odFigKey = `${dcName}-${dgIndex}-0`;
+      const alreadyUsed = game.overdriveUsedThisActivation?.[_odFigKey];
+      if (!alreadyUsed) {
+        rows.push(new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`overdrive_use_${msgId}`)
+            .setLabel('Overdrive: −1 HP for +1 Action')
+            .setStyle(ButtonStyle.Warning)
+        ));
+      }
+    }
+  }
   return rows;
 }
 

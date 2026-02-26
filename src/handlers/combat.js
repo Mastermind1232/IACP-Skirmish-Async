@@ -234,6 +234,14 @@ export async function handleAttackTarget(interaction, ctx) {
   if (attackerConds.includes('Focus')) {
     attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'green'] };
   }
+  // Utinni! (roundUtinniJawaBuffs): Jawa Scavenger gets +1 Accuracy and a VP-earning surge ability
+  if (game.roundUtinniJawaBuffs && meta.dcName?.toLowerCase().includes('jawa scavenger')) {
+    game.nextAttackBonusAccuracy = game.nextAttackBonusAccuracy || {};
+    game.nextAttackBonusAccuracy[attackerPlayerNum] = (game.nextAttackBonusAccuracy[attackerPlayerNum] || 0) + 1;
+    game.nextAttackBonusSurgeAbilities = game.nextAttackBonusSurgeAbilities || {};
+    game.nextAttackBonusSurgeAbilities[attackerPlayerNum] = game.nextAttackBonusSurgeAbilities[attackerPlayerNum] || [];
+    game.nextAttackBonusSurgeAbilities[attackerPlayerNum].push('utinni_vp_1');
+  }
   const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
   const combatDeclare = `**P${attackerPlayerNum}:** "${attackerDisplayName}" is attacking **P${defenderPlayerNum}:** "${target.label}"!`;
 
@@ -497,6 +505,13 @@ export async function handleAttackTarget(interaction, ctx) {
     const pierceStr = overrideDice.pierce > 0 ? `, Pierce ${overrideDice.pierce}` : '';
     await thread.send(`**Override dice** — Attack uses [${diceStr}]${typeStr}${pierceStr}.`);
   }
+  // Apply bonusHits from overrideDice (e.g. Overheated: -1 Hit per attack)
+  if (overrideDice?.bonusHits) {
+    game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + overrideDice.bonusHits;
+    if (overrideDice.bonusHits < 0) {
+      await thread.send(`**Overheated** — −${Math.abs(overrideDice.bonusHits)} Hit applied automatically.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
+  }
 
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
   if (nextPierce) delete game.nextAttackBonusPierce?.[attackerPlayerNum];
@@ -666,6 +681,29 @@ export async function handleCombatRoll(interaction, ctx) {
     const dodgeText = dodge ? ' **DODGE!**' : '';
     await thread.send(`**Defense roll** — ${block} block, ${evade} evade${dodgeText}  [${diceDetail}]`);
 
+    // There Is No Try (TINT): if thereIsNoTryPlayerNum is set for the defender, and the defending DC has REBEL + FORCE USER keywords
+    if (game.thereIsNoTryPlayerNum === defenderPlayerNum && !combat.tintResolved) {
+      const _tintDefDcName = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '');
+      const _tintStats = ctx.getDcStats?.(_tintDefDcName) || {};
+      const _tintAllKws = [...(_tintStats.keywords || []), ...(_tintStats.traits || [])].map((k) => String(k).toUpperCase());
+      if (_tintAllKws.includes('REBEL') && _tintAllKws.includes('FORCE USER')) {
+        game.pendingThereIsNoTry = { defenderPlayerNum };
+        const _tintDice = combat.defenseDiceResults || [];
+        const _tintBtns = _tintDice.map((d, i) =>
+          new ButtonBuilder()
+            .setCustomId(`there_is_no_try_die_${gameId}_${i}`)
+            .setLabel(`Die #${i + 1}: ${d.block}B/${d.evade}E${d.dodge ? '/Dodge' : ''}`.slice(0, 80))
+            .setStyle(ButtonStyle.Primary)
+        );
+        _tintBtns.push(new ButtonBuilder().setCustomId(`there_is_no_try_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        const _tintRows = [];
+        for (let i = 0; i < _tintBtns.length; i += 5) _tintRows.push(new ActionRowBuilder().addComponents(_tintBtns.slice(i, i + 5)));
+        await thread.send({ content: `**There Is No Try** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> choose a defense die to set to any face:`, components: _tintRows.slice(0, 5) }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        saveGames();
+        return; // Wait for TINT response before entering reroll window
+      }
+    }
+
     // --- Enter reroll window ---
     const atkInnate = getInnateRerolls(combat.attackerDcName);
     const defenderDcName = combat.target?.figureKey?.replace(/-\d+-\d+$/, '') || '';
@@ -765,7 +803,7 @@ function formatDefenseDie(d, i) {
 }
 
 /** Show reroll UI for the current phase (attacker or defender) */
-async function sendRerollUI(thread, game, combat, phase) {
+export async function sendRerollUI(thread, game, combat, phase) {
   const gameId = game.gameId;
   if (phase === 'attacker') {
     const remaining = combat.attackerRerollsRemaining || 0;
@@ -860,6 +898,7 @@ export async function handleCombatReroll(interaction, ctx) {
   }
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
 
+  let _tlTriggered = false;
   if (choice !== 'done') {
     const idx = parseInt(choice, 10);
     if (side === 'atk') {
@@ -873,6 +912,17 @@ export async function handleCombatReroll(interaction, ctx) {
         combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
         combat.attackerRerollsRemaining -= 1;
         await thread.send(`**Rerolled** attack ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
+        // Tough Luck: if defender set TL, they may remove this rerolled die
+        if (game.toughLuckPlayerNum === defenderPlayerNum) {
+          game.pendingToughLuck = { side: 'atk', idx };
+          const _tlOwner = game[`player${defenderPlayerNum}Id`] ?? '';
+          const _tlRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`tough_luck_remove_${gameId}_${idx}`).setLabel(`Remove rerolled ${newDie.color} die`).setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`tough_luck_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          );
+          await thread.send({ content: `**Tough Luck** — <@${_tlOwner}> may remove the rerolled attack die.`, components: [_tlRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          _tlTriggered = true;
+        }
       }
     } else {
       const dice = combat.defenseDiceResults || [];
@@ -886,9 +936,21 @@ export async function handleCombatReroll(interaction, ctx) {
         combat.defenderRerollsRemaining -= 1;
         const dodgeTag = newDie.dodge ? '/DODGE' : '';
         await thread.send(`**Rerolled** defense ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
+        // Tough Luck: if attacker set TL, they may remove this rerolled defense die
+        if (game.toughLuckPlayerNum === attackerPlayerNum) {
+          game.pendingToughLuck = { side: 'def', idx };
+          const _tlOwner = game[`player${attackerPlayerNum}Id`] ?? '';
+          const _tlRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`tough_luck_remove_${gameId}_${idx}`).setLabel(`Remove rerolled ${newDie.color} die`).setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`tough_luck_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          );
+          await thread.send({ content: `**Tough Luck** — <@${_tlOwner}> may remove the rerolled defense die.`, components: [_tlRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          _tlTriggered = true;
+        }
       }
     }
   }
+  if (_tlTriggered) { saveGames(); return; }
 
   // Check if current side is done (clicked done or exhausted rerolls)
   if (side === 'atk' && (choice === 'done' || combat.attackerRerollsRemaining <= 0)) {
@@ -1068,7 +1130,7 @@ async function advanceTokenPhase(thread, game, combat, completedRole, ctx) {
 /**
  * After rerolls are complete: check dodge, then gate through token windows if eligible tokens exist.
  */
-async function proceedAfterRerolls(thread, game, combat, ctx) {
+export async function proceedAfterRerolls(thread, game, combat, ctx) {
   const saveGames = ctx.saveGames;
 
   // Lasat Honor Guard (Zeb Orrelios): after rerolls, may turn 1 die showing only a single attack icon to any other side
@@ -1333,6 +1395,16 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeFellSwoop) combat.surgeFellSwoop = true;
       if (mod.surgeMastery) combat.surgeMastery = true;
       if (mod.surgeInterrogate) combat.surgeInterrogate = true;
+      // Utinni! (Jawa Scavenger): spending this surge earns 1 VP
+      if (key === 'utinni_vp_1') {
+        const _utinniVpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+        game[_utinniVpKey] = game[_utinniVpKey] || { total: 0, kills: 0, objectives: 0 };
+        game[_utinniVpKey].total += 1;
+        game[_utinniVpKey].objectives += 1;
+        combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);
+        await thread.send(`**Utinni!** — +1 VP earned (${game[_utinniVpKey].total} total).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Utinni!** — Jawa Scavenger earned +1 VP.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+      }
       // Bargain (Jawa Scavenger Elite): inline VP exchange during surge phase
       if (mod.surgeBargain) {
         const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';

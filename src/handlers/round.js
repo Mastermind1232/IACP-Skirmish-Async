@@ -132,6 +132,30 @@ export async function handleEndEndOfRound(interaction, ctx) {
     }
   }
 
+  // Self-Destruct Probe: prompt each player who has a live Probe Droid DC
+  const _sdpEffs = getDcEffects();
+  for (const [_pNum, _getDcIds, _getDcListF] of [[1, () => game.p1DcMessageIds, () => game.p1DcList], [2, () => game.p2DcMessageIds, () => game.p2DcList]]) {
+    const _sdpIds = _getDcIds() || [];
+    const _sdpList = _getDcListF() || [];
+    for (let _i = 0; _i < _sdpIds.length; _i++) {
+      const _probeMsgId = _sdpIds[_i];
+      if (!_probeMsgId) continue;
+      const _probeDc = _sdpList[_i];
+      if (!_probeDc || _probeDc.defeated) continue;
+      const _probeEff = _sdpEffs[_probeDc.dcName] || _sdpEffs[_probeDc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+      if (!(_probeEff?.specialAbilityIds || []).includes('self_destruct_probe')) continue;
+      const _probeOwnerId = _pNum === 1 ? game.player1Id : game.player2Id;
+      const _sdpRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`self_destruct_probe_use_${gameId}_${_probeMsgId}`).setLabel('Use Self-Destruct').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`self_destruct_probe_skip_${gameId}_${_probeMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await logGameAction(game, client, `<@${_probeOwnerId}> **Self-Destruct** (${_probeDc.displayName || _probeDc.dcName}) — use at end of round?`, {
+        components: [_sdpRow],
+        allowedMentions: { users: [_probeOwnerId] },
+      });
+    }
+  }
+
   // Apply end-of-round self damage (e.g. Blaze of Glory)
   const eorSelfDamage = game.endOfRoundSelfDamage;
   if (eorSelfDamage && typeof eorSelfDamage === 'object') {
@@ -311,6 +335,18 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.setTrapSpace = {};
   game.reverseEngineerActive = {};
   game.pendingMpBonus = {};
+  game.pummelTwoAttacksThisActivation = {};
+  game.pummelAttacksRemaining = {};
+  game.overrunDamagedThisMove = {};
+  game.overdriveUsedThisActivation = {};
+  game.stayDownPendingMsgId = {};
+  game.selfDestructProtocolTriggered = {};
+  game.pendingToughLuck = null;
+  game.pendingBELReorder = null;
+  game.pendingThereIsNoTry = null;
+  game.pendingSelfDestruct = null;
+  game.priceBounties = game.priceBounties || {};
+  game.nextDefeatedFriendlyVpReduction = null;
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
   }

@@ -461,6 +461,55 @@ export async function handleMovePick(interaction, ctx) {
   if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
   const newTopLeft = targetInfo.topLeft;
   game.figurePositions[playerNum][figureKey] = newTopLeft;
+  // Overrun: when entering a hostile's space, deal 2 damage (once per hostile per move session)
+  if (game.overrunThisActivation?.[msgId]) {
+    const hostilePlayerNum = playerNum === 1 ? 2 : 1;
+    const hostilePositions = game.figurePositions?.[hostilePlayerNum] || {};
+    game.overrunDamagedThisMove = game.overrunDamagedThisMove || {};
+    if (!game.overrunDamagedThisMove[msgId]) game.overrunDamagedThisMove[msgId] = [];
+    const hostileDcList = hostilePlayerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const hostileMsgIds = hostilePlayerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const _dcHealthState = ctx.dcHealthState;
+    // Compute the moving figure's footprint tentatively for overlap detection
+    const _movingSize = targetInfo.size || getFigureSize(meta.dcName);
+    const _movingFootprint = new Set(getNormalizedFootprint(newTopLeft, _movingSize));
+    for (const [hostileFigureKey, hostilePos] of Object.entries(hostilePositions)) {
+      if (!hostilePos) continue;
+      if (game.overrunDamagedThisMove[msgId].includes(hostileFigureKey)) continue;
+      const hFkMatch = hostileFigureKey.match(/^(.+)-(\d+)-(\d+)$/);
+      if (!hFkMatch) continue;
+      const [, hostileDcName, hostileDgIndex, hostileFigIndexStr] = hFkMatch;
+      const hostileSize = game.figureOrientations?.[hostileFigureKey] || getFigureSize(hostileDcName);
+      const hostileFootprint = new Set(getNormalizedFootprint(hostilePos, hostileSize));
+      const overlaps = [..._movingFootprint].some((s) => hostileFootprint.has(s));
+      if (!overlaps) continue;
+      game.overrunDamagedThisMove[msgId].push(hostileFigureKey);
+      if (!_dcHealthState) continue;
+      let hostileMsgId = null;
+      for (const [hMsgId, hMeta] of dcMessageMeta) {
+        if (hMeta.gameId !== game.gameId) continue;
+        if (hMeta.playerNum !== hostilePlayerNum) continue;
+        if (hMeta.dcName !== hostileDcName) continue;
+        const hDgMatch = (hMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+        const hDgIdx = hDgMatch ? hDgMatch[1] : '1';
+        if (String(hDgIdx) === String(hostileDgIndex)) { hostileMsgId = hMsgId; break; }
+      }
+      if (!hostileMsgId) continue;
+      const hFigIndex = parseInt(hostileFigIndexStr, 10);
+      const hHealthState = _dcHealthState.get(hostileMsgId);
+      if (!hHealthState?.[hFigIndex]) continue;
+      const [curHp, maxHp] = hHealthState[hFigIndex];
+      if (curHp === null || curHp <= 0) continue;
+      const newHp = Math.max(0, curHp - 2);
+      hHealthState[hFigIndex] = [newHp, maxHp];
+      _dcHealthState.set(hostileMsgId, hHealthState);
+      const hDcListIdx = hostileMsgIds.indexOf(hostileMsgId);
+      if (hDcListIdx >= 0 && hostileDcList[hDcListIdx]) hostileDcList[hDcListIdx].healthState = [...hHealthState];
+      const hDisplayName = dcMessageMeta.get(hostileMsgId)?.displayName || hostileDcName;
+      const defeatNote = newHp <= 0 ? ' **(may be defeated — check manually)**' : '';
+      await logGameAction(game, client, `**Overrun** — **${displayName}** entered **${hDisplayName}**'s space: 2 Damage${defeatNote} (HP: ${curHp}→${newHp}).`, { phase: 'ROUND', icon: 'attack' });
+    }
+  }
   const newSize = targetInfo.size;
   const storedSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
   if (newSize !== storedSize) {

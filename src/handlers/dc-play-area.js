@@ -58,6 +58,14 @@ export async function handleDcActivate(interaction, ctx) {
     await interaction.followUp({ content: 'No activations remaining this round.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
+  // Sit Tight: cannot activate when you have fewer or equal ready DCs than opponent
+  if (game.sitTightPlayerNum === playerNum) {
+    const oppRem = playerNum === 1 ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
+    if (remaining <= oppRem) {
+      await interaction.followUp({ content: '**Sit Tight** — you cannot activate until you have more ready Deployment cards than your opponent.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
+  }
   const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
   const msgId = dcMessageIds[dcIndex];
   if (!msgId) {
@@ -1007,7 +1015,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   const actionsData = game.dcActionsData?.[msgId];
   const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
   const hasFellSwoopFreeAttack = action === 'Attack' && !!game.fellSwoopFreeAttack?.[msgId];
-  if (actionsRemaining <= 0 && !hasFellSwoopFreeAttack) {
+  const hasPummelFreeAttack = action === 'Attack' && !!(game.pummelTwoAttacksThisActivation?.[msgId]);
+  if (actionsRemaining <= 0 && !hasFellSwoopFreeAttack && !hasPummelFreeAttack) {
     await interaction.followUp({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
@@ -1314,6 +1323,25 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         game.freeAttackBonusPending[msgId] = _fabCount - 1;
       } else {
         delete game.freeAttackBonusPending[msgId];
+      }
+      // Stay Down: apply Stun to the attacker figure when the free attack is consumed
+      if (game.stayDownPendingMsgId?.[msgId]) {
+        delete game.stayDownPendingMsgId[msgId];
+        const _sdDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+        const _sdFigKey = `${meta.dcName}-${_sdDgIdx}-${figureIndex}`;
+        game.figureConditions = game.figureConditions || {};
+        game.figureConditions[_sdFigKey] = game.figureConditions[_sdFigKey] || [];
+        if (!game.figureConditions[_sdFigKey].includes('Stun')) game.figureConditions[_sdFigKey].push('Stun');
+        await logGameAction(game, client, `**Stay Down** — **${meta.displayName || meta.dcName}** is now **Stunned**.`, { phase: 'ROUND', icon: 'activate' });
+      }
+    } else if (hasPummelFreeAttack) {
+      // Pummel: grants 2 free attacks; track remaining count
+      game.pummelAttacksRemaining = game.pummelAttacksRemaining || {};
+      if (game.pummelAttacksRemaining[msgId] === undefined) game.pummelAttacksRemaining[msgId] = 2;
+      game.pummelAttacksRemaining[msgId] = Math.max(0, game.pummelAttacksRemaining[msgId] - 1);
+      if (game.pummelAttacksRemaining[msgId] <= 0) {
+        delete game.pummelTwoAttacksThisActivation[msgId];
+        delete game.pummelAttacksRemaining[msgId];
       }
     } else {
       const actionCost = buttonKey === 'dc_special_' ? (getDcStats(meta.dcName).specialCosts?.[specialIdx] ?? 1) : 1;

@@ -165,6 +165,8 @@ import {
   handleFalseOrdersAtkPick,
   handleFalseOrdersAction,
   handleFalseOrdersMovePick,
+  sendRerollUI,
+  proceedAfterRerolls,
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
@@ -3494,7 +3496,18 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const existing = game.figureConditions[combat.target.figureKey] || [];
         game.figureConditions[combat.target.figureKey] = [...new Set([...existing, ...allConditions])];
       }
-      if (newCur <= 0) {
+      // You Will Not Deny Me: prevent Fifth Brother from being defeated (restore HP to 1)
+      if (newCur <= 0 && game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum) {
+        const _ywndmDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        if (_ywndmDcName?.toLowerCase().includes('fifth')) {
+          healthState[targetFigIndex] = [1, max ?? 1];
+          dcHealthState.set(targetMsgId, healthState);
+          if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+          game.youWillNotDenyMeActive = null;
+          await logGameAction(game, client, `**You Will Not Deny Me** — Fifth Brother cannot be defeated! HP restored to 1.`, { phase: 'ROUND', icon: 'card' });
+        }
+      }
+      if (newCur <= 0 && !(game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum && ((idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, ''))?.toLowerCase().includes('fifth')))) {
         // F7: Keep healthState, figurePositions, and DC embed in sync when one figure in a group dies.
         if (game.figurePositions?.[defenderPlayerNum]) delete game.figurePositions[defenderPlayerNum][combat.target.figureKey];
         if (game.figureConditions?.[combat.target.figureKey]) delete game.figureConditions[combat.target.figureKey];
@@ -3504,6 +3517,70 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
         game[vpKey].kills += vp;
         game[vpKey].total += vp;
+        // Of No Importance: reduce VP gained when CC owner's own non-unique figure is defeated
+        if (game.nextDefeatedFriendlyVpReduction?.playerNum === defenderPlayerNum) {
+          const _noImportDcName = idx >= 0 ? dcList[idx]?.dcName : null;
+          if (_noImportDcName && !isDcUnique(_noImportDcName)) {
+            const _reduceAmt = game.nextDefeatedFriendlyVpReduction.amount || 0;
+            const _reduced = Math.min(_reduceAmt, vp);
+            game[vpKey].kills = Math.max(0, game[vpKey].kills - _reduced);
+            game[vpKey].total = Math.max(0, game[vpKey].total - _reduced);
+            resultText += ` (−${_reduced} VP: Of No Importance)`;
+            await logGameAction(game, client, `**Of No Importance** — VP reduced by ${_reduced}.`, { phase: 'ROUND', icon: 'card' });
+          }
+          game.nextDefeatedFriendlyVpReduction = null;
+        }
+        // Price on Their Heads: award bounty VP to setter when target group is defeated
+        const _priceBounty = game.priceBounties?.[combat.target.label];
+        if (_priceBounty) {
+          const _bountyAmt = typeof _priceBounty === 'object' ? _priceBounty.amount : _priceBounty;
+          const _bountySetterNum = typeof _priceBounty === 'object' ? _priceBounty.playerNum : attackerPlayerNum;
+          const _bountyVpKey = _bountySetterNum === 1 ? 'player1VP' : 'player2VP';
+          game[_bountyVpKey] = game[_bountyVpKey] || { total: 0, kills: 0, objectives: 0 };
+          game[_bountyVpKey].total += _bountyAmt;
+          game[_bountyVpKey].objectives += _bountyAmt;
+          delete game.priceBounties[combat.target.label];
+          await logGameAction(game, client, `**Price on Their Heads** — +${_bountyAmt} VP bounty awarded to P${_bountySetterNum} (${game[_bountyVpKey].total} total).`, { phase: 'ROUND', icon: 'card' });
+        }
+        // Paid in Beskar: grant Block tokens when hostile is defeated within range
+        if (game.whenDefeatHostileWithin3GainBlockTokens) {
+          const _beskarData = game.whenDefeatHostileWithin3GainBlockTokens;
+          const _beskarDist = combat.distanceToTarget ?? 0;
+          const _beskarRange = _beskarData.range ?? 3;
+          if (_beskarDist <= _beskarRange) {
+            const _beskarTokens = _beskarData.tokens ?? 1;
+            const _beskarFigKey = combat.attackerFigureKey;
+            game.figurePowerTokens = game.figurePowerTokens || {};
+            game.figurePowerTokens[_beskarFigKey] = game.figurePowerTokens[_beskarFigKey] || [];
+            for (let _bt = 0; _bt < _beskarTokens; _bt++) game.figurePowerTokens[_beskarFigKey].push('Block');
+            await logGameAction(game, client, `**Paid in Beskar** — +${_beskarTokens} Block Token${_beskarTokens !== 1 ? 's' : ''} granted to ${combat.attackerDisplayName}.`, { phase: 'ROUND', icon: 'card' });
+          }
+          game.whenDefeatHostileWithin3GainBlockTokens = null;
+        }
+        // You Will Not Deny Me: prevent Fifth Brother defeat; on any hostile defeat recover 2 HP
+        if (game.youWillNotDenyMeActive) {
+          const _ywndmData = game.youWillNotDenyMeActive;
+          const _fifthKey = Object.keys(game.figurePositions?.[_ywndmData.playerNum] || {}).find(k => k.replace(/-\d+-\d+$/, '').toLowerCase() === 'fifth brother' || k.replace(/-\d+-\d+$/, '') === 'fifth-brother');
+          if (_fifthKey) {
+            const _fifthMsgId = (() => { for (const [mid, mm] of dcMessageMeta) { if (mm.playerNum === _ywndmData.playerNum && mm.dcName?.toLowerCase().includes('fifth')) return mid; } return null; })();
+            if (_fifthMsgId) {
+              const _fifthHS = dcHealthState.get(_fifthMsgId);
+              const _fifthFigIdx = 0;
+              if (_fifthHS?.[_fifthFigIdx]) {
+                const [_fc, _fm] = _fifthHS[_fifthFigIdx];
+                const _fNew = Math.min((_fc ?? _fm) + 2, _fm ?? _fc);
+                _fifthHS[_fifthFigIdx] = [_fNew, _fm ?? _fc];
+                dcHealthState.set(_fifthMsgId, _fifthHS);
+                const _fifthDcIds = _ywndmData.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+                const _fifthDcList = _ywndmData.playerNum === 1 ? game.p1DcList : game.p2DcList;
+                const _fifthIdx = (_fifthDcIds || []).indexOf(_fifthMsgId);
+                if (_fifthIdx >= 0 && _fifthDcList?.[_fifthIdx]) _fifthDcList[_fifthIdx].healthState = [..._fifthHS];
+                await logGameAction(game, client, `**You Will Not Deny Me** — Fifth Brother recovered 2 HP after hostile defeat.`, { phase: 'ROUND', icon: 'card' });
+              }
+              game.youWillNotDenyMeActive = null;
+            }
+          }
+        }
         resultText += ` — **${combat.target.label} defeated!** +${vp} VP`;
         await logGameAction(game, client, `<@${ownerId}> defeated **${combat.target.label}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
         if (idx >= 0 && isGroupDefeated(game, defenderPlayerNum, idx)) {
@@ -6794,6 +6871,7 @@ client.on('interactionCreate', async (interaction) => {
       updateDcActionsMessage,
       sendBleedingPrompt,
       getDcStats,
+      dcHealthState,
       saveGames,
       client,
     };
@@ -6816,7 +6894,7 @@ client.on('interactionCreate', async (interaction) => {
   if (buttonKey === 'missile_salvo_die_') { await handleMissileSalvoDie(interaction); return; }
   if (buttonKey === 'missile_salvo_done_') { await handleMissileSalvoDone(interaction); return; }
 
-  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_' || buttonKey === 'spread_pain_cond_' || buttonKey === 'figurehead_use_' || buttonKey === 'figurehead_skip_' || buttonKey === 'lasat_die_' || buttonKey === 'lasat_face_' || buttonKey === 'false_orders_atk_') {
+  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_' || buttonKey === 'spread_pain_cond_' || buttonKey === 'figurehead_use_' || buttonKey === 'figurehead_skip_' || buttonKey === 'lasat_die_' || buttonKey === 'lasat_face_' || buttonKey === 'false_orders_atk_' || buttonKey === 'tough_luck_remove_' || buttonKey === 'tough_luck_skip_' || buttonKey === 'there_is_no_try_die_' || buttonKey === 'there_is_no_try_face_' || buttonKey === 'there_is_no_try_skip_') {
     const combatContext = {
       getGame,
       replyIfGameEnded,
@@ -6868,6 +6946,138 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'lasat_die_') await handleLasatDiePick(interaction, combatContext);
     else if (buttonKey === 'lasat_face_') await handleLasatFacePick(interaction, combatContext);
     else if (buttonKey === 'false_orders_atk_') await handleFalseOrdersAtkPick(interaction, combatContext);
+    else if (buttonKey === 'tough_luck_remove_' || buttonKey === 'tough_luck_skip_') {
+      // Tough Luck: remove a rerolled die or skip, then continue reroll flow
+      const _tlParts = interaction.customId.split('_');
+      const _tlGameId = _tlParts[3];
+      const _tlGame = getGame(_tlGameId);
+      if (!_tlGame?.pendingToughLuck) { await interaction.followUp({ content: 'No pending Tough Luck.', ephemeral: true }).catch(() => {}); return; }
+      const _tlData = _tlGame.pendingToughLuck;
+      const _tlCombat = _tlGame.pendingCombat;
+      const _tlAtk = _tlCombat?.attackerPlayerNum;
+      const _tlDef = _tlAtk === 1 ? 2 : 1;
+      // TL player is the one who set toughLuckPlayerNum
+      const _tlResponder = _tlGame.toughLuckPlayerNum;
+      if (!canActAsPlayer(_tlGame, interaction.user.id, _tlResponder)) {
+        await interaction.followUp({ content: 'Only the Tough Luck player may respond.', ephemeral: true }).catch(() => {}); return;
+      }
+      if (buttonKey === 'tough_luck_remove_') {
+        const _tlDieIdx = parseInt(_tlParts[4], 10);
+        if (_tlData.side === 'atk' && _tlCombat?.attackDiceResults?.[_tlDieIdx]) {
+          const _tlDie = _tlCombat.attackDiceResults[_tlDieIdx];
+          _tlCombat.attackDiceResults.splice(_tlDieIdx, 1);
+          const t = recalcAttackTotals(_tlCombat.attackDiceResults);
+          _tlCombat.attackRoll = { acc: t.acc, dmg: t.dmg, surge: t.surge };
+          await logGameAction(_tlGame, client, `**Tough Luck** — Removed rerolled ${_tlDie.color} attack die. New totals: ${t.acc} acc, ${t.dmg} dmg, ${t.surge} surge.`, { phase: 'ROUND', icon: 'card' });
+        } else if (_tlData.side === 'def' && _tlCombat?.defenseDiceResults?.[_tlDieIdx]) {
+          const _tlDie = _tlCombat.defenseDiceResults[_tlDieIdx];
+          _tlCombat.defenseDiceResults.splice(_tlDieIdx, 1);
+          const t = recalcDefenseTotals(_tlCombat.defenseDiceResults);
+          _tlCombat.defenseRoll = { block: t.block, evade: t.evade, dodge: t.dodge };
+          await logGameAction(_tlGame, client, `**Tough Luck** — Removed rerolled ${_tlDie.color} defense die. New totals: ${t.block} block, ${t.evade} evade.`, { phase: 'ROUND', icon: 'card' });
+        }
+      } else {
+        await logGameAction(_tlGame, client, '**Tough Luck** — Skipped.', { phase: 'ROUND', icon: 'card' });
+      }
+      _tlGame.pendingToughLuck = null;
+      // Continue reroll flow
+      const _tlThread = await client.channels.fetch(_tlCombat?.combatThreadId).catch(() => null);
+      if (_tlThread && _tlCombat) {
+        const _tlSide = _tlData.side;
+        const _tlAtkRem = _tlCombat.attackerRerollsRemaining || 0;
+        const _tlDefRem = _tlCombat.defenderRerollsRemaining || 0;
+        if (_tlSide === 'atk' && _tlAtkRem > 0) {
+          await sendRerollUI(_tlThread, _tlGame, _tlCombat, 'attacker');
+        } else if (_tlSide === 'def' && _tlDefRem > 0) {
+          await sendRerollUI(_tlThread, _tlGame, _tlCombat, 'defender');
+        } else if (_tlSide === 'atk' && _tlDefRem > 0) {
+          _tlCombat.rerollPhase = 'defender';
+          await sendRerollUI(_tlThread, _tlGame, _tlCombat, 'defender');
+        } else {
+          _tlCombat.rerollPhase = null;
+          await proceedAfterRerolls(_tlThread, _tlGame, _tlCombat, combatContext);
+        }
+      }
+      saveGames(); return;
+    } else if (buttonKey === 'there_is_no_try_die_' || buttonKey === 'there_is_no_try_face_' || buttonKey === 'there_is_no_try_skip_') {
+      // There Is No Try: die picker → face picker → apply, then enter reroll window
+      const _tintParts = interaction.customId.split('_');
+      // Prefix pattern: there_is_no_try_{die|face|skip}_ → parts[0..4] are the prefix words
+      const _tintType = _tintParts[4]; // 'die', 'face', or 'skip'
+      const _tintGameId = _tintParts[5];
+      const _tintGame = getGame(_tintGameId);
+      if (!_tintGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+      const _tintCombat = _tintGame.pendingCombat;
+      const _tintDefNum = _tintCombat?.defenderPlayerNum ?? (_tintCombat?.attackerPlayerNum === 1 ? 2 : 1);
+      if (!canActAsPlayer(_tintGame, interaction.user.id, _tintDefNum)) {
+        await interaction.followUp({ content: 'Only the defender may respond.', ephemeral: true }).catch(() => {}); return;
+      }
+      if (!_tintGame.pendingThereIsNoTry && _tintType !== 'skip') {
+        await interaction.followUp({ content: 'No pending There Is No Try.', ephemeral: true }).catch(() => {}); return;
+      }
+      const _tintThread = await client.channels.fetch(_tintCombat?.combatThreadId).catch(() => null);
+      if (_tintType === 'die') {
+        const _tintDieIdx = parseInt(_tintParts[6], 10);
+        const _tintDefDice = _tintCombat?.defenseDiceResults || [];
+        const _tintDie = _tintDefDice[_tintDieIdx];
+        if (!_tintDie) { await interaction.followUp({ content: 'Die not found.', ephemeral: true }).catch(() => {}); return; }
+        _tintGame.pendingThereIsNoTry.pickedDieIdx = _tintDieIdx;
+        // Build face options based on die color (white/black)
+        const _tintColor = _tintDie.color || 'white';
+        // Standard defense die faces: white: 0/0, 1/0, 1/1, 0/0/dodge; black: 0/0, 1/0, 2/0, 1/1, 0/1, dodge
+        const _tintFaceOptions = _tintColor === 'black'
+          ? [{ block: 0, evade: 0 }, { block: 1, evade: 0 }, { block: 2, evade: 0 }, { block: 1, evade: 1 }, { block: 0, evade: 1 }, { block: 0, evade: 0, dodge: true }]
+          : [{ block: 0, evade: 0 }, { block: 1, evade: 0 }, { block: 1, evade: 1 }, { block: 0, evade: 0, dodge: true }];
+        const _tintFaceBtns = _tintFaceOptions.map((face, fi) =>
+          new ButtonBuilder()
+            .setCustomId(`there_is_no_try_face_${_tintGameId}_${_tintDieIdx}_${face.block ?? 0}_${face.evade ?? 0}_${face.dodge ? 1 : 0}`)
+            .setLabel(`${face.block ?? 0}B/${face.evade ?? 0}E${face.dodge ? '/Dodge' : ''}`.slice(0, 80))
+            .setStyle(ButtonStyle.Primary)
+        );
+        if (_tintThread) await _tintThread.send({ content: `**There Is No Try** — Choose any face for die #${_tintDieIdx + 1} (${_tintColor}):`, components: [new ActionRowBuilder().addComponents(..._tintFaceBtns.slice(0, 5))] }).catch(() => {});
+        saveGames(); return;
+      }
+      if (_tintType === 'face') {
+        const _tintDieIdxF = parseInt(_tintParts[6], 10);
+        const _tintBlock = parseInt(_tintParts[7], 10) || 0;
+        const _tintEvade = parseInt(_tintParts[8], 10) || 0;
+        const _tintDodgeFlag = parseInt(_tintParts[9], 10) === 1;
+        const _tintDefDiceF = _tintCombat?.defenseDiceResults || [];
+        if (_tintDefDiceF[_tintDieIdxF]) {
+          const _tintOld = _tintDefDiceF[_tintDieIdxF];
+          // Apply chosen face; convert any Dodge results on this die to Block+Block+Evade
+          _tintDefDiceF[_tintDieIdxF] = { ..._tintOld, block: _tintBlock, evade: _tintEvade, dodge: _tintDodgeFlag };
+          // Convert Dodge on this die to +2 Block +1 Evade (no dice dodge result)
+          if (_tintDodgeFlag) {
+            _tintDefDiceF[_tintDieIdxF] = { ..._tintOld, block: _tintBlock + 2, evade: _tintEvade + 1, dodge: false };
+          }
+          _tintCombat.defenseDiceResults = _tintDefDiceF;
+          const _tintNewTotal = _tintDefDiceF.reduce((acc, d) => ({ block: acc.block + (d.block ?? 0), evade: acc.evade + (d.evade ?? 0), dodge: acc.dodge || !!d.dodge }), { block: 0, evade: 0, dodge: false });
+          _tintCombat.defenseRoll = { block: _tintNewTotal.block, evade: _tintNewTotal.evade, dodge: _tintNewTotal.dodge };
+          if (_tintThread) await _tintThread.send(`**There Is No Try** — Die set to ${_tintBlock}B/${_tintEvade}E${_tintDodgeFlag ? ' (Dodge→+2B+1E)' : ''}. New defense totals: ${_tintCombat.defenseRoll.block} block, ${_tintCombat.defenseRoll.evade} evade.`).catch(() => {});
+        }
+        _tintGame.pendingThereIsNoTry = null;
+        _tintCombat.tintResolved = true;
+      } else {
+        // Skip
+        _tintGame.pendingThereIsNoTry = null;
+        _tintCombat.tintResolved = true;
+        if (_tintThread) await _tintThread.send('**There Is No Try** — Skipped.').catch(() => {});
+      }
+      // After TINT resolves (face set or skipped): enter reroll window
+      if (_tintThread && _tintCombat) {
+        const _tintAtkRem = _tintCombat.attackerRerollsRemaining || 0;
+        const _tintDefRem = _tintCombat.defenderRerollsRemaining || 0;
+        if (_tintAtkRem > 0 || _tintDefRem > 0) {
+          _tintCombat.rerollPhase = _tintAtkRem > 0 ? 'attacker' : 'defender';
+          await sendRerollUI(_tintThread, _tintGame, _tintCombat, _tintCombat.rerollPhase);
+        } else {
+          _tintCombat.rerollPhase = null;
+          await proceedAfterRerolls(_tintThread, _tintGame, _tintCombat, combatContext);
+        }
+      }
+      saveGames(); return;
+    }
     return;
   }
 
@@ -7246,6 +7456,171 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
     return;
+  }
+
+  // Squad Swarm: Yes/No handlers
+  if (buttonKey === 'squad_swarm_yes_' || buttonKey === 'squad_swarm_no_') {
+    const _swParts = interaction.customId.split('_');
+    // squad_swarm_yes_{gameId}_{msgId}_{targetMsgId} OR squad_swarm_no_{gameId}_{msgId}
+    const _swGameId = _swParts[3]; const _swMsgId = _swParts[4]; const _swTargetMsgId = _swParts[5];
+    const _swGame = getGame(_swGameId);
+    if (!_swGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+    const _swMeta = dcMessageMeta.get(_swMsgId);
+    if (_swMeta && !canActAsPlayer(_swGame, interaction.user.id, _swMeta.playerNum)) {
+      await interaction.followUp({ content: 'Only the Squad Swarm player may respond.', ephemeral: true }).catch(() => {}); return;
+    }
+    _swGame.squadSwarmPlayerNum = null;
+    if (buttonKey === 'squad_swarm_yes_') {
+      const _swTargetName = _swTargetMsgId ? (dcMessageMeta.get(_swTargetMsgId)?.displayName || 'another figure') : 'another figure';
+      await logGameAction(_swGame, client, `**Squad Swarm** — Activating **${_swTargetName}**. Click its card to begin.`, { phase: 'ROUND', icon: 'activate' });
+    } else {
+      await logGameAction(_swGame, client, `**Squad Swarm** — Skipped.`, { phase: 'ROUND', icon: 'activate' });
+    }
+    saveGames(); return;
+  }
+
+  // Overdrive: DROID takes 1 damage for +1 action
+  if (buttonKey === 'overdrive_use_') {
+    const _odMsgId = interaction.customId.replace('overdrive_use_', '');
+    const _odMeta = dcMessageMeta.get(_odMsgId);
+    if (!_odMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
+    const _odGame = getGame(_odMeta.gameId);
+    if (!_odGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+    if (!canActAsPlayer(_odGame, interaction.user.id, _odMeta.playerNum)) {
+      await interaction.followUp({ content: 'Only the DC owner can use Overdrive.', ephemeral: true }).catch(() => {}); return;
+    }
+    const _odActionsData = _odGame.dcActionsData?.[_odMsgId];
+    if (!_odActionsData) { await interaction.followUp({ content: 'No active activation found.', ephemeral: true }).catch(() => {}); return; }
+    const _odHS = dcHealthState.get(_odMsgId) || [];
+    let _odHpNote = '';
+    if (_odHS[0]) {
+      const [_oc, _om] = _odHS[0];
+      const _onc = Math.max(0, (_oc ?? _om) - 1);
+      _odHS[0] = [_onc, _om ?? _oc];
+      dcHealthState.set(_odMsgId, _odHS);
+      const _odDcIds = _odMeta.playerNum === 1 ? _odGame.p1DcMessageIds : _odGame.p2DcMessageIds;
+      const _odDcList = _odMeta.playerNum === 1 ? _odGame.p1DcList : _odGame.p2DcList;
+      const _odIdx = (_odDcIds || []).indexOf(_odMsgId);
+      if (_odIdx >= 0 && _odDcList?.[_odIdx]) _odDcList[_odIdx].healthState = [..._odHS];
+      _odHpNote = ` (HP: ${_oc ?? _om}→${_onc})`;
+    }
+    _odActionsData.remaining = Math.min((_odActionsData.total ?? DC_ACTIONS_PER_ACTIVATION) + 1, (_odActionsData.remaining || 0) + 1);
+    const _odDgIdx = (_odMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+    _odGame.overdriveUsedThisActivation = _odGame.overdriveUsedThisActivation || {};
+    _odGame.overdriveUsedThisActivation[`${_odMeta.dcName}-${_odDgIdx}-0`] = true;
+    await logGameAction(_odGame, client, `**Overdrive** — **${_odMeta.displayName || _odMeta.dcName}** took 1 Damage${_odHpNote}; +1 Action granted.`, { phase: 'ROUND', icon: 'activate' });
+    await updateDcActionsMessage(_odGame, _odMsgId, client);
+    const _odDisplayName = _odMeta.displayName || _odMeta.dcName;
+    const { embed: _odEmbed, files: _odFiles } = await buildDcEmbedAndFiles(_odMeta.dcName, true, _odDisplayName, _odHS, getConditionsForDcMessage?.(_odGame, _odMeta), (_odGame?.p1DcAttachments?.[_odMsgId] || _odGame?.p2DcAttachments?.[_odMsgId] || []));
+    try {
+      const _odCh = await client.channels.fetch(_odMeta.playerNum === 1 ? _odGame.p1PlayAreaId : _odGame.p2PlayAreaId);
+      const _odMsg = await _odCh.messages.fetch(_odMsgId);
+      await _odMsg.edit({ embeds: [_odEmbed], files: _odFiles, components: getDcPlayAreaComponents(_odMsgId, true, _odGame, _odMeta.dcName) });
+    } catch (err) { console.error('Overdrive embed refresh failed:', err); }
+    saveGames(); return;
+  }
+
+  // Self-Destruct Probe: use or skip at end of round
+  if (buttonKey === 'self_destruct_probe_use_' || buttonKey === 'self_destruct_probe_skip_') {
+    const _sdpSuffix = interaction.customId.replace(buttonKey, '');
+    const _sdpParts = _sdpSuffix.split('_');
+    const _sdpGameId = _sdpParts[0]; const _sdpMsgId = _sdpParts.slice(1).join('_');
+    const _sdpGame = getGame(_sdpGameId);
+    if (!_sdpGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+    const _sdpMeta = dcMessageMeta.get(_sdpMsgId);
+    if (!_sdpMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
+    if (!canActAsPlayer(_sdpGame, interaction.user.id, _sdpMeta.playerNum)) {
+      await interaction.followUp({ content: 'Only the DC owner can respond.', ephemeral: true }).catch(() => {}); return;
+    }
+    if (buttonKey === 'self_destruct_probe_skip_') {
+      await logGameAction(_sdpGame, client, `**Self-Destruct** — ${_sdpMeta.displayName || _sdpMeta.dcName} skipped.`, { phase: 'ROUND', icon: 'card' });
+      saveGames(); return;
+    }
+    // Use: roll 1 red die, apply Hits to adjacent hostile figures, defeat probe
+    const _sdpDiceData = getDiceData ? getDiceData() : null;
+    const _sdpFaces = _sdpDiceData?.attack?.red || [];
+    const _sdpFace = _sdpFaces[Math.floor(Math.random() * Math.max(_sdpFaces.length, 1))] || {};
+    const _sdpHits = _sdpFace.dmg ?? 0;
+    const _sdpFaceLabel = `${_sdpHits}H`;
+    const _sdpPos = (() => { for (const [, pos] of Object.entries(_sdpGame.figurePositions?.[_sdpMeta.playerNum] || {})) { const fk = `${_sdpMeta.dcName}-1-0`; return _sdpGame.figurePositions?.[_sdpMeta.playerNum]?.[fk] || null; } return null; })();
+    let _sdpResultLog = `Rolled red die: **${_sdpFaceLabel}** — `;
+    if (_sdpHits > 0 && _sdpPos) {
+      const _sdpMs = getMapSpaces ? getMapSpaces(_sdpGame.selectedMap?.id) : null;
+      const _sdpAdj = _sdpMs?.adjacency?.[String(_sdpPos).toLowerCase()] || [];
+      const _sdpAllAdjSpaces = new Set([String(_sdpPos).toLowerCase(), ..._sdpAdj.map(s => String(s).toLowerCase())]);
+      const _sdpHostileNum = _sdpMeta.playerNum === 1 ? 2 : 1;
+      const _sdpDamaged = [];
+      for (const [_sdpFk, _sdpFkPos] of Object.entries(_sdpGame.figurePositions?.[_sdpHostileNum] || {})) {
+        if (!_sdpFkPos || !_sdpAllAdjSpaces.has(String(_sdpFkPos).toLowerCase())) continue;
+        let _sdpHMsgId = null;
+        for (const [mid, mm] of dcMessageMeta) { if (mm.playerNum === _sdpHostileNum && _sdpFk.startsWith(mm.dcName + '-')) { _sdpHMsgId = mid; break; } }
+        if (!_sdpHMsgId) continue;
+        const _sdpHM = dcMessageMeta.get(_sdpHMsgId);
+        const _sdpFkMatch = _sdpFk.match(/^(.+)-(\d+)-(\d+)$/);
+        if (!_sdpFkMatch) continue;
+        const _sdpHFigIdx = parseInt(_sdpFkMatch[3], 10);
+        const _sdpHHS = dcHealthState.get(_sdpHMsgId) || [];
+        if (!_sdpHHS[_sdpHFigIdx]) continue;
+        const [_hc, _hm] = _sdpHHS[_sdpHFigIdx];
+        if (_hc === null || _hc <= 0) continue;
+        const _hnc = Math.max(0, _hc - _sdpHits);
+        _sdpHHS[_sdpHFigIdx] = [_hnc, _hm ?? _hc];
+        dcHealthState.set(_sdpHMsgId, _sdpHHS);
+        const _sdpHDcIds = _sdpHostileNum === 1 ? _sdpGame.p1DcMessageIds : _sdpGame.p2DcMessageIds;
+        const _sdpHDcList = _sdpHostileNum === 1 ? _sdpGame.p1DcList : _sdpGame.p2DcList;
+        const _sdpHIdx = (_sdpHDcIds || []).indexOf(_sdpHMsgId);
+        if (_sdpHIdx >= 0 && _sdpHDcList?.[_sdpHIdx]) _sdpHDcList[_sdpHIdx].healthState = [..._sdpHHS];
+        _sdpDamaged.push(`${_sdpHM?.displayName || _sdpFkMatch[1]} (HP: ${_hc}→${_hnc})`);
+      }
+      _sdpResultLog += _sdpDamaged.length ? _sdpDamaged.join(', ') : 'No adjacent hostiles.';
+    } else {
+      _sdpResultLog += 'No hits.';
+    }
+    // Defeat the probe
+    const _sdpDcIds2 = _sdpMeta.playerNum === 1 ? _sdpGame.p1DcMessageIds : _sdpGame.p2DcMessageIds;
+    const _sdpDcList2 = _sdpMeta.playerNum === 1 ? _sdpGame.p1DcList : _sdpGame.p2DcList;
+    const _sdpDcIdx = (_sdpDcIds2 || []).indexOf(_sdpMsgId);
+    if (_sdpDcIdx >= 0 && _sdpDcList2?.[_sdpDcIdx]) {
+      _sdpDcList2[_sdpDcIdx].healthState = [[0, _sdpDcList2[_sdpDcIdx].healthState?.[0]?.[1] ?? 0]];
+      dcHealthState.set(_sdpMsgId, _sdpDcList2[_sdpDcIdx].healthState);
+    }
+    if (_sdpGame.figurePositions?.[_sdpMeta.playerNum]) delete _sdpGame.figurePositions[_sdpMeta.playerNum][`${_sdpMeta.dcName}-1-0`];
+    await logGameAction(_sdpGame, client, `**Self-Destruct** — ${_sdpMeta.displayName || _sdpMeta.dcName}: ${_sdpResultLog} Probe defeated.`, { phase: 'ROUND', icon: 'attack' });
+    saveGames(); return;
+  }
+
+  // Behind Enemy Lines: sequential card reorder pickers
+  if (buttonKey === 'bel_reorder_1_' || buttonKey === 'bel_reorder_2_') {
+    const _belParts = interaction.customId.replace(buttonKey, '').split('_');
+    const _belGameId = _belParts[0]; const _belCardIdx = parseInt(_belParts[1], 10);
+    const _belGame = getGame(_belGameId);
+    if (!_belGame || !_belGame.pendingBELReorder) { await interaction.followUp({ content: 'No pending deck reorder.', ephemeral: true }).catch(() => {}); return; }
+    const _belData = _belGame.pendingBELReorder;
+    if (!canActAsPlayer(_belGame, interaction.user.id, _belData.playerNum)) {
+      await interaction.followUp({ content: 'Only the card owner may reorder.', ephemeral: true }).catch(() => {}); return;
+    }
+    if (buttonKey === 'bel_reorder_1_') {
+      _belData.picked = [_belCardIdx];
+      const _belRem = _belData.cards.filter((_, i) => i !== _belCardIdx);
+      const _belBtns2 = _belRem.map((c, i) => {
+        const _origIdx = _belData.cards.indexOf(c);
+        return new ButtonBuilder().setCustomId(`bel_reorder_2_${_belGameId}_${_origIdx}`).setLabel(`2nd: ${c}`.slice(0, 80)).setStyle(ButtonStyle.Primary);
+      });
+      const _belHandId = _belData.playerNum === 1 ? _belGame.p1HandId : _belGame.p2HandId;
+      const _belHandCh2 = await client.channels.fetch(_belHandId).catch(() => null);
+      if (_belHandCh2) await _belHandCh2.send({ content: `**Behind Enemy Lines** — **${_belData.cards[_belCardIdx]}** goes 1st. Choose 2nd card:`, components: [new ActionRowBuilder().addComponents(..._belBtns2.slice(0, 5))] }).catch(() => {});
+      saveGames(); return;
+    }
+    // bel_reorder_2_: finalize order
+    const _belFirst = _belData.picked[0];
+    const _belSecond = _belCardIdx;
+    const _belThird = _belData.cards.findIndex((_, i) => i !== _belFirst && i !== _belSecond);
+    const _belNewOrder = [_belData.cards[_belFirst], _belData.cards[_belSecond], _belData.cards[_belThird]];
+    const _belDeck = _belGame[_belData.deckKey] || [];
+    _belGame[_belData.deckKey] = [..._belNewOrder, ..._belDeck.slice(_belData.cards.length)];
+    _belGame.pendingBELReorder = null;
+    await logGameAction(_belGame, client, `**Behind Enemy Lines** — Opponent's deck top 3 reordered to: ${_belNewOrder.map(c => `**${c}**`).join(', ')}.`, { phase: 'ROUND', icon: 'card' });
+    saveGames(); return;
   }
 
   if (buttonKey === 'status_phase_' || buttonKey === 'pass_activation_turn_' || buttonKey === 'end_turn_' || buttonKey === 'dc_end_activation_' || buttonKey === 'confirm_activate_' || buttonKey === 'cancel_activate_') {
