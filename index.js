@@ -3573,6 +3573,59 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           await logGameAction(game, client, `🚀 **Jets** — **Sabine Wren** gains 1 MP (target within 2 spaces).`, { phase: 'ROUND', icon: 'attack' });
         }
       }
+      // Fly-By (Jet Trooper Elite): after attack, gain 2 MP if target was within 2 spaces
+      {
+        const _fbAtkEff = getDcEffects()?.[combat.attackerDcName];
+        if ((_fbAtkEff?.passives || []).includes('Fly-By') && combat.distanceToTarget != null && combat.distanceToTarget <= 2) {
+          const _fbMsgId = combat.attackerMsgId;
+          if (_fbMsgId) {
+            game.movementBank = game.movementBank || {};
+            game.movementBank[_fbMsgId] = game.movementBank[_fbMsgId] || { total: 0, remaining: 0 };
+            game.movementBank[_fbMsgId].total = (game.movementBank[_fbMsgId].total || 0) + 2;
+            game.movementBank[_fbMsgId].remaining = (game.movementBank[_fbMsgId].remaining || 0) + 2;
+            await logGameAction(game, client, `🚀 **Fly-By** — **${combat.attackerDcName}** gains 2 MP (target within 2 spaces).`, { phase: 'ROUND', icon: 'attack' });
+          }
+        }
+      }
+      // Jets (Jet Trooper Regular): after attack, gain 1 MP if target within 2 spaces
+      {
+        const _jtAtkEff = getDcEffects()?.[combat.attackerDcName];
+        if ((_jtAtkEff?.passives || []).includes('Jets') && combat.distanceToTarget != null && combat.distanceToTarget <= 2) {
+          const _jtMsgId = combat.attackerMsgId;
+          if (_jtMsgId) {
+            game.movementBank = game.movementBank || {};
+            game.movementBank[_jtMsgId] = game.movementBank[_jtMsgId] || { total: 0, remaining: 0 };
+            game.movementBank[_jtMsgId].total = (game.movementBank[_jtMsgId].total || 0) + 1;
+            game.movementBank[_jtMsgId].remaining = (game.movementBank[_jtMsgId].remaining || 0) + 1;
+            await logGameAction(game, client, `🚀 **Jets** — **${combat.attackerDcName}** gains 1 MP (target within 2 spaces).`, { phase: 'ROUND', icon: 'attack' });
+          }
+        }
+      }
+      // Locked and Loaded (Migs Mayfeld): after attack, gain 2 Power Tokens (max 3 total)
+      {
+        const _llAtkEff = getDcEffects()?.[combat.attackerDcName];
+        if ((_llAtkEff?.passives || []).includes('Locked and Loaded')) {
+          const _llFk = combat.attackerFigureKey;
+          if (_llFk) {
+            game.figurePowerTokens = game.figurePowerTokens || {};
+            game.figurePowerTokens[_llFk] = game.figurePowerTokens[_llFk] || [];
+            const _llCurrent = game.figurePowerTokens[_llFk].length;
+            const _llGain = Math.min(2, 3 - _llCurrent);
+            if (_llGain > 0) {
+              game.pendingPowerTokenGrant = { grants: [{ figureKey: _llFk, figName: combat.attackerDcName, count: _llGain }], channelId: combat.combatThreadId, playerNum: attackerPlayerNum };
+              const _llBtns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
+                new ButtonBuilder().setCustomId(`power_token_choice_${game.gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
+              );
+              await thread.send({
+                content: `🔫 **Locked and Loaded** — **${combat.attackerDcName}** gains ${_llGain} Power Token${_llGain > 1 ? 's' : ''} (${_llCurrent} → ${_llCurrent + _llGain}, max 3). Choose type:`,
+                components: [new ActionRowBuilder().addComponents(_llBtns)],
+              }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            } else {
+              await logGameAction(game, client, `🔫 **Locked and Loaded** — **${combat.attackerDcName}** already at max 3 Power Tokens; no tokens gained.`, { phase: 'ROUND', icon: 'attack' });
+            }
+          }
+        }
+      }
       // You Will Not Deny Me: prevent Fifth Brother from being defeated (restore HP to 1)
       if (newCur <= 0 && game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum) {
         const _ywndmDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');

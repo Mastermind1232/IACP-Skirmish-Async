@@ -294,6 +294,10 @@ export async function handleEndTurn(interaction, ctx) {
       await logGameAction(game, client, `😈 **Unnerving** — **0-0-0** Weakened adjacent hostiles: ${weakened.join(', ')}.`, { phase: 'ROUND', icon: 'activate' });
     }
   }
+  // Hold the Line (Baze Malbus): at end of activation, gain 1 Block Token per hostile with LOS
+  if (meta.dcName === 'Baze Malbus') {
+    await logGameAction(game, client, `🛡️ **Hold the Line** — **${meta.displayName || 'Baze Malbus'}** gains 1 **Block Token** for each hostile with LOS. *(Count hostiles and apply Block Tokens manually.)*`, { phase: 'ROUND', icon: 'activate' });
+  }
 
   const actionsData = game.dcActionsData?.[dcMsgId];
   if (actionsData?.threadId) {
@@ -690,6 +694,30 @@ export async function handleConfirmActivate(interaction, ctx) {
     game.movementBank[msgId].total += 3;
     game.movementBank[msgId].remaining += 3;
     await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **3 MP** + 1 **Block** or **Evade** Token. *(Applies only if no hostile within 2 spaces — honor system check. Apply token manually.)*` }).catch(() => {});
+  }
+  // Vigor (Fifth Brother): gain 2 MP or 1 Block Token at start of activation
+  if (meta.dcName === 'Fifth Brother') {
+    game.movementBank = game.movementBank || {};
+    game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    game.movementBank[msgId].total += 2;
+    game.movementBank[msgId].remaining += 2;
+    await thread.send({ content: `✨ **Vigor** — **${displayName}** gains **2 movement points** at the start of activation. *(Or choose 1 Block Token instead: honor system.)*` }).catch(() => {});
+  }
+  // Tactical Movement (Fenn Signis): choose a friendly within 3 → that figure gains 2 MP
+  if (meta.dcName === 'Fenn Signis') {
+    await thread.send({ content: `🎯 **Tactical Movement** — Choose a friendly figure within 3 spaces. That figure gains **2 MP**. *(Apply manually via the target figure's movement controls.)*` }).catch(() => {});
+  }
+  // Into the Fray (Baze Malbus): gain 1 Surge Token per hostile with LOS, then gain 1 MP
+  if (meta.dcName === 'Baze Malbus') {
+    game.movementBank = game.movementBank || {};
+    game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
+    game.movementBank[msgId].total += 1;
+    game.movementBank[msgId].remaining += 1;
+    await thread.send({ content: `🔥 **Into the Fray** — **${displayName}** gains **1 MP**. Also gain 1 **Surge Token** for each hostile with LOS to you. *(Count hostiles with LOS and apply Surge Tokens manually.)*` }).catch(() => {});
+  }
+  // Advanced Weapons Research (Director Krennic): friendly within 2 gains 1 Hit or Surge Token
+  if (meta.dcName === 'Director Krennic') {
+    await thread.send({ content: `🔬 **Advanced Weapons Research** — A friendly figure within 2 spaces may gain 1 **Hit Token** or 1 **Surge Token**. *(Apply the chosen token to the target figure manually.)*` }).catch(() => {});
   }
   const logCh = await client.channels.fetch(game.generalId);
   const icon = ACTION_ICONS.activate || '⚡';

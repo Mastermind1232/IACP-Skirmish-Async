@@ -3578,8 +3578,17 @@
       "category": "passive-auto",
       "trigger": "combat-declare",
       "label": "Relentless Pursuit",
-      "description": "When you declare an attack, if the target is within 3 spaces, that figure suffers 1 Strain.",
+      "description": "When you declare an attack, the target suffers 1 Strain.",
       "oncePer": null,
+      "wiredStatus": "wired"
+    },
+    "sith_acolyte": {
+      "type": "dcSpecial",
+      "label": "Sith Acolyte",
+      "description": "Search your Command deck for a card with the FORCE USER or BRAWLER trait that costs 2 or less, reveal it, and put it into your hand. Then, shuffle your Command deck.",
+      "shuffleOneDiscardToDeck": false,
+      "informational": true,
+      "logMessage": "**Sith Acolyte** — Search your Command deck for a **FORCE USER** or **BRAWLER** card costing ≤2, put it into your hand, then shuffle your deck. *(Resolve manually.)*",
       "wiredStatus": "wired"
     },
     "shared_intuition": {
@@ -3682,8 +3691,8 @@
       "type": "dcSpecial",
       "label": "Improved Smuggler's Instincts",
       "description": "Perform an interact, then move up to 3 spaces.",
-      "informational": true,
-      "logMessage": "**Improved Smuggler's Instincts** — Perform an Interact action (honor system), then gain 3 free MP.",
+      "freeAction": true,
+      "logMessage": "**Improved Smuggler's Instincts** — Perform an Interact action *(honor system)*, then gain 3 free MP.",
       "freeMoveBonus": 3,
       "wiredStatus": "wired"
     },
@@ -3735,8 +3744,8 @@
       "type": "dcSpecial",
       "label": "System Shock",
       "description": "Use while on or adjacent to a terminal. Choose a figure on or adjacent to any terminal. That figure suffers 2 Damage and 1 Strain.",
-      "informational": true,
-      "logMessage": "**System Shock** — Choose a figure on/adjacent to any terminal. That figure suffers **2 Damage** and **1 Strain**. *(Must be on/adjacent to a terminal yourself. Apply damage manually.)*",
+      "targetHostileFigure": { "damage": 2, "strain": 1, "range": 99, "requiresLos": false },
+      "logMessage": "**System Shock** — *(Must be on/adjacent to a terminal. Target must be on/adjacent to any terminal — honor system.)*",
       "wiredStatus": "wired"
     },
     "mandalorian_whip": {
@@ -3941,6 +3950,86 @@
       "trigger": "combat-declare",
       "label": "Bespin Security",
       "description": "While an adjacent friendly LEADER or SCUM TROOPER is attacking, it may reroll 1 attack die.",
+      "wiredStatus": "wired"
+    },
+    "mystic_hunter": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Mystic Hunter",
+      "description": "When you declare an attack, you become Focused.",
+      "wiredStatus": "wired"
+    },
+    "fly_by": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Fly-By",
+      "description": "When you declare an attack, if the target space is within 2 spaces, add 1 blue die to your attack pool. After the attack resolves, gain 2 movement points.",
+      "wiredStatus": "wired"
+    },
+    "jets_jet_trooper": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-after",
+      "label": "Jets",
+      "description": "After you resolve an attack, if the target space is within 2 spaces, gain 1 movement point.",
+      "wiredStatus": "wired"
+    },
+    "relentless_pursuit": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Relentless Pursuit",
+      "description": "When you declare an attack, the target suffers 1 Strain.",
+      "wiredStatus": "wired"
+    },
+    "havoc_shot": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-after",
+      "label": "Havoc Shot",
+      "description": "After you resolve an attack, if it did not miss, you may suffer 1 Strain to choose up to 2 figures within 2 spaces of the target space in your line of sight. Those figures suffer 1 Damage.",
+      "wiredStatus": "wired"
+    },
+    "tactical_movement": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "activation-start",
+      "label": "Tactical Movement",
+      "description": "At the start of your activation, you may choose a friendly figure within 3 spaces. That figure gains 2 movement points.",
+      "wiredStatus": "wired"
+    },
+    "into_the_fray": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "activation-start",
+      "label": "Into the Fray",
+      "description": "At the start of your activation, gain 1 Surge Token for each hostile figure with line of sight to you. Then, gain 1 movement point.",
+      "wiredStatus": "wired"
+    },
+    "hold_the_line": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "activation-end",
+      "label": "Hold the Line",
+      "description": "At the end of your activation, gain 1 Block Token for each hostile figure with line of sight to you.",
+      "wiredStatus": "wired"
+    },
+    "advanced_weapons_research": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "activation-start",
+      "label": "Advanced Weapons Research",
+      "description": "At the start of your activation, a friendly figure within 2 spaces may gain 1 Hit Token or 1 Surge Token.",
+      "wiredStatus": "wired"
+    },
+    "locked_and_loaded": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-after",
+      "label": "Locked and Loaded",
+      "description": "You may have up to 3 Power Tokens. After you resolve an attack, gain 2 Power Tokens.",
       "wiredStatus": "wired"
     }
   }

@@ -286,6 +286,24 @@ export async function handleAttackTarget(interaction, ctx) {
   if (attackerConds.includes('Focus')) {
     attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'green'] };
   }
+  // Mystic Hunter (Zuckuss): when you declare an attack, become Focused
+  const _atkEff = getDcEffects()?.[meta.dcName];
+  let _mysticHunterFired = false;
+  if ((_atkEff?.passives || []).includes('Mystic Hunter')) {
+    game.figureConditions = game.figureConditions || {};
+    game.figureConditions[attackerFigureKey] = game.figureConditions[attackerFigureKey] || [];
+    if (!game.figureConditions[attackerFigureKey].includes('Focus')) {
+      game.figureConditions[attackerFigureKey].push('Focus');
+      attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'green'] };
+      _mysticHunterFired = true;
+    }
+  }
+  // Fly-By (Jet Trooper Elite): if target within 2 spaces, add 1 blue die
+  let _flyByFired = false;
+  if ((_atkEff?.passives || []).includes('Fly-By') && target.dist != null && target.dist <= 2) {
+    attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'blue'] };
+    _flyByFired = true;
+  }
   // Utinni! (roundUtinniJawaBuffs): Jawa Scavenger gets +1 Accuracy and a VP-earning surge ability
   if (game.roundUtinniJawaBuffs && meta.dcName?.toLowerCase().includes('jawa scavenger')) {
     game.nextAttackBonusAccuracy = game.nextAttackBonusAccuracy || {};
@@ -316,6 +334,8 @@ export async function handleAttackTarget(interaction, ctx) {
     content: '**Pre-combat window** — Both players: resolve any Command Cards, add/remove dice, apply/block damage, etc. When ready, click **Ready to roll combat dice** below.',
     components: [readyRow],
   });
+  if (_mysticHunterFired) await thread.send(`🔮 **Mystic Hunter** — **${meta.dcName}** becomes **Focused** (+1 green die).`).catch(() => {});
+  if (_flyByFired) await thread.send(`🚀 **Fly-By** — Target within 2 spaces: +1 blue die to attack pool.`).catch(() => {});
   const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
   const nextPierce = (game.nextAttackBonusPierce?.[attackerPlayerNum] || 0) + (overrideDice?.pierce || 0);
   const nextBonusAcc = (game.nextAttackBonusAccuracy?.[attackerPlayerNum] || 0) + (overrideDice?.bonusAccuracy || 0);

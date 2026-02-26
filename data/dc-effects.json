@@ -1046,7 +1046,9 @@
       "health": 11,
       "speed": 3,
       "passives": [
-        "+2 Accuracy"
+        "+2 Accuracy",
+        "Into the Fray",
+        "Hold the Line"
       ],
       "figures": 1,
       "attack": {
@@ -2015,7 +2017,8 @@
       "health": 7,
       "speed": 4,
       "passives": [
-        "+1 Surge"
+        "+1 Surge",
+        "Advanced Weapons Research"
       ],
       "figures": 1,
       "attack": {
@@ -2382,7 +2385,9 @@
       "speed": 4,
       "passives": [
         "+1 Accuracy",
-        "Pierce 1"
+        "Pierce 1",
+        "Havoc Shot",
+        "Tactical Movement"
       ],
       "figures": 1,
       "attack": {
@@ -2451,7 +2456,8 @@
       "health": 14,
       "speed": 4,
       "passives": [
-        "Cleave 1"
+        "Cleave 1",
+        "Relentless Pursuit"
       ],
       "figures": 1,
       "attack": {
@@ -2474,8 +2480,10 @@
       "unique": true,
       "affiliation": "Imperial",
       "specialAbilityIds": [
-        "fifth_brother_relentless"
-      ]
+        "fifth_brother_relentless",
+        "sith_acolyte"
+      ],
+      "specials": ["Sith Acolyte"]
     },
     "Gaarkhan": {
       "abilityText": "Brutal Cleave: After you resolve an attack during your activation, you may suffer 1 Strain to perform an attack using 1 red and 1 yellow die targeting a different figure or object. Limit once per activation.\n\nSpecial Action (Charge): Move a number of spaces up to your Speed. Then, you may perform an attack.",
@@ -3440,6 +3448,9 @@
         "accuracy 3",
         "damage 2"
       ],
+      "passives": [
+        "Fly-By"
+      ],
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial"
@@ -3456,7 +3467,8 @@
       "health": 3,
       "speed": 4,
       "passives": [
-        "Mobile"
+        "Mobile",
+        "Jets"
       ],
       "figures": 2,
       "attack": {
@@ -4168,7 +4180,8 @@
       "health": 11,
       "speed": 4,
       "passives": [
-        "+1 Accuracy"
+        "+1 Accuracy",
+        "Locked and Loaded"
       ],
       "figures": 1,
       "attack": {
@@ -6211,7 +6224,8 @@
       "health": 10,
       "speed": 4,
       "passives": [
-        "+2 Accuracy"
+        "+2 Accuracy",
+        "Mystic Hunter"
       ],
       "figures": 1,
       "attack": {
