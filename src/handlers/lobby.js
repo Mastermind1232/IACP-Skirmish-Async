@@ -102,7 +102,7 @@ export async function handleLobbyStart(interaction, ctx) {
   let gameId;
   try {
     const guild = interaction.guild;
-    const { gameId: gid, generalChannel } =
+    const { gameId: gid, generalChannel, chatChannel } =
       await createGameChannels(guild, lobby.creatorId, lobby.joinedId);
     gameId = gid;
     const game = {
@@ -112,7 +112,7 @@ export async function handleLobbyStart(interaction, ctx) {
       player1Id: lobby.creatorId,
       player2Id: lobby.joinedId,
       generalId: generalChannel.id,
-      chatId: null,
+      chatId: chatChannel?.id || null,
       boardId: null,
       p1HandId: null,
       p2HandId: null,
