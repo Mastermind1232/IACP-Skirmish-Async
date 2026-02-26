@@ -340,6 +340,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.overrunDamagedThisMove = {};
   game.overdriveUsedThisActivation = {};
   game.stayDownPendingMsgId = {};
+  game.burstFirePendingMsgId = {};
   game.selfDestructProtocolTriggered = {};
   game.pendingToughLuck = null;
   game.pendingBELReorder = null;

@@ -3355,6 +3355,24 @@ async function resolveCombatAfterRolls(game, combat, client) {
   if (roundEvade) combat.bonusEvade = (combat.bonusEvade || 0) + roundEvade;
   const perEvade = game.roundDefenderBonusBlockPerEvade?.[defenderPlayerNum] || 0;
   if (perEvade && combat.defenseRoll) combat.bonusBlock = (combat.bonusBlock || 0) + (combat.defenseRoll.evade || 0) * perEvade;
+  // Harsh Environment: exterior spaces -1 Evade; interior spaces +1 Block (applied once per combat resolution)
+  if (game.harshEnvironmentActive && !combat.harshEnvApplied) {
+    const _heMapId = game.selectedMap?.id;
+    const _heMsData = _heMapId ? getMapSpaces(_heMapId) : null;
+    const _heFigKey = combat.target?.figureKey;
+    const _hePos = _heFigKey ? (game.figurePositions?.[defenderPlayerNum]?.[_heFigKey]) : null;
+    if (_heMsData && _hePos) {
+      combat.harshEnvApplied = true;
+      const _heExterior = !!_heMsData.exterior?.[_hePos];
+      if (_heExterior) {
+        combat.bonusEvade = (combat.bonusEvade || 0) - 1;
+        await logGameAction(game, client, `\u26A1 **Harsh Environment** \u2014 **${combat.target.label}** on exterior space: \u22121 Evade.`, { phase: 'ROUND', icon: 'attack' });
+      } else {
+        combat.bonusBlock = (combat.bonusBlock || 0) + 1;
+        await logGameAction(game, client, `\u26A1 **Harsh Environment** \u2014 **${combat.target.label}** on interior space: +1 Block.`, { phase: 'ROUND', icon: 'attack' });
+      }
+    }
+  }
   // Cavalry Charge: round TROOPER attack hit bonus
   const trooperHitBonus = game.roundTrooperAttackHitBonus?.[combat.attackerPlayerNum] || 0;
   if (trooperHitBonus) {
@@ -3714,11 +3732,43 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
   }
   // Discard consumed conditions post-combat
   if (combat.attackerFigureKey) {
+    const _hadFocus = (game.figureConditions?.[combat.attackerFigureKey] || []).includes('Focus');
     filterCondition(game, combat.attackerFigureKey, 'Focus');  // Focus consumed after attacking
+    if (_hadFocus) await logGameAction(game, client, `🎯 **Focus** consumed on **${combat.attackerDcName}** \u2014 used in this attack.`, { phase: 'ROUND', icon: 'attack' });
+    const _atkHidden = (game.figureConditions?.[combat.attackerFigureKey] || []).includes('Hide');
     filterCondition(game, combat.attackerFigureKey, 'Hide');   // Attacker loses Hidden after resolving an attack
+    if (_atkHidden) await logGameAction(game, client, `\uD83D\uDC7B **Hidden** removed from **${combat.attackerDcName}** \u2014 resolved an attack.`, { phase: 'ROUND', icon: 'attack' });
   }
   if (combat.target?.figureKey) {
+    const _defHidden = (game.figureConditions?.[combat.target.figureKey] || []).includes('Hide');
     filterCondition(game, combat.target.figureKey, 'Hide');    // Defender loses Hidden after being attacked
+    if (_defHidden) await logGameAction(game, client, `\uD83D\uDC7B **Hidden** removed from **${combat.target.label}** \u2014 was targeted by an attack.`, { phase: 'ROUND', icon: 'attack' });
+  }
+  // Burst Fire: apply Stun to all figures adjacent to target if target suffered damage
+  if (game.burstFirePendingMsgId?.[combat.attackerMsgId]) {
+    const _bfPending = game.burstFirePendingMsgId[combat.attackerMsgId];
+    delete game.burstFirePendingMsgId[combat.attackerMsgId];
+    if (damage > 0 && combat.target?.figureKey) {
+      const _bfMapId = game.selectedMap?.id;
+      const _bfMs = _bfMapId ? getMapSpaces(_bfMapId) : null;
+      const _bfTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+      if (_bfMs && _bfTargetPos) {
+        const _bfAdj = _bfMs.adjacency?.[_bfTargetPos] || [];
+        for (const _bfPn of [1, 2]) {
+          for (const [_bfFk, _bfPos] of Object.entries(game.figurePositions?.[_bfPn] || {})) {
+            if (!_bfAdj.includes(_bfPos)) continue;
+            if (_bfFk === combat.target.figureKey) continue;
+            game.figureConditions = game.figureConditions || {};
+            game.figureConditions[_bfFk] = game.figureConditions[_bfFk] || [];
+            if (!game.figureConditions[_bfFk].includes('Stun')) {
+              game.figureConditions[_bfFk].push('Stun');
+              const _bfDcName = _bfFk.replace(/-\d+-\d+$/, '');
+              await logGameAction(game, client, `\uD83D\uDCA5 **Burst Fire** \u2014 **${_bfDcName}** (adjacent) is now **Stunned**.`, { phase: 'ROUND', icon: 'attack' });
+            }
+          }
+        }
+      }
+    }
   }
   const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);

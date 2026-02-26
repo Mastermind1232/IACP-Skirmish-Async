@@ -1550,7 +1550,7 @@ export async function handleCombatSurge(interaction, ctx) {
  *   combat_token_{gameId}_def_{n|skip}  — defender spends token index n, or skips
  */
 export async function handleCombatToken(interaction, ctx) {
-  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const { getGame, replyIfGameEnded, saveGames, logGameAction } = ctx;
   // Match both att/def (spend/skip) and wild (type resolution) patterns
   const m = interaction.customId.match(/^combat_token_([^_]+)_(att|def|wild)_(.+)$/);
   if (!m) return;
@@ -1572,6 +1572,7 @@ export async function handleCombatToken(interaction, ctx) {
     const figKey = combat.pendingWildRole === 'attacker' ? combat.attackerFigureKey : combat.target.figureKey;
     removeSpentToken(game, figKey, combat.pendingWildTokenIndex);
     await thread.send(`**Power Token spent:** Wild → +1 ${resolvedType}`);
+    logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${combat.pendingWildRole === 'attacker' ? 'Attacker' : 'Defender'}: Wild → +1 ${resolvedType}`, { phase: 'ROUND', icon: 'attack' });
     const completedRole = combat.pendingWildRole;
     combat.pendingWildRole = null;
     combat.pendingWildTokenIndex = null;
@@ -1617,6 +1618,7 @@ export async function handleCombatToken(interaction, ctx) {
   applyTokenBonus(combat, tokenType);
   removeSpentToken(game, figureKey, tokenIndex);
   await thread.send(`**Power Token spent:** +1 ${tokenType}`);
+  logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${tokenType}`, { phase: 'ROUND', icon: 'attack' });
   // Track Block token spending for Mandalorian Steel
   if (!isAttacker && tokenType === 'Block') combat.defenderSpentBlock = true;
   await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);

@@ -663,6 +663,11 @@ export function resolveAbility(abilityId, context) {
       game.stayDownPendingMsgId = game.stayDownPendingMsgId || {};
       game.stayDownPendingMsgId[msgId] = true;
     }
+    // Burst Fire: mark so adjacent Stun is applied when the free attack resolves with damage
+    if (entry.label === 'Burst Fire') {
+      game.burstFirePendingMsgId = game.burstFirePendingMsgId || {};
+      game.burstFirePendingMsgId[msgId] = true;
+    }
     const label = entry.label || 'Heroic';
     const countNote = (entry.freeAttackBonusCount ?? 1) > 1 ? ` (${entry.freeAttackBonusCount} times, each targeting a different figure)` : '';
     return { applied: true, freeAction: true, logMessage: entry.logMessage || `**${label}** — Your next attack${countNote} costs no action. Click Attack when ready.` };

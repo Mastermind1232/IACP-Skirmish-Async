@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git -C \"C:/Users/theme/OneDrive/Desktop/IACP Skirmish Async/IACP-Skirmish-Async/IACP-Skirmish-Async\" config --list | grep -i \"user\\\\|remote\\\\|vantheon\" 2>/dev/null)"
+      "Bash(*)",
+      "WebSearch"
     ]
   }
 }
