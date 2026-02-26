@@ -360,7 +360,19 @@ export function resolveAbility(abilityId, context) {
         }
       }
       const splashLog = splashParts.length > 0 ? `\nSplash — ${splashParts.join('; ')}` : splashDamageNote ? `\n> ${splashDamageNote}` : '';
-      return { applied: true, freeAction: !!entry.freeAction, logMessage: `**${entry.label}** — **${dcName}** ${parts.join(', ') || 'targeted'}.${splashLog}`, refreshDcEmbed: true };
+      // selfCondition: apply a condition to the activating figure (e.g. Invasive Procedure → Focus self)
+      let selfCondLog = '';
+      if (entry.selfCondition) {
+        const figureKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+        const selfKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+        if (selfKey) {
+          game.figureConditions = game.figureConditions || {};
+          game.figureConditions[selfKey] = game.figureConditions[selfKey] || [];
+          if (!game.figureConditions[selfKey].includes(entry.selfCondition)) game.figureConditions[selfKey].push(entry.selfCondition);
+          selfCondLog = ` You became **${entry.selfCondition}ed**.`;
+        }
+      }
+      return { applied: true, freeAction: !!entry.freeAction, logMessage: `**${entry.label}** — **${dcName}** ${parts.join(', ') || 'targeted'}.${splashLog}${selfCondLog}`, refreshDcEmbed: true };
     }
     // First call: enumerate valid enemy targets with range/LOS filter
     const activatingKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
@@ -815,6 +827,85 @@ export function resolveAbility(abilityId, context) {
     }
     if (validTargets.length === 0) return { applied: false, manualMessage: '**Firing Squad** — No adjacent friendly Troopers.' };
     game.pendingFiringSquad = [];
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // scheme_jabba (Jabba the Hutt): draw 1 CC card
+  if (abilityId === 'scheme_jabba') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Scheme** manually.' };
+    const drew = drawCcCards(game, playerNum, 1);
+    if (drew.length > 0) return { applied: true, logMessage: `**Scheme** — Drew 1 Command card.`, refreshHand: true };
+    return { applied: true, logMessage: '**Scheme** — No cards left in CC deck.' };
+  }
+
+  // incentivize_jabba (Jabba the Hutt): choose any elite figure → Focus
+  if (abilityId === 'incentivize_jabba') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getDcEffects: getEff } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Incentivize** manually.' };
+    if (choiceIndex != null && targetFigureKey) {
+      game.figureConditions = game.figureConditions || {};
+      game.figureConditions[targetFigureKey] = game.figureConditions[targetFigureKey] || [];
+      if (!game.figureConditions[targetFigureKey].includes('Focus')) game.figureConditions[targetFigureKey].push('Focus');
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Incentivize** — **${chosenName}** is now **Focused**.`, refreshDcEmbed: true };
+    }
+    // Enumerate all elite figures on the board (both players)
+    const dcEffects = typeof getEff === 'function' ? getEff() : null;
+    const enemyNum = playerNum === 1 ? 2 : 1;
+    const validTargets = [];
+    for (const pn of [playerNum, enemyNum]) {
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!pos) continue;
+        const fkDcName = fk.replace(/-\d+-\d+$/, '');
+        const fkEff = dcEffects?.[fkDcName];
+        if (!fkEff?.elite) continue;
+        validTargets.push(fk);
+      }
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Incentivize** — No elite figures on the board.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map((fk) => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // do_or_do_not_yoda (Yoda): choose a friendly REBEL FORCE USER within 4 → Focus
+  if (abilityId === 'do_or_do_not_yoda') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng, getDcEffects: getEff } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Do or Do Not** manually.' };
+    if (choiceIndex != null && targetFigureKey) {
+      game.figureConditions = game.figureConditions || {};
+      game.figureConditions[targetFigureKey] = game.figureConditions[targetFigureKey] || [];
+      if (!game.figureConditions[targetFigureKey].includes('Focus')) game.figureConditions[targetFigureKey].push('Focus');
+      const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Do or Do Not** — **${chosenName}** is now **Focused**.`, refreshDcEmbed: true };
+    }
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+    if (!activatingPos) return { applied: false, manualMessage: '**Do or Do Not** — No position on the board. Resolve manually.' };
+    const dcEffects = typeof getEff === 'function' ? getEff() : null;
+    const validTargets = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (fk === activatingKey || !pos) continue;
+      if (getRng && getRng(activatingPos, pos) > 4) continue;
+      const fkDcName = fk.replace(/-\d+-\d+$/, '');
+      const fkEff = dcEffects?.[fkDcName];
+      if (!fkEff) continue;
+      const fkKw = (fkEff.keywords || []).map(k => k.toUpperCase());
+      if (!fkKw.includes('FORCE USER')) continue;
+      if (fkEff.affiliation !== 'Rebel') continue;
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Do or Do Not** — No friendly REBEL FORCE USER within 4 spaces.' };
     return {
       applied: false,
       requiresChoice: true,

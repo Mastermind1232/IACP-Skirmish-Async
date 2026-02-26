@@ -585,6 +585,12 @@
         "recover 2",
         "shocking_palm"
       ],
+      "specialAbilityIds": [
+        "invasive_procedure"
+      ],
+      "specials": [
+        "Invasive Procedure"
+      ],
       "attachment": false,
       "elite": true,
       "unique": true,
@@ -1012,6 +1018,12 @@
       "surgeAbilities": [
         "accuracy 2",
         "pierce 2"
+      ],
+      "specialAbilityIds": [
+        "trample_bantha"
+      ],
+      "specials": [
+        "Trample"
       ],
       "attachment": false,
       "elite": true,
@@ -1686,6 +1698,12 @@
         "damage 2",
         "accuracy 2, pierce 1"
       ],
+      "specialAbilityIds": [
+        "lift_off_dark_trooper"
+      ],
+      "specials": [
+        "Lift Off"
+      ],
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial"
@@ -1925,6 +1943,14 @@
         "damage 1",
         "pierce 1"
       ],
+      "specialAbilityIds": [
+        "shock_lance_dewback",
+        "mounted_dewback"
+      ],
+      "specials": [
+        "Shock Lance",
+        "Mounted"
+      ],
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial"
@@ -2053,6 +2079,14 @@
         "focus",
         "block 1",
         "accuracy 3"
+      ],
+      "specialAbilityIds": [
+        "neurotoxin_hemlock",
+        "neurostim_hemlock"
+      ],
+      "specials": [
+        "Neurotoxin",
+        "Neurostim"
       ],
       "attachment": false,
       "elite": true,
@@ -2534,6 +2568,12 @@
         "accuracy 2",
         "block token",
         "damage 1"
+      ],
+      "specialAbilityIds": [
+        "gar_saxon_flamethrower"
+      ],
+      "specials": [
+        "Gar Saxon's Flamethrower"
       ],
       "attachment": false,
       "elite": true,
@@ -3240,6 +3280,18 @@
       "defense": [
         "black"
       ],
+      "specialAbilityIds": [
+        "bully_jabba",
+        "incentivize_jabba",
+        "scheme_jabba",
+        "order_hit_jabba"
+      ],
+      "specials": [
+        "Bully",
+        "Incentivize",
+        "Scheme",
+        "Order Hit"
+      ],
       "attachment": false,
       "elite": true,
       "unique": true,
@@ -3819,6 +3871,14 @@
       "surgeAbilities": [
         "damage 2"
       ],
+      "specialAbilityIds": [
+        "dc_pounce",
+        "fresh_catch_lothcat"
+      ],
+      "specials": [
+        "Pounce",
+        "Fresh Catch"
+      ],
       "attachment": false,
       "elite": true,
       "affiliation": "Scum"
@@ -3848,6 +3908,14 @@
       ],
       "surgeAbilities": [
         "damage 1"
+      ],
+      "specialAbilityIds": [
+        "dc_pounce",
+        "rat_catcher_lothcat"
+      ],
+      "specials": [
+        "Pounce",
+        "Rat Catcher"
       ],
       "attachment": false,
       "affiliation": "Scum"
@@ -4372,6 +4440,12 @@
       "surgeAbilities": [
         "damage 1",
         "pierce 2"
+      ],
+      "specialAbilityIds": [
+        "shock_grenade_purge"
+      ],
+      "specials": [
+        "Shock Grenade"
       ],
       "attachment": false,
       "elite": true,
@@ -5215,6 +5289,12 @@
         "accuracy 2",
         "pierce 1"
       ],
+      "specialAbilityIds": [
+        "env_recovery_gear"
+      ],
+      "specials": [
+        "Environmental Recovery Gear"
+      ],
       "attachment": false,
       "affiliation": "Imperial"
     },
@@ -5373,6 +5453,12 @@
         "pierce 3",
         "damage 2",
         "deadly_spin"
+      ],
+      "specialAbilityIds": [
+        "lightsaber_throw_gi"
+      ],
+      "specials": [
+        "Lightsaber Throw"
       ],
       "attachment": false,
       "elite": true,
@@ -5577,6 +5663,12 @@
       "doubleSurgeAbilities": [
         "+1 hit"
       ],
+      "specialAbilityIds": [
+        "tusken_cycler_elite"
+      ],
+      "specials": [
+        "Tusken Cycler"
+      ],
       "attachment": false,
       "elite": true,
       "affiliation": "Scum"
@@ -5605,6 +5697,12 @@
       "surgeAbilities": [
         "weaken",
         "cleave 1"
+      ],
+      "specialAbilityIds": [
+        "tusken_cycler_regular"
+      ],
+      "specials": [
+        "Tusken Cycler"
       ],
       "attachment": false,
       "affiliation": "Scum"
@@ -6010,6 +6108,12 @@
       "defense": [
         "white"
       ],
+      "specialAbilityIds": [
+        "do_or_do_not_yoda"
+      ],
+      "specials": [
+        "Do or Do Not"
+      ],
       "attachment": false,
       "elite": true,
       "unique": true,
@@ -6189,6 +6293,14 @@
         "block token",
         "accuracy 2, pierce 1"
       ],
+      "specialAbilityIds": [
+        "disruptor_rifle_mando",
+        "dins_wrist_flamethrower"
+      ],
+      "specials": [
+        "Disruptor Rifle",
+        "Din's Wrist Flamethrower"
+      ],
       "attachment": false,
       "elite": true,
       "unique": true,
@@ -6204,6 +6316,12 @@
       "speed": 4,
       "defense": [
         "black"
+      ],
+      "specialAbilityIds": [
+        "stim_canister_bd1"
+      ],
+      "specials": [
+        "Stim Canister"
       ],
       "attachment": false,
       "companion": true,
@@ -6235,6 +6353,12 @@
       ],
       "health": 6,
       "speed": 3,
+      "specialAbilityIds": [
+        "scratch_crumb"
+      ],
+      "specials": [
+        "Scratch"
+      ],
       "attachment": false,
       "companion": true,
       "unique": true

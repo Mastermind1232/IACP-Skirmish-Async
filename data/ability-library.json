@@ -2848,6 +2848,228 @@
       "description": "At the start of your activation, gain 3 movement points.",
       "wiredStatus": "wired"
     },
+    "bully_jabba": {
+      "type": "dcSpecial",
+      "label": "Bully",
+      "description": "A figure of your choice within 3 spaces suffers 3 Damage.",
+      "targetHostileFigure": {
+        "damage": 3,
+        "strain": 0,
+        "range": 3
+      },
+      "wiredStatus": "wired"
+    },
+    "incentivize_jabba": {
+      "type": "dcSpecial",
+      "label": "Incentivize",
+      "description": "An elite figure of your choice becomes Focused.",
+      "logMessage": "**Incentivize** — Choose an elite figure to become **Focused**. *(Select via figure picker — honor system: must be elite.)*",
+      "wiredStatus": "wired"
+    },
+    "scheme_jabba": {
+      "type": "dcSpecial",
+      "label": "Scheme",
+      "description": "Draw 1 Command card.",
+      "draw": 1,
+      "logMessage": "**Scheme** — Draw 1 Command card.",
+      "wiredStatus": "wired"
+    },
+    "order_hit_jabba": {
+      "type": "dcSpecial",
+      "label": "Order Hit",
+      "description": "Spend 2 VPs. An elite figure of your choice may interrupt to perform an attack. Then, it gains 2 movement points.",
+      "logMessage": "**Order Hit** (Double Action) — Spend 2 VPs. Choose an elite figure to interrupt and perform a free attack + gain 2 MP. *(Honor system: costs 2 actions + 2 VP.)*",
+      "wiredStatus": "wired"
+    },
+    "do_or_do_not_yoda": {
+      "type": "dcSpecial",
+      "label": "Do or Do Not",
+      "description": "Choose another friendly REBEL FORCE USER within 4 spaces. That figure becomes Focused.",
+      "logMessage": "**Do or Do Not** — Choose a friendly REBEL FORCE USER within 4 spaces to become **Focused**. *(Honor system: must be REBEL + FORCE USER.)*",
+      "wiredStatus": "wired"
+    },
+    "scratch_crumb": {
+      "type": "dcSpecial",
+      "label": "Scratch",
+      "description": "Choose an adjacent hostile figure. That figure suffers 1 Damage.",
+      "targetHostileFigure": {
+        "damage": 1,
+        "strain": 0,
+        "range": 1
+      },
+      "wiredStatus": "wired"
+    },
+    "stim_canister_bd1": {
+      "type": "dcSpecial",
+      "label": "Stim Canister",
+      "description": "An adjacent friendly figure recovers 2 Health.",
+      "targetFriendlyFigureAdjacent": {
+        "recoverTarget": 2
+      },
+      "wiredStatus": "wired"
+    },
+    "invasive_procedure": {
+      "type": "dcSpecial",
+      "label": "Invasive Procedure",
+      "description": "An adjacent figure suffers 1 Damage, 1 Strain, and becomes Bleeding. You become Focused.",
+      "targetHostileFigure": {
+        "damage": 1,
+        "strain": 1,
+        "applyCondition": "Bleed",
+        "range": 1
+      },
+      "selfCondition": "Focus",
+      "wiredStatus": "wired"
+    },
+    "env_recovery_gear": {
+      "type": "dcSpecial",
+      "label": "Environmental Recovery Gear",
+      "description": "You and each adjacent friendly TROOPER may either recover 1 Damage or discard 1 HARMFUL condition.",
+      "recoverSelf": 1,
+      "logMessage": "**Environmental Recovery Gear** — You and each adjacent friendly TROOPER may recover 1 Damage or discard 1 harmful condition. *(Self auto-recovers 1; adjacent TROOPERs: honor system.)*",
+      "wiredStatus": "wired"
+    },
+    "shock_lance_dewback": {
+      "type": "dcSpecial",
+      "label": "Shock Lance",
+      "description": "Choose a figure within 2 spaces and roll 1 green die. That figure suffers Damage equal to the Hit results. If you rolled a Surge, it becomes Weakened.",
+      "rollOneDie": "green",
+      "rollOneDieTarget": "spaceWithin",
+      "rollOneDieRange": 2,
+      "rollOneDieSurgeCondition": "Weaken",
+      "rollOneDieNote": "Deal Hit results as Damage to the chosen figure. If Surge rolled, that figure becomes **Weakened**.",
+      "wiredStatus": "wired"
+    },
+    "mounted_dewback": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "trigger": "startOfActivation",
+      "label": "Mounted",
+      "description": "At the start of your activation, gain 3 movement points.",
+      "wiredStatus": "wired"
+    },
+    "shock_grenade_purge": {
+      "type": "dcSpecial",
+      "label": "Shock Grenade",
+      "description": "Choose a space within 3 spaces and roll 1 green die. Each figure on or adjacent suffers Damage equal to Hit results. If Surge, they become Weakened.",
+      "rollOneDie": "green",
+      "rollOneDieTarget": "spaceWithin",
+      "rollOneDieRange": 3,
+      "rollOneDieSurgeCondition": "Weaken",
+      "rollOneDieNote": "Deal Hit results as Damage to each figure on or adjacent to that space. If Surge rolled, those figures become **Weakened**.",
+      "wiredStatus": "wired"
+    },
+    "gar_saxon_flamethrower": {
+      "type": "dcSpecial",
+      "label": "Gar Saxon's Flamethrower",
+      "description": "Choose a space within 2 spaces. Each other figure on or adjacent suffers 1 Damage + 1 Strain and discards 1 Power Token.",
+      "fixedAreaEffect": true,
+      "fixedAreaRange": 2,
+      "fixedAreaDamage": 1,
+      "fixedAreaStrain": 1,
+      "logMessage": "**Gar Saxon's Flamethrower** — Each figure on or adjacent to the chosen space suffers 1 Damage + 1 Strain and discards 1 Power Token. *(Power Token discard: honor system.)*",
+      "wiredStatus": "wired"
+    },
+    "trample_bantha": {
+      "type": "dcSpecial",
+      "label": "Trample",
+      "description": "Choose up to 3 adjacent hostile figures and roll 1 red die. Each suffers Damage equal to Hit results.",
+      "rollOneDie": "red",
+      "rollOneDieTarget": "adjacentHostile",
+      "rollOneDieNote": "Deal Hit results as Damage to up to 3 adjacent hostile figures. *(Select targets: honor system.)*",
+      "wiredStatus": "wired"
+    },
+    "neurotoxin_hemlock": {
+      "type": "dcSpecial",
+      "label": "Neurotoxin",
+      "description": "Choose a space within 3 spaces and roll 1 yellow die. Hostile figures on/adjacent become Weakened and suffer Damage equal to Hit results.",
+      "rollOneDie": "yellow",
+      "rollOneDieTarget": "spaceWithin",
+      "rollOneDieRange": 3,
+      "rollOneDieNote": "All hostile figures on or adjacent to that space become **Weakened** and suffer Hit results as Damage.",
+      "wiredStatus": "wired"
+    },
+    "neurostim_hemlock": {
+      "type": "dcSpecial",
+      "label": "Neurostim",
+      "description": "Choose an adjacent friendly figure and roll 1 yellow die. If Block: Block Token. If Surge: Focus.",
+      "rollOneDie": "yellow",
+      "rollOneDieNote": "Choose an adjacent friendly figure. If **Block** rolled → gain 1 Block Token. If **Surge** rolled → become Focused. *(Apply manually.)*",
+      "wiredStatus": "wired"
+    },
+    "lift_off_dark_trooper": {
+      "type": "dcSpecial",
+      "label": "Lift Off",
+      "description": "Move up to 4 spaces. During this movement, you gain Mobile.",
+      "freeMoveBonus": 4,
+      "logMessage": "**Lift Off** — Gained 4 free movement points with **Mobile** during this movement. *(Mobile movement: honor system.)*",
+      "wiredStatus": "wired"
+    },
+    "fresh_catch_lothcat": {
+      "type": "dcSpecial",
+      "label": "Fresh Catch",
+      "description": "You or an adjacent CREATURE gains 1 Power Token.",
+      "logMessage": "**Fresh Catch** — You or an adjacent CREATURE gains 1 Power Token. *(Choose token type and recipient manually.)*",
+      "wiredStatus": "wired"
+    },
+    "rat_catcher_lothcat": {
+      "type": "dcSpecial",
+      "label": "Rat Catcher",
+      "description": "You or an adjacent CREATURE gains 1 Block Token.",
+      "logMessage": "**Rat Catcher** — You or an adjacent CREATURE gains 1 Block Token. *(Apply manually.)*",
+      "wiredStatus": "wired"
+    },
+    "tusken_cycler_elite": {
+      "type": "dcSpecial",
+      "label": "Tusken Cycler",
+      "description": "Perform a Ranged attack using 1 blue and 1 red die. Apply +2 Accuracy.",
+      "freeAttackBonus": true,
+      "overrideAttackDice": ["blue", "red"],
+      "overrideAttackType": "Ranged",
+      "overrideBonusAccuracy": 2,
+      "logMessage": "**Tusken Cycler** — Your next attack is free and uses [Blue, Red] dice (Ranged) with +2 Accuracy.",
+      "wiredStatus": "wired"
+    },
+    "tusken_cycler_regular": {
+      "type": "dcSpecial",
+      "label": "Tusken Cycler",
+      "description": "Perform a Ranged attack using 1 blue and 1 red die. You cannot use abilities during this attack.",
+      "freeAttackBonus": true,
+      "overrideAttackDice": ["blue", "red"],
+      "overrideAttackType": "Ranged",
+      "logMessage": "**Tusken Cycler** — Your next attack is free and uses [Blue, Red] dice (Ranged). *(No abilities during this attack: honor system.)*",
+      "wiredStatus": "wired"
+    },
+    "lightsaber_throw_gi": {
+      "type": "dcSpecial",
+      "label": "Lightsaber Throw",
+      "description": "Perform a Ranged attack targeting a non-adjacent figure using your attack pool. Apply +2 Accuracy.",
+      "freeAttackBonus": true,
+      "overrideAttackType": "Ranged",
+      "overrideBonusAccuracy": 2,
+      "logMessage": "**Lightsaber Throw** — Your next attack is free, Ranged with +2 Accuracy (uses your normal attack pool). *(Must target non-adjacent: honor system.)*",
+      "wiredStatus": "wired"
+    },
+    "disruptor_rifle_mando": {
+      "type": "dcSpecial",
+      "label": "Disruptor Rifle",
+      "description": "Perform an attack. After this attack resolves, if it did not miss and the target has suffered Damage equal to Health minus 1, it suffers 1 more.",
+      "freeAttackBonus": true,
+      "logMessage": "**Disruptor Rifle** — Your next attack costs no action. After it resolves: if it didn't miss and target HP = 1, the target suffers 1 additional Damage. *(Extra damage: honor system.)*",
+      "wiredStatus": "wired"
+    },
+    "dins_wrist_flamethrower": {
+      "type": "dcSpecial",
+      "label": "Din's Wrist Flamethrower",
+      "description": "Move up to 2 spaces, then choose a space within 2 spaces. Each other figure on or adjacent suffers 1 Damage and 1 Strain.",
+      "fixedAreaEffect": true,
+      "fixedAreaRange": 2,
+      "fixedAreaDamage": 1,
+      "fixedAreaStrain": 1,
+      "freeMoveBonus": 2,
+      "logMessage": "**Din's Wrist Flamethrower** — Gained 2 free MP. Then choose a space within 2: each figure on/adjacent suffers 1 Damage + 1 Strain.",
+      "wiredStatus": "wired"
+    },
     "battlefield_leadership": {
       "type": "dcSpecial",
       "category": "active",

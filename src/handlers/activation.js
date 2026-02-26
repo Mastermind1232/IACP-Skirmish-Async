@@ -582,7 +582,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   // Mounted (Captain Terro, Kuiil): gain 3 MP at start of activation
   const _mountedEff = getDcEffects()?.[meta.dcName];
   const _mountedIds = _mountedEff?.specialAbilityIds || [];
-  if (_mountedIds.includes('mounted_terro') || _mountedIds.includes('mounted_kuiil')) {
+  if (_mountedIds.includes('mounted_terro') || _mountedIds.includes('mounted_kuiil') || _mountedIds.includes('mounted_dewback')) {
     game.movementBank = game.movementBank || {};
     game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
     game.movementBank[msgId].total += 3;
