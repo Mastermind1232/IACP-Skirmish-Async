@@ -178,6 +178,15 @@ export function getMapSelectionMenu(gameId) {
   return new ActionRowBuilder().addComponents(select);
 }
 
+export function getMapConfirmButton(gameId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`map_confirm_${gameId}`)
+      .setLabel('Confirm Selection')
+      .setStyle(ButtonStyle.Success),
+  );
+}
+
 const MISSION_SELECT_MAX_OPTIONS = 25;
 
 /**

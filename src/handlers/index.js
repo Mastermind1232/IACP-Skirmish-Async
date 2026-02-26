@@ -27,6 +27,7 @@ import {
   handleDeployPick,
   handleDeploymentDone,
   handleAutoDeploy,
+  handleMapConfirm,
   handleSetupAttachTo,
 } from './setup.js';
 import {
@@ -139,6 +140,7 @@ register('deployment_orient_', handleDeploymentOrient);
 register('deploy_pick_', handleDeployPick);
 register('deployment_done_', handleDeploymentDone);
 register('auto_deploy_', handleAutoDeploy);
+register('map_confirm_', handleMapConfirm);
 register('setup_attach_to_', handleSetupAttachTo);
 register('dc_activate_', handleDcActivate);
 register('dc_unactivate_', handleDcUnactivate);
@@ -215,6 +217,7 @@ export {
   handleDeployPick,
   handleDeploymentDone,
   handleAutoDeploy,
+  handleMapConfirm,
   handleSetupAttachTo,
 } from './setup.js';
 export {

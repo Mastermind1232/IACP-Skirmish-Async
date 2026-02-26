@@ -17,6 +17,7 @@ import {
 } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
+import { normalizeSquadInput } from '../game/validation.js';
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
 export async function handleSquadModal(interaction, ctx) {
@@ -43,6 +44,7 @@ export async function handleSquadModal(interaction, ctx) {
   const dcList = dcText ? dcText.split('\n').map((s) => s.trim()).filter(Boolean) : [];
   const ccList = ccText ? ccText.split('\n').map((s) => s.trim()).filter(Boolean) : [];
   const squad = { name, dcList, ccList, dcCount: dcList.length, ccCount: ccList.length };
+  normalizeSquadInput(squad);
   const validation = validateDeckLegal(squad);
   if (!validation.legal) {
     await sendDeckIllegalAlert(game, isP1, squad, validation, interaction.client);

@@ -12,6 +12,7 @@ export {
   getBoardButtons,
   getGeneralSetupButtons,
   getMapSelectionMenu,
+  getMapConfirmButton,
   getMissionSelectDrawMenu,
   getMissionSelectionPickMenu,
   getBotmenuButtons,
