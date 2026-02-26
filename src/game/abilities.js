@@ -400,7 +400,7 @@ export function resolveAbility(abilityId, context) {
 
   // dcSpecial: targetFriendlyFigureAdjacent (Gifted Mechanic) — pick adjacent friendly figure with trait, apply effect to both
   if (entry.type === 'dcSpecial' && entry.targetFriendlyFigureAdjacent && typeof entry.targetFriendlyFigureAdjacent === 'object') {
-    const { traits = [], recoverSelf = 0, recoverTarget = 0, hitTokenSelf = 0, hitTokenTarget = 0 } = entry.targetFriendlyFigureAdjacent;
+    const { traits = [], recoverSelf = 0, recoverTarget = 0, hitTokenSelf = 0, hitTokenTarget = 0, powerTokenTarget = 0 } = entry.targetFriendlyFigureAdjacent;
     const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve ${entry.label} manually.` };
     const mapId = game.selectedMap?.id;
@@ -450,6 +450,13 @@ export function resolveAbility(abilityId, context) {
       // Hit tokens
       if (hitTokenSelf > 0) { const sfk = activatingKeys[0]; if (sfk) { addHitToken(sfk, hitTokenSelf); parts.push(`you gained ${hitTokenSelf} Hit Token`); } }
       if (hitTokenTarget > 0) { addHitToken(targetFigureKey, hitTokenTarget); parts.push(`${targetFigureKey.replace(/-\d+-\d+$/, '')} gained ${hitTokenTarget} Hit Token`); }
+      // Power Token grant (player chooses type via pendingPowerTokenGrant)
+      if (powerTokenTarget > 0) {
+        const tName = targetFigureKey.replace(/-\d+-\d+$/, '');
+        game.pendingPowerTokenGrant = { grants: [{ figureKey: targetFigureKey, figName: tName, count: powerTokenTarget }], channelId: null, playerNum };
+        parts.push(`${tName} gains ${powerTokenTarget} Power Token — choose type`);
+        return { applied: true, requiresPowerTokenChoice: true, logMessage: `**${entry.label}** — ${parts.join(', ')}.`, refreshDcEmbed: true };
+      }
       return { applied: true, logMessage: `**${entry.label}** — ${parts.join(', ')}.`, refreshDcEmbed: true };
     }
     // First call: enumerate adjacent friendly figures matching traits

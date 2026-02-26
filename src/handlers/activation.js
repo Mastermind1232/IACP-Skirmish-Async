@@ -635,6 +635,23 @@ export async function handleConfirmActivate(interaction, ctx) {
   const thread = await dcMsg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
   game.movementBank = game.movementBank || {};
   game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
+  // Deploy bonus MP (Smooth Landing, Forward Emplacement): consume stored MP from post-deploy
+  if (game.deployBonusMp) {
+    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const prefix = `${meta.dcName}-${dgIndex}-`;
+    let _dbTotal = 0;
+    for (const [dbFk, dbAmt] of Object.entries(game.deployBonusMp)) {
+      if (dbFk.startsWith(prefix) && dbAmt > 0) {
+        _dbTotal = Math.max(_dbTotal, dbAmt); // per-group: use max figure bonus
+        delete game.deployBonusMp[dbFk];
+      }
+    }
+    if (_dbTotal > 0) {
+      game.movementBank[msgId].total += _dbTotal;
+      game.movementBank[msgId].remaining += _dbTotal;
+    }
+    if (Object.keys(game.deployBonusMp).length === 0) delete game.deployBonusMp;
+  }
   game.dcActionsData = game.dcActionsData || {};
   game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
   const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;

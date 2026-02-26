@@ -312,6 +312,31 @@ export async function handleAttackTarget(interaction, ctx) {
     game.nextAttackBonusSurgeAbilities[attackerPlayerNum] = game.nextAttackBonusSurgeAbilities[attackerPlayerNum] || [];
     game.nextAttackBonusSurgeAbilities[attackerPlayerNum].push('utinni_vp_1');
   }
+  // Merciless (HK Assassin Droid Elite): if defender has harmful conditions, 1 Damage
+  if ((_atkEff?.passives || []).includes('Merciless')) {
+    const _merDefConds = game.figureConditions?.[target.figureKey] || [];
+    const _merHarmful = ['Bleed', 'Stun', 'Weaken'].some(c => _merDefConds.includes(c));
+    if (_merHarmful) {
+      const _merDefPn2 = attackerPlayerNum === 1 ? 2 : 1;
+      const _merTargetMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, _merDefPn2, target.figureKey) : null;
+      if (_merTargetMsgId && dcHealthState) {
+        const _merHs = dcHealthState.get(_merTargetMsgId) || [];
+        const _merFkMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
+        const _merFigIdx = _merFkMatch ? parseInt(_merFkMatch[2], 10) : 0;
+        if (_merHs[_merFigIdx]) {
+          const [_merCur, _merMax] = _merHs[_merFigIdx];
+          const _merNew = Math.max(0, (_merCur ?? _merMax) - 1);
+          _merHs[_merFigIdx] = [_merNew, _merMax ?? _merCur];
+          dcHealthState.set(_merTargetMsgId, _merHs);
+          const _merDcList = _merDefPn2 === 1 ? game.p1DcList : game.p2DcList;
+          const _merDcIds = _merDefPn2 === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const _merIdx = (_merDcIds || []).indexOf(_merTargetMsgId);
+          if (_merIdx >= 0 && _merDcList?.[_merIdx]) _merDcList[_merIdx].healthState = [..._merHs];
+        }
+      }
+      await logGameAction(game, client, `⚡ **Merciless** — **${target.label}** suffers 1 Damage (has harmful condition).`, { phase: 'ROUND', icon: 'attack' });
+    }
+  }
   const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
   const combatDeclare = `**P${attackerPlayerNum}:** "${attackerDisplayName}" is attacking **P${defenderPlayerNum}:** "${target.label}"!`;
 

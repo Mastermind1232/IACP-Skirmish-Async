@@ -2,7 +2,7 @@
  * Round handlers: end_end_of_round_, end_start_of_round_
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getDcEffects } from '../data-loader.js';
+import { getDcEffects, getMapSpaces } from '../data-loader.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -592,6 +592,69 @@ export async function handleEndStartOfRound(interaction, ctx) {
           game.figurePowerTokens[fk].push('Block');
           game.figurePowerTokens[fk].push('Block');
           await logGameAction(game, client, `🛡️ **Beskar Armor** — **${dcName}** gains **2 Block Tokens** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
+        }
+        // Stealthy (Davith Elso): become Hidden at start of mission
+        if (passives.includes('Stealthy')) {
+          game.figureConditions = game.figureConditions || {};
+          game.figureConditions[fk] = game.figureConditions[fk] || [];
+          if (!game.figureConditions[fk].includes('Hide')) game.figureConditions[fk].push('Hide');
+          await logGameAction(game, client, `🥷 **Stealthy** — **${dcName}** becomes **Hidden** at start of mission.`, { phase: 'ROUND', icon: 'deployed' });
+        }
+        // Ambush (Ewok Warrior Elite): become Hidden after deployment
+        if (passives.includes('Ambush')) {
+          game.figureConditions = game.figureConditions || {};
+          game.figureConditions[fk] = game.figureConditions[fk] || [];
+          if (!game.figureConditions[fk].includes('Hide')) game.figureConditions[fk].push('Hide');
+          await logGameAction(game, client, `🥷 **Ambush** — **${dcName}** becomes **Hidden** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
+        }
+        // Security Detail (Death Trooper Regular): a friendly LEADER gains 1 Block Token
+        if (passives.includes('Security Detail')) {
+          const _sdEff = _pdEff || {};
+          const leaderFk = Object.keys(game.figurePositions?.[pn] || {}).find(lfk => {
+            if (!game.figurePositions[pn][lfk]) return false;
+            const ldn = lfk.replace(/-\d+-\d+$/, '');
+            return (_sdEff[ldn]?.keywords || []).some(k => k.toUpperCase() === 'LEADER');
+          });
+          if (leaderFk) {
+            game.figurePowerTokens = game.figurePowerTokens || {};
+            game.figurePowerTokens[leaderFk] = game.figurePowerTokens[leaderFk] || [];
+            game.figurePowerTokens[leaderFk].push('Block');
+            const leaderName = leaderFk.replace(/-\d+-\d+$/, '');
+            await logGameAction(game, client, `🛡️ **Security Detail** — **${leaderName}** gains **1 Block Token** (from ${dcName}).`, { phase: 'ROUND', icon: 'deployed' });
+          }
+        }
+        // Forward Emplacement (E-Web Engineer Elite): gain movement points equal to speed
+        if (passives.includes('Forward Emplacement')) {
+          const _feSpeed = _pdEff[dcName]?.speed || 0;
+          if (_feSpeed > 0) {
+            game.deployBonusMp = game.deployBonusMp || {};
+            game.deployBonusMp[fk] = (game.deployBonusMp[fk] || 0) + _feSpeed;
+            await logGameAction(game, client, `🏗️ **Forward Emplacement** — **${dcName}** gains **${_feSpeed} MP** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
+          }
+        }
+        // Smooth Landing (Bodhi Rook, Hera Syndulla): self + adjacent friendlies gain 1 MP
+        if (passives.includes('Smooth Landing')) {
+          const _slPos = game.figurePositions?.[pn]?.[fk];
+          if (_slPos) {
+            // Grant 1 MP to self
+            game.deployBonusMp = game.deployBonusMp || {};
+            game.deployBonusMp[fk] = (game.deployBonusMp[fk] || 0) + 1;
+            const _slGranted = [dcName];
+            // Grant 1 MP to adjacent friendlies
+            const _slMs = getMapSpaces(game.selectedMap?.id);
+            const _slAdj = (_slMs?.adjacency?.[String(_slPos).toLowerCase()] || []).map(a => String(a).toLowerCase());
+            const _slDone = new Set();
+            for (const [afk, apos] of Object.entries(game.figurePositions?.[pn] || {})) {
+              if (!apos || afk === fk) continue;
+              if (!_slAdj.includes(String(apos).toLowerCase())) continue;
+              // Only grant once per figure
+              if (_slDone.has(afk)) continue;
+              _slDone.add(afk);
+              game.deployBonusMp[afk] = (game.deployBonusMp[afk] || 0) + 1;
+              _slGranted.push(afk.replace(/-\d+-\d+$/, ''));
+            }
+            await logGameAction(game, client, `🛬 **Smooth Landing** — ${_slGranted.join(', ')} gain${_slGranted.length === 1 ? 's' : ''} **1 MP** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
+          }
         }
       }
     }

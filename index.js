@@ -3553,6 +3553,20 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           await logGameAction(game, client, `⚡ **Stun Batons** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`, { phase: 'ROUND', icon: 'attack' });
         }
       }
+      // Self-Preservation (Hired Gun Elite): when you suffer damage, become Focused
+      if (newCur > 0) {
+        const _spDefEff = getDcEffects()?.[combat.target.label?.replace(/-\d+-\d+$/, '') || ''];
+        const _spDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _spEff = getDcEffects()?.[_spDcName];
+        if ((_spEff?.passives || []).includes('Self-Preservation')) {
+          game.figureConditions = game.figureConditions || {};
+          game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
+          if (!game.figureConditions[combat.target.figureKey].includes('Focus')) {
+            game.figureConditions[combat.target.figureKey].push('Focus');
+            await logGameAction(game, client, `🛡️ **Self-Preservation** — **${_spDcName}** became **Focused** (suffered damage).`, { phase: 'ROUND', icon: 'attack' });
+          }
+        }
+      }
       // Guerilla (Rebel Pathfinder E/R, Alliance Ranger E): after attack, if defender defeated, attacker becomes Hidden
       if (newCur <= 0) {
         const _guerAttEff = getDcEffects()?.[combat.attackerDcName];
@@ -3893,6 +3907,18 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
               game.figurePowerTokens[combat.attackerFigureKey].push('Block');
               await logGameAction(game, client, `🛡️ **This is the Way** — **${combat.attackerDcName}** gains 1 **Block Token** (defeated hostile).`, { phase: 'ROUND', icon: 'card' });
             }
+          }
+        }
+        // Bounty (Fennec Shand): when defeated, opponent (= attacker) gains 2 VP
+        {
+          const _bountyDcName = _lsDcName;
+          const _bountyEff = getDcEffects()?.[_bountyDcName];
+          if ((_bountyEff?.passives || []).includes('Bounty')) {
+            const _bountyVpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+            game[_bountyVpKey] = game[_bountyVpKey] || { total: 0, kills: 0, objectives: 0 };
+            game[_bountyVpKey].total += 2;
+            game[_bountyVpKey].objectives += 2;
+            await logGameAction(game, client, `💰 **Bounty** — **${_bountyDcName}** was defeated. Opponent (P${attackerPlayerNum}) gains **2 VP** (${game[_bountyVpKey].total} total).`, { phase: 'ROUND', icon: 'card' });
           }
         }
         resultText += ` — **${combat.target.label} defeated!** +${vp} VP`;

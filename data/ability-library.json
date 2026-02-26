@@ -4079,6 +4079,86 @@
       "label": "Beskar Armor",
       "description": "After deployment, you gain 2 Block Tokens.",
       "wiredStatus": "wired"
+    },
+    "mockery": {
+      "type": "dcSpecial",
+      "label": "Mockery",
+      "description": "Choose a hostile figure in your line of sight. That figure suffers 1 Strain.",
+      "targetHostileFigure": { "strain": 1, "requiresLos": true },
+      "freeAction": true,
+      "wiredStatus": "wired"
+    },
+    "squad_captain": {
+      "type": "dcSpecial",
+      "label": "Squad Captain",
+      "description": "An adjacent friendly TROOPER or LEADER gains 1 Power Token.",
+      "targetFriendlyFigureAdjacent": { "traits": ["TROOPER", "LEADER"], "powerTokenTarget": 1 },
+      "freeAction": true,
+      "wiredStatus": "wired"
+    },
+    "stealthy": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "post-deploy",
+      "label": "Stealthy",
+      "description": "At the start of the mission, become Hidden.",
+      "wiredStatus": "wired"
+    },
+    "ambush_ewok": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "post-deploy",
+      "label": "Ambush",
+      "description": "After you are deployed, you become Hidden.",
+      "wiredStatus": "wired"
+    },
+    "forward_emplacement": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "post-deploy",
+      "label": "Forward Emplacement",
+      "description": "After deployment, you gain movement points equal to your speed.",
+      "wiredStatus": "wired"
+    },
+    "security_detail": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "post-deploy",
+      "label": "Security Detail",
+      "description": "After deployment, a friendly LEADER gains 1 Block Token.",
+      "wiredStatus": "wired"
+    },
+    "smooth_landing": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "post-deploy",
+      "label": "Smooth Landing",
+      "description": "After deployment, you and each adjacent friendly figure gains 1 movement point.",
+      "wiredStatus": "wired"
+    },
+    "self_preservation": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "on-damage",
+      "label": "Self-Preservation",
+      "description": "When you suffer Damage, you become Focused.",
+      "wiredStatus": "wired"
+    },
+    "merciless": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "declare-attack",
+      "label": "Merciless",
+      "description": "When you declare an attack, if the defender has any HARMFUL conditions, it suffers 1 Damage.",
+      "wiredStatus": "wired"
+    },
+    "bounty_fennec": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "on-defeat",
+      "label": "Bounty",
+      "description": "When you are defeated, your opponent gains 2 VPs.",
+      "wiredStatus": "wired"
     }
   }
 }
