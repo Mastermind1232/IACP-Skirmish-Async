@@ -65,6 +65,13 @@ export async function handleMoveMp(interaction, ctx) {
     return;
   }
   const profile = moveState.movementProfile || getMovementProfile(meta.dcName, figureKey, game);
+  // Force Jump: mobileMovementActive grants MOBILE movement (pass through figures/doors)
+  if (game.mobileMovementActive?.[msgId]) {
+    profile.isMobile = true;
+    profile.ignoreBlocking = true;
+    profile.ignoreFigureCost = true;
+    profile.ignoreDifficult = true;
+  }
   moveState.boardState = boardState;
   moveState.movementProfile = profile;
   const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
@@ -400,6 +407,13 @@ export async function handleMovePick(interaction, ctx) {
     return;
   }
   const profile = getMovementProfile(meta.dcName, figureKey, game);
+  // Force Jump: mobileMovementActive grants MOBILE movement (pass through figures/doors)
+  if (game.mobileMovementActive?.[msgId]) {
+    profile.isMobile = true;
+    profile.ignoreBlocking = true;
+    profile.ignoreFigureCost = true;
+    profile.ignoreDifficult = true;
+  }
   const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
   if (!startCoord) {
     delete game.moveInProgress[moveKey];
@@ -566,10 +580,19 @@ export async function handleMovePick(interaction, ctx) {
       } catch { /* already gone */ }
     }
     delete game.moveInProgress[moveKey];
+    // Force Jump: clear mobileMovementActive when all MP is spent
+    if (game.mobileMovementActive?.[msgId]) delete game.mobileMovementActive[msgId];
   } else {
     const nextBoard = getBoardStateForMovement(game, figureKey);
     if (nextBoard && computeMovementCache) {
       const nextProfile = getMovementProfile(meta.dcName, figureKey, game);
+      // Force Jump: carry mobileMovement override into subsequent move steps
+      if (game.mobileMovementActive?.[msgId]) {
+        nextProfile.isMobile = true;
+        nextProfile.ignoreBlocking = true;
+        nextProfile.ignoreFigureCost = true;
+        nextProfile.ignoreDifficult = true;
+      }
       const nextCache = computeMovementCache(newTopLeft, newMp, nextBoard, nextProfile);
       moveState.boardState = nextBoard;
       moveState.movementProfile = nextProfile;

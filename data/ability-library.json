@@ -179,7 +179,8 @@
       "label": "Brutality: Perform 2 attacks. Each attack must have a different target.",
       "wiredStatus": "wired",
       "freeAttackBonus": true,
-      "logMessage": "**Brutality** \u00e2\u20ac\u201d Your next attack costs no action (2 attacks total; each must target a different figure \u00e2\u20ac\u201d honor system)."
+      "logMessage": "**Brutality** — Perform 2 attacks this activation (each must target a different figure). Your next 2 attacks cost no action.",
+      "freeAttackBonusCount": 2
     },
     "saber_strike": {
       "type": "dcSpecial",
@@ -192,7 +193,7 @@
       ],
       "overrideAttackType": "melee",
       "overrideAttackPierce": 3,
-      "logMessage": "**Saber Strike** \u00e2\u20ac\u201d Your next attack is free and uses [Red, Yellow] dice with Pierce 3 (melee)."
+      "logMessage": "**Saber Strike** â€” Your next attack is free and uses [Red, Yellow] dice with Pierce 3 (melee)."
     },
     "get_into_position": {
       "type": "dcSpecial",
@@ -257,7 +258,7 @@
     },
     "cc:against_the_odds": {
       "type": "ccEffect",
-      "label": "If opponent has \u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u201a\u00ac\u00c2\u00b0\u00c3\u201a\u00c2\u00a58 more VPs, up to 3 figures become Focused",
+      "label": "If opponent has ÃƒÂ¢Ã¢â‚¬Â°Ã‚Â¥8 more VPs, up to 3 figures become Focused",
       "focusGainToUpToNFigures": 3,
       "vpCondition": {
         "opponentHasAtLeastMore": 8
@@ -527,13 +528,15 @@
     },
     "Reactive Loyalties": {
       "type": "ccEffect",
-      "label": "After attack targeting you resolves: IMPERIAL \u00e2\u20ac\u201d attacker suffers 3 Damage; SCUM \u00e2\u20ac\u201d gain 3 VPs; REBEL \u00e2\u20ac\u201d recover 3 Damage",
+      "label": "After attack targeting you resolves: IMPERIAL â€” attacker suffers 3 Damage; SCUM â€” gain 3 VPs; REBEL â€” recover 3 Damage",
       "chooseOne": [
         {
-          "label": "IMPERIAL: Attacker suffers 3 Damage (resolve manually)"
+          "label": "IMPERIAL: Attacker suffers 3 Damage",
+          "applyDamageToAttacker": 3
         },
         {
-          "label": "SCUM: Gain 3 VPs (resolve manually)"
+          "label": "SCUM: Gain 3 VPs",
+          "vpGain": 3
         },
         {
           "label": "REBEL: Recover 3 Damage",
@@ -551,7 +554,7 @@
     },
     "Foresee": {
       "type": "ccEffect",
-      "label": "Look at top 2 of opponent's deck, choose 1 to discard; if cost \u00e2\u2030\u00a41, draw 1 from own deck",
+      "label": "Look at top 2 of opponent's deck, choose 1 to discard; if cost â‰¤1, draw 1 from own deck",
       "foreseeEffect": true,
       "wiredStatus": "wired"
     },
@@ -570,7 +573,8 @@
           "mpBonus": 4
         },
         {
-          "label": "Perform an attack without spending an action (resolve manually)"
+          "label": "Perform an attack without spending an action",
+          "freeAttackBonus": true
         }
       ],
       "wiredStatus": "wired"
@@ -600,14 +604,29 @@
       "label": "When friendly within 3 would be defeated: move 2, gain 1 Power Token, attack, then that figure defeated (rest manual)",
       "powerTokenGain": 1,
       "wiredStatus": "wired",
-      "logMessage": "Gained **1 Power Token**. Move up to 2 spaces and perform a Melee attack with this figure, then it is defeated (honor \u00e2\u20ac\u201d apply movement, attack, and defeat manually)."
+      "logMessage": "Gained **1 Power Token** and **2 MP**. Perform a Melee attack without spending an action; this figure is defeated after the attack resolves.",
+      "freeAttackBonus": true,
+      "selfDefeatsAfterAttack": true,
+      "mpBonus": 2,
+      "overrideAttackType": "Melee"
     },
     "Meditation": {
       "type": "ccEffect",
       "label": "Become Focused (future attack manual)",
       "applyFocus": true,
-      "logMessage": "Became Focused. Once during your next activation, if FORCE USER, perform a Melee attack targeting an adjacent figure using 1 red + 1 yellow die without spending an action (honor).",
-      "wiredStatus": "wired"
+      "logMessage": "Became Focused. During your next activation (if FORCE USER), you may perform a Melee attack (1 red + 1 yellow die) without spending an action.",
+      "wiredStatus": "wired",
+      "nextActivationFreeAttack": {
+        "melee": true,
+        "dice": [
+          {
+            "color": "red"
+          },
+          {
+            "color": "yellow"
+          }
+        ]
+      }
     },
     "Master Operative": {
       "type": "ccEffect",
@@ -717,10 +736,12 @@
     },
     "Concentrated Fire": {
       "type": "ccEffect",
-      "label": "Add 1 red die to attack pool (you become Stunned \u00e2\u20ac\u201d apply manually)",
+      "label": "Add 1 red die to attack pool (you become Stunned â€” apply manually)",
       "attackBonusDice": 1,
       "attackBonusDiceColor": "red",
-      "wiredStatus": "wired"
+      "wiredStatus": "wired",
+      "applySelfStunAfterAttack": true,
+      "logMessage": "Added 1 red die to this attack pool. You become Stunned after the attack resolves."
     },
     "Inspiring Speech": {
       "type": "ccEffect",
@@ -800,8 +821,9 @@
       "type": "ccEffect",
       "label": "Become Focused (perform 1 additional action manually)",
       "applyFocus": true,
-      "logMessage": "Became Focused. Perform 1 additional action this activation (honor).",
-      "wiredStatus": "wired"
+      "logMessage": "Became Focused. Gained 1 extra action this activation.",
+      "wiredStatus": "wired",
+      "extraActionBonus": 1
     },
     "Debts Repaid": {
       "type": "ccEffect",
@@ -815,7 +837,12 @@
       "label": "Become Focused (multiple attacks and Stunned/Bleeding manually)",
       "applyFocus": true,
       "wiredStatus": "wired",
-      "logMessage": "Became Focused. Perform up to 3 attacks this activation, then become Stunned and Bleeding (honor \u00e2\u20ac\u201d resolve attacks and apply conditions manually)."
+      "logMessage": "Became Focused. You may perform up to 3 free attacks this activation. After the last free attack (or end of activation), become Stunned and Bleeding.",
+      "freeAttackBonusCount": 3,
+      "postActivationConditions": [
+        "Stun",
+        "Bleed"
+      ]
     },
     "Espionage Mastery": {
       "type": "ccEffect",
@@ -835,7 +862,8 @@
       "label": "Gain 2 Power Tokens (adjacent LEADER part manual)",
       "powerTokenGain": 2,
       "wiredStatus": "wired",
-      "logMessage": "Gained **2 Power Tokens**. If adjacent to a friendly LEADER, gain 1 additional Power Token (honor)."
+      "logMessage": "Gained **2 Power Tokens**. If adjacent to a friendly LEADER, gain 1 additional Power Token.",
+      "conditionalAdjacentLeaderPowerToken": 1
     },
     "Forward March": {
       "type": "ccEffect",
@@ -854,14 +882,15 @@
       "label": "Gain 1 Power Token (exterior figure part manual)",
       "powerTokenGain": 1,
       "wiredStatus": "wired",
-      "logMessage": "Gained **1 Power Token**. If the activating figure is in an exterior space, gain 1 additional Power Token (honor)."
+      "logMessage": "Gained **1 Power Token**. If this figure is in an exterior space, gain 1 additional Power Token.",
+      "conditionalExteriorPowerToken": 1
     },
     "Looking for a Fight": {
       "type": "ccEffect",
-      "label": "Gain 1 Power Token (move or push manual)",
+      "label": "Gain 1 Power Token; then move 2 spaces or push an adjacent hostile 1 space",
       "powerTokenGain": 1,
-      "wiredStatus": "wired",
-      "logMessage": "Gained **1 Power Token**. Move 2 spaces or push an adjacent hostile 1 space (honor)."
+      "logMessage": "Gained **1 Power Token**. Then choose: move 2 spaces (use movement bank) or push an adjacent hostile 1 space (honor).",
+      "wiredStatus": "wired"
     },
     "Force Surge": {
       "type": "ccEffect",
@@ -878,14 +907,25 @@
       "label": "Gain 2 Power Tokens (choose Hit/Surge and Block/Evade manually)",
       "powerTokenGain": 2,
       "wiredStatus": "wired",
-      "logMessage": "Gained **2 Power Tokens**. Until end of activation: choose 1 Hit or Surge to add to each attack roll, and 1 Block or Evade to add to each defense roll (honor)."
+      "logMessage": "Gained **2 Power Tokens**. This activation: on each attack roll add 1 Hit or Surge to results; on each defense roll add 1 Block or Evade to results (honor — announce choice to opponent each time).",
+      "vetInstinctsActiveThisActivation": true
     },
     "Close and Personal": {
       "type": "ccEffect",
       "label": "Gain 2 MP (melee attack manual)",
       "mpBonus": 2,
-      "logMessage": "Gained **2 MP**. Perform a Melee attack using 1 red + 1 yellow die without spending an action (honor \u00e2\u20ac\u201d see card text).",
-      "wiredStatus": "wired"
+      "logMessage": "Gained **2 MP**. Perform a Melee attack (1 red + 1 yellow die) without spending an action.",
+      "wiredStatus": "wired",
+      "freeAttackBonus": true,
+      "overrideAttackDice": [
+        {
+          "color": "red"
+        },
+        {
+          "color": "yellow"
+        }
+      ],
+      "overrideAttackType": "Melee"
     },
     "Lord of the Sith": {
       "type": "ccEffect",
@@ -944,7 +984,7 @@
     },
     "Dirty Trick": {
       "type": "ccEffect",
-      "label": "When hostile enters adjacent space: that figure suffers 3 Strain (or Stun \u00e2\u20ac\u201d choose one)",
+      "label": "When hostile enters adjacent space: that figure suffers 3 Strain (or Stun â€” choose one)",
       "chooseAdjacentHostileThen": {
         "strain": 3,
         "orStunInstead": true
@@ -955,15 +995,16 @@
       "type": "ccEffect",
       "label": "Move 2 spaces then attack (attack manual)",
       "mpBonus": 2,
-      "logMessage": "Gained **2 MP**. Perform an attack \u00e2\u20ac\u201d must target the attacker if possible (honor).",
+      "logMessage": "Gained **2 MP**. Perform an attack targeting the figure who attacked you (use Attack button and select the attacker as your target).",
       "wiredStatus": "wired"
     },
     "Force Jump": {
       "type": "ccEffect",
       "label": "Move up to 5 spaces (MOBILE during movement manual)",
       "mpBonus": 5,
-      "logMessage": "Gained **5 MP**. During this move you gain MOBILE \u00e2\u20ac\u201d treat doors and other figures as if they do not exist; cannot end in blocking terrain (honor).",
-      "wiredStatus": "wired"
+      "logMessage": "Gained **5 MP** with MOBILE movement — treat doors and other figures as if they do not exist during this move; cannot end in blocking terrain.",
+      "wiredStatus": "wired",
+      "mobileMovement": true
     },
     "Counter Attack": {
       "type": "ccEffect",
@@ -1040,8 +1081,10 @@
       "type": "ccEffect",
       "label": "Move up to 2 spaces (then attack manual)",
       "mpBonus": 2,
-      "logMessage": "Gained **2 MP**. Perform a Melee attack targeting an adjacent figure or object (honor).",
-      "wiredStatus": "wired"
+      "logMessage": "Gained **2 MP**. Perform a Melee attack targeting an adjacent figure without spending an action.",
+      "wiredStatus": "wired",
+      "freeAttackBonus": true,
+      "overrideAttackType": "Melee"
     },
     "Heightened Reflexes": {
       "type": "ccEffect",
@@ -1195,7 +1238,10 @@
       "label": "When Damage = Health: move 2, melee attack, then defeated (manual)",
       "mpBonus": 2,
       "wiredStatus": "wired",
-      "logMessage": "Gained **2 MP** (use to move into position). Perform a Melee attack, then this figure is defeated (honor \u00e2\u20ac\u201d apply defeat manually after attack resolves)."
+      "logMessage": "Gained **2 MP**. Perform a Melee attack without spending an action; this figure is defeated after the attack resolves.",
+      "freeAttackBonus": true,
+      "selfDefeatsAfterAttack": true,
+      "overrideAttackType": "Melee"
     },
     "Fuel Upgrade": {
       "type": "ccEffect",
@@ -1206,8 +1252,9 @@
     },
     "Collateral Damage": {
       "type": "ccEffect",
-      "label": "After attack: figure within 2 of target space suffers 2 Damage (honor targeting)",
-      "chooseAdjacentHostileThen": {
+      "label": "After attack: choose figure within 2 of target space, it suffers 2 Damage",
+      "flatDamageToFigureWithin": {
+        "range": 2,
         "damage": 2
       },
       "wiredStatus": "wired"
@@ -1286,7 +1333,7 @@
       "type": "ccEffect",
       "label": "Free attack; if target suffers damage, Stun auto-applied to adjacent figures",
       "freeAttackBonus": true,
-      "logMessage": "**Burst Fire** \u00e2\u20ac\u201d Attack granted (no action cost). If the target suffers 1+ Damage, **Stun** is applied automatically to all figures adjacent to the target's space (friendly and hostile).",
+      "logMessage": "**Burst Fire** â€” Attack granted (no action cost). If the target suffers 1+ Damage, **Stun** is applied automatically to all figures adjacent to the target's space (friendly and hostile).",
       "wiredStatus": "wired"
     },
     "Close the Gap": {
@@ -1361,15 +1408,15 @@
       "type": "ccEffect",
       "label": "Move 3 into space adjacent to friendly, attack targets you (3 MP honor)",
       "mpBonus": 3,
-      "logMessage": "Gained **3 MP**. Move into a space adjacent to the friendly; the attack now targets you instead (honor).",
+      "logMessage": "Gained **3 MP**. Move into position; the incoming attack targets you instead. Inform your opponent, then proceed with you as the target.",
       "wiredStatus": "wired"
     },
     "Grenadier": {
       "type": "ccEffect",
-      "label": "Choose space within 3, roll red, each on/adjacent suffers Hit (1 adjacent 1 dmg honor)",
-      "chooseAdjacentHostileThen": {
-        "damage": 1
-      },
+      "label": "Choose space within 3, roll 1 red die, each figure on or adjacent suffers Hit results as Damage",
+      "rollOneDie": "red",
+      "rollOneDieTarget": "spaceWithin",
+      "rollOneDieRange": 3,
       "wiredStatus": "wired"
     },
     "Hidden Trap": {
@@ -1388,7 +1435,9 @@
       "type": "ccEffect",
       "demoralizingMonologueEffect": true,
       "label": "Force defender to reroll 1 die during this attack (reveal condition honor system)",
-      "wiredStatus": "wired"
+      "wiredStatus": "wired",
+      "forceDefenderRerollOne": true,
+      "logMessage": "**Demoralizing Monologue** — During this attack, the defender must reroll 1 die of your choice. Flag set — enforced automatically during this attack."
     },
     "Field Supply": {
       "type": "ccEffect",
@@ -1406,12 +1455,31 @@
       "type": "ccEffect",
       "label": "Trigger same Surge up to twice (+1 Surge honor)",
       "attackSurgeBonus": 1,
-      "wiredStatus": "wired"
+      "wiredStatus": "wired",
+      "surgeDoublingActive": true,
+      "logMessage": "During this attack, you may trigger the same surge ability up to twice. Flag set — announce to opponent which surge you are doubling."
     },
     "I Can Feel It": {
       "type": "ccEffect",
-      "label": "Reroll defense/attack die or 1 VP (Focus honor)",
-      "applyFocus": true,
+      "label": "After attack/defense roll: choose one — reroll one die, gain 1 VP, or become Focused",
+      "chooseOne": [
+        {
+          "label": "Reroll one attack die",
+          "rerollOneDieByPlayer": "attacker"
+        },
+        {
+          "label": "Reroll one defense die",
+          "rerollOneDieByPlayer": "defender"
+        },
+        {
+          "label": "Gain 1 VP",
+          "vpGain": 1
+        },
+        {
+          "label": "Become Focused",
+          "applyFocus": true
+        }
+      ],
       "wiredStatus": "wired"
     },
     "Lightbow": {
@@ -1460,7 +1528,9 @@
       "type": "ccEffect",
       "label": "After attack on you: if suffered 3+ ready deployment (Focus honor)",
       "applyFocus": true,
-      "wiredStatus": "wired"
+      "wiredStatus": "wired",
+      "conditionalFocusIfDamagedGte": 3,
+      "logMessage": "Became Focused (auto-applied when you suffered 3+ Damage from this attack)."
     },
     "Blood Feud": {
       "type": "ccEffect",
@@ -1498,7 +1568,7 @@
       "type": "ccEffect",
       "label": "When attack declared on adjacent friendly: attack targets you instead (2 MP honor to get in position)",
       "mpBonus": 2,
-      "logMessage": "Gained **2 MP** (to move into position if needed). The attack now targets you instead of the adjacent friendly (honor).",
+      "logMessage": "Gained **2 MP**. Move into position; the incoming attack targets you instead. Inform your opponent, then click Attack as the defender (if attacked) to proceed.",
       "wiredStatus": "wired"
     },
     "Cal's Buddy": {
@@ -1517,7 +1587,8 @@
       "label": "Distribute Hit tokens = round number to friendly within 3 (1 PT honor)",
       "powerTokenGain": 1,
       "wiredStatus": "wired",
-      "logMessage": "Gained **1 Power Token**. Distribute Hit tokens equal to the current round number among friendly figures within 3 spaces (honor)."
+      "logMessage": "Gained **1 Power Token**. Distribute Hit tokens equal to the current round number among friendly figures within 3 spaces (honor — agree with opponent on distribution).",
+      "distributeHitTokensEqualToRound": true
     },
     "Deadly Precision": {
       "type": "ccEffect",
@@ -1619,13 +1690,13 @@
     "Data Theft": {
       "type": "ccEffect",
       "label": "Choose a CC from opponent discard; once this round you may play it as yours",
-      "logMessage": "Resolve manually: choose a Command card from opponent's discard; once this round you may play it as though in your hand.",
+      "logMessage": "**Data Theft** — Choose a Command card from your opponent’s discard pile; declare it to your opponent. Until end of round you may play it as though in your hand (honor — inform opponent which card you chose).",
       "wiredStatus": "wired",
       "stealsFromOpponentDiscard": true
     },
     "Cloned Reinforcements": {
       "type": "ccEffect",
-      "label": "Special: place defeated friendly non-DROID non-unique TROOPER cost \u00c3\u00a2\u00e2\u20ac\u00b0\u00c2\u00a44 in empty adjacent space",
+      "label": "Special: place defeated friendly non-DROID non-unique TROOPER cost Ã¢â€°Â¤4 in empty adjacent space",
       "placeDefeatedFigure": {
         "traitFilter": [
           "TROOPER"
@@ -1655,13 +1726,16 @@
       "type": "ccEffect",
       "doubleOrNothingEffect": true,
       "label": "Choose a die to reroll; if same icon type, double those icons (honor system)",
-      "wiredStatus": "wired"
+      "wiredStatus": "wired",
+      "doubleMatchingIconsOnReroll": true,
+      "logMessage": "**Double or Nothing** — Choose a die in this attack and reroll it; if the new result shows the same icon type as before, double those matching icons."
     },
     "Expose Weakness": {
       "type": "ccEffect",
       "label": "Choose adjacent hostile: next attack targeting that figure gains Pierce 3 (honor which figure)",
       "nextAttackBonusPierce": 3,
-      "wiredStatus": "wired"
+      "wiredStatus": "wired",
+      "logMessage": "Your next attack gains +3 Pierce. Target any adjacent hostile figure with that attack."
     },
     "Force Push": {
       "type": "ccEffect",
@@ -1918,7 +1992,7 @@
     },
     "Strength in Numbers": {
       "type": "ccEffect",
-      "label": "After you resolve a group's activation: activate another group (combined cost \u00c3\u00a2\u00e2\u20ac\u00b0\u00c2\u00a412)",
+      "label": "After you resolve a group's activation: activate another group (combined cost Ã¢â€°Â¤12)",
       "strengthInNumbersPlayerNum": true,
       "wiredStatus": "wired"
     },
@@ -1992,7 +2066,7 @@
     },
     "Squad Swarm": {
       "type": "ccEffect",
-      "label": "After activating a group: activate another same-name group (combined cost \u00c3\u00a2\u00e2\u20ac\u00b0\u00c2\u00a415)",
+      "label": "After activating a group: activate another same-name group (combined cost Ã¢â€°Â¤15)",
       "squadSwarmPlayerNum": true,
       "wiredStatus": "wired"
     },
@@ -2016,14 +2090,14 @@
     "Cripple": {
       "type": "ccEffect",
       "label": "Adjacent hostile cannot voluntarily exit its space this round",
-      "logMessage": "**Cripple** \u00e2\u20ac\u201d Choose an adjacent hostile figure. Until end of round, that figure cannot voluntarily exit its space. Enforced automatically.",
+      "logMessage": "**Cripple** â€” Choose an adjacent hostile figure. Until end of round, that figure cannot voluntarily exit its space. Enforced automatically.",
       "wiredStatus": "wired",
       "cripplesFigure": true
     },
     "Disable": {
       "type": "ccEffect",
       "label": "Adjacent hostile cannot use Surge abilities or Special actions this round",
-      "logMessage": "**Disable** \u00e2\u20ac\u201d Choose an adjacent hostile figure. Until end of round, that figure cannot use Surge abilities or Special actions. Enforced automatically.",
+      "logMessage": "**Disable** â€” Choose an adjacent hostile figure. Until end of round, that figure cannot use Surge abilities or Special actions. Enforced automatically.",
       "wiredStatus": "wired",
       "disablesFigure": true
     },
@@ -2042,13 +2116,13 @@
     "Ferocity": {
       "type": "ccEffect",
       "ferocityEffect": true,
-      "label": "Choose a CREATURE \u00e2\u20ac\u201d it performs 1 attack",
+      "label": "Choose a CREATURE â€” it performs 1 attack",
       "wiredStatus": "wired"
     },
     "Hold Ground": {
       "type": "ccEffect",
       "label": "SMALL hostile figures cannot voluntarily exit spaces adjacent to you this round",
-      "logMessage": "**Hold Ground** \u00e2\u20ac\u201d Until end of round, SMALL hostile figures cannot voluntarily exit spaces adjacent to you. Enforced automatically.",
+      "logMessage": "**Hold Ground** â€” Until end of round, SMALL hostile figures cannot voluntarily exit spaces adjacent to you. Enforced automatically.",
       "wiredStatus": "wired",
       "setsHoldGround": true
     },
@@ -2078,7 +2152,7 @@
     "Mandalorian Steel": {
       "type": "ccEffect",
       "label": "After attack on friendly: if they spent a Block Token, recover 1 Damage",
-      "logMessage": "**Mandalorian Steel** \u00e2\u20ac\u201d This round, after an attack resolves targeting a friendly figure, if that figure spent a Block Token during that attack, it recovers 1 Damage. Applied automatically when a Block Token is spent in defense.",
+      "logMessage": "**Mandalorian Steel** â€” This round, after an attack resolves targeting a friendly figure, if that figure spent a Block Token during that attack, it recovers 1 Damage. Applied automatically when a Block Token is spent in defense.",
       "wiredStatus": "wired",
       "setsMandaAsteel": true
     },
@@ -2092,8 +2166,9 @@
       "type": "ccEffect",
       "optimalBombardmentEffect": true,
       "label": "Up to 3 adjacent VEHICLES/DROIDS/HEAVY WEAPONs each attack with Blast 1",
-      "logMessage": "Blast 1 is honor system \u00e2\u20ac\u201d apply manually after each attack.",
-      "wiredStatus": "wired"
+      "logMessage": "**Optimal Bombardment** — Each friendly VEHICLE, DROID, or HEAVY WEAPON figure adjacent to this figure may perform an attack with +Blast 1 this activation (honor: player announces and applies Blast 1 to each such attack).",
+      "wiredStatus": "wired",
+      "blastBonusToAdjacentVehiclesDroidHW": 1
     },
     "Overcharged Weapons": {
       "type": "ccEffect",
@@ -2110,7 +2185,7 @@
     "Pack Alpha": {
       "type": "ccEffect",
       "packAlphaEffect": true,
-      "label": "Move CREATUREs (manual), then pick hostile \u00e2\u20ac\u201d deal damage = # CREATUREs adjacent",
+      "label": "Move CREATUREs (manual), then pick hostile â€” deal damage = # CREATUREs adjacent",
       "wiredStatus": "wired"
     },
     "Parting Blow": {
@@ -2122,7 +2197,7 @@
     "Price on Their Heads": {
       "type": "ccEffect",
       "label": "Place bounty on hostile DC: +4 VP when that group is defeated",
-      "logMessage": "**Price on Their Heads** \u00e2\u20ac\u201d Place on a hostile Deployment card. When the last figure in that group is defeated, you gain +4 VP automatically.",
+      "logMessage": "**Price on Their Heads** â€” Place on a hostile Deployment card. When the last figure in that group is defeated, you gain +4 VP automatically.",
       "wiredStatus": "wired",
       "setsBounty": true
     },
@@ -2134,7 +2209,7 @@
     },
     "Reinforcements": {
       "type": "ccEffect",
-      "label": "Return a defeated TROOPER (reinforcement cost \u00c3\u00a2\u00e2\u20ac\u00b0\u00c2\u00a43) adjacent to its group",
+      "label": "Return a defeated TROOPER (reinforcement cost Ã¢â€°Â¤3) adjacent to its group",
       "placeDefeatedFigure": {
         "traitFilter": [
           "TROOPER"
@@ -2178,14 +2253,14 @@
     "Signal Jammer": {
       "type": "ccEffect",
       "label": "Place in play: cancels the next CC played; then discards itself",
-      "logMessage": "**Signal Jammer** \u00e2\u20ac\u201d Place this card in your Play Area. When any player next plays a Command card, cancel its effects and discard both cards. **Notify your opponent that Signal Jammer is now active.**",
+      "logMessage": "**Signal Jammer** â€” Place this card in your Play Area. When any player next plays a Command card, cancel its effects and discard both cards. **Notify your opponent that Signal Jammer is now active.**",
       "wiredStatus": "wired",
       "signalJammer": true
     },
     "Son of Skywalker": {
       "type": "ccEffect",
       "label": "After any figure resolves an activation, ready your Deployment card",
-      "logMessage": "**Son of Skywalker** \u00e2\u20ac\u201d After a figure resolves its activation, ready your Deployment card. Use Refresh All on your DC embed to reset it to READIED.",
+      "logMessage": "**Son of Skywalker** â€” After a figure resolves its activation, ready your Deployment card. Use Refresh All on your DC embed to reset it to READIED.",
       "wiredStatus": "wired",
       "readyOwnDeploymentCard": true
     },
@@ -2199,26 +2274,26 @@
       "type": "ccEffect",
       "label": "After Close and Personal (target survived): free attack, then you become Stunned",
       "freeAttackBonus": true,
-      "logMessage": "**Stay Down** \u00e2\u20ac\u201d Free attack granted (after Close and Personal, if target survived \u00e2\u20ac\u201d target the same figure). After this attack resolves, your figure becomes Stunned automatically.",
+      "logMessage": "**Stay Down** â€” Free attack granted (after Close and Personal, if target survived â€” target the same figure). After this attack resolves, your figure becomes Stunned automatically.",
       "wiredStatus": "wired"
     },
     "Still Faster Than You": {
       "type": "ccEffect",
       "label": "At start of hostile activation: interrupt to move 2 spaces + attack a different hostile",
-      "logMessage": "**Still Faster Than You** \u00e2\u20ac\u201d At the start of a hostile figure's activation, you will be prompted to interrupt with a move (2 spaces) and an attack targeting a DIFFERENT hostile figure.",
+      "logMessage": "**Still Faster Than You** â€” At the start of a hostile figure's activation, you will be prompted to interrupt with a move (2 spaces) and an attack targeting a DIFFERENT hostile figure.",
       "wiredStatus": "wired",
       "setsStillFaster": true
     },
     "Support Specialist": {
       "type": "ccEffect",
       "supportSpecialistEffect": true,
-      "label": "Choose DROID/TECHNICIAN/TROOPER within 3 \u00e2\u20ac\u201d grant free interrupt move",
+      "label": "Choose DROID/TECHNICIAN/TROOPER within 3 â€” grant free interrupt move",
       "wiredStatus": "wired"
     },
     "Terminal Network": {
       "type": "ccEffect",
       "label": "While adjacent to a terminal: control all terminals until next round",
-      "logMessage": "**Terminal Network** \u00e2\u20ac\u201d Until the start of next round, you control all terminals regardless of adjacency. Applies to mission objectives. Announce to opponent.",
+      "logMessage": "**Terminal Network** â€” Until the start of next round, you control all terminals regardless of adjacency. Applies to mission objectives. Announce to opponent.",
       "wiredStatus": "wired",
       "setsTerminalControl": true
     },
@@ -2231,14 +2306,14 @@
     "There Is No Try": {
       "type": "ccEffect",
       "label": "When a friendly REBEL FORCE USER rolls dice: set 1 die to any side + convert Dodge results",
-      "logMessage": "**There Is No Try** \u00e2\u20ac\u201d When a friendly REBEL FORCE USER within 4 spaces rolls dice, choose one die and turn it to any side. On that die, convert each Dodge to 2 Blocks + 1 Evade. You will be prompted when a qualifying figure rolls dice.",
+      "logMessage": "**There Is No Try** â€” When a friendly REBEL FORCE USER within 4 spaces rolls dice, choose one die and turn it to any side. On that die, convert each Dodge to 2 Blocks + 1 Evade. You will be prompted when a qualifying figure rolls dice.",
       "wiredStatus": "wired",
       "setsTherIsNoTry": true
     },
     "Tough Luck": {
       "type": "ccEffect",
       "label": "After opponent rerolls a die: remove that die from the results",
-      "logMessage": "**Tough Luck** \u00e2\u20ac\u201d After your opponent rerolls a die, remove that die's result entirely from the results. You will be prompted after each opponent reroll.",
+      "logMessage": "**Tough Luck** â€” After your opponent rerolls a die, remove that die's result entirely from the results. You will be prompted after each opponent reroll.",
       "wiredStatus": "wired",
       "setsToughLuck": true
     },
@@ -2252,34 +2327,36 @@
     "Triangulate": {
       "type": "ccEffect",
       "triangulateEffect": true,
-      "label": "Move DROIDs (manual), then pick hostile \u00e2\u20ac\u201d deal damage = # DROIDs in play (LOS honor system)",
-      "wiredStatus": "wired"
+      "label": "Move DROIDs (manual), then pick hostile â€” deal damage = # DROIDs in play (LOS honor system)",
+      "wiredStatus": "wired",
+      "triangulateCountFriendlyDroids": true,
+      "logMessage": "**Triangulate** — Count the number of DROID figures in your squad currently in play. Choose a hostile figure in LOS; it suffers Damage equal to that count (honor: apply via /editvp or health tracking)."
     },
     "Unlimited Power": {
       "type": "ccEffect",
       "label": "When using Emperor: choose any friendly figure on the map instead of within 4 spaces",
-      "logMessage": "**Unlimited Power** \u00e2\u20ac\u201d When you use **Emperor**, you may choose any friendly figure on the map instead of one within 4 spaces. Play alongside Emperor; resolve targeting manually.",
+      "logMessage": "**Unlimited Power** â€” When you use **Emperor**, you may choose any friendly figure on the map instead of one within 4 spaces. Play alongside Emperor; resolve targeting manually.",
       "wiredStatus": "wired",
       "setsUnlimitedPower": true
     },
     "Windfall": {
       "type": "ccEffect",
       "label": "When CCs discarded from hand/deck: gain VP equal to their cost",
-      "logMessage": "**Windfall** \u00e2\u20ac\u201d When a Command card is discarded from your hand or deck, VPs equal to its cost are awarded automatically. When Windfall itself is discarded, +1 VP is awarded automatically.",
+      "logMessage": "**Windfall** â€” When a Command card is discarded from your hand or deck, VPs equal to its cost are awarded automatically. When Windfall itself is discarded, +1 VP is awarded automatically.",
       "wiredStatus": "wired",
       "setsWindfall": true
     },
     "Wreak Vengeance": {
       "type": "ccEffect",
       "label": "When using Dual-Bladed Fury: choose both effects instead of 1",
-      "logMessage": "**Wreak Vengeance** \u00e2\u20ac\u201d When using **Dual-Bladed Fury**, both surge effects are applied automatically (play alongside Dual-Bladed Fury).",
+      "logMessage": "**Wreak Vengeance** â€” When using **Dual-Bladed Fury**, both surge effects are applied automatically (play alongside Dual-Bladed Fury).",
       "wiredStatus": "wired",
       "setsWreakVengeance": true
     },
     "You Will Not Deny Me": {
       "type": "ccEffect",
       "label": "Fifth Brother cannot be defeated; ignores conditions; recover 2 Damage on each hostile defeat",
-      "logMessage": "**You Will Not Deny Me** \u00e2\u20ac\u201d Place on Fifth Brother. He cannot be defeated and ignores Harmful conditions. When a hostile figure is defeated, he recovers 2 Damage automatically and this card returns to the game box.",
+      "logMessage": "**You Will Not Deny Me** â€” Place on Fifth Brother. He cannot be defeated and ignores Harmful conditions. When a hostile figure is defeated, he recovers 2 Damage automatically and this card returns to the game box.",
       "wiredStatus": "wired",
       "setsYouWillNotDenyMe": true
     },
@@ -2292,7 +2369,7 @@
     "slam": {
       "type": "dcSpecial",
       "label": "Slam",
-      "logMessage": "Slam: Roll 1 red die. Choose an adjacent hostile figure \u00e2\u20ac\u201d it suffers Damage equal to the Hit results. If that figure is SMALL, you may push it 1 space.",
+      "logMessage": "Slam: Roll 1 red die. Choose an adjacent hostile figure â€” it suffers Damage equal to the Hit results. If that figure is SMALL, you may push it 1 space.",
       "wiredStatus": "wired",
       "rollOneDie": "red",
       "rollOneDieNote": "Deal Hit results as Damage to 1 adjacent hostile figure. If that figure is SMALL, you may push it 1 space."
@@ -2300,7 +2377,7 @@
     "force_lightning": {
       "type": "dcSpecial",
       "label": "Force Lightning",
-      "description": "Choose a figure within 4 spaces and LOS \u00e2\u20ac\u201d 3 Damage + Weaken; each adjacent figure suffers 1 Damage.",
+      "description": "Choose a figure within 4 spaces and LOS â€” 3 Damage + Weaken; each adjacent figure suffers 1 Damage.",
       "targetHostileFigure": {
         "damage": 3,
         "strain": 0,
@@ -2320,7 +2397,7 @@
     "field_report": {
       "type": "dcSpecial",
       "label": "Field Report",
-      "description": "Choose up to 2 friendly figures within 4 spaces with 2 or fewer attack dice in their printed pool \u00e2\u20ac\u201d those figures become Hidden.",
+      "description": "Choose up to 2 friendly figures within 4 spaces with 2 or fewer attack dice in their printed pool â€” those figures become Hidden.",
       "applyHideToFriendlyWithinRange": {
         "range": 4,
         "maxDiceCount": 2,
@@ -2336,7 +2413,7 @@
         "bonus": 1
       },
       "label": "On the Hunt",
-      "logMessage": "On the Hunt: Gained 2 free movement points \u00e2\u20ac\u201d use the Move button. Your next attack automatically gains +1 Hit (tracked by the bot). Target must be a unique hostile figure.",
+      "logMessage": "On the Hunt: Gained 2 free movement points â€” use the Move button. Your next attack automatically gains +1 Hit (tracked by the bot). Target must be a unique hostile figure.",
       "wiredStatus": "wired"
     },
     "shocking_palm": {
@@ -2499,7 +2576,7 @@
       "description": "Once during your activation, perform a Melee attack using 2 red dice without spending an action.",
       "oncePer": "activation",
       "wiredStatus": "wired",
-      "logMessage": "**Bo-Rifle Staff Strike** \u00e2\u20ac\u201d Free Special action. Your next attack costs no action and uses [Red, Red] dice (melee).",
+      "logMessage": "**Bo-Rifle Staff Strike** â€” Free Special action. Your next attack costs no action and uses [Red, Red] dice (melee).",
       "freeAction": true,
       "freeAttackBonus": true,
       "overrideAttackDice": [
@@ -2529,7 +2606,7 @@
       ],
       "overrideAttackType": "melee",
       "freeAttackBonus": true,
-      "logMessage": "**Brutal Cleave** \u00e2\u20ac\u201d Suffer 1 Strain to unlock a free melee attack with [red, yellow] against a *different* target.",
+      "logMessage": "**Brutal Cleave** â€” Suffer 1 Strain to unlock a free melee attack with [red, yellow] against a *different* target.",
       "wiredStatus": "wired"
     },
     "smash": {
@@ -2605,9 +2682,11 @@
       "description": "At the end of the round, you may move up to 2 spaces. Then, choose a space within 3 spaces that contains a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Hit results.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Mortar Launcher** \u00e2\u20ac\u201d At the end of the round, you may move up to 2 spaces. Then, choose a space within 3 spaces that contains a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Hit results.. Resolve manually and inform your opponent.",
+      "logMessage": "**Mortar Launcher** — Move up to 2 spaces, then choose a space within 3 containing a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Hit results.",
       "rollOneDie": "red",
-      "rollOneDieNote": "You may move up to 2 spaces first. Then choose a space within 3 with a hostile figure. Each figure on or adjacent suffers Hit results as Damage."
+      "rollOneDieTarget": "spaceWithin",
+      "rollOneDieRange": 3,
+      "freeMoveBonus": 2
     },
     "charge": {
       "type": "dcSpecial",
@@ -2617,7 +2696,7 @@
       "description": "Move a number of spaces up to your Speed. Then, you may perform an attack.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Charge** \u00e2\u20ac\u201d Gained free MP equal to Speed. Your next attack costs no action.",
+      "logMessage": "**Charge** â€” Gained free MP equal to Speed. Your next attack costs no action.",
       "freeMoveEqualToSpeed": true,
       "freeAttackBonus": true
     },
@@ -2629,7 +2708,7 @@
       "description": "Perform 2 attacks.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Rapid Fire** \u00e2\u20ac\u201d Your next attack costs no action (2 attacks total for this activation).",
+      "logMessage": "**Rapid Fire** â€” Your next attack costs no action (2 attacks total for this activation).",
       "freeAttackBonus": true
     },
     "rapid_fire_vinto": {
@@ -2640,7 +2719,7 @@
       "description": "Perform 2 attacks.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Rapid Fire** \u00e2\u20ac\u201d Your next attack costs no action (2 attacks total for this activation).",
+      "logMessage": "**Rapid Fire** â€” Your next attack costs no action (2 attacks total for this activation).",
       "freeAttackBonus": true
     },
     "indiscriminate_fire": {
@@ -2648,10 +2727,10 @@
       "category": "active",
       "trigger": "activation",
       "label": "Indiscriminate Fire",
-      "description": "Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red die \u00e2\u20ac\u201d each other figure within 2 spaces of the target suffers Damage = Hits and Strain = Surges on that die.",
+      "description": "Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red die â€” each other figure within 2 spaces of the target suffers Damage = Hits and Strain = Surges on that die.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Indiscriminate Fire** \u00e2\u20ac\u201d Click **Attack** to perform your attack. After it resolves (if not a miss), you will be prompted to choose a die for splash damage.",
+      "logMessage": "**Indiscriminate Fire** â€” Click **Attack** to perform your attack. After it resolves (if not a miss), you will be prompted to choose a die for splash damage.",
       "freeAction": true
     },
     "missile_salvo": {
@@ -2797,7 +2876,7 @@
       "description": "At the start of a hostile figure's activation, interrupt to perform an attack targeting that figure. Limit once per round.",
       "freeAttackBonus": true,
       "freeAction": true,
-      "logMessage": "**Hair Trigger** \u00e2\u20ac\u201d (Interrupt: triggered at the start of a hostile figure's activation.) Your next attack costs no action \u00e2\u20ac\u201d click **Attack** to target the activating figure. Limit once per round.",
+      "logMessage": "**Hair Trigger** â€” (Interrupt: triggered at the start of a hostile figure's activation.) Your next attack costs no action â€” click **Attack** to target the activating figure. Limit once per round.",
       "wiredStatus": "wired"
     },
     "figurehead": {
@@ -2814,7 +2893,7 @@
       "freeMoveBonus": 2,
       "freeAttackBonus": true,
       "freeAction": true,
-      "logMessage": "**Executor** \u00e2\u20ac\u201d (Interrupt: triggered when a friendly figure within 3 spaces is defeated.) Gain 2 free movement points, then your next attack costs no action. Limit once per round.",
+      "logMessage": "**Executor** â€” (Interrupt: triggered when a friendly figure within 3 spaces is defeated.) Gain 2 free movement points, then your next attack costs no action. Limit once per round.",
       "wiredStatus": "wired"
     },
     "i_am_one_with_the_force": {
@@ -2822,7 +2901,7 @@
       "label": "I'm One With the Force",
       "description": "At the start of a hostile figure's activation, you may move up to 2 spaces to a space adjacent to a hostile figure.",
       "freeMoveBonus": 2,
-      "logMessage": "**I'm One With the Force** \u00e2\u20ac\u201d Gain 2 free movement points. Move adjacent to a hostile figure. (Trigger: at the start of any hostile figure's activation, once per round.)",
+      "logMessage": "**I'm One With the Force** â€” Gain 2 free movement points. Move adjacent to a hostile figure. (Trigger: at the start of any hostile figure's activation, once per round.)",
       "oncePer": "round",
       "wiredStatus": "wired"
     },
@@ -2832,7 +2911,7 @@
       "description": "After an attack targeting you resolves with no damage, interrupt to perform an attack targeting the attacker. Limit once per round.",
       "freeAttackBonus": true,
       "freeAction": true,
-      "logMessage": "**Return Fire** \u00e2\u20ac\u201d (Interrupt: triggered after an attack targeting you resolves with 0 Damage.) Your next attack costs no action \u00e2\u20ac\u201d click **Attack** to target the attacker. Limit once per round.",
+      "logMessage": "**Return Fire** â€” (Interrupt: triggered after an attack targeting you resolves with 0 Damage.) Your next attack costs no action â€” click **Attack** to target the attacker. Limit once per round.",
       "wiredStatus": "wired"
     },
     "defensive_stance": {
@@ -2934,7 +3013,7 @@
       "description": "When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Self-Destruct Protocol** \u00e2\u20ac\u201d When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.. Resolve manually and inform your opponent.",
+      "logMessage": "**Self-Destruct Protocol** â€” When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.. Resolve manually and inform your opponent.",
       "rollOneDie": "red",
       "rollOneDieNote": "Each figure adjacent to you suffers Hit results as Damage. Then this figure is defeated (resolve manually)."
     },
@@ -2946,7 +3025,7 @@
       "description": "At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Self-Destruct** \u00e2\u20ac\u201d At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.. Resolve manually and inform your opponent.",
+      "logMessage": "**Self-Destruct** â€” At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.. Resolve manually and inform your opponent.",
       "rollOneDie": "red",
       "rollOneDieNote": "Each adjacent figure suffers Hit results as Damage. Then this figure is defeated (resolve manually)."
     },
@@ -2986,7 +3065,7 @@
       "description": "After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Military Efficiency** \u00e2\u20ac\u201d After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck.. Resolve manually and inform your opponent.",
+      "logMessage": "**Military Efficiency** — After you resolve an attack, choose 1 Command card from your discard pile and shuffle it into your Command deck.",
       "shuffleOneDiscardToDeck": true
     },
     "boltslinger": {
@@ -3145,7 +3224,7 @@
         "strain": 0,
         "requiresLos": true
       },
-      "logMessage": "**Deflect** \u00e2\u20ac\u201d Choose an enemy in your line of sight to redirect 1 Damage to. (Trigger: after a ranged attack targeting you or an adjacent friendly resolves.)",
+      "logMessage": "**Deflect** â€” Choose an enemy in your line of sight to redirect 1 Damage to. (Trigger: after a ranged attack targeting you or an adjacent friendly resolves.)",
       "freeAction": true,
       "wiredStatus": "wired"
     },

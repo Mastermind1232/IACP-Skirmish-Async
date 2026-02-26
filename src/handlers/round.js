@@ -342,6 +342,13 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.stayDownPendingMsgId = {};
   game.burstFirePendingMsgId = {};
   game.selfDestructProtocolTriggered = {};
+  game.mobileMovementActive = {};
+  game.selfDefeatsAfterAttackMsgId = {};
+  game.applySelfStunAfterAttackPlayerNum = {};
+  game.postActivationConditions = {};
+  game.pendingPostAttackConditions = {};
+  game.nextActivationFreeAttack = {};
+  game.conditionalFocusIfDamagedGte = null;
   game.pendingToughLuck = null;
   game.pendingBELReorder = null;
   game.pendingThereIsNoTry = null;

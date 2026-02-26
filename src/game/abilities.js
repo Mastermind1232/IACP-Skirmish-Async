@@ -642,11 +642,23 @@ export function resolveAbility(abilityId, context) {
         strainNote = ` (Apply ${entry.strainCostToSelf} Strain to self manually.)`;
       }
     }
+    // mpBonus alongside overrideAttackDice (Close and Personal: move + override attack)
+    let odMpNote = '';
+    if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
+      game.movementBank = game.movementBank || {};
+      const odBank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+      odBank.total = (odBank.total ?? 0) + entry.mpBonus;
+      odBank.remaining = (odBank.remaining ?? 0) + entry.mpBonus;
+      game.movementBank[msgId] = odBank;
+      odMpNote = ` Gained ${entry.mpBonus} MP.`;
+    }
     return {
       applied: true,
       freeAction: !!entry.freeAction,
       refreshDcEmbed: entry.strainCostToSelf > 0,
-      logMessage: (entry.logMessage || `**${entry.label}** — Click Attack to proceed.`) + strainNote,
+      refreshMovementBank: typeof entry.mpBonus === 'number' && entry.mpBonus > 0,
+      activeMsgId: msgId,
+      logMessage: (entry.logMessage || `**${entry.label}** — Click Attack to proceed.`) + strainNote + odMpNote,
     };
   }
 
@@ -668,9 +680,36 @@ export function resolveAbility(abilityId, context) {
       game.burstFirePendingMsgId = game.burstFirePendingMsgId || {};
       game.burstFirePendingMsgId[msgId] = true;
     }
+    // overrideAttackType (Face to Face, Dying Lunge, Final Stand): force Melee attack type without overriding dice
+    if (entry.overrideAttackType) {
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[msgId] = { type: entry.overrideAttackType, dice: null, pierce: 0, bonusAccuracy: 0 };
+    }
+    // selfDefeatsAfterAttack (Dying Lunge, Final Stand): attacker figure defeated when free attack resolves
+    if (entry.selfDefeatsAfterAttack) {
+      game.selfDefeatsAfterAttackMsgId = game.selfDefeatsAfterAttackMsgId || {};
+      game.selfDefeatsAfterAttackMsgId[msgId] = true;
+    }
+    // postActivationConditions (Wild Fury): apply conditions after last free attack
+    if (Array.isArray(entry.postActivationConditions) && entry.postActivationConditions.length > 0) {
+      game.postActivationConditions = game.postActivationConditions || {};
+      game.postActivationConditions[msgId] = entry.postActivationConditions;
+    }
+    // mpBonus alongside freeAttackBonus (Face to Face, Final Stand: gain MP + free attack)
+    let fabMpNote = '';
+    let fabMpRefresh = false;
+    if (typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
+      game.movementBank = game.movementBank || {};
+      const fabBank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+      fabBank.total = (fabBank.total ?? 0) + entry.mpBonus;
+      fabBank.remaining = (fabBank.remaining ?? 0) + entry.mpBonus;
+      game.movementBank[msgId] = fabBank;
+      fabMpNote = ` Gained ${entry.mpBonus} MP.`;
+      fabMpRefresh = true;
+    }
     const label = entry.label || 'Heroic';
     const countNote = (entry.freeAttackBonusCount ?? 1) > 1 ? ` (${entry.freeAttackBonusCount} times, each targeting a different figure)` : '';
-    return { applied: true, freeAction: true, logMessage: entry.logMessage || `**${label}** — Your next attack${countNote} costs no action. Click Attack when ready.` };
+    return { applied: true, freeAction: true, refreshMovementBank: fabMpRefresh, activeMsgId: msgId, logMessage: entry.logMessage || (`**${label}** — Your next attack${countNote} costs no action. Click Attack when ready.` + fabMpNote) };
   }
 
   // dcSpecial: freeMoveEqualToSpeed (Wall Run, Charge) — gain free MP equal to DC's Speed
@@ -694,9 +733,15 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: entry.logMessage || `**${label}** — Gained ${speed} free movement points (your Speed).${extraMsg}`, refreshMovementBank: true, activeMsgId: msgId };
   }
 
-  // dcSpecial: rollOneDie (Slam, Smash, Electrified Knuckledusters, Parting Gift) — roll one die with optional targeting
-  if (entry.type === 'dcSpecial' && entry.rollOneDie) {
-    const { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, targetFigureKey, chosenSpace } = context;
+  // dcSpecial/ccEffect: rollOneDie (Slam, Smash, Grenadier, Parting Gift) — roll one die with optional targeting
+  if ((entry.type === 'dcSpecial' || entry.type === 'ccEffect') && entry.rollOneDie) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, targetFigureKey, chosenSpace } = context;
+    let { msgId, meta } = context;
+    // For ccEffect: fall back to active activation for figure-position lookup
+    if (entry.type === 'ccEffect' && !msgId && dcMessageMeta && playerNum && game) {
+      msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta) || null;
+      meta = msgId ? dcMessageMeta.get(msgId) : null;
+    }
 
     // ── Electrified Knuckledusters style: pick adjacent hostile, then roll + apply ──
     if (entry.rollOneDieTarget === 'adjacentHostile') {
@@ -848,7 +893,16 @@ export function resolveAbility(abilityId, context) {
       const validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
       const validSpaces = [...validSet];
       if (validSpaces.length === 0) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (no spaces in range).` };
-      return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**${entry.label}** — Choose a space within ${range}:` };
+      // freeMoveBonus (Mortar Launcher): grant MP before the space pick so player can move first
+      if (entry.freeMoveBonus > 0 && msgId) {
+        game.movementBank = game.movementBank || {};
+        const fbBank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+        fbBank.total = (fbBank.total ?? 0) + entry.freeMoveBonus;
+        fbBank.remaining = (fbBank.remaining ?? 0) + entry.freeMoveBonus;
+        game.movementBank[msgId] = fbBank;
+      }
+      const moveNote = entry.freeMoveBonus > 0 ? ` (Move up to ${entry.freeMoveBonus} spaces first, then choose a target space.)` : '';
+      return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**${entry.label}** — Choose a target space within ${range}:${moveNote}`, refreshMovementBank: entry.freeMoveBonus > 0, activeMsgId: msgId };
     }
 
     // ── Plain rollOneDie: report results only (Slam, Smash) ──
@@ -1504,7 +1558,13 @@ export function resolveAbility(abilityId, context) {
       }
       if (trooperCount > 0) msg += ` Each of ${trooperCount} other friendly TROOPER(s) also gained ${bonus} MP.`;
     }
-    return { applied: true, logMessage: entry.logMessage || msg };
+    // mobileMovement (Force Jump): during this move ignore figures and doors for pathing; cannot end in blocking terrain
+    if (entry.mobileMovement) {
+      game.mobileMovementActive = game.mobileMovementActive || {};
+      game.mobileMovementActive[msgId] = true;
+      msg += ' MOBILE movement active \u2014 treat doors and figures as open terrain; cannot end in blocking terrain.';
+    }
+    return { applied: true, logMessage: entry.logMessage || msg, refreshMovementBank: true, activeMsgId: msgId };
   }
 
   // ccEffect: Power Token gain (Battle Scars, etc.) — requires active activation
@@ -1539,10 +1599,36 @@ export function resolveAbility(abilityId, context) {
     game.figurePowerTokens = game.figurePowerTokens || {};
     game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
     const current = game.figurePowerTokens[fk].length;
-    const toAdd = Math.min(n, 2 - current);
+    // conditionalExteriorPowerToken (Marked Territory): +1 if figure is in an exterior space
+    let conditionalPtBonus = 0;
+    let conditionalPtNote = '';
+    if (typeof entry.conditionalExteriorPowerToken === 'number' && entry.conditionalExteriorPowerToken > 0 && game.selectedMap?.id) {
+      const _mapExt = getMapSpaces(game.selectedMap.id)?.exterior || {};
+      const _figPos = game.figurePositions?.[playerNum]?.[fk];
+      if (_figPos && (_mapExt[String(_figPos).toLowerCase()] || _mapExt[String(_figPos).toUpperCase()])) {
+        conditionalPtBonus += entry.conditionalExteriorPowerToken;
+        conditionalPtNote += ` (exterior: +${entry.conditionalExteriorPowerToken} bonus token)`;
+      }
+    }
+    // conditionalAdjacentLeaderPowerToken (Prepared for Battle): +1 if adjacent to a friendly LEADER
+    if (typeof entry.conditionalAdjacentLeaderPowerToken === 'number' && entry.conditionalAdjacentLeaderPowerToken > 0 && game.selectedMap?.id) {
+      const _adjAll = getFiguresAdjacentToTarget(game, fk, game.selectedMap.id);
+      const _hasLeader = _adjAll.some(({ figureKey: _afk, playerNum: _apn }) => {
+        if (_apn !== playerNum) return false;
+        const _adcName = _afk.replace(/-\d+-\d+$/, '');
+        const _aEff = getDcEffects()?.[_adcName] || getDcEffects()?.[_adcName?.replace(/\s*\[.*\]\s*$/, '')];
+        return (_aEff?.keywords || []).map(k => String(k).toUpperCase()).includes('LEADER');
+      });
+      if (_hasLeader) {
+        conditionalPtBonus += entry.conditionalAdjacentLeaderPowerToken;
+        conditionalPtNote += ` (adjacent LEADER: +${entry.conditionalAdjacentLeaderPowerToken} bonus token)`;
+      }
+    }
+    const nTotal = n + conditionalPtBonus;
+    const toAdd = Math.min(nTotal, 2 - current);
     if (toAdd <= 0) return { applied: false, manualMessage: 'That figure already has 2 Power Tokens (max).' };
     game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: fk, count: toAdd }], channelId: null, playerNum };
-    const msg = toAdd === 1 ? 'Gained 1 Power Token — choose type.' : `Gained ${toAdd} Power Tokens — choose type.`;
+    const msg = (toAdd === 1 ? 'Gained 1 Power Token' : `Gained ${toAdd} Power Tokens`) + conditionalPtNote + ' — choose type.';
     return { applied: true, requiresPowerTokenChoice: true, logMessage: msg, refreshBoard: true };
   }
 
@@ -1938,7 +2024,8 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: Focus / Meditation — apply Focus to activating figures; requires active activation
   // Optional: readyActiveDc: true → also unexhaust/ready the active DC embed (e.g. Debts Repaid)
-  if (abilityId === 'Focus' || (entry.type === 'ccEffect' && entry.applyFocus)) {
+  // Excluded: conditionalFocusIfDamagedGte entries (e.g. Furious Charge) — handled in their own block below
+  if ((abilityId === 'Focus' || (entry.type === 'ccEffect' && entry.applyFocus)) && !entry.conditionalFocusIfDamagedGte) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
@@ -1955,7 +2042,23 @@ export function resolveAbility(abilityId, context) {
     if (entry.readyActiveDc) {
       return { applied: true, logMessage: 'Became Focused. Readied active Deployment card.', readyDcMsgIds: [msgId], refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
     }
-    return { applied: true, logMessage: entry.logMessage || 'Became Focused.', refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true, conditionCardsToPost: ['Focus'] };
+    const extraParts = [];
+    // extraActionBonus (All in a Day's Work): increment remaining actions for active DC
+    if (typeof entry.extraActionBonus === 'number' && entry.extraActionBonus > 0) {
+      const actData = game.dcActionsData?.[msgId];
+      if (actData) {
+        actData.remaining = (actData.remaining ?? 0) + entry.extraActionBonus;
+        extraParts.push(`Gained ${entry.extraActionBonus} extra action${entry.extraActionBonus !== 1 ? 's' : ''}.`);
+      }
+    }
+    // nextActivationFreeAttack (Meditation): store flag for next activation free attack
+    if (entry.nextActivationFreeAttack) {
+      game.nextActivationFreeAttack = game.nextActivationFreeAttack || {};
+      game.nextActivationFreeAttack[playerNum] = entry.nextActivationFreeAttack;
+    }
+    const baseMsg = entry.logMessage || 'Became Focused.';
+    const fullMsg = extraParts.length > 0 ? `${baseMsg} ${extraParts.join(' ')}` : baseMsg;
+    return { applied: true, logMessage: fullMsg, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true, conditionCardsToPost: ['Focus'] };
   }
 
   // dcSpecial: mpBonus + applyFocus (e.g. Get into Position — gain MP and become Focused)
@@ -2287,6 +2390,114 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `Your next attack gains surge abilities: ${labels}.` };
   }
 
+  // ccEffect: vpGain (Reactive Loyalties SCUM, I Can Feel It VP option) — award VP to this player
+  if (entry.type === 'ccEffect' && typeof entry.vpGain === 'number' && entry.vpGain > 0) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+    game[vpKey].total = (game[vpKey].total ?? 0) + entry.vpGain;
+    game[vpKey].objectives = (game[vpKey].objectives ?? 0) + entry.vpGain;
+    return { applied: true, logMessage: `Gained **${entry.vpGain} VP** (total: ${game[vpKey].total}).` };
+  }
+
+  // ccEffect: applyDamageToAttacker (Reactive Loyalties IMPERIAL) — deal N damage to the last attacker
+  if (entry.type === 'ccEffect' && typeof entry.applyDamageToAttacker === 'number' && entry.applyDamageToAttacker > 0) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: `Resolve manually: attacker suffers ${entry.applyDamageToAttacker} Damage.` };
+    const attMsgId = game.lastAttackAttackerMsgId;
+    if (!attMsgId) return { applied: false, manualMessage: `Resolve manually: attacker suffers ${entry.applyDamageToAttacker} Damage (no recent attack stored).` };
+    const attHS = dcHealthState.get(attMsgId) || [];
+    const attFigIdx = game.lastAttackAttackerFigureIndex ?? 0;
+    const attEntry = attHS[attFigIdx];
+    if (!attEntry) return { applied: false, manualMessage: `Resolve manually: attacker suffers ${entry.applyDamageToAttacker} Damage.` };
+    const [aC, aM] = attEntry;
+    const aNew = Math.max(0, (aC ?? aM) - entry.applyDamageToAttacker);
+    attHS[attFigIdx] = [aNew, aM ?? aNew];
+    dcHealthState.set(attMsgId, attHS);
+    const attP = game.lastAttackAttackerPlayerNum ?? (playerNum === 1 ? 2 : 1);
+    const attDcIds = attP === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const attDcList = attP === 1 ? game.p1DcList : game.p2DcList;
+    const attIdx = (attDcIds || []).indexOf(attMsgId);
+    if (attIdx >= 0 && attDcList?.[attIdx]) attDcList[attIdx].healthState = [...attHS];
+    const attDcName = attDcList?.[attIdx]?.displayName || attMsgId;
+    return { applied: true, logMessage: `Attacker (**${attDcName}**) suffers **${entry.applyDamageToAttacker} Damage** (HP: ${aC ?? aM} → ${aNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [attMsgId] };
+  }
+
+  // ccEffect: flatDamageToFigureWithin (Collateral Damage) — pick a figure within N of last attack target, deal N damage
+  if (entry.type === 'ccEffect' && entry.flatDamageToFigureWithin) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, targetFigureKey: chosenTargetFk } = context;
+    const { range = 2, damage: flatDmg = 2 } = entry.flatDamageToFigureWithin;
+    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: `Resolve manually: choose a figure within ${range} spaces of the attack target; it suffers ${flatDmg} Damage.` };
+    const lastTargetFk = game.lastAttackTargetFigureKey;
+    const mapId = game.selectedMap?.id;
+    if (!lastTargetFk || !mapId) return { applied: false, manualMessage: `Resolve manually: choose a figure within ${range} spaces of the attack target; it suffers ${flatDmg} Damage.` };
+    // Phase 2: apply damage to chosen figure
+    if (chosenTargetFk) {
+      const cftMsgId = (() => { for (const [mid, m] of dcMessageMeta) { if (m.playerNum !== playerNum) { const ks = getFigureKeysForDcMsg(game, m.playerNum, m); if (ks.includes(chosenTargetFk)) return mid; } } return null; })();
+      if (!cftMsgId) return { applied: false, manualMessage: `Resolve manually: could not locate target DC.` };
+      const cftHS = dcHealthState.get(cftMsgId) || [];
+      const cftMatch = chosenTargetFk.match(/-(\d+)-(\d+)$/);
+      const cftIdx = cftMatch ? parseInt(cftMatch[2], 10) : 0;
+      const cftEntry = cftHS[cftIdx];
+      if (!cftEntry) return { applied: false, manualMessage: `Apply ${flatDmg} Damage to chosen figure manually.` };
+      const [cC, cM] = cftEntry;
+      const cNew = Math.max(0, (cC ?? cM) - flatDmg);
+      cftHS[cftIdx] = [cNew, cM ?? cNew];
+      dcHealthState.set(cftMsgId, cftHS);
+      const cftP = dcMessageMeta.get(cftMsgId)?.playerNum;
+      const cftDcIds = cftP === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const cftDcList = cftP === 1 ? game.p1DcList : game.p2DcList;
+      const cftIdx2 = (cftDcIds || []).indexOf(cftMsgId);
+      if (cftIdx2 >= 0 && cftDcList?.[cftIdx2]) cftDcList[cftIdx2].healthState = [...cftHS];
+      const cftName = chosenTargetFk.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Collateral Damage** — **${cftName}** suffers **${flatDmg} Damage** (HP: ${cC ?? cM} → ${cNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [cftMsgId] };
+    }
+    // Phase 1: find all figures (hostile to attacker) within N spaces of last attack target
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const lastTargetPos = game.figurePositions?.[oppNum]?.[lastTargetFk];
+    if (!lastTargetPos) return { applied: false, manualMessage: `Resolve manually: choose a figure within ${range} spaces of the attack target; it suffers ${flatDmg} Damage.` };
+    const boardState = getBoardStateForMovement(game, null);
+    const reachable = boardState?.mapSpaces ? getReachableSpaces(lastTargetPos, range, boardState.mapSpaces, []) : [];
+    const validSet = new Set([String(lastTargetPos).toLowerCase(), ...reachable.map(s => String(s).toLowerCase())]);
+    const targets = [];
+    for (const pn of [1, 2]) {
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!validSet.has(String(pos).toLowerCase())) continue;
+        const dcName = fk.replace(/-\d+-\d+$/, '');
+        targets.push({ figureKey: fk, playerNum: pn, label: dcName });
+      }
+    }
+    if (targets.length === 0) return { applied: false, manualMessage: `No figures within ${range} spaces of attack target.` };
+    if (targets.length === 1) {
+      // Auto-apply to single target
+      const solo = targets[0];
+      const soloMsgId = (() => { for (const [mid, m] of dcMessageMeta) { if (m.playerNum === solo.playerNum) { const ks = getFigureKeysForDcMsg(game, m.playerNum, m); if (ks.includes(solo.figureKey)) return mid; } } return null; })();
+      if (soloMsgId) {
+        const sHS = dcHealthState.get(soloMsgId) || [];
+        const sMatch = solo.figureKey.match(/-(\d+)-(\d+)$/);
+        const sIdx = sMatch ? parseInt(sMatch[2], 10) : 0;
+        const sEntry = sHS[sIdx];
+        if (sEntry) {
+          const [sC, sM] = sEntry; const sNew = Math.max(0, (sC ?? sM) - flatDmg);
+          sHS[sIdx] = [sNew, sM ?? sNew]; dcHealthState.set(soloMsgId, sHS);
+          const sDcIds = solo.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds; const sDcList = solo.playerNum === 1 ? game.p1DcList : game.p2DcList;
+          const sIdx2 = (sDcIds || []).indexOf(soloMsgId); if (sIdx2 >= 0 && sDcList?.[sIdx2]) sDcList[sIdx2].healthState = [...sHS];
+          return { applied: true, logMessage: `**Collateral Damage** — **${solo.label}** suffers **${flatDmg} Damage** (HP: ${sC ?? sM} → ${sNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [soloMsgId] };
+        }
+      }
+    }
+    return { applied: false, requiresChoice: true, choiceOptions: targets.map(t => t.label), targetFigureKeys: targets.map(t => t.figureKey) };
+  }
+
+  // ccEffect: conditionalFocusIfDamagedGte (Furious Charge) — become Focused if suffered >= N damage from this attack
+  if (entry.type === 'ccEffect' && typeof entry.conditionalFocusIfDamagedGte === 'number') {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: `Become Focused if you suffer ${entry.conditionalFocusIfDamagedGte}+ Damage from this attack (resolve manually).` };
+    game.conditionalFocusIfDamagedGte = { playerNum, threshold: entry.conditionalFocusIfDamagedGte };
+    return { applied: true, logMessage: `**Furious Charge** — will automatically become Focused if you suffer ${entry.conditionalFocusIfDamagedGte}+ Damage from this attack.` };
+  }
+
   // ccEffect: nextAttackBonusPierce (Expose Weakness) — next attack gains +N Pierce; consumed when combat declared
   if (entry.type === 'ccEffect' && typeof entry.nextAttackBonusPierce === 'number' && entry.nextAttackBonusPierce > 0) {
     const { game, playerNum, dcMessageMeta } = context;
@@ -2513,9 +2724,14 @@ export function resolveAbility(abilityId, context) {
       const color = String(entry.attackBonusDiceColor).toLowerCase();
       for (let i = 0; i < entry.attackBonusDice; i++) cbt.attackBonusDiceColors.push(color);
     }
+    // applySelfStunAfterAttack (Concentrated Fire): flag to stun attacker when this attack resolves
+    if (entry.applySelfStunAfterAttack) {
+      game.applySelfStunAfterAttackPlayerNum = game.applySelfStunAfterAttackPlayerNum || {};
+      game.applySelfStunAfterAttackPlayerNum[playerNum] = combat.attackerMsgId || true;
+    }
     return {
       applied: true,
-      logMessage: `Added ${entry.attackBonusDice} attack die to the attack pool.`,
+      logMessage: `Added ${entry.attackBonusDice} attack die to the attack pool.` + (entry.applySelfStunAfterAttack ? ' You become Stunned after this attack resolves.' : ''),
     };
   }
 

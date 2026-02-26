@@ -30,6 +30,8 @@ export async function handleDcActivate(interaction, ctx) {
     client,
     logGameErrorToBotLogs,
     extractGameIdFromInteraction,
+    getDcEffects,
+    logGameAction,
   } = ctx;
   const parts = interaction.customId.replace('dc_activate_', '').split('_');
   const gameId = parts[0];
@@ -129,6 +131,22 @@ export async function handleDcActivate(interaction, ctx) {
     if (playerNum === 1) { game.p1ActivationsRemaining--; game.p1ActivatedDcIndices.push(dcIndex); }
     else { game.p2ActivationsRemaining--; game.p2ActivatedDcIndices.push(dcIndex); }
     await updateActivationsMessage(game, playerNum, client);
+    // Meditation: if this player has a deferred free attack (from Meditation CC) and this DC is FORCE USER, grant it
+    if (game.nextActivationFreeAttack?.[playerNum]) {
+      const _natEff = getDcEffects ? (getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')]) : null;
+      const _natKws = (_natEff?.keywords || []).map((k) => String(k).toUpperCase());
+      if (_natKws.includes('FORCE USER')) {
+        const _natData = game.nextActivationFreeAttack[playerNum];
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[msgId] = true;
+        if (_natData?.dice) {
+          game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+          game.pendingOverrideAttackDice[msgId] = { type: _natData.melee ? 'Melee' : null, dice: _natData.dice, pierce: 0, bonusAccuracy: 0 };
+        }
+        delete game.nextActivationFreeAttack[playerNum];
+        if (logGameAction) await logGameAction(game, client, `**Meditation** — **${displayName}** has a free Melee attack (1 red + 1 yellow) available this activation.`, { phase: 'ROUND', icon: 'card' });
+      }
+    }
     saveGames();
     const logCh = await client.channels.fetch(game.generalId);
     const icon = ACTION_ICONS.activate || '⚡';
@@ -1323,6 +1341,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         game.freeAttackBonusPending[msgId] = _fabCount - 1;
       } else {
         delete game.freeAttackBonusPending[msgId];
+        // Wild Fury: on the last free attack, queue postActivationConditions (Stun + Bleed) to apply after combat
+        if (game.postActivationConditions?.[msgId]) {
+          game.pendingPostAttackConditions = game.pendingPostAttackConditions || {};
+          game.pendingPostAttackConditions[msgId] = [...game.postActivationConditions[msgId]];
+          delete game.postActivationConditions[msgId];
+        }
       }
       // Stay Down: apply Stun to the attacker figure when the free attack is consumed
       if (game.stayDownPendingMsgId?.[msgId]) {

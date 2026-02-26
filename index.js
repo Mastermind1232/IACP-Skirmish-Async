@@ -3436,6 +3436,10 @@ async function resolveCombatAfterRolls(game, combat, client) {
 /** Apply damage, conditions, defeat logic, and finish combat resolution. Called from resolveCombatAfterRolls and handleFigureheadDecision. */
 async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client) {
   const thread = await client.channels.fetch(combat.combatThreadId);
+  // Store last attack metadata for post-attack CC effect handlers
+  game.lastAttackAttackerMsgId = combat.attackerMsgId ?? null;
+  game.lastAttackAttackerFigureIndex = combat.attackerFigureIndex ?? 0;
+  game.lastAttackTargetFigureKey = combat.target?.figureKey ?? null;
 
   // NPC target (thug / Krykna / Crate): apply damage directly, skip dcHealthState
   if (combat.target?.isNpc) {
@@ -3513,6 +3517,16 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         game.figureConditions = game.figureConditions || {};
         const existing = game.figureConditions[combat.target.figureKey] || [];
         game.figureConditions[combat.target.figureKey] = [...new Set([...existing, ...allConditions])];
+      }
+      // Furious Charge: if defender's player played this CC, and suffered >= threshold damage, grant Focus
+      if (game.conditionalFocusIfDamagedGte?.playerNum === defenderPlayerNum && damage >= game.conditionalFocusIfDamagedGte.threshold) {
+        game.figureConditions = game.figureConditions || {};
+        game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
+        if (!game.figureConditions[combat.target.figureKey].includes('Focus')) {
+          game.figureConditions[combat.target.figureKey].push('Focus');
+          await logGameAction(game, client, `**Furious Charge** — **${combat.target.label}** is now **Focused** (suffered ${damage} Damage).`, { phase: 'ROUND', icon: 'card' });
+        }
+        game.conditionalFocusIfDamagedGte = null;
       }
       // You Will Not Deny Me: prevent Fifth Brother from being defeated (restore HP to 1)
       if (newCur <= 0 && game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum) {
@@ -3772,6 +3786,70 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
   }
   const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
+
+  // Concentrated Fire: apply Stun to the attacker figure after attack resolves
+  if (game.applySelfStunAfterAttackPlayerNum?.[attackerPlayerNum] && combat.attackerMsgId) {
+    delete game.applySelfStunAfterAttackPlayerNum[attackerPlayerNum];
+    const _cfaFigKey = combat.attackerFigureKey;
+    if (_cfaFigKey) {
+      game.figureConditions = game.figureConditions || {};
+      game.figureConditions[_cfaFigKey] = game.figureConditions[_cfaFigKey] || [];
+      if (!game.figureConditions[_cfaFigKey].includes('Stun')) {
+        game.figureConditions[_cfaFigKey].push('Stun');
+        const _cfaDcName = _cfaFigKey.replace(/-\d+-\d+$/, '');
+        await logGameAction(game, client, `**Concentrated Fire** — **${_cfaDcName}** is now **Stunned**.`, { phase: 'ROUND', icon: 'card' });
+        embedRefreshMsgIds.add(combat.attackerMsgId);
+      }
+    }
+  }
+  // Wild Fury: after final free attack, apply postActivationConditions (Stun + Bleed) to attacker figure
+  if (game.pendingPostAttackConditions?.[combat.attackerMsgId] && combat.attackerFigureKey) {
+    const _ppaConditions = game.pendingPostAttackConditions[combat.attackerMsgId];
+    delete game.pendingPostAttackConditions[combat.attackerMsgId];
+    if (Array.isArray(_ppaConditions) && _ppaConditions.length > 0) {
+      game.figureConditions = game.figureConditions || {};
+      game.figureConditions[combat.attackerFigureKey] = game.figureConditions[combat.attackerFigureKey] || [];
+      for (const _ppaC of _ppaConditions) {
+        if (!game.figureConditions[combat.attackerFigureKey].includes(_ppaC)) {
+          game.figureConditions[combat.attackerFigureKey].push(_ppaC);
+        }
+      }
+      const _ppaDcName = combat.attackerFigureKey.replace(/-\d+-\d+$/, '');
+      await logGameAction(game, client, `**Wild Fury** — **${_ppaDcName}** is now **${_ppaConditions.join(' + ')}**.`, { phase: 'ROUND', icon: 'card' });
+      embedRefreshMsgIds.add(combat.attackerMsgId);
+    }
+  }
+  // Dying Lunge / Final Stand: attacker defeats itself after the attack resolves
+  if (game.selfDefeatsAfterAttackMsgId?.[combat.attackerMsgId] && combat.attackerMsgId) {
+    delete game.selfDefeatsAfterAttackMsgId[combat.attackerMsgId];
+    const _sdaMsgId = combat.attackerMsgId;
+    const _sdaFigKey = combat.attackerFigureKey;
+    const _sdaFigIdx = combat.attackerFigureIndex ?? 0;
+    if (_sdaFigKey) {
+      const _sdaHS = dcHealthState.get(_sdaMsgId) || [];
+      if (_sdaHS[_sdaFigIdx]) {
+        const [_sdaC, _sdaM] = _sdaHS[_sdaFigIdx];
+        _sdaHS[_sdaFigIdx] = [0, _sdaM ?? _sdaC];
+        dcHealthState.set(_sdaMsgId, _sdaHS);
+        const _sdaDcIds = attackerPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const _sdaDcList = attackerPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+        const _sdaIdx = (_sdaDcIds || []).indexOf(_sdaMsgId);
+        if (_sdaIdx >= 0 && _sdaDcList?.[_sdaIdx]) _sdaDcList[_sdaIdx].healthState = [..._sdaHS];
+        if (game.figurePositions?.[attackerPlayerNum]) delete game.figurePositions[attackerPlayerNum][_sdaFigKey];
+        if (game.figureConditions?.[_sdaFigKey]) delete game.figureConditions[_sdaFigKey];
+        const _sdaName = _sdaDcList?.[_sdaIdx]?.displayName || _sdaFigKey.replace(/-\d+-\d+$/, '');
+        const _sdaVpKey = defenderPlayerNum === 1 ? 'player1VP' : 'player2VP';
+        game[_sdaVpKey] = game[_sdaVpKey] || { total: 0, kills: 0, objectives: 0 };
+        const _sdaStats = _sdaIdx >= 0 ? getDcStats(_sdaDcList[_sdaIdx]?.dcName) : null;
+        const _sdaVp = _sdaStats?.cost ?? 5;
+        game[_sdaVpKey].kills += _sdaVp;
+        game[_sdaVpKey].total += _sdaVp;
+        embedRefreshMsgIds.add(_sdaMsgId);
+        await logGameAction(game, client, `**${_sdaName}** defeated itself (self-sacrifice). Opponent gains **${_sdaVp} VP**.`, { phase: 'ROUND', icon: 'attack' });
+        await checkWinConditions(game, client);
+      }
+    }
+  }
 
   // --- Named surge post-combat effects ---
   if (hit && targetMsgId) {
