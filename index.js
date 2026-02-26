@@ -5124,6 +5124,26 @@ async function updateDcActionsMessage(game, msgId, client) {
       console.error('Failed to update DC actions message:', err);
     }
   }
+  // P4/P5: Refresh the DC embed in the play area with live action count + power tokens
+  if (meta && game) {
+    try {
+      const _chId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+      const _ch = await client.channels.fetch(_chId);
+      const _dcMsg = await _ch.messages.fetch(msgId);
+      const _hs = dcHealthState.get(msgId) || [];
+      const { embed: _emb, files: _files } = await buildDcEmbedAndFiles(
+        meta.dcName, true, displayName, _hs,
+        getConditionsForDcMessage(game, meta),
+        getDcUpgradeAttachments(game, msgId),
+        getTokensForDcMessage(game, meta),
+        data,
+      );
+      const _comps = getDcPlayAreaComponents(msgId, true, game, meta.dcName);
+      await _dcMsg.edit({ embeds: [_emb], files: _files, components: _comps }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    } catch (_err) {
+      console.error('Failed to update DC embed with action count/tokens:', _err);
+    }
+  }
 
   if (data?.remaining === 0 && meta) {
     game.dcFinishedPinged = game.dcFinishedPinged || {};
@@ -5232,7 +5252,25 @@ function getConditionsForDcMessage(game, meta) {
   return hasAny ? out : undefined;
 }
 
-async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, conditionsByFigure, dcAttachments = []) {
+/** Per-figure power tokens for a DC message (for embed display). */
+function getTokensForDcMessage(game, meta) {
+  if (!game?.figurePowerTokens || !meta?.dcName) return undefined;
+  const stats = getDcStats(meta.dcName);
+  const figures = stats.figures ?? 1;
+  const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const out = [];
+  let hasAny = false;
+  for (let i = 0; i < figures; i++) {
+    const fk = `${meta.dcName}-${dgIndex}-${i}`;
+    const list = game.figurePowerTokens[fk] || [];
+    out.push(Array.isArray(list) ? [...list] : []);
+    if (out[out.length - 1].length) hasAny = true;
+  }
+  return hasAny ? out : undefined;
+}
+
+async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, conditionsByFigure, dcAttachments = [], tokensByFigure = null, actionsData = null) {
   const status = exhausted ? 'EXHAUSTED' : 'READIED';
   const color = exhausted ? 0xed4245 : 0x57f287; // red : green
   const figureless = isFigurelessDc(dcName);
@@ -5240,10 +5278,12 @@ async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState,
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   const variant = dcName?.includes('(Elite)') ? 'Elite' : dcName?.includes('(Regular)') ? 'Regular' : null;
-  const healthSection = figureless ? null : formatHealthSection(Number(dgIndex), healthState, conditionsByFigure);
+  const healthSection = figureless ? null : formatHealthSection(Number(dgIndex), healthState, conditionsByFigure, tokensByFigure);
+  const actionsLine = (actionsData != null && exhausted) ? getActionsCounterContent(actionsData.remaining, actionsData.total) : null;
   const lines = figureless
-    ? [variant ? `**Variant:** ${variant}` : null].filter(Boolean)
+    ? [actionsLine, variant ? `**Variant:** ${variant}` : null].filter(Boolean)
     : [
+        actionsLine,
         `**Figures:** ${figures}`,
         variant ? `**Variant:** ${variant}` : null,
         '',

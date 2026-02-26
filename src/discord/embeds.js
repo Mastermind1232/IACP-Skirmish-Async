@@ -44,8 +44,9 @@ export function buildScorecardEmbed(game) {
  * @param {number} dgIndex - Deployment group index (e.g. 1)
  * @param {[number, number][]} healthState - Per-figure [cur, max]
  * @param {string[][]} [conditionsByFigure] - Optional per-figure condition names (e.g. [['Stun'], ['Weaken']])
+ * @param {string[][]} [tokensByFigure] - Optional per-figure power token names (e.g. [['Hit', 'Block']])
  */
-export function formatHealthSection(dgIndex, healthState, conditionsByFigure) {
+export function formatHealthSection(dgIndex, healthState, conditionsByFigure, tokensByFigure) {
   if (!healthState?.length) return 'Health\n—/—';
   const labels = 'abcdefghij';
   const lines = healthState.map(([cur, max], i) => {
@@ -64,6 +65,16 @@ export function formatHealthSection(dgIndex, healthState, conditionsByFigure) {
       })
       .filter(Boolean);
     if (condLines.length) out += '\n\n' + condLines.join('\n');
+  }
+  if (tokensByFigure?.length) {
+    const tokenLines = tokensByFigure
+      .map((tokens, i) => {
+        if (!tokens?.length) return null;
+        const label = healthState.length === 1 ? 'Tokens' : `Tokens (${dgIndex}${labels[i]})`;
+        return `${label}: ${tokens.join(', ')}`;
+      })
+      .filter(Boolean);
+    if (tokenLines.length) out += '\n' + tokenLines.join('\n');
   }
   return out;
 }
