@@ -131,6 +131,25 @@ export async function handleEndEndOfRound(interaction, ctx) {
       if (game.figureConditions[fk].length === 0) delete game.figureConditions[fk];
     }
   }
+  // Hardy (Trandoshan Hunter Elite): discard all HARMFUL conditions at end of round
+  for (const [msgId, meta] of dcMessageMeta) {
+    if (meta.gameId !== gameId) continue;
+    if (isDepletedRemovedFromGame(game, msgId)) continue;
+    const _hardyEff = dcEffects[meta.dcName] || dcEffects[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if (!(_hardyEff?.passives || []).includes('Hardy')) continue;
+    const HARMFUL = ['Bleed', 'Stun', 'Weaken'];
+    let cleared = false;
+    for (const fk of Object.keys(game.figureConditions || {})) {
+      if (!fk.startsWith(meta.dcName + '-')) continue;
+      const before = game.figureConditions[fk]?.length || 0;
+      game.figureConditions[fk] = (game.figureConditions[fk] || []).filter(c => !HARMFUL.includes(c));
+      if (game.figureConditions[fk].length === 0) delete game.figureConditions[fk];
+      if ((game.figureConditions[fk]?.length || 0) < before) cleared = true;
+    }
+    if (cleared) {
+      await logGameAction(game, client, `💪 **Hardy** — **${meta.dcName}** discarded all harmful conditions at end of round.`, { phase: 'ROUND', icon: 'round' });
+    }
+  }
 
   // Self-Destruct Probe: prompt each player who has a live Probe Droid DC
   const _sdpEffs = getDcEffects();

@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getCcEffectsData, getDcEffects } from '../data-loader.js';
+import { getCcEffectsData, getDcEffects, getMapSpaces } from '../data-loader.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -264,6 +264,34 @@ export async function handleEndTurn(interaction, ctx) {
     }
     if (figureKeys.length > 0) {
       await logGameAction(game, client, `🥷 **In The Shadows** — **ISB Infiltrator (Elite)** figures became **Hidden** at end of activation.`, { phase: 'ROUND', icon: 'activate' });
+    }
+  }
+  // Unnerving (0-0-0): at end of activation, each adjacent hostile becomes Weakened
+  if (meta.dcName === '0-0-0') {
+    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const prefix = `${meta.dcName}-${dgIndex}-`;
+    const figureKeys000 = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(k => k.startsWith(prefix));
+    const enemyNum = meta.playerNum === 1 ? 2 : 1;
+    const ms = getMapSpaces(game.selectedMap?.id);
+    const weakened = [];
+    for (const fk of figureKeys000) {
+      const pos = game.figurePositions?.[meta.playerNum]?.[fk];
+      if (!pos) continue;
+      const posNorm = String(pos).toLowerCase();
+      const adj = (ms?.adjacency?.[posNorm] || []).map(a => String(a).toLowerCase());
+      for (const [eFk, ePos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
+        if (!ePos) continue;
+        if (!adj.includes(String(ePos).toLowerCase())) continue;
+        game.figureConditions = game.figureConditions || {};
+        game.figureConditions[eFk] = game.figureConditions[eFk] || [];
+        if (!game.figureConditions[eFk].includes('Weaken')) {
+          game.figureConditions[eFk].push('Weaken');
+          weakened.push(eFk.replace(/-\d+-\d+$/, ''));
+        }
+      }
+    }
+    if (weakened.length > 0) {
+      await logGameAction(game, client, `😈 **Unnerving** — **0-0-0** Weakened adjacent hostiles: ${weakened.join(', ')}.`, { phase: 'ROUND', icon: 'activate' });
     }
   }
 
@@ -633,6 +661,35 @@ export async function handleConfirmActivate(interaction, ctx) {
     game.movementBank[msgId].total += 1;
     game.movementBank[msgId].remaining += 1;
     await thread.send({ content: `🏃 **Responsive** — **${displayName}** gains **1 movement point** at the start of activation. *(Or recover 1 Damage instead: honor system.)*` }).catch(() => {});
+  }
+  // Fulcrum (Agent Kallus): at start of activation, each player draws 1 CC
+  if (meta.dcName === 'Agent Kallus') {
+    const _fParts = [];
+    for (const pn of [1, 2]) {
+      const deckKey = pn === 1 ? 'player1CcDeck' : 'player2CcDeck';
+      const handKey = pn === 1 ? 'player1CcHand' : 'player2CcHand';
+      const deck = game[deckKey] || [];
+      if (deck.length > 0) {
+        const card = deck.shift();
+        game[handKey] = [...(game[handKey] || []), card];
+        _fParts.push(`P${pn} drew 1 CC`);
+      } else {
+        _fParts.push(`P${pn} deck empty`);
+      }
+    }
+    await thread.send({ content: `🕵️ **Fulcrum** — Each player draws 1 Command card. (${_fParts.join(', ')})` }).catch(() => {});
+  }
+  // Hunger (Wampa Regular): if no hostile within 3 spaces, gain 2 MP
+  if (meta.dcName === 'Wampa') {
+    game.movementBank[msgId].total += 2;
+    game.movementBank[msgId].remaining += 2;
+    await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **2 MP**. *(Applies only if no hostile within 3 spaces — honor system check.)*` }).catch(() => {});
+  }
+  // Hunger (Wampa Elite): if no hostile within 2 spaces, gain 3 MP + 1 Block/Evade Token
+  if (meta.dcName === 'Wampa (Elite)') {
+    game.movementBank[msgId].total += 3;
+    game.movementBank[msgId].remaining += 3;
+    await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **3 MP** + 1 **Block** or **Evade** Token. *(Applies only if no hostile within 2 spaces — honor system check. Apply token manually.)*` }).catch(() => {});
   }
   const logCh = await client.channels.fetch(game.generalId);
   const icon = ACTION_ICONS.activate || '⚡';

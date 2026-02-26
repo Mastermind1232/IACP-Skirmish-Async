@@ -5609,7 +5609,8 @@
       "specialAbilityIds": [
         "relentless_trandoshan_elite",
         "acp_scattergun"
-      ]
+      ],
+      "passives": ["Hardy"]
     },
     "Trandoshan Hunter (Regular)": {
       "abilityText": "Relentless: When you declare an attack targeting a figure within 3 spaces, that figure suffers 1 Strain.\n\nScattergun: While attacking, if you are adjacent to the target, apply +1 Hit to the attack results.",

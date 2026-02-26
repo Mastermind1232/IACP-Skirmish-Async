@@ -3552,6 +3552,27 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           await logGameAction(game, client, `⚡ **Stun Batons** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`, { phase: 'ROUND', icon: 'attack' });
         }
       }
+      // Guerilla (Rebel Pathfinder E/R, Alliance Ranger E): after attack, if defender defeated, attacker becomes Hidden
+      if (newCur <= 0) {
+        const _guerAttEff = getDcEffects()?.[combat.attackerDcName];
+        if ((_guerAttEff?.abilityText || '').includes('Guerilla') || (_guerAttEff?.abilityText || '').includes('guerilla')) {
+          game.figureConditions = game.figureConditions || {};
+          game.figureConditions[combat.attackerFigureKey] = game.figureConditions[combat.attackerFigureKey] || [];
+          if (!game.figureConditions[combat.attackerFigureKey].includes('Hide')) {
+            game.figureConditions[combat.attackerFigureKey].push('Hide');
+            await logGameAction(game, client, `🥷 **Guerilla** — **${combat.attackerDcName}** became **Hidden** (defender defeated).`, { phase: 'ROUND', icon: 'attack' });
+          }
+        }
+      }
+      // Jets (Sabine Wren): after attack, if target within 2 spaces, gain 1 MP
+      if (combat.attackerDcName === 'Sabine Wren' && combat.distanceToTarget != null && combat.distanceToTarget <= 2) {
+        const _jetsMsgId = combat.attackerMsgId;
+        if (_jetsMsgId && game.movementBank?.[_jetsMsgId]) {
+          game.movementBank[_jetsMsgId].total = (game.movementBank[_jetsMsgId].total || 0) + 1;
+          game.movementBank[_jetsMsgId].remaining = (game.movementBank[_jetsMsgId].remaining || 0) + 1;
+          await logGameAction(game, client, `🚀 **Jets** — **Sabine Wren** gains 1 MP (target within 2 spaces).`, { phase: 'ROUND', icon: 'attack' });
+        }
+      }
       // You Will Not Deny Me: prevent Fifth Brother from being defeated (restore HP to 1)
       if (newCur <= 0 && game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum) {
         const _ywndmDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
@@ -3722,6 +3743,69 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
               game.figureConditions[_lsTarget].push('Focus');
               const _lsName = _lsTarget.replace(/-\d+-\d+$/, '');
               await logGameAction(game, client, `⚡ **Last Stand** — **${_lsName}** becomes **Focused** (another figure in the group was defeated).`, { phase: 'ROUND', icon: 'card' });
+            }
+          }
+        }
+        // Nefarious Gains (Jabba): when a hostile figure is defeated, Jabba's owner gains 1 VP
+        const _jabbaOwner = attackerPlayerNum; // attacker defeated the hostile, so Jabba must be on attacker's side
+        for (const pn of [1, 2]) {
+          if (pn === defenderPlayerNum) continue; // Jabba's owner must be the one who defeated someone
+          const _jabbaOnBoard = Object.keys(game.figurePositions?.[pn] || {}).some(fk => fk.startsWith('Jabba the Hutt-'));
+          if (_jabbaOnBoard) {
+            const vpKey = pn === 1 ? 'p1VP' : 'p2VP';
+            game[vpKey] = (game[vpKey] || 0) + 1;
+            await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${pn} VP: ${game[vpKey]}`, { phase: 'ROUND', icon: 'card' });
+          }
+        }
+        // Into the Force (Obi-Wan): when defeated, a friendly figure becomes Focused
+        if (_lsDcName === 'Obi-Wan Kenobi') {
+          const _obiAlive = Object.keys(game.figurePositions?.[defenderPlayerNum] || {}).filter(k => !k.startsWith('Obi-Wan Kenobi-'));
+          if (_obiAlive.length > 0) {
+            const _obiTarget = _obiAlive[0];
+            game.figureConditions = game.figureConditions || {};
+            game.figureConditions[_obiTarget] = game.figureConditions[_obiTarget] || [];
+            if (!game.figureConditions[_obiTarget].includes('Focus')) {
+              game.figureConditions[_obiTarget].push('Focus');
+              const _obiName = _obiTarget.replace(/-\d+-\d+$/, '');
+              await logGameAction(game, client, `✨ **Into the Force** — **${_obiName}** becomes **Focused** (Obi-Wan was defeated).`, { phase: 'ROUND', icon: 'card' });
+            }
+          }
+        }
+        // Vengeance (Royal Guard Regular): when adjacent friendly non-GUARDIAN defeated, become Focused
+        {
+          const _defPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+          if (_defPos) {
+            const _defDcEff = getDcEffects()?.[_lsDcName];
+            const _defKws = (_defDcEff?.keywords || []).map(k => k.toUpperCase());
+            const _defIsGuardian = _defKws.includes('GUARDIAN');
+            if (!_defIsGuardian) {
+              const _ms = getMapSpaces(game.selectedMap?.id);
+              const _defAdj = (_ms?.adjacency?.[String(_defPos).toLowerCase()] || []).map(a => String(a).toLowerCase());
+              for (const [rgFk, rgPos] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
+                if (!rgPos || rgFk === combat.target.figureKey) continue;
+                if (!_defAdj.includes(String(rgPos).toLowerCase())) continue;
+                const rgDcName = rgFk.replace(/-\d+-\d+$/, '');
+                if (rgDcName !== 'Royal Guard (Regular)' && rgDcName !== 'Royal Guard (Elite)') continue;
+                game.figureConditions = game.figureConditions || {};
+                game.figureConditions[rgFk] = game.figureConditions[rgFk] || [];
+                if (!game.figureConditions[rgFk].includes('Focus')) {
+                  game.figureConditions[rgFk].push('Focus');
+                  const vLabel = rgDcName === 'Royal Guard (Elite)' ? 'Forward Vengeance' : 'Vengeance';
+                  await logGameAction(game, client, `⚔️ **${vLabel}** — **${rgDcName}** becomes **Focused** (adjacent friendly defeated).`, { phase: 'ROUND', icon: 'card' });
+                }
+              }
+            }
+          }
+        }
+        // This is the Way (The Armorer): when attacker defeats defender, attacker gains 1 Block Token
+        {
+          const _armorerOnBoard = Object.keys(game.figurePositions?.[attackerPlayerNum] || {}).some(fk => fk.startsWith('The Armorer-'));
+          if (_armorerOnBoard) {
+            game.figurePowerTokens = game.figurePowerTokens || {};
+            game.figurePowerTokens[combat.attackerFigureKey] = game.figurePowerTokens[combat.attackerFigureKey] || [];
+            if (game.figurePowerTokens[combat.attackerFigureKey].length < 2) {
+              game.figurePowerTokens[combat.attackerFigureKey].push('Block');
+              await logGameAction(game, client, `🛡️ **This is the Way** — **${combat.attackerDcName}** gains 1 **Block Token** (defeated hostile).`, { phase: 'ROUND', icon: 'card' });
             }
           }
         }
