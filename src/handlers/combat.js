@@ -6,7 +6,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapSpaces } from '../data-loader.js';
 
 /** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after. */
-async function sendReadyToResolveRolls(thread, gameId) {
+export async function sendReadyToResolveRolls(thread, gameId) {
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`combat_resolve_ready_${gameId}`)
@@ -512,6 +512,13 @@ export async function handleAttackTarget(interaction, ctx) {
       await thread.send(`**Overheated** — −${Math.abs(overrideDice.bonusHits)} Hit applied automatically.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
   }
+  // Optimal Bombardment: apply +Blast bonus if this figure was granted one
+  if (game.optimalBombardmentBlastBonus?.[msgId]) {
+    const _obBlast = game.optimalBombardmentBlastBonus[msgId];
+    game.pendingCombat.bonusBlast = (game.pendingCombat.bonusBlast || 0) + _obBlast;
+    await thread.send(`**Optimal Bombardment** — +${_obBlast} Blast added to this attack.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    delete game.optimalBombardmentBlastBonus[msgId];
+  }
 
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
   if (nextPierce) delete game.nextAttackBonusPierce?.[attackerPlayerNum];
@@ -650,6 +657,17 @@ export async function handleCombatRoll(interaction, ctx) {
     combat.attackDiceResults = result.dice;
     const diceDetail = result.dice.map((d, i) => `${d.color}(${d.acc}a/${d.dmg}d/${d.surge}s)`).join(', ');
     await thread.send(`**Attack roll** — ${result.acc} accuracy, ${result.dmg} damage, ${result.surge} surge  [${diceDetail}]`);
+    // Veteran Instincts: attacker may add +1 Hit or +1 Surge to this roll
+    if (game.vetInstinctsActiveThisActivation?.[attackerPlayerNum] && !combat.vetInstinctsAttackApplied) {
+      const _viRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_hit`).setLabel('+1 Hit').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_surge`).setLabel('+1 Surge').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${attackerPlayerNum}Id`] ?? ''}> add +1 Hit or +1 Surge to the attack roll?`, components: [_viRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      saveGames();
+      return;
+    }
     saveGames();
     return;
   }
@@ -767,8 +785,28 @@ export async function handleCombatRoll(interaction, ctx) {
       }
     }
 
+    // Demoralizing Monologue: if flag set before reroll window, count 1 forced reroll for defender
+    let _dmForcedReroll = 0;
+    if (game.forceDefenderRerollOne && !combat.demoralizingMonologueApplied) {
+      _dmForcedReroll = 1;
+      combat.demoralizingMonologueApplied = true;
+      game.forceDefenderRerollOne = null;
+    }
     const atkRerolls = (combat.rerollOneAttackDie || 0) + (game.roundAttackRerollDice?.[attackerPlayerNum] || 0) + atkInnate.attackReroll + atkSpecialReroll;
-    const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll + defSpecialReroll;
+    const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll + defSpecialReroll + _dmForcedReroll;
+    // Veteran Instincts: defender may add +1 Block or +1 Evade before the reroll window
+    if (game.vetInstinctsActiveThisActivation?.[defenderPlayerNum] && !combat.vetInstinctsDefenseApplied) {
+      combat.viPendingAtkRerolls = atkRerolls;
+      combat.viPendingDefRerolls = defRerolls;
+      const _viRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_block`).setLabel('+1 Block').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_evade`).setLabel('+1 Evade').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> add +1 Block or +1 Evade to the defense roll?`, components: [_viRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      saveGames();
+      return;
+    }
     if (atkRerolls > 0 || defRerolls > 0) {
       combat.rerollPhase = 'attacker';
       combat.attackerRerollsRemaining = atkRerolls;
@@ -898,6 +936,16 @@ export async function handleCombatReroll(interaction, ctx) {
   }
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
 
+  // Helper: get the dominant icon type of a die result for Double or Nothing
+  const _getDomIcon = (d) => {
+    if (!d) return null;
+    const { dmg: _dd = 0, surge: _ds = 0, acc: _da = 0 } = d;
+    if (_dd === 0 && _ds === 0 && _da === 0) return null;
+    if (_dd >= _ds && _dd >= _da) return 'dmg';
+    if (_ds >= _dd && _ds >= _da) return 'surge';
+    return 'acc';
+  };
+
   let _tlTriggered = false;
   if (choice !== 'done') {
     const idx = parseInt(choice, 10);
@@ -912,6 +960,21 @@ export async function handleCombatReroll(interaction, ctx) {
         combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
         combat.attackerRerollsRemaining -= 1;
         await thread.send(`**Rerolled** attack ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
+        // Double or Nothing: if DON flag is set for attack side, check dominant icon match
+        if (game.doubleMatchingIconsOnReroll?.side === 'atk' && !combat.doubleOrNothingApplied) {
+          const _domOld = _getDomIcon(oldDie);
+          const _domNew = _getDomIcon(newDie);
+          if (_domOld && _domOld === _domNew) {
+            dice[idx][_domNew] = (newDie[_domNew] || 0) * 2;
+            const t2 = recalcAttackTotals(dice);
+            combat.attackRoll = { acc: t2.acc, dmg: t2.dmg, surge: t2.surge };
+            await thread.send(`**Double or Nothing** — Dominant icon matched (${_domNew})! Doubled to ${dice[idx][_domNew]}. New totals: ${t2.acc} acc, ${t2.dmg} dmg, ${t2.surge} surge.`);
+          } else {
+            await thread.send(`**Double or Nothing** — Icon changed (${_domOld ?? 'blank'} → ${_domNew ?? 'blank'}). No doubling.`);
+          }
+          combat.doubleOrNothingApplied = true;
+          game.doubleMatchingIconsOnReroll = null;
+        }
         // Tough Luck: if defender set TL, they may remove this rerolled die
         if (game.toughLuckPlayerNum === defenderPlayerNum) {
           game.pendingToughLuck = { side: 'atk', idx };
@@ -936,6 +999,22 @@ export async function handleCombatReroll(interaction, ctx) {
         combat.defenderRerollsRemaining -= 1;
         const dodgeTag = newDie.dodge ? '/DODGE' : '';
         await thread.send(`**Rerolled** defense ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
+        // Double or Nothing: if DON flag is set for defense side, check dominant icon match
+        if (game.doubleMatchingIconsOnReroll?.side === 'def' && !combat.doubleOrNothingApplied) {
+          const _domOldD = _getDomIcon({ dmg: oldDie.block, surge: oldDie.evade, acc: oldDie.dodge ? 1 : 0 });
+          const _domNewD = _getDomIcon({ dmg: newDie.block, surge: newDie.evade, acc: newDie.dodge ? 1 : 0 });
+          if (_domOldD && _domOldD === _domNewD) {
+            if (_domNewD === 'dmg') { dice[idx].block = (newDie.block || 0) * 2; }
+            else if (_domNewD === 'surge') { dice[idx].evade = (newDie.evade || 0) * 2; }
+            const t2d = recalcDefenseTotals(dice);
+            combat.defenseRoll = { block: t2d.block, evade: t2d.evade, dodge: t2d.dodge };
+            await thread.send(`**Double or Nothing** — Dominant defense icon matched (${_domNewD === 'dmg' ? 'Block' : 'Evade'})! Doubled. New totals: ${t2d.block} block, ${t2d.evade} evade.`);
+          } else {
+            await thread.send(`**Double or Nothing** — Icon changed. No doubling.`);
+          }
+          combat.doubleOrNothingApplied = true;
+          game.doubleMatchingIconsOnReroll = null;
+        }
         // Tough Luck: if attacker set TL, they may remove this rerolled defense die
         if (game.toughLuckPlayerNum === attackerPlayerNum) {
           game.pendingToughLuck = { side: 'def', idx };
@@ -955,6 +1034,12 @@ export async function handleCombatReroll(interaction, ctx) {
   // Check if current side is done (clicked done or exhausted rerolls)
   if (side === 'atk' && (choice === 'done' || combat.attackerRerollsRemaining <= 0)) {
     combat.rerollPhase = 'defender';
+    // Demoralizing Monologue: if flag still pending, add forced reroll for defender now
+    if (game.forceDefenderRerollOne && !combat.demoralizingMonologueApplied) {
+      combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
+      combat.demoralizingMonologueApplied = true;
+      game.forceDefenderRerollOne = null;
+    }
     if ((combat.defenderRerollsRemaining || 0) > 0) {
       await sendRerollUI(thread, game, combat, 'defender');
       saveGames();
@@ -1472,6 +1557,20 @@ export async function handleCombatSurge(interaction, ctx) {
       combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - cost);
       const label = getSurgeLabel(key);
       await thread.send(`**Surge spent (${cost}):** ${label}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      // Hunter Protocol: offer to trigger the same surge ability once more
+      if (game.surgeDoublingActive?.[attackerPlayerNum] && key && !combat.surgeDoubledAbility && !key.startsWith('double:') && key !== 'utinni_vp_1') {
+        if ((combat.surgeRemaining || 0) >= cost) {
+          combat.surgeDoubledAbility = key;
+          game.pendingHunterProtocol = { key, cost };
+          const _hpRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`hunter_protocol_trigger_${gameId}`).setLabel(`Trigger again: ${label}`.slice(0, 80)).setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`hunter_protocol_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          );
+          await thread.send({ content: `**Hunter Protocol** — Trigger **${label}** once more?`, components: [_hpRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          saveGames();
+          return;
+        }
+      }
       // If this surge granted a power token, send the type-choice prompt now
       if (game.pendingPowerTokenGrant?.channelId === null) {
         game.pendingPowerTokenGrant.channelId = thread.id;

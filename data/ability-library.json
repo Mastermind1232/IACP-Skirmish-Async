@@ -217,8 +217,8 @@
     },
     "medical_loadout": {
       "type": "dcSpecial",
-      "label": "Medical Loadout: You recover 3 Damage. (To heal an adjacent figure instead, use manual resolve.)",
-      "recoverSelf": 3,
+      "label": "Medical Loadout: You or an adjacent friendly recovers 3 Damage",
+      "medicalLoadoutEffect": true,
       "wiredStatus": "wired"
     },
     "scomp_link": {
@@ -329,25 +329,29 @@
     },
     "Apex Predator": {
       "type": "ccEffect",
-      "label": "Become Focused, Hidden, gain 2 Power Tokens, gain 2 MP (recovery on hostile defeat is player-honored)",
+      "label": "Become Focused, Hidden, gain 2 Power Tokens, gain 2 MP; recover 2 Damage when a hostile within 2 is defeated this activation",
       "applyFocus": true,
       "applyHide": true,
       "powerTokenGain": 2,
       "mpBonus": 2,
+      "recoverOnHostileDefeat": 2,
+      "recoverOnHostileDefeatRange": 2,
       "wiredStatus": "wired"
     },
     "Price of Glory": {
       "type": "ccEffect",
-      "label": "Discard 1 harmful condition; gain 2 MP (optional Power Token reward is player-honored)",
+      "label": "Discard 1 harmful condition; gain 2 MP; may suffer 1 Damage to gain 2 different Power Tokens",
       "discardUpToNHarmful": 1,
       "mpBonus": 2,
+      "optionalPowerTokenOnConditionDiscard": true,
       "wiredStatus": "wired"
     },
     "Worth Every Credit": {
       "type": "ccEffect",
-      "label": "Discard 1 harmful condition; gain 2 MP (VP on next hostile defeat is player-honored)",
+      "label": "Discard 1 harmful condition; gain 2 MP; gain 2 VP when the next hostile is defeated this activation",
       "discardUpToNHarmful": 1,
       "mpBonus": 2,
+      "nextHostileDefeatVpBonus": 2,
       "wiredStatus": "wired"
     },
     "Rank and File": {
@@ -587,7 +591,7 @@
     },
     "Force Drain": {
       "type": "ccEffect",
-      "label": "Adjacent hostile: 3 Damage + Stun + Weaken; if FORCE USER recover 3 Damage (within 2 manual)",
+      "label": "Choose hostile within 2: deal 3 Damage + Stun + Weaken; if you are a FORCE USER recover 3 Damage",
       "chooseAdjacentHostileThen": {
         "damage": 3,
         "stun": true,
@@ -595,7 +599,8 @@
         "healSelfIfTrait": {
           "trait": "FORCE USER",
           "amount": 3
-        }
+        },
+        "range": 2
       },
       "wiredStatus": "wired"
     },
@@ -730,13 +735,13 @@
     },
     "Element of Surprise": {
       "type": "ccEffect",
-      "label": "Remove 1 defense die from pool (LOS condition at activation start is player-honored)",
+      "label": "Remove 1 defense die from pool (die removed automatically when played during attack)",
       "defensePoolRemoveMax": 1,
       "wiredStatus": "wired"
     },
     "Concentrated Fire": {
       "type": "ccEffect",
-      "label": "Add 1 red die to attack pool (you become Stunned â€” apply manually)",
+      “label”: “Add 1 red die to attack pool (Stun applied automatically after attack)”,
       "attackBonusDice": 1,
       "attackBonusDiceColor": "red",
       "wiredStatus": "wired",
@@ -889,7 +894,8 @@
       "type": "ccEffect",
       "label": "Gain 1 Power Token; then move 2 spaces or push an adjacent hostile 1 space",
       "powerTokenGain": 1,
-      "logMessage": "Gained **1 Power Token**. Then choose: move 2 spaces (use movement bank) or push an adjacent hostile 1 space (honor).",
+      "lookingForAFightChoice": true,
+      "logMessage": "Gained **1 Power Token**. Choose: Move 2 spaces OR push an adjacent hostile 1 space.",
       "wiredStatus": "wired"
     },
     "Force Surge": {
@@ -904,10 +910,10 @@
     },
     "Veteran Instincts": {
       "type": "ccEffect",
-      "label": "Gain 2 Power Tokens (choose Hit/Surge and Block/Evade manually)",
+      "label": "Gain 2 Power Tokens (prompted to add +1 Hit/Surge or Block/Evade each roll)",
       "powerTokenGain": 2,
       "wiredStatus": "wired",
-      "logMessage": "Gained **2 Power Tokens**. This activation: on each attack roll add 1 Hit or Surge to results; on each defense roll add 1 Block or Evade to results (honor — announce choice to opponent each time).",
+      "logMessage": "Gained **2 Power Tokens**. This activation: you will be prompted to add +1 Hit or Surge on each attack roll, and +1 Block or Evade on each defense roll.",
       "vetInstinctsActiveThisActivation": true
     },
     "Close and Personal": {
@@ -1028,10 +1034,8 @@
     },
     "Dark Energy": {
       "type": "ccEffect",
-      "label": "Choose SMALL figure within 3: push 1 (manual), then 1 Damage",
-      "chooseAdjacentHostileThen": {
-        "damage": 1
-      },
+      "label": "Choose SMALL hostile within 3: push 1 space, then deal 1 Damage",
+      "darkEnergyEffect": true,
       "wiredStatus": "wired"
     },
     "Dangerous Prey": {
@@ -1049,7 +1053,7 @@
     },
     "Ambush": {
       "type": "ccEffect",
-      "label": "Move 4 to space adjacent to attacker (terrain condition manual), then attacker suffers 2 Damage",
+      "label": "Move 4 spaces; choose adjacent hostile and deal 2 Damage (terrain during movement is inherent honor)",
       "mpBonus": 4,
       "chooseAdjacentHostileThen": {
         "damage": 2
@@ -1070,10 +1074,12 @@
     },
     "Toxic Dart": {
       "type": "ccEffect",
-      "label": "Hostile within 3 LOS: 1 Strain + Weaken (adjacent auto-resolved; non-adjacent manual)",
+      "label": "Choose hostile within 3 with LOS: apply 1 Strain + Weaken",
       "chooseAdjacentHostileThen": {
         "strain": 1,
-        "weaken": true
+        "weaken": true,
+        "range": 3,
+        "requiresLos": true
       },
       "wiredStatus": "wired"
     },
@@ -1102,9 +1108,8 @@
     },
     "Stimulants": {
       "type": "ccEffect",
-      "label": "You or adjacent suffers 1 Damage (manual); then gain 1 MP and become Focused",
-      "mpBonus": 1,
-      "applyFocus": true,
+      "label": "You or an adjacent friendly suffers 1 Damage; then gain 1 MP and become Focused",
+      "stimulantsEffect": true,
       "wiredStatus": "wired"
     },
     "On a Mission": {
@@ -1134,10 +1139,13 @@
     },
     "Eerie Visage": {
       "type": "ccEffect",
-      "label": "Each hostile with LOS: 1 Strain + Weaken (adjacent auto-resolved; non-adjacent manual)",
+      "label": "All hostiles with LOS: each suffers 1 Strain + Weaken (auto-applied to all)",
       "chooseAdjacentHostileThen": {
         "strain": 1,
-        "weaken": true
+        "weaken": true,
+        "range": 99,
+        "requiresLos": true,
+        "targetAll": true
       },
       "wiredStatus": "wired"
     },
@@ -1157,18 +1165,22 @@
     },
     "Telekinetic Throw": {
       "type": "ccEffect",
-      "label": "One hostile within 3 LOS suffers Damage (roll 2 blue manual)",
+      "label": "Choose hostile within 3 with LOS: deal 2 Damage",
       "chooseAdjacentHostileThen": {
-        "damage": 2
+        "damage": 2,
+        "range": 3,
+        "requiresLos": true
       },
       "wiredStatus": "wired"
     },
     "Out of Time": {
       "type": "ccEffect",
-      "label": "Hostile within 3 LOS: Strain = round number (adjacent auto-resolved; non-adjacent manual)",
+      "label": "Choose hostile within 3 with LOS: apply Strain equal to current round number",
       "chooseAdjacentHostileThen": {
         "strain": 1,
-        "scaleStrainToRound": true
+        "scaleStrainToRound": true,
+        "range": 3,
+        "requiresLos": true
       },
       "wiredStatus": "wired"
     },
@@ -1319,7 +1331,7 @@
     },
     "Blend In": {
       "type": "ccEffect",
-      "label": "Become Hidden (discard at end of activation or when declaring attack -- player-honored)",
+      "label": "Become Hidden (Hidden is cleared automatically when you attack or are targeted)",
       "applyHide": true,
       "wiredStatus": "wired"
     },
@@ -1434,7 +1446,7 @@
     "Demoralizing Monologue": {
       "type": "ccEffect",
       "demoralizingMonologueEffect": true,
-      "label": "Force defender to reroll 1 die during this attack (reveal condition honor system)",
+      "label": "Force defender to reroll 1 die during this attack (auto-prompted during combat)",
       "wiredStatus": "wired",
       "forceDefenderRerollOne": true,
       "logMessage": "**Demoralizing Monologue** — During this attack, the defender must reroll 1 die of your choice. Flag set — enforced automatically during this attack."
@@ -1453,11 +1465,11 @@
     },
     "Hunter Protocol": {
       "type": "ccEffect",
-      "label": "Trigger same Surge up to twice (+1 Surge honor)",
+      "label": "Trigger same Surge up to twice (auto-prompted after first surge use)",
       "attackSurgeBonus": 1,
       "wiredStatus": "wired",
       "surgeDoublingActive": true,
-      "logMessage": "During this attack, you may trigger the same surge ability up to twice. Flag set — announce to opponent which surge you are doubling."
+      "logMessage": "During this attack, you may trigger the same surge ability up to twice. You will be prompted after the first surge use."
     },
     "I Can Feel It": {
       "type": "ccEffect",
@@ -1526,7 +1538,7 @@
     },
     "Furious Charge": {
       "type": "ccEffect",
-      "label": "After attack on you: if suffered 3+ ready deployment (Focus honor)",
+      "label": "After attack on you: if suffered 3+ Damage, become Focused (auto-applied)",
       "applyFocus": true,
       "wiredStatus": "wired",
       "conditionalFocusIfDamagedGte": 3,
@@ -1578,7 +1590,7 @@
     },
     "Capitalize": {
       "type": "ccEffect",
-      "label": "While attacking: remove 1 defense die from pool (timing and die choice are player-honored)",
+      "label": "While attacking: remove 1 defense die from pool (die removed automatically when played during attack)",
       "defensePoolRemoveMax": 1,
       "wiredStatus": "wired"
     },
@@ -1725,17 +1737,17 @@
     "Double or Nothing": {
       "type": "ccEffect",
       "doubleOrNothingEffect": true,
-      "label": "Choose a die to reroll; if same icon type, double those icons (honor system)",
+      "label": "Choose a die to reroll; if same icon type, those icons are doubled automatically",
       "wiredStatus": "wired",
       "doubleMatchingIconsOnReroll": true,
       "logMessage": "**Double or Nothing** — Choose a die in this attack and reroll it; if the new result shows the same icon type as before, double those matching icons."
     },
     "Expose Weakness": {
       "type": "ccEffect",
-      "label": "Choose adjacent hostile: next attack targeting that figure gains Pierce 3 (honor which figure)",
+      "label": "Choose adjacent hostile: next attack targeting that figure gains Pierce 3 (auto-applied on next attack)",
       "nextAttackBonusPierce": 3,
       "wiredStatus": "wired",
-      "logMessage": "Your next attack gains +3 Pierce. Target any adjacent hostile figure with that attack."
+      "logMessage": "Your next attack gains +3 Pierce (applied automatically when you attack)."
     },
     "Force Push": {
       "type": "ccEffect",
@@ -2166,7 +2178,7 @@
       "type": "ccEffect",
       "optimalBombardmentEffect": true,
       "label": "Up to 3 adjacent VEHICLES/DROIDS/HEAVY WEAPONs each attack with Blast 1",
-      "logMessage": "**Optimal Bombardment** — Each friendly VEHICLE, DROID, or HEAVY WEAPON figure adjacent to this figure may perform an attack with +Blast 1 this activation (honor: player announces and applies Blast 1 to each such attack).",
+      "logMessage": "**Optimal Bombardment** — Each friendly VEHICLE, DROID, or HEAVY WEAPON figure adjacent to this figure may perform an attack with +Blast 1 this activation. Blast bonus is applied automatically when those figures attack.",
       "wiredStatus": "wired",
       "blastBonusToAdjacentVehiclesDroidHW": 1
     },
@@ -2327,10 +2339,10 @@
     "Triangulate": {
       "type": "ccEffect",
       "triangulateEffect": true,
-      "label": "Move DROIDs (manual), then pick hostile â€” deal damage = # DROIDs in play (LOS honor system)",
+      “label”: “Move DROIDs first (manual), then pick hostile in LOS — damage = # DROIDs in play (auto-applied)”,
       "wiredStatus": "wired",
       "triangulateCountFriendlyDroids": true,
-      "logMessage": "**Triangulate** — Count the number of DROID figures in your squad currently in play. Choose a hostile figure in LOS; it suffers Damage equal to that count (honor: apply via /editvp or health tracking)."
+      "logMessage": "**Triangulate** — Move your DROID figures first (manual), then pick a hostile in LOS. It suffers Damage equal to the number of DROID figures in your squad in play (applied automatically)."
     },
     "Unlimited Power": {
       "type": "ccEffect",
@@ -3013,9 +3025,9 @@
       "description": "When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Self-Destruct Protocol** â€” When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.. Resolve manually and inform your opponent.",
-      "rollOneDie": "red",
-      "rollOneDieNote": "Each figure adjacent to you suffers Hit results as Damage. Then this figure is defeated (resolve manually)."
+      “logMessage”: “**Self-Destruct Protocol** — When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated. You will be prompted when this triggers.”,
+      “rollOneDie”: “red”,
+      “rollOneDieNote”: “Each figure adjacent to you suffers Hit results as Damage. Then this figure is defeated.”
     },
     "self_destruct_probe": {
       "type": "dcSpecial",
@@ -3025,9 +3037,9 @@
       "description": "At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Self-Destruct** â€” At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.. Resolve manually and inform your opponent.",
-      "rollOneDie": "red",
-      "rollOneDieNote": "Each adjacent figure suffers Hit results as Damage. Then this figure is defeated (resolve manually)."
+      “logMessage”: “**Self-Destruct** — At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated. You will be prompted at end of round.”,
+      “rollOneDie”: “red”,
+      “rollOneDieNote”: “Each adjacent figure suffers Hit results as Damage. Then this figure is defeated.”
     },
     "lasat_honor_guard": {
       "type": "dcSpecial",

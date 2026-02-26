@@ -355,6 +355,14 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.pendingSelfDestruct = null;
   game.priceBounties = game.priceBounties || {};
   game.nextDefeatedFriendlyVpReduction = null;
+  game.recoverOnHostileDefeat = {};
+  game.nextHostileDefeatVpBonus = {};
+  game.forceDefenderRerollOne = null;
+  game.doubleMatchingIconsOnReroll = null;
+  game.vetInstinctsActiveThisActivation = {};
+  game.surgeDoublingActive = {};
+  game.optimalBombardmentBlastBonus = {};
+  game.pendingHunterProtocol = null;
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
   }

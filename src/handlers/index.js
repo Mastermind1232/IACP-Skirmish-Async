@@ -198,7 +198,7 @@ export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
 export { handleEndEndOfRound, handleEndStartOfRound } from './round.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
-export { handleAttackTarget, handleCleaveTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendRerollUI, proceedAfterRerolls } from './combat.js';
+export { handleAttackTarget, handleCleaveTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls } from './combat.js';
 export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate } from './activation.js';
 export {
   handleMapSelection,

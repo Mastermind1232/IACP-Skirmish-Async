@@ -167,6 +167,7 @@ import {
   handleFalseOrdersMovePick,
   sendRerollUI,
   proceedAfterRerolls,
+  sendReadyToResolveRolls,
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
@@ -3539,6 +3540,24 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           await logGameAction(game, client, `**You Will Not Deny Me** — Fifth Brother cannot be defeated! HP restored to 1.`, { phase: 'ROUND', icon: 'card' });
         }
       }
+      // Self-Destruct Protocol: pre-defeat interrupt — prompt owner to use ability before defeat
+      if (newCur <= 0 && !game.selfDestructProtocolTriggered?.[targetMsgId]) {
+        const _sdpDcName2 = idx >= 0 ? dcList?.[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _sdpEff2 = getDcEffects()?.[_sdpDcName2];
+        if ((_sdpEff2?.specialAbilityIds || []).includes('self_destruct_protocol')) {
+          game.selfDestructProtocolTriggered = game.selfDestructProtocolTriggered || {};
+          game.selfDestructProtocolTriggered[targetMsgId] = true;
+          game.pendingSelfDestruct = { targetMsgId, defenderPlayerNum, attackerPlayerNum, damage, hit, resultText, totalBlast, ownerId, targetFigIndex };
+          const _sdpOwnerId2 = game[`player${defenderPlayerNum}Id`];
+          const _sdpRow2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`self_destruct_protocol_use_${game.gameId}_${targetMsgId}`).setLabel('Use Self-Destruct').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`self_destruct_protocol_skip_${game.gameId}_${targetMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          );
+          await logGameAction(game, client, `<@${_sdpOwnerId2}> **Self-Destruct Protocol** — **${combat.target.label || _sdpDcName2}** is about to be defeated! Roll 1 red die, apply Hits to adjacent figures, then the figure is defeated.`, { components: [_sdpRow2], allowedMentions: { users: [_sdpOwnerId2] } });
+          saveGames();
+          return;
+        }
+      }
       if (newCur <= 0 && !(game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum && ((idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, ''))?.toLowerCase().includes('fifth')))) {
         // F7: Keep healthState, figurePositions, and DC embed in sync when one figure in a group dies.
         if (game.figurePositions?.[defenderPlayerNum]) delete game.figurePositions[defenderPlayerNum][combat.target.figureKey];
@@ -3589,6 +3608,15 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           }
           game.whenDefeatHostileWithin3GainBlockTokens = null;
         }
+        // Worth Every Credit: bonus VP when hostile is defeated this activation
+        if (game.nextHostileDefeatVpBonus?.[attackerPlayerNum]) {
+          const _wecData = game.nextHostileDefeatVpBonus[attackerPlayerNum];
+          const _wecAmt = typeof _wecData === 'object' ? (_wecData.amount ?? 2) : _wecData;
+          game[vpKey].total += _wecAmt;
+          game[vpKey].objectives += _wecAmt;
+          delete game.nextHostileDefeatVpBonus[attackerPlayerNum];
+          await logGameAction(game, client, `**Worth Every Credit** — +${_wecAmt} bonus VP (${game[vpKey].total} total).`, { phase: 'ROUND', icon: 'card' });
+        }
         // You Will Not Deny Me: prevent Fifth Brother defeat; on any hostile defeat recover 2 HP
         if (game.youWillNotDenyMeActive) {
           const _ywndmData = game.youWillNotDenyMeActive;
@@ -3612,6 +3640,32 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
               game.youWillNotDenyMeActive = null;
             }
           }
+        }
+        // Apex Predator: recover HP when a hostile within range is defeated this activation
+        if (game.recoverOnHostileDefeat?.[attackerPlayerNum]) {
+          const _apData = game.recoverOnHostileDefeat[attackerPlayerNum];
+          const _apRange = _apData.range ?? 2;
+          const _apDist = combat.distanceToTarget ?? 0;
+          if (_apDist <= _apRange) {
+            const _apMsgId = _apData.msgId ?? combat.attackerMsgId;
+            const _apAmt = _apData.amount ?? 2;
+            if (_apMsgId) {
+              const _apHS = dcHealthState.get(_apMsgId);
+              const _apFigIdx = combat.attackerFigureIndex ?? 0;
+              if (_apHS?.[_apFigIdx]) {
+                const [_apCur, _apMax] = _apHS[_apFigIdx];
+                const _apNew = Math.min((_apCur ?? _apMax) + _apAmt, _apMax ?? _apCur);
+                _apHS[_apFigIdx] = [_apNew, _apMax ?? _apCur];
+                dcHealthState.set(_apMsgId, _apHS);
+                const _apDcList = attackerPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+                const _apDcIds = attackerPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+                const _apIdx = (_apDcIds || []).indexOf(_apMsgId);
+                if (_apIdx >= 0 && _apDcList?.[_apIdx]) _apDcList[_apIdx].healthState = [..._apHS];
+                await logGameAction(game, client, `**Apex Predator** — Recovered ${_apAmt} HP after defeating hostile within ${_apRange}.`, { phase: 'ROUND', icon: 'card' });
+              }
+            }
+          }
+          delete game.recoverOnHostileDefeat[attackerPlayerNum];
         }
         resultText += ` — **${combat.target.label} defeated!** +${vp} VP`;
         await logGameAction(game, client, `<@${ownerId}> defeated **${combat.target.label}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
@@ -7062,7 +7116,7 @@ client.on('interactionCreate', async (interaction) => {
   if (buttonKey === 'missile_salvo_die_') { await handleMissileSalvoDie(interaction); return; }
   if (buttonKey === 'missile_salvo_done_') { await handleMissileSalvoDone(interaction); return; }
 
-  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_' || buttonKey === 'spread_pain_cond_' || buttonKey === 'figurehead_use_' || buttonKey === 'figurehead_skip_' || buttonKey === 'lasat_die_' || buttonKey === 'lasat_face_' || buttonKey === 'false_orders_atk_' || buttonKey === 'tough_luck_remove_' || buttonKey === 'tough_luck_skip_' || buttonKey === 'there_is_no_try_die_' || buttonKey === 'there_is_no_try_face_' || buttonKey === 'there_is_no_try_skip_') {
+  if (buttonKey === 'cleave_target_' || buttonKey === 'attack_target_' || buttonKey === 'combat_resolve_ready_' || buttonKey === 'combat_ready_' || buttonKey === 'combat_roll_' || buttonKey === 'combat_surge_' || buttonKey === 'combat_reroll_' || buttonKey === 'combat_token_' || buttonKey === 'spread_pain_cond_' || buttonKey === 'figurehead_use_' || buttonKey === 'figurehead_skip_' || buttonKey === 'lasat_die_' || buttonKey === 'lasat_face_' || buttonKey === 'false_orders_atk_' || buttonKey === 'tough_luck_remove_' || buttonKey === 'tough_luck_skip_' || buttonKey === 'there_is_no_try_die_' || buttonKey === 'there_is_no_try_face_' || buttonKey === 'there_is_no_try_skip_' || buttonKey === 'vet_instincts_pick_' || buttonKey === 'hunter_protocol_trigger_' || buttonKey === 'hunter_protocol_skip_') {
     const combatContext = {
       getGame,
       replyIfGameEnded,
@@ -7243,6 +7297,117 @@ client.on('interactionCreate', async (interaction) => {
           _tintCombat.rerollPhase = null;
           await proceedAfterRerolls(_tintThread, _tintGame, _tintCombat, combatContext);
         }
+      }
+      saveGames(); return;
+    } else if (buttonKey === 'vet_instincts_pick_') {
+      // Veteran Instincts: attacker adds +1 Hit/Surge, defender adds +1 Block/Evade
+      const _viParts = interaction.customId.split('_');
+      const _viGameId = _viParts[3];
+      const _viChoice = _viParts[4]; // hit/surge/block/evade/skip
+      const _viGame = getGame(_viGameId);
+      if (!_viGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+      const _viCombat = _viGame.pendingCombat;
+      if (!_viCombat) { await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(() => {}); return; }
+      const _viAtk = _viCombat.attackerPlayerNum;
+      const _viDef = _viAtk === 1 ? 2 : 1;
+      // Determine phase: block/evade = defense; hit/surge = attack; skip depends on which phase is pending
+      const _viIsDefPhase = _viChoice === 'block' || _viChoice === 'evade' || (_viChoice === 'skip' && _viCombat.vetInstinctsAttackApplied);
+      const _viExpectedPlayer = _viIsDefPhase ? _viDef : _viAtk;
+      if (!canActAsPlayer(_viGame, interaction.user.id, _viExpectedPlayer)) {
+        await interaction.followUp({ content: `Only P${_viExpectedPlayer} may respond to Veteran Instincts.`, ephemeral: true }).catch(() => {}); return;
+      }
+      const _viThread = await client.channels.fetch(_viCombat.combatThreadId).catch(() => null);
+      if (_viChoice === 'hit') {
+        _viCombat.attackRoll = { ..._viCombat.attackRoll, dmg: (_viCombat.attackRoll?.dmg || 0) + 1 };
+        _viCombat.vetInstinctsAttackApplied = true;
+        if (_viThread) await _viThread.send('**Veteran Instincts** — +1 Hit added to attack roll.').catch(() => {});
+      } else if (_viChoice === 'surge') {
+        _viCombat.attackRoll = { ..._viCombat.attackRoll, surge: (_viCombat.attackRoll?.surge || 0) + 1 };
+        _viCombat.vetInstinctsAttackApplied = true;
+        if (_viThread) await _viThread.send('**Veteran Instincts** — +1 Surge added to attack roll.').catch(() => {});
+      } else if (_viChoice === 'block') {
+        _viCombat.defenseRoll = { ..._viCombat.defenseRoll, block: (_viCombat.defenseRoll?.block || 0) + 1 };
+        _viCombat.vetInstinctsDefenseApplied = true;
+        if (_viThread) await _viThread.send('**Veteran Instincts** — +1 Block added to defense roll.').catch(() => {});
+      } else if (_viChoice === 'evade') {
+        _viCombat.defenseRoll = { ..._viCombat.defenseRoll, evade: (_viCombat.defenseRoll?.evade || 0) + 1 };
+        _viCombat.vetInstinctsDefenseApplied = true;
+        if (_viThread) await _viThread.send('**Veteran Instincts** — +1 Evade added to defense roll.').catch(() => {});
+      } else {
+        // skip
+        if (!_viCombat.vetInstinctsAttackApplied) {
+          _viCombat.vetInstinctsAttackApplied = true;
+          if (_viThread) await _viThread.send('**Veteran Instincts** — Attack bonus skipped.').catch(() => {});
+        } else {
+          _viCombat.vetInstinctsDefenseApplied = true;
+          if (_viThread) await _viThread.send('**Veteran Instincts** — Defense bonus skipped.').catch(() => {});
+        }
+      }
+      if (_viIsDefPhase && _viThread && _viCombat) {
+        // Enter or continue the reroll window using stored pending counts
+        const _viAtkRem = _viCombat.viPendingAtkRerolls || 0;
+        const _viDefRem = _viCombat.viPendingDefRerolls || 0;
+        if (_viAtkRem > 0 || _viDefRem > 0) {
+          _viCombat.rerollPhase = _viAtkRem > 0 ? 'attacker' : 'defender';
+          _viCombat.attackerRerollsRemaining = _viAtkRem;
+          _viCombat.defenderRerollsRemaining = _viDefRem;
+          await sendRerollUI(_viThread, _viGame, _viCombat, _viCombat.rerollPhase);
+        } else {
+          _viCombat.rerollPhase = null;
+          await proceedAfterRerolls(_viThread, _viGame, _viCombat, combatContext);
+        }
+      }
+      saveGames(); return;
+    } else if (buttonKey === 'hunter_protocol_trigger_' || buttonKey === 'hunter_protocol_skip_') {
+      // Hunter Protocol: re-trigger the same surge ability once
+      const _hpGameId = interaction.customId.replace(/^hunter_protocol_(?:trigger|skip)_/, '');
+      const _hpGame = getGame(_hpGameId);
+      if (!_hpGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+      const _hpCombat = _hpGame.pendingCombat;
+      if (!_hpCombat || !_hpGame.pendingHunterProtocol) { await interaction.followUp({ content: 'No pending Hunter Protocol.', ephemeral: true }).catch(() => {}); return; }
+      const _hpAtk = _hpCombat.attackerPlayerNum;
+      if (!canActAsPlayer(_hpGame, interaction.user.id, _hpAtk)) {
+        await interaction.followUp({ content: 'Only the attacker may respond to Hunter Protocol.', ephemeral: true }).catch(() => {}); return;
+      }
+      const _hpThread = await client.channels.fetch(_hpCombat.combatThreadId).catch(() => null);
+      const { key: _hpKey, cost: _hpCost } = _hpGame.pendingHunterProtocol;
+      _hpGame.pendingHunterProtocol = null;
+      if (buttonKey === 'hunter_protocol_trigger_' && _hpKey) {
+        const _hpResolveSurge = resolveSurgeAbility || parseSurgeEffect;
+        const _hpMod = _hpResolveSurge ? _hpResolveSurge(_hpKey) : {};
+        _hpCombat.surgeDamage = (_hpCombat.surgeDamage || 0) + (_hpMod.damage ?? 0);
+        _hpCombat.surgePierce = (_hpCombat.surgePierce || 0) + (_hpMod.pierce ?? 0);
+        _hpCombat.surgeAccuracy = (_hpCombat.surgeAccuracy || 0) + (_hpMod.accuracy ?? 0);
+        if (_hpMod.conditions?.length) _hpCombat.surgeConditions = (_hpCombat.surgeConditions || []).concat(_hpMod.conditions);
+        _hpCombat.surgeBlast = (_hpCombat.surgeBlast || 0) + (_hpMod.blast ?? 0);
+        _hpCombat.surgeRecover = (_hpCombat.surgeRecover || 0) + (_hpMod.recover ?? 0);
+        _hpCombat.surgeCleave = (_hpCombat.surgeCleave || 0) + (_hpMod.cleave ?? 0);
+        _hpCombat.surgeRemaining = Math.max(0, (_hpCombat.surgeRemaining || 0) - _hpCost);
+        const _hpLabel = (SURGE_LABELS && SURGE_LABELS[_hpKey]) || getSurgeAbilityLabel?.(_hpKey) || _hpKey;
+        if (_hpThread) await _hpThread.send(`**Hunter Protocol** — Triggered **${_hpLabel}** again (cost: ${_hpCost}). Surge remaining: ${_hpCombat.surgeRemaining}`).catch(() => {});
+      } else {
+        if (_hpThread) await _hpThread.send('**Hunter Protocol** — Skipped second trigger.').catch(() => {});
+      }
+      // Continue surge flow
+      if ((_hpCombat.surgeRemaining || 0) <= 0) {
+        _hpCombat.surgeRemaining = 0;
+        if (_hpThread) await sendReadyToResolveRolls(_hpThread, _hpGameId);
+      } else {
+        const _hpSurgeAbilities = getAttackerSurgeAbilities(_hpCombat);
+        const _hpRemaining = _hpCombat.surgeRemaining || 0;
+        const _hpRows = [];
+        for (let _hi = 0; _hi < _hpSurgeAbilities.length; _hi++) {
+          const _hpSkey = _hpSurgeAbilities[_hi];
+          const _hpScost = (_hpSkey?.startsWith?.('double:') ? 2 : (getAbility?.(_hpSkey)?.surgeCost ?? 1));
+          if (_hpScost > _hpRemaining) continue;
+          const _hpSlabel = ((SURGE_LABELS && SURGE_LABELS[_hpSkey]) || getSurgeAbilityLabel?.(_hpSkey) || _hpSkey).slice(0, 80);
+          _hpRows.push(new ButtonBuilder().setCustomId(`combat_surge_${_hpGameId}_${_hi}`).setLabel((_hpScost > 1 ? `Spend ${_hpScost} surge: ${_hpSlabel}` : `Spend 1 surge: ${_hpSlabel}`).slice(0, 80)).setStyle(ButtonStyle.Secondary));
+        }
+        if (_hpCombat.attackerConds?.includes('Bleed') && !_hpCombat.surgePreventBleed) {
+          _hpRows.push(new ButtonBuilder().setCustomId(`combat_surge_${_hpGameId}_bleed_prevention`).setLabel('Spend 1 Surge — Prevent Bleed').setStyle(ButtonStyle.Secondary));
+        }
+        _hpRows.push(new ButtonBuilder().setCustomId(`combat_surge_${_hpGameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
+        if (_hpThread) await _hpThread.send({ content: `**Spend surge?** **${_hpRemaining}** surge left.`, components: [new ActionRowBuilder().addComponents(_hpRows.slice(0, 5))] }).catch(() => {});
       }
       saveGames(); return;
     }
@@ -7754,6 +7919,78 @@ client.on('interactionCreate', async (interaction) => {
     }
     if (_sdpGame.figurePositions?.[_sdpMeta.playerNum]) delete _sdpGame.figurePositions[_sdpMeta.playerNum][`${_sdpMeta.dcName}-1-0`];
     await logGameAction(_sdpGame, client, `**Self-Destruct** — ${_sdpMeta.displayName || _sdpMeta.dcName}: ${_sdpResultLog} Probe defeated.`, { phase: 'ROUND', icon: 'attack' });
+    saveGames(); return;
+  }
+
+  // Self-Destruct Protocol: pre-defeat use or skip during combat
+  if (buttonKey === 'self_destruct_protocol_use_' || buttonKey === 'self_destruct_protocol_skip_') {
+    await interaction.deferUpdate().catch(() => {});
+    const _sdcpSuffix = interaction.customId.replace(buttonKey, '');
+    const _sdcpParts = _sdcpSuffix.split('_');
+    const _sdcpGameId = _sdcpParts[0]; const _sdcpTargetMsgId = _sdcpParts[1];
+    const _sdcpGame = getGame(_sdcpGameId);
+    if (!_sdcpGame || !_sdcpGame.pendingSelfDestruct) {
+      await interaction.followUp({ content: 'No pending Self-Destruct Protocol.', ephemeral: true }).catch(() => {}); return;
+    }
+    const _sdcpPending = _sdcpGame.pendingSelfDestruct;
+    if (!canActAsPlayer(_sdcpGame, interaction.user.id, _sdcpPending.defenderPlayerNum)) {
+      await interaction.followUp({ content: 'Only the DC owner may respond.', ephemeral: true }).catch(() => {}); return;
+    }
+    delete _sdcpGame.pendingSelfDestruct;
+    const _sdcpCombat = _sdcpGame.pendingCombat;
+    if (buttonKey === 'self_destruct_protocol_use_') {
+      // Roll 1 red die, apply Hit results as Damage to adjacent hostile figures
+      const _sdcpDiceData = getDiceData ? getDiceData() : null;
+      const _sdcpFaces = _sdcpDiceData?.attack?.red || [];
+      const _sdcpFace = _sdcpFaces[Math.floor(Math.random() * Math.max(_sdcpFaces.length, 1))] || {};
+      const _sdcpHits = _sdcpFace.dmg ?? 0;
+      const _sdcpFaceLabel = `${_sdcpHits}H`;
+      const _sdcpFigKey = _sdcpCombat?.target?.figureKey;
+      const _sdcpPos = _sdcpFigKey ? _sdcpGame.figurePositions?.[_sdcpPending.defenderPlayerNum]?.[_sdcpFigKey] : null;
+      let _sdcpResultLog = `Rolled red die: **${_sdcpFaceLabel}** — `;
+      if (_sdcpHits > 0 && _sdcpPos && _sdcpGame.selectedMap?.id) {
+        const _sdcpMs = getMapSpaces ? getMapSpaces(_sdcpGame.selectedMap.id) : null;
+        const _sdcpAdj = _sdcpMs?.adjacency?.[String(_sdcpPos).toLowerCase()] || [];
+        const _sdcpAllAdj = new Set([String(_sdcpPos).toLowerCase(), ..._sdcpAdj.map(s => String(s).toLowerCase())]);
+        const _sdcpHostileNum = _sdcpPending.defenderPlayerNum === 1 ? 2 : 1;
+        const _sdcpDamaged = [];
+        for (const [_sfk, _sfkPos] of Object.entries(_sdcpGame.figurePositions?.[_sdcpHostileNum] || {})) {
+          if (!_sfkPos || !_sdcpAllAdj.has(String(_sfkPos).toLowerCase())) continue;
+          if (_sfk === _sdcpFigKey) continue;
+          let _sfkMsgId = null;
+          for (const [_mid, _mm] of dcMessageMeta) { if (_mm.playerNum === _sdcpHostileNum && _sfk.startsWith(_mm.dcName + '-')) { _sfkMsgId = _mid; break; } }
+          if (!_sfkMsgId) continue;
+          const _sfkFigMatch = _sfk.match(/^(.+)-(\d+)-(\d+)$/);
+          if (!_sfkFigMatch) continue;
+          const _sfkFigIdx = parseInt(_sfkFigMatch[3], 10);
+          const _sfkHS = dcHealthState.get(_sfkMsgId) || [];
+          if (!_sfkHS[_sfkFigIdx]) continue;
+          const [_shc, _shm] = _sfkHS[_sfkFigIdx];
+          if (_shc === null || _shc <= 0) continue;
+          const _shnc = Math.max(0, _shc - _sdcpHits);
+          _sfkHS[_sfkFigIdx] = [_shnc, _shm ?? _shc];
+          dcHealthState.set(_sfkMsgId, _sfkHS);
+          const _sfkDcIds = _sdcpHostileNum === 1 ? _sdcpGame.p1DcMessageIds : _sdcpGame.p2DcMessageIds;
+          const _sfkDcList = _sdcpHostileNum === 1 ? _sdcpGame.p1DcList : _sdcpGame.p2DcList;
+          const _sfkIdx = (_sfkDcIds || []).indexOf(_sfkMsgId);
+          if (_sfkIdx >= 0 && _sfkDcList?.[_sfkIdx]) _sfkDcList[_sfkIdx].healthState = [..._sfkHS];
+          _sdcpDamaged.push(`${dcMessageMeta.get(_sfkMsgId)?.displayName || _sfkFigMatch[1]} (HP: ${_shc}→${_shnc})`);
+        }
+        _sdcpResultLog += _sdcpDamaged.length ? _sdcpDamaged.join(', ') : 'No adjacent hostiles.';
+      } else {
+        _sdcpResultLog += 'No hits.';
+      }
+      await logGameAction(_sdcpGame, client, `**Self-Destruct Protocol** — ${_sdcpCombat?.target?.label || 'Figure'}: ${_sdcpResultLog}`, { phase: 'ROUND', icon: 'attack' });
+    } else {
+      await logGameAction(_sdcpGame, client, `**Self-Destruct Protocol** — Skipped. ${_sdcpCombat?.target?.label || 'Figure'} is defeated.`, { phase: 'ROUND', icon: 'card' });
+    }
+    // Finalize defeat by re-calling applyDamageAndFinishCombat (SDP flag already set so no re-trigger)
+    await applyDamageAndFinishCombat(_sdcpGame, _sdcpCombat, {
+      damage: _sdcpPending.damage, hit: _sdcpPending.hit, resultText: _sdcpPending.resultText,
+      totalBlast: _sdcpPending.totalBlast, defenderPlayerNum: _sdcpPending.defenderPlayerNum,
+      attackerPlayerNum: _sdcpPending.attackerPlayerNum, ownerId: _sdcpPending.ownerId,
+      targetMsgId: _sdcpPending.targetMsgId, targetFigIndex: _sdcpPending.targetFigIndex,
+    }, client);
     saveGames(); return;
   }
 

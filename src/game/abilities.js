@@ -1392,9 +1392,9 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: msg, refreshMovementBank: true, activeMsgId: msgId };
   }
 
-  // ccEffect: discardUpToNHarmful + mpBonus combo (optionally + recoverDamage) — Heart of Freedom, Price of Glory
+  // ccEffect: discardUpToNHarmful + mpBonus combo (optionally + recoverDamage) — Heart of Freedom, Price of Glory, Worth Every Credit
   if (entry.type === 'ccEffect' && typeof entry.discardUpToNHarmful === 'number' && typeof entry.mpBonus === 'number') {
-    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play at start of your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
@@ -1402,6 +1402,19 @@ export function resolveAbility(abilityId, context) {
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    // Price of Glory Phase 1: present token combo choice before applying any effects
+    if (entry.optionalPowerTokenOnConditionDiscard && !chosenFigureKey) {
+      return {
+        requiresChoice: true,
+        choiceOptions: [
+          'Discard condition + gain MP (no tokens)',
+          'Damage self — Surge + Hit tokens',
+          'Damage self — Hit + Block tokens',
+          'Damage self — Block + Evade tokens',
+        ],
+        choiceValues: ['skip', 'Surge+Hit', 'Hit+Block', 'Block+Evade'],
+      };
+    }
     const HARMFUL = ['Stun', 'Weaken', 'Bleed'];
     const limit = entry.discardUpToNHarmful;
     let discarded = 0;
@@ -1454,7 +1467,36 @@ export function resolveAbility(abilityId, context) {
     if (discarded > 0) parts.push(`Discarded ${discarded} HARMFUL condition(s)`);
     if (recovered > 0) parts.push(`recovered ${recovered} Damage`);
     parts.push(`gained ${mp} MP`);
-    return { applied: true, logMessage: parts.join(', ') + '.', refreshDcEmbed: recovered > 0 };
+    // Worth Every Credit: set VP bonus for next hostile defeat this activation
+    if (typeof entry.nextHostileDefeatVpBonus === 'number' && entry.nextHostileDefeatVpBonus > 0) {
+      game.nextHostileDefeatVpBonus = game.nextHostileDefeatVpBonus || {};
+      game.nextHostileDefeatVpBonus[playerNum] = { amount: entry.nextHostileDefeatVpBonus, msgId };
+      parts.push(`+${entry.nextHostileDefeatVpBonus} VP if hostile defeated this activation`);
+    }
+    // Price of Glory Phase 2: apply token combo + self-damage (chosenFigureKey = 'Surge+Hit' etc.)
+    let tokenRefresh = false;
+    if (entry.optionalPowerTokenOnConditionDiscard && chosenFigureKey && chosenFigureKey !== 'skip' && dcHealthState) {
+      const combo = String(chosenFigureKey).split('+');
+      const selfHs = (dcHealthState.get(msgId) || []).slice();
+      if (selfHs.length > 0 && Array.isArray(selfHs[0])) {
+        const [sCur, sMax] = selfHs[0];
+        selfHs[0] = [Math.max(0, (sCur ?? sMax ?? 0) - 1), sMax];
+        dcHealthState.set(msgId, selfHs);
+        const dcMids = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcLst = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const siIdx = (dcMids || []).indexOf(msgId);
+        if (siIdx >= 0 && dcLst?.[siIdx]) dcLst[siIdx].healthState = [...selfHs];
+      }
+      const activatingFk = figureKeys[0];
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[activatingFk] = game.figurePowerTokens[activatingFk] || [];
+      const tokensCur = game.figurePowerTokens[activatingFk].length;
+      const tokensToAdd = combo.slice(0, Math.max(0, 2 - tokensCur));
+      for (const tok of tokensToAdd) game.figurePowerTokens[activatingFk].push(tok);
+      parts.push(`suffered 1 Damage, gained ${tokensToAdd.length} Power Token(s): ${tokensToAdd.join(' + ')}`);
+      tokenRefresh = true;
+    }
+    return { applied: true, logMessage: parts.join(', ') + '.', refreshDcEmbed: recovered > 0 || tokenRefresh };
   }
 
   // ccEffect: Apex Predator combo — Focus + Hide + powerTokenGain + mpBonus (must run before individual branches)
@@ -1489,7 +1531,14 @@ export function resolveAbility(abilityId, context) {
     if (toAdd > 0) {
       game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: meta?.displayName || fk, count: toAdd }], channelId: null, playerNum };
     }
-    const parts = ['Became Focused', 'Hidden', toAdd > 0 ? `gained ${toAdd} Power Token(s) — choose type` : null, `gained ${entry.mpBonus} MP`].filter(Boolean);
+    // Apex Predator: set activation-long recover-on-defeat flag
+    if (typeof entry.recoverOnHostileDefeat === 'number' && entry.recoverOnHostileDefeat > 0) {
+      game.recoverOnHostileDefeat = game.recoverOnHostileDefeat || {};
+      game.recoverOnHostileDefeat[playerNum] = { amount: entry.recoverOnHostileDefeat, range: entry.recoverOnHostileDefeatRange ?? 2, msgId };
+    }
+    const apParts = ['Became Focused', 'Hidden', toAdd > 0 ? `gained ${toAdd} Power Token(s) — choose type` : null, `gained ${entry.mpBonus} MP`];
+    if (typeof entry.recoverOnHostileDefeat === 'number' && entry.recoverOnHostileDefeat > 0) apParts.push(`recover ${entry.recoverOnHostileDefeat} Damage if hostile within ${entry.recoverOnHostileDefeatRange ?? 2} is defeated this activation`);
+    const parts = apParts.filter(Boolean);
     return { applied: true, requiresPowerTokenChoice: toAdd > 0, logMessage: parts.join(', ') + '.', refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true, conditionCardsToPost: ['Focus', 'Hidden'] };
   }
 
@@ -1629,6 +1678,11 @@ export function resolveAbility(abilityId, context) {
     if (toAdd <= 0) return { applied: false, manualMessage: 'That figure already has 2 Power Tokens (max).' };
     game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: fk, count: toAdd }], channelId: null, playerNum };
     const msg = (toAdd === 1 ? 'Gained 1 Power Token' : `Gained ${toAdd} Power Tokens`) + conditionalPtNote + ' — choose type.';
+    // Veteran Instincts: set activation-long flag so attacker/defender may add +1 Hit/Surge or Block/Evade
+    if (entry.vetInstinctsActiveThisActivation) {
+      game.vetInstinctsActiveThisActivation = game.vetInstinctsActiveThisActivation || {};
+      game.vetInstinctsActiveThisActivation[playerNum] = true;
+    }
     return { applied: true, requiresPowerTokenChoice: true, logMessage: msg, refreshBoard: true };
   }
 
@@ -2131,6 +2185,77 @@ export function resolveAbility(abilityId, context) {
       logMessage: totalRecovered > 0 ? `Recovered ${totalRecovered} Damage.${freeMovePart}` : `Already at full health.${freeMovePart}`,
       refreshDcEmbed: true,
     };
+  }
+
+  // dcSpecial: medicalLoadoutEffect — you or an adjacent friendly recovers 3 Damage (Medical Loadout)
+  // Phase 1 (no targetFigureKey): find adjacent friendlies → requiresChoice; Phase 2: apply heal
+  if (entry.type === 'dcSpecial' && entry.medicalLoadoutEffect) {
+    const { game, msgId, meta, dcMessageMeta, dcHealthState, targetFigureKey } = context;
+    if (!game || !msgId || !meta || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const playerNum = meta.playerNum;
+    const mapId = game.selectedMap?.id;
+    // Helper: apply up to 3 HP heal to a DC (by message ID)
+    const applyHeal3 = (healMsgId) => {
+      const hs = (dcHealthState.get(healMsgId) || []).slice();
+      let totalHealed = 0;
+      let remaining = 3;
+      for (let i = 0; i < hs.length && remaining > 0; i++) {
+        if (!Array.isArray(hs[i])) continue;
+        const [cur, max] = hs[i];
+        if (cur == null || max == null) continue;
+        const healed = Math.min(max - cur, remaining);
+        hs[i] = [cur + healed, max];
+        totalHealed += healed;
+        remaining -= healed;
+      }
+      dcHealthState.set(healMsgId, hs);
+      const dcMids = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const dcLst = playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const si = (dcMids || []).indexOf(healMsgId);
+      if (si >= 0 && dcLst?.[si]) dcLst[si].healthState = [...hs];
+      return totalHealed;
+    };
+    // Phase 2: apply heal to chosen figure
+    if (targetFigureKey) {
+      if (targetFigureKey === 'self') {
+        const healed = applyHeal3(msgId);
+        return { applied: true, logMessage: `**Medical Loadout** — Recovered ${healed} Damage (self).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId] };
+      }
+      const tMsgId = findMsgIdForFigureKey(game, playerNum, targetFigureKey, dcMessageMeta);
+      if (!tMsgId) return { applied: false, manualMessage: 'Could not find adjacent friendly DC — resolve manually.' };
+      const tMeta = dcMessageMeta.get(tMsgId);
+      const healed = applyHeal3(tMsgId);
+      const tName = tMeta?.displayName || tMeta?.dcName || targetFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Medical Loadout** — **${tName}** recovered ${healed} Damage.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [tMsgId] };
+    }
+    // Phase 1: find adjacent friendly figures
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const adjFriendlyKeys = [];
+    if (mapId) {
+      for (const fk of activatingKeys) {
+        const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+        for (const { figureKey, playerNum: p } of adj) {
+          if (p === playerNum && !activatingKeys.includes(figureKey) && !adjFriendlyKeys.includes(figureKey)) {
+            adjFriendlyKeys.push(figureKey);
+          }
+        }
+      }
+    }
+    if (adjFriendlyKeys.length === 0) {
+      const healed = applyHeal3(msgId);
+      return { applied: true, logMessage: `**Medical Loadout** — Recovered ${healed} Damage.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId] };
+    }
+    const selfName = meta.displayName || meta.dcName || 'self';
+    const opts = [`Heal self (${selfName})`];
+    const tFks = ['self'];
+    for (const fk of adjFriendlyKeys) {
+      const fMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
+      const fMeta = fMsgId ? dcMessageMeta.get(fMsgId) : null;
+      const fName = fMeta?.displayName || fMeta?.dcName || fk.replace(/-\d+-\d+$/, '');
+      opts.push(`Heal: ${fName}`);
+      tFks.push(fk);
+    }
+    return { requiresChoice: true, choiceOptions: opts, targetFigureKeys: tFks };
   }
 
   // dcSpecial: healFriendlyAdjacent (Stim Canister) — one adjacent friendly recovers N damage
@@ -2651,6 +2776,11 @@ export function resolveAbility(abilityId, context) {
     } else {
       cbt.surgeBonus = (cbt.surgeBonus || 0) + n;
     }
+    // Hunter Protocol: set activation-long flag allowing a surge ability to be triggered twice
+    if (entry.surgeDoublingActive) {
+      game.surgeDoublingActive = game.surgeDoublingActive || {};
+      game.surgeDoublingActive[playerNum] = true;
+    }
     return {
       applied: true,
       logMessage: `+${n} Surge added to this attack.`,
@@ -3151,7 +3281,7 @@ export function resolveAbility(abilityId, context) {
       }
       return mainResult;
     }
-    // First pass: find adjacent hostiles
+    // First pass: find valid hostile targets (adjacent, or range+LOS if specified)
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     const meta = dcMessageMeta.get(msgId);
@@ -3160,15 +3290,38 @@ export function resolveAbility(abilityId, context) {
     if (activatingKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
     const mapId = game.selectedMap?.id;
     if (!mapId) return { applied: false, manualMessage: 'Resolve manually: no map selected.' };
+    const cahRange = cah.range ?? 1;
+    const cahLos = cah.requiresLos ?? false;
+    const cahAll = cah.targetAll ?? false;
+    // Range helper: use context if available, else Manhattan distance via parseCoord
+    const getRng = context.getRange ?? ((c1, c2) => { const a = parseCoord(c1); const b = parseCoord(c2); return (a.col < 0 || b.col < 0) ? 999 : Math.abs(a.col - b.col) + Math.abs(a.row - b.row); });
+    const losCheck = context.hasLineOfSight ?? null;
+    const mapSpacesForLos = cahLos ? getMapSpaces(mapId) : null;
+    // Activator position for range/LOS checks
+    const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
+    const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
     const hostileSet = new Set();
-    for (const fk of activatingKeys) {
-      const adj = getFiguresAdjacentToTarget(game, fk, mapId);
-      for (const { figureKey, playerNum: p } of adj) {
-        if (p === oppNum) hostileSet.add(figureKey);
+    if (cahRange <= 1) {
+      // Original path: adjacent figures via adjacency graph
+      for (const fk of activatingKeys) {
+        const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+        for (const { figureKey, playerNum: p } of adj) {
+          if (p === oppNum) hostileSet.add(figureKey);
+        }
+      }
+    } else {
+      // Extended path: range + optional LOS filter
+      for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+        if (!coord) continue;
+        if (activatorPos && getRng(activatorPos, coord) > cahRange) continue;
+        if (cahLos && losCheck && activatorPos && mapSpacesForLos) {
+          if (!losCheck(activatorPos, coord, mapSpacesForLos)) continue;
+        }
+        hostileSet.add(fk);
       }
     }
     const hostiles = [...hostileSet];
-    if (hostiles.length === 0) return { applied: true, logMessage: 'No adjacent hostile figure.' };
+    if (hostiles.length === 0) return { applied: true, logMessage: 'No valid hostile figure in range.' };
     // Helper to get a display label for a figure key
     const getFigLabel = (fk) => {
       const tMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
@@ -3178,6 +3331,17 @@ export function resolveAbility(abilityId, context) {
       const suffix = isNaN(figIdx) || figIdx === 0 ? '' : ` (${String.fromCharCode(65 + figIdx)})`;
       return `${baseName}${suffix}`;
     };
+    // targetAll: apply to every matching figure at once (no picker)
+    if (cahAll) {
+      const allMsgIds = [];
+      const allParts = [];
+      for (const fk of hostiles) {
+        const r = applyToFigureKey(fk);
+        if (r.logMessage) allParts.push(r.logMessage);
+        if (r.refreshDcEmbedMsgIds) for (const id of r.refreshDcEmbedMsgIds) { if (!allMsgIds.includes(id)) allMsgIds.push(id); }
+      }
+      return { applied: true, logMessage: allParts.join(' ') || 'Effect applied to all hostiles in range.', refreshDcEmbed: true, refreshDcEmbedMsgIds: allMsgIds };
+    }
     // orStunInstead: present "N Strain" vs "Stun" choices (combined with target if multiple hostiles)
     if (cah.orStunInstead) {
       const strainN = (cah.strain || 0);
@@ -3194,7 +3358,7 @@ export function resolveAbility(abilityId, context) {
       return { applied: false, requiresChoice: true, choiceOptions: combLabels, choiceValues: combValues };
     }
     if (hostiles.length === 1) return applyToFigureKey(hostiles[0]);
-    // Multiple adjacent hostiles: prompt player to pick one
+    // Multiple hostiles in range: prompt player to pick one
     const labels = hostiles.map(getFigLabel);
     return { applied: false, requiresChoice: true, choiceOptions: labels, choiceValues: hostiles };
   }
@@ -4770,9 +4934,17 @@ export function resolveAbility(abilityId, context) {
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     const names = [];
     let count = 0;
+    const blastBonus = entry.blastBonusToAdjacentVehiclesDroidHW || 0;
     for (const fk of targets.slice(0, 3)) {
       const figMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
-      if (figMsgId) { game.freeAttackBonusPending[figMsgId] = true; count++; }
+      if (figMsgId) {
+        game.freeAttackBonusPending[figMsgId] = true;
+        if (blastBonus > 0) {
+          game.optimalBombardmentBlastBonus = game.optimalBombardmentBlastBonus || {};
+          game.optimalBombardmentBlastBonus[figMsgId] = blastBonus;
+        }
+        count++;
+      }
       names.push(fk.replace(/-\d+-\d+$/, ''));
     }
     return { applied: true, logMessage: `**Optimal Bombardment** — Free attack granted to: ${names.join(', ')} (${count} figure${count !== 1 ? 's' : ''}, up to 3).` };
@@ -4875,21 +5047,55 @@ export function resolveAbility(abilityId, context) {
     return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: '**Set the Charges** — Choose a space within 3:' };
   }
 
-  // ccEffect: faceMeEffect (Face Me!) — pick a unique hostile in LOS; push them to adjacent (manual); grant free melee attack
+  // ccEffect: faceMeEffect (Face Me!) — pick a unique hostile; push them to a space adjacent to you; grant free melee attack
+  // Phase 1: pick unique hostile; Phase 2: pick push landing space; Phase 3: push + grant free melee attack
   if (entry.type === 'ccEffect' && entry.faceMeEffect) {
-    const { game, playerNum, dcMessageMeta, choiceIndex, chosenFigureKey } = context;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const oppNum = playerNum === 1 ? 2 : 1;
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
-    // Phase 2: grant free attack
-    if (chosenFigureKey) {
+    // Phase 3: push hostile to chosen space, grant free melee attack
+    if (chosenFigureKey && chosenSpace) {
+      game.figurePositions = game.figurePositions || {};
+      game.figurePositions[oppNum] = game.figurePositions[oppNum] || {};
+      game.figurePositions[oppNum][chosenFigureKey] = chosenSpace;
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = true;
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[msgId] = { type: 'melee' };
       const dcName = chosenFigureKey.replace(/-\d+-\d+$/, '');
-      return { applied: true, logMessage: `**Face Me!** — Move **${dcName}** adjacent manually (push = their Speed spaces). Then use your Melee Attack button for 1 free attack.` };
+      return { applied: true, logMessage: `**Face Me!** — Pushed **${dcName}** to ${String(chosenSpace).toUpperCase()}. Use the Melee Attack button for 1 free attack.`, refreshBoard: true };
+    }
+    // Phase 2: find spaces adjacent to activating figure for the push landing
+    if (chosenFigureKey && !chosenSpace) {
+      const mapId = game.selectedMap?.id;
+      const meta = dcMessageMeta.get(msgId);
+      const activatingKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+      const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
+      const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
+      if (!activatorPos || !mapId) {
+        // Fallback: grant free attack without push
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[msgId] = true;
+        const nm = chosenFigureKey.replace(/-\d+-\d+$/, '');
+        return { applied: true, logMessage: `**Face Me!** — Move **${nm}** adjacent manually. Then use Melee Attack button for 1 free attack.` };
+      }
+      const mapSpaces = getMapSpaces(mapId);
+      const adjacentSpaces = mapSpaces?.adjacency?.[activatorPos] || [];
+      const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
+      const targetCurrentPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
+      const validSpaces = adjacentSpaces.filter((s) => !occupiedSet.has(s) || s === targetCurrentPos);
+      if (!validSpaces.length) {
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[msgId] = true;
+        const nm = chosenFigureKey.replace(/-\d+-\d+$/, '');
+        return { applied: true, logMessage: `**Face Me!** — No free adjacent space for push; move **${nm}** adjacent manually. Use Melee Attack button for 1 free attack.` };
+      }
+      const nm = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      return { requiresSpaceChoice: true, validSpaces, chosenFigureKey, spaceChoiceLabel: `**Face Me!** — Push **${nm}** to which adjacent space?` };
     }
     // Phase 1: hostile figure picker (unique figures only)
-    const oppNum = playerNum === 1 ? 2 : 1;
     const dcEffects = getDcEffects();
     const hostileKeys = [];
     const hostileLabels = [];
@@ -4900,6 +5106,262 @@ export function resolveAbility(abilityId, context) {
     }
     if (!hostileKeys.length) return { applied: false, manualMessage: 'No unique hostile figures in play. Resolve manually.' };
     return { requiresChoice: true, choiceOptions: hostileLabels.map((n) => `Push & attack: ${n}`), choiceValues: hostileKeys };
+  }
+
+  // ccEffect: stimulantsEffect — you or an adjacent friendly suffers 1 Damage; gain 1 MP and become Focused
+  // Phase 1: pick self or adjacent friendly; Phase 2: apply 1 damage to chosen + grant 1 MP + Focus
+  if (entry.type === 'ccEffect' && entry.stimulantsEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (activatingKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
+    // Apply 1 MP + Focus to activating figure (used in both phases)
+    const applyMpAndFocus = () => {
+      game.movementBank = game.movementBank || {};
+      const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+      bank.total = (bank.total ?? 0) + 1;
+      bank.remaining = (bank.remaining ?? 0) + 1;
+      game.movementBank[msgId] = bank;
+      game.figureConditions = game.figureConditions || {};
+      const existing = game.figureConditions[activatorFk] || [];
+      if (!existing.includes('Focus')) game.figureConditions[activatorFk] = [...existing, 'Focus'];
+    };
+    // Phase 2: apply damage to chosen (chosenFigureKey = 'self' or a friendly figure key)
+    if (chosenFigureKey) {
+      if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
+      const targetIsActivator = chosenFigureKey === 'self' || chosenFigureKey === activatorFk;
+      const damageMsgId = targetIsActivator ? msgId : findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+      const damageFk = targetIsActivator ? activatorFk : chosenFigureKey;
+      const targetHs = (dcHealthState.get(damageMsgId) || []).slice();
+      const targetMeta = damageMsgId ? dcMessageMeta.get(damageMsgId) : null;
+      const targetKeys = targetMeta ? getFigureKeysForDcMsg(game, playerNum, targetMeta) : [damageFk];
+      const fi = Math.max(0, targetKeys.indexOf(damageFk));
+      if (targetHs[fi] && Array.isArray(targetHs[fi])) {
+        const [cur, max] = targetHs[fi];
+        targetHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
+        dcHealthState.set(damageMsgId, targetHs);
+        const dcMids = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcLst = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const si = (dcMids || []).indexOf(damageMsgId);
+        if (si >= 0 && dcLst?.[si]) dcLst[si].healthState = [...targetHs];
+      }
+      applyMpAndFocus();
+      const targetName = targetIsActivator ? (meta.displayName || meta.dcName) : damageFk.replace(/-\d+-\d+$/, '');
+      const refreshIds = [msgId];
+      if (damageMsgId && !refreshIds.includes(damageMsgId)) refreshIds.push(damageMsgId);
+      return { applied: true, logMessage: `**Stimulants** — **${targetName}** suffered 1 Damage; gained 1 MP and Focus.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, conditionCardsToPost: ['Focus'] };
+    }
+    // Phase 1: find adjacent friendly figures to offer as damage targets
+    const mapId = game.selectedMap?.id;
+    const adjFriendlyKeys = [];
+    if (mapId) {
+      for (const fk of activatingKeys) {
+        const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+        for (const { figureKey, playerNum: p } of adj) {
+          if (p === playerNum && !activatingKeys.includes(figureKey) && !adjFriendlyKeys.includes(figureKey)) {
+            adjFriendlyKeys.push(figureKey);
+          }
+        }
+      }
+    }
+    if (adjFriendlyKeys.length === 0) {
+      // No adjacent friendly — auto-apply to self
+      if (dcHealthState) {
+        const selfHs = (dcHealthState.get(msgId) || []).slice();
+        const activatorIdx = activatingKeys.indexOf(activatorFk);
+        const fi = Math.max(0, activatorIdx);
+        if (selfHs[fi] && Array.isArray(selfHs[fi])) {
+          const [cur, max] = selfHs[fi];
+          selfHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
+          dcHealthState.set(msgId, selfHs);
+          const dcMids = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcLst = playerNum === 1 ? game.p1DcList : game.p2DcList;
+          const si = (dcMids || []).indexOf(msgId);
+          if (si >= 0 && dcLst?.[si]) dcLst[si].healthState = [...selfHs];
+        }
+      }
+      applyMpAndFocus();
+      return { applied: true, logMessage: `**Stimulants** — Suffered 1 Damage (self); gained 1 MP and Focus.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], conditionCardsToPost: ['Focus'] };
+    }
+    // Show choice: self or an adjacent friendly
+    const selfName = meta.displayName || meta.dcName || 'self';
+    const opts = [`Damage self (${selfName})`];
+    const vals = ['self'];
+    for (const fk of adjFriendlyKeys) {
+      const fMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
+      const fMeta = fMsgId ? dcMessageMeta.get(fMsgId) : null;
+      const fName = fMeta?.displayName || fMeta?.dcName || fk.replace(/-\d+-\d+$/, '');
+      opts.push(`Damage: ${fName}`);
+      vals.push(fk);
+    }
+    return { requiresChoice: true, choiceOptions: opts, choiceValues: vals };
+  }
+
+  // ccEffect: darkEnergyEffect — choose SMALL hostile within 3; push 1 space; deal 1 Damage
+  // Phase 1: SMALL within-3 picker; Phase 2: pick landing space for push; Phase 3: push + deal 1 Damage
+  if (entry.type === 'ccEffect' && entry.darkEnergyEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey, chosenSpace } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const mapId = game.selectedMap?.id;
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    // Phase 3: apply push + deal 1 Damage
+    if (chosenFigureKey && chosenSpace) {
+      game.figurePositions = game.figurePositions || {};
+      game.figurePositions[oppNum] = game.figurePositions[oppNum] || {};
+      game.figurePositions[oppNum][chosenFigureKey] = chosenSpace;
+      const targetName = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      const targetMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
+      const refreshIds = [];
+      if (targetMsgId) refreshIds.push(targetMsgId);
+      if (dcHealthState && targetMsgId) {
+        const targetMeta = dcMessageMeta.get(targetMsgId);
+        const targetKeys = targetMeta ? getFigureKeysForDcMsg(game, oppNum, targetMeta) : [chosenFigureKey];
+        const fi = Math.max(0, targetKeys.indexOf(chosenFigureKey));
+        const targetHs = (dcHealthState.get(targetMsgId) || []).slice();
+        if (targetHs[fi] && Array.isArray(targetHs[fi])) {
+          const [cur, max] = targetHs[fi];
+          targetHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
+          dcHealthState.set(targetMsgId, targetHs);
+          const dcMids = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcLst = oppNum === 1 ? game.p1DcList : game.p2DcList;
+          const si = (dcMids || []).indexOf(targetMsgId);
+          if (si >= 0 && dcLst?.[si]) dcLst[si].healthState = [...targetHs];
+        }
+      }
+      return { applied: true, logMessage: `**Dark Energy** — Pushed **${targetName}** to ${String(chosenSpace).toUpperCase()}, dealt 1 Damage.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
+    }
+    // Phase 2: pick landing space adjacent to target (1-space push in any direction)
+    if (chosenFigureKey && !chosenSpace) {
+      const targetPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
+      if (!targetPos || !mapId) return { applied: false, manualMessage: 'Resolve Dark Energy push manually.' };
+      const mapSpaces = getMapSpaces(mapId);
+      const adjacentSpaces = mapSpaces?.adjacency?.[targetPos] || [];
+      const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
+      occupiedSet.delete(targetPos); // target's current space is available (they're moving)
+      const validSpaces = adjacentSpaces.filter((s) => !occupiedSet.has(s));
+      if (!validSpaces.length) return { applied: false, manualMessage: 'No valid push space — resolve Dark Energy push manually.' };
+      const nm = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      return { requiresSpaceChoice: true, validSpaces, chosenFigureKey, spaceChoiceLabel: `**Dark Energy** — Push **${nm}** to which space?` };
+    }
+    // Phase 1: find SMALL hostiles within 3 of activating figure
+    if (!mapId) return { applied: false, manualMessage: 'Resolve Dark Energy manually (no map).' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
+    const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
+    const getRng = context.getRange ?? ((c1, c2) => { const a = parseCoord(c1); const b = parseCoord(c2); return (a.col < 0 || b.col < 0) ? 999 : Math.abs(a.col - b.col) + Math.abs(a.row - b.row); });
+    const validTargets = [];
+    for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+      if (!coord) continue;
+      if (activatorPos && getRng(activatorPos, coord) > 3) continue;
+      // SMALL check: skip LARGE and MASSIVE figures
+      const targetDcName = fk.replace(/-\d+-\d+$/, '');
+      const targetStats = getStatsForDc(targetDcName);
+      const kwds = (targetStats?.keywords || []).map((k) => String(k).toUpperCase());
+      if (kwds.includes('LARGE') || kwds.includes('MASSIVE')) continue;
+      validTargets.push(fk);
+    }
+    if (!validTargets.length) return { applied: true, logMessage: 'No SMALL hostile within 3 for Dark Energy.' };
+    const getFigLbl = (fk) => {
+      const tMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
+      const tMeta = tMsgId ? dcMessageMeta.get(tMsgId) : null;
+      return tMeta?.displayName || tMeta?.dcName || fk.replace(/-\d+-\d+$/, '');
+    };
+    if (validTargets.length === 1) {
+      // Auto-select single target, go to Phase 2 immediately
+      const fk = validTargets[0];
+      const targetPos = game.figurePositions?.[oppNum]?.[fk];
+      const mapSpaces = getMapSpaces(mapId);
+      const adjacentSpaces = mapSpaces?.adjacency?.[targetPos] || [];
+      const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
+      occupiedSet.delete(targetPos);
+      const validSpaces = adjacentSpaces.filter((s) => !occupiedSet.has(s));
+      if (!validSpaces.length) return { applied: false, manualMessage: `No valid push space for **${getFigLbl(fk)}** — resolve manually.` };
+      return { requiresSpaceChoice: true, validSpaces, chosenFigureKey: fk, spaceChoiceLabel: `**Dark Energy** — Push **${getFigLbl(fk)}** to which space?` };
+    }
+    return { requiresChoice: true, choiceOptions: validTargets.map(getFigLbl), choiceValues: validTargets };
+  }
+
+  // ccEffect: lookingForAFightChoice — gain 1 Power Token; then move 2 spaces or push an adjacent hostile 1 space
+  // Must come before the general powerTokenGain handler to take priority.
+  // Phase 1 (no chosenFigureKey): grant Wild token + present Move/Push choice
+  // Phase 2a (chosenFigureKey='move2'): add 2 MP
+  // Phase 2b (chosenFigureKey=hostile fk): present space picker for push
+  // Phase 3 (chosenFigureKey + chosenSpace): push hostile to space
+  if (entry.type === 'ccEffect' && entry.powerTokenGain && entry.lookingForAFightChoice) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (!figureKeys.length) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const activatorFk = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    // Phase 3: push hostile to chosen space
+    if (chosenFigureKey && chosenFigureKey !== 'move2' && chosenSpace) {
+      game.figurePositions = game.figurePositions || {};
+      game.figurePositions[oppNum] = game.figurePositions[oppNum] || {};
+      game.figurePositions[oppNum][chosenFigureKey] = chosenSpace;
+      const nm = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      return { applied: true, logMessage: `**Looking for a Fight** — Pushed **${nm}** to ${String(chosenSpace).toUpperCase()}.`, refreshBoard: true };
+    }
+    // Phase 2a: Move 2 spaces
+    if (chosenFigureKey === 'move2') {
+      game.movementBank = game.movementBank || {};
+      const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+      bank.total = (bank.total ?? 0) + 2;
+      bank.remaining = (bank.remaining ?? 0) + 2;
+      game.movementBank[msgId] = bank;
+      return { applied: true, logMessage: `**Looking for a Fight** — Chose to move 2 spaces.`, refreshMovementBank: true, activeMsgId: msgId };
+    }
+    // Phase 2b: Push hostile — find spaces adjacent to the chosen hostile
+    if (chosenFigureKey && chosenFigureKey !== 'move2' && !chosenSpace) {
+      const targetPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
+      const mapId = game.selectedMap?.id;
+      if (!targetPos || !mapId) return { applied: false, manualMessage: 'Resolve push manually.' };
+      const mapSpaces = getMapSpaces(mapId);
+      const adjacentSpaces = mapSpaces?.adjacency?.[targetPos] || [];
+      const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
+      occupiedSet.delete(targetPos);
+      const validSpaces = adjacentSpaces.filter((s) => !occupiedSet.has(s));
+      if (!validSpaces.length) return { applied: true, logMessage: `No valid push space — push **${chosenFigureKey.replace(/-\d+-\d+$/, '')}** manually.` };
+      const nm = chosenFigureKey.replace(/-\d+-\d+$/, '');
+      return { requiresSpaceChoice: true, validSpaces, chosenFigureKey, spaceChoiceLabel: `**Looking for a Fight** — Push **${nm}** to which space?` };
+    }
+    // Phase 1: grant Wild Power Token + present Move/Push choice
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    game.figurePowerTokens[activatorFk] = game.figurePowerTokens[activatorFk] || [];
+    if (game.figurePowerTokens[activatorFk].length < 2) game.figurePowerTokens[activatorFk].push('Wild');
+    const mapId = game.selectedMap?.id;
+    const adjHostileFks = [];
+    if (mapId) {
+      for (const fk of figureKeys) {
+        const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+        for (const { figureKey, playerNum: p } of adj) {
+          if (p === oppNum && !adjHostileFks.includes(figureKey)) adjHostileFks.push(figureKey);
+        }
+      }
+    }
+    const opts = ['Move 2 spaces'];
+    const vals = ['move2'];
+    for (const hfk of adjHostileFks) {
+      const hMsgId = findMsgIdForFigureKey(game, oppNum, hfk, dcMessageMeta);
+      const hMeta = hMsgId ? dcMessageMeta.get(hMsgId) : null;
+      const hName = hMeta?.displayName || hMeta?.dcName || hfk.replace(/-\d+-\d+$/, '');
+      opts.push(`Push: ${hName}`);
+      vals.push(hfk);
+    }
+    return { requiresChoice: true, choiceOptions: opts, choiceValues: vals };
   }
 
   // ccEffect: supportSpecialistEffect (Support Specialist) — choose DROID/TECHNICIAN/TROOPER within 3; grant free move (extra MP)
@@ -5339,13 +5801,14 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, combat } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     if (!combat) return { applied: false, manualMessage: 'Play during an attack. No active combat found.' };
-    // Add 1 forced reroll to defender's pool
+    // If already in reroll phase, increment defender's remaining rerolls directly
     if (combat.defenderRerollsRemaining != null) {
       combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
-    } else {
-      combat.defenderRerollDiceMax = (combat.defenderRerollDiceMax || 0) + 1;
+      return { applied: true, logMessage: "**Demoralizing Monologue** — Added 1 forced reroll to defender (attacker chooses which die)." };
     }
-    return { applied: true, logMessage: "**Demoralizing Monologue** — Defender gains +1 forced reroll. Moff Gideon chooses which die to reroll (honor system). If 2+ cards revealed, remove that die's result (honor system)." };
+    // Otherwise set flag to be consumed when the reroll window opens
+    game.forceDefenderRerollOne = { attackerPlayerNum: combat.attackerPlayerNum };
+    return { applied: true, logMessage: "**Demoralizing Monologue** — Defender will be forced to reroll 1 die. Flag set — applies when reroll window opens." };
   }
 
   // ccEffect: doubleOrNothingEffect (Double or Nothing) — choose a die; reroll it; if same icon type, may double those icons
@@ -5355,13 +5818,15 @@ export function resolveAbility(abilityId, context) {
     if (!combat) return { applied: false, manualMessage: 'Play during an attack. No active combat found.' };
     if (choiceIndex !== undefined && choiceIndex !== null) {
       if (choiceIndex === 0) {
-        // Attacker die
+        // Attacker die — set DON flag so the doubling check fires after the reroll
         combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
-        return { applied: true, logMessage: "**Double or Nothing** — Attacker rerolls 1 die of choice. If same icon type, attacker may double those icons (honor system)." };
+        game.doubleMatchingIconsOnReroll = { playerNum, side: 'atk' };
+        return { applied: true, logMessage: "**Double or Nothing** — Attacker rerolls 1 die; if dominant icon type matches, that icon is doubled automatically." };
       } else {
         // Defender die
         combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
-        return { applied: true, logMessage: "**Double or Nothing** — Defender rerolls 1 die of choice. If same icon type, defender may double those icons (honor system)." };
+        game.doubleMatchingIconsOnReroll = { playerNum, side: 'def' };
+        return { applied: true, logMessage: "**Double or Nothing** — Defender rerolls 1 die; if dominant icon type matches, that icon is doubled automatically." };
       }
     }
     return { requiresChoice: true, choiceOptions: ['Reroll an attack die', 'Reroll a defense die'] };
