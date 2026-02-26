@@ -534,6 +534,104 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
+  // Sharpshooter (Fennec Shand): auto-Focus if target is 5+ spaces away
+  if (atkSpecialIds.includes('sharpshooter') && distanceToTarget >= 5) {
+    if (!attackerConds.includes('Focus') && !(game.figureConditions?.[attackerFigureKey] || []).includes('Focus')) {
+      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
+      if (!game.figureConditions) game.figureConditions = {};
+      game.figureConditions[attackerFigureKey] = [...(game.figureConditions[attackerFigureKey] || []).filter(c => c !== 'Focus'), 'Focus'];
+      await thread.send(`**Sharpshooter** — **${meta.dcName}** is **Focused** (target ${distanceToTarget} spaces away, +1 green die).`);
+    }
+  }
+
+  // Sentinel / Protector: scan defender's friendlies for adjacent-to-target, +1 Block. Limit 1 per attack.
+  if (mapSpaces && targetCoord && !target.isNpc) {
+    const adjToTargetSP = new Set((mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase()));
+    adjToTargetSP.add(targetCoord);
+    const defFigPos = game.figurePositions?.[defenderPlayerNum] || {};
+    const defenderKws = (defEff?.keywords || []).map(k => String(k).toUpperCase());
+    const defenderIsGuardian = defenderKws.includes('GUARDIAN');
+    let sentinelApplied = false;
+    for (const [fk, pos] of Object.entries(defFigPos)) {
+      if (sentinelApplied) break;
+      if (fk === target.figureKey) continue; // skip the defender itself
+      const fkDcName = fk.replace(/-\d+-\d+$/, '');
+      const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const fkAbilityIds = fkEff?.specialAbilityIds || [];
+      if (!adjToTargetSP.has(String(pos).toLowerCase())) continue;
+      // Sentinel: only defends non-GUARDIAN figures
+      if (fkAbilityIds.includes('sentinel') && !defenderIsGuardian) {
+        game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
+        await thread.send(`**Sentinel** (${fkDcName}) — adjacent to target space, +1 Block for defender.`);
+        sentinelApplied = true;
+      }
+      // Protector (Chewbacca): works for ALL friendly defenders (no GUARDIAN restriction)
+      if (!sentinelApplied && fkAbilityIds.includes('protector')) {
+        game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
+        await thread.send(`**Protector** (${fkDcName}) — adjacent to target space, +1 Block for defender.`);
+        sentinelApplied = true;
+      }
+    }
+  }
+
+  // Keep the Peace Elite (Wing Guard Elite): attacker suffers 1 Strain when attacking space adjacent to you
+  // Limit 1 per group activation — track per activation via roundFigureAbilityUsed
+  if (mapSpaces && targetCoord && !target.isNpc) {
+    const adjToTargetKP = new Set((mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase()));
+    const defFigPosKP = game.figurePositions?.[defenderPlayerNum] || {};
+    let ktpApplied = false;
+    for (const [fk, pos] of Object.entries(defFigPosKP)) {
+      if (ktpApplied) break;
+      const fkDcName = fk.replace(/-\d+-\d+$/, '');
+      const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const fkAbilityIds = fkEff?.specialAbilityIds || [];
+      if (!adjToTargetKP.has(String(pos).toLowerCase())) continue;
+      // Elite: automatic, limit 1 per group activation
+      if (fkAbilityIds.includes('keep_the_peace_elite')) {
+        const ktpKey = `${fkDcName}_ktp_${game.currentRound || 0}`;
+        if (!game.roundFigureAbilityUsed?.[ktpKey]) {
+          if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
+          game.roundFigureAbilityUsed[ktpKey] = true;
+          await applyStrainToFigure(game, attackerPlayerNum, attackerFigureKey, 1, 'Keep the Peace', fkDcName, ctx, thread);
+          ktpApplied = true;
+        }
+      }
+      // Regular: optional — remind defender they may spend 1 Strain to deal 1 Strain to attacker
+      if (!ktpApplied && fkAbilityIds.includes('keep_the_peace_regular')) {
+        // Check: target space must not contain a friendly GUARDIAN
+        const targetFigKws = (defEff?.keywords || []).map(k => String(k).toUpperCase());
+        if (!targetFigKws.includes('GUARDIAN')) {
+          await thread.send(`**Keep the Peace** reminder — **${fkDcName}** is adjacent to the target space. Defender may suffer 1 Strain to make the attacker suffer 1 Strain.`);
+          ktpApplied = true;
+        }
+      }
+    }
+  }
+
+  // Bespin Security (Wing Guard Elite): adjacent friendly LEADER or SCUM TROOPER attacker gets +1 reroll
+  if (mapSpaces) {
+    const atkPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
+    const atkKws = (atkEff?.keywords || []).map(k => String(k).toUpperCase());
+    const isLeaderOrScumTrooper = atkKws.includes('LEADER') || (atkKws.includes('TROOPER') && atkEff?.affiliation === 'Scum');
+    if (isLeaderOrScumTrooper && atkPos) {
+      const adjToAtk = new Set((mapSpaces.adjacency?.[String(atkPos).toLowerCase()] || []).map(s => String(s).toLowerCase()));
+      const friendlyPos = game.figurePositions?.[attackerPlayerNum] || {};
+      let bespinApplied = false;
+      for (const [fk, pos] of Object.entries(friendlyPos)) {
+        if (bespinApplied) break;
+        if (fk === attackerFigureKey) continue;
+        if (!adjToAtk.has(String(pos).toLowerCase())) continue;
+        const fkDcName = fk.replace(/-\d+-\d+$/, '');
+        const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+        if ((fkEff?.specialAbilityIds || []).includes('bespin_security')) {
+          game.pendingCombat.rerollOneAttackDie = (game.pendingCombat.rerollOneAttackDie || 0) + 1;
+          await thread.send(`**Bespin Security** (${fkDcName}) — adjacent to attacker, +1 attack reroll.`);
+          bespinApplied = true;
+        }
+      }
+    }
+  }
+
   // Log override dice if active (Saber Strike, Bo-Rifle Staff Strike)
   if (overrideDice?.dice) {
     const diceStr = overrideDice.dice.join(', ');

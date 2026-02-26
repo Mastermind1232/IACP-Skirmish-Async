@@ -1531,7 +1531,8 @@
         "Slam"
       ],
       "specialAbilityIds": [
-        "slam"
+        "slam",
+        "protector"
       ]
     },
     "Chirrut Imwe": {
@@ -2345,6 +2346,7 @@
       "keywords": [
         "HUNTER"
       ],
+      "specialAbilityIds": ["sharpshooter"],
       "subname": "HUNTED MASTER ASSASSAIN",
       "cost": 5,
       "health": 8,
@@ -4642,6 +4644,7 @@
         "GUARDIAN",
         "BRAWLER"
       ],
+      "specialAbilityIds": ["sentinel"],
       "cost": 9,
       "subCost": 5,
       "health": 10,
@@ -4675,6 +4678,7 @@
         "GUARDIAN",
         "BRAWLER"
       ],
+      "specialAbilityIds": ["sentinel"],
       "cost": 8,
       "subCost": 4,
       "health": 8,
@@ -5795,6 +5799,7 @@
         "GUARDIAN",
         "TROOPER"
       ],
+      "specialAbilityIds": ["keep_the_peace_elite", "bespin_security"],
       "cost": 7,
       "subCost": 3,
       "health": 5,
@@ -5824,6 +5829,7 @@
         "GUARDIAN",
         "TROOPER"
       ],
+      "specialAbilityIds": ["keep_the_peace_regular"],
       "cost": 6,
       "subCost": 2,
       "health": 3,
