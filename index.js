@@ -3921,6 +3921,38 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             await logGameAction(game, client, `💰 **Bounty** — **${_bountyDcName}** was defeated. Opponent (P${attackerPlayerNum}) gains **2 VP** (${game[_bountyVpKey].total} total).`, { phase: 'ROUND', icon: 'card' });
           }
         }
+        // Brutal Tactics (Saw Gerrerra): when a hostile figure is defeated, each hostile within 3 of that figure becomes Weakened
+        {
+          const _btPlayerNum = attackerPlayerNum; // attacker's side has Saw
+          const _btAllFigs = Object.keys(game.figurePositions?.[_btPlayerNum] || {});
+          const _btHasSaw = _btAllFigs.some(fk => {
+            const dcN = fk.replace(/-\d+-\d+$/, '');
+            return (getDcEffects()?.[dcN]?.passives || []).includes('Brutal Tactics');
+          });
+          if (_btHasSaw) {
+            // defeated figure's position
+            const _btDefPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey || ''];
+            if (_btDefPos) {
+              const _btEnemyPos = game.figurePositions?.[defenderPlayerNum] || {};
+              let _btWeakened = 0;
+              for (const [fk, pos] of Object.entries(_btEnemyPos)) {
+                if (!pos || fk === (combat.target.figureKey || '')) continue;
+                const dist = getRange(_btDefPos, pos);
+                if (dist <= 3) {
+                  game.figureConditions = game.figureConditions || {};
+                  game.figureConditions[fk] = game.figureConditions[fk] || [];
+                  if (!game.figureConditions[fk].includes('Weaken')) {
+                    game.figureConditions[fk].push('Weaken');
+                    _btWeakened++;
+                  }
+                }
+              }
+              if (_btWeakened > 0) {
+                await logGameAction(game, client, `⚔️ **Brutal Tactics** — ${_btWeakened} hostile figure${_btWeakened !== 1 ? 's' : ''} within 3 spaces of the defeated figure became **Weakened**.`, { phase: 'ROUND', icon: 'card' });
+              }
+            }
+          }
+        }
         resultText += ` — **${combat.target.label} defeated!** +${vp} VP`;
         await logGameAction(game, client, `<@${ownerId}> defeated **${combat.target.label}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
         if (idx >= 0 && isGroupDefeated(game, defenderPlayerNum, idx)) {

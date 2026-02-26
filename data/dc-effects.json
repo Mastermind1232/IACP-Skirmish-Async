@@ -4159,6 +4159,7 @@
       "keywords": [
         "DROID"
       ],
+      "specialAbilityIds": ["medical_loadout", "improper_procedure"],
       "cost": 5,
       "health": 7,
       "speed": 4,
@@ -5029,6 +5030,7 @@
       "speed": 4,
       "passives": [
         "+2 Accuracy",
+        "Brutal Tactics",
         "+1 Surge"
       ],
       "figures": 1,
@@ -5191,7 +5193,8 @@
       "elite": true,
       "affiliation": "Imperial",
       "specialAbilityIds": [
-        "targeting_computer_sentry_elite"
+        "targeting_computer_sentry_elite",
+        "charged_shot_elite"
       ]
     },
     "Sentry Droid (Regular)": {
@@ -5224,7 +5227,8 @@
       "attachment": false,
       "affiliation": "Imperial",
       "specialAbilityIds": [
-        "targeting_computer_sentry_reg"
+        "targeting_computer_sentry_reg",
+        "charged_shot_reg"
       ]
     },
     "Shoretrooper (Elite)": {
@@ -5428,6 +5432,7 @@
         "TROOPER",
         "VEHICLE"
       ],
+      "specialAbilityIds": ["shield_gauntlets", "jetpack_rocket"],
       "cost": 7,
       "subCost": 4,
       "health": 7,

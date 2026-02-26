@@ -1213,6 +1213,11 @@ export function resolveAbility(abilityId, context) {
       game.postActivationConditions = game.postActivationConditions || {};
       game.postActivationConditions[msgId] = entry.postActivationConditions;
     }
+    // nextAttackBonusAccuracy (Charged Shot): grant bonus accuracy on next attack
+    if (typeof entry.nextAttackBonusAccuracy === 'number' && entry.nextAttackBonusAccuracy > 0) {
+      game.nextAttackBonusAccuracy = game.nextAttackBonusAccuracy || {};
+      game.nextAttackBonusAccuracy[playerNum] = (game.nextAttackBonusAccuracy[playerNum] || 0) + entry.nextAttackBonusAccuracy;
+    }
     // mpBonus alongside freeAttackBonus (Face to Face, Final Stand: gain MP + free attack)
     let fabMpNote = '';
     let fabMpRefresh = false;
@@ -1227,7 +1232,29 @@ export function resolveAbility(abilityId, context) {
     }
     const label = entry.label || 'Heroic';
     const countNote = (entry.freeAttackBonusCount ?? 1) > 1 ? ` (${entry.freeAttackBonusCount} times, each targeting a different figure)` : '';
-    return { applied: true, freeAction: true, refreshMovementBank: fabMpRefresh, activeMsgId: msgId, logMessage: entry.logMessage || (`**${label}** — Your next attack${countNote} costs no action. Click Attack when ready.` + fabMpNote) };
+    const accNote = entry.nextAttackBonusAccuracy ? ` +${entry.nextAttackBonusAccuracy} Accuracy.` : '';
+    return { applied: true, freeAction: true, refreshMovementBank: fabMpRefresh, activeMsgId: msgId, logMessage: entry.logMessage || (`**${label}** — Your next attack${countNote} costs no action.${accNote} Click Attack when ready.` + fabMpNote) };
+  }
+
+  // dcSpecial: spendMpForBlockToken (Shield Gauntlets) — spend N MP to gain 1 Block power token
+  if (entry.type === 'dcSpecial' && typeof entry.spendMpForBlockToken === 'number') {
+    const { game, msgId, meta, playerNum } = context;
+    if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const bank = game.movementBank?.[msgId];
+    const remaining = bank?.remaining ?? 0;
+    const mpCost = entry.spendMpForBlockToken;
+    if (remaining < mpCost) return { applied: false, manualMessage: `**${entry.label}** requires ${mpCost} MP (you have ${remaining}).` };
+    bank.remaining -= mpCost;
+    // Grant 1 Block token
+    const actionsData = game.dcActionsData?.[msgId];
+    const selectedFig = actionsData?.selectedFigure ?? 0;
+    const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIndex = dgMatch ? dgMatch[1] : '1';
+    const figureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
+    game.figurePowerTokens[figureKey].push('Block');
+    return { applied: true, freeAction: !!entry.freeAction, refreshMovementBank: true, activeMsgId: msgId, refreshDcEmbed: true, logMessage: `**${entry.label}** — Spent ${mpCost} MP → gained 1 **Block Token** (${remaining - mpCost} MP remaining).` };
   }
 
   // dcSpecial: freeMoveEqualToSpeed (Wall Run, Charge) — gain free MP equal to DC's Speed
@@ -1333,6 +1360,103 @@ export function resolveAbility(abilityId, context) {
         applied: false,
         requiresChoice: true,
         choiceOptions: validTargets.map((t) => t.figureKey.replace(/-\d+-\d+$/, '')),
+        targetFigureKeys: validTargets.map((t) => t.figureKey),
+      };
+    }
+
+    // ── Jetpack Rocket style: pick hostile within range (+ LOS), spend MP, roll + apply damage ──
+    if (entry.rollOneDieTarget === 'hostileWithinRange') {
+      const maxRange = entry.rollOneDieTargetRange || 3;
+      const requiresLos = entry.rollOneDieRequiresLos !== false;
+      const mpCost = entry.rollOneDieMpCost || 0;
+      // Phase 2: target chosen → check MP cost, roll die, apply damage
+      if (targetFigureKey) {
+        // Check MP cost
+        if (mpCost > 0 && msgId) {
+          const bank = game.movementBank?.[msgId];
+          const remaining = bank?.remaining ?? 0;
+          if (remaining < mpCost) return { applied: false, manualMessage: `**${entry.label}** requires ${mpCost} MP (you have ${remaining}).` };
+          bank.remaining -= mpCost;
+        }
+        const color = entry.rollOneDie;
+        const faces = getDiceData().attack?.[color.toLowerCase()];
+        if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die manually and apply results.` };
+        const face = faces[Math.floor(Math.random() * faces.length)];
+        const hits = face.dmg ?? 0;
+        const surges = face.surge ?? 0;
+        const dieParts = [];
+        if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+        if (surges) dieParts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
+        const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
+        const totalDmg = hits; // only Hits count as damage
+        const enemyPlayerNum = (playerNum || 1) === 1 ? 2 : 1;
+        const resultParts = [];
+        if (totalDmg > 0) {
+          const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
+          if (dcHealthState && targetMsgId) {
+            const healthState = dcHealthState.get(targetMsgId) || [];
+            const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
+            const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+            const entryHp = healthState[figIdx];
+            if (entryHp) {
+              const [cur, max] = entryHp;
+              const newCur = Math.max(0, (cur ?? max) - totalDmg);
+              healthState[figIdx] = [newCur, max ?? newCur];
+              dcHealthState.set(targetMsgId, healthState);
+              const dcIds = enemyPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+              const dcList = enemyPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+              const idx = (dcIds || []).indexOf(targetMsgId);
+              if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+              resultParts.push(`${totalDmg} Damage (HP: ${cur ?? max} → ${newCur})`);
+            } else {
+              resultParts.push(`apply ${totalDmg} Damage manually`);
+            }
+          } else {
+            resultParts.push(`apply ${totalDmg} Damage manually`);
+          }
+        }
+        const targetName = targetFigureKey.replace(/-\d+-\d+$/, '');
+        const mpNote = mpCost > 0 ? ` Spent ${mpCost} MP.` : '';
+        return {
+          applied: true,
+          logMessage: `**${entry.label}** —${mpNote} Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.`,
+          refreshDcEmbed: true,
+          refreshMovementBank: mpCost > 0,
+          activeMsgId: msgId,
+        };
+      }
+      // Phase 1: enumerate hostile figures within range (+ optional LOS)
+      if (!game || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
+      // Check MP cost upfront
+      if (mpCost > 0 && msgId) {
+        const bank = game.movementBank?.[msgId];
+        const remaining = bank?.remaining ?? 0;
+        if (remaining < mpCost) return { applied: false, manualMessage: `**${entry.label}** requires ${mpCost} MP (you have ${remaining}).` };
+      }
+      const mapId = game.selectedMap?.id;
+      const actionsData = game.dcActionsData?.[msgId];
+      const selectedFig = actionsData?.selectedFigure ?? 0;
+      const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const dgIndex = dgMatch ? dgMatch[1] : '1';
+      const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+      const activatingPos = game.figurePositions?.[playerNum]?.[activatingFigureKey];
+      if (!mapId || !activatingPos) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (position unknown).` };
+      const enemyPlayerNum = (playerNum || 1) === 1 ? 2 : 1;
+      const enemyPositions = game.figurePositions?.[enemyPlayerNum] || {};
+      const { hasLineOfSight: losCheck, getRange: getRng } = context;
+      const validTargets = [];
+      for (const [fk, pos] of Object.entries(enemyPositions)) {
+        if (!pos) continue;
+        const dist = typeof getRng === 'function' ? getRng(activatingPos, pos, mapId) : 999;
+        if (dist > maxRange) continue;
+        if (requiresLos && typeof losCheck === 'function' && !losCheck(activatingPos, pos, mapId)) continue;
+        validTargets.push({ figureKey: fk, dist });
+      }
+      if (validTargets.length === 0) return { applied: false, manualMessage: `No hostile figures within ${maxRange} spaces${requiresLos ? ' and LOS' : ''}. **${entry.label}** has no valid targets.` };
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: validTargets.map((t) => `${t.figureKey.replace(/-\d+-\d+$/, '')} (${t.dist} sp)`),
         targetFigureKeys: validTargets.map((t) => t.figureKey),
       };
     }

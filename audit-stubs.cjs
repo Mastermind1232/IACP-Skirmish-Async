@@ -22,6 +22,10 @@ const CODED_PASSIVES = new Set([
   // Batch 8
   'Stealthy', 'Ambush', 'Forward Emplacement', 'Security Detail', 'Smooth Landing',
   'Self-Preservation', 'Merciless', 'Bounty',
+  // Batch 9
+  'Brutal Tactics',
+  // Already wired via specialAbilityIds but also in passives
+  'Relentless',
 ]);
 
 // Abilities wired by figure-name checks in activation.js/combat.js/index.js/round.js
@@ -78,8 +82,8 @@ function parseAbilities(text) {
   const paragraphs = text.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
 
   for (const para of paragraphs) {
-    // "Special Action (Name): ..."
-    let m = para.match(/^Special Action\s*\(([^)]+)\):\s*(.+)/s);
+    // "Special Action (Name): ..." or "Double Action Special (Name): ..."
+    let m = para.match(/^(?:Special Action|Double Action Special)\s*\(([^)]+)\):\s*(.+)/s);
     if (m) { results.push({ type: 'special', name: m[1].trim(), desc: m[2].trim() }); continue; }
 
     // "Surge (Name): ..." or "Surge: ..."
@@ -90,8 +94,8 @@ function parseAbilities(text) {
     m = para.match(/^([A-Z][A-Za-z0-9''()\- ]{1,40}):\s+(.+)/s);
     if (m) {
       const name = m[1].trim();
-      // Skip restriction text
-      if (/^(Include|Your army|Your command|AT-ST|CREATURE|DROID|TROOPER|BRAWLER|HUNTER|FORCE USER|LEADER|SMUGGLER|SPY|GUARDIAN|HEAVY WEAPON|VEHICLE)/i.test(name)) {
+      // Skip restriction text and army-building rules
+      if (/^(Include|Your army|Your command|Limit|Skirmish|AT-ST|CREATURE|DROID|TROOPER|BRAWLER|HUNTER|FORCE USER|LEADER|SMUGGLER|SPY|GUARDIAN|HEAVY WEAPON|VEHICLE)/i.test(name)) {
         results.push({ type: 'restriction', name: null, desc: para });
         continue;
       }

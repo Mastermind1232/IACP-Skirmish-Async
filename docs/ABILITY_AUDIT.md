@@ -481,7 +481,7 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Arsenal | WIRED |
-| Relentless | PASSIVE_DATA_ONLY |
+| Relentless | WIRED |
 | Assault | N/A_HONOR |
 
 ### Imperial Officer (Elite)
@@ -513,7 +513,7 @@ Generated: 2026-02-26
 | Special: Bully | WIRED |
 | Special: Incentivize | WIRED |
 | Special: Scheme | WIRED |
-| Double Action Special (Order Hit) | NOT_WIRED |
+| Special: Order Hit | WIRED |
 | Nefarious Gains | WIRED |
 
 ### Jawa Scavenger (Elite)
@@ -662,7 +662,7 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Special: Medical Loadout | WIRED |
-| Special: Improper Procedure | NOT_WIRED |
+| Special: Improper Procedure | WIRED |
 
 ### Migs Mayfeld
 | Ability | Status |
@@ -764,7 +764,7 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Aim | NOT_WIRED |
-| Double Action Special (Get into Position) | NOT_WIRED |
+| Special: Get into Position | WIRED |
 
 ### Rebel Trooper (Regular)
 | Ability | Status |
@@ -820,13 +820,13 @@ Generated: 2026-02-26
 ### Saw Gerrerra
 | Ability | Status |
 |---------|--------|
-| Brutal Tactics | NOT_WIRED |
+| Brutal Tactics | WIRED |
 | Wanton Destruction | NOT_WIRED |
 
 ### SC2-M Repulsor Tank
 | Ability | Status |
 |---------|--------|
-| Double Action Special (Focus Fire) | NOT_WIRED |
+| Special: Focus Fire | INFORMATIONAL |
 | Defensible | NOT_WIRED |
 
 ### Scout Trooper (Elite)
@@ -847,14 +847,14 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Special: Multi-Fire | INFORMATIONAL |
-| Special: Charged Shot | NOT_WIRED |
+| Special: Charged Shot | WIRED |
 | Targeting Computer | WIRED |
 
 ### Sentry Droid (Regular)
 | Ability | Status |
 |---------|--------|
 | Special: Multi-Fire | INFORMATIONAL |
-| Special: Charged Shot | NOT_WIRED |
+| Special: Charged Shot | WIRED |
 | Targeting Computer | WIRED |
 
 ### Shoretrooper (Elite)
@@ -894,8 +894,8 @@ Generated: 2026-02-26
 ### Super Commando (Elite)
 | Ability | Status |
 |---------|--------|
-| Jetpack Rocket | NOT_WIRED |
-| Shield Gauntlets | NOT_WIRED |
+| Jetpack Rocket | WIRED |
+| Shield Gauntlets | WIRED |
 
 ### Taron Malicos
 | Ability | Status |
@@ -1062,17 +1062,16 @@ Generated: 2026-02-26
 
 | Status | Count | % |
 |--------|-------|---|
-| WIRED | 211 | 55% |
-| NOT_WIRED | 136 | 36% |
+| WIRED | 220 | 57% |
+| NOT_WIRED | 127 | 33% |
 | WIRED_SURGE | 16 | 4% |
-| INFORMATIONAL | 9 | 2% |
+| INFORMATIONAL | 10 | 3% |
 | N/A_HONOR | 5 | 1% |
 | N/A | 4 | 1% |
 | PASSIVE_COMBAT | 1 | 0% |
-| PASSIVE_DATA_ONLY | 1 | 0% |
 
-**Automated:** 228 (60%)
-**Not wired:** 136 (36%)
+**Automated:** 237 (62%)
+**Not wired:** 127 (33%)
 
 ---
 
@@ -1137,7 +1136,6 @@ Generated: 2026-02-26
 | Hondo Ohnaka | What's Yours is Mine | At the end of a round, if you are in an opponent's deployment zone, that opponent loses 2 VPs and you gain 2 VPs. Limit once per mission. |
 | Imperial Officer (Regular) | Cower | While defending, while adjacent to a friendly figure, you may reroll 1 defense die. |
 | ISB Infiltrator (Elite) | Comms Jammer | Your opponent cannot play Command cards during your activation. |
-| Jabba the Hutt | Double Action Special (Order Hit) | Spend 2 VPs. An elite figure of your choice may interrupt to perform an attack. Then, it gains 2 movement points. |
 | Jawa Scavenger (Elite) | Take Cover | While defending, you may apply +1 Block and -1 Evade to the defense results. |
 | Jawa Scavenger (Elite) | Scavenged Stock | If your army's affiliation is Scum, you may include up to 3 DROID groups from any other affiliations in your army. |
 | Jawa Scavenger (Regular) | Take Cover | While defending, you may apply +1 Block and -1 Evade to the defense results. |
@@ -1162,7 +1160,6 @@ Generated: 2026-02-26
 - SCUM: SM |
 | Mara Jade | Fast Learner | Once per round, you may play a Command card whose restriction matches the name of another Deployment card in your army, except "Arcing Shot". |
 | Mara Jade | Professional | While attacking, you may reroll 1 attack die. |
-| MHD-19 | Special: Improper Procedure | Choose an adjacent hostile figure. That figure suffers 1 Damage and becomes Weakened. |
 | Migs Mayfeld | Return Fire | After an attack targeting you is resolved, you can interrupt to perform an attack targeting that attacker. Limit once per round. |
 | Obi-Wan Kenobi | Alter Mind | Hostile figures with a figure cost of 9 or less within 3 spaces of you cannot interact and are not counted for the purposes of control. |
 | Obi-Wan Kenobi | Strike Me Down | When an attack targeting you is declared, you may reduce your figure cost by 3. If you do, you are then defeated. |
@@ -1181,27 +1178,20 @@ Generated: 2026-02-26
 | Rebel Saboteur (Elite) | Overload | You can trigger the same Surge ability up to twice per attack. |
 | Rebel Saboteur (Regular) | Overload | You can trigger the same Surge ability up to twice per attack. |
 | Rebel Trooper (Elite) | Aim | If you have not exited your space during this activation, apply +1 Hit and +2 Accuracy to your attack results. |
-| Rebel Trooper (Elite) | Double Action Special (Get into Position) | Gain 4 movement points and become Focused. |
 | Rebel Trooper (Regular) | Aim | If you have not exited your space during this activation, apply +1 Hit and +2 Accuracy to your attack results. |
 | Riot Trooper (Elite) | Professional | While attacking, you may reroll 1 attack die. |
 | Royal Guard (Elite) | Professional | While attacking, you may reroll one attack die. |
 | Saska Teft | Shady Contacts | You may include up to 1 non-upgrade SCUM Deployment card in your army. |
 | Saska Teft | Unstable Devices | Once during your activation, a friendly figure in your line of sight may gain 1 Device token. |
 | Saska Teft | Power Converter | Once per round, while a friendly figure with a Device token is attacking, it may reroll 1 attack die. Before rerolling, you may replace that die with  |
-| Saw Gerrerra | Brutal Tactics | Once per round, when a hostile figure is defeated, choose a hostile figure within 3 spaces of the defeated figure's space. The chose figure becomes we |
 | Saw Gerrerra | Wanton Destruction | After a friendly resolves an attack, you may discard 1 Command card from your hand to choose up to 2 figures other than the defender within 2 spaces o |
-| SC2-M Repulsor Tank | Double Action Special (Focus Fire) | Perform 2 attacks targeting the same figure. |
 | SC2-M Repulsor Tank | Defensible | While defending, you may apply either +1 Block or +1 Evade to your defense results. |
 | Scout Trooper (Elite) | Camouflage | Hostile figures 4 or more spaces away from you cannot draw line of sight to you. You do not block line of sight for those figures. |
-| Sentry Droid (Elite) | Special: Charged Shot | Perform an attack. Apply +2 Accuracy to the attack results. |
-| Sentry Droid (Regular) | Special: Charged Shot | Perform an attack. Apply +2 Accuracy to the attack results. |
 | Shoretrooper (Elite) | Squad Training | While attacking, while adjacent to another friendly TROOPER, you may reroll 1 attack die. |
 | Snowtrooper (Elite) | Spiked Boots | You cannot be pushed out of your space except by MASSIVE figures. |
 | Snowtrooper (Elite) | Immune | You cannot gain HARMFUL conditions. |
 | Stormtrooper (Elite) | Squad Training | While adjacent to another friendly TROOPER, you may reroll 1 attack die. |
 | Stormtrooper (Regular) | Squad Training | While attacking, while adjacent to another friendly TROOPER, you may reroll 1 attack die. |
-| Super Commando (Elite) | Jetpack Rocket | Once per figure per round, you may spend 2 movement points to choose a hostile figure within 3 spaces and line of sight. Roll 1 blue die. That figure  |
-| Super Commando (Elite) | Shield Gauntlets | Once during your activation, you may spend 1 movement point to gain 1 Block token. |
 | Taron Malicos | Fallen Master | Friendly non-companion FORCE USER figures may ignore the IMPERIAL restriction when using Command cards. |
 | The Armorer | Survival is Strength | While a friendly figure within 3 spaces is defending, if it spent a Block symbol during this attack, it may reroll 1 attack die. |
 | The Grand Inquisitor | Precision | While attacking or defending against an adjacent figure, you may choose 1 die. The player that rolled that die must reroll it. |

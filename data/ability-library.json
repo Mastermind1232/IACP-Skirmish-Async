@@ -4159,6 +4159,57 @@
       "label": "Bounty",
       "description": "When you are defeated, your opponent gains 2 VPs.",
       "wiredStatus": "wired"
+    },
+    "improper_procedure": {
+      "type": "dcSpecial",
+      "label": "Improper Procedure",
+      "description": "Choose a hostile figure adjacent to you. That figure suffers 1 damage and becomes Weakened.",
+      "targetHostileFigure": {
+        "damage": 1,
+        "applyCondition": "Weaken",
+        "range": 1,
+        "requiresLos": false
+      }
+    },
+    "charged_shot_elite": {
+      "type": "dcSpecial",
+      "label": "Charged Shot",
+      "description": "Your next attack gains +2 Accuracy and costs no additional actions.",
+      "freeAttackBonus": true,
+      "nextAttackBonusAccuracy": 2
+    },
+    "charged_shot_reg": {
+      "type": "dcSpecial",
+      "label": "Charged Shot",
+      "description": "Your next attack gains +2 Accuracy and costs no additional actions.",
+      "freeAttackBonus": true,
+      "nextAttackBonusAccuracy": 2
+    },
+    "shield_gauntlets": {
+      "type": "dcSpecial",
+      "label": "Shield Gauntlets",
+      "description": "Spend 1 movement point to gain 1 Block power token.",
+      "spendMpForBlockToken": 1,
+      "freeAction": true
+    },
+    "jetpack_rocket": {
+      "type": "dcSpecial",
+      "label": "Jetpack Rocket",
+      "description": "Spend 2 movement points. Roll 1 blue die. A hostile figure within 3 spaces and in LOS suffers damage equal to the rolled result.",
+      "rollOneDie": "blue",
+      "rollOneDieTarget": "hostileWithinRange",
+      "rollOneDieTargetRange": 3,
+      "rollOneDieRequiresLos": true,
+      "rollOneDieMpCost": 2,
+      "freeAction": true
+    },
+    "brutal_tactics": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "on-hostile-defeat",
+      "label": "Brutal Tactics",
+      "description": "When a hostile figure is defeated, each hostile figure within 3 spaces of that figure becomes Weakened.",
+      "wiredStatus": "wired"
     }
   }
 }
