@@ -248,7 +248,6 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     }
     const p1Hand = await client.channels.fetch(game.p1HandId);
     const p2Hand = await client.channels.fetch(game.p2HandId);
-    const isTest = game.isTestGame;
     const p1Id = game.player1Id;
     const p2Id = game.player2Id;
     await p1Hand.send({

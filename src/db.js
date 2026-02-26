@@ -119,7 +119,7 @@ export async function loadGamesFromDb() {
 }
 
 /** Save all games to the database. Serializes the games Map. DB5: only delete rows for games no longer in the in-memory map; upsert the rest. */
-let savePromise = Promise.resolve();
+export let savePromise = Promise.resolve();
 
 export async function saveGamesToDb(gamesMap) {
   if (!pool) return;

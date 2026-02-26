@@ -1241,8 +1241,6 @@ const GAME_TAGS = [
   { name: 'Slow' },
   { name: 'Fast' },
   { name: 'Hyperspeed' },
-  { name: 'Ranked' },
-  { name: 'Test' },
 ];
 
 const SAMPLE_DECK_P1 = {

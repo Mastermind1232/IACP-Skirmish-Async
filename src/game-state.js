@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { isDbConfigured, initDb, loadGamesFromDb, saveGamesToDb } from './db.js';
+import { isDbConfigured, initDb, loadGamesFromDb, saveGamesToDb, savePromise } from './db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
@@ -177,3 +177,21 @@ export {
   dcHealthState,
   pendingIllegalSquad,
 };
+
+/** Graceful shutdown: flush pending DB writes before the process exits. */
+async function gracefulShutdown(signal) {
+  console.log(`[Games] ${signal} received — flushing pending saves...`);
+  try {
+    syncHealthStateToGames();
+    if (isDbConfigured() && gamesLoadedOk) {
+      await saveGamesToDb(games);
+      await savePromise;
+    }
+    console.log('[Games] Save complete. Exiting.');
+  } catch (err) {
+    console.error('[Games] Shutdown save failed:', err);
+  }
+  process.exit(0);
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

@@ -98,20 +98,6 @@ export async function handleLobbyStart(interaction, ctx) {
   }
   lobby.status = 'Launched';
 
-  let isTestGame = false;
-  try {
-    const thread = interaction.channel;
-    const parent = thread.parent;
-    if (parent?.availableTags) {
-      const testTag = parent.availableTags.find((t) => t.name === 'Test');
-      if (testTag && thread.appliedTags?.includes(testTag.id)) {
-        isTestGame = true;
-      }
-    }
-  } catch {
-    // ignore
-  }
-
   await interaction.followUp({ content: 'Creating your game channels...', ephemeral: true });
   let gameId;
   try {
@@ -136,29 +122,24 @@ export async function handleLobbyStart(interaction, ctx) {
       player2Squad: null,
       player1VP: { total: 0, kills: 0, objectives: 0 },
       player2VP: { total: 0, kills: 0, objectives: 0 },
-      isTestGame: !!isTestGame,
       ended: false,
     };
     setGame(gameId, game);
 
     const setupMsg = await generalChannel.send({
-      content: `<@${game.player1Id}> <@${game.player2Id}> — Game created. Map Selection below — Play Areas (with **Your Hand** threads) will appear after map selection.`,
+      content: `<@${game.player1Id}> <@${game.player2Id}>`,
       allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
       embeds: [
         new EmbedBuilder()
-          .setTitle(isTestGame ? 'Game Setup (Test)' : 'Game Setup')
-          .setDescription(
-            isTestGame
-              ? '**Test game** — Complete **MAP SELECTION** first (button below). Play Areas with **Your Hand** threads will then appear for picking decks.'
-              : 'Complete **MAP SELECTION** first (button below). Play Areas will appear — pick your deck in the **Your Hand** thread (Select Squad or default deck buttons).'
-          )
+          .setTitle('Game Setup')
+          .setDescription('Select your **map and mission** below to begin. Once confirmed, Play Areas and **Your Hand** threads will appear for squad selection.')
           .setColor(0x2f3136),
       ],
       components: [getGeneralSetupButtons(game)],
     });
     game.generalSetupMessageId = setupMsg.id;
     await interaction.followUp({
-      content: `Game **IA Game #${gameId}** is ready!${isTestGame ? ' (Test)' : ''} Select the map in Game Log — Play Areas (with **Your Hand** threads) will appear after map selection.`,
+      content: `Game **IA Game #${gameId}** is ready! Select the map in Game Log to get started.`,
       ephemeral: true,
     });
     await updateThreadName(interaction.channel, lobby);
