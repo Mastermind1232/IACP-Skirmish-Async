@@ -284,3 +284,210 @@ test('recalcDefenseTotals propagates dodge', () => {
   const totals = recalcDefenseTotals(dice);
   assert.strictEqual(totals.dodge, true);
 });
+
+// --- Extended computeCombatResult tests (Pillar 8) ---
+
+test('computeCombatResult Hidden on defender reduces accuracy by 2', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 3, dmg: 4, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    isRanged: true,
+    distanceToTarget: 2,
+    defenderConds: ['Hide'],
+  });
+  // acc = 3 - 2 (hidden) = 1, distance = 2, so miss
+  assert.strictEqual(r.hit, false);
+  assert.ok(r.resultText.includes('Hidden'));
+});
+
+test('computeCombatResult Weakened on defender reduces block by 1', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 5, surge: 0 },
+    defenseRoll: { block: 3, evade: 0 },
+    defenderConds: ['Weaken'],
+  });
+  // effectiveBlock = max(0, 3 - 1) = 2; damage = 5 - 2 = 3
+  assert.strictEqual(r.hit, true);
+  assert.strictEqual(r.effectiveBlock, 2);
+  assert.strictEqual(r.damage, 3);
+  assert.ok(r.resultText.includes('Weakened'));
+});
+
+test('computeCombatResult Weakened on attacker reduces damage by 1', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 3, surge: 0 },
+    defenseRoll: { block: 1, evade: 0 },
+    attackerConds: ['Weaken'],
+  });
+  // damage = 3 - 1 block = 2, then -1 weaken = 1
+  assert.strictEqual(r.damage, 1);
+  assert.ok(r.resultText.includes('Weakened'));
+});
+
+test('computeCombatResult Weakened attacker with 0 damage stays at 0', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 1, surge: 0 },
+    defenseRoll: { block: 1, evade: 0 },
+    attackerConds: ['Weaken'],
+  });
+  // damage = 1 - 1 = 0, weaken doesn't apply below 0
+  assert.strictEqual(r.damage, 0);
+});
+
+test('computeCombatResult surgeCancelDodge overrides dodge', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 5, surge: 0 },
+    defenseRoll: { block: 0, evade: 0, dodge: true },
+    surgeCancelDodge: true,
+  });
+  assert.strictEqual(r.hit, true);
+  assert.strictEqual(r.damage, 5);
+  assert.ok(r.resultText.includes('Deadly Spin'));
+});
+
+test('computeCombatResult maxDamageToDefender caps damage', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 10, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    maxDamageToDefender: 3,
+  });
+  assert.strictEqual(r.hit, true);
+  assert.strictEqual(r.damage, 3);
+});
+
+test('computeCombatResult defenderIgnorePierce ignores all pierce', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 3, surge: 0 },
+    defenseRoll: { block: 3, evade: 0 },
+    surgePierce: 2,
+    bonusPierce: 1,
+    defenderIgnorePierce: true,
+  });
+  // 3 pierce ignored; effectiveBlock stays 3; damage = 3 - 3 = 0
+  assert.strictEqual(r.damage, 0);
+  assert.strictEqual(r.effectiveBlock, 3);
+});
+
+test('computeCombatResult surgeCancel reduces block before pierce', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 3, surge: 0 },
+    defenseRoll: { block: 4, evade: 0 },
+    surgePierce: 1,
+    surgeCancel: 2,
+  });
+  // effectiveBlock = max(0, 4 - 2 cancel - 1 pierce) = 1; damage = 3 - 1 = 2
+  assert.strictEqual(r.effectiveBlock, 1);
+  assert.strictEqual(r.damage, 2);
+});
+
+test('computeCombatResult attackResultReplaceWithStun zeroes damage and adds Stun', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 5, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    attackResultReplaceWithStun: true,
+  });
+  assert.strictEqual(r.hit, true);
+  assert.strictEqual(r.damage, 0);
+  assert.ok(r.resultText.includes('Set for Stun'));
+});
+
+test('computeCombatResult Cunning adds evade as block', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 4, surge: 0 },
+    defenseRoll: { block: 1, evade: 2 },
+    hasCunning: true,
+  });
+  // block = 1 + 2 cunning = 3; damage = 4 - 3 = 1
+  assert.strictEqual(r.effectiveBlock, 3);
+  assert.strictEqual(r.damage, 1);
+  assert.ok(r.resultText.includes('Cunning'));
+});
+
+test('computeCombatResult bonusDamagePerDefenseDie multiplied by dice count', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 1, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    bonusDamagePerDefenseDie: 1,
+    defenseDiceCount: 2,
+  });
+  // damage = 1 + 1*2 = 3
+  assert.strictEqual(r.damage, 3);
+});
+
+test('computeCombatResult ignoreDefenseResultsNotOnDice excludes bonusBlock', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 5, surge: 0 },
+    defenseRoll: { block: 1, evade: 0 },
+    bonusBlock: 3,
+    ignoreDefenseResultsNotOnDice: true,
+  });
+  // bonusBlock is ignored when ignoreDefenseResultsNotOnDice is set
+  assert.strictEqual(r.effectiveBlock, 1);
+  assert.strictEqual(r.damage, 4);
+});
+
+test('computeCombatResult zero damage hit still counts as hit', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 1, surge: 0 },
+    defenseRoll: { block: 5, evade: 0 },
+  });
+  assert.strictEqual(r.hit, true);
+  assert.strictEqual(r.damage, 0);
+});
+
+test('computeCombatResult bonusBlast appears in result text', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 3, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    bonusBlast: 2,
+  });
+  assert.ok(r.resultText.includes('bonus: Blast 2'));
+});
+
+test('computeCombatResult combined surge blast and bonus blast', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 3, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    surgeBlast: 1,
+    bonusBlast: 2,
+  });
+  assert.ok(r.resultText.includes('Blast 3'));
+});
+
+// --- parseSurgeEffect extended ---
+
+test('parseSurgeEffect special keys: stun_net, focus, hide', () => {
+  assert.deepStrictEqual(parseSurgeEffect('stun_net').conditions, ['Stun']);
+  assert.strictEqual(parseSurgeEffect('focus').surgeSelfFocus, true);
+  assert.strictEqual(parseSurgeEffect('hide').surgeSelfHide, true);
+});
+
+test('parseSurgeEffect double-surge prefix stripped', () => {
+  const r = parseSurgeEffect('double:damage 2');
+  assert.strictEqual(r.damage, 2);
+});
+
+test('parseSurgeEffect critical_hit returns pierce 2 + flag', () => {
+  const r = parseSurgeEffect('critical_hit');
+  assert.strictEqual(r.pierce, 2);
+  assert.strictEqual(r.surgeCriticalHit, true);
+});
+
+test('parseSurgeEffect deadly_spin returns cleave 3 + cancel dodge', () => {
+  const r = parseSurgeEffect('deadly_spin');
+  assert.strictEqual(r.cleave, 3);
+  assert.strictEqual(r.surgeCancelDodge, true);
+});
+
+test('parseSurgeEffect shrapnel returns blast 2', () => {
+  const r = parseSurgeEffect('shrapnel');
+  assert.strictEqual(r.blast, 2);
+});
+
+// --- getInnateRerolls ---
+
+test('getInnateRerolls returns zeros for unknown DC', () => {
+  const r = getInnateRerolls('NonExistent DC 12345');
+  assert.strictEqual(r.attackReroll, 0);
+  assert.strictEqual(r.defenseReroll, 0);
+});

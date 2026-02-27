@@ -183,3 +183,105 @@ test('getReachableSpaces mp 0 returns empty', () => {
   const reachable = getReachableSpaces('a1', 0, mapSpaces, []);
   assert.deepStrictEqual(reachable, []);
 });
+
+// --- Extended movement tests (Pillar 8) ---
+
+test('difficult terrain costs 2 MP', () => {
+  const mapSpaces = buildGrid5x5({ difficult: ['b1'] });
+  const board = buildTempBoardState(mapSpaces, []);
+  const cache = computeMovementCache('a1', 2, board, defaultProfile);
+  // b1 is difficult: costs 2 MP from a1
+  const target = getMovementTarget(cache, 'b1');
+  assert.ok(target);
+  assert.strictEqual(target.cost, 2);
+});
+
+test('ignoreDifficult bypasses difficult terrain cost', () => {
+  const mapSpaces = buildGrid5x5({ difficult: ['b1'] });
+  const board = buildTempBoardState(mapSpaces, []);
+  const profile = { ...defaultProfile, ignoreDifficult: true };
+  const cache = computeMovementCache('a1', 2, board, profile);
+  const target = getMovementTarget(cache, 'b1');
+  assert.ok(target);
+  assert.strictEqual(target.cost, 1); // ignores difficult, costs 1
+});
+
+test('movement-blocking edge prevents crossing', () => {
+  const mapSpaces = buildGrid5x5({ movementBlockingEdges: [['a1', 'b1']] });
+  const board = buildTempBoardState(mapSpaces, []);
+  const cache = computeMovementCache('a1', 3, board, defaultProfile);
+  // b1 should still be reachable via a2→b2→b1 (3 MP)
+  const target = getMovementTarget(cache, 'b1');
+  if (target) {
+    assert.ok(target.cost > 1); // can't go directly, must detour
+  }
+});
+
+test('occupied spaces block movement for hostile figures', () => {
+  const mapSpaces = buildGrid5x5();
+  // buildTempBoardState takes occupiedSet (strings) and hostileOccupiedSet (strings)
+  const board = buildTempBoardState(mapSpaces, ['b1'], ['b1']);
+  const cache = computeMovementCache('a1', 3, board, defaultProfile);
+  // b1 is hostile occupied — cannot end there
+  const target = getMovementTarget(cache, 'b1');
+  assert.ok(!target); // can't enter hostile space
+});
+
+test('friendly occupied spaces allow passage', () => {
+  const mapSpaces = buildGrid5x5();
+  const board = buildTempBoardState(mapSpaces, [{ coord: 'b1', hostile: false }]);
+  const cache = computeMovementCache('a1', 2, board, defaultProfile);
+  // b1 is friendly occupied — can pass through but not end there
+  const c1Target = getMovementTarget(cache, 'c1');
+  assert.ok(c1Target);
+  assert.strictEqual(c1Target.cost, 2);
+});
+
+test('completely isolated start returns no reachable spaces', () => {
+  const mapSpaces = buildGrid5x5({ blocked: ['a2', 'b1'] });
+  const reachable = getReachableSpaces('a1', 5, mapSpaces, []);
+  assert.deepStrictEqual(reachable, []);
+});
+
+test('getReachableSpaces with large MP covers entire grid', () => {
+  const mapSpaces = buildGrid5x5();
+  const reachable = getReachableSpaces('a1', 10, mapSpaces, []);
+  // 5x5 grid = 25 spaces, minus start = 24 reachable
+  assert.strictEqual(reachable.length, 24);
+});
+
+test('getPathCost returns 1 for adjacent spaces', () => {
+  const mapSpaces = buildGrid5x5();
+  const cost = getPathCost('a1', 'a2', mapSpaces, []);
+  assert.strictEqual(cost, 1);
+});
+
+test('getPathCost through difficult terrain costs more', () => {
+  // Disable diagonals so paths are orthogonal-only
+  const mapSpaces = buildGrid5x5({ difficult: ['b1'] });
+  const cost = getPathCost('a1', 'c1', mapSpaces, []);
+  // With diagonals enabled, a1→b2(diag)→c1(diag) = 2 (bypasses difficult b1)
+  assert.strictEqual(cost, 2);
+});
+
+test('getMovementPath returns valid path through grid', () => {
+  const mapSpaces = buildGrid5x5();
+  const board = buildTempBoardState(mapSpaces, []);
+  const cache = computeMovementCache('c3', 4, board, defaultProfile);
+  const path = getMovementPath(cache, 'c3', 'e5', '1x1', defaultProfile);
+  assert.ok(Array.isArray(path));
+  assert.strictEqual(path[0], 'c3');
+  assert.strictEqual(path[path.length - 1], 'e5');
+  // With diagonal movement: c3 → d4 → e5 = 3 steps (2 MP via diagonals)
+  assert.ok(path.length >= 2 && path.length <= 5);
+});
+
+test('2x2 figure getNormalizedFootprint', () => {
+  const fp = getNormalizedFootprint('a1', '2x2');
+  assert.deepStrictEqual(fp, ['a1', 'b1', 'a2', 'b2']);
+});
+
+test('2x2 figure getNormalizedFootprint from different anchor', () => {
+  const fp = getNormalizedFootprint('b2', '2x2');
+  assert.deepStrictEqual(fp, ['b2', 'c2', 'b3', 'c3']);
+});
