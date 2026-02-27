@@ -197,9 +197,16 @@ export function resolveAbility(abilityId, context) {
       }
       const dcDisplay = meta?.displayName || meta?.dcName || label;
       const targetName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      // Post-push free attack (Mandalorian Whip): grant free attack targeting the pushed figure
+      if (entry.postPushFreeAttack) {
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[msgId] = true;
+        game.forcedAttackTarget = game.forcedAttackTarget || {};
+        game.forcedAttackTarget[msgId] = targetFigureKey;
+      }
       return {
         applied: true,
-        logMessage: `**${label}** — **${dcDisplay}** pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} to ${String(chosenSpace).toUpperCase()}.`,
+        logMessage: `**${label}** — **${dcDisplay}** pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} to ${String(chosenSpace).toUpperCase()}.${entry.postPushFreeAttack ? ' Now attack that figure (free action).' : ''}`,
         refreshBoard: true,
         refreshMovementBank: !!entry.mpCostToActivate,
         activeMsgId: msgId,
@@ -400,6 +407,28 @@ export function resolveAbility(abilityId, context) {
     const attackerKey = activatingKeys.find((k) => k.endsWith(`-${selectedFig}`)) || activatingKeys[0];
     const attackerPos = attackerKey ? (game.figurePositions?.[playerNum]?.[attackerKey]) : null;
     const mapSpaces = getMs ? getMs(game.selectedMap?.id) : null;
+    // Terminal adjacency: activator must be on/adjacent to token (System Shock)
+    const _thfActTokenType = entry.targetHostileFigure.activatorMustBeAdjacentToToken;
+    if (_thfActTokenType && attackerPos) {
+      const mapId = game.selectedMap?.id;
+      const mapTokens = mapId ? (getMapTokensData()?.[mapId]) : null;
+      const tokenPositions = mapTokens?.[_thfActTokenType + 's'] || [];
+      if (tokenPositions.length > 0) {
+        const posLower = String(attackerPos).toLowerCase();
+        const adjSpaces = mapSpaces?.adjacency?.[attackerPos] || [];
+        const isNear = tokenPositions.some(t => String(t).toLowerCase() === posLower) ||
+                       tokenPositions.some(t => adjSpaces.includes(t));
+        if (!isNear) return { applied: false, manualMessage: `**${entry.label}** — You must be on or adjacent to a ${_thfActTokenType}.` };
+      }
+    }
+    // Terminal adjacency: filter targets to on/adjacent to token (System Shock)
+    const _thfTgtTokenType = entry.targetHostileFigure.targetMustBeAdjacentToToken;
+    let _tgtTokenPositions = [];
+    if (_thfTgtTokenType) {
+      const mapId = game.selectedMap?.id;
+      const mapTokens = mapId ? (getMapTokensData()?.[mapId]) : null;
+      _tgtTokenPositions = mapTokens?.[_thfTgtTokenType + 's'] || [];
+    }
     const validTargets = [];
     for (const [fk, coord] of Object.entries(enemyPositions)) {
       if (!coord) continue;
@@ -409,6 +438,14 @@ export function resolveAbility(abilityId, context) {
       }
       if (requiresLos && losCheck && attackerPos && mapSpaces) {
         if (!losCheck(attackerPos, coord, mapSpaces)) continue;
+      }
+      // Token adjacency filter (System Shock: target must be on/adjacent to terminal)
+      if (_thfTgtTokenType && _tgtTokenPositions.length > 0) {
+        const coordLower = String(coord).toLowerCase();
+        const adjCoords = mapSpaces?.adjacency?.[coord] || [];
+        const isNear = _tgtTokenPositions.some(t => String(t).toLowerCase() === coordLower) ||
+                       _tgtTokenPositions.some(t => adjCoords.includes(t));
+        if (!isNear) continue;
       }
       validTargets.push({ fk, name: fk.replace(/-\d+-\d+$/, '') });
     }
@@ -1108,6 +1145,94 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // dcSpecial: chooseFriendlyToFocus (Incentivize, Do or Do Not) — pick a friendly figure matching criteria → Focus it
+  if (entry.type === 'dcSpecial' && entry.chooseFriendlyToFocus) {
+    const { game, msgId, meta, playerNum, targetFigureKey, dcMessageMeta, dcHealthState } = context;
+    const getRange = context.getRange || (() => 99);
+    if (!game || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
+    const dcEffects = getDcEffects() || {};
+    // Phase 2: figure chosen → apply Focus
+    if (targetFigureKey) {
+      game.figureConditions = game.figureConditions || {};
+      const conds = game.figureConditions[targetFigureKey] || [];
+      if (!conds.includes('Focus')) {
+        game.figureConditions[targetFigureKey] = [...conds, 'Focus'];
+      }
+      const dcName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      // autoDeductVp (Order Hit): deduct VP from player's total
+      if (entry.autoDeductVp > 0) {
+        const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+        game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+        game[vpKey].total = Math.max(0, game[vpKey].total - entry.autoDeductVp);
+        game[vpKey].objectives = Math.max(0, (game[vpKey].objectives || 0) - entry.autoDeductVp);
+      }
+      // grantFreeAttackToTarget (Order Hit): grant free attack + MP to chosen figure
+      if (entry.grantFreeAttackToTarget) {
+        const tgtMsgId = findMsgIdForFigureKey(game, playerNum, targetFigureKey, dcMessageMeta);
+        if (tgtMsgId) {
+          game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+          game.freeAttackBonusPending[tgtMsgId] = true;
+          if (entry.grantMpToTarget > 0) {
+            game.movementBank = game.movementBank || {};
+            const bank = game.movementBank[tgtMsgId] || { total: 0, remaining: 0 };
+            bank.total = (bank.total ?? 0) + entry.grantMpToTarget;
+            bank.remaining = (bank.remaining ?? 0) + entry.grantMpToTarget;
+            game.movementBank[tgtMsgId] = bank;
+          }
+          return { applied: true, logMessage: `**${entry.label}** — **${dcName}** may interrupt to perform a free attack and gains ${entry.grantMpToTarget || 0} MP.${entry.autoDeductVp ? ` (−${entry.autoDeductVp} VP)` : ''}`, refreshDcEmbed: true };
+        }
+      }
+      return { applied: true, logMessage: `**${entry.label}** — **${dcName}** is now **Focused**.`, refreshDcEmbed: true };
+    }
+    // Phase 1: enumerate valid friendly figures
+    // VP cost check (Order Hit: requires 2 VP to use)
+    if (entry.autoDeductVp > 0) {
+      const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+      const currentVp = game[vpKey]?.total || 0;
+      if (currentVp < entry.autoDeductVp) {
+        return { applied: false, manualMessage: `**${entry.label}** requires ${entry.autoDeductVp} VP but you only have ${currentVp}.` };
+      }
+    }
+    const actionsData = game.dcActionsData?.[msgId];
+    const selectedFig = actionsData?.selectedFigure ?? 0;
+    const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIndex = dgMatch ? dgMatch[1] : '1';
+    const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+    const activatingPos = game.figurePositions?.[playerNum]?.[activatingFigureKey];
+    const validTargets = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos) continue;
+      if (entry.choiceExcludeSelf && fk === activatingFigureKey) continue;
+      const fkDcName = fk.replace(/-\d+-\d+$/, '');
+      const eff = dcEffects[fkDcName];
+      // Range check
+      if (entry.choiceRange && activatingPos) {
+        const dist = getRange(activatingPos, pos);
+        if (dist > entry.choiceRange) continue;
+      }
+      // Elite check
+      if (entry.choiceRequiresElite && !eff?.elite) continue;
+      // Keyword check
+      if (Array.isArray(entry.choiceRequiresKeywords)) {
+        const kw = (eff?.keywords || []).map(k => String(k).toLowerCase());
+        const aff = (eff?.affiliation || '').toLowerCase();
+        if (!entry.choiceRequiresKeywords.every(rk => kw.includes(rk.toLowerCase()) || aff === rk.toLowerCase())) continue;
+      }
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: `**${entry.label}** — No valid targets found.` };
+    if (validTargets.length === 1) {
+      // Auto-select the only valid target
+      return resolveAbility(abilityId, { ...context, targetFigureKey: validTargets[0] });
+    }
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map(fk => fk.replace(/-\d+-\d+$/, '')),
+      targetFigureKeys: validTargets,
+    };
+  }
+
   // dcSpecial: informational — manual resolution with instruction message (no automated game-state change)
   // Supports strainCostToSelf: auto-deducts HP from activating figure if specified.
   if (entry.type === 'dcSpecial' && entry.informational && !entry.freeMoveBonus && !entry.nextAttacksBonusHits) {
@@ -1160,6 +1285,8 @@ export function resolveAbility(abilityId, context) {
       type: entry.overrideAttackType || null,
       pierce: entry.overrideAttackPierce || 0,
       bonusAccuracy: entry.overrideBonusAccuracy || 0,
+      mustTargetNonAdjacent: entry.mustTargetNonAdjacent || false,
+      blockSurgeAbilities: entry.blockSurgeAbilities || false,
     };
     // strainCostToSelf (Brutal Cleave): reduce activating figure's HP by strain amount
     let strainNote = '';
@@ -1218,10 +1345,35 @@ export function resolveAbility(abilityId, context) {
       game.burstFirePendingMsgId = game.burstFirePendingMsgId || {};
       game.burstFirePendingMsgId[msgId] = true;
     }
-    // overrideAttackType (Face to Face, Dying Lunge, Final Stand): force Melee attack type without overriding dice
+    // Crippling Blow: mark so Stun is applied to defender if attack doesn't miss
+    if (entry.label === 'Crippling Blow') {
+      game.cripplingBlowPending = game.cripplingBlowPending || {};
+      game.cripplingBlowPending[msgId] = true;
+    }
+    // Disruptor Rifle: mark so extra damage is applied if defender at 1 HP after non-miss attack
+    if (entry.label === 'Disruptor Rifle') {
+      game.disruptorRiflePending = game.disruptorRiflePending || {};
+      game.disruptorRiflePending[msgId] = true;
+    }
+    // Tonfa Strike: mark so second free attack is granted after first resolves
+    if (entry.label === 'Tonfa Strike') {
+      game.tonfaStrikeSecondAttack = game.tonfaStrikeSecondAttack || {};
+      game.tonfaStrikeSecondAttack[msgId] = true;
+    }
+    // Close Quarters: at attack time, override dice with adjacent hostile's pool + remove 1 defense die
+    if (entry.closeQuartersOverride) {
+      game.closeQuartersActive = game.closeQuartersActive || {};
+      game.closeQuartersActive[msgId] = true;
+    }
+    // overrideAttackType (Face to Face, Dying Lunge, Final Stand, Lightsaber Throw): force attack type without overriding dice
     if (entry.overrideAttackType) {
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-      game.pendingOverrideAttackDice[msgId] = { type: entry.overrideAttackType, dice: null, pierce: 0, bonusAccuracy: 0 };
+      game.pendingOverrideAttackDice[msgId] = {
+        type: entry.overrideAttackType, dice: null, pierce: 0,
+        bonusAccuracy: entry.overrideBonusAccuracy || 0,
+        mustTargetNonAdjacent: entry.mustTargetNonAdjacent || false,
+        blockSurgeAbilities: entry.blockSurgeAbilities || false,
+      };
     }
     // selfDefeatsAfterAttack (Dying Lunge, Final Stand): attacker figure defeated when free attack resolves
     if (entry.selfDefeatsAfterAttack) {
@@ -1310,6 +1462,117 @@ export function resolveAbility(abilityId, context) {
 
     // ── Electrified Knuckledusters style: pick adjacent hostile, then roll + apply ──
     if (entry.rollOneDieTarget === 'adjacentHostile') {
+      // Phase 3: push space chosen (Smash/Slam/Ram) → move target figure to chosen space
+      if (context.chosenSpace && targetFigureKey && entry.rollOneDiePushSmall) {
+        const oppNum = (playerNum || 1) === 1 ? 2 : 1;
+        const _pushDcName = targetFigureKey.replace(/-\d+-\d+$/, '');
+        const _pushStats = getStatsForDc(_pushDcName);
+        if ((_pushStats?.specialAbilityIds || []).includes('spiked_boots_snowtrooper')) {
+          const pusherStats = getStatsForDc(meta?.dcName || '');
+          if (!(pusherStats?.keywords || []).some(k => /massive/i.test(k))) {
+            return { applied: true, logMessage: `**Spiked Boots** — **${_pushDcName}** cannot be pushed.`, refreshDcEmbed: true, refreshBoard: true };
+          }
+        }
+        game.figurePositions = game.figurePositions || {};
+        game.figurePositions[oppNum] = game.figurePositions[oppNum] || {};
+        game.figurePositions[oppNum][targetFigureKey] = context.chosenSpace;
+        return { applied: true, logMessage: `**${entry.label}** — Pushed **${_pushDcName}** to **${String(context.chosenSpace).toUpperCase()}**.`, refreshDcEmbed: true, refreshBoard: true };
+      }
+      // Multi-target variant (Trample): auto-target all adjacent hostiles (up to N), single die roll
+      if (entry.rollOneDieMaxTargets && entry.rollOneDieMaxTargets > 1) {
+        const maxTgts = entry.rollOneDieMaxTargets;
+        const pendingKey = msgId;
+        const pendingMT = game.pendingMultiTargetRoll?.[pendingKey];
+        // Helper: roll once and apply to all targets
+        const _rollAndApplyMulti = (targets) => {
+          const color = entry.rollOneDie;
+          const faces = getDiceData().attack?.[color.toLowerCase()];
+          if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die manually.` };
+          const face = faces[Math.floor(Math.random() * faces.length)];
+          const hits = face.dmg ?? 0;
+          const surges = face.surge ?? 0;
+          const dieParts = [];
+          if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+          if (surges) dieParts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
+          const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
+          const enemyPN = (playerNum || 1) === 1 ? 2 : 1;
+          const parts = [];
+          for (const tFk of targets) {
+            const tName = tFk.replace(/-\d+-\d+$/, '');
+            const subParts = [];
+            if (hits > 0) {
+              const tMsgId = findMsgIdForFigureKey(game, enemyPN, tFk, dcMessageMeta);
+              if (dcHealthState && tMsgId) {
+                const hs = dcHealthState.get(tMsgId) || [];
+                const fkM = tFk.match(/-(\d+)-(\d+)$/);
+                const fIdx = fkM ? parseInt(fkM[2], 10) : 0;
+                const hpE = hs[fIdx];
+                if (hpE) {
+                  const [cur, max] = hpE;
+                  const newCur = Math.max(0, (cur ?? max) - hits);
+                  hs[fIdx] = [newCur, max ?? newCur];
+                  dcHealthState.set(tMsgId, hs);
+                  const dcIds = enemyPN === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+                  const dcList = enemyPN === 1 ? game.p1DcList : game.p2DcList;
+                  const idx = (dcIds || []).indexOf(tMsgId);
+                  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+                  subParts.push(`${hits} Dmg (HP: ${cur ?? max}→${newCur})`);
+                }
+              }
+            }
+            if (entry.rollOneDieSurgeCondition && surges >= 1) {
+              game.figureConditions = game.figureConditions || {};
+              const existing = game.figureConditions[tFk] || [];
+              if (!existing.includes(entry.rollOneDieSurgeCondition)) {
+                game.figureConditions[tFk] = [...existing, entry.rollOneDieSurgeCondition];
+                subParts.push(`**${entry.rollOneDieSurgeCondition}**`);
+              }
+            }
+            parts.push(`**${tName}**: ${subParts.length ? subParts.join(', ') : 'unaffected'}`);
+          }
+          return { applied: true, logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. ${parts.join('; ')}.`, refreshDcEmbed: true };
+        };
+        // Phase 2+: accumulate sequential picks (only when > maxTargets adjacent)
+        if (targetFigureKey && pendingMT) {
+          if (targetFigureKey === '__done__') {
+            delete game.pendingMultiTargetRoll[pendingKey];
+            if (pendingMT.targets.length === 0) return { applied: false, manualMessage: `**${entry.label}** — No targets selected.` };
+            return _rollAndApplyMulti(pendingMT.targets);
+          }
+          pendingMT.targets.push(targetFigureKey);
+          if (pendingMT.targets.length >= maxTgts) {
+            delete game.pendingMultiTargetRoll[pendingKey];
+            return _rollAndApplyMulti(pendingMT.targets);
+          }
+          const remaining = pendingMT.allTargets.filter(fk => !pendingMT.targets.includes(fk));
+          const opts = [...remaining.map(fk => fk.replace(/-\d+-\d+$/, '')), 'Done selecting'];
+          const fKeys = [...remaining, '__done__'];
+          return { applied: false, requiresChoice: true, choiceOptions: opts, targetFigureKeys: fKeys, choicePrompt: `**${entry.label}** — Selected ${pendingMT.targets.length}/${maxTgts}. Choose another or Done:` };
+        }
+        // Phase 1: enumerate adjacent hostiles
+        if (!game || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
+        const mapId = game.selectedMap?.id;
+        if (!mapId) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (map not loaded).` };
+        const actionsData = game.dcActionsData?.[msgId];
+        const selectedFig = actionsData?.selectedFigure ?? 0;
+        const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+        const dgIndex = dgMatch ? dgMatch[1] : '1';
+        const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+        const adjacentAll = getFiguresAdjacentToTarget(game, activatingFigureKey, mapId);
+        const enemyPlayerNum = (playerNum || 1) === 1 ? 2 : 1;
+        const validTargetFks = adjacentAll.filter(f => f.playerNum === enemyPlayerNum).map(f => f.figureKey);
+        if (validTargetFks.length === 0) return { applied: false, manualMessage: `No adjacent hostile figures for **${entry.label}**.` };
+        if (validTargetFks.length <= maxTgts) {
+          // Auto-target all — no choice needed
+          return _rollAndApplyMulti(validTargetFks);
+        }
+        // More than max — sequential picks
+        game.pendingMultiTargetRoll = game.pendingMultiTargetRoll || {};
+        game.pendingMultiTargetRoll[pendingKey] = { targets: [], allTargets: validTargetFks, max: maxTgts };
+        const choices = [...validTargetFks.map(fk => fk.replace(/-\d+-\d+$/, '')), 'Done selecting'];
+        const fKeysDone = [...validTargetFks, '__done__'];
+        return { applied: false, requiresChoice: true, choiceOptions: choices, targetFigureKeys: fKeysDone, choicePrompt: `**${entry.label}** — Choose up to ${maxTgts} adjacent hostile figures:` };
+      }
       // Phase 2: target chosen → roll die, apply damage + optional surge condition
       if (targetFigureKey) {
         const color = entry.rollOneDie;
@@ -1356,10 +1619,41 @@ export function resolveAbility(abilityId, context) {
           resultParts.push(`became **${surgeCondition}**`);
         }
         const targetName = targetFigureKey.replace(/-\d+-\d+$/, '');
-        const pushNote = entry.rollOneDiePushSmallHonor ? ' If that figure is SMALL, you may push it 1 space adjacent to you (apply manually).' : '';
+        // SMALL push check (Smash, Slam, Ram): after damage, offer space picker for push
+        if (entry.rollOneDiePushSmall && hits > 0) {
+          const targetStats = getStatsForDc(targetName);
+          const isSmall = !(targetStats?.keywords || []).some(k => /large|massive/i.test(k));
+          if (isSmall) {
+            const mapId = game.selectedMap?.id;
+            if (mapId) {
+              const _actData = game.dcActionsData?.[msgId];
+              const _selFig = _actData?.selectedFigure ?? 0;
+              const _dgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+              const _dgI = _dgM ? _dgM[1] : '1';
+              const activFk = `${meta.dcName}-${_dgI}-${_selFig}`;
+              const activPos = game.figurePositions?.[playerNum]?.[activFk];
+              if (activPos) {
+                const mapSpaces = getMapSpaces(mapId);
+                const adjSpaces = mapSpaces?.adjacency?.[activPos] || [];
+                const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
+                const targetCurPos = game.figurePositions?.[enemyPlayerNum]?.[targetFigureKey];
+                const validPushSpaces = adjSpaces.filter(s => !occupiedSet.has(s) || s === targetCurPos);
+                if (validPushSpaces.length > 0) {
+                  return {
+                    applied: false,
+                    requiresSpaceChoice: true,
+                    validSpaces: validPushSpaces,
+                    targetFigureKey,
+                    spaceChoiceLabel: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}. Push **${targetName}** to which adjacent space?`,
+                  };
+                }
+              }
+            }
+          }
+        }
         return {
           applied: true,
-          logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.${pushNote}`,
+          logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.`,
           refreshDcEmbed: true,
         };
       }
@@ -1642,6 +1936,14 @@ export function resolveAbility(abilityId, context) {
             const added = conditions.filter((c) => !existing.includes(c));
             if (added.length) parts.push(added.join(', '));
           }
+          // fixedAreaDiscardToken (Gar Saxon Flamethrower): discard 1 Power Token per affected figure
+          if (entry.fixedAreaDiscardToken) {
+            const tokens = game.figurePowerTokens?.[fk];
+            if (tokens?.length) {
+              const removed = tokens.shift();
+              parts.push(`discarded ${removed} Token`);
+            }
+          }
           if (parts.length) results.push(`**${dcName}**: ${parts.join(', ')}`);
         }
       }
@@ -1732,6 +2034,16 @@ export function resolveAbility(abilityId, context) {
     if (entry.freeAttackBonus) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = true;
+    }
+    // mobileMovement (Lift Off): grant Mobile movement for these MP
+    if (entry.mobileMovement) {
+      game.mobileMovementActive = game.mobileMovementActive || {};
+      game.mobileMovementActive[msgId] = true;
+    }
+    // Rush (Onar): after movement MP are exhausted, trigger adjacent SMALL push + mutual damage
+    if (entry.rushPostMovePush) {
+      game.rushPending = game.rushPending || {};
+      game.rushPending[msgId] = true;
     }
     return { applied: true, freeAction: !!entry.freeAction, logMessage: entry.logMessage || `**${entry.label}** — Gained ${entry.freeMoveBonus} free movement points.`, refreshMovementBank: true, activeMsgId: msgId };
   }
@@ -2943,6 +3255,77 @@ export function resolveAbility(abilityId, context) {
       if (!existing.includes(cond)) game.figureConditions[fk] = [...existing, cond];
     }
     return { applied: true, logMessage: `Became ${cond}.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true, conditionCardsToPost: [cond] };
+  }
+
+  // dcSpecial: envRecoveryGearEffect — self + adjacent friendly TROOPERs: recover 1 HP or discard 1 harmful condition
+  if (entry.type === 'dcSpecial' && entry.envRecoveryGearEffect) {
+    const { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !msgId || !meta || !dcHealthState) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
+    const mapId = game.selectedMap?.id;
+    const dcEffects = getDcEffects() || {};
+    const actionsData = game.dcActionsData?.[msgId];
+    const selectedFig = actionsData?.selectedFigure ?? 0;
+    const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIndex = dgMatch ? dgMatch[1] : '1';
+    const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+    const pNum = playerNum || meta.playerNum;
+    const harmfulConditions = ['Stun', 'Bleed', 'Weaken'];
+    // Helper: recover 1 HP if damaged, else discard 1 harmful condition if at full HP
+    const applyRecoveryOrDiscard = (figKey, figMsgId, figIdx) => {
+      const dcName = figKey.replace(/-\d+-\d+$/, '');
+      const hs = dcHealthState.get(figMsgId) || [];
+      const hpEntry = hs[figIdx];
+      if (hpEntry) {
+        const [cur, max] = hpEntry;
+        if (cur < max) {
+          hs[figIdx] = [Math.min(max, cur + 1), max];
+          dcHealthState.set(figMsgId, hs);
+          const dcIds = pNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcList = pNum === 1 ? game.p1DcList : game.p2DcList;
+          const idx = (dcIds || []).indexOf(figMsgId);
+          if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+          return `**${dcName}** recovered 1 HP`;
+        }
+      }
+      // At full HP — try discarding 1 harmful condition
+      const conds = game.figureConditions?.[figKey] || [];
+      const harmful = conds.filter(c => harmfulConditions.includes(c));
+      if (harmful.length > 0) {
+        const removed = harmful[0];
+        game.figureConditions[figKey] = conds.filter(c => c !== removed);
+        return `**${dcName}** discarded **${removed}**`;
+      }
+      return null;
+    };
+    const results = [];
+    // Self
+    const selfResult = applyRecoveryOrDiscard(activatingFigureKey, msgId, selectedFig);
+    if (selfResult) results.push(selfResult);
+    // Adjacent friendly TROOPERs
+    if (mapId) {
+      const adjacentAll = getFiguresAdjacentToTarget(game, activatingFigureKey, mapId);
+      for (const { figureKey: fk, playerNum: pn } of adjacentAll) {
+        if (pn !== pNum) continue;
+        if (fk === activatingFigureKey) continue;
+        const fkDcName = fk.replace(/-\d+-\d+$/, '');
+        const eff = dcEffects[fkDcName];
+        const kws = (eff?.keywords || []).map(k => String(k).toUpperCase());
+        if (!kws.includes('TROOPER')) continue;
+        const tMsgId = findMsgIdForFigureKey(game, pNum, fk, dcMessageMeta);
+        if (!tMsgId) continue;
+        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const r = applyRecoveryOrDiscard(fk, tMsgId, figIdx);
+        if (r) results.push(r);
+      }
+    }
+    return {
+      applied: true,
+      logMessage: results.length > 0
+        ? `**${entry.label}** — ${results.join('; ')}.`
+        : `**${entry.label}** — No figures needed healing or condition removal.`,
+      refreshDcEmbed: true,
+    };
   }
 
   // dcSpecial: recoverSelf — recover N damage from own activating figure(s)

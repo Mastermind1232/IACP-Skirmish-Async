@@ -450,8 +450,16 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.overdriveUsedThisActivation = {};
   game.stayDownPendingMsgId = {};
   game.burstFirePendingMsgId = {};
+  game.cripplingBlowPending = {};
+  game.disruptorRiflePending = {};
+  game.tonfaStrikeSecondAttack = {};
+  game.pendingMultiTargetRoll = {};
+  game.closeQuartersActive = {};
   game.selfDestructProtocolTriggered = {};
   game.mobileMovementActive = {};
+  game.rushPending = {};
+  game.pendingRushPush = null;
+  game.forcedAttackTarget = {};
   game.figureMoved = {};
   game.tripodAttacked = {};
   game.activationStartPositions = {};

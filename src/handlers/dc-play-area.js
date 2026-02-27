@@ -1666,6 +1666,29 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     return;
   }
 
+  // Multi-step choice (e.g., Trample multi-target): re-present choice buttons if ability needs more picks
+  if (!resolveResult.applied && resolveResult.requiresChoice && Array.isArray(resolveResult.choiceOptions) && resolveResult.choiceOptions.length > 0) {
+    game.pendingDcAbilityChoice = game.pendingDcAbilityChoice || {};
+    game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`] = {
+      gameId, playerNum, abilityId, msgId, figureIndex, specialIdx,
+      targetFigureKeys: resolveResult.targetFigureKeys || null,
+    };
+    const choiceButtons = resolveResult.choiceOptions.map((label, i) =>
+      new ButtonBuilder()
+        .setCustomId(`dc_ability_choice_${gameId}_${msgId}_${specialIdx}_${i}`)
+        .setLabel(String(label).slice(0, 80))
+        .setStyle(ButtonStyle.Primary)
+    );
+    const rows = [];
+    for (let i = 0; i < choiceButtons.length; i += 5) {
+      rows.push(new ActionRowBuilder().addComponents(choiceButtons.slice(i, i + 5)));
+    }
+    const prompt = resolveResult.choicePrompt || `**${abilityId}** — Choose:`;
+    await interaction.followUp({ content: prompt, components: rows.slice(0, 5), ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    saveGames();
+    return;
+  }
+
   // Deduct action (was refunded when showing choice buttons)
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {
@@ -1748,9 +1771,12 @@ export async function handlePounceSpacePick(interaction, ctx) {
         .setLabel('Done')
         .setStyle(ButtonStyle.Success)
     );
+    const hasForcedTarget = game.forcedAttackTarget?.[msgId];
     const editContent = abilityId === 'pounce'
       ? `**Pounce**: placed at **${String(chosenSpace).toUpperCase()}**. Use the **Attack** button for your free pounce attack (no action cost), or press **Done** to skip.`
-      : `${result.logMessage || `**${abilityId}** resolved.`} Click **Done** when finished.`;
+      : hasForcedTarget
+        ? `${result.logMessage || `**${abilityId}** resolved.`} Use **Attack** to target the pushed figure (free action), or press **Done** to skip.`
+        : `${result.logMessage || `**${abilityId}** resolved.`} Click **Done** when finished.`;
     await interaction.message.edit({
       content: editContent,
       components: [doneRow],
@@ -2058,5 +2084,179 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
   };
   if (boardPayload?.files) replyPayload.files = boardPayload.files;
   await interaction.followUp(replyPayload).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  saveGames();
+}
+
+/**
+ * Apply N damage to a figure via dcHealthState, syncing dcList. Returns { newHp, wasDefeated }.
+ */
+function _applyHpDamage(game, dcHealthState, dcMessageMeta, figureKey, damage) {
+  const fkMatch = figureKey.match(/^(.+)-(\d+)-(\d+)$/);
+  if (!fkMatch) return { newHp: null, wasDefeated: false };
+  const [, dcName, dgIndex, figIndexStr] = fkMatch;
+  const figIndex = parseInt(figIndexStr, 10);
+  // Find msgId for this figure's DC
+  let targetMsgId = null;
+  for (const [mId, mMeta] of dcMessageMeta) {
+    if (mMeta.gameId !== game.gameId) continue;
+    if (mMeta.dcName !== dcName) continue;
+    const dgMatch = (mMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIdx = dgMatch ? dgMatch[1] : '1';
+    if (String(dgIdx) === String(dgIndex)) { targetMsgId = mId; break; }
+  }
+  if (!targetMsgId) return { newHp: null, wasDefeated: false };
+  const healthState = dcHealthState.get(targetMsgId) || [];
+  if (!healthState[figIndex]) return { newHp: null, wasDefeated: false };
+  const [curHp, maxHp] = healthState[figIndex];
+  if (curHp === null || curHp <= 0) return { newHp: curHp, wasDefeated: false };
+  const newHp = Math.max(0, curHp - damage);
+  healthState[figIndex] = [newHp, maxHp];
+  dcHealthState.set(targetMsgId, healthState);
+  // Sync dcList
+  const meta = dcMessageMeta.get(targetMsgId);
+  if (meta) {
+    const dcIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcList = meta.playerNum === 1 ? game.p1DcList : game.p2DcList;
+    const idx = dcIds ? dcIds.indexOf(targetMsgId) : -1;
+    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+  }
+  return { newHp, wasDefeated: newHp <= 0, targetMsgId };
+}
+
+/**
+ * Handle rush_push_fig_ button: player picks which adjacent SMALL hostile to push.
+ */
+export async function handleRushPushFig(interaction, ctx) {
+  const m = interaction.customId.match(/^rush_push_fig_([^_]+)_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, msgId, choiceIdxStr] = m;
+  const choiceIndex = parseInt(choiceIdxStr, 10);
+  const { getGame, dcMessageMeta, dcHealthState, getMapSpaces, logGameAction, buildBoardMapPayload,
+    updateDcActionsMessage, getSpaceChoiceRows, getMapAttachmentForSpaces, saveGames, client } = ctx;
+  const game = getGame(gameId);
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const pending = game.pendingRushPush;
+  if (!pending || pending.msgId !== msgId) {
+    await interaction.followUp({ content: 'No pending Rush push.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (!canActAsPlayer(game, interaction.user.id, pending.playerNum)) {
+    await interaction.followUp({ content: 'Only the activating player can choose.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const targetFk = pending.targets?.[choiceIndex];
+  if (!targetFk) { await interaction.followUp({ content: 'Invalid target.', ephemeral: true }).catch(() => {}); return; }
+  pending.chosenTarget = targetFk;
+  const oppNum = pending.playerNum === 1 ? 2 : 1;
+  const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
+  if (!targetPos) {
+    delete game.pendingRushPush;
+    await interaction.message.edit({ content: '**Rush** — Target no longer on board.', components: [] }).catch(() => {});
+    saveGames();
+    return;
+  }
+  // Find valid landing spaces: target's current space + adjacent unoccupied
+  const mapId = game.selectedMap?.id;
+  const mapSpaces = mapId ? getMapSpaces(mapId) : null;
+  const adjToTarget = mapSpaces?.adjacency?.[targetPos] || [];
+  const occupied = new Set([
+    ...Object.values(game.figurePositions?.[1] || {}),
+    ...Object.values(game.figurePositions?.[2] || {}),
+  ].filter(Boolean));
+  occupied.delete(targetPos); // target can stay in its own space
+  const validSpaces = [targetPos, ...adjToTarget.filter(s => !occupied.has(s))];
+  if (validSpaces.length === 1) {
+    // Only current space — auto-resolve (damage only, no actual push)
+    const targetName = targetFk.replace(/-\d+-\d+$/, '');
+    const t = _applyHpDamage(game, dcHealthState, dcMessageMeta, targetFk, 1);
+    const a = _applyHpDamage(game, dcHealthState, dcMessageMeta, pending.activatorFigureKey, 1);
+    const tNote = t.wasDefeated ? ' **(may be defeated)**' : '';
+    const aNote = a.wasDefeated ? ' **(may be defeated)**' : '';
+    const logMsg = `**Rush** — Both suffer 1 Damage: **${targetName}**${tNote}, **Onar**${aNote}. No push (no open space).`;
+    if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+    await updateDcActionsMessage(game, msgId, client).catch(() => {});
+    delete game.pendingRushPush;
+    await interaction.message.edit({ content: logMsg, components: [] }).catch(() => {});
+    saveGames();
+    return;
+  }
+  // Show space picker
+  pending.chosenTarget = targetFk;
+  const boardState = ctx.getBoardStateForMovement ? ctx.getBoardStateForMovement(game, null) : null;
+  const bMapSpaces = boardState?.mapSpaces || {};
+  const { rows } = getSpaceChoiceRows(`rush_push_space_${gameId}_${msgId}_`, validSpaces, bMapSpaces);
+  const mapAttachment = await getMapAttachmentForSpaces(game, validSpaces);
+  const payload = {
+    content: `**Rush** — Pick landing space for **${targetFk.replace(/-\d+-\d+$/, '')}** (or stay at **${targetPos.toUpperCase()}**):`,
+    components: rows.slice(0, 5),
+  };
+  if (mapAttachment) payload.files = [mapAttachment];
+  await interaction.message.edit({ content: '**Rush** — Choosing push destination...', components: [] }).catch(() => {});
+  await interaction.followUp(payload).catch(() => {});
+  saveGames();
+}
+
+/**
+ * Handle rush_push_space_ button: finalize Rush push + apply mutual 1 Damage.
+ */
+export async function handleRushPushSpace(interaction, ctx) {
+  const m = interaction.customId.match(/^rush_push_space_([^_]+)_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, msgId, space] = m;
+  const chosenSpace = String(space).toLowerCase();
+  const { getGame, dcMessageMeta, dcHealthState, logGameAction, buildBoardMapPayload,
+    updateDcActionsMessage, saveGames, client } = ctx;
+  const game = getGame(gameId);
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const pending = game.pendingRushPush;
+  if (!pending || pending.msgId !== msgId) {
+    await interaction.followUp({ content: 'No pending Rush push.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (!canActAsPlayer(game, interaction.user.id, pending.playerNum)) {
+    await interaction.followUp({ content: 'Only the activating player can choose.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const targetFk = pending.chosenTarget;
+  const oppNum = pending.playerNum === 1 ? 2 : 1;
+  const prevPos = game.figurePositions?.[oppNum]?.[targetFk];
+  const targetName = targetFk.replace(/-\d+-\d+$/, '');
+  // Move target to chosen space
+  game.figurePositions[oppNum][targetFk] = chosenSpace;
+  const pushed = chosenSpace !== prevPos;
+  // Apply 1 damage to both
+  const t = _applyHpDamage(game, dcHealthState, dcMessageMeta, targetFk, 1);
+  const a = _applyHpDamage(game, dcHealthState, dcMessageMeta, pending.activatorFigureKey, 1);
+  const tNote = t.wasDefeated ? ' **(may be defeated)**' : '';
+  const aNote = a.wasDefeated ? ' **(may be defeated)**' : '';
+  const pushNote = pushed ? ` Pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} → ${chosenSpace.toUpperCase()}.` : '';
+  const logMsg = `**Rush** —${pushNote} Both suffer 1 Damage: **${targetName}**${tNote}, **Onar**${aNote}.`;
+  if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+  // Refresh board
+  if (game.boardId && game.selectedMap && buildBoardMapPayload) {
+    try {
+      const boardChannel = await client.channels.fetch(game.boardId);
+      const boardPayload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+      await boardChannel.send(boardPayload);
+    } catch { /* ignore */ }
+  }
+  await updateDcActionsMessage(game, msgId, client).catch(() => {});
+  delete game.pendingRushPush;
+  await interaction.message.edit({ content: logMsg, components: [] }).catch(() => {});
+  saveGames();
+}
+
+/**
+ * Handle rush_push_skip_ button: skip Rush push.
+ */
+export async function handleRushPushSkip(interaction, ctx) {
+  const m = interaction.customId.match(/^rush_push_skip_([^_]+)_([^_]+)$/);
+  if (!m) return;
+  const [, gameId, msgId] = m;
+  const { getGame, saveGames } = ctx;
+  const game = getGame(gameId);
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  delete game.pendingRushPush;
+  await interaction.message.edit({ content: '**Rush** — Push skipped.', components: [] }).catch(() => {});
   saveGames();
 }

@@ -171,6 +171,9 @@ import {
   handleFalseOrdersAtkPick,
   handleFalseOrdersAction,
   handleFalseOrdersMovePick,
+  handleRushPushFig,
+  handleRushPushSpace,
+  handleRushPushSkip,
   sendRerollUI,
   proceedAfterRerolls,
   sendReadyToResolveRolls,
@@ -4343,6 +4346,49 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
     }
   }
+  // Crippling Blow: Stun defender if attack didn't miss
+  if (game.cripplingBlowPending?.[combat.attackerMsgId]) {
+    delete game.cripplingBlowPending[combat.attackerMsgId];
+    if (hit && combat.target?.figureKey) {
+      if (!isConditionImmune(game, combat.target.figureKey)) {
+        game.figureConditions = game.figureConditions || {};
+        game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
+        if (!game.figureConditions[combat.target.figureKey].includes('Stun')) {
+          game.figureConditions[combat.target.figureKey].push('Stun');
+          await logGameAction(game, client, `⚡ **Crippling Blow** — **${combat.target.label || combat.target.figureKey.replace(/-\d+-\d+$/, '')}** is now **Stunned**.`, { phase: 'ROUND', icon: 'attack' });
+        }
+      } else {
+        await logGameAction(game, client, `**Crippling Blow** — **${combat.target.label || combat.target.figureKey.replace(/-\d+-\d+$/, '')}** is immune to Stun.`, { phase: 'ROUND', icon: 'attack' });
+      }
+    }
+  }
+  // Disruptor Rifle: if attack didn't miss and defender at exactly 1 HP, deal 1 more damage
+  if (game.disruptorRiflePending?.[combat.attackerMsgId]) {
+    delete game.disruptorRiflePending[combat.attackerMsgId];
+    if (hit && targetMsgId) {
+      const _drHS = dcHealthState.get(targetMsgId) || [];
+      const _drEntry = _drHS[targetFigIndex];
+      if (_drEntry) {
+        const [_drCur] = _drEntry;
+        if (_drCur === 1) {
+          _drHS[targetFigIndex] = [0, _drEntry[1]];
+          dcHealthState.set(targetMsgId, _drHS);
+          const _drDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const _drDcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+          const _drIdx = (_drDcIds || []).indexOf(targetMsgId);
+          if (_drIdx >= 0 && _drDcList?.[_drIdx]) _drDcList[_drIdx].healthState = [..._drHS];
+          await logGameAction(game, client, `💀 **Disruptor Rifle** — **${combat.target?.label || ''}** had 1 HP remaining — suffers 1 additional Damage and is **defeated**.`, { phase: 'ROUND', icon: 'attack' });
+        }
+      }
+    }
+  }
+  // Tonfa Strike: grant second free attack after first resolves
+  if (game.tonfaStrikeSecondAttack?.[combat.attackerMsgId]) {
+    delete game.tonfaStrikeSecondAttack[combat.attackerMsgId];
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[combat.attackerMsgId] = true;
+    await thread.send('**Tonfa Strike** — You may perform an additional attack (use Attack button).');
+  }
   const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
   // Force Deflection embed refresh (flag set earlier in pre-defeat section)
@@ -7543,6 +7589,9 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'dc_cc_eoa_') await handleDcCcEndOfActivation(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_cc_double_') await handleDcCcDoubleAction(interaction, dcPlayAreaContext);
     else if (buttonKey === 'pounce_space_') await handlePounceSpacePick(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'rush_push_fig_') await handleRushPushFig(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'rush_push_space_') await handleRushPushSpace(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'rush_push_skip_') await handleRushPushSkip(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_ability_choice_') await handleDcAbilityChoice(interaction, dcPlayAreaContext);
     else if (buttonKey === 'ee3_pick_die_') await handleEe3DiePick(interaction, dcPlayAreaContext);
     else if (buttonKey === 'false_orders_action_') await handleFalseOrdersAction(interaction, dcPlayAreaContext);

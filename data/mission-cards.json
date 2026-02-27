@@ -56,16 +56,7 @@
         "setup": "Thugs are hostile to all figures except other thugs.\nA figure can attack a thug (Health: 4, Defense: 1 black die)",
         "persistent": "Thugs are hostile to all figures except other thugs.\nA figure can attack a thug (Health: 4, Defense: 1 black die)",
         "startOfRound": "",
-        "endOfRound": "Move each thug 2 spaces to the closest hostile figure. Then, each hostile figure adjacent to a thug suffers 2 Damage. (If multiple hostile figures are tied for closest to the thug, then the player with Initiative decides which figure is targeted.)\nThe player who controls the Cantina gains 6 VPs.",
-        "rules": {
-          "endOfRound": {
-            "vpForControllingNamedArea": {
-              "areaName": "Cantina",
-              "vp": 6,
-              "vpMessage": "controlling the Cantina (6 VP)"
-            }
-          }
-        }
+        "endOfRound": "Move each thug 2 spaces to the closest hostile figure. Then, each hostile figure adjacent to a thug suffers 2 Damage. (If multiple hostile figures are tied for closest to the thug, then the player with Initiative decides which figure is targeted.)\nThe player who controls the Cantina gains 6 VPs."
       },
       "b": {
         "name": "Sabacc Standoff",
@@ -75,22 +66,7 @@
         "setup": "",
         "persistent": "",
         "startOfRound": "The player with the Initiative places 1 token next to the Cantina for each Command card in their hand.",
-        "endOfRound": "Until the end of the next round, the player who controls the Sabacc table is considered to have 1 additional VP for each token next to the Cantina.",
-        "rules": {
-          "startOfRound": {
-            "setTokenCountFromInitiativeHand": {
-              "gameKey": "sabaccTokenCount"
-            }
-          },
-          "endOfRound": {
-            "vpPerTokenForControllingCell": {
-              "controlCell": "m14",
-              "tokenCountKey": "sabaccTokenCount",
-              "vpPerToken": 1,
-              "vpMessage": "controlling the Sabacc table ({count} Cantina token(s) at 1 VP each)"
-            }
-          }
-        }
+        "endOfRound": "Until the end of the next round, the player who controls the Sabacc table is considered to have 1 additional VP for each token next to the Cantina."
       }
     },
     "chopper-base-atollon": {
@@ -224,6 +200,26 @@
         "imagePath": "vassal_extracted/images/mission-cards/Development Facility-B-Experiment.jpg",
         "setup": "",
         "persistent": "A figure can retrieve a weapon prototype. A figure can carry only 1 weapon prototype.\n\nA figure carrying a weapon prototype applies -1 Block to its defense results and gains: Surge: Perform an attack. Before performing the attack, you become Focused. Hit+Hit: Gain 3 VPs. Hit+Hit: Move up to 4 spaces and recover 3 Strain."
+      }
+    },
+    "hoth-battle-station": {
+      "a": {
+        "name": "Inside Job",
+        "tokenLabel": "",
+        "imagePath": "",
+        "setup": "",
+        "persistent": "While a figure inside its own deployment zone is defending, apply -1 Block to the defense results.\n\nWhile a figure inside its opponent's deployment zone is defending, apply +1 Evade to the defense results.",
+        "startOfRound": "",
+        "endOfRound": "Each player scores 3 VPs for each deployment zone they control. Then, if a player controls the Command Center, that player scores 3 VPs."
+      },
+      "b": {
+        "name": "Bomb Drop",
+        "tokenLabel": "",
+        "imagePath": "",
+        "setup": "",
+        "persistent": "A figure can retrieve an explosive.\n\nFigures carrying 1 or more explosives gain:\nSpecial Action (\"Bomb Drop\"): Discard 1 explosive you are carrying and choose a space within 3 spaces. Each figure on or adjacent to the chosen space suffers 2 Damage.",
+        "startOfRound": "",
+        "endOfRound": "Each figure in an opponent's deployment zone carrying 1 or more explosives discards all carried explosives and gains 4 VPs for each explosive discarded."
       }
     }
   }

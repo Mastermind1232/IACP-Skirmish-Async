@@ -372,5 +372,30 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
     }
   }
 
+  // Fast Learner (Mara Jade): once per round, may play CC whose restriction matches another DC name in army
+  if (adaptiveSkillsDc && !game.roundFigureAbilityUsed?.[`${adaptiveSkillsDc}_fast_learner`]) {
+    const ccNameLower = (cardName || '').toLowerCase();
+    // "Arcing Shot" is excluded from Fast Learner
+    if (!ccNameLower.includes('arcing shot')) {
+      for (const dc of dcList) {
+        const otherName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+        if (!otherName || otherName === adaptiveSkillsDc) continue; // skip Mara Jade herself
+        const otherBase = String(otherName)
+          .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
+          .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
+          .trim();
+        const otherDisp = (typeof dc === 'object' ? dc.displayName : otherName) || otherBase;
+        for (const alt of alternatives) {
+          const altLow = alt.toLowerCase().trim();
+          const oBase = otherBase.toLowerCase();
+          const oDisp = String(otherDisp).toLowerCase();
+          if (oBase.includes(altLow) || altLow.includes(oBase) || oDisp.includes(altLow) || altLow.includes(oDisp)) {
+            return { legal: true, fastLearner: true };
+          }
+        }
+      }
+    }
+  }
+
   return { legal: false, reason: `No figure matches "playable by: ${playableBy}" in your army.` };
 }

@@ -195,6 +195,15 @@ export async function handleAttackTarget(interaction, ctx) {
       return;
     }
   }
+  // Mandalorian Whip: forced attack target validation — must target the pushed figure
+  if (game.forcedAttackTarget?.[msgId] && target.figureKey) {
+    if (target.figureKey !== game.forcedAttackTarget[msgId]) {
+      const forcedName = game.forcedAttackTarget[msgId].replace(/-\d+-\d+$/, '');
+      await interaction.followUp({ content: `**Mandalorian Whip** — You must target the pushed figure (**${forcedName.replace(/_/g, ' ')}**).`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
+    delete game.forcedAttackTarget[msgId];
+  }
   // Ballistics Matrix: clear per-attack flag after this attack proceeds
   if (game.nextAttackIgnoreFigureLOS?.[attackerPlayerNum]) delete game.nextAttackIgnoreFigureLOS[attackerPlayerNum];
   delete game.attackTargets[`${msgId}_${figureIndex}`];
@@ -246,7 +255,51 @@ export async function handleAttackTarget(interaction, ctx) {
       if (idx >= 0) newDice.splice(idx, 1);
       attackInfo = { ...attackInfo, dice: newDice };
     }
+    // Lightsaber Throw: must target non-adjacent figure
+    if (overrideDice.mustTargetNonAdjacent && target.dist != null && target.dist <= 1) {
+      await thread.send('**Lightsaber Throw** requires targeting a non-adjacent figure. Choose a different target.');
+      return;
+    }
+    // Tusken Cycler: no surge abilities during this attack — stored on pendingCombat
+    if (overrideDice.blockSurgeAbilities) {
+      game._pendingBlockSurgeAbilities = true;
+    }
     delete game.pendingOverrideAttackDice[msgId];
+  }
+  // Close Quarters: override attack with adjacent hostile's dice/type, +1 Accuracy, -1 defense die
+  if (game.closeQuartersActive?.[msgId]) {
+    delete game.closeQuartersActive[msgId];
+    const cqMapId = game.selectedMap?.id;
+    if (cqMapId) {
+      const cqActData = game.dcActionsData?.[msgId];
+      const cqSelFig = cqActData?.selectedFigure ?? 0;
+      const cqDgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const cqDgIdx = cqDgMatch ? cqDgMatch[1] : '1';
+      const cqAttackerFk = `${meta.dcName}-${cqDgIdx}-${cqSelFig}`;
+      const cqAttackerPos = game.figurePositions?.[meta.playerNum]?.[cqAttackerFk];
+      if (cqAttackerPos) {
+        const cqMapSpaces = getMapSpaces(cqMapId);
+        const cqAdjSpaces = new Set(cqMapSpaces?.adjacency?.[cqAttackerPos] || []);
+        const cqOppNum = meta.playerNum === 1 ? 2 : 1;
+        const cqOppPositions = game.figurePositions?.[cqOppNum] || {};
+        let cqHostileName = null;
+        for (const [fk, pos] of Object.entries(cqOppPositions)) {
+          if (pos && cqAdjSpaces.has(pos)) { cqHostileName = fk.replace(/-\d+-\d+$/, ''); break; }
+        }
+        if (cqHostileName) {
+          const cqHostileStats = getDcStats(cqHostileName);
+          const cqAttack = cqHostileStats?.attack;
+          if (cqAttack?.dice) {
+            attackInfo = { ...attackInfo, dice: cqAttack.dice };
+            if (cqAttack.attackType?.toLowerCase() === 'melee') attackInfo = { ...attackInfo, range: [1, 1] };
+            else if (cqAttack.attackType?.toLowerCase() === 'ranged') attackInfo = { ...attackInfo, range: [1, 99] };
+            game._closeQuartersBonusAcc = 1;
+            game._closeQuartersRemoveDefDie = true;
+            await thread.send(`**Close Quarters** — Using **${cqHostileName}**'s attack pool [${cqAttack.dice.join(', ')}], +1 Accuracy, remove 1 defense die.`);
+          }
+        }
+      }
+    }
   }
   // NPC targets (thugs, Krykna) have synthesized stats — no DC lookup
   let targetDcName, targetStats, targetEff, npcDefenseBonus;
@@ -363,7 +416,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (_flyByFired) await thread.send(`🚀 **Fly-By** — Target within 2 spaces: +1 blue die to attack pool.`).catch(() => {});
   const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
   const nextPierce = (game.nextAttackBonusPierce?.[attackerPlayerNum] || 0) + (overrideDice?.pierce || 0);
-  const nextBonusAcc = (game.nextAttackBonusAccuracy?.[attackerPlayerNum] || 0) + (overrideDice?.bonusAccuracy || 0);
+  const nextBonusAcc = (game.nextAttackBonusAccuracy?.[attackerPlayerNum] || 0) + (overrideDice?.bonusAccuracy || 0) + (game._closeQuartersBonusAcc || 0);
   const [minRange, maxRange] = attackInfo.range || [1, 3];
   const isRanged = minRange >= 2 || maxRange >= 3;
   const distanceToTarget = target.dist ?? 1;
@@ -391,6 +444,8 @@ export async function handleAttackTarget(interaction, ctx) {
       figures: 1,
     },
     bonusBlock: npcDefenseBonus || undefined, // Krykna: 2 fixed blocks
+    blockSurgeAbilities: game._pendingBlockSurgeAbilities || false, // Tusken Cycler
+    defensePoolRemoveMax: game._closeQuartersRemoveDefDie ? 1 : 0, // Close Quarters: remove 1 defense die
     attackInfo,
     isRanged,
     distanceToTarget,
@@ -403,6 +458,10 @@ export async function handleAttackTarget(interaction, ctx) {
     defenseRoll: null,
     attackTargetMsgId: interaction.message.id,
   };
+  // Clean up temp flags after transferring to combat object
+  if (game._pendingBlockSurgeAbilities) delete game._pendingBlockSurgeAbilities;
+  if (game._closeQuartersBonusAcc) delete game._closeQuartersBonusAcc;
+  if (game._closeQuartersRemoveDefDie) delete game._closeQuartersRemoveDefDie;
   // Apply printed passive stat bonuses from attacker only (NPC has no passives)
   const attackerPassives = getDcStats(meta.dcName).passives || [];
   const defenderPassives = target.isNpc ? [] : (getDcStats(targetDcName).passives || []);

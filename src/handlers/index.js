@@ -45,6 +45,9 @@ import {
   handleEe3DiePick,
   handleFalseOrdersAction,
   handleFalseOrdersMovePick,
+  handleRushPushFig,
+  handleRushPushSpace,
+  handleRushPushSkip,
 } from './dc-play-area.js';
 import {
   handleSquadModal,
@@ -155,6 +158,9 @@ register('dc_cc_special_', handleDcCcSpecial);
 register('dc_cc_eoa_', handleDcCcEndOfActivation);
 register('dc_cc_double_', handleDcCcDoubleAction);
 register('pounce_space_', handlePounceSpacePick);
+register('rush_push_fig_', handleRushPushFig);
+register('rush_push_space_', handleRushPushSpace);
+register('rush_push_skip_', handleRushPushSkip);
 register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'));
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'));
 register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'));
@@ -241,6 +247,9 @@ export {
   handleEe3DiePick,
   handleFalseOrdersAction,
   handleFalseOrdersMovePick,
+  handleRushPushFig,
+  handleRushPushSpace,
+  handleRushPushSkip,
 } from './dc-play-area.js';
 export {
   handleSquadModal,

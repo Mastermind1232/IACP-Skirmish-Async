@@ -2385,10 +2385,12 @@
     "slam": {
       "type": "dcSpecial",
       "label": "Slam",
-      "logMessage": "Slam: Roll 1 red die. Choose an adjacent hostile figure — it suffers Damage equal to the Hit results. If that figure is SMALL, you may push it 1 space.",
+      "logMessage": "Slam: Roll 1 red die. Choose an adjacent hostile — it suffers Hit results as Damage. If SMALL, push 1 space (automated).",
       "wiredStatus": "wired",
       "rollOneDie": "red",
-      "rollOneDieNote": "Deal Hit results as Damage to 1 adjacent hostile figure. If that figure is SMALL, you may push it 1 space."
+      "rollOneDieTarget": "adjacentHostile",
+      "rollOneDiePushSmall": true,
+      "rollOneDieNote": "Deal Hit results as Damage to 1 adjacent hostile figure. If that figure is SMALL, push it 1 space."
     },
     "force_lightning": {
       "type": "dcSpecial",
@@ -2635,7 +2637,7 @@
       "wiredStatus": "wired",
       "rollOneDie": "red",
       "rollOneDieTarget": "adjacentHostile",
-      "rollOneDiePushSmallHonor": true
+      "rollOneDiePushSmall": true
     },
     "force_throw": {
       "type": "dcSpecial",
@@ -2863,7 +2865,9 @@
       "type": "dcSpecial",
       "label": "Incentivize",
       "description": "An elite figure of your choice becomes Focused.",
-      "logMessage": "**Incentivize** — Choose an elite figure to become **Focused**. *(Select via figure picker — honor system: must be elite.)*",
+      "chooseFriendlyToFocus": true,
+      "choiceRequiresElite": true,
+      "logMessage": "**Incentivize** — Choose an elite figure to become **Focused** (enforced).",
       "wiredStatus": "wired"
     },
     "scheme_jabba": {
@@ -2878,14 +2882,23 @@
       "type": "dcSpecial",
       "label": "Order Hit",
       "description": "Spend 2 VPs. An elite figure of your choice may interrupt to perform an attack. Then, it gains 2 movement points.",
-      "logMessage": "**Order Hit** (Double Action) — Spend 2 VPs. Choose an elite figure to interrupt and perform a free attack + gain 2 MP. *(Honor system: costs 2 actions + 2 VP.)*",
+      "chooseFriendlyToFocus": true,
+      "choiceRequiresElite": true,
+      "autoDeductVp": 2,
+      "grantFreeAttackToTarget": true,
+      "grantMpToTarget": 2,
+      "logMessage": "**Order Hit** (Double Action) — Spend 2 VPs. Choose an elite figure: free attack + 2 MP (enforced).",
       "wiredStatus": "wired"
     },
     "do_or_do_not_yoda": {
       "type": "dcSpecial",
       "label": "Do or Do Not",
       "description": "Choose another friendly REBEL FORCE USER within 4 spaces. That figure becomes Focused.",
-      "logMessage": "**Do or Do Not** — Choose a friendly REBEL FORCE USER within 4 spaces to become **Focused**. *(Honor system: must be REBEL + FORCE USER.)*",
+      "chooseFriendlyToFocus": true,
+      "choiceRequiresKeywords": ["REBEL", "FORCE USER"],
+      "choiceRange": 4,
+      "choiceExcludeSelf": true,
+      "logMessage": "**Do or Do Not** — Choose a friendly REBEL FORCE USER within 4 spaces to become **Focused** (enforced).",
       "wiredStatus": "wired"
     },
     "scratch_crumb": {
@@ -2925,8 +2938,8 @@
       "type": "dcSpecial",
       "label": "Environmental Recovery Gear",
       "description": "You and each adjacent friendly TROOPER may either recover 1 Damage or discard 1 HARMFUL condition.",
-      "recoverSelf": 1,
-      "logMessage": "**Environmental Recovery Gear** — You and each adjacent friendly TROOPER may recover 1 Damage or discard 1 harmful condition. *(Self auto-recovers 1; adjacent TROOPERs: honor system.)*",
+      "envRecoveryGearEffect": true,
+      "logMessage": "**Environmental Recovery Gear** — Self + adjacent TROOPERs: recover 1 HP or discard 1 harmful condition (automated).",
       "wiredStatus": "wired"
     },
     "shock_lance_dewback": {
@@ -2967,7 +2980,8 @@
       "fixedAreaRange": 2,
       "fixedAreaDamage": 1,
       "fixedAreaStrain": 1,
-      "logMessage": "**Gar Saxon's Flamethrower** — Each figure on or adjacent to the chosen space suffers 1 Damage + 1 Strain and discards 1 Power Token. *(Power Token discard: honor system.)*",
+      "fixedAreaDiscardToken": true,
+      "logMessage": "**Gar Saxon's Flamethrower** — Each figure on or adjacent to the chosen space suffers 1 Damage + 1 Strain and discards 1 Power Token (automated).",
       "wiredStatus": "wired"
     },
     "trample_bantha": {
@@ -2976,7 +2990,8 @@
       "description": "Choose up to 3 adjacent hostile figures and roll 1 red die. Each suffers Damage equal to Hit results.",
       "rollOneDie": "red",
       "rollOneDieTarget": "adjacentHostile",
-      "rollOneDieNote": "Deal Hit results as Damage to up to 3 adjacent hostile figures. *(Select targets: honor system.)*",
+      "rollOneDieMaxTargets": 3,
+      "rollOneDieNote": "Deal Hit results as Damage to up to 3 adjacent hostile figures (automated).",
       "wiredStatus": "wired"
     },
     "neurotoxin_hemlock": {
@@ -3002,7 +3017,8 @@
       "label": "Lift Off",
       "description": "Move up to 4 spaces. During this movement, you gain Mobile.",
       "freeMoveBonus": 4,
-      "logMessage": "**Lift Off** — Gained 4 free movement points with **Mobile** during this movement. *(Mobile movement: honor system.)*",
+      "mobileMovement": true,
+      "logMessage": "**Lift Off** — Gained 4 free MP with **Mobile** (ignores blocking terrain/figures). Automated.",
       "wiredStatus": "wired"
     },
     "fresh_catch_lothcat": {
@@ -3037,7 +3053,8 @@
       "freeAttackBonus": true,
       "overrideAttackDice": ["blue", "red"],
       "overrideAttackType": "Ranged",
-      "logMessage": "**Tusken Cycler** — Your next attack is free and uses [Blue, Red] dice (Ranged). *(No abilities during this attack: honor system.)*",
+      "blockSurgeAbilities": true,
+      "logMessage": "**Tusken Cycler** — Your next attack is free and uses [Blue, Red] dice (Ranged). Surge abilities blocked for this attack (automated).",
       "wiredStatus": "wired"
     },
     "lightsaber_throw_gi": {
@@ -3047,7 +3064,8 @@
       "freeAttackBonus": true,
       "overrideAttackType": "Ranged",
       "overrideBonusAccuracy": 2,
-      "logMessage": "**Lightsaber Throw** — Your next attack is free, Ranged with +2 Accuracy (uses your normal attack pool). *(Must target non-adjacent: honor system.)*",
+      "mustTargetNonAdjacent": true,
+      "logMessage": "**Lightsaber Throw** — Your next attack is free, Ranged with +2 Accuracy (uses your normal attack pool). Must target non-adjacent figure (enforced).",
       "wiredStatus": "wired"
     },
     "disruptor_rifle_mando": {
@@ -3055,7 +3073,7 @@
       "label": "Disruptor Rifle",
       "description": "Perform an attack. After this attack resolves, if it did not miss and the target has suffered Damage equal to Health minus 1, it suffers 1 more.",
       "freeAttackBonus": true,
-      "logMessage": "**Disruptor Rifle** — Your next attack costs no action. After it resolves: if it didn't miss and target HP = 1, the target suffers 1 additional Damage. *(Extra damage: honor system.)*",
+      "logMessage": "**Disruptor Rifle** — Your next attack costs no action. After it resolves: if it didn't miss and target HP = 1, the target suffers 1 additional Damage (automated).",
       "wiredStatus": "wired"
     },
     "dins_wrist_flamethrower": {
@@ -3676,7 +3694,7 @@
       "label": "Crippling Blow",
       "description": "Perform an attack. After the attack resolves, if it did not miss, the defender becomes Stunned.",
       "freeAttackBonus": true,
-      "logMessage": "**Crippling Blow** — Your next attack costs no action. After it resolves: if it didn't miss, the defender becomes **Stunned**. *(Stun application: honor system.)*",
+      "logMessage": "**Crippling Blow** — Your next attack costs no action. After it resolves: if it didn't miss, the defender becomes **Stunned** (automated).",
       "wiredStatus": "wired"
     },
     "disruptor_rifle_snowtrooper": {
@@ -3684,7 +3702,7 @@
       "label": "Disruptor Rifle",
       "description": "Perform an attack. After it resolves, if it did not miss and the target has suffered Damage equal to its Health minus 1, the target suffers 1 Damage.",
       "freeAttackBonus": true,
-      "logMessage": "**Disruptor Rifle** — Your next attack costs no action. After it resolves: if it didn't miss and target HP = 1, the target suffers 1 additional Damage. *(Extra damage: honor system.)*",
+      "logMessage": "**Disruptor Rifle** — Your next attack costs no action. After it resolves: if it didn't miss and target HP = 1, the target suffers 1 additional Damage (automated).",
       "wiredStatus": "wired"
     },
     "improved_smugglers_instincts": {
@@ -3692,7 +3710,7 @@
       "label": "Improved Smuggler's Instincts",
       "description": "Perform an interact, then move up to 3 spaces.",
       "freeAction": true,
-      "logMessage": "**Improved Smuggler's Instincts** — Perform an Interact action *(honor system)*, then gain 3 free MP.",
+      "logMessage": "**Improved Smuggler's Instincts** — Perform your Interact action, then use the 3 free MP granted below.",
       "freeMoveBonus": 3,
       "wiredStatus": "wired"
     },
@@ -3726,7 +3744,8 @@
       "label": "Rush",
       "description": "Move up to 4 spaces, then push an adjacent SMALL figure up to 1 space. Both suffer 1 Damage.",
       "freeMoveBonus": 4,
-      "logMessage": "**Rush** — Gained 4 free MP. After moving, you may push an adjacent SMALL figure 1 space; if you do, both suffer 1 Damage. *(Push + damage: honor system.)*",
+      "rushPostMovePush": true,
+      "logMessage": "**Rush** — Gained 4 free MP. After movement, you may push an adjacent SMALL hostile 1 space (both suffer 1 Damage).",
       "wiredStatus": "wired"
     },
     "ram_chopper": {
@@ -3736,24 +3755,26 @@
       "freeMoveBonus": 2,
       "rollOneDie": "green",
       "rollOneDieTarget": "adjacentHostile",
-      "rollOneDieNote": "If SMALL, push up to 1 space.",
-      "logMessage": "**Ram** — Gained 2 free MP. Then choose an adjacent figure and roll 1 green die for damage. Push if SMALL.",
+      "rollOneDiePushSmall": true,
+      "rollOneDieNote": "If SMALL, push up to 1 space (automated).",
+      "logMessage": "**Ram** — Gained 2 free MP. Then choose an adjacent figure and roll 1 green die for damage. Push if SMALL (automated).",
       "wiredStatus": "wired"
     },
     "system_shock_chopper": {
       "type": "dcSpecial",
       "label": "System Shock",
       "description": "Use while on or adjacent to a terminal. Choose a figure on or adjacent to any terminal. That figure suffers 2 Damage and 1 Strain.",
-      "targetHostileFigure": { "damage": 2, "strain": 1, "range": 99, "requiresLos": false },
-      "logMessage": "**System Shock** — *(Must be on/adjacent to a terminal. Target must be on/adjacent to any terminal — honor system.)*",
+      "targetHostileFigure": { "damage": 2, "strain": 1, "range": 99, "requiresLos": false, "activatorMustBeAdjacentToToken": "terminal", "targetMustBeAdjacentToToken": "terminal" },
+      "logMessage": "**System Shock** — Terminal adjacency enforced for both activator and target.",
       "wiredStatus": "wired"
     },
     "mandalorian_whip": {
       "type": "dcSpecial",
       "label": "Mandalorian Whip",
       "description": "Choose a SMALL hostile figure within 3 spaces and LOS. Push it up to 3 spaces adjacent to you. Then, perform an attack targeting that figure.",
-      "freeAttackBonus": true,
-      "logMessage": "**Mandalorian Whip** — Choose a SMALL hostile within 3 spaces/LOS. Push it adjacent to you (honor system), then your next attack costs no action and must target that figure.",
+      "pushTargetWithinRange": { "range": 3, "requiresSmall": true, "requiresLos": true },
+      "pushLandingEffect": { "mustAdjacentToActivator": true, "maxDistanceFromTarget": 3 },
+      "postPushFreeAttack": true,
       "wiredStatus": "wired"
     },
     "tonfa_strike": {
@@ -3764,7 +3785,7 @@
       "freeAttackBonus": true,
       "overrideAttackDice": ["red", "green"],
       "overrideAttackType": "melee",
-      "logMessage": "**Tonfa Strike** — Gained 2 free MP. Your next attack is free and uses [Red, Green] dice (Melee). *(After it resolves, you may perform another attack: honor system — use Attack again.)*",
+      "logMessage": "**Tonfa Strike** — Gained 2 free MP. Your next attack is free and uses [Red, Green] dice (Melee). After it resolves, a second free attack is automatically granted.",
       "wiredStatus": "wired"
     },
     "close_quarters": {
@@ -3773,7 +3794,8 @@
       "description": "Move up to 1 space. Perform an attack using an adjacent hostile's attack type and pool, removing 1 defense die and applying +1 Accuracy.",
       "freeMoveBonus": 1,
       "freeAttackBonus": true,
-      "logMessage": "**Close Quarters** — Gained 1 free MP. Your next attack costs no action. *(Use the adjacent hostile's attack type/pool, remove 1 defense die, +1 Accuracy: honor system.)*",
+      "closeQuartersOverride": true,
+      "logMessage": "**Close Quarters** — Gained 1 free MP. Your next attack uses an adjacent hostile's dice/type, removes 1 defense die, +1 Accuracy (automated).",
       "wiredStatus": "wired"
     },
     "spot_weld": {
@@ -4748,7 +4770,7 @@
       "type": "dcSpecial",
       "category": "passive",
       "label": "Fast Learner",
-      "description": "Once per round, you may play a CC as if a different DC played it. Notification at activation start.",
+      "description": "Once per round, you may play a CC whose restriction matches another DC name in your army (except Arcing Shot). Enforced in CC restriction checker.",
       "wiredStatus": "wired"
     },
     "consider_it_my_payment_asajj": {

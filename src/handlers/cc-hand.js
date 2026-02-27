@@ -18,6 +18,7 @@ import {
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { normalizeSquadInput } from '../game/validation.js';
+import { getDcEffects } from '../data-loader.js';
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
 export async function handleSquadModal(interaction, ctx) {
@@ -292,6 +293,19 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
     saveGames();
     return;
+  }
+  // Fast Learner (Mara Jade): if CC was played via Fast Learner bypass, mark ability as used for the round
+  if (restriction.fastLearner) {
+    const dcList2 = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    for (const dc of dcList2) {
+      const dn = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+      const eff = getDcEffects()?.[dn];
+      if ((eff?.specialAbilityIds || []).includes('adaptive_skills_mara_jade')) {
+        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+        game.roundFigureAbilityUsed[`${dn}_fast_learner`] = true;
+        break;
+      }
+    }
   }
   if (isCcAttachment(card)) {
     const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);

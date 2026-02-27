@@ -3,7 +3,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getDcEffects } from '../data-loader.js';
+import { getDcEffects, getMapSpaces } from '../data-loader.js';
 import { bottomLeftCoord } from '../game/coords.js';
 
 const BTM_PER_MSG = 5;
@@ -721,6 +721,55 @@ export async function handleMovePick(interaction, ctx) {
     moveState.pendingBleed = false;
     if ((game.figureConditions?.[moveState.figureKey] || []).includes('Bleed')) {
       await ctx.sendBleedingPrompt(game, interaction.channel, moveState.figureKey, moveState.playerNum, moveState.displayName);
+    }
+  }
+  // Rush (Onar): after all movement MP exhausted, offer push on adjacent SMALL hostile
+  if (newMp <= 0 && game.rushPending?.[msgId]) {
+    delete game.rushPending[msgId];
+    const rushMapId = game.selectedMap?.id;
+    const rushAdjSpaces = rushMapId ? (getMapSpaces(rushMapId)?.adjacency?.[newTopLeft] || []) : [];
+    const rushEffects = getDcEffects();
+    const rushOppNum = playerNum === 1 ? 2 : 1;
+    const rushOppPos = game.figurePositions?.[rushOppNum] || {};
+    const rushAdjSet = new Set(rushAdjSpaces);
+    const rushTargets = [];
+    for (const [fk, pos] of Object.entries(rushOppPos)) {
+      if (!pos || !rushAdjSet.has(pos)) continue;
+      const rDcName = fk.replace(/-\d+-\d+$/, '');
+      const rEff = rushEffects?.[rDcName];
+      const rKw = (rEff?.keywords || []).map(k => String(k).toUpperCase());
+      if (rKw.includes('LARGE') || rKw.includes('MASSIVE')) continue;
+      // Spiked Boots: cannot be pushed except by MASSIVE
+      if ((rEff?.specialAbilityIds || []).includes('spiked_boots_snowtrooper')) {
+        const pusherEff = rushEffects?.[meta.dcName];
+        if (!(pusherEff?.keywords || []).some(k => String(k).toUpperCase() === 'MASSIVE')) continue;
+      }
+      rushTargets.push({ figureKey: fk, dcName: rDcName });
+    }
+    if (rushTargets.length > 0) {
+      game.pendingRushPush = {
+        msgId, playerNum, activatorFigureKey: figureKey,
+        activatorPos: newTopLeft,
+        targets: rushTargets.map(t => t.figureKey),
+      };
+      const btns = rushTargets.map((t, i) =>
+        new ButtonBuilder()
+          .setCustomId(`rush_push_fig_${game.gameId}_${msgId}_${i}`)
+          .setLabel(t.dcName.replace(/_/g, ' '))
+          .setStyle(ButtonStyle.Primary)
+      );
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`rush_push_skip_${game.gameId}_${msgId}`)
+          .setLabel('Skip Rush Push')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      const rushRows = [];
+      while (btns.length > 0) rushRows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
+      await interaction.followUp({
+        content: '**Rush** — Push an adjacent SMALL hostile 1 space? Both suffer 1 Damage.',
+        components: rushRows.slice(0, 5),
+      });
     }
   }
   saveGames();
