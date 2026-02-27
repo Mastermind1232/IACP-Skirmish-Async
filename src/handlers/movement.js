@@ -3,6 +3,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
+import { getDcEffects } from '../data-loader.js';
 import { bottomLeftCoord } from '../game/coords.js';
 
 const BTM_PER_MSG = 5;
@@ -470,11 +471,23 @@ export async function handleMovePick(interaction, ctx) {
     }
   }
 
+  // Tripod: if figure has attacked this activation, cannot exit its space
+  if (game.tripodAttacked?.[figureKey]) {
+    const currentPos = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
+    if (currentPos && targetInfo.topLeft !== currentPos) {
+      await interaction.followUp({ content: `**${displayName}** has **Tripod** and has already attacked — cannot exit its space this activation.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
+  }
+
   const terminalsBefore = mapId ? countTerminalsControlledByPlayer(game, playerNum, mapId) : 0;
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
   if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
   const newTopLeft = targetInfo.topLeft;
   game.figurePositions[playerNum][figureKey] = newTopLeft;
+  // Track that this figure has moved (used by Tripod, etc.)
+  if (!game.figureMoved) game.figureMoved = {};
+  game.figureMoved[figureKey] = true;
   // Overrun: when entering a hostile's space, deal 2 damage (once per hostile per move session)
   if (game.overrunThisActivation?.[msgId]) {
     const hostilePlayerNum = playerNum === 1 ? 2 : 1;
@@ -522,6 +535,55 @@ export async function handleMovePick(interaction, ctx) {
       const hDisplayName = dcMessageMeta.get(hostileMsgId)?.displayName || hostileDcName;
       const defeatNote = newHp <= 0 ? ' **(may be defeated — check manually)**' : '';
       await logGameAction(game, client, `**Overrun** — **${displayName}** entered **${hDisplayName}**'s space: 2 Damage${defeatNote} (HP: ${curHp}→${newHp}).`, { phase: 'ROUND', icon: 'attack' });
+    }
+  }
+  // Cut and Run (Davith Elso): when exiting a space containing a hostile, that hostile suffers 1 Damage (once/fig/round)
+  {
+    const _carEff = getDcEffects()?.[meta.dcName];
+    if ((_carEff?.specialAbilityIds || []).includes('cut_and_run_davith') && startCoord && newTopLeft !== startCoord) {
+      const hostilePlayerNum = playerNum === 1 ? 2 : 1;
+      const hostilePositions = game.figurePositions?.[hostilePlayerNum] || {};
+      const _movingSize = getFigureSize(meta.dcName);
+      const _oldFootprint = new Set(getNormalizedFootprint(startCoord, _movingSize));
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      const hostileDcList = hostilePlayerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const hostileMsgIds = hostilePlayerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const _dcHs = ctx.dcHealthState;
+      for (const [hFk, hPos] of Object.entries(hostilePositions)) {
+        if (!hPos) continue;
+        const _carKey = `cut_and_run_${hFk}`;
+        if (game.roundFigureAbilityUsed[_carKey]) continue;
+        const hMatch = hFk.match(/^(.+)-(\d+)-(\d+)$/);
+        if (!hMatch) continue;
+        const [, hDcName, hDgIdx, hFigIdxStr] = hMatch;
+        const hSize = game.figureOrientations?.[hFk] || getFigureSize(hDcName);
+        const hFootprint = new Set(getNormalizedFootprint(hPos, hSize));
+        const wasAdjacent = [..._oldFootprint].some(s => hFootprint.has(s));
+        if (!wasAdjacent) continue;
+        game.roundFigureAbilityUsed[_carKey] = true;
+        // Deal 1 damage to hostile
+        if (!_dcHs) continue;
+        let hMsgId = null;
+        for (const [mId, mMeta] of dcMessageMeta) {
+          if (mMeta.gameId !== game.gameId || mMeta.playerNum !== hostilePlayerNum || mMeta.dcName !== hDcName) continue;
+          const dgM = (mMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+          if (String(dgM ? dgM[1] : '1') === String(hDgIdx)) { hMsgId = mId; break; }
+        }
+        if (!hMsgId) continue;
+        const hFigIdx = parseInt(hFigIdxStr, 10);
+        const hHs = _dcHs.get(hMsgId);
+        if (!hHs?.[hFigIdx]) continue;
+        const [hCur, hMax] = hHs[hFigIdx];
+        if (hCur === null || hCur <= 0) continue;
+        const hNewHp = Math.max(0, hCur - 1);
+        hHs[hFigIdx] = [hNewHp, hMax];
+        _dcHs.set(hMsgId, hHs);
+        const hListIdx = hostileMsgIds.indexOf(hMsgId);
+        if (hListIdx >= 0 && hostileDcList[hListIdx]) hostileDcList[hListIdx].healthState = [...hHs];
+        const hDispName = dcMessageMeta.get(hMsgId)?.displayName || hDcName;
+        const defeatNote = hNewHp <= 0 ? ' **(may be defeated)**' : '';
+        await logGameAction(game, client, `⚔️ **Cut and Run** — **${displayName}** exits **${hDispName}**'s space: 1 Damage${defeatNote} (HP: ${hCur}→${hNewHp}).`, { phase: 'ROUND', icon: 'attack' });
+      }
     }
   }
   const newSize = targetInfo.size;

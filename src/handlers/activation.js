@@ -282,6 +282,10 @@ export async function handleEndTurn(interaction, ctx) {
       for (const [eFk, ePos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
         if (!ePos) continue;
         if (!adj.includes(String(ePos).toLowerCase())) continue;
+        // Condition Immunity: skip Weaken for immune figures
+        const _unnEff = getDcEffects()?.[eFk.replace(/-\d+-\d+$/, '')] || getDcEffects()?.[eFk.replace(/-\d+-\d+$/, '')?.replace(/\s*\[.*\]\s*$/, '')];
+        const _unnImm = (_unnEff?.specialAbilityIds || []).includes('immune_onar') || (_unnEff?.specialAbilityIds || []).includes('immune_snowtrooper_elite');
+        if (_unnImm) continue;
         game.figureConditions = game.figureConditions || {};
         game.figureConditions[eFk] = game.figureConditions[eFk] || [];
         if (!game.figureConditions[eFk].includes('Weaken')) {
@@ -464,6 +468,8 @@ export async function handleDcEndActivation(interaction, ctx) {
   if (game.nextAttackBonusPierce?.[meta.playerNum]) delete game.nextAttackBonusPierce[meta.playerNum];
   if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
   if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
+  // Comms Jammer: clear CC block at end of activation
+  delete game.commsJammerActivePlayerNum;
   // Stun: discarded at end of activation
   if (game.figureConditions && ctx.getDcStats) {
     const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
@@ -471,6 +477,38 @@ export async function handleDcEndActivation(interaction, ctx) {
     for (let f = 0; f < figures; f++) {
       const fk = `${meta.dcName}-${dgIndex}-${f}`;
       if (game.figureConditions[fk]) game.figureConditions[fk] = game.figureConditions[fk].filter((c) => c !== 'Stun');
+    }
+  }
+  // Clear figure movement tracking for all figures in this group
+  if (game.figureMoved) {
+    const endEff = getDcEffects()?.[meta.dcName];
+    const figCount = endEff?.figures || 1;
+    for (let fi = 0; fi < figCount; fi++) {
+      for (let di = 0; di < (endEff?.subCost ? 2 : 1); di++) {
+        const fk = `${meta.dcName}-${di}-${fi}`;
+        delete game.figureMoved[fk];
+      }
+    }
+  }
+  // Clear Tripod attack tracking for all figures in this group
+  if (game.tripodAttacked) {
+    const endEff2 = getDcEffects()?.[meta.dcName];
+    const figCount2 = endEff2?.figures || 1;
+    for (let fi = 0; fi < figCount2; fi++) {
+      for (let di = 0; di < (endEff2?.subCost ? 2 : 1); di++) {
+        const fk = `${meta.dcName}-${di}-${fi}`;
+        delete game.tripodAttacked[fk];
+      }
+    }
+  }
+  // Clear activation start positions for this group
+  if (game.activationStartPositions) {
+    const endEff3 = getDcEffects()?.[meta.dcName];
+    const figCount3 = endEff3?.figures || 1;
+    for (let fi = 0; fi < figCount3; fi++) {
+      for (let di = 0; di < (endEff3?.subCost ? 2 : 1); di++) {
+        delete game.activationStartPositions[`${meta.dcName}-${di}-${fi}`];
+      }
     }
   }
 
@@ -651,6 +689,16 @@ export async function handleConfirmActivate(interaction, ctx) {
       game.movementBank[msgId].remaining += _dbTotal;
     }
     if (Object.keys(game.deployBonusMp).length === 0) delete game.deployBonusMp;
+  }
+  // Track activation start positions for abilities like Light It Up
+  game.activationStartPositions = game.activationStartPositions || {};
+  {
+    const _aspDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _aspPrefix = `${meta.dcName}-${_aspDgIndex}-`;
+    const _aspFigPos = game.figurePositions?.[meta.playerNum] || {};
+    for (const [fk, pos] of Object.entries(_aspFigPos)) {
+      if (fk.startsWith(_aspPrefix)) game.activationStartPositions[fk] = pos;
+    }
   }
   game.dcActionsData = game.dcActionsData || {};
   game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
@@ -841,6 +889,187 @@ export async function handleConfirmActivate(interaction, ctx) {
       }
     }
   }
+  // Durasteel Fist (Dark Trooper Mk III): once during activation, choose adjacent figure, roll 1 green die
+  if (_mountedIds.includes('durasteel_fist_dark_trooper')) {
+    await thread.send({ content: `🤜 **Durasteel Fist** available — Once during this activation, you may choose an adjacent figure/object and roll 1 green die. Apply Hits as damage. If a Surge is rolled and the target is SMALL, push it 1 space. *(Honor system — resolve manually.)*` }).catch(() => {});
+  }
+  // Comms Jammer (ISB Infiltrator Elite): opponent can't play CCs during your activation
+  if (_mountedIds.includes('comms_jammer_isb')) {
+    const oppNum = meta.playerNum === 1 ? 2 : 1;
+    game.commsJammerActivePlayerNum = meta.playerNum;
+    await thread.send({ content: `📡 **Comms Jammer** — Opponent (P${oppNum}) cannot play Command Cards during this activation.` }).catch(() => {});
+  }
+  // Power Converter (Saska Teft): at start of activation, may discard device token for +1 atk reroll
+  if (_mountedIds.includes('power_converter_saska')) {
+    const _pcFk = `${meta.dcName}-0-0`;
+    const _pcTokens = game.deviceTokens?.[_pcFk] || 0;
+    if (_pcTokens > 0) {
+      game.deviceTokens[_pcFk] = _pcTokens - 1;
+      game.deviceRerollGranted = game.deviceRerollGranted || {};
+      game.deviceRerollGranted[msgId] = true;
+      await thread.send({ content: `🔧 **Power Converter** — Discarded 1 Device token (${_pcTokens - 1} remaining). A friendly figure with a Device token may reroll 1 attack die during the next attack.` }).catch(() => {});
+    }
+  }
+  // Negotiate (Hondo): when declaring attack, +2 damage unless target pays 2 VP
+  if (_mountedIds.includes('negotiate_hondo')) {
+    await thread.send({ content: `💰 **Negotiate** available — When you attack, target gains +2 damage unless they pay 2 VP. *(Honor system.)*` }).catch(() => {});
+  }
+  // Airborne Commander (Gar Saxon): Mobile figures within 4 can use your surge abilities
+  if (_mountedIds.includes('airborne_commander_gar_saxon')) {
+    await thread.send({ content: `🪂 **Airborne Commander** — Mobile figures within 4 spaces may use Gar Saxon's surge abilities. *(Honor system.)*` }).catch(() => {});
+  }
+  // Advanced Firepower (General Sorin): adjacent DROID/VEHICLE may use your surge abilities
+  if (_mountedIds.includes('advanced_firepower_sorin')) {
+    await thread.send({ content: `🔧 **Advanced Firepower** — Adjacent DROID or VEHICLE figures may use Sorin's surge abilities. *(Honor system.)*` }).catch(() => {});
+  }
+  // Unhinged Director (Director Krennic): TROOPER/GUARDIAN within 2 get +2 bonus from tokens
+  if (_mountedIds.includes('unhinged_director_krennic')) {
+    await thread.send({ content: `📋 **Unhinged Director** — TROOPER or GUARDIAN within 2 spaces gain +2 (instead of +1) when spending power tokens. *(Honor system.)*` }).catch(() => {});
+  }
+  // Squad Cohesion (Ko-Tun): REBEL within 3 can spend another REBEL's token
+  if (_mountedIds.includes('squad_cohesion_kotun')) {
+    await thread.send({ content: `🤝 **Squad Cohesion** — REBEL figures within 3 spaces may spend each other's power tokens. *(Honor system.)*` }).catch(() => {});
+  }
+  // Consider It My Payment (Asajj): opponent reveals a CC from hand
+  if (_mountedIds.includes('consider_it_my_payment_asajj')) {
+    const oppNum = meta.playerNum === 1 ? 2 : 1;
+    const oppOwnerId = game[`player${oppNum}Id`];
+    await thread.send({ content: `💳 **Consider It My Payment** — <@${oppOwnerId}>, reveal a Command Card from your hand. *(Honor system.)*`, allowedMentions: { users: [oppOwnerId] } }).catch(() => {});
+  }
+  // General's Orders (General Weiss): choose up to 2 friendlies to move up to 2 spaces
+  if (_mountedIds.includes('generals_orders_weiss')) {
+    await thread.send({ content: `🎖️ **General's Orders** — Choose up to 2 friendly figures; each may interrupt to move up to 2 spaces. *(Honor system.)*` }).catch(() => {});
+  }
+  // Long-Laid Plans (Thrawn): distribute N power tokens (N = round#)
+  if (_mountedIds.includes('long_laid_plans_thrawn')) {
+    const roundNum = game.currentRound || 1;
+    await thread.send({ content: `🧠 **Long-Laid Plans** — Distribute **${roundNum} power token${roundNum > 1 ? 's' : ''}** (round ${roundNum}) among friendly figures. *(Honor system.)*` }).catch(() => {});
+  }
+  // Strategize (Thrawn): look at top CC of each deck, may discard one
+  if (_mountedIds.includes('strategize_thrawn')) {
+    await thread.send({ content: `🧠 **Strategize** — Look at the top CC of each player's deck; you may discard one. *(Honor system.)*` }).catch(() => {});
+  }
+  // Wisdom (Yoda): draw 1 CC, return 1 to bottom of deck
+  if (_mountedIds.includes('wisdom_yoda')) {
+    const deckKey = meta.playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const handKey = meta.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const deck = game[deckKey] || [];
+    if (deck.length > 0) {
+      const card = deck.shift();
+      game[handKey] = [...(game[handKey] || []), card];
+      await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC. Now return 1 CC from your hand to the bottom of your deck. *(Honor system for the return.)*` }).catch(() => {});
+    } else {
+      await thread.send({ content: `🧘 **Wisdom** — Deck is empty; cannot draw.` }).catch(() => {});
+    }
+  }
+  // Force Vision (Kanan): force opponent to activate a specific group next
+  if (_mountedIds.includes('force_vision_kanan')) {
+    const oppNum = meta.playerNum === 1 ? 2 : 1;
+    const oppOwnerId = game[`player${oppNum}Id`];
+    await thread.send({ content: `👁️ **Force Vision** — You may choose which group <@${oppOwnerId}> must activate next. *(Honor system.)*`, allowedMentions: { users: [oppOwnerId] } }).catch(() => {});
+  }
+  // Arms Distribution (Ko-Tun): distribute 2 power tokens among friendlies within 3
+  if (_mountedIds.includes('arms_distribution_kotun')) {
+    await thread.send({ content: `🎯 **Arms Distribution** — Distribute **2 power tokens** among friendly figures within 3 spaces. *(Honor system.)*` }).catch(() => {});
+  }
+  // Trust Goes Both Ways (Jyn Erso): choose a friendly within 3 to gain 1 MP
+  if (_mountedIds.includes('trust_goes_both_ways_jyn')) {
+    await thread.send({ content: `🤝 **Trust Goes Both Ways** — Choose a friendly figure within 3 spaces to gain **1 MP**. *(Honor system.)*` }).catch(() => {});
+  }
+  // Dead Precise (Ko-Tun): +2 Accuracy if didn't move this activation
+  if (_mountedIds.includes('dead_precise_kotun')) {
+    await thread.send({ content: `🎯 **Dead Precise** — If you do not move during this activation, apply +2 Accuracy while attacking.` }).catch(() => {});
+  }
+  // Adapt (Agent Blaise): choose a trait for the round
+  if (_mountedIds.includes('adapt_blaise')) {
+    await thread.send({ content: `🔄 **Adapt** — Choose a trait for this round. Agent Blaise gains that trait. *(Honor system.)*` }).catch(() => {});
+  }
+  // Hunt Dissent (Agent Kallus): when you or friendly TROOPER within 3 defeats hostile, gain Block Token
+  if (_mountedIds.includes('hunt_dissent_kallus')) {
+    await thread.send({ content: `🎯 **Hunt Dissent** — When you or a friendly TROOPER within 3 spaces defeats a hostile figure, gain 1 Block Token. *(Honor system.)*` }).catch(() => {});
+  }
+  // Air Support (Bodhi): after friendly attack, if target in your LOS, target suffers 1 additional damage
+  if (_mountedIds.includes('air_support_bodhi')) {
+    await thread.send({ content: `✈️ **Air Support** — After a friendly figure resolves an attack, if the target is in Bodhi's LOS, the target suffers 1 additional Damage. *(Honor system.)*` }).catch(() => {});
+  }
+  // Fast Learner (Mara Jade): once per round, may play CC as different DC
+  if (_mountedIds.includes('fast_learner_mara_jade') && !game.roundFigureAbilityUsed?.[`${meta.dcName}_fast_learner`]) {
+    await thread.send({ content: `📚 **Fast Learner** — Once this round, Mara Jade may play a Command card whose restriction matches the name of another Deployment card in your army (except "Arcing Shot"). *(Honor system.)*` }).catch(() => {});
+  }
+  // Imperial Loadout (Purge Trooper): loadout card abilities
+  if (_mountedIds.includes('imperial_loadout_purge_trooper')) {
+    await thread.send({ content: `⚔️ **Imperial Loadout** — Remember to apply your chosen Loadout card abilities (Electrobatons/Electrohammer/Electrostaff). *(Honor system.)*` }).catch(() => {});
+  }
+  // Scrap Battalion (Ugnaught): Junk Droid readies and co-activates
+  if (_mountedIds.includes('scrap_battalion_ugnaught_elite') || _mountedIds.includes('scrap_battalion_ugnaught_reg')) {
+    await thread.send({ content: `🤖 **Scrap Battalion** — Your Junk Droid readies at the start of this activation. It activates as though part of your group and may use your surge abilities. *(Honor system.)*` }).catch(() => {});
+  }
+  // I Make the Rules Now (Cad Bane): when another figure activates, HUNTER within 4 of Cad Bane gains 1 MP
+  // Scan all DCs on BOTH teams for this ability
+  for (const pn of [1, 2]) {
+    const dcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const dcMsgIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    for (let di = 0; di < dcList.length; di++) {
+      const dc = dcList[di];
+      if (!dc?.dcName) continue;
+      const eff = getDcEffects()?.[dc.dcName];
+      if (!(eff?.specialAbilityIds || []).includes('i_make_the_rules_cad_bane')) continue;
+      if (dc.dcName === meta.dcName && pn === meta.playerNum) continue; // "another figure"
+      const _getRange = ctx.getRange;
+      const cadDgIdx = (dc.displayName || dc.dcName).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const cadFk = `${dc.dcName}-${cadDgIdx}-0`;
+      const cadPos = game.figurePositions?.[pn]?.[cadFk];
+      if (!cadPos || !_getRange) continue;
+      // Grant 1 MP to each HUNTER within 4 of Cad Bane
+      const friendlyFigs = game.figurePositions?.[pn] || {};
+      for (const [fk, fp] of Object.entries(friendlyFigs)) {
+        if (!fp) continue;
+        const fDcName = fk.replace(/-\d+-\d+$/, '');
+        const fEff = getDcEffects()?.[fDcName];
+        if (!(fEff?.keywords || []).some(k => String(k).toUpperCase() === 'HUNTER')) continue;
+        if (_getRange(cadPos, fp) > 4) continue;
+        // Find the msgId for this HUNTER figure
+        for (const [mId, mMeta] of dcMessageMeta) {
+          if (mMeta.gameId !== game.gameId || mMeta.playerNum !== pn || mMeta.dcName !== fDcName) continue;
+          game.movementBank = game.movementBank || {};
+          game.movementBank[mId] = game.movementBank[mId] || { total: 0, remaining: 0 };
+          game.movementBank[mId].remaining += 1;
+          game.movementBank[mId].total += 1;
+          await thread.send({ content: `🔫 **I Make the Rules Now** — **${fDcName}** (HUNTER within 4 of Cad Bane) gains **1 MP**.` }).catch(() => {});
+          break;
+        }
+      }
+    }
+  }
+
+  // Calming Presence (Yoda): when a friendly REBEL activates, remove 1 harmful condition
+  // Check if any Yoda figure on the activating player's team has this ability
+  if (meta.playerNum) {
+    const dcList = meta.playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    for (const dc of dcList) {
+      if (!dc?.dcName) continue;
+      const eff = getDcEffects()?.[dc.dcName];
+      if (!(eff?.specialAbilityIds || []).includes('calming_presence_yoda')) continue;
+      if (dc.dcName === meta.dcName) continue; // different figure
+      // Check if the activating DC is REBEL
+      const activatingEff = getDcEffects()?.[meta.dcName];
+      if (activatingEff?.affiliation !== 'Rebel') continue;
+      // Check if any figure in the activating group has a harmful condition
+      const dgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const figures = activatingEff?.figures ?? 1;
+      for (let fi = 0; fi < figures; fi++) {
+        const fk = `${meta.dcName}-${dgIdx}-${fi}`;
+        const conds = game.figureConditions?.[fk] || [];
+        const harmful = conds.filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c));
+        if (harmful.length > 0) {
+          await thread.send({ content: `🧘 **Calming Presence** (Yoda) — **${meta.dcName}** is a REBEL figure that just activated. You may remove 1 harmful condition (${harmful.join(', ')}). *(Honor system.)*` }).catch(() => {});
+          break;
+        }
+      }
+      break;
+    }
+  }
+
   const logCh = await client.channels.fetch(game.generalId);
   const icon = ACTION_ICONS.activate || '⚡';
   const pLabel = `P${meta.playerNum}`;

@@ -4,6 +4,7 @@
  */
 export {
   validateDeckLegal,
+  validateArmyAffiliation,
   resolveDcName,
   DC_POINTS_LEGAL,
   CC_CARDS_LEGAL,

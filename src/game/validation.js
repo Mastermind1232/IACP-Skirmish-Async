@@ -1,7 +1,7 @@
 /**
  * Game validation (deck legal, etc.). No Discord; uses data-loader for card data.
  */
-import { getDcEffects, getCcEffect, getCcEffectsData } from '../data-loader.js';
+import { getDcEffects, getDcKeywords, getCcEffect, getCcEffectsData } from '../data-loader.js';
 
 export const DC_POINTS_LEGAL = 40;
 export const CC_CARDS_LEGAL = 15;
@@ -176,4 +176,123 @@ export function validateDeckLegal(squad) {
     ccCount: ccList.length,
     ccCost,
   };
+}
+
+/**
+ * Validate army affiliation consistency.
+ * Determines the primary affiliation from non-"Any" DCs and warns about mismatches,
+ * accounting for special DC abilities that allow cross-faction inclusions.
+ *
+ * @param {{ dcList: string[] }} squad
+ * @returns {{ warnings: string[], primaryAffiliation: string|null }}
+ */
+export function validateArmyAffiliation(squad) {
+  const warnings = [];
+  const dcList = squad?.dcList || [];
+  if (!dcList.length) return { warnings, primaryAffiliation: null };
+
+  const dcEffects = getDcEffects();
+  const dcKeywords = getDcKeywords();
+
+  // ── Resolve each DC to its canonical name, affiliation, and keywords ──
+  const resolved = dcList.map((entry) => {
+    const name = resolveDcName(entry);
+    const stats = dcEffects[name] || (!name.startsWith('[') ? dcEffects[`[${name}]`] : null);
+    const affiliation = stats?.affiliation || 'Any';
+    const keywords = dcKeywords[name] || dcKeywords[`[${name}]`] || stats?.keywords || [];
+    const isAttachment = stats?.attachment === true;
+    return { name, affiliation, keywords, isAttachment };
+  });
+
+  // ── Determine primary affiliation (most common non-"Any" affiliation) ──
+  const affCounts = {};
+  for (const dc of resolved) {
+    if (dc.affiliation !== 'Any') {
+      affCounts[dc.affiliation] = (affCounts[dc.affiliation] || 0) + 1;
+    }
+  }
+  const sorted = Object.entries(affCounts).sort((a, b) => b[1] - a[1]);
+  const primaryAffiliation = sorted.length ? sorted[0][0] : null;
+  if (!primaryAffiliation) return { warnings, primaryAffiliation: null };
+
+  // ── Detect special DC abilities in the army ──
+  const nameSet = new Set(resolved.map((d) => d.name));
+
+  const hasBibFortuna = nameSet.has('Bib Fortuna');
+  const hasSaskaTeft = nameSet.has('Saska Teft');
+  const hasDoctorAphra = nameSet.has('Doctor Aphra') || nameSet.has('Dr. Aphra');
+  const hasEliteJawaScavenger = nameSet.has('Jawa Scavenger (Elite)');
+  const hasHeavyStormtrooperElite = nameSet.has('Heavy Stormtrooper (Elite)');
+
+  // ── Bib Fortuna — Dirty Dealing: army CANNOT include Rebel DCs ──
+  if (hasBibFortuna) {
+    const rebelDcs = resolved.filter((d) => d.affiliation === 'Rebel');
+    if (rebelDcs.length) {
+      warnings.push(
+        `Bib Fortuna (Dirty Dealing): army cannot include Rebel DCs, but found: ${rebelDcs.map((d) => d.name).join(', ')}.`
+      );
+    }
+  }
+
+  // ── Heavy Stormtrooper (Elite) — Modular: note if attachment exists ──
+  if (hasHeavyStormtrooperElite) {
+    const attachments = resolved.filter((d) => d.isAttachment);
+    if (attachments.length) {
+      warnings.push(
+        `Heavy Stormtrooper (Elite) (Modular): attachment "${attachments[0].name}" present — may include at -1 cost (cost validation unchanged).`
+      );
+    }
+  }
+
+  // ── Build set of DCs that are excused from affiliation warnings ──
+  const excused = new Set();
+
+  // Saska Teft — Shady Contacts: up to 1 non-upgrade Scum DC allowed
+  if (hasSaskaTeft && primaryAffiliation !== 'Scum') {
+    let scumExcusedCount = 0;
+    for (const dc of resolved) {
+      if (dc.affiliation === 'Scum' && dc.name !== 'Saska Teft' && !dc.isAttachment) {
+        if (scumExcusedCount < 1) {
+          excused.add(dc.name);
+          scumExcusedCount++;
+        }
+      }
+    }
+    // Saska herself is Rebel, so she's fine in a Rebel army; excuse her from Scum checks
+  }
+
+  // Doctor Aphra — Dubious Counterparts: Scum DROID DCs are allowed
+  if (hasDoctorAphra) {
+    for (const dc of resolved) {
+      if (dc.affiliation === 'Scum' && dc.keywords.some((k) => String(k).toUpperCase() === 'DROID')) {
+        excused.add(dc.name);
+      }
+    }
+  }
+
+  // Jawa Scavenger (Elite) — Scavenged Stock: up to 3 cross-affiliation DROID DCs allowed
+  if (hasEliteJawaScavenger) {
+    let droidExcusedCount = 0;
+    for (const dc of resolved) {
+      if (dc.affiliation !== primaryAffiliation && dc.affiliation !== 'Any' && !excused.has(dc.name)) {
+        if (dc.keywords.some((k) => String(k).toUpperCase() === 'DROID')) {
+          if (droidExcusedCount < 3) {
+            excused.add(dc.name);
+            droidExcusedCount++;
+          }
+        }
+      }
+    }
+  }
+
+  // ── Warn about any non-primary, non-"Any", non-excused DCs ──
+  for (const dc of resolved) {
+    if (dc.affiliation !== primaryAffiliation && dc.affiliation !== 'Any' && !excused.has(dc.name)) {
+      warnings.push(
+        `"${dc.name}" is ${dc.affiliation} but army primary affiliation is ${primaryAffiliation}.`
+      );
+    }
+  }
+
+  return { warnings, primaryAffiliation };
 }

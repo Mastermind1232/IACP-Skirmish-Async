@@ -1201,6 +1201,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   }
 
   if (action === 'Attack') {
+    // Non-Combatant (C-3PO): cannot attack
+    const ncEff = getDcEffects()?.[meta?.dcName];
+    if ((ncEff?.specialAbilityIds || []).includes('non_combatant_c3po')) {
+      await interaction.followUp({ content: '**Non-Combatant** — This figure cannot attack.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
     const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
     // Stunned figures cannot Attack
@@ -1291,6 +1297,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         }
       }
     }
+    // Tripod: track that figure has attacked (for "cannot exit space if attacked")
+    if (atkSpecialIds.includes('tripod_eweb')) {
+      if (!game.tripodAttacked) game.tripodAttacked = {};
+      game.tripodAttacked[figureKey] = true;
+    }
     // Snapshot state before attack begins (undo restores health/VP/conditions/hand)
     if (pushUndo) pushUndo(game, { type: 'attack', label: 'Attack', msgId, gameLogMessageId: null });
     await buildAndSendAttackTargets(interaction, ctx, game, meta, msgId, figureKey, figureIndex, {
@@ -1375,10 +1386,17 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         delete game.stayDownPendingMsgId[msgId];
         const _sdDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
         const _sdFigKey = `${meta.dcName}-${_sdDgIdx}-${figureIndex}`;
-        game.figureConditions = game.figureConditions || {};
-        game.figureConditions[_sdFigKey] = game.figureConditions[_sdFigKey] || [];
-        if (!game.figureConditions[_sdFigKey].includes('Stun')) game.figureConditions[_sdFigKey].push('Stun');
-        await logGameAction(game, client, `**Stay Down** — **${meta.displayName || meta.dcName}** is now **Stunned**.`, { phase: 'ROUND', icon: 'activate' });
+        // Condition Immunity: skip Stun for immune figures
+        const _sdEff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+        const _sdImm = (_sdEff?.specialAbilityIds || []).includes('immune_onar') || (_sdEff?.specialAbilityIds || []).includes('immune_snowtrooper_elite');
+        if (!_sdImm) {
+          game.figureConditions = game.figureConditions || {};
+          game.figureConditions[_sdFigKey] = game.figureConditions[_sdFigKey] || [];
+          if (!game.figureConditions[_sdFigKey].includes('Stun')) game.figureConditions[_sdFigKey].push('Stun');
+          await logGameAction(game, client, `**Stay Down** — **${meta.displayName || meta.dcName}** is now **Stunned**.`, { phase: 'ROUND', icon: 'activate' });
+        } else {
+          await logGameAction(game, client, `**Condition Immunity** — **${meta.displayName || meta.dcName}** is immune to Stun (Stay Down).`, { phase: 'ROUND', icon: 'card' });
+        }
       }
     } else if (hasPummelFreeAttack) {
       // Pummel: grants 2 free attacks; track remaining count

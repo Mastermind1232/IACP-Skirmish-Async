@@ -4210,6 +4210,881 @@
       "label": "Brutal Tactics",
       "description": "When a hostile figure is defeated, each hostile figure within 3 spaces of that figure becomes Weakened.",
       "wiredStatus": "wired"
+    },
+    "targeting_computer_atst": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Targeting Computer",
+      "description": "While attacking, you may reroll 1 attack die.",
+      "wiredStatus": "wired"
+    },
+    "awkward_atst": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Awkward",
+      "description": "You cannot attack adjacent figures.",
+      "wiredStatus": "wired"
+    },
+    "slippery_smuggler_elite": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Slippery",
+      "description": "While defending, apply -2 Accuracy to the attack results. After the attack resolves, you gain 2 movement points.",
+      "wiredStatus": "wired"
+    },
+    "slippery_smuggler_reg": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Slippery",
+      "description": "While defending, apply -2 Accuracy to the attack results. After the attack resolves, you gain 2 movement points.",
+      "wiredStatus": "wired"
+    },
+    "take_cover_jawa_elite": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Take Cover",
+      "description": "While defending, you may apply +1 Block and -1 Evade to the defense results.",
+      "wiredStatus": "wired"
+    },
+    "take_cover_jawa_reg": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Take Cover",
+      "description": "While defending, you may apply +1 Block and -1 Evade to the defense results.",
+      "wiredStatus": "wired"
+    },
+    "aim_rebel_trooper_elite": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Aim",
+      "description": "If you have not exited a space during this activation, apply +1 Hit and +2 Accuracy to your attack results.",
+      "wiredStatus": "wired"
+    },
+    "aim_rebel_trooper_reg": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Aim",
+      "description": "If you have not exited a space during this activation, apply +1 Hit and +2 Accuracy to your attack results.",
+      "wiredStatus": "wired"
+    },
+    "spray_fire_heavy_stormtrooper": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Spray Fire",
+      "description": "While attacking, you may apply -3 Accuracy and +1 Surge to the attack results.",
+      "wiredStatus": "wired"
+    },
+    "improvised_cover_verena": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Improvised Cover",
+      "description": "While defending, if you are adjacent to an object or a non-friendly figure (not the attacker), apply +1 Block to the defense results.",
+      "wiredStatus": "wired"
+    },
+    "non_combatant_c3po": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Non-Combatant",
+      "description": "You cannot attack.",
+      "wiredStatus": "wired"
+    },
+    "cower_c3po": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Cower",
+      "description": "While defending, while adjacent to a friendly figure, you may reroll 1 defense die.",
+      "wiredStatus": "wired"
+    },
+    "cower_imperial_officer_reg": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Cower",
+      "description": "While defending, while adjacent to a friendly figure, you may reroll 1 defense die.",
+      "wiredStatus": "wired"
+    },
+    "immune_onar": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Immune",
+      "description": "You cannot gain HARMFUL conditions.",
+      "wiredStatus": "wired"
+    },
+    "immune_snowtrooper_elite": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Immune",
+      "description": "You cannot gain HARMFUL conditions.",
+      "wiredStatus": "wired"
+    },
+    "spiked_boots_snowtrooper": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Spiked Boots",
+      "description": "You cannot be pushed or pulled except by a MASSIVE figure.",
+      "wiredStatus": "wired"
+    },
+    "nimble_asajj": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Nimble",
+      "description": "After an attack targeting you resolves, you gain 2 movement points for each Block result.",
+      "wiredStatus": "wired"
+    },
+    "force_deflection_yoda": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Force Deflection",
+      "description": "After an attack targeting you or an adjacent friendly Rebel figure resolves, the attacker suffers Damage equal to the number of attack dice rolled. Limit once per round.",
+      "wiredStatus": "wired"
+    },
+    "overload_saboteur": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Overload",
+      "description": "You may trigger the same surge ability up to twice during each of your attacks.",
+      "wiredStatus": "wired"
+    },
+    "camouflage_mak": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Camouflage",
+      "description": "Hostile figures 4 or more spaces away from you cannot draw line of sight to you.",
+      "wiredStatus": "wired"
+    },
+    "camouflage_scout_trooper": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Camouflage",
+      "description": "Hostile figures 4 or more spaces away from you cannot draw line of sight to you.",
+      "wiredStatus": "wired"
+    },
+    "tripod_eweb": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Tripod",
+      "description": "If you have been targeted by an attack this activation, you cannot exit your space. If you have exited your space this activation, you cannot attack.",
+      "wiredStatus": "wired"
+    },
+    "squad_training_shoretrooper_elite": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Squad Training",
+      "description": "While attacking, while adjacent to another friendly TROOPER, you may reroll 1 attack die.",
+      "wiredStatus": "wired"
+    },
+    "squad_training_shoretrooper_reg": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Squad Training",
+      "description": "While attacking, while adjacent to another friendly TROOPER, you may reroll 1 attack die.",
+      "wiredStatus": "wired"
+    },
+    "squad_training_stormtrooper_elite": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Squad Training",
+      "description": "While attacking, while adjacent to another friendly TROOPER, you may reroll 1 attack die.",
+      "wiredStatus": "wired"
+    },
+    "squad_training_stormtrooper_reg": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Squad Training",
+      "description": "While attacking, while adjacent to another friendly TROOPER, you may reroll 1 attack die.",
+      "wiredStatus": "wired"
+    },
+    "coordinated_hunt_purge_commander": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Coordinated Hunt",
+      "description": "While you or a friendly HUNTER in your line of sight is attacking, it may reroll 1 attack die. Limit one Coordinated Hunt per attack.",
+      "wiredStatus": "wired"
+    },
+    "light_it_up_rebel_pathfinder": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Light It Up",
+      "description": "While attacking, if the target of your attack did not have line of sight to you at the start of your activation, you may reroll up to 1 attack die.",
+      "wiredStatus": "wired"
+    },
+    "versatile_weaponry_hk_elite": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Versatile Weaponry",
+      "description": "While attacking, you may force the defender to reroll 1 defense die.",
+      "wiredStatus": "wired"
+    },
+    "shared_calculations_zuckuss": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Shared Calculations",
+      "description": "While attacking, if a friendly DROID within 3 spaces has line of sight to the target space, you may force the defender to reroll 1 defense die.",
+      "wiredStatus": "wired"
+    },
+    "raider_weequay_elite": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Raider",
+      "description": "While attacking, you may choose 1 die. The player that rolled that die must reroll that die.",
+      "wiredStatus": "wired"
+    },
+    "raider_weequay_reg": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Raider",
+      "description": "While attacking, you may choose 1 die. The player that rolled that die must reroll that die.",
+      "wiredStatus": "wired"
+    },
+    "twin_sabers_ahsoka": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Twin Sabers",
+      "description": "While attacking, you may reroll all attack dice or force the defender to reroll all defense dice.",
+      "wiredStatus": "wired"
+    },
+    "resourceful_lando": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Resourceful",
+      "description": "While attacking or defending, you may reroll 1 of your attack or defense dice.",
+      "wiredStatus": "wired"
+    },
+    "gambit_lando": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Gambit",
+      "description": "Before you reroll a die, you may replace it with another die of the same type. After rolling, the new die is considered rerolled.",
+      "wiredStatus": "wired"
+    },
+    "shrewd_scoundrel_lando": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Shrewd Scoundrel",
+      "description": "While attacking or defending, before you reroll a die with Resourceful, you may guess aloud a number from 0-2. After rerolls, if the number of Hit results matches your guess, gain 2 VP.",
+      "wiredStatus": "wired"
+    },
+    "precision_grand_inquisitor": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Precision",
+      "description": "While attacking or defending against an adjacent figure, you may choose 1 die. The player that rolled that die must reroll it.",
+      "wiredStatus": "wired"
+    },
+    "fyrnock_style_tress": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Fyrnock Style",
+      "description": "While attacking or defending, choose 1 attack die. The player that rolled that die must reroll that die.",
+      "wiredStatus": "wired"
+    },
+    "trained_rancor": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Trained",
+      "description": "While attacking, you may suffer 1 Strain to reroll 1 attack die.",
+      "wiredStatus": "wired"
+    },
+    "agile_jet_trooper_elite": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Agile",
+      "description": "While defending, you may convert 1 Block to 1 Evade.",
+      "wiredStatus": "wired"
+    },
+    "agile_jet_trooper_reg": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Agile",
+      "description": "While defending, you may convert 1 Block to 1 Evade.",
+      "wiredStatus": "wired"
+    },
+    "defensible_sc2m": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Defensible",
+      "description": "While defending, you may apply either +1 Block or +1 Evade to your defense results.",
+      "wiredStatus": "wired"
+    },
+    "get_down_onar": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Get Down",
+      "description": "While a small figure within 2 spaces is defending, you may apply +1 Block or +1 Evade to the defense results. Limit once per round.",
+      "wiredStatus": "wired"
+    },
+    "personal_combat_shield_gar_saxon": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Personal Combat Shield",
+      "description": "Whenever you spend a Block while defending, apply +1 Evade to the defense results.",
+      "wiredStatus": "wired"
+    },
+    "survival_is_strength_armorer": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Survival is Strength",
+      "description": "While a friendly figure within 3 spaces is defending, if it spent a Block symbol during this attack, it may reroll 1 attack die.",
+      "wiredStatus": "wired"
+    },
+    "vague_and_unconvincing_k2s0": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Vague and Unconvincing",
+      "description": "While defending, your player and your opponent cannot spend power tokens or play Command cards.",
+      "wiredStatus": "wired"
+    },
+    "call_the_shots_hera": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Call the Shots",
+      "description": "While another friendly figure within 3 spaces is attacking, you may apply +2 Accuracy, +1 Hit, or +1 Surge to the attack results. Limit once per round.",
+      "wiredStatus": "wired"
+    },
+    "adv_targeting_computer_dark_trooper": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Advanced Targeting Computer",
+      "description": "When you declare an attack, you become Focused. During this attack, you may reroll 1 attack die. If the rerolled die has fewer Hit results, apply +1 Hit.",
+      "wiredStatus": "wired"
+    },
+    "krayt_dragon_fury_tress": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Krayt Dragon Fury",
+      "description": "While attacking, X equals the number of Surge rolled. Affects Cleave X and Recover X surge abilities.",
+      "wiredStatus": "wired"
+    },
+    "leg_hydraulics_tress": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Leg Hydraulics",
+      "description": "After you resolve an attack, move up to 1 space.",
+      "wiredStatus": "wired"
+    },
+    "parting_shot_greedo": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "pre-defeat",
+      "label": "Parting Shot",
+      "description": "When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated.",
+      "wiredStatus": "wired"
+    },
+    "parting_shot_hired_gun_elite": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "pre-defeat",
+      "label": "Parting Shot",
+      "description": "When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated.",
+      "wiredStatus": "wired"
+    },
+    "parting_shot_hired_gun_reg": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "pre-defeat",
+      "label": "Parting Shot",
+      "description": "When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated.",
+      "wiredStatus": "wired"
+    },
+    "slow_on_the_draw_greedo": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "attack-declare",
+      "label": "Slow on the Draw",
+      "description": "When you declare an attack, the defender may interrupt to perform an attack targeting you.",
+      "wiredStatus": "wired"
+    },
+    "strike_me_down_obiwan": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "attack-declared-on-you",
+      "label": "Strike Me Down",
+      "description": "When an attack targeting you is declared, you may reduce your figure cost by 3. If you do, you are then defeated.",
+      "wiredStatus": "wired"
+    },
+    "into_the_force_obiwan": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "on-defeat",
+      "label": "Into the Force",
+      "description": "When you are defeated, choose another friendly figure. That figure becomes Focused.",
+      "wiredStatus": "wired"
+    },
+    "alter_mind_obiwan": {
+      "type": "dcSpecial",
+      "category": "passive-aura",
+      "label": "Alter Mind",
+      "description": "Hostile figures with a figure cost of 9 or less within 3 spaces of you cannot interact and are not counted for the purposes of control. Interact blocking enforced in getLegalInteractOptions; control counting is honor-system.",
+      "wiredStatus": "wired"
+    },
+    "cut_and_run_davith": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "movement-exit",
+      "label": "Cut and Run",
+      "description": "When you exit a space containing a hostile figure, that figure suffers 1 Damage. Limit once per figure per round.",
+      "wiredStatus": "wired"
+    },
+    "stealthy_davith": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "mission-start",
+      "label": "Stealthy",
+      "description": "At the start of the mission, become Hidden.",
+      "wiredStatus": "wired"
+    },
+    "the_force_is_with_me_chirrut": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "ranged-attack-declared-on-you",
+      "label": "The Force is With Me",
+      "description": "When a Ranged attack targeting you is declared, choose an adjacent hostile figure. If you do, apply -1 Hit to the attack results and the chosen figure suffers 1 Damage.",
+      "wiredStatus": "wired"
+    },
+    "devout_chirrut": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Devout",
+      "description": "You may use Rebel FORCE USER Command cards. Enforced in CC restriction checking.",
+      "wiredStatus": "wired"
+    },
+    "durasteel_fist_dark_trooper": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "once-per-activation",
+      "label": "Durasteel Fist",
+      "description": "Once during your activation, choose 1 adjacent figure or object and roll 1 green die. It suffers Damage equal to the Hit results. Then, if you rolled a Surge and the target was a SMALL figure, push it up to 1 space.",
+      "wiredStatus": "wired"
+    },
+    "self_preservation_hired_gun_elite": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "on-damage",
+      "label": "Self-Preservation",
+      "description": "When you suffer Damage, you become Focused.",
+      "wiredStatus": "wired"
+    },
+    "comms_jammer_isb": {
+      "type": "dcSpecial",
+      "category": "passive-aura",
+      "label": "Comms Jammer",
+      "description": "While you are activated, your opponent cannot play Command Cards.",
+      "wiredStatus": "wired"
+    },
+    "negotiate_hondo": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "attack-declare",
+      "label": "Negotiate",
+      "description": "When you declare an attack, the target suffers +2 damage unless the target's owner pays 2 VP.",
+      "wiredStatus": "wired"
+    },
+    "airborne_commander_gar_saxon": {
+      "type": "dcSpecial",
+      "category": "passive-aura",
+      "label": "Airborne Commander",
+      "description": "Mobile friendly figures within 4 spaces may use your surge abilities during their attacks.",
+      "wiredStatus": "wired"
+    },
+    "advanced_firepower_sorin": {
+      "type": "dcSpecial",
+      "category": "passive-aura",
+      "label": "Advanced Firepower",
+      "description": "Adjacent friendly DROID or VEHICLE figures may use your surge abilities during their attacks.",
+      "wiredStatus": "wired"
+    },
+    "unhinged_director_krennic": {
+      "type": "dcSpecial",
+      "category": "passive-aura",
+      "label": "Unhinged Director",
+      "description": "Friendly TROOPER or GUARDIAN within 2 spaces gain +2 (instead of +1) when spending power tokens.",
+      "wiredStatus": "wired"
+    },
+    "squad_cohesion_kotun": {
+      "type": "dcSpecial",
+      "category": "passive-aura",
+      "label": "Squad Cohesion",
+      "description": "Friendly REBEL figures within 3 spaces may spend each other's power tokens.",
+      "wiredStatus": "wired"
+    },
+    "whats_yours_is_mine_hondo": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "end-of-round",
+      "label": "What's Yours is Mine",
+      "description": "At the end of each round, if you are in the opponent's deployment zone, steal 2 VP.",
+      "wiredStatus": "wired"
+    },
+    "illicit_arms_bib": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "attack-declare",
+      "label": "Illicit Arms",
+      "description": "While attacking, you may discard a CC to apply +1 Hit.",
+      "wiredStatus": "wired"
+    },
+    "dirty_dealing_bib": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Dirty Dealing",
+      "description": "Your army cannot include Rebel deployment cards. Army-building rule. Validated in validateArmyAffiliation.",
+      "wiredStatus": "wired"
+    },
+    "i_make_the_rules_cad_bane": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "other-activation",
+      "label": "I Make the Rules Now",
+      "description": "When another figure is activated, each of your HUNTER figures within 4 spaces gains 1 MP.",
+      "wiredStatus": "wired"
+    },
+    "adaptive_skills_mara_jade": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Adaptive Skills",
+      "description": "Your affiliation matches your army's affiliation. Enforced in CC restriction checking.",
+      "wiredStatus": "wired"
+    },
+    "fast_learner_mara_jade": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Fast Learner",
+      "description": "Once per round, you may play a CC as if a different DC played it. Notification at activation start.",
+      "wiredStatus": "wired"
+    },
+    "consider_it_my_payment_asajj": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "activation-start",
+      "label": "Consider It My Payment",
+      "description": "At the start of your activation, your opponent reveals a CC from their hand.",
+      "wiredStatus": "wired"
+    },
+    "adapt_blaise": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Adapt",
+      "description": "At the start of each round, choose a trait. You gain that trait until the end of the round.",
+      "wiredStatus": "wired"
+    },
+    "hunt_dissent_kallus": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Hunt Dissent",
+      "description": "When you or a friendly TROOPER within 3 spaces defeats a hostile figure, you gain 1 Block Token.",
+      "wiredStatus": "wired"
+    },
+    "air_support_bodhi": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "friendly-attack",
+      "label": "Air Support",
+      "description": "After a friendly figure resolves an attack, if the target is in your LOS, the target suffers 1 additional Damage.",
+      "wiredStatus": "wired"
+    },
+    "trust_goes_both_ways_jyn": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Trust Goes Both Ways",
+      "description": "When you activate, choose a friendly figure within 3 spaces to gain 1 MP.",
+      "wiredStatus": "wired"
+    },
+    "dead_precise_kotun": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Dead Precise",
+      "description": "While attacking, if you did not move during this activation, apply +2 Accuracy.",
+      "wiredStatus": "wired"
+    },
+    "arms_distribution_kotun": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "activation-start",
+      "label": "Arms Distribution",
+      "description": "At the start of your activation, distribute 2 power tokens among friendly figures within 3 spaces.",
+      "wiredStatus": "wired"
+    },
+    "generals_orders_weiss": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "activation-start",
+      "label": "General's Orders",
+      "description": "At the start of your activation, choose up to 2 friendly figures. Each may interrupt to move up to 2 spaces.",
+      "wiredStatus": "wired"
+    },
+    "long_laid_plans_thrawn": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "activation-start",
+      "label": "Long-Laid Plans",
+      "description": "At the start of your activation, distribute N power tokens among friendly figures (N = current round number).",
+      "wiredStatus": "wired"
+    },
+    "strategize_thrawn": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "activation-start",
+      "label": "Strategize",
+      "description": "At the start of your activation, look at the top CC of each deck; you may discard one.",
+      "wiredStatus": "wired"
+    },
+    "wisdom_yoda": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "activation-start",
+      "label": "Wisdom",
+      "description": "At the start of your activation, draw 1 CC, then place 1 CC from your hand on the bottom of your deck.",
+      "wiredStatus": "wired"
+    },
+    "calming_presence_yoda": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "friendly-activation",
+      "label": "Calming Presence",
+      "description": "When a friendly REBEL figure activates, you may remove 1 harmful condition from that figure.",
+      "wiredStatus": "wired"
+    },
+    "force_vision_kanan": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "activation-start",
+      "label": "Force Vision",
+      "description": "At the start of your activation, you may choose which group your opponent must activate next.",
+      "wiredStatus": "wired"
+    },
+    "field_tactics_death_trooper_elite": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "end-of-activation",
+      "label": "Field Tactics",
+      "description": "After this group activates, choose a friendly TROOPER or LEADER with cost 6 or less to immediately activate.",
+      "wiredStatus": "wired"
+    },
+    "field_tactics_death_trooper_reg": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "end-of-activation",
+      "label": "Field Tactics",
+      "description": "After this group activates, choose a friendly TROOPER or LEADER with cost 6 or less to immediately activate.",
+      "wiredStatus": "wired"
+    },
+    "distracting_fire_rebel_pathfinder": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "after-attack",
+      "label": "Distracting Fire",
+      "description": "After a non-miss attack, the target's group must activate next.",
+      "wiredStatus": "wired"
+    },
+    "infiltration_rebel_pathfinder": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "post-deploy",
+      "label": "Infiltration",
+      "description": "After deploying, each friendly Pathfinder gains 6 MP.",
+      "wiredStatus": "wired"
+    },
+    "wanton_destruction_saw": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "after-friendly-attack",
+      "label": "Wanton Destruction",
+      "description": "After a friendly attack resolves, you may discard a CC to deal 2 damage to 2 nearby figures.",
+      "wiredStatus": "wired"
+    },
+    "force_slow_cal": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "start-of-round",
+      "label": "Force Slow",
+      "description": "At the start of each round, choose a hostile within 3 spaces; that figure skips its next activation.",
+      "wiredStatus": "wired"
+    },
+    "strike_team_cassian": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "post-deploy",
+      "label": "Strike Team",
+      "description": "After deploying, distribute MP among friendly figures.",
+      "wiredStatus": "wired"
+    },
+    "it_will_be_alright_cassian": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "friendly-defeat",
+      "label": "It Will Be Alright",
+      "description": "When a friendly figure is defeated, Cassian may move and then perform an attack.",
+      "wiredStatus": "wired"
+    },
+    "voracious_rancor": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "other-activation",
+      "label": "Voracious",
+      "description": "When another figure activates, Rancor may defeat an adjacent friendly small figure to recover damage.",
+      "wiredStatus": "wired"
+    },
+    "lucky_r2d2": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Lucky",
+      "description": "While you are defending, if you roll a Dodge, you recover 2 damage.",
+      "wiredStatus": "wired"
+    },
+    "flamethrower_terro": {
+      "type": "dcSpecial",
+      "category": "dc-special",
+      "label": "Flamethrower",
+      "description": "Choose a space within 2 and adjacent to a hostile. Each figure in/adjacent to that space suffers 2 damage, 1 strain, and becomes Weakened.",
+      "wiredStatus": "wired"
+    },
+    "sling_barrage_ewok_elite": {
+      "type": "dcSpecial",
+      "category": "dc-special",
+      "label": "Sling Barrage",
+      "description": "Perform a ranged attack with +1 reroll per nearby friendly Ewok.",
+      "wiredStatus": "wired"
+    },
+    "hop_on_kuiil": {
+      "type": "dcSpecial",
+      "category": "dc-special",
+      "label": "Hop On!",
+      "description": "Push a friendly SMALL figure up to 4 spaces.",
+      "wiredStatus": "wired"
+    },
+    "service_r2d2": {
+      "type": "dcSpecial",
+      "category": "dc-special",
+      "label": "Service",
+      "description": "You or an adjacent DROID/VEHICLE recovers 1 damage.",
+      "wiredStatus": "wired"
+    },
+    "excavation_aphra": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "start-of-round",
+      "label": "Excavation",
+      "description": "At the start of each round, choose a CC from your discard pile with cost 1 or less and add it to your hand.",
+      "wiredStatus": "wired"
+    },
+    "dubious_counterparts_aphra": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Dubious Counterparts",
+      "description": "Your army may include Scum DROID deployment cards. Army-building rule. Validated in validateArmyAffiliation.",
+      "wiredStatus": "wired"
+    },
+    "scavenged_stock_jawa_elite": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Scavenged Stock",
+      "description": "Your army may include up to 3 DROID cards from other affiliations. Army-building rule. Validated in validateArmyAffiliation.",
+      "wiredStatus": "wired"
+    },
+    "modular_heavy_stormtrooper": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Modular",
+      "description": "You may include an attachment at -1 cost. Army-building rule. Honor-system (-1 attachment cost).",
+      "wiredStatus": "wired"
+    },
+    "imperial_loadout_purge_trooper": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Imperial Loadout",
+      "description": "At the start of the game, choose a loadout configuration. Notification at activation start; loadout abilities are honor-system.",
+      "wiredStatus": "wired"
+    },
+    "fallen_master_malicos": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Fallen Master",
+      "description": "FORCE USER figures ignore IMPERIAL restriction on command cards. Enforced in CC restriction checking.",
+      "wiredStatus": "wired"
+    },
+    "shady_contacts_saska": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Shady Contacts",
+      "description": "Your army may include 1 Scum deployment card. Army-building rule. Validated in validateArmyAffiliation.",
+      "wiredStatus": "wired"
+    },
+    "power_converter_saska": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Power Converter",
+      "description": "At the start of your activation, auto-discards device token and grants +1 attack reroll to activating DC. Die replacement is honor-system.",
+      "wiredStatus": "wired"
+    },
+    "unstable_devices_saska": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Unstable Devices",
+      "description": "At the start of each round, gain 1 device token. Automated in round.js.",
+      "wiredStatus": "wired"
+    },
+    "set_your_sights_loku": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "label": "Set Your Sights",
+      "description": "After attacking, place recon token on target. Friendly figures attacking that target get Pierce 2. Automated: recon token placed after Loku attacks; Pierce 2 applied when any friendly attacks tokened figure.",
+      "wiredStatus": "wired"
+    },
+    "mon_cala_sf_loku": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Mon Cala Special Forces",
+      "description": "Friendly figures attacking the recon-tokened figure become Focused. Automated: Loku gains Focus when attacking recon-tokened figure.",
+      "wiredStatus": "wired"
+    },
+    "shape_clawdite_elite": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Shape",
+      "description": "Choose a form card at deployment. While that form is active, gain its abilities. Notification at round start; form card is honor-system.",
+      "wiredStatus": "wired"
+    },
+    "shift_clawdite_elite": {
+      "type": "dcSpecial",
+      "category": "dc-special",
+      "label": "Shift",
+      "description": "Special action: change to a different form card. Notification at round start.",
+      "wiredStatus": "wired"
+    },
+    "shape_clawdite_reg": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Shape",
+      "description": "Choose a form card at deployment. While that form is active, gain its abilities. Notification at round start; form card is honor-system.",
+      "wiredStatus": "wired"
+    },
+    "shift_clawdite_reg": {
+      "type": "dcSpecial",
+      "category": "dc-special",
+      "label": "Shift",
+      "description": "Special action: change to a different form card. Notification at round start.",
+      "wiredStatus": "wired"
+    },
+    "scrap_battalion_ugnaught_elite": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Scrap Battalion",
+      "description": "Companion co-activation mechanic. Notification at activation start; co-activation is honor-system.",
+      "wiredStatus": "wired"
+    },
+    "scrap_battalion_ugnaught_reg": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Scrap Battalion",
+      "description": "Companion co-activation mechanic. Notification at activation start; co-activation is honor-system.",
+      "wiredStatus": "wired"
+    },
+    "brush_ezra": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "start-of-round",
+      "label": "Brush",
+      "description": "At the start of each round, gain 4 MP.",
+      "wiredStatus": "wired"
     }
   }
 }

@@ -666,7 +666,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "adapt_blaise"
+      ]
     },
     "Agent Kallus": {
       "abilityText": "Hunt Dissent: When your opponent plays a Command card, you may distribute 2 Hit Tokens among friendly figures within 1 space. Limit once per round.\n\nFulcrum: At the start of your activation, you may have each player draw 1 Command card.\n\nBo-Rifle: Before you declare an attack, you may treat your attack type as Melee. If you do, replace 1 blue die with 1 red die.",
@@ -699,7 +702,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "hunt_dissent_kallus"
+      ]
     },
     "Asajj Ventress": {
       "abilityText": "Nimble: After an attack targeting you is resolved, gain 2 movement points for each of your Block results.\n\nConsider It My Payment: At the start of your activation, your opponent reveals a Command card from his hand. During this round, if the next Command card played by that player does not have the same name as the revealed card, that player discards a copy of the revealed card, or reveals a hand without any copies of that card.",
@@ -729,6 +735,10 @@
         "evade",
         "accuracy 2, damage 2",
         "pierce 3"
+      ],
+      "specialAbilityIds": [
+        "nimble_asajj",
+        "consider_it_my_payment_asajj"
       ],
       "attachment": false,
       "elite": true,
@@ -767,8 +777,13 @@
       "elite": true,
       "unique": true,
       "affiliation": "Rebel",
-      "specialAbilityIds": ["force_leap_ahsoka"],
-      "specials": ["Force Leap"]
+      "specialAbilityIds": [
+        "force_leap_ahsoka",
+        "twin_sabers_ahsoka"
+      ],
+      "specials": [
+        "Force Leap"
+      ]
     },
     "Alliance Ranger (Elite)": {
       "abilityText": "Guerilla: After you resolve an attack, if the defender was defeated, become Hidden\n\nElite Sniper: While attacking, if the target space is 5 or more spaces away, you may reroll up to 2 attack dice.",
@@ -776,7 +791,9 @@
         "TROOPER",
         "HUNTER"
       ],
-      "specialAbilityIds": ["elite_sniper"],
+      "specialAbilityIds": [
+        "elite_sniper"
+      ],
       "cost": 12,
       "subCost": 4,
       "health": 7,
@@ -811,7 +828,9 @@
         "TROOPER",
         "HUNTER"
       ],
-      "specialAbilityIds": ["sniper"],
+      "specialAbilityIds": [
+        "sniper"
+      ],
       "cost": 9,
       "subCost": 3,
       "health": 5,
@@ -865,8 +884,13 @@
       ],
       "attachment": false,
       "elite": true,
-      "specialAbilityIds": ["improved_smugglers_instincts"],
-      "specials": ["Improved Smuggler's Instincts"]
+      "specialAbilityIds": [
+        "improved_smugglers_instincts",
+        "slippery_smuggler_elite"
+      ],
+      "specials": [
+        "Improved Smuggler's Instincts"
+      ]
     },
     "Alliance Smuggler (Regular)": {
       "abilityText": "Special Action (Smuggler's Instincts): Perform an attack, then move up to 2 spaces.\n\nSlippery: While defending, apply -2 Accuracy to the attack results. After an attack targeting you resolves, gain 2 movement points.",
@@ -894,8 +918,13 @@
       ],
       "attachment": false,
       "affiliation": "Rebel",
-      "specialAbilityIds": ["smugglers_instincts"],
-      "specials": ["Smuggler's Instincts"]
+      "specialAbilityIds": [
+        "smugglers_instincts",
+        "slippery_smuggler_reg"
+      ],
+      "specials": [
+        "Smuggler's Instincts"
+      ]
     },
     "AT-DP": {
       "abilityText": "Assault: You can perform multiple attacks during your activation. \n\nCharge Generators: While attacking, if you have suffered fewer than 9 Damage, apply +1 Hit to the attack results and you may reroll 1 attack die.",
@@ -997,6 +1026,10 @@
       "surgeAbilities": [
         "blast 2",
         "pierce 2"
+      ],
+      "specialAbilityIds": [
+        "targeting_computer_atst",
+        "awkward_atst"
       ],
       "attachment": false,
       "elite": true,
@@ -1103,8 +1136,14 @@
       "elite": true,
       "unique": true,
       "affiliation": "Scum",
-      "specialAbilityIds": ["bartered_information"],
-      "specials": ["Bartered Information"]
+      "specialAbilityIds": [
+        "bartered_information",
+        "illicit_arms_bib",
+        "dirty_dealing_bib"
+      ],
+      "specials": [
+        "Bartered Information"
+      ]
     },
     "Biv Bodhrik": {
       "abilityText": "Special Action (Multi-Fire): Perform 2 attacks. Each attack must have a different target. Apply -1 Hit to each attack's results.\n\nSurge (Suppression): After resolving a Ranged attack, if it did not miss due to accuracy, the target suffers Strain equal to the number of targets Block, Evade, and Dodge, results, to a maximum of 2.",
@@ -1141,8 +1180,12 @@
       "elite": true,
       "unique": true,
       "affiliation": "Rebel",
-      "specialAbilityIds": ["multi_fire"],
-      "specials": ["Multi-Fire"]
+      "specialAbilityIds": [
+        "multi_fire"
+      ],
+      "specials": [
+        "Multi-Fire"
+      ]
     },
     "Boba Fett": {
       "abilityText": "Wrist Cord: Once per round, you may spend 2 movement points to choose a SMALL figure within 3 spaces in your line of sight. Push the choses figure up to 3 spaces into a space adjacent to you.\n\nWrist Flamethrower: Once per round, you may spend 2 movement points to choose a space within 2 spaces. Each other figure on or adjacent to that spaces suffers 1 Damage and 1 Strain, then becomes Weakened.\n\nEE-3 Carbine: When you declare an attack, you may spend 2 movement points to change one of your attack die to a red die. Limit once per attack.",
@@ -1190,7 +1233,9 @@
       "keywords": [
         "TECHNICIAN"
       ],
-      "passives": ["Smooth Landing"],
+      "passives": [
+        "Smooth Landing"
+      ],
       "subname": "THE PILOT",
       "cost": 2,
       "health": 3,
@@ -1215,7 +1260,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "air_support_bodhi"
+      ]
     },
     "Bossk": {
       "abilityText": "Special Action (Indiscriminate Fire): Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red attack die. Each other figure within 2 spaces of the target space other than the defender suffers Damage equal to the Hit results and Strain equal to the Surge results.\n\nRegenerate: At the end of each round, recover 2 Damage and discard all Harmful conditions.",
@@ -1312,7 +1360,9 @@
       "unique": true,
       "affiliation": "Rebel",
       "specialAbilityIds": [
-        "distracting_c3po"
+        "distracting_c3po",
+        "non_combatant_c3po",
+        "cower_c3po"
       ]
     },
     "C1-10P \"Chopper\"": {
@@ -1343,8 +1393,14 @@
       "elite": true,
       "unique": true,
       "affiliation": "Rebel",
-      "specialAbilityIds": ["ram_chopper", "system_shock_chopper"],
-      "specials": ["Ram", "System Shock"]
+      "specialAbilityIds": [
+        "ram_chopper",
+        "system_shock_chopper"
+      ],
+      "specials": [
+        "Ram",
+        "System Shock"
+      ]
     },
     "Cad Bane": {
       "abilityText": "Flawless Execution: Before you declare an attack, you become Focused. If you are already Focused, you may gain 1 Power Token and add 1 attack die of any color to your attack pool instead of 1 green die.\n\nI Make the Rules Now: At the start of another figure's activation, a friendly HUNTER within 4 spaces may gain 1 movement point. Limit once per round.",
@@ -1379,7 +1435,8 @@
       "unique": true,
       "affiliation": "Scum",
       "specialAbilityIds": [
-        "flawless_execution"
+        "flawless_execution",
+        "i_make_the_rules_cad_bane"
       ]
     },
     "Cal Kestis": {
@@ -1415,7 +1472,8 @@
       "unique": true,
       "affiliation": "Rebel",
       "specialAbilityIds": [
-        "wall_run"
+        "wall_run",
+        "force_slow_cal"
       ]
     },
     "Captain Terro": {
@@ -1446,7 +1504,8 @@
         "pierce 2"
       ],
       "specialAbilityIds": [
-        "mounted_terro"
+        "mounted_terro",
+        "flamethrower_terro"
       ],
       "specials": [
         "Mounted"
@@ -1527,7 +1586,11 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "strike_team_cassian",
+        "it_will_be_alright_cassian"
+      ]
     },
     "Chewbacca": {
       "abilityText": "Special Action (Slam): Choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space.\n\nProtector: While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Block to the defense results. Limit 1 \"Protector\" ability used per attack.",
@@ -1605,7 +1668,9 @@
       "unique": true,
       "affiliation": "Rebel",
       "specialAbilityIds": [
-        "i_am_one_with_the_force"
+        "i_am_one_with_the_force",
+        "the_force_is_with_me_chirrut",
+        "devout_chirrut"
       ]
     },
     "Clawdite Shapeshifter (Elite)": {
@@ -1632,7 +1697,11 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Scum",
-      "isIACPVariant": false
+      "isIACPVariant": false,
+      "specialAbilityIds": [
+        "shape_clawdite_elite",
+        "shift_clawdite_elite"
+      ]
     },
     "Clawdite Shapeshifter (Regular)": {
       "abilityText": "Shape: When you are deployed, you may gain 1 Form card of your choice from the supply.\n\nShift: At the start of each round, you may switch your Form card with 1 other Form card of your choice.",
@@ -1656,7 +1725,11 @@
       ],
       "attachment": false,
       "affiliation": "Scum",
-      "isIACPVariant": false
+      "isIACPVariant": false,
+      "specialAbilityIds": [
+        "shape_clawdite_reg",
+        "shift_clawdite_reg"
+      ]
     },
     "CT-1701": {
       "abilityText": "Special Action (Barrage): Perform 2 attacks. The target of the second attack must be within 3 spaces of the first target space and adds 1 white die to the defense pool.\n\nCover Fire: After you resolve an attack, distribute 1 Block Token to a friendly figure within 3 spaces. Then, if it did not miss, you may discard 1 condition or Power Token from the target.",
@@ -1689,8 +1762,12 @@
       "elite": true,
       "unique": true,
       "affiliation": "Rebel",
-      "specialAbilityIds": ["barrage_ct1701"],
-      "specials": ["Barrage"]
+      "specialAbilityIds": [
+        "barrage_ct1701"
+      ],
+      "specials": [
+        "Barrage"
+      ]
     },
     "Dark Trooper Mk III": {
       "abilityText": "Advanced Targeting Computer: When you declare an attack, you become Focused. During this attack, you may reroll 1 attack die. If the rerolled die has fewer Hit symbols than before it was rerolled, apply +1 Hit to the attack results.\n\nDurasteel Fist: Once during your activation, you may choose 1 adjacent figure or object and roll 1 green die. It suffers Damage equal to the Hit results. Then, if you rolled a Surge and the target was a SMALL figure, you may push that figure up to 1 space.\n\nSpecial Action (Lift Off): Move up to 4 spaces. During this movement, you gain Mobile.",
@@ -1717,7 +1794,9 @@
         "accuracy 2, pierce 1"
       ],
       "specialAbilityIds": [
-        "lift_off_dark_trooper"
+        "lift_off_dark_trooper",
+        "adv_targeting_computer_dark_trooper",
+        "durasteel_fist_dark_trooper"
       ],
       "specials": [
         "Lift Off"
@@ -1770,11 +1849,17 @@
     },
     "Davith Elso": {
       "abilityText": "Stealthy: At the start of the mission, become Hidden.\n\nCut and Run: When you exit a space containing a hostile figure, that figure suffers 1 Damage. Limit once per figure per round.\n\nSurge (Fell Swoop): After this attack resolves, become Hidden, move up to 2 spaces, then perform an attack. Limit once per round.",
+      "specialAbilityIds": [
+        "stealthy_davith",
+        "cut_and_run_davith"
+      ],
       "keywords": [
         "SPY",
         "FORCE USER"
       ],
-      "passives": ["Stealthy"],
+      "passives": [
+        "Stealthy"
+      ],
       "subname": "CODENAME: \"HAWKBAT\"",
       "cost": 6,
       "health": 10,
@@ -1806,7 +1891,10 @@
         "TROOPER",
         "GUARDIAN"
       ],
-      "specialAbilityIds": ["squad_captain"],
+      "specialAbilityIds": [
+        "squad_captain",
+        "field_tactics_death_trooper_elite"
+      ],
       "cost": 4,
       "health": 7,
       "speed": 4,
@@ -1861,7 +1949,10 @@
         "accuracy 2, pierce 1"
       ],
       "attachment": false,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "field_tactics_death_trooper_reg"
+      ]
     },
     "Del Meeko": {
       "abilityText": "Expertise: After you perform a Special Action, you may perform an additional action. Limit once per activation.\n\nSpecial Action (Gifted Mechanic): Choose an adjacent friendly DROID or VEHICLE. If you do, you and that figure each recover 1 Damage and gain 1 Hit Token.\n\nOpen-Minded: After this attack resolves, gain 1 movement point or Power Token.",
@@ -2047,7 +2138,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "unhinged_director_krennic"
+      ]
     },
     "Doctor Aphra": {
       "abilityText": "Dubious Counterparts: If your army's affiliation is Scum, you may include \"0-0-0\" and \"BT-1\" in your army together. After a friendly DROID resolves \"Invasive Procedure\" or \"Missile Salvo\", that figure may perform 1 additional action.\n\nExcavation: At the start of each round, you may choose 1 Command card in any discard pile that costs 1 or less, except \"Take Initiative\". Once during this round, your player may play that card from the discard pile and then return it to the game box.",
@@ -2077,7 +2171,11 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "specialAbilityIds": [
+        "excavation_aphra",
+        "dubious_counterparts_aphra"
+      ]
     },
     "Dr. Royce Hemlock": {
       "abilityText": "Special Action (Neurotoxin): Choose a space within 3 spaces and roll 1 yellow die. All hostile figures on or adjacent to that space become Weakened and suffer Damage equal to the Hit results.\n\nSpecial Action (Neurostim): Choose an adjacent friendly figure and roll 1 yellow die. If you rolled a Block, that figure gains a Block Token. Then, if you rolled a Surge, that figure gains a Focus.",
@@ -2180,6 +2278,9 @@
         "accuracy 2",
         "recover 2"
       ],
+      "specialAbilityIds": [
+        "tripod_eweb"
+      ],
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial"
@@ -2209,6 +2310,9 @@
         "recover 2",
         "damage 1"
       ],
+      "specialAbilityIds": [
+        "tripod_eweb"
+      ],
       "attachment": false,
       "affiliation": "Imperial"
     },
@@ -2217,7 +2321,10 @@
       "keywords": [
         "TROOPER"
       ],
-      "specialAbilityIds": ["front_line", "cortosis_weave"],
+      "specialAbilityIds": [
+        "front_line",
+        "cortosis_weave"
+      ],
       "cost": 7,
       "subCost": 4,
       "health": 8,
@@ -2250,7 +2357,9 @@
       "keywords": [
         "TROOPER"
       ],
-      "specialAbilityIds": ["front_line"],
+      "specialAbilityIds": [
+        "front_line"
+      ],
       "cost": 6,
       "subCost": 3,
       "health": 5,
@@ -2323,7 +2432,10 @@
       "keywords": [
         "BRAWLER"
       ],
-      "specialAbilityIds": ["forest_fighters"],
+      "specialAbilityIds": [
+        "forest_fighters",
+        "sling_barrage_ewok_elite"
+      ],
       "cost": 6,
       "subCost": 2,
       "health": 3,
@@ -2357,7 +2469,10 @@
         "FORCE USER",
         "SMUGGLER"
       ],
-      "specialAbilityIds": ["much_to_learn"],
+      "specialAbilityIds": [
+        "much_to_learn",
+        "brush_ezra"
+      ],
       "subname": "SPECTRE-6",
       "cost": 7,
       "health": 10,
@@ -2425,7 +2540,9 @@
       "keywords": [
         "HUNTER"
       ],
-      "specialAbilityIds": ["sharpshooter"],
+      "specialAbilityIds": [
+        "sharpshooter"
+      ],
       "subname": "HUNTED MASTER ASSASSAIN",
       "cost": 5,
       "health": 8,
@@ -2494,7 +2611,9 @@
         "fifth_brother_relentless",
         "sith_acolyte"
       ],
-      "specials": ["Sith Acolyte"]
+      "specials": [
+        "Sith Acolyte"
+      ]
     },
     "Gaarkhan": {
       "abilityText": "Brutal Cleave: After you resolve an attack during your activation, you may suffer 1 Strain to perform an attack using 1 red and 1 yellow die targeting a different figure or object. Limit once per activation.\n\nSpecial Action (Charge): Move a number of spaces up to your Speed. Then, you may perform an attack.",
@@ -2543,7 +2662,9 @@
         "BRAWLER",
         "GUARDIAN"
       ],
-      "specialAbilityIds": ["gamorrean_honor_guard"],
+      "specialAbilityIds": [
+        "gamorrean_honor_guard"
+      ],
       "cost": 7,
       "subCost": 4,
       "health": 8,
@@ -2603,7 +2724,9 @@
         "damage 1"
       ],
       "specialAbilityIds": [
-        "gar_saxon_flamethrower"
+        "gar_saxon_flamethrower",
+        "personal_combat_shield_gar_saxon",
+        "airborne_commander_gar_saxon"
       ],
       "specials": [
         "Gar Saxon's Flamethrower"
@@ -2646,7 +2769,8 @@
         "Bombardment"
       ],
       "specialAbilityIds": [
-        "bombardment_sorin"
+        "bombardment_sorin",
+        "advanced_firepower_sorin"
       ]
     },
     "General Weiss": {
@@ -2687,7 +2811,8 @@
       "unique": true,
       "affiliation": "Imperial",
       "specialAbilityIds": [
-        "epic_arsenal"
+        "epic_arsenal",
+        "generals_orders_weiss"
       ]
     },
     "Gideon Argus": {
@@ -2727,6 +2852,10 @@
     },
     "Greedo": {
       "abilityText": "Slow on the Draw: When you declare an attack, the defender may interrupt to perform an attack targeting you.\n\nParting Shot: When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated.",
+      "specialAbilityIds": [
+        "slow_on_the_draw_greedo",
+        "parting_shot_greedo"
+      ],
       "keywords": [
         "HUNTER",
         "SMUGGLER"
@@ -2824,6 +2953,10 @@
         "damage 2",
         "blast 2"
       ],
+      "specialAbilityIds": [
+        "spray_fire_heavy_stormtrooper",
+        "modular_heavy_stormtrooper"
+      ],
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial"
@@ -2834,7 +2967,9 @@
         "TROOPER",
         "HEAVY WEAPON"
       ],
-      "specialAbilityIds": ["composite_plating"],
+      "specialAbilityIds": [
+        "composite_plating"
+      ],
       "cost": 6,
       "subCost": 3,
       "health": 6,
@@ -2866,7 +3001,9 @@
         "LEADER",
         "SMUGGLER"
       ],
-      "passives": ["Smooth Landing"],
+      "passives": [
+        "Smooth Landing"
+      ],
       "subname": "SPECTRE-2",
       "cost": 4,
       "health": 7,
@@ -2892,10 +3029,17 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "call_the_shots_hera"
+      ]
     },
     "Hired Gun (Elite)": {
       "abilityText": "Self-Preservation: When you suffer Damage, you become Focused.\n\nParting Shot: When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated.",
+      "specialAbilityIds": [
+        "self_preservation_hired_gun_elite",
+        "parting_shot_hired_gun_elite"
+      ],
       "keywords": [
         "SMUGGLER"
       ],
@@ -2931,7 +3075,10 @@
       "keywords": [
         "SMUGGLER"
       ],
-      "specialAbilityIds": ["disposable"],
+      "specialAbilityIds": [
+        "disposable",
+        "parting_shot_hired_gun_reg"
+      ],
       "cost": 4,
       "subCost": 2,
       "health": 3,
@@ -2991,7 +3138,8 @@
       "elite": true,
       "affiliation": "Scum",
       "specialAbilityIds": [
-        "targeting_computer_hk_elite"
+        "targeting_computer_hk_elite",
+        "versatile_weaponry_hk_elite"
       ]
     },
     "HK-47": {
@@ -3000,7 +3148,11 @@
         "DROID",
         "HUNTER"
       ],
-      "specialAbilityIds": ["conclusion", "query_hk47", "mockery"],
+      "specialAbilityIds": [
+        "conclusion",
+        "query_hk47",
+        "mockery"
+      ],
       "subname": "FAITHFUL MEATBAG EXTERMINATOR",
       "cost": 7,
       "health": 11,
@@ -3055,7 +3207,11 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "specialAbilityIds": [
+        "negotiate_hondo",
+        "whats_yours_is_mine_hondo"
+      ]
     },
     "Iden Versio": {
       "abilityText": "Droid Kit: Once during your activation, if a friendly \"Dio\" is in your space, you may gain 1 Power Token.\n\nPulse Cannon: While attacking, if you spent a Power Token during this attack, apply an additional +4 Accuracy and +1 Hit to the attack results.\n\nID10 Seeker Droid: At the start of the game, put the \"Dio\" companion into play in your space. It activates at the start or end of your activation, and is not counted for the purposes of control.",
@@ -3234,7 +3390,8 @@
         "Order"
       ],
       "specialAbilityIds": [
-        "officer_order"
+        "officer_order",
+        "cower_imperial_officer_reg"
       ]
     },
     "ISB Infiltrator (Elite)": {
@@ -3265,8 +3422,13 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial",
-      "specialAbilityIds": ["coordinated_raid_elite"],
-      "specials": ["Coordinated Raid"]
+      "specialAbilityIds": [
+        "coordinated_raid_elite",
+        "comms_jammer_isb"
+      ],
+      "specials": [
+        "Coordinated Raid"
+      ]
     },
     "ISB Infiltrator (Regular)": {
       "abilityText": "Special Action (Coordinated Raid): Another figure in your group may interrupt to perform an attack targeting a hostile figure in your line of sight. Limit once per group per round.",
@@ -3295,8 +3457,12 @@
       ],
       "attachment": false,
       "affiliation": "Imperial",
-      "specialAbilityIds": ["coordinated_raid_regular"],
-      "specials": ["Coordinated Raid"]
+      "specialAbilityIds": [
+        "coordinated_raid_regular"
+      ],
+      "specials": [
+        "Coordinated Raid"
+      ]
     },
     "Jabba the Hutt": {
       "abilityText": "Special Action (Bully): A figure of your choice within 3 spaces suffers 3 Damage.\n\nSpecial Action (Incentivize): An elite figure of your choice becomes Focused.\n\nSpecial Action (Scheme): Draw 1 Command card.\n\nDouble Action Special (Order Hit): Spend 2 VPs. An elite figure of your choice may interrupt to perform an attack. Then, it gains 2 movement points.\n\nNefarious Gains: When a hostile figure is defeated, gain 1 VP.",
@@ -3371,8 +3537,12 @@
       "companion": "J4X-7",
       "unique": true,
       "affiliation": "Rebel",
-      "specialAbilityIds": ["leaping_slash"],
-      "specials": ["Leaping Slash"]
+      "specialAbilityIds": [
+        "leaping_slash"
+      ],
+      "specials": [
+        "Leaping Slash"
+      ]
     },
     "Jawa Scavenger (Elite)": {
       "abilityText": "Surge (Bargain): Spend 1 VP to roll 1 green die. For each Hit result, gain 1 VP.\n\nTake Cover: While defending, you may apply +1 Block and -1 Evade to the defense results.\n\nScavenged Stock: If your army's affiliation is Scum, you may include up to 3 DROID groups from any other affiliations in your army.",
@@ -3402,6 +3572,10 @@
         "accuracy 2",
         "pierce 2",
         "bargain"
+      ],
+      "specialAbilityIds": [
+        "take_cover_jawa_elite",
+        "scavenged_stock_jawa_elite"
       ],
       "attachment": false,
       "elite": true,
@@ -3433,6 +3607,9 @@
         "damage 2",
         "accuracy 2",
         "harass"
+      ],
+      "specialAbilityIds": [
+        "take_cover_jawa_reg"
       ],
       "attachment": false,
       "affiliation": "Scum"
@@ -3467,7 +3644,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "agile_jet_trooper_elite"
+      ]
     },
     "Jet Trooper (Regular)": {
       "abilityText": "Agile: While defending, you may convert 1 Block to 1 Evade.\n\nJets: After you resolve an attack, if the target space is within 2 spaces, gain 1 movement point.",
@@ -3499,7 +3679,10 @@
         "damage 1",
         "accuracy 2"
       ],
-      "attachment": false
+      "attachment": false,
+      "specialAbilityIds": [
+        "agile_jet_trooper_reg"
+      ]
     },
     "Jyn Erso": {
       "abilityText": "Trust Goes Both Ways: At the start or end of your activation, choose an adjacent friendly figure. If you do, you and that figure Recover 1 Damage and gain 1 Surge Token. Limit once per round.\n\nSpecial Action (Tonfa Strike): Move up to 2 spaces, then you may perform a Melee attack using 1 red and 1 green die. Then you may perform an attack.",
@@ -3533,8 +3716,13 @@
       "elite": true,
       "unique": true,
       "affiliation": "Rebel",
-      "specialAbilityIds": ["tonfa_strike"],
-      "specials": ["Tonfa Strike"]
+      "specialAbilityIds": [
+        "tonfa_strike",
+        "trust_goes_both_ways_jyn"
+      ],
+      "specials": [
+        "Tonfa Strike"
+      ]
     },
     "Jyn Odan": {
       "abilityText": "Hair Trigger: At the start of a hostile figure's activation, you may interrupt to perform an attack that targets that figure. Limit once per round.\n\nSidewinder: After you resolve an attack, you may suffer 1 Strain to move up to 2 spaces. Limit once per round.\n\nCunning: While defending, apply +1 Block to the defense results for each Evade result.",
@@ -3608,8 +3796,13 @@
       "elite": true,
       "unique": true,
       "affiliation": "Rebel",
-      "specialAbilityIds": ["continually_unexpected"],
-      "specials": ["Continually Unexpected"]
+      "specialAbilityIds": [
+        "continually_unexpected",
+        "vague_and_unconvincing_k2s0"
+      ],
+      "specials": [
+        "Continually Unexpected"
+      ]
     },
     "Kanan Jarrus": {
       "abilityText": "Force Vision: At the start of you activation, your opponent chooses one of their ready groups and must activate it next if possible.\n\nSoresu Form: While a friendly figure within 3 spaces is defending, it may reroll 1 die. If it does, convert each Dodge result to 2 Block and 1 Evade and, if that figure is not FORCE USER, you suffer 1 Strain.",
@@ -3642,7 +3835,8 @@
       "unique": true,
       "affiliation": "Rebel",
       "specialAbilityIds": [
-        "soresu_form"
+        "soresu_form",
+        "force_vision_kanan"
       ]
     },
     "Kayn Somos": {
@@ -3715,7 +3909,12 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "squad_cohesion_kotun",
+        "dead_precise_kotun",
+        "arms_distribution_kotun"
+      ]
     },
     "Krrsantan": {
       "abilityText": "Full of Rage: Before you declare an attack, if you have suffered 3 or more Damage, become Focused.\n\nElectrified Knuckledusters: Choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Hit results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.",
@@ -3785,7 +3984,8 @@
         "stun"
       ],
       "specialAbilityIds": [
-        "mounted_kuiil"
+        "mounted_kuiil",
+        "hop_on_kuiil"
       ],
       "specials": [
         "Mounted"
@@ -3824,7 +4024,12 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "resourceful_lando",
+        "gambit_lando",
+        "shrewd_scoundrel_lando"
+      ]
     },
     "Leia Organa": {
       "abilityText": "Special Action (Battlefield Leadership): Perform an attack, then choose another friendly figure within 3 spaces. That figure may interrupt to move up to 1 space and then perform an attack with the same target.\n\nMilitary Efficiency: After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck.",
@@ -3893,7 +4098,11 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "set_your_sights_loku",
+        "mon_cala_sf_loku"
+      ]
     },
     "Loth-cat (Elite)": {
       "abilityText": "Special Action (Pounce): Place your figure in an empty space within 3 spaces. Then, you may perform an attack.\n\nSpecial Action (Fresh Catch): You or an adjacent CREATURE gains 1 Power Token.\n\nCurious: After you interact, suffer 1 Strain",
@@ -4082,6 +4291,9 @@
         "pierce 2",
         "critical_hit"
       ],
+      "specialAbilityIds": [
+        "camouflage_mak"
+      ],
       "attachment": false,
       "unique": true,
       "affiliation": "Rebel"
@@ -4112,10 +4324,17 @@
         "damage 2",
         "pierce 3"
       ],
+      "passives": [
+        "Professional"
+      ],
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Any"
+      "affiliation": "Any",
+      "specialAbilityIds": [
+        "adaptive_skills_mara_jade",
+        "fast_learner_mara_jade"
+      ]
     },
     "Maul": {
       "abilityText": "Dual-Bladed Fury: Before you declare an attack, choose one:\n- This attack gains Reach and Cleave 2\n- You become Focused.\n\nSurge (Stalk Prey): After this attack resolves, you gain 2 movement points and 1 Hit Token.\n\nSustained by Rage: You cannot recover Damage. If you have not resolved an activation this round, you cannot be defeated.",
@@ -4159,7 +4378,9 @@
       "keywords": [
         "DROID"
       ],
-      "specialAbilityIds": ["medical_loadout", "improper_procedure"],
+      "specialAbilityIds": [
+        "medical_loadout"
+      ],
       "cost": 5,
       "health": 7,
       "speed": 4,
@@ -4181,10 +4402,7 @@
       ],
       "attachment": false,
       "unique": true,
-      "affiliation": "Rebel",
-      "specialAbilityIds": [
-        "medical_loadout"
-      ]
+      "affiliation": "Rebel"
     },
     "Migs Mayfeld": {
       "abilityText": "Locked and Loaded: You may have up to 3 Power Tokens. After you resolve an attack, gain 2 Power Tokens.\n\nDroid Arm: Before you declare an attack, you may discard a Power Token to draw line of sight to the target from a space adjacent to you.\n\nReturn Fire: After an attack targeting you is resolved, you can interrupt to perform an attack targeting that attacker. Limit once per round.",
@@ -4343,6 +4561,11 @@
     },
     "Obi-Wan Kenobi": {
       "abilityText": "Alter Mind: Hostile figures with a figure cost of 9 or less within 3 spaces of you cannot interact and are not counted for the purposes of control.\n\nStrike Me Down: When an attack targeting you is declared, you may reduce your figure cost by 3. If you do, you are then defeated.\n\nInto the Force: When you are defeated, choose another friendly figure. That figure becomes Focused.",
+      "specialAbilityIds": [
+        "alter_mind_obiwan",
+        "strike_me_down_obiwan",
+        "into_the_force_obiwan"
+      ],
       "keywords": [
         "FORCE USER",
         "GUARDIAN"
@@ -4399,8 +4622,14 @@
       ],
       "attachment": false,
       "unique": true,
-      "specialAbilityIds": ["rush_onar"],
-      "specials": ["Rush"]
+      "specialAbilityIds": [
+        "rush_onar",
+        "immune_onar",
+        "get_down_onar"
+      ],
+      "specials": [
+        "Rush"
+      ]
     },
     "Probe Droid (Elite)": {
       "abilityText": "Targeting Computer: While attacking, you may reroll 1 attack die.\n\nSelf-Destruct: At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.",
@@ -4498,7 +4727,8 @@
         "pierce 2"
       ],
       "specialAbilityIds": [
-        "shock_grenade_purge"
+        "shock_grenade_purge",
+        "coordinated_hunt_purge_commander"
       ],
       "specials": [
         "Shock Grenade"
@@ -4535,7 +4765,8 @@
         "On the Hunt"
       ],
       "specialAbilityIds": [
-        "on_the_hunt"
+        "on_the_hunt",
+        "imperial_loadout_purge_trooper"
       ]
     },
     "R2-D2": {
@@ -4571,7 +4802,9 @@
       "unique": true,
       "affiliation": "Rebel",
       "specialAbilityIds": [
-        "scomp_link"
+        "scomp_link",
+        "lucky_r2d2",
+        "service_r2d2"
       ]
     },
     "Rancor": {
@@ -4609,8 +4842,14 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Scum",
-      "specialAbilityIds": ["crippling_blow"],
-      "specials": ["Crippling Blow"]
+      "specialAbilityIds": [
+        "crippling_blow",
+        "trained_rancor",
+        "voracious_rancor"
+      ],
+      "specials": [
+        "Crippling Blow"
+      ]
     },
     "Rebel Pathfinder (Elite)": {
       "abilityText": "Infiltration: After deployment, you may move up to 6 spaces.\n\nLight It Up: While attacking, if the target of your attack did not have line of sight to you at the start of your activation, you may reroll up to 1 attack die.\n\nDistracting Fire: After resolving an attack, if it did not miss, you may force the defender's group to activate next if able. Limit once per group per round.",
@@ -4639,7 +4878,12 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "light_it_up_rebel_pathfinder",
+        "distracting_fire_rebel_pathfinder",
+        "infiltration_rebel_pathfinder"
+      ]
     },
     "Rebel Saboteur (Elite)": {
       "abilityText": "Overload: You can trigger the same Surge ability up to twice per attack.\n\nPriority Target: Figures do not block line of sight for this figure's attack.",
@@ -4669,6 +4913,9 @@
         "stun",
         "pierce 2",
         "blast 2"
+      ],
+      "specialAbilityIds": [
+        "overload_saboteur"
       ],
       "attachment": false,
       "elite": true,
@@ -4703,6 +4950,9 @@
         "pierce 1",
         "stun"
       ],
+      "specialAbilityIds": [
+        "overload_saboteur"
+      ],
       "attachment": false,
       "affiliation": "Rebel"
     },
@@ -4730,12 +4980,13 @@
         "accuracy 2",
         "pierce 2"
       ],
+      "specialAbilityIds": [
+        "get_into_position",
+        "aim_rebel_trooper_elite"
+      ],
       "attachment": false,
       "elite": true,
       "affiliation": "Rebel",
-      "specialAbilityIds": [
-        "get_into_position"
-      ],
       "specials": [
         "Get into Position"
       ],
@@ -4766,6 +5017,9 @@
       "surgeAbilities": [
         "pierce 1",
         "accuracy 1"
+      ],
+      "specialAbilityIds": [
+        "aim_rebel_trooper_reg"
       ],
       "attachment": false,
       "affiliation": "Rebel"
@@ -4798,7 +5052,8 @@
       ],
       "passives": [
         "Stun Batons",
-        "Shield"
+        "Shield",
+        "Professional"
       ],
       "attachment": false,
       "elite": true,
@@ -4843,14 +5098,17 @@
         "GUARDIAN",
         "BRAWLER"
       ],
-      "specialAbilityIds": ["sentinel"],
+      "specialAbilityIds": [
+        "sentinel"
+      ],
       "cost": 9,
       "subCost": 5,
       "health": 10,
       "speed": 5,
       "passives": [
         "Reach",
-        "Pierce 1"
+        "Pierce 1",
+        "Professional"
       ],
       "figures": 2,
       "attack": {
@@ -4877,7 +5135,9 @@
         "GUARDIAN",
         "BRAWLER"
       ],
-      "specialAbilityIds": ["sentinel"],
+      "specialAbilityIds": [
+        "sentinel"
+      ],
       "cost": 8,
       "subCost": 4,
       "health": 8,
@@ -5017,7 +5277,12 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "shady_contacts_saska",
+        "power_converter_saska",
+        "unstable_devices_saska"
+      ]
     },
     "Saw Gerrerra": {
       "abilityText": "Brutal Tactics: Once per round, when a hostile figure is defeated, choose a hostile figure within 3 spaces of the defeated figure's space. The chose figure becomes weakend.\n\nWanton Destruction: After a friendly resolves an attack, you may discard 1 Command card from your hand to choose up to 2 figures other than the defender within 2 spaces of the target space. Those figures suffer 1 Damage.",
@@ -5052,7 +5317,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "wanton_destruction_saw"
+      ]
     },
     "SC2-M Repulsor Tank": {
       "abilityText": "Double Action Special (Focus Fire): Perform 2 attacks targeting the same figure.\n\nDefensible: While defending, you may apply either +1 Block or +1 Evade to your defense results.",
@@ -5086,8 +5354,13 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial",
-      "specialAbilityIds": ["focus_fire_tank"],
-      "specials": ["Focus Fire"]
+      "specialAbilityIds": [
+        "focus_fire_tank",
+        "defensible_sc2m"
+      ],
+      "specials": [
+        "Focus Fire"
+      ]
     },
     "Scout Trooper (Elite)": {
       "abilityText": "Camouflage: Hostile figures 4 or more spaces away from you cannot draw line of sight to you. You do not block line of sight for those figures.\n\nFind Weakness: While attacking, apply +3 Accuracy and -1 Evade to the results.\n\nExploit Weakness: While attacking a figure with a HARMFUL condition, apply +1 Surge to the attack results.",
@@ -5095,7 +5368,11 @@
         "SPY",
         "TROOPER"
       ],
-      "specialAbilityIds": ["find_weakness", "exploit_weakness"],
+      "specialAbilityIds": [
+        "find_weakness",
+        "exploit_weakness",
+        "camouflage_scout_trooper"
+      ],
       "cost": 8,
       "subCost": 4,
       "health": 7,
@@ -5158,8 +5435,14 @@
       "elite": true,
       "unique": true,
       "affiliation": "Imperial",
-      "specialAbilityIds": ["force_leap_second_sister", "saber_orbit"],
-      "specials": ["Force Leap", "Saber Orbit"]
+      "specialAbilityIds": [
+        "force_leap_second_sister",
+        "saber_orbit"
+      ],
+      "specials": [
+        "Force Leap",
+        "Saber Orbit"
+      ]
     },
     "Sentry Droid (Elite)": {
       "abilityText": "Special Action (Multi-Fire): Perform 2 attacks. Each attack must have a different target. Apply -1 Damage to each attack's result.\n\nSpecial Action (Charged Shot): Perform an attack. Apply +2 Accuracy to the attack results.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.",
@@ -5261,7 +5544,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "squad_training_shoretrooper_elite"
+      ]
     },
     "Shyla Varad": {
       "abilityText": "Special Action (Mandalorian Whip): Choose a SMALL, hostile figure within 3 spaces and line of sight. Push that figure up to 3 spaces to a space adjacent to you. Then, perform an attack targeting that figure.\n\nResponsive: At the start of your activation, you may gain 1 movement point or recover 1 Damage.",
@@ -5295,8 +5581,12 @@
       "attachment": false,
       "unique": true,
       "affiliation": "Scum",
-      "specialAbilityIds": ["mandalorian_whip"],
-      "specials": ["Mandalorian Whip"]
+      "specialAbilityIds": [
+        "mandalorian_whip"
+      ],
+      "specials": [
+        "Mandalorian Whip"
+      ]
     },
     "Snowtrooper (Elite)": {
       "abilityText": "Special Action (Disruptor Rifle): Perform an attack. After this attack resolves, if it did not miss and the target has suffered Damage equal to its Health minus 1, the target suffers 1 Damage.\n\nSpiked Boots: You cannot be pushed out of your space except by MASSIVE figures.\n\nImmune: You cannot gain HARMFUL conditions.",
@@ -5330,8 +5620,14 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial",
-      "specialAbilityIds": ["disruptor_rifle_snowtrooper"],
-      "specials": ["Disruptor Rifle"]
+      "specialAbilityIds": [
+        "disruptor_rifle_snowtrooper",
+        "immune_snowtrooper_elite",
+        "spiked_boots_snowtrooper"
+      ],
+      "specials": [
+        "Disruptor Rifle"
+      ]
     },
     "Snowtrooper (Regular)": {
       "abilityText": "Special Action (Environmental Recovery Gear): You and each adjacent friendly TROOPER may either recover 1 Damage or discard 1 HARMFUL condition.",
@@ -5396,7 +5692,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "squad_training_stormtrooper_elite"
+      ]
     },
     "Stormtrooper (Regular)": {
       "abilityText": "Squad Training: While attacking, while adjacent to another friendly TROOPER, you may reroll 1 attack die.",
@@ -5423,7 +5722,10 @@
         "accuracy 2"
       ],
       "attachment": false,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "squad_training_stormtrooper_reg"
+      ]
     },
     "Super Commando (Elite)": {
       "abilityText": "Jetpack Rocket: Once per figure per round, you may spend 2 movement points to choose a hostile figure within 3 spaces and line of sight. Roll 1 blue die. That figure suffers Damage equal to the Hit results.\n\nShield Gauntlets: Once during your activation, you may spend 1 movement point to gain 1 Block token.",
@@ -5432,7 +5734,10 @@
         "TROOPER",
         "VEHICLE"
       ],
-      "specialAbilityIds": ["shield_gauntlets", "jetpack_rocket"],
+      "specialAbilityIds": [
+        "shield_gauntlets",
+        "jetpack_rocket"
+      ],
       "cost": 7,
       "subCost": 4,
       "health": 7,
@@ -5495,8 +5800,13 @@
       "elite": true,
       "unique": true,
       "affiliation": "Scum",
-      "specialAbilityIds": ["boulder_barrage"],
-      "specials": ["Boulder Barrage"]
+      "specialAbilityIds": [
+        "boulder_barrage",
+        "fallen_master_malicos"
+      ],
+      "specials": [
+        "Boulder Barrage"
+      ]
     },
     "The Grand Inquisitor": {
       "abilityText": "Precision: While attacking or defending against an adjacent figure, you may choose 1 die. The player that rolled that die must reroll it.\n\nSpecial Action (Lightsaber Throw): Perform a Ranged attack targeting a non-adjacent figure using your attack pool. Apply +2 Accuracy to the attack results.\n\nSurge (Deadly Spin): Apply -1 Dodge to the defense results. This attack gains Cleave 3.",
@@ -5527,7 +5837,8 @@
         "deadly_spin"
       ],
       "specialAbilityIds": [
-        "lightsaber_throw_gi"
+        "lightsaber_throw_gi",
+        "precision_grand_inquisitor"
       ],
       "specials": [
         "Lightsaber Throw"
@@ -5577,7 +5888,11 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "long_laid_plans_thrawn",
+        "strategize_thrawn"
+      ]
     },
     "The Armorer": {
       "abilityText": "Beskar Armor: After deployment, you gain 2 Block Tokens.\n\nThis is the Way: When another friendly figure resolves an attack, if the defender was defeated, that figure gains 1 Block Token.\n\nSurvival is Strength: While a friendly figure within 3 spaces is defending, if it spent a Block symbol during this attack, it may reroll 1 attack die.",
@@ -5612,7 +5927,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "specialAbilityIds": [
+        "survival_is_strength_armorer"
+      ]
     },
     "Trandoshan Hunter (Elite)": {
       "abilityText": "Relentless: When you declare an attack on a target within 3 spaces, that figure suffers 1 Strain.\n\nACP Scattergun: While attacking, if you are adjacent to the target, apply +2 Hits to the attack results.\n\nHardy: At the end of each round, discard all HARMFUL conditions.",
@@ -5647,7 +5965,9 @@
         "relentless_trandoshan_elite",
         "acp_scattergun"
       ],
-      "passives": ["Hardy"]
+      "passives": [
+        "Hardy"
+      ]
     },
     "Trandoshan Hunter (Regular)": {
       "abilityText": "Relentless: When you declare an attack targeting a figure within 3 spaces, that figure suffers 1 Strain.\n\nScattergun: While attacking, if you are adjacent to the target, apply +1 Hit to the attack results.",
@@ -5713,7 +6033,12 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "specialAbilityIds": [
+        "fyrnock_style_tress",
+        "krayt_dragon_fury_tress",
+        "leg_hydraulics_tress"
+      ]
     },
     "Tusken Raider (Elite)": {
       "abilityText": "Special Action (Tusken Cycler): Perform a Ranged attack using 1 blue and 1 red die. Apply +2 Accuracy to the attack results.",
@@ -5812,8 +6137,15 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Scum",
-      "specialAbilityIds": ["spot_weld", "overclock"],
-      "specials": ["Spot Weld", "Overclock"]
+      "specialAbilityIds": [
+        "spot_weld",
+        "overclock",
+        "scrap_battalion_ugnaught_elite"
+      ],
+      "specials": [
+        "Spot Weld",
+        "Overclock"
+      ]
     },
     "Ugnaught Tinkerer (Regular)": {
       "abilityText": "Special Action (Spot Weld): Place the Junk Droid companion in an adjacent space.\n\nScrap Battalion: The Junk Droid readies at the start of your activation. It activates as though it was part of your group and may use your surge abilities.",
@@ -5840,8 +6172,13 @@
       ],
       "attachment": false,
       "affiliation": "Scum",
-      "specialAbilityIds": ["spot_weld"],
-      "specials": ["Spot Weld"]
+      "specialAbilityIds": [
+        "spot_weld",
+        "scrap_battalion_ugnaught_reg"
+      ],
+      "specials": [
+        "Spot Weld"
+      ]
     },
     "Verena Talos": {
       "abilityText": "Special Action (Close Quarters): Move up to 1 space, then perform an attack using an adjacent hostile figure's attack type and attack pool. Remove 1 die from the target's defense pool and apply +1 Accuracy to the attack results.\n\nSurge (Fighting Knife): After this attack resolves, choose an adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results.\n\nImprovised Cover: While defending, if you are adjacent to an object or non-friendly figure other than the attacker, apply +1 Block to the defense results.",
@@ -5877,8 +6214,13 @@
       "elite": true,
       "unique": true,
       "affiliation": "Rebel",
-      "specialAbilityIds": ["close_quarters"],
-      "specials": ["Close Quarters"]
+      "specialAbilityIds": [
+        "close_quarters",
+        "improvised_cover_verena"
+      ],
+      "specials": [
+        "Close Quarters"
+      ]
     },
     "Vinto Hreeda": {
       "abilityText": "Special Action (Rapid Fire): Perform 2 attacks.\n\nBoltslinger: After you resolve an attack during your activation, you may choose a hostile figure other than the defender in your line of sight and within 3 spaces of you. That figure suffers 1 Damage.",
@@ -6011,7 +6353,8 @@
       "elite": true,
       "affiliation": "Scum",
       "specialAbilityIds": [
-        "prowl"
+        "prowl",
+        "raider_weequay_elite"
       ],
       "specials": [
         "Prowl"
@@ -6046,7 +6389,10 @@
         "accuracy 1"
       ],
       "attachment": false,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "specialAbilityIds": [
+        "raider_weequay_reg"
+      ]
     },
     "Wing Guard (Elite)": {
       "abilityText": "Keep the Peace: When a hostile figure declares an attack targeting a space adjacent to you, the attacker suffers 1 Strain. Limit 1 'Keep the Peace' ability per group activation.\n\nBespin Security: You may include 'Lando Calrissian' in your army. While an adjacent friendly LEADER or SCUM TROOPER is performing an attack, it may reroll 1 attack die. Limit 1 'Bespin Security' ability per attack.",
@@ -6054,7 +6400,10 @@
         "GUARDIAN",
         "TROOPER"
       ],
-      "specialAbilityIds": ["keep_the_peace_elite", "bespin_security"],
+      "specialAbilityIds": [
+        "keep_the_peace_elite",
+        "bespin_security"
+      ],
       "cost": 7,
       "subCost": 3,
       "health": 5,
@@ -6084,7 +6433,9 @@
         "GUARDIAN",
         "TROOPER"
       ],
-      "specialAbilityIds": ["keep_the_peace_regular"],
+      "specialAbilityIds": [
+        "keep_the_peace_regular"
+      ],
       "cost": 6,
       "subCost": 2,
       "health": 3,
@@ -6194,7 +6545,10 @@
         "white"
       ],
       "specialAbilityIds": [
-        "do_or_do_not_yoda"
+        "do_or_do_not_yoda",
+        "force_deflection_yoda",
+        "wisdom_yoda",
+        "calming_presence_yoda"
       ],
       "specials": [
         "Do or Do Not"
@@ -6274,7 +6628,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "specialAbilityIds": [
+        "shared_calculations_zuckuss"
+      ]
     },
     "[Nemik's Manifesto]": {
       "abilityText": "Your command deck may include up to 3 additional Command cards. \n\nExhaust this card during a friendly figure's activation to have that figure suffer 2 Strain and gain 1 movement point.",

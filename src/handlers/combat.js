@@ -519,6 +519,17 @@ export async function handleAttackTarget(interaction, ctx) {
     await applyStrainToFigure(game, defenderPlayerNum, target.figureKey, 1, 'Relentless', meta.dcName, ctx, thread);
   }
 
+  // Advanced Targeting Computer (Dark Trooper Mk III): auto-Focus on declare
+  if (atkSpecialIds.includes('adv_targeting_computer_dark_trooper')) {
+    if (!attackerConds.includes('Focus') && !(game.figureConditions?.[attackerFigureKey] || []).includes('Focus')) {
+      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
+      if (!game.figureConditions) game.figureConditions = {};
+      game.figureConditions[attackerFigureKey] = [...(game.figureConditions[attackerFigureKey] || []).filter(c => c !== 'Focus'), 'Focus'];
+      await thread.send('**Advanced Targeting Computer** — Dark Trooper Mk III is **Focused** before attacking (+1 green die).');
+    }
+    // Focus already applied — still grant the green die from Focus condition (handled above at line ~286)
+  }
+
   // Flawless Execution (Cad Bane): become Focused; if already Focused → Wild token + yellow die
   if (atkSpecialIds.includes('flawless_execution')) {
     if (!attackerConds.includes('Focus')) {
@@ -798,6 +809,88 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
+  // Awkward (AT-ST): cannot attack adjacent figures
+  if (atkSpecialIds.includes('awkward_atst') && distanceToTarget <= 1) {
+    await thread.send('**Awkward** — Cannot attack adjacent figures. Attack cancelled.');
+    delete game.pendingCombat;
+    saveGames();
+    return;
+  }
+
+  // Camouflage (Mak, Scout Trooper Elite): hostile figures 4+ spaces away cannot draw LOS
+  const camouflageIds = ['camouflage_mak', 'camouflage_scout_trooper'];
+  if (defSpecialIds.some(id => camouflageIds.includes(id)) && isRanged && distanceToTarget >= 4) {
+    const camName = defSpecialIds.includes('camouflage_mak') ? 'Mak' : 'Scout Trooper';
+    await thread.send(`**Camouflage** (${camName}) — Hostile figures 4+ spaces away cannot target this figure. Attack cancelled.`);
+    delete game.pendingCombat;
+    saveGames();
+    return;
+  }
+
+  // Slippery (Alliance Smuggler E/R): while defending, apply -2 Accuracy
+  const slipperyIds = ['slippery_smuggler_elite', 'slippery_smuggler_reg'];
+  if (defSpecialIds.some(id => slipperyIds.includes(id))) {
+    game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) - 2;
+    await thread.send('**Slippery** — Defender applies -2 Accuracy to the attack.');
+  }
+
+  // Take Cover (Jawa Scavenger E/R): while defending, +1 Block and -1 Evade
+  const takeCoverIds = ['take_cover_jawa_elite', 'take_cover_jawa_reg'];
+  if (defSpecialIds.some(id => takeCoverIds.includes(id))) {
+    game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
+    game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) - 1;
+    await thread.send('**Take Cover** — Defender applies +1 Block, -1 Evade.');
+  }
+
+  // Aim (Rebel Trooper E/R): +1 Hit, +2 Accuracy if figure has not moved this activation
+  const aimIds = ['aim_rebel_trooper_elite', 'aim_rebel_trooper_reg'];
+  if (atkSpecialIds.some(id => aimIds.includes(id))) {
+    if (!game.figureMoved?.[attackerFigureKey]) {
+      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+      game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
+      await thread.send('**Aim** — Has not moved this activation: +1 Hit, +2 Accuracy.');
+    }
+  }
+
+  // Dead Precise (Ko-Tun Feralo): +2 Accuracy if didn't move this activation
+  if (atkSpecialIds.includes('dead_precise_kotun')) {
+    if (!game.figureMoved?.[attackerFigureKey]) {
+      game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
+      await thread.send('**Dead Precise** — Has not moved this activation: +2 Accuracy.');
+    }
+  }
+
+  // Spray Fire (Heavy Stormtrooper Elite): -3 Accuracy, +1 Surge (always beneficial at melee range)
+  if (atkSpecialIds.includes('spray_fire_heavy_stormtrooper')) {
+    game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) - 3;
+    game.pendingCombat.surgeBonus = (game.pendingCombat.surgeBonus || 0) + 1;
+    await thread.send('**Spray Fire** — -3 Accuracy, +1 Surge applied.');
+  }
+
+  // Improvised Cover (Verena Talos): +1 Block if adjacent to object or non-friendly, non-attacker figure
+  if (defSpecialIds.includes('improvised_cover_verena') && mapSpaces && targetCoord) {
+    const adjToDefIC = (mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase());
+    // Check for adjacent hostile/neutral figures (attacker's figures that aren't the attacker)
+    const atkFigPosIC = game.figurePositions?.[attackerPlayerNum] || {};
+    let icFound = false;
+    for (const [fk, pos] of Object.entries(atkFigPosIC)) {
+      if (fk === attackerFigureKey) continue;
+      if (adjToDefIC.includes(String(pos).toLowerCase())) { icFound = true; break; }
+    }
+    if (icFound) {
+      game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
+      await thread.send('**Improvised Cover** — Adjacent to non-friendly figure (not attacker): +1 Block.');
+    }
+  }
+
+  // Tripod (E-Web E/R): if figure has moved this activation, cannot attack
+  if (atkSpecialIds.includes('tripod_eweb') && game.figureMoved?.[attackerFigureKey]) {
+    await thread.send('**Tripod** — Has exited space this activation. Cannot attack.');
+    delete game.pendingCombat;
+    saveGames();
+    return;
+  }
+
   // Log override dice if active (Saber Strike, Bo-Rifle Staff Strike)
   if (overrideDice?.dice) {
     const diceStr = overrideDice.dice.join(', ');
@@ -818,6 +911,82 @@ export async function handleAttackTarget(interaction, ctx) {
     game.pendingCombat.bonusBlast = (game.pendingCombat.bonusBlast || 0) + _obBlast;
     await thread.send(`**Optimal Bombardment** — +${_obBlast} Blast added to this attack.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
     delete game.optimalBombardmentBlastBonus[msgId];
+  }
+
+  // The Force is With Me (Chirrut): ranged attack targeting Chirrut — choose adjacent hostile; -1 Hit + 1 dmg to chosen
+  if (isRanged && defSpecialIds.includes('the_force_is_with_me_chirrut') && mapSpaces && targetCoord) {
+    const adjToChirrut = (mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase());
+    const atkFigPos = game.figurePositions?.[attackerPlayerNum] || {};
+    let _tfiwmTarget = null;
+    for (const [fk, pos] of Object.entries(atkFigPos)) {
+      if (adjToChirrut.includes(String(pos).toLowerCase())) {
+        _tfiwmTarget = fk;
+        break;
+      }
+    }
+    if (_tfiwmTarget) {
+      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) - 1;
+      const _tfiwmDcName = _tfiwmTarget.replace(/-\d+-\d+$/, '');
+      // Deal 1 damage to the adjacent hostile
+      const _tfiwmMatch = _tfiwmTarget.match(/^(.+)-(\d+)-(\d+)$/);
+      if (_tfiwmMatch) {
+        const [, _tfDcN, _tfDgI, _tfFiStr] = _tfiwmMatch;
+        const _tfMsgIds = attackerPlayerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+        const _tfDcList = attackerPlayerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+        const _tfDcHs = ctx.dcHealthState;
+        if (_tfDcHs) {
+          let _tfMsgId = null;
+          for (let i = 0; i < _tfMsgIds.length; i++) {
+            if (_tfDcList[i]?.dcName === _tfDcN) { _tfMsgId = _tfMsgIds[i]; break; }
+          }
+          if (_tfMsgId) {
+            const _tfHs = _tfDcHs.get(_tfMsgId);
+            const _tfFi = parseInt(_tfFiStr, 10);
+            if (_tfHs?.[_tfFi]) {
+              const [_tfCur, _tfMax] = _tfHs[_tfFi];
+              if (_tfCur > 0) {
+                const _tfNew = Math.max(0, _tfCur - 1);
+                _tfHs[_tfFi] = [_tfNew, _tfMax];
+                _tfDcHs.set(_tfMsgId, _tfHs);
+                const _tfIdx = _tfMsgIds.indexOf(_tfMsgId);
+                if (_tfIdx >= 0 && _tfDcList[_tfIdx]) _tfDcList[_tfIdx].healthState = [..._tfHs];
+              }
+            }
+          }
+        }
+      }
+      await thread.send(`**The Force is With Me** — Ranged attack targeting Chirrut. Adjacent hostile **${_tfiwmDcName}** suffers 1 Damage. -1 Hit applied to attack.`);
+    }
+  }
+
+  // Loku Recon Token: Set Your Sights — Pierce 2 when attacking figure with recon token
+  if (game.reconToken?.figureKey === targetFigureKey && game.reconToken?.playerNum === attackerPlayerNum) {
+    game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 2;
+    await thread.send('**Set Your Sights** — Attacking figure with Recon token: +Pierce 2.');
+  }
+  // Loku Recon Token: Mon Cala SF — Loku becomes Focused when attacking recon-tokened figure
+  if (game.reconToken?.figureKey === targetFigureKey && game.reconToken?.playerNum === attackerPlayerNum) {
+    if (atkSpecialIds.includes('mon_cala_sf_loku')) {
+      game.figureConditions = game.figureConditions || {};
+      const _atkConds = game.figureConditions[attackerFigureKey] || [];
+      if (!_atkConds.includes('Focus')) {
+        _atkConds.push('Focus');
+        game.figureConditions[attackerFigureKey] = _atkConds;
+        await thread.send('**Mon Cala Special Forces** — Loku gains Focus for attacking Recon-tokened figure.');
+      }
+    }
+  }
+
+  // Strike Me Down (Obi-Wan): when attack targeting Obi-Wan is declared, may reduce VP cost by 3 and be defeated
+  // Auto-notify in thread; Obi-Wan's player must decide (handled as honor-system with log notification)
+  if (defSpecialIds.includes('strike_me_down_obiwan')) {
+    await thread.send('⚠️ **Strike Me Down** — Obi-Wan may choose to reduce his figure cost by 3 and be defeated (ending this attack). This is an honor-system choice — notify your opponent if you choose to activate it.');
+  }
+
+  // Slow on the Draw (Greedo): when Greedo declares an attack, defender may interrupt to attack Greedo first
+  if (atkSpecialIds.includes('slow_on_the_draw_greedo')) {
+    const defOwnerId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
+    await thread.send({ content: `⚠️ **Slow on the Draw** — <@${defOwnerId}>, you may interrupt to perform an attack targeting **Greedo** before this attack resolves. This is an honor-system choice — use your DC's attack action to target Greedo if desired.`, allowedMentions: { users: [defOwnerId] } });
   }
 
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
@@ -1070,7 +1239,7 @@ export async function handleCombatRoll(interaction, ctx) {
     let atkSpecialReroll = 0;
     let defSpecialReroll = 0;
     // Targeting Computer (HK Assassin elite, IG-11, Probe Droid elite, Sentry Droid elite/reg): +1 atk reroll
-    const tcIds = ['targeting_computer_hk_elite', 'targeting_computer_ig11', 'targeting_computer_probe_elite', 'targeting_computer_sentry_elite', 'targeting_computer_sentry_reg'];
+    const tcIds = ['targeting_computer_hk_elite', 'targeting_computer_ig11', 'targeting_computer_probe_elite', 'targeting_computer_sentry_elite', 'targeting_computer_sentry_reg', 'targeting_computer_atst', 'adv_targeting_computer_dark_trooper'];
     if (atkSIds.some(id => tcIds.includes(id))) atkSpecialReroll += 1;
     // Overpower (Royal Guard Champion): +1 atk reroll when attacking, +1 def reroll when defending
     if (atkSIds.includes('overpower')) atkSpecialReroll += 1;
@@ -1118,12 +1287,139 @@ export async function handleCombatRoll(interaction, ctx) {
       }
     }
 
+    // Cower (C-3PO, Imperial Officer Regular): +1 def reroll if adjacent to a friendly figure
+    const cowerIds = ['cower_c3po', 'cower_imperial_officer_reg'];
+    if (defSIds.some(id => cowerIds.includes(id))) {
+      const defFigsC = game.figurePositions?.[defenderPlayerNum] || {};
+      const mapSpC = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const defPosC = combat.target?.coord;
+      if (defPosC && mapSpC) {
+        const adjToDefC = new Set((mapSpC.adjacency?.[String(defPosC).toLowerCase()] || []).map(s => String(s).toLowerCase()));
+        for (const [fk, pos] of Object.entries(defFigsC)) {
+          if (fk === combat.target?.figureKey) continue;
+          if (adjToDefC.has(String(pos).toLowerCase())) {
+            defSpecialReroll += 1;
+            break;
+          }
+        }
+      }
+    }
+
+    // Squad Training (Shoretrooper E, Stormtrooper E/R): +1 atk reroll if adjacent friendly TROOPER
+    const squadTrainingIds = ['squad_training_shoretrooper_elite', 'squad_training_shoretrooper_reg', 'squad_training_stormtrooper_elite', 'squad_training_stormtrooper_reg'];
+    if (atkSIds.some(id => squadTrainingIds.includes(id))) {
+      const stFigs = game.figurePositions?.[attackerPlayerNum] || {};
+      const stMap = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const stPos = stFigs[combat.attackerFigureKey];
+      if (stPos && stMap) {
+        const stAdj = new Set((stMap.adjacency?.[String(stPos).toLowerCase()] || []).map(s => String(s).toLowerCase()));
+        for (const [fk, pos] of Object.entries(stFigs)) {
+          if (fk === combat.attackerFigureKey) continue;
+          if (!stAdj.has(String(pos).toLowerCase())) continue;
+          const fn = fk.replace(/-\d+-\d+$/, '');
+          const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
+          if ((fe?.keywords || []).some(k => String(k).toUpperCase() === 'TROOPER')) {
+            atkSpecialReroll += 1; break;
+          }
+        }
+      }
+    }
+    // Coordinated Hunt (Purge Commander Elite): +1 atk reroll for self or HUNTER with PC in LOS. Limit 1 per attack.
+    {
+      let _chApplied = false;
+      if (atkSIds.includes('coordinated_hunt_purge_commander')) {
+        atkSpecialReroll += 1; _chApplied = true;
+      }
+      if (!_chApplied) {
+        const atkKwsCH = (atkEffR?.keywords || []).map(k => String(k).toUpperCase());
+        if (atkKwsCH.includes('HUNTER')) {
+          const chFigs = game.figurePositions?.[attackerPlayerNum] || {};
+          const chMapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+          const chAtkPos = chFigs[combat.attackerFigureKey];
+          if (chAtkPos && chMapSp && ctx.hasLineOfSight) {
+            for (const [fk, pos] of Object.entries(chFigs)) {
+              if (fk === combat.attackerFigureKey) continue;
+              const fn = fk.replace(/-\d+-\d+$/, '');
+              const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
+              if (!(fe?.specialAbilityIds || []).includes('coordinated_hunt_purge_commander')) continue;
+              if (pos && ctx.hasLineOfSight(String(pos).toLowerCase(), String(chAtkPos).toLowerCase(), chMapSp)) {
+                atkSpecialReroll += 1; _chApplied = true; break;
+              }
+            }
+          }
+        }
+      }
+    }
+    // Light It Up (Rebel Pathfinder Elite): +1 atk reroll if target had no LOS to attacker at activation start
+    if (atkSIds.includes('light_it_up_rebel_pathfinder')) {
+      const liuStartPos = game.activationStartPositions?.[combat.attackerFigureKey];
+      const liuMapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      if (liuStartPos && combat.target?.coord && liuMapSp && ctx.hasLineOfSight) {
+        const targetHadLos = ctx.hasLineOfSight(String(combat.target.coord).toLowerCase(), String(liuStartPos).toLowerCase(), liuMapSp);
+        if (!targetHadLos) atkSpecialReroll += 1;
+      }
+    }
+
+    // Build forced reroll queue for Batch 2B abilities
+    combat.forcedRerollQueue = [];
+    // Versatile Weaponry (HK Assassin Elite): attacker forces 1 def die reroll
+    if (atkSIds.includes('versatile_weaponry_hk_elite')) {
+      combat.forcedRerollQueue.push({ controlPlayer: attackerPlayerNum, pool: 'defense', remaining: 1, source: 'Versatile Weaponry' });
+    }
+    // Shared Calculations (Zuckuss): attacker forces 1 def die reroll if friendly DROID within 3 + LOS to target
+    if (atkSIds.includes('shared_calculations_zuckuss') && combat.target?.coord) {
+      const scFigs = game.figurePositions?.[attackerPlayerNum] || {};
+      const scMapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      if (scMapSp) {
+        for (const [fk, pos] of Object.entries(scFigs)) {
+          if (fk === combat.attackerFigureKey) continue;
+          const fn = fk.replace(/-\d+-\d+$/, '');
+          const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
+          if (!(fe?.keywords || []).some(k => String(k).toUpperCase() === 'DROID')) continue;
+          if (!pos) continue;
+          if (!isWithinSpaces(scMapSp, String(pos).toLowerCase(), String(combat.target.coord).toLowerCase(), 3)) continue;
+          if (ctx.hasLineOfSight && ctx.hasLineOfSight(String(pos).toLowerCase(), String(combat.target.coord).toLowerCase(), scMapSp)) {
+            combat.forcedRerollQueue.push({ controlPlayer: attackerPlayerNum, pool: 'defense', remaining: 1, source: 'Shared Calculations' });
+            break;
+          }
+        }
+      }
+    }
+    // Raider (Weequay Elite/Reg): attacker chooses any 1 die, force reroll
+    const raiderIds = ['raider_weequay_elite', 'raider_weequay_reg'];
+    if (atkSIds.some(id => raiderIds.includes(id))) {
+      combat.forcedRerollQueue.push({ controlPlayer: attackerPlayerNum, pool: 'any', remaining: 1, source: 'Raider' });
+    }
+    // Precision (Grand Inquisitor): if attacking/defending against adjacent, choose any 1 die to force reroll
+    if (atkSIds.includes('precision_grand_inquisitor') || defSIds.includes('precision_grand_inquisitor')) {
+      const precMapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const precAtkPos = (game.figurePositions?.[attackerPlayerNum] || {})[combat.attackerFigureKey];
+      const precDefPos = combat.target?.coord;
+      if (precAtkPos && precDefPos && precMapSp) {
+        const precAdj = (precMapSp.adjacency?.[String(precAtkPos).toLowerCase()] || []).map(s => String(s).toLowerCase());
+        if (precAdj.includes(String(precDefPos).toLowerCase())) {
+          const precPlayer = atkSIds.includes('precision_grand_inquisitor') ? attackerPlayerNum : defenderPlayerNum;
+          combat.forcedRerollQueue.push({ controlPlayer: precPlayer, pool: 'any', remaining: 1, source: 'Precision' });
+        }
+      }
+    }
+    // Fyrnock Style (Tress Hacnua): while attacking or defending, choose 1 attack die to force reroll
+    if (atkSIds.includes('fyrnock_style_tress') || defSIds.includes('fyrnock_style_tress')) {
+      const fsPlayer = atkSIds.includes('fyrnock_style_tress') ? attackerPlayerNum : defenderPlayerNum;
+      combat.forcedRerollQueue.push({ controlPlayer: fsPlayer, pool: 'attack', remaining: 1, source: 'Fyrnock Style' });
+    }
+
     // Demoralizing Monologue: if flag set before reroll window, count 1 forced reroll for defender
     let _dmForcedReroll = 0;
     if (game.forceDefenderRerollOne && !combat.demoralizingMonologueApplied) {
       _dmForcedReroll = 1;
       combat.demoralizingMonologueApplied = true;
       game.forceDefenderRerollOne = null;
+    }
+    // Power Converter (Saska): device reroll grants +1 atk reroll to friendly figure
+    if (game.deviceRerollGranted?.[combat.attackerMsgId]) {
+      atkSpecialReroll += 1;
+      delete game.deviceRerollGranted[combat.attackerMsgId];
     }
     const atkRerolls = (combat.rerollOneAttackDie || 0) + (game.roundAttackRerollDice?.[attackerPlayerNum] || 0) + atkInnate.attackReroll + atkSpecialReroll;
     const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll + defSpecialReroll + _dmForcedReroll;
@@ -1140,11 +1436,37 @@ export async function handleCombatRoll(interaction, ctx) {
       saveGames();
       return;
     }
-    if (atkRerolls > 0 || defRerolls > 0) {
-      combat.rerollPhase = 'attacker';
-      combat.attackerRerollsRemaining = atkRerolls;
-      combat.defenderRerollsRemaining = defRerolls;
-      await sendRerollUI(thread, game, combat, 'attacker');
+    combat.attackerRerollsRemaining = atkRerolls;
+    combat.defenderRerollsRemaining = defRerolls;
+    // Build pre-reroll prompt queue (2C abilities that need a choice before rerolls)
+    combat.pendingPreRerolls = [];
+    if (atkSIds.includes('twin_sabers_ahsoka')) {
+      combat.pendingPreRerolls.push({ type: 'twin_sabers', playerNum: attackerPlayerNum });
+    }
+    if (atkSIds.includes('resourceful_lando') || defSIds.includes('resourceful_lando')) {
+      const _resPlayer = atkSIds.includes('resourceful_lando') ? attackerPlayerNum : defenderPlayerNum;
+      const _resSIds = atkSIds.includes('resourceful_lando') ? atkSIds : defSIds;
+      if (_resSIds.includes('shrewd_scoundrel_lando')) {
+        combat.pendingPreRerolls.push({ type: 'shrewd_scoundrel', playerNum: _resPlayer });
+      }
+      if (_resSIds.includes('gambit_lando')) combat.gambitActive = true;
+      combat.pendingPreRerolls.push({ type: 'resourceful', playerNum: _resPlayer });
+    }
+    if (atkSIds.includes('trained_rancor')) {
+      combat.pendingPreRerolls.push({ type: 'trained', playerNum: attackerPlayerNum });
+    }
+    const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
+    if (atkRerolls > 0 || defRerolls > 0 || hasForcedRerolls) {
+      if (atkRerolls > 0) {
+        combat.rerollPhase = 'attacker';
+        await sendRerollUI(thread, game, combat, 'attacker');
+      } else if (hasForcedRerolls) {
+        combat.rerollPhase = 'forced';
+        await sendRerollUI(thread, game, combat, 'forced');
+      } else {
+        combat.rerollPhase = 'defender';
+        await sendRerollUI(thread, game, combat, 'defender');
+      }
       saveGames();
       return;
     }
@@ -1176,15 +1498,69 @@ function formatDefenseDie(d, i) {
 /** Show reroll UI for the current phase (attacker or defender) */
 export async function sendRerollUI(thread, game, combat, phase) {
   const gameId = game.gameId;
+  // Helper: advance from forced to defender (or null)
+  const _advanceFromForced = async () => {
+    if ((combat.forcedRerollQueue || []).length > 0) {
+      combat.rerollPhase = 'forced';
+      await sendRerollUI(thread, game, combat, 'forced');
+      return;
+    }
+    combat.rerollPhase = 'defender';
+    if ((combat.defenderRerollsRemaining || 0) > 0) {
+      await sendRerollUI(thread, game, combat, 'defender');
+      return;
+    }
+    combat.rerollPhase = null;
+  };
   if (phase === 'attacker') {
-    const remaining = combat.attackerRerollsRemaining || 0;
-    if (remaining <= 0) {
-      combat.rerollPhase = 'defender';
-      if ((combat.defenderRerollsRemaining || 0) > 0) {
-        await sendRerollUI(thread, game, combat, 'defender');
+    // Pre-reroll prompts: show before any reroll dice are offered
+    if (!combat.preRerollsProcessed && (combat.pendingPreRerolls || []).length > 0) {
+      const pr = combat.pendingPreRerolls[0];
+      const playerId = game[`player${pr.playerNum}Id`] ?? '';
+      if (pr.type === 'twin_sabers') {
+        const atkCount = (combat.attackDiceResults || []).length;
+        const defCount = (combat.defenseDiceResults || []).length;
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_twin_sabers_atk`).setLabel(`Reroll all ${atkCount} ATK dice`).setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_twin_sabers_def`).setLabel(`Force reroll all ${defCount} DEF dice`).setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send({ content: `**Twin Sabers** — <@${playerId}> choose:`, components: [row] });
         return;
       }
-      combat.rerollPhase = null;
+      if (pr.type === 'shrewd_scoundrel') {
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_0`).setLabel('Guess 0 Hits').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_1`).setLabel('Guess 1 Hit').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_2`).setLabel('Guess 2 Hits').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_skip`).setLabel('Skip (no guess)').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send({ content: `**Shrewd Scoundrel** — <@${playerId}> guess the number of Hit results after rerolls (0-2):`, components: [row] });
+        return;
+      }
+      if (pr.type === 'resourceful') {
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_resourceful_atk`).setLabel('Reroll 1 ATK die').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_resourceful_def`).setLabel('Reroll 1 DEF die').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send({ content: `**Resourceful** — <@${playerId}> choose:`, components: [row] });
+        return;
+      }
+      if (pr.type === 'trained') {
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_trained_yes`).setLabel('Suffer 1 Strain, +1 ATK reroll').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_trained_no`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send({ content: `**Trained** — <@${playerId}> suffer 1 Strain to reroll 1 attack die?`, components: [row] });
+        return;
+      }
+      // Unknown type — skip it
+      combat.pendingPreRerolls.shift();
+    }
+    const remaining = combat.attackerRerollsRemaining || 0;
+    if (remaining <= 0) {
+      await _advanceFromForced();
       return;
     }
     const dice = combat.attackDiceResults || [];
@@ -1206,6 +1582,48 @@ export async function sendRerollUI(thread, game, combat, phase) {
     const actionRows = buildActionRows(buttons);
     await thread.send({
       content: `**Reroll Window (Attacker)** — ${remaining} reroll${remaining > 1 ? 's' : ''} available. Choose an attack die to reroll, or Done.`,
+      components: actionRows,
+    });
+  } else if (phase === 'forced') {
+    const entry = (combat.forcedRerollQueue || [])[0];
+    if (!entry || entry.remaining <= 0) {
+      combat.forcedRerollQueue.shift();
+      await _advanceFromForced();
+      return;
+    }
+    const buttons = [];
+    if (entry.pool === 'attack' || entry.pool === 'any') {
+      const aDice = combat.attackDiceResults || [];
+      for (let i = 0; i < aDice.length; i++) {
+        buttons.push(
+          new ButtonBuilder()
+            .setCustomId(`combat_reroll_${gameId}_atk_${i}`)
+            .setLabel(`Force ATK ${formatAttackDie(aDice[i], i)}`)
+            .setStyle(ButtonStyle.Danger)
+        );
+      }
+    }
+    if (entry.pool === 'defense' || entry.pool === 'any') {
+      const dDice = combat.defenseDiceResults || [];
+      for (let i = 0; i < dDice.length; i++) {
+        buttons.push(
+          new ButtonBuilder()
+            .setCustomId(`combat_reroll_${gameId}_def_${i}`)
+            .setLabel(`Force DEF ${formatDefenseDie(dDice[i], i)}`)
+            .setStyle(ButtonStyle.Danger)
+        );
+      }
+    }
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(`combat_reroll_${gameId}_atk_done`)
+        .setLabel('Skip (no forced reroll)')
+        .setStyle(ButtonStyle.Secondary)
+    );
+    const actionRows = buildActionRows(buttons);
+    const poolLabel = entry.pool === 'any' ? '' : entry.pool + ' ';
+    await thread.send({
+      content: `**${entry.source}** (Forced Reroll) — Pick a ${poolLabel}die to force reroll (${entry.remaining} remaining), or Skip.`,
       components: actionRows,
     });
   } else {
@@ -1254,17 +1672,28 @@ export async function handleCombatReroll(interaction, ctx) {
     await interaction.followUp({ content: 'No reroll phase active.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const expectedPhase = side === 'atk' ? 'attacker' : 'defender';
-  if (combat.rerollPhase !== expectedPhase) {
-    await interaction.followUp({ content: `It's the ${combat.rerollPhase}'s turn to reroll.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
-    return;
-  }
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
   const effectiveAtk = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
-  const expectedPlayer = side === 'atk' ? effectiveAtk : defenderPlayerNum;
-  if (!canActAsPlayer(game, interaction.user.id, expectedPlayer)) {
-    await interaction.followUp({ content: `Only P${expectedPlayer} can reroll ${side === 'atk' ? 'attack' : 'defense'} dice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  // Phase validation: accept 'forced' for both atk and def sides
+  if (combat.rerollPhase === 'forced') {
+    // Forced phase accepts both atk and def die picks
+  } else {
+    const expectedPhase = side === 'atk' ? 'attacker' : 'defender';
+    if (combat.rerollPhase !== expectedPhase) {
+      await interaction.followUp({ content: `It's the ${combat.rerollPhase}'s turn to reroll.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      return;
+    }
+  }
+  // Permission: for forced phase, use controlPlayer from queue entry
+  let expectedPlayer;
+  if (combat.rerollPhase === 'forced') {
+    expectedPlayer = (combat.forcedRerollQueue || [])[0]?.controlPlayer;
+  } else {
+    expectedPlayer = side === 'atk' ? effectiveAtk : defenderPlayerNum;
+  }
+  if (!expectedPlayer || !canActAsPlayer(game, interaction.user.id, expectedPlayer)) {
+    await interaction.followUp({ content: `Only P${expectedPlayer} can reroll ${combat.rerollPhase === 'forced' ? 'forced' : (side === 'atk' ? 'attack' : 'defense')} dice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
@@ -1279,6 +1708,66 @@ export async function handleCombatReroll(interaction, ctx) {
     return 'acc';
   };
 
+  // --- Forced reroll phase handling ---
+  if (combat.rerollPhase === 'forced') {
+    const _frEntry = (combat.forcedRerollQueue || [])[0];
+    if (choice !== 'done' && _frEntry && _frEntry.remaining > 0) {
+      const idx = parseInt(choice, 10);
+      if (side === 'atk') {
+        const dice = combat.attackDiceResults || [];
+        if (idx >= 0 && idx < dice.length) {
+          const oldDie = dice[idx];
+          const newDie = rollSingleAttackDie(oldDie.color);
+          dice[idx] = newDie;
+          combat.attackDiceResults = dice;
+          const totals = recalcAttackTotals(dice);
+          combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
+          _frEntry.remaining -= 1;
+          await thread.send(`**${_frEntry.source}** forced reroll ATK ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
+        }
+      } else {
+        const dice = combat.defenseDiceResults || [];
+        if (idx >= 0 && idx < dice.length) {
+          const oldDie = dice[idx];
+          const newDie = rollSingleDefenseDie(oldDie.color);
+          dice[idx] = newDie;
+          combat.defenseDiceResults = dice;
+          const totals = recalcDefenseTotals(dice);
+          combat.defenseRoll = { block: totals.block, evade: totals.evade, dodge: totals.dodge };
+          _frEntry.remaining -= 1;
+          const dodgeTag = newDie.dodge ? '/DODGE' : '';
+          await thread.send(`**${_frEntry.source}** forced reroll DEF ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
+        }
+      }
+    }
+    // Transition: done or entry exhausted
+    if (choice === 'done' || !_frEntry || _frEntry.remaining <= 0) {
+      if (_frEntry) combat.forcedRerollQueue.shift();
+    }
+    if ((combat.forcedRerollQueue || []).length > 0) {
+      await sendRerollUI(thread, game, combat, 'forced');
+      saveGames();
+      return;
+    }
+    // All forced rerolls done — move to defender
+    if (game.forceDefenderRerollOne && !combat.demoralizingMonologueApplied) {
+      combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
+      combat.demoralizingMonologueApplied = true;
+      game.forceDefenderRerollOne = null;
+    }
+    combat.rerollPhase = 'defender';
+    if ((combat.defenderRerollsRemaining || 0) > 0) {
+      await sendRerollUI(thread, game, combat, 'defender');
+      saveGames();
+      return;
+    }
+    combat.rerollPhase = null;
+    await proceedAfterRerolls(thread, game, combat, ctx);
+    saveGames();
+    return;
+  }
+
+  // --- Voluntary reroll phase handling ---
   let _tlTriggered = false;
   if (choice !== 'done') {
     const idx = parseInt(choice, 10);
@@ -1307,6 +1796,19 @@ export async function handleCombatReroll(interaction, ctx) {
           }
           combat.doubleOrNothingApplied = true;
           game.doubleMatchingIconsOnReroll = null;
+        }
+        // Advanced Targeting Computer (Dark Trooper Mk III): if rerolled die has fewer Hits, +1 Hit
+        if (!combat.advTcBonusApplied) {
+          const _atcDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+          const _atcDcName = (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+          const _atcEff = _atcDcEff[_atcDcName] || _atcDcEff[_atcDcName?.replace(/\s*\[.*\]\s*$/, '')];
+          if ((_atcEff?.specialAbilityIds || []).includes('adv_targeting_computer_dark_trooper')) {
+            if ((newDie.dmg || 0) < (oldDie.dmg || 0)) {
+              combat.bonusHits = (combat.bonusHits || 0) + 1;
+              combat.advTcBonusApplied = true;
+              await thread.send('**Advanced Targeting Computer** — Rerolled die has fewer Hits: +1 Hit applied.');
+            }
+          }
         }
         // Tough Luck: if defender set TL, they may remove this rerolled die
         if (game.toughLuckPlayerNum === defenderPlayerNum) {
@@ -1366,6 +1868,13 @@ export async function handleCombatReroll(interaction, ctx) {
 
   // Check if current side is done (clicked done or exhausted rerolls)
   if (side === 'atk' && (choice === 'done' || combat.attackerRerollsRemaining <= 0)) {
+    // Route through forced reroll queue before defender
+    if ((combat.forcedRerollQueue || []).length > 0) {
+      combat.rerollPhase = 'forced';
+      await sendRerollUI(thread, game, combat, 'forced');
+      saveGames();
+      return;
+    }
     combat.rerollPhase = 'defender';
     // Demoralizing Monologue: if flag still pending, add forced reroll for defender now
     if (game.forceDefenderRerollOne && !combat.demoralizingMonologueApplied) {
@@ -1392,6 +1901,121 @@ export async function handleCombatReroll(interaction, ctx) {
 
   // Still has rerolls — show updated UI
   await sendRerollUI(thread, game, combat, combat.rerollPhase);
+  saveGames();
+}
+
+/**
+ * Handle pre-reroll button clicks (pre_reroll_{gameId}_{choice})
+ * Choices: twin_sabers_atk, twin_sabers_def, resourceful_atk, resourceful_def,
+ *   trained_yes, trained_no, shrewd_0/1/2, skip
+ */
+export async function handlePreReroll(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const match = interaction.customId.match(/^pre_reroll_([^_]+)_(.+)$/);
+  if (!match) return;
+  const [, gameId, choice] = match;
+  const game = getGame(gameId);
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) {
+    await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const pr = (combat.pendingPreRerolls || [])[0];
+  if (!pr) { await interaction.followUp({ content: 'No pending pre-reroll.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!canActAsPlayer(game, interaction.user.id, pr.playerNum)) {
+    await interaction.followUp({ content: `Only P${pr.playerNum} can make this choice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+
+  // Process choice
+  if (choice === 'skip') {
+    combat.pendingPreRerolls.shift();
+    await thread.send(`Pre-reroll choice skipped.`);
+  } else if (choice === 'twin_sabers_atk') {
+    // Reroll all attack dice: set atkRerolls to number of dice
+    combat.attackerRerollsRemaining = (combat.attackDiceResults || []).length;
+    combat.pendingPreRerolls.shift();
+    await thread.send(`**Twin Sabers** — Will reroll all ${combat.attackerRerollsRemaining} attack dice.`);
+  } else if (choice === 'twin_sabers_def') {
+    // Force reroll all defense dice: add to forced queue
+    const defCount = (combat.defenseDiceResults || []).length;
+    combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+    combat.forcedRerollQueue.unshift({ controlPlayer: combat.attackerPlayerNum, pool: 'defense', remaining: defCount, source: 'Twin Sabers' });
+    combat.pendingPreRerolls.shift();
+    await thread.send(`**Twin Sabers** — Will force reroll all ${defCount} defense dice.`);
+  } else if (choice === 'resourceful_atk') {
+    combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
+    combat.resourcefulSide = 'atk';
+    combat.pendingPreRerolls.shift();
+    const gambitNote = combat.gambitActive ? ' (Gambit: you may swap die color before rerolling)' : '';
+    await thread.send(`**Resourceful** — +1 attack reroll.${gambitNote}`);
+  } else if (choice === 'resourceful_def') {
+    combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
+    combat.resourcefulSide = 'def';
+    combat.pendingPreRerolls.shift();
+    const gambitNote = combat.gambitActive ? ' (Gambit: you may swap die color before rerolling)' : '';
+    await thread.send(`**Resourceful** — +1 defense reroll.${gambitNote}`);
+  } else if (choice === 'trained_yes') {
+    // Suffer 1 strain (= 1 HP damage) + +1 atk reroll
+    const dcHS = ctx.dcHealthState;
+    const atkMsgId = combat.attackerMsgId;
+    if (atkMsgId && dcHS) {
+      const hpArr = dcHS.get(atkMsgId);
+      const figIdx = combat.attackerFigureIndex ?? 0;
+      if (hpArr?.[figIdx]) {
+        hpArr[figIdx][0] = Math.max(0, (hpArr[figIdx][0] ?? 0) - 1);
+      }
+    }
+    combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
+    combat.pendingPreRerolls.shift();
+    await thread.send(`**Trained** — Suffered 1 Strain. +1 attack reroll.`);
+  } else if (choice === 'trained_no') {
+    combat.pendingPreRerolls.shift();
+    await thread.send(`**Trained** — Skipped.`);
+  } else if (choice.startsWith('shrewd_')) {
+    const guess = parseInt(choice.replace('shrewd_', ''), 10);
+    if (!isNaN(guess)) {
+      combat.shrewdScoundrelGuess = guess;
+      await thread.send(`**Shrewd Scoundrel** — Guessed **${guess}** Hit result${guess !== 1 ? 's' : ''}.`);
+    }
+    combat.pendingPreRerolls.shift();
+  } else {
+    combat.pendingPreRerolls.shift();
+  }
+
+  // Check if more pre-rerolls remain
+  if ((combat.pendingPreRerolls || []).length > 0) {
+    combat.rerollPhase = 'attacker';
+    await sendRerollUI(thread, game, combat, 'attacker');
+    saveGames();
+    return;
+  }
+
+  // All pre-rerolls done — enter the actual reroll window
+  combat.preRerollsProcessed = true;
+  const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
+  const atkR = combat.attackerRerollsRemaining || 0;
+  const defR = combat.defenderRerollsRemaining || 0;
+  if (atkR > 0 || defR > 0 || hasForcedRerolls) {
+    if (atkR > 0) {
+      combat.rerollPhase = 'attacker';
+      await sendRerollUI(thread, game, combat, 'attacker');
+    } else if (hasForcedRerolls) {
+      combat.rerollPhase = 'forced';
+      await sendRerollUI(thread, game, combat, 'forced');
+    } else {
+      combat.rerollPhase = 'defender';
+      await sendRerollUI(thread, game, combat, 'defender');
+    }
+    saveGames();
+    return;
+  }
+  // No rerolls — proceed directly
+  combat.rerollPhase = null;
+  await proceedAfterRerolls(thread, game, combat, ctx);
   saveGames();
 }
 
@@ -1546,10 +2170,273 @@ async function advanceTokenPhase(thread, game, combat, completedRole, ctx) {
 }
 
 /**
+ * Handle combat_passive_ buttons: Defensible, Get Down, Call the Shots choices.
+ * After applying the choice, re-enters proceedAfterRerolls.
+ */
+export async function handleCombatPassive(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const m = interaction.customId.match(/^combat_passive_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, rest] = m;
+  const game = getGame(gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) return;
+  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+
+  // Parse ability and choice
+  const parts = rest.split('_');
+  const abilityKey = parts[0]; // defensible, getdown, cts
+  const choice = parts.slice(1).join('_'); // block, evade, skip, acc, hit, surge
+
+  if (abilityKey === 'defensible') {
+    if (choice === 'block') {
+      combat.bonusBlock = (combat.bonusBlock || 0) + 1;
+      await thread.send('**Defensible** — Applied +1 Block.');
+    } else if (choice === 'evade') {
+      combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+      await thread.send('**Defensible** — Applied +1 Evade.');
+    } else {
+      await thread.send('**Defensible** — Skipped.');
+    }
+    combat.defensibleResolved = true;
+    delete combat.pendingCombatPassive;
+  } else if (abilityKey === 'getdown') {
+    if (combat.getDownFigKey) {
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      game.roundFigureAbilityUsed[`${combat.getDownFigKey}_get_down`] = true;
+    }
+    if (choice === 'block') {
+      combat.bonusBlock = (combat.bonusBlock || 0) + 1;
+      await thread.send('**Get Down** — Applied +1 Block.');
+    } else if (choice === 'evade') {
+      combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+      await thread.send('**Get Down** — Applied +1 Evade.');
+    } else {
+      await thread.send('**Get Down** — Skipped.');
+    }
+    combat.getDownResolved = true;
+    delete combat.pendingCombatPassive;
+    delete combat.getDownFigKey;
+  } else if (abilityKey === 'cts') {
+    if (combat.callTheShotsFigKey) {
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      game.roundFigureAbilityUsed[`${combat.callTheShotsFigKey}_call_the_shots`] = true;
+    }
+    if (choice === 'acc') {
+      combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2;
+      await thread.send('**Call the Shots** — Applied +2 Accuracy.');
+    } else if (choice === 'hit') {
+      combat.bonusHits = (combat.bonusHits || 0) + 1;
+      await thread.send('**Call the Shots** — Applied +1 Hit.');
+    } else if (choice === 'surge') {
+      combat.surgeBonus = (combat.surgeBonus || 0) + 1;
+      await thread.send('**Call the Shots** — Applied +1 Surge.');
+    } else {
+      await thread.send('**Call the Shots** — Skipped.');
+    }
+    combat.callTheShotsResolved = true;
+    delete combat.pendingCombatPassive;
+    delete combat.callTheShotsFigKey;
+  } else if (abilityKey === 'survival') {
+    // Survival is Strength: reroll 1 attack die (chosen by defender's team)
+    if (combat.survivalFigKey) {
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      game.roundFigureAbilityUsed[`${combat.survivalFigKey}_survival_is_strength`] = true;
+    }
+    if (choice === 'skip') {
+      await thread.send('**Survival is Strength** — Skipped.');
+    } else {
+      const dieIdx = parseInt(choice, 10);
+      const dice = combat.attackDiceResults;
+      if (dice && dieIdx >= 0 && dieIdx < dice.length) {
+        const getDiceData = ctx.getDiceData || (() => ({}));
+        const diceData = getDiceData();
+        const oldDie = dice[dieIdx];
+        const color = oldDie.color;
+        const faces = diceData?.[color];
+        if (faces?.length) {
+          const newFace = faces[Math.floor(Math.random() * faces.length)];
+          // Update the die result
+          dice[dieIdx] = { ...newFace, color };
+          // Recalculate attackRoll totals
+          combat.attackRoll = { dmg: 0, surge: 0, acc: 0 };
+          for (const d of dice) {
+            combat.attackRoll.dmg += (d.dmg || 0);
+            combat.attackRoll.surge += (d.surge || 0);
+            combat.attackRoll.acc += (d.acc || 0);
+          }
+          await thread.send(`**Survival is Strength** — Rerolled 1 ${color} attack die. New roll: ${newFace.dmg || 0} Hit, ${newFace.surge || 0} Surge, ${newFace.acc || 0} Acc.`);
+        }
+      }
+    }
+    combat.survivalResolved = true;
+    delete combat.pendingCombatPassive;
+    delete combat.survivalFigKey;
+    // Survival triggers during token phase — resume there, not in reroll phase
+    saveGames();
+    await proceedAfterTokens(thread, game, combat, ctx);
+    return;
+  }
+
+  saveGames();
+  await proceedAfterRerolls(thread, game, combat, ctx);
+}
+
+/**
  * After rerolls are complete: check dodge, then gate through token windows if eligible tokens exist.
  */
 export async function proceedAfterRerolls(thread, game, combat, ctx) {
   const saveGames = ctx.saveGames;
+
+  // Shrewd Scoundrel (Lando): check hit guess after all rerolls
+  if (typeof combat.shrewdScoundrelGuess === 'number') {
+    const hitCount = combat.attackRoll?.dmg ?? 0;
+    const guess = combat.shrewdScoundrelGuess;
+    if (hitCount === guess) {
+      const ssPlayerNum = combat.attackerPlayerNum; // Lando must be attacker or defender
+      // Find which player is Lando
+      const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+      const atkSIds = (getDcEff[combat.attackerDcName] || getDcEff[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')])?.specialAbilityIds || [];
+      const defDcN = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '');
+      const defSIds = (getDcEff[defDcN] || getDcEff[(defDcN || '').replace(/\s*\[.*\]\s*$/, '')])?.specialAbilityIds || [];
+      const landoPN = atkSIds.includes('shrewd_scoundrel_lando') ? combat.attackerPlayerNum : (defSIds.includes('shrewd_scoundrel_lando') ? (combat.attackerPlayerNum === 1 ? 2 : 1) : null);
+      if (landoPN) {
+        if (landoPN === 1) game.p1VictoryPoints = (game.p1VictoryPoints || 0) + 2;
+        else game.p2VictoryPoints = (game.p2VictoryPoints || 0) + 2;
+        await thread.send(`**Shrewd Scoundrel** — Guessed ${guess} Hits, rolled ${hitCount} Hits. **Correct! +2 VP!**`);
+      }
+    } else {
+      await thread.send(`**Shrewd Scoundrel** — Guessed ${guess} Hits, rolled ${hitCount} Hits. Incorrect.`);
+    }
+    delete combat.shrewdScoundrelGuess;
+  }
+
+  // Agile (Jet Trooper E/R): while defending, convert 1 Block to 1 Evade
+  if (combat.target?.figureKey && !combat.agileJetTrooperApplied) {
+    const _agDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _agDefDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const _agDefEff = _agDcEff[_agDefDcName] || _agDcEff[(_agDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    const _agDefSIds = _agDefEff?.specialAbilityIds || [];
+    if (_agDefSIds.includes('agile_jet_trooper_elite') || _agDefSIds.includes('agile_jet_trooper_reg')) {
+      const _agTotalBlock = (combat.defenseRoll?.block || 0) + (combat.bonusBlock || 0);
+      if (_agTotalBlock > 0) {
+        combat.bonusBlock = (combat.bonusBlock || 0) - 1;
+        combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+        combat.agileJetTrooperApplied = true;
+        await thread.send('**Agile** — Converted 1 Block to 1 Evade.');
+      }
+    }
+  }
+
+  // Defensible (SC2-M): while defending, apply +1 Block or +1 Evade (player chooses)
+  if (!combat.defensibleResolved && combat.target?.figureKey) {
+    const _defsDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _defsDefDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const _defsDefEff = _defsDcEff[_defsDefDcName] || _defsDcEff[(_defsDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((_defsDefEff?.specialAbilityIds || []).includes('defensible_sc2m')) {
+      combat.pendingCombatPassive = 'defensible';
+      const btns = [
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_defensible_block`).setLabel('+1 Block').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_defensible_evade`).setLabel('+1 Evade').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_defensible_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      ];
+      await thread.send({
+        content: `**Defensible** (${_defsDefDcName}): Apply +1 Block or +1 Evade?`,
+        components: [new ActionRowBuilder().addComponents(btns)],
+      });
+      saveGames?.();
+      return;
+    }
+    combat.defensibleResolved = true;
+  }
+
+  // Get Down (Onar Koma): while a SMALL figure within 2 is defending, apply +1 Block or +1 Evade (once/round)
+  if (!combat.getDownResolved && combat.target?.figureKey) {
+    const _gdDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _gdDefDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const _gdDefEff = _gdDcEff[_gdDefDcName] || _gdDcEff[(_gdDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    // Defender must be SMALL (no LARGE/MASSIVE keyword)
+    const _gdDefKws = (_gdDefEff?.keywords || []).map(k => String(k).toUpperCase());
+    const _gdIsSmall = !_gdDefKws.includes('LARGE') && !_gdDefKws.includes('MASSIVE');
+    if (_gdIsSmall) {
+      const defPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+      const friendlyFigs = game.figurePositions?.[defPlayerNum] || {};
+      const defCoord = friendlyFigs[combat.target.figureKey];
+      const mapSp = getMapSpaces(game.selectedMap?.id);
+      let _gdOnarFk = null;
+      if (defCoord && mapSp) {
+        for (const [fk, pos] of Object.entries(friendlyFigs)) {
+          if (fk === combat.target.figureKey) continue;
+          const fDcName = fk.replace(/-\d+-\d+$/, '');
+          const fEff = _gdDcEff[fDcName] || _gdDcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
+          if (!(fEff?.specialAbilityIds || []).includes('get_down_onar')) continue;
+          if (isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defCoord).toLowerCase(), 2)) {
+            _gdOnarFk = fk;
+            break;
+          }
+        }
+      }
+      if (_gdOnarFk && !game.roundFigureAbilityUsed?.[`${_gdOnarFk}_get_down`]) {
+        combat.pendingCombatPassive = 'get_down';
+        combat.getDownFigKey = _gdOnarFk;
+        const _gdOnarDcName = _gdOnarFk.replace(/-\d+-\d+$/, '');
+        const btns = [
+          new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_getdown_block`).setLabel('+1 Block').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_getdown_evade`).setLabel('+1 Evade').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_getdown_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        ];
+        await thread.send({
+          content: `**Get Down** (${_gdOnarDcName}): Apply +1 Block or +1 Evade to **${_gdDefDcName}**'s defense?`,
+          components: [new ActionRowBuilder().addComponents(btns)],
+        });
+        saveGames?.();
+        return;
+      }
+    }
+    combat.getDownResolved = true;
+  }
+
+  // Call the Shots (Hera): while a friendly within 3 is attacking, apply +2 Acc, +1 Hit, or +1 Surge (once/round)
+  if (!combat.callTheShotsResolved && combat.attackerFigureKey) {
+    const _ctsDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const atkPlayerNum = combat.attackerPlayerNum;
+    const friendlyFigs = game.figurePositions?.[atkPlayerNum] || {};
+    const atkCoord = friendlyFigs[combat.attackerFigureKey];
+    const mapSp = getMapSpaces(game.selectedMap?.id);
+    let _ctsHeraFk = null;
+    if (atkCoord && mapSp) {
+      for (const [fk, pos] of Object.entries(friendlyFigs)) {
+        if (fk === combat.attackerFigureKey) continue; // "another friendly"
+        const fDcName = fk.replace(/-\d+-\d+$/, '');
+        const fEff = _ctsDcEff[fDcName] || _ctsDcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
+        if (!(fEff?.specialAbilityIds || []).includes('call_the_shots_hera')) continue;
+        if (isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkCoord).toLowerCase(), 3)) {
+          _ctsHeraFk = fk;
+          break;
+        }
+      }
+    }
+    if (_ctsHeraFk && !game.roundFigureAbilityUsed?.[`${_ctsHeraFk}_call_the_shots`]) {
+      combat.pendingCombatPassive = 'call_the_shots';
+      combat.callTheShotsFigKey = _ctsHeraFk;
+      const _ctsHeraDcName = _ctsHeraFk.replace(/-\d+-\d+$/, '');
+      const btns = [
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_acc`).setLabel('+2 Accuracy').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_hit`).setLabel('+1 Hit').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_surge`).setLabel('+1 Surge').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      ];
+      await thread.send({
+        content: `**Call the Shots** (${_ctsHeraDcName}): Apply +2 Accuracy, +1 Hit, or +1 Surge to **${combat.attackerDcName}**'s attack?`,
+        components: [new ActionRowBuilder().addComponents(btns)],
+      });
+      saveGames?.();
+      return;
+    }
+    combat.callTheShotsResolved = true;
+  }
 
   // Lasat Honor Guard (Zeb Orrelios): after rerolls, may turn 1 die showing only a single attack icon to any other side
   if (!combat.lasatHonorGuardUsed && combat.attackDiceResults?.length > 0) {
@@ -1603,6 +2490,32 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     combat.soresuFormFigKey = null;
   }
 
+  // Lucky (R2-D2): while defending, if Dodge rolled, recover 2 damage
+  if (combat.defenseRoll.dodge && combat.target?.figureKey) {
+    const _luckyDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _luckyDefDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const _luckyDefEff = _luckyDcEff[_luckyDefDcName] || _luckyDcEff[(_luckyDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((_luckyDefEff?.specialAbilityIds || []).includes('lucky_r2d2') && ctx.dcHealthState) {
+      const _luckyFkMatch = combat.target.figureKey.match(/^(.+)-(\d+)-(\d+)$/);
+      if (_luckyFkMatch) {
+        const targetMsgId = combat.target.msgId;
+        if (targetMsgId) {
+          const _luckyHs = ctx.dcHealthState.get(targetMsgId);
+          const _luckyFi = parseInt(_luckyFkMatch[3], 10);
+          if (_luckyHs?.[_luckyFi]) {
+            const [_lCur, _lMax] = _luckyHs[_luckyFi];
+            if (_lCur < _lMax) {
+              const _lNew = Math.min(_lMax, (_lCur ?? _lMax) + 2);
+              _luckyHs[_luckyFi] = [_lNew, _lMax];
+              ctx.dcHealthState.set(targetMsgId, _luckyHs);
+              await thread.send(`🍀 **Lucky** — R2-D2 rolled a Dodge! Recovered 2 damage (HP: ${_lCur}→${_lNew}).`);
+            }
+          }
+        }
+      }
+    }
+  }
+
   // Dodge check (now AFTER rerolls and Defensive Stance conversion)
   if (combat.defenseRoll.dodge) {
     await thread.send('**DODGE!** The attack misses — all damage and effects negated.');
@@ -1610,14 +2523,27 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     return;
   }
 
+  // Vague and Unconvincing (K-2S0): while defending, neither player can spend power tokens
+  let _vagueBlockTokens = false;
+  if (combat.target?.figureKey) {
+    const _vuDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _vuDefDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const _vuDefEff = _vuDcEff[_vuDefDcName] || _vuDcEff[(_vuDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((_vuDefEff?.specialAbilityIds || []).includes('vague_and_unconvincing_k2s0')) {
+      _vagueBlockTokens = true;
+      combat.vagueAndUnconvincing = true;
+      await thread.send('**Vague and Unconvincing** — Neither player may spend Power Tokens or play Command Cards during this attack.');
+    }
+  }
+
   const attackerTokens = getEligibleTokens(game, combat.attackerFigureKey, 'attacker');
   const defenderTokens = getEligibleTokens(game, combat.target.figureKey, 'defender');
-  if (attackerTokens.length > 0) {
+  if (!_vagueBlockTokens && attackerTokens.length > 0) {
     combat.tokenPhase = 'attacker';
     await sendTokenWindow(thread, game.gameId, 'attacker', attackerTokens, combat.attackerDisplayName);
     return;
   }
-  if (defenderTokens.length > 0) {
+  if (!_vagueBlockTokens && defenderTokens.length > 0) {
     combat.tokenPhase = 'defender';
     await sendTokenWindow(thread, game.gameId, 'defender', defenderTokens, combat.target.label);
     return;
@@ -1629,6 +2555,57 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
  * After token windows are resolved: evade cancellation, surge spending, or ready-to-resolve.
  */
 async function proceedAfterTokens(thread, game, combat, ctx) {
+  const saveGames = ctx.saveGames;
+
+  // Survival is Strength (Armorer): after a friendly within 3 defending spent a Block,
+  // Armorer's player may force reroll 1 attack die. Once per round.
+  if (!combat.survivalResolved && combat.defenderSpentBlock && combat.target?.figureKey && combat.attackDiceResults?.length > 0) {
+    const _sisDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const defPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+    const friendlyFigs = game.figurePositions?.[defPlayerNum] || {};
+    const defCoord = friendlyFigs[combat.target.figureKey];
+    const mapSp = getMapSpaces(game.selectedMap?.id);
+    let _sisArmorerFk = null;
+    if (defCoord && mapSp) {
+      for (const [fk, pos] of Object.entries(friendlyFigs)) {
+        const fDcName = fk.replace(/-\d+-\d+$/, '');
+        const fEff = _sisDcEff[fDcName] || _sisDcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
+        if (!(fEff?.specialAbilityIds || []).includes('survival_is_strength_armorer')) continue;
+        if (isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defCoord).toLowerCase(), 3)) {
+          _sisArmorerFk = fk;
+          break;
+        }
+      }
+    }
+    if (_sisArmorerFk && !game.roundFigureAbilityUsed?.[`${_sisArmorerFk}_survival_is_strength`]) {
+      combat.pendingCombatPassive = 'survival';
+      combat.survivalFigKey = _sisArmorerFk;
+      const _sisArmorerDcName = _sisArmorerFk.replace(/-\d+-\d+$/, '');
+      const dice = combat.attackDiceResults;
+      const btns = dice.map((d, i) =>
+        new ButtonBuilder()
+          .setCustomId(`combat_passive_${game.gameId}_survival_${i}`)
+          .setLabel(`${d.color} die (${d.dmg || 0}H/${d.surge || 0}S/${d.acc || 0}A)`)
+          .setStyle(ButtonStyle.Danger)
+      );
+      btns.push(
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_survival_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary)
+      );
+      // Split into rows of 5 if needed
+      const rows = [];
+      for (let i = 0; i < btns.length; i += 5) {
+        rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+      }
+      await thread.send({
+        content: `**Survival is Strength** (${_sisArmorerDcName}): Defender spent a Block token — choose an attack die to force reroll, or skip.`,
+        components: rows,
+      });
+      saveGames?.();
+      return;
+    }
+    combat.survivalResolved = true;
+  }
+
   const { getAttackerSurgeAbilities, SURGE_LABELS } = ctx;
   const getAbility = ctx.getAbility || (() => null);
   const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (SURGE_LABELS && SURGE_LABELS[id]) || id);
@@ -1666,11 +2643,19 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     combat.surgeAccuracy = 0;
     combat.surgeConditions = [];
     const surgeRows = [];
+    // Krayt Dragon Fury (Tress Hacnua): resolve X in surge labels to actual surge count
+    const _kdfXVal = combat.attackRoll?.surge ?? 0;
+    const _kdfDcEffL = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _kdfAtkDcNameL = (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+    const _kdfAtkEffL = _kdfDcEffL[_kdfAtkDcNameL] || _kdfDcEffL[(_kdfAtkDcNameL || '').replace(/\s*\[.*\]\s*$/, '')];
+    const _kdfHasL = (_kdfAtkEffL?.specialAbilityIds || []).includes('krayt_dragon_fury_tress');
     for (let i = 0; i < surgeAbilities.length; i++) {
       const key = surgeAbilities[i];
       const cost = (key?.startsWith?.('double:') ? 2 : (getAbility(key)?.surgeCost ?? 1));
       if (cost > remaining) continue;
-      const label = (getSurgeLabel(key) || key).slice(0, 80);
+      let label = (getSurgeLabel(key) || key).slice(0, 80);
+      // Substitute X with actual value for Krayt Dragon Fury
+      if (_kdfHasL && /\bx\b/i.test(label)) label = label.replace(/\bX\b/gi, String(_kdfXVal));
       const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
       surgeRows.push(
         new ButtonBuilder()
@@ -1775,6 +2760,10 @@ export async function handleCombatSurge(interaction, ctx) {
     return;
   }
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  // Overload (Rebel Saboteur): may trigger the same surge ability up to twice per attack
+  const getDcEffS = ctx.getDcEffects || (() => ({}));
+  const atkEffS = getDcEffS()[combat.attackerDcName] || getDcEffS()[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  const overloadActive = (atkEffS?.specialAbilityIds || []).includes('overload_saboteur');
   if (choice === 'bleed_prevention') {
     combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);
     combat.surgePreventBleed = true;
@@ -1790,6 +2779,13 @@ export async function handleCombatSurge(interaction, ctx) {
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const key = surgeAbilities[idx];
     if (key) {
+      // Overload: check if this surge has already been used the max number of times
+      const maxUses = overloadActive ? 2 : 1;
+      const usedCount = (combat.surgeSpentCount || {})[idx] || 0;
+      if (usedCount >= maxUses) {
+        await interaction.deferUpdate().catch(() => {});
+        return;
+      }
       const cost = (key?.startsWith?.('double:') ? 2 : (getAbility(key)?.surgeCost ?? 1));
       const mod = resolveSurge(key);
       combat.surgeDamage = (combat.surgeDamage || 0) + (mod.damage ?? 0);
@@ -1886,10 +2882,29 @@ export async function handleCombatSurge(interaction, ctx) {
         combat.surgeRemaining = (combat.surgeRemaining || 0) + mod.surgeGrantExtraSurge;
       }
       if (mod.surgeComplex) {
-        const cThread = await interaction.client.channels.fetch(combat.combatThreadId);
-        await cThread.send(`⚠️ **${getSurgeLabel(key)}** — resolve manually (see ability text).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        // Krayt Dragon Fury (Tress Hacnua): X = number of Surge rolled on the attack dice
+        const _kdfDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+        const _kdfAtkDcName = (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+        const _kdfAtkEff = _kdfDcEff[_kdfAtkDcName] || _kdfDcEff[(_kdfAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+        const _kdfHas = (_kdfAtkEff?.specialAbilityIds || []).includes('krayt_dragon_fury_tress');
+        if (_kdfHas) {
+          const _kdfX = combat.attackRoll?.surge ?? 0;
+          if (mod.surgeComplex === 'cleave x') {
+            combat.surgeCleave = (combat.surgeCleave || 0) + _kdfX;
+            await thread.send(`**Krayt Dragon Fury** — Cleave ${_kdfX} (${_kdfX} Surge rolled).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          } else if (mod.surgeComplex === 'recover x') {
+            combat.surgeRecover = (combat.surgeRecover || 0) + _kdfX;
+            await thread.send(`**Krayt Dragon Fury** — Recover ${_kdfX} (${_kdfX} Surge rolled).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }
+        } else {
+          const cThread = await interaction.client.channels.fetch(combat.combatThreadId);
+          await cThread.send(`⚠️ **${getSurgeLabel(key)}** — resolve manually (see ability text).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }
       }
       combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - cost);
+      // Track how many times each surge index has been spent (for Overload)
+      if (!combat.surgeSpentCount) combat.surgeSpentCount = {};
+      combat.surgeSpentCount[idx] = (combat.surgeSpentCount[idx] || 0) + 1;
       const label = getSurgeLabel(key);
       await thread.send(`**Surge spent (${cost}):** ${label}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
       // Hunter Protocol: offer to trigger the same surge ability once more
@@ -1940,12 +2955,22 @@ export async function handleCombatSurge(interaction, ctx) {
   } else {
     const surgeAbilities = getAttackerSurgeAbilities(combat);
     const remaining = combat.surgeRemaining || 0;
+    const maxSurgeUses = overloadActive ? 2 : 1;
+    // Krayt Dragon Fury: resolve X in labels
+    const _kdfXValR = combat.attackRoll?.surge ?? 0;
+    const _kdfDcEffR = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _kdfAtkDcNameR = (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+    const _kdfAtkEffR = _kdfDcEffR[_kdfAtkDcNameR] || _kdfDcEffR[(_kdfAtkDcNameR || '').replace(/\s*\[.*\]\s*$/, '')];
+    const _kdfHasR = (_kdfAtkEffR?.specialAbilityIds || []).includes('krayt_dragon_fury_tress');
     const surgeRows = [];
     for (let i = 0; i < surgeAbilities.length; i++) {
       const key = surgeAbilities[i];
       const cost = (key?.startsWith?.('double:') ? 2 : (getAbility(key)?.surgeCost ?? 1));
       if (cost > remaining) continue;
-      const label = (getSurgeLabel(key) || key).slice(0, 80);
+      // Skip surges that have been used the max number of times
+      if (((combat.surgeSpentCount || {})[i] || 0) >= maxSurgeUses) continue;
+      let label = (getSurgeLabel(key) || key).slice(0, 80);
+      if (_kdfHasR && /\bx\b/i.test(label)) label = label.replace(/\bX\b/gi, String(_kdfXValR));
       const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
       surgeRows.push(
         new ButtonBuilder()
@@ -2007,6 +3032,17 @@ export async function handleCombatToken(interaction, ctx) {
     removeSpentToken(game, figKey, combat.pendingWildTokenIndex);
     await thread.send(`**Power Token spent:** Wild → +1 ${resolvedType}`);
     logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${combat.pendingWildRole === 'attacker' ? 'Attacker' : 'Defender'}: Wild → +1 ${resolvedType}`, { phase: 'ROUND', icon: 'attack' });
+    // Track Block spending for Mandalorian Steel / Personal Combat Shield
+    if (combat.pendingWildRole === 'defender' && resolvedType === 'Block') {
+      combat.defenderSpentBlock = true;
+      const _pcsWDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+      const _pcsWDefDcName = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '');
+      const _pcsWDefEff = _pcsWDcEff[_pcsWDefDcName] || _pcsWDcEff[(_pcsWDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+      if ((_pcsWDefEff?.specialAbilityIds || []).includes('personal_combat_shield_gar_saxon')) {
+        combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+        await thread.send('**Personal Combat Shield** — Gar Saxon spent a Block token: +1 Evade.');
+      }
+    }
     const completedRole = combat.pendingWildRole;
     combat.pendingWildRole = null;
     combat.pendingWildTokenIndex = null;
@@ -2055,6 +3091,16 @@ export async function handleCombatToken(interaction, ctx) {
   logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${tokenType}`, { phase: 'ROUND', icon: 'attack' });
   // Track Block token spending for Mandalorian Steel
   if (!isAttacker && tokenType === 'Block') combat.defenderSpentBlock = true;
+  // Personal Combat Shield (Gar Saxon): when spending a Block token while defending, +1 Evade
+  if (!isAttacker && tokenType === 'Block') {
+    const _pcsDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _pcsDefDcName = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '');
+    const _pcsDefEff = _pcsDcEff[_pcsDefDcName] || _pcsDcEff[(_pcsDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((_pcsDefEff?.specialAbilityIds || []).includes('personal_combat_shield_gar_saxon')) {
+      combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+      await thread.send('**Personal Combat Shield** — Gar Saxon spent a Block token: +1 Evade.');
+    }
+  }
   await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);
   saveGames();
 }
@@ -2209,12 +3255,21 @@ export async function handlePowerTokenChoice(interaction, ctx) {
       const surgeAbilities = ctx.getAttackerSurgeAbilities ? ctx.getAttackerSurgeAbilities(combat) : [];
       const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS?.[id]) || id);
       const remaining = combat.surgeRemaining || 0;
+      // Overload (Rebel Saboteur): allow same surge to be used twice
+      const _ptAtkEff = getDcEffectsGlobal()?.[combat.attackerDcName] || getDcEffectsGlobal()?.[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+      const _ptMaxUses = (_ptAtkEff?.specialAbilityIds || []).includes('overload_saboteur') ? 2 : 1;
+      // Krayt Dragon Fury: resolve X in labels
+      const _kdfXValPT = combat.attackRoll?.surge ?? 0;
+      const _kdfAtkEffPT = getDcEffectsGlobal()?.[combat.attackerDcName] || getDcEffectsGlobal()?.[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+      const _kdfHasPT = (_kdfAtkEffPT?.specialAbilityIds || []).includes('krayt_dragon_fury_tress');
       const surgeRows = [];
       for (let i = 0; i < surgeAbilities.length; i++) {
         const k = surgeAbilities[i];
         const cost = (k?.startsWith?.('double:') ? 2 : (ctx.getAbility?.(k)?.surgeCost ?? 1));
         if (cost > remaining) continue;
-        const label = (getSurgeLabel(k) || k).slice(0, 80);
+        if (((combat.surgeSpentCount || {})[i] || 0) >= _ptMaxUses) continue;
+        let label = (getSurgeLabel(k) || k).slice(0, 80);
+        if (_kdfHasPT && /\bx\b/i.test(label)) label = label.replace(/\bX\b/gi, String(_kdfXValPT));
         const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
         surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_${i}`).setLabel(btnLabel.slice(0, 80)).setStyle(ButtonStyle.Secondary));
       }
@@ -2259,12 +3314,21 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
     const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS?.[id]) || id);
     const surgeAbilities = ctx.getAttackerSurgeAbilities ? ctx.getAttackerSurgeAbilities(combat) : [];
     const remaining = combat.surgeRemaining;
+    // Overload (Rebel Saboteur): allow same surge to be used twice
+    const _spAtkEff = getDcEffectsGlobal()?.[combat.attackerDcName] || getDcEffectsGlobal()?.[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    const _spMaxUses = (_spAtkEff?.specialAbilityIds || []).includes('overload_saboteur') ? 2 : 1;
+    // Krayt Dragon Fury: resolve X in labels
+    const _kdfXValSP = combat.attackRoll?.surge ?? 0;
+    const _kdfAtkEffSP = getDcEffectsGlobal()?.[combat.attackerDcName] || getDcEffectsGlobal()?.[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    const _kdfHasSP = (_kdfAtkEffSP?.specialAbilityIds || []).includes('krayt_dragon_fury_tress');
     const surgeRows = [];
     for (let i = 0; i < surgeAbilities.length; i++) {
       const k = surgeAbilities[i];
       const cost = (k?.startsWith?.('double:') ? 2 : (ctx.getAbility?.(k)?.surgeCost ?? 1));
       if (cost > remaining) continue;
-      const label = (getSurgeLabel(k) || k).slice(0, 80);
+      if (((combat.surgeSpentCount || {})[i] || 0) >= _spMaxUses) continue;
+      let label = (getSurgeLabel(k) || k).slice(0, 80);
+      if (_kdfHasSP && /\bx\b/i.test(label)) label = label.replace(/\bX\b/gi, String(_kdfXValSP));
       const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
       surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_${i}`).setLabel(btnLabel.slice(0, 80)).setStyle(ButtonStyle.Secondary));
     }

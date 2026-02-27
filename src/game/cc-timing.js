@@ -2,7 +2,7 @@
  * CC timing (F5): when can a Command Card be played from hand?
  * Uses game state to derive play context and cc-effects timing field.
  */
-import { getCcEffect, getDcKeywords } from '../data-loader.js';
+import { getCcEffect, getDcKeywords, getDcEffects } from '../data-loader.js';
 
 /**
  * Derive current CC play context from game state.
@@ -56,6 +56,8 @@ const SPECIAL_ACTION_TIMING = new Set([
 export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffect) {
   // Shadow Ops: opponent cannot play Command cards this round
   if (game?.shadowOpsBlockedPlayer === playerNum) return false;
+  // Comms Jammer (ISB Infiltrator Elite): opponent cannot play CCs during this activation
+  if (game?.commsJammerActivePlayerNum && game.commsJammerActivePlayerNum !== playerNum) return false;
   const effect = getEffect(cardName);
   if (!effect || !effect.timing) return false;
   const timing = String(effect.timing).toLowerCase().trim();
@@ -236,8 +238,43 @@ export function getPlayableCcFromHand(game, playerNum, hand) {
   return (hand || []).filter((card) => isCcPlayableNow(game, playerNum, card));
 }
 
+/** Known affiliation values (lowercase) in dc-effects.json. */
+const AFFILIATIONS = new Set(['imperial', 'rebel', 'scum', 'mercenary']);
+
+/**
+ * Check if a single playableBy alternative matches a DC's traits.
+ * @param {string} alt - Lowercase alternative (e.g., "imperial force user", "brawler", "luke skywalker")
+ * @param {string} dcBaseLower - Lowercase base DC name
+ * @param {string} dispLower - Lowercase display name
+ * @param {string} affiliationLower - Lowercase affiliation from dc-effects.json
+ * @param {string[]} kwLower - Lowercase keywords array
+ * @returns {boolean}
+ */
+function alternativeMatchesDc(alt, dcBaseLower, dispLower, affiliationLower, kwLower) {
+  // Name match (existing logic)
+  if (dcBaseLower.includes(alt) || alt.includes(dcBaseLower) || dispLower.includes(alt) || alt.includes(dispLower))
+    return true;
+  // Decompose alternative into affiliation part and keyword parts
+  const words = alt.split(/\s+/);
+  let reqAffiliation = null;
+  const reqKeywordWords = [];
+  for (const w of words) {
+    if (AFFILIATIONS.has(w) && !reqAffiliation) reqAffiliation = w;
+    else reqKeywordWords.push(w);
+  }
+  const reqKeyword = reqKeywordWords.join(' '); // e.g. "force user" from ["force","user"]
+  // Check affiliation requirement
+  if (reqAffiliation && affiliationLower !== reqAffiliation && affiliationLower !== 'any') return false;
+  // Check keyword requirement
+  if (reqKeyword && !kwLower.includes(reqKeyword)) return false;
+  // Must have matched at least one requirement
+  return !!(reqAffiliation || reqKeyword);
+}
+
 /**
  * Check if a CC is legal to play by playableBy (figure/trait) in current context.
+ * Handles compound restrictions ("IMPERIAL FORCE USER"), alternatives ("X or Y"),
+ * and DC ability modifiers (Devout, Fallen Master, Adaptive Skills).
  * Returns { legal: true } or { legal: false, reason: string }.
  * @param {object} game - Game state
  * @param {number} playerNum - 1 or 2
@@ -251,8 +288,34 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
   if (!playableBy || playableBy.toLowerCase() === 'any figure') return { legal: true };
 
   const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-  const keywords = getDcKeywords();
+  const allKeywords = getDcKeywords();
+  const dcEffects = getDcEffects() || {};
   const p = playableBy.toLowerCase();
+
+  // Handle special cases first
+  if (p === 'any small figure' || p === 'any unique figure' || p === 'unique') return { legal: true };
+
+  // Split on " or " for alternatives (handle quoted names like "\"Iden Versio\" or \"Dio\"")
+  const alternatives = playableBy.split(/\s+or\s+/i).map(a => a.trim().replace(/^"|"$/g, '').toLowerCase());
+
+  // Detect army-wide DC ability modifiers
+  let hasFallenMaster = false;
+  let hasDevout = false;
+  let adaptiveSkillsDc = null;
+  let armyAffiliation = null;
+
+  for (const dc of dcList) {
+    const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+    if (!dcName) continue;
+    const eff = dcEffects[dcName];
+    const sIds = eff?.specialAbilityIds || [];
+    if (sIds.includes('fallen_master_malicos')) hasFallenMaster = true;
+    if (sIds.includes('devout_chirrut')) hasDevout = true;
+    if (sIds.includes('adaptive_skills_mara_jade')) adaptiveSkillsDc = dcName;
+    // Track army affiliation (most common non-Any affiliation)
+    const aff = (eff?.affiliation || '').toLowerCase();
+    if (aff && aff !== 'any' && !armyAffiliation) armyAffiliation = aff;
+  }
 
   for (const dc of dcList) {
     const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
@@ -262,12 +325,52 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
       .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
       .trim();
     const disp = (typeof dc === 'object' ? dc.displayName : dcName) || dcBase;
-    const d = dcBase.toLowerCase();
-    const dispLower = String(disp).toLowerCase();
-    if (d.includes(p) || p.includes(d) || dispLower.includes(p) || p.includes(dispLower))
-      return { legal: true };
-    const kw = keywords[dcName] || keywords[dcBase];
-    if (Array.isArray(kw) && kw.some((k) => String(k).toLowerCase() === p)) return { legal: true };
+    const dcData = dcEffects[dcName] || dcEffects[dcBase];
+    const affiliationLower = (dcData?.affiliation || '').toLowerCase();
+    const kw = allKeywords[dcName] || allKeywords[dcBase] || [];
+    const kwLower = kw.map(k => String(k).toLowerCase());
+
+    // Build effective affiliation for this DC
+    let effectiveAffiliation = affiliationLower;
+    // Adaptive Skills: Mara Jade's affiliation matches the army's
+    if (dcName === adaptiveSkillsDc && armyAffiliation) effectiveAffiliation = armyAffiliation;
+
+    // Build effective keywords for this DC
+    const effectiveKw = [...kwLower];
+    // Fallen Master: FORCE USER DCs also count as IMPERIAL for CC restriction purposes
+    if (hasFallenMaster && kwLower.includes('force user') && effectiveAffiliation !== 'imperial') {
+      // Don't change affiliation, but allow matching IMPERIAL restrictions
+    }
+
+    for (const alt of alternatives) {
+      if (alternativeMatchesDc(alt, dcBase.toLowerCase(), String(disp).toLowerCase(), effectiveAffiliation, effectiveKw))
+        return { legal: true };
+
+      // Fallen Master override: if alt requires IMPERIAL and DC is FORCE USER, allow
+      if (hasFallenMaster && kwLower.includes('force user')) {
+        // Re-check with IMPERIAL affiliation override
+        if (alternativeMatchesDc(alt, dcBase.toLowerCase(), String(disp).toLowerCase(), 'imperial', effectiveKw))
+          return { legal: true };
+      }
+    }
   }
+
+  // Devout (Chirrut): can use Rebel FORCE USER CCs — treat as having a virtual REBEL FORCE USER in army
+  if (hasDevout) {
+    for (const alt of alternatives) {
+      // Check if alt matches FORCE USER (with or without REBEL qualifier)
+      const words = alt.split(/\s+/);
+      let reqAff = null;
+      const kwWords = [];
+      for (const w of words) {
+        if (AFFILIATIONS.has(w)) reqAff = w;
+        else kwWords.push(w);
+      }
+      const reqKw = kwWords.join(' ');
+      // Devout allows playing if: no affiliation req OR rebel affiliation, AND keyword is "force user"
+      if (reqKw === 'force user' && (!reqAff || reqAff === 'rebel')) return { legal: true };
+    }
+  }
+
   return { legal: false, reason: `No figure matches "playable by: ${playableBy}" in your army.` };
 }

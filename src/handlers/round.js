@@ -151,6 +151,29 @@ export async function handleEndEndOfRound(interaction, ctx) {
     }
   }
 
+  // What's Yours is Mine (Hondo): at end of round, if in opponent's deployment zone, steal 2 VP
+  {
+    const _wymEff = getDcEffects() || {};
+    for (const pn of [1, 2]) {
+      const dcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const msgIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      for (let i = 0; i < dcList.length; i++) {
+        const dc = dcList[i];
+        if (!dc || dc.defeated) continue;
+        const eff = _wymEff[dc.dcName] || _wymEff[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+        if (!(eff?.specialAbilityIds || []).includes('whats_yours_is_mine_hondo')) continue;
+        const mid = msgIds[i];
+        if (!mid) continue;
+        const ownerId = pn === 1 ? game.player1Id : game.player2Id;
+        const oppNum = pn === 1 ? 2 : 1;
+        await logGameAction(game, client, `💰 **What's Yours is Mine** — <@${ownerId}>, if **${dc.displayName || dc.dcName}** is in the opponent's deployment zone, steal 2 VP from Player ${oppNum}. *(Honor system.)*`, {
+          phase: 'ROUND', icon: 'round',
+          allowedMentions: { users: [ownerId] },
+        });
+      }
+    }
+  }
+
   // Self-Destruct Probe: prompt each player who has a live Probe Droid DC
   const _sdpEffs = getDcEffects();
   for (const [_pNum, _getDcIds, _getDcListF] of [[1, () => game.p1DcMessageIds, () => game.p1DcList], [2, () => game.p2DcMessageIds, () => game.p2DcList]]) {
@@ -429,6 +452,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.burstFirePendingMsgId = {};
   game.selfDestructProtocolTriggered = {};
   game.mobileMovementActive = {};
+  game.figureMoved = {};
+  game.tripodAttacked = {};
+  game.activationStartPositions = {};
   game.selfDefeatsAfterAttackMsgId = {};
   game.applySelfStunAfterAttackPlayerNum = {};
   game.postActivationConditions = {};
@@ -458,6 +484,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.surgeDoublingActive = {};
   game.optimalBombardmentBlastBonus = {};
   game.pendingHunterProtocol = null;
+  delete game.commsJammerActivePlayerNum;
+  delete game.partingShotTriggered;
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
   }
@@ -655,6 +683,68 @@ export async function handleEndStartOfRound(interaction, ctx) {
             }
             await logGameAction(game, client, `🛬 **Smooth Landing** — ${_slGranted.join(', ')} gain${_slGranted.length === 1 ? 's' : ''} **1 MP** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
           }
+        }
+      }
+    }
+  }
+
+  // Start-of-round DC passive hooks
+  {
+    const _sorEff = getDcEffects() || {};
+    for (const playerNum of [1, 2]) {
+      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      for (let i = 0; i < dcList.length; i++) {
+        const dc = dcList[i];
+        if (!dc || dc.defeated) continue;
+        const eff = _sorEff[dc.dcName] || _sorEff[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+        const sIds = eff?.specialAbilityIds || [];
+
+        // Brush (Ezra Bridger): gain 4 MP at start of round
+        if (sIds.includes('brush_ezra')) {
+          const mid = msgIds[i];
+          if (mid) {
+            game.movementBank = game.movementBank || {};
+            game.movementBank[mid] = game.movementBank[mid] || { total: 0, remaining: 0 };
+            game.movementBank[mid].total += 4;
+            game.movementBank[mid].remaining += 4;
+            await logGameAction(game, client, `🌿 **Brush** — **${dc.displayName || dc.dcName}** gains **4 MP** at the start of the round.`, { phase: 'ROUND', icon: 'round' });
+          }
+        }
+
+        // Unstable Devices (Saska Teft): gain 1 device token at start of round
+        if (sIds.includes('unstable_devices_saska')) {
+          game.deviceTokens = game.deviceTokens || {};
+          const _fk = `${dc.dcName}-0-0`;
+          game.deviceTokens[_fk] = (game.deviceTokens[_fk] || 0) + 1;
+          await logGameAction(game, client, `🔧 **Unstable Devices** — **${dc.displayName || dc.dcName}** gains 1 Device token (now ${game.deviceTokens[_fk]}).`, { phase: 'ROUND', icon: 'round' });
+        }
+
+        // Force Slow (Cal Kestis): choose a hostile within 3 to skip activation
+        if (sIds.includes('force_slow_cal')) {
+          const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+          await logGameAction(game, client, `🐌 **Force Slow** — <@${ownerId}>, choose a hostile figure within 3 spaces of **${dc.displayName || dc.dcName}**; that figure skips its next activation. *(Honor system.)*`, {
+            phase: 'ROUND', icon: 'round',
+            allowedMentions: { users: [ownerId] },
+          });
+        }
+
+        // Excavation (Doctor Aphra): choose a CC from discard with cost ≤1, add to hand
+        if (sIds.includes('excavation_aphra')) {
+          const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+          await logGameAction(game, client, `⛏️ **Excavation** — <@${ownerId}>, choose a Command Card from your discard pile with cost 1 or less and add it to your hand. *(Honor system.)*`, {
+            phase: 'ROUND', icon: 'round',
+            allowedMentions: { users: [ownerId] },
+          });
+        }
+
+        // Shape/Shift (Clawdite Shapeshifter): reminder about form card at start of round
+        if (sIds.includes('shape_clawdite_elite') || sIds.includes('shape_clawdite_reg') || sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
+          const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+          await logGameAction(game, client, `🔄 **Shift** — <@${ownerId}>, you may switch **${dc.displayName || dc.dcName}**'s Form card at the start of this round. *(Honor system.)*`, {
+            phase: 'ROUND', icon: 'round',
+            allowedMentions: { users: [ownerId] },
+          });
         }
       }
     }

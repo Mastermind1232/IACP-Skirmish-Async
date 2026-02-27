@@ -101,6 +101,8 @@ import {
   handleCombatRoll,
   handleCombatSurge,
   handleCombatReroll,
+  handlePreReroll,
+  handleCombatPassive,
   handleCombatToken,
   handleStatusPhase,
   handlePassActivationTurn,
@@ -611,6 +613,25 @@ function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
   const options = [];
   const mapData = getMapTokensData()[mapId];
   if (!mapData) return options;
+
+  // Alter Mind (Obi-Wan Kenobi - Jedi Master): hostile figures with cost ≤ 9 within 3 spaces cannot interact
+  const oppNum = playerNum === 1 ? 2 : 1;
+  const oppPositions = game.figurePositions?.[oppNum] || {};
+  const figPos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (figPos) {
+    const dcName = figureKey.replace(/-\d+-\d+$/, '');
+    const figDcEff = getDcEffects()?.[dcName];
+    const figCost = figDcEff?.cost ?? 99;
+    if (figCost <= 9) {
+      for (const [oppFk, oppCoord] of Object.entries(oppPositions)) {
+        const oppDcName = oppFk.replace(/-\d+-\d+$/, '');
+        const oppEff = getDcEffects()?.[oppDcName];
+        if ((oppEff?.specialAbilityIds || []).includes('alter_mind_obiwan')) {
+          if (getRange(figPos, oppCoord) <= 3) return options; // blocked — return empty
+        }
+      }
+    }
+  }
 
   const variant = game?.selectedMission?.variant;
   const interactLabel = game?.selectedMission?.interactLabel;
@@ -3204,6 +3225,16 @@ function filterCondition(game, figureKey, cond) {
   if (game.figureConditions[figureKey].length === 0) delete game.figureConditions[figureKey];
 }
 
+/** Check if a figure is immune to HARMFUL conditions (Stun, Bleed, Weaken). */
+function isConditionImmune(game, figureKey) {
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const dcEff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const sIds = dcEff?.specialAbilityIds || [];
+  return sIds.includes('immune_onar') || sIds.includes('immune_snowtrooper_elite');
+}
+
+const HARMFUL_CONDITIONS = ['Stun', 'Bleed', 'Weaken'];
+
 /** Send a Bleeding damage prompt to the given channel. Offers "Take 1 damage" or "Prevent (discard CC)". */
 async function sendBleedingPrompt(game, channel, figureKey, playerNum, displayName) {
   const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
@@ -3511,6 +3542,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     return;
   }
 
+  let _fdNeedsEmbedRefresh = false;
   if (damage > 0 && targetMsgId) {
     const healthState = dcHealthState.get(targetMsgId) || [];
     const entry = healthState[targetFigIndex];
@@ -3523,7 +3555,15 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
       const idx = (dcMessageIds || []).indexOf(targetMsgId);
       if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-      const allConditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
+      let allConditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
+      // Condition Immunity: filter out harmful conditions for immune figures
+      if (allConditions.length && isConditionImmune(game, combat.target.figureKey)) {
+        const blocked = allConditions.filter((c) => HARMFUL_CONDITIONS.includes(c));
+        allConditions = allConditions.filter((c) => !HARMFUL_CONDITIONS.includes(c));
+        if (blocked.length) {
+          await logGameAction(game, client, `**Condition Immunity** — **${combat.target.label}** is immune to ${blocked.join(', ')}.`, { phase: 'ROUND', icon: 'card' });
+        }
+      }
       if (allConditions.length) {
         game.figureConditions = game.figureConditions || {};
         const existing = game.figureConditions[combat.target.figureKey] || [];
@@ -3679,6 +3719,133 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           }
         }
       }
+      // Nimble (Asajj Ventress): after attack resolves, defender gains 2 MP per Block result
+      {
+        const _nimDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _nimEff = getDcEffects()?.[_nimDcName];
+        if ((_nimEff?.specialAbilityIds || []).includes('nimble_asajj') && combat.defenseRoll) {
+          const _nimTotalBlock = combat.defenseRoll.block || 0;
+          if (_nimTotalBlock > 0) {
+            const _nimMp = _nimTotalBlock * 2;
+            const _nimMsgId = targetMsgId;
+            if (_nimMsgId) {
+              game.movementBank = game.movementBank || {};
+              game.movementBank[_nimMsgId] = game.movementBank[_nimMsgId] || { total: 0, remaining: 0 };
+              game.movementBank[_nimMsgId].remaining = (game.movementBank[_nimMsgId].remaining || 0) + _nimMp;
+              game.movementBank[_nimMsgId].total = (game.movementBank[_nimMsgId].total || 0) + _nimMp;
+            }
+            await logGameAction(game, client, `🦎 **Nimble** — **${_nimDcName}** gained ${_nimMp} MP (${_nimTotalBlock} Block result${_nimTotalBlock !== 1 ? 's' : ''} × 2).`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+          }
+        }
+      }
+      // Slippery (Alliance Smuggler E/R): after attack resolves, defender gains 2 MP
+      {
+        const _slipDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _slipEff = getDcEffects()?.[_slipDcName];
+        if ((_slipEff?.specialAbilityIds || []).some(id => id === 'slippery_smuggler_elite' || id === 'slippery_smuggler_reg')) {
+          const _slipMsgId = targetMsgId;
+          if (_slipMsgId) {
+            game.movementBank = game.movementBank || {};
+            game.movementBank[_slipMsgId] = game.movementBank[_slipMsgId] || { total: 0, remaining: 0 };
+            game.movementBank[_slipMsgId].remaining = (game.movementBank[_slipMsgId].remaining || 0) + 2;
+            game.movementBank[_slipMsgId].total = (game.movementBank[_slipMsgId].total || 0) + 2;
+          }
+          await logGameAction(game, client, `🏃 **Slippery** — **${_slipDcName}** gains 2 MP after being attacked.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+        }
+      }
+      // Leg Hydraulics (Tress Hacnua): after resolving an attack, attacker gains 1 MP
+      {
+        const _lhAtkDcName = combat.attackerDcName || (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+        const _lhEff = getDcEffects()?.[_lhAtkDcName];
+        if ((_lhEff?.specialAbilityIds || []).includes('leg_hydraulics_tress') && combat.attackerMsgId) {
+          game.movementBank = game.movementBank || {};
+          game.movementBank[combat.attackerMsgId] = game.movementBank[combat.attackerMsgId] || { total: 0, remaining: 0 };
+          game.movementBank[combat.attackerMsgId].remaining = (game.movementBank[combat.attackerMsgId].remaining || 0) + 1;
+          game.movementBank[combat.attackerMsgId].total = (game.movementBank[combat.attackerMsgId].total || 0) + 1;
+          await logGameAction(game, client, `🦿 **Leg Hydraulics** — **${_lhAtkDcName}** gains 1 MP after attacking.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+        }
+      }
+      // Loku Recon Token: Set Your Sights — after Loku's attack resolves, place recon token on target
+      {
+        const _lkAtkDcName = combat.attackerDcName || (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+        const _lkAtkEff = getDcEffects()?.[_lkAtkDcName];
+        if ((_lkAtkEff?.specialAbilityIds || []).includes('set_your_sights_loku') && combat.target?.figureKey) {
+          game.reconToken = { figureKey: combat.target.figureKey, playerNum: combat.attackerPlayerNum };
+          await logGameAction(game, client, `🎯 **Set Your Sights** — Recon token placed on **${(combat.target.figureKey || '').replace(/-\d+-\d+$/, '')}**.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+        }
+      }
+      // Force Deflection (Yoda): after attack targeting Yoda or adjacent friendly REBEL resolves,
+      // attacker suffers Damage = number of attack dice rolled. Limit once per round.
+      {
+        const _fdDefDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _fdDefEff = getDcEffects()?.[_fdDefDcName];
+        const _fdDefIsTarget = (_fdDefEff?.specialAbilityIds || []).includes('force_deflection_yoda');
+        let _fdYodaFigKey = null;
+        if (_fdDefIsTarget) {
+          // Yoda is the defender — use Yoda's own figure key for round tracking
+          _fdYodaFigKey = combat.target.figureKey;
+        } else {
+          // Check if any Yoda figure on defender's team is adjacent to the target space AND defender is REBEL
+          const _fdDefAffil = _fdDefEff?.affiliation || '';
+          if (_fdDefAffil === 'Rebel') {
+            const _fdFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
+            const _fdTargetCoord = _fdFriendlyFigs[combat.target.figureKey];
+            if (_fdTargetCoord) {
+              for (const [fk, fCoord] of Object.entries(_fdFriendlyFigs)) {
+                if (fk === combat.target.figureKey) continue;
+                const fDcName = fk.replace(/-\d+-\d+$/, '');
+                const fEff = getDcEffects()?.[fDcName];
+                if (!(fEff?.specialAbilityIds || []).includes('force_deflection_yoda')) continue;
+                // Check adjacency (within 1 space)
+                if (isWithinN(fCoord, _fdTargetCoord, 1, game.selectedMap?.id)) {
+                  _fdYodaFigKey = fk;
+                  break;
+                }
+              }
+            }
+          }
+        }
+        if (_fdYodaFigKey) {
+          game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+          const _fdKey = `${_fdYodaFigKey}_force_deflection`;
+          if (!game.roundFigureAbilityUsed[_fdKey]) {
+            game.roundFigureAbilityUsed[_fdKey] = true;
+            const _fdDiceCount = combat.attackRoll?.dice?.length || 0;
+            if (_fdDiceCount > 0 && combat.attackerMsgId) {
+              const _fdAtkHs = dcHealthState.get(combat.attackerMsgId) || [];
+              const _fdAtkFigIdx = combat.attackerFigureIndex ?? 0;
+              const _fdAtkEntry = _fdAtkHs[_fdAtkFigIdx];
+              if (_fdAtkEntry) {
+                const [_fdAtkCur, _fdAtkMax] = _fdAtkEntry;
+                const _fdAtkNew = Math.max(0, (_fdAtkCur ?? _fdAtkMax) - _fdDiceCount);
+                _fdAtkHs[_fdAtkFigIdx] = [_fdAtkNew, _fdAtkMax];
+                dcHealthState.set(combat.attackerMsgId, _fdAtkHs);
+                const _fdAtkDcIds = attackerPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+                const _fdAtkDcList = attackerPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+                const _fdAtkIdx = (_fdAtkDcIds || []).indexOf(combat.attackerMsgId);
+                if (_fdAtkIdx >= 0 && _fdAtkDcList?.[_fdAtkIdx]) _fdAtkDcList[_fdAtkIdx].healthState = [..._fdAtkHs];
+                _fdNeedsEmbedRefresh = true;
+                const _fdYodaDcName = _fdYodaFigKey.replace(/-\d+-\d+$/, '');
+                await logGameAction(game, client, `🔵 **Force Deflection** — **${_fdYodaDcName}** deflects! **${combat.attackerDcName}** suffers **${_fdDiceCount} Damage** (${_fdDiceCount} attack dice rolled). HP: ${_fdAtkCur ?? _fdAtkMax} → ${_fdAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+                // Check if attacker was defeated by Force Deflection
+                if (_fdAtkNew <= 0) {
+                  if (game.figurePositions?.[attackerPlayerNum]) delete game.figurePositions[attackerPlayerNum][combat.attackerFigureKey];
+                  if (game.figureConditions?.[combat.attackerFigureKey]) delete game.figureConditions[combat.attackerFigureKey];
+                  const _fdAtkStats = getDcStats(combat.attackerDcName);
+                  const _fdAtkEffects = getDcEffects()?.[combat.attackerDcName];
+                  const _fdAtkFigures = _fdAtkStats?.figures ?? 1;
+                  const _fdAtkVp = (_fdAtkFigures > 1 && _fdAtkEffects?.subCost != null) ? _fdAtkEffects.subCost : (_fdAtkStats?.cost ?? 5);
+                  const _fdDefVpKey = defenderPlayerNum === 1 ? 'player1VP' : 'player2VP';
+                  game[_fdDefVpKey] = game[_fdDefVpKey] || { total: 0, kills: 0, objectives: 0 };
+                  game[_fdDefVpKey].kills += _fdAtkVp;
+                  game[_fdDefVpKey].total += _fdAtkVp;
+                  await logGameAction(game, client, `**Force Deflection** — **${combat.attackerDcName}** was defeated! +${_fdAtkVp} VP to Player ${defenderPlayerNum}.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+                }
+              }
+            }
+          }
+        }
+      }
       // You Will Not Deny Me: prevent Fifth Brother from being defeated (restore HP to 1)
       if (newCur <= 0 && game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum) {
         const _ywndmDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
@@ -3722,6 +3889,19 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           await logGameAction(game, client, `<@${_sdpOwnerId2}> **Self-Destruct Protocol** — **${combat.target.label || _sdpDcName2}** is about to be defeated! Roll 1 red die, apply Hits to adjacent figures, then the figure is defeated.`, { components: [_sdpRow2], allowedMentions: { users: [_sdpOwnerId2] } });
           saveGames();
           return;
+        }
+      }
+      // Parting Shot (Greedo, Hired Gun): pre-defeat interrupt — may perform an attack before being defeated
+      if (newCur <= 0 && !_sbrImmune && !game.partingShotTriggered?.[targetMsgId]) {
+        const _psDcName = idx >= 0 ? dcList?.[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _psEff = getDcEffects()?.[_psDcName];
+        const _psSIds = _psEff?.specialAbilityIds || [];
+        const _psHas = _psSIds.some(id => id.startsWith('parting_shot_'));
+        if (_psHas) {
+          game.partingShotTriggered = game.partingShotTriggered || {};
+          game.partingShotTriggered[targetMsgId] = true;
+          const _psOwnerId = game[`player${defenderPlayerNum}Id`];
+          await logGameAction(game, client, `<@${_psOwnerId}> ⚠️ **Parting Shot** — **${combat.target.label || _psDcName}** is about to be defeated! You may interrupt to perform an attack before defeat. Use the DC's Attack action to fire your parting shot, then click End Turn to proceed with defeat.`, { allowedMentions: { users: [_psOwnerId] } });
         }
       }
       if (newCur <= 0 && !_sbrImmune && !(game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum && ((idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, ''))?.toLowerCase().includes('fifth')))) {
@@ -3945,6 +4125,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
                 if (!pos || fk === (combat.target.figureKey || '')) continue;
                 const dist = getRange(_btDefPos, pos);
                 if (dist <= 3) {
+                  if (isConditionImmune(game, fk)) continue; // Condition Immunity: skip Weaken
                   game.figureConditions = game.figureConditions || {};
                   game.figureConditions[fk] = game.figureConditions[fk] || [];
                   if (!game.figureConditions[fk].includes('Weaken')) {
@@ -4149,6 +4330,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           for (const [_bfFk, _bfPos] of Object.entries(game.figurePositions?.[_bfPn] || {})) {
             if (!_bfAdj.includes(_bfPos)) continue;
             if (_bfFk === combat.target.figureKey) continue;
+            if (isConditionImmune(game, _bfFk)) continue; // Condition Immunity: skip Stun
             game.figureConditions = game.figureConditions || {};
             game.figureConditions[_bfFk] = game.figureConditions[_bfFk] || [];
             if (!game.figureConditions[_bfFk].includes('Stun')) {
@@ -4163,12 +4345,14 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
   }
   const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
+  // Force Deflection embed refresh (flag set earlier in pre-defeat section)
+  if (_fdNeedsEmbedRefresh && combat.attackerMsgId) embedRefreshMsgIds.add(combat.attackerMsgId);
 
   // Concentrated Fire: apply Stun to the attacker figure after attack resolves
   if (game.applySelfStunAfterAttackPlayerNum?.[attackerPlayerNum] && combat.attackerMsgId) {
     delete game.applySelfStunAfterAttackPlayerNum[attackerPlayerNum];
     const _cfaFigKey = combat.attackerFigureKey;
-    if (_cfaFigKey) {
+    if (_cfaFigKey && !isConditionImmune(game, _cfaFigKey)) {
       game.figureConditions = game.figureConditions || {};
       game.figureConditions[_cfaFigKey] = game.figureConditions[_cfaFigKey] || [];
       if (!game.figureConditions[_cfaFigKey].includes('Stun')) {
@@ -4181,19 +4365,25 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
   }
   // Wild Fury: after final free attack, apply postActivationConditions (Stun + Bleed) to attacker figure
   if (game.pendingPostAttackConditions?.[combat.attackerMsgId] && combat.attackerFigureKey) {
-    const _ppaConditions = game.pendingPostAttackConditions[combat.attackerMsgId];
+    let _ppaConditions = game.pendingPostAttackConditions[combat.attackerMsgId];
     delete game.pendingPostAttackConditions[combat.attackerMsgId];
     if (Array.isArray(_ppaConditions) && _ppaConditions.length > 0) {
-      game.figureConditions = game.figureConditions || {};
-      game.figureConditions[combat.attackerFigureKey] = game.figureConditions[combat.attackerFigureKey] || [];
-      for (const _ppaC of _ppaConditions) {
-        if (!game.figureConditions[combat.attackerFigureKey].includes(_ppaC)) {
-          game.figureConditions[combat.attackerFigureKey].push(_ppaC);
-        }
+      // Condition Immunity: filter out harmful conditions for immune figures
+      if (isConditionImmune(game, combat.attackerFigureKey)) {
+        _ppaConditions = _ppaConditions.filter((c) => !HARMFUL_CONDITIONS.includes(c));
       }
-      const _ppaDcName = combat.attackerFigureKey.replace(/-\d+-\d+$/, '');
-      await logGameAction(game, client, `**Wild Fury** — **${_ppaDcName}** is now **${_ppaConditions.join(' + ')}**.`, { phase: 'ROUND', icon: 'card' });
-      embedRefreshMsgIds.add(combat.attackerMsgId);
+      if (_ppaConditions.length > 0) {
+        game.figureConditions = game.figureConditions || {};
+        game.figureConditions[combat.attackerFigureKey] = game.figureConditions[combat.attackerFigureKey] || [];
+        for (const _ppaC of _ppaConditions) {
+          if (!game.figureConditions[combat.attackerFigureKey].includes(_ppaC)) {
+            game.figureConditions[combat.attackerFigureKey].push(_ppaC);
+          }
+        }
+        const _ppaDcName = combat.attackerFigureKey.replace(/-\d+-\d+$/, '');
+        await logGameAction(game, client, `**Wild Fury** — **${_ppaDcName}** is now **${_ppaConditions.join(' + ')}**.`, { phase: 'ROUND', icon: 'card' });
+        embedRefreshMsgIds.add(combat.attackerMsgId);
+      }
     }
   }
   // Dying Lunge / Final Stand: attacker defeats itself after the attack resolves
@@ -5306,11 +5496,15 @@ async function handleSpreadThePainFigPick(interaction) {
   await interaction.message.edit({ components: [] }).catch(() => {});
   const cond = pending.conditions[pending.conditionIdx];
   // Apply condition to figureKey
-  game.figureConditions = game.figureConditions || {};
-  const existing = game.figureConditions[figureKey] || [];
-  if (!existing.includes(cond)) game.figureConditions[figureKey] = [...existing, cond];
   const dcName = figureKey.replace(/-\d+-\d+$/, '');
-  await logGameAction(game, client, `**Spread the Pain** — **${dcName}** gains **${cond}**`, { phase: 'ROUND', icon: 'attack' });
+  if (HARMFUL_CONDITIONS.includes(cond) && isConditionImmune(game, figureKey)) {
+    await logGameAction(game, client, `**Condition Immunity** — **${dcName}** is immune to **${cond}** (Spread the Pain).`, { phase: 'ROUND', icon: 'card' });
+  } else {
+    game.figureConditions = game.figureConditions || {};
+    const existing = game.figureConditions[figureKey] || [];
+    if (!existing.includes(cond)) game.figureConditions[figureKey] = [...existing, cond];
+    await logGameAction(game, client, `**Spread the Pain** — **${dcName}** gains **${cond}**`, { phase: 'ROUND', icon: 'attack' });
+  }
   pending.conditionIdx++;
   await advanceSpreadThePain(game, pending);
 }
@@ -7503,6 +7697,8 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'combat_roll_') await handleCombatRoll(interaction, combatContext);
     else if (buttonKey === 'combat_surge_') await handleCombatSurge(interaction, combatContext);
     else if (buttonKey === 'combat_reroll_') await handleCombatReroll(interaction, combatContext);
+    else if (buttonKey === 'pre_reroll_') await handlePreReroll(interaction, combatContext);
+    else if (buttonKey === 'combat_passive_') await handleCombatPassive(interaction, combatContext);
     else if (buttonKey === 'combat_token_') await handleCombatToken(interaction, combatContext);
     else if (buttonKey === 'spread_pain_cond_') await handleSpreadThePainCondPick(interaction, combatContext);
     else if (buttonKey === 'figurehead_use_' || buttonKey === 'figurehead_skip_') await handleFigureheadDecision(interaction, combatContext);
@@ -7688,11 +7884,21 @@ client.on('interactionCreate', async (interaction) => {
         // Enter or continue the reroll window using stored pending counts
         const _viAtkRem = _viCombat.viPendingAtkRerolls || 0;
         const _viDefRem = _viCombat.viPendingDefRerolls || 0;
-        if (_viAtkRem > 0 || _viDefRem > 0) {
-          _viCombat.rerollPhase = _viAtkRem > 0 ? 'attacker' : 'defender';
+        const _viHasForced = (_viCombat.forcedRerollQueue || []).length > 0;
+        const _viHasPreRerolls = (_viCombat.pendingPreRerolls || []).length > 0;
+        if (_viAtkRem > 0 || _viDefRem > 0 || _viHasForced || _viHasPreRerolls) {
           _viCombat.attackerRerollsRemaining = _viAtkRem;
           _viCombat.defenderRerollsRemaining = _viDefRem;
-          await sendRerollUI(_viThread, _viGame, _viCombat, _viCombat.rerollPhase);
+          if (_viAtkRem > 0 || _viHasPreRerolls) {
+            _viCombat.rerollPhase = 'attacker';
+            await sendRerollUI(_viThread, _viGame, _viCombat, 'attacker');
+          } else if (_viHasForced) {
+            _viCombat.rerollPhase = 'forced';
+            await sendRerollUI(_viThread, _viGame, _viCombat, 'forced');
+          } else {
+            _viCombat.rerollPhase = 'defender';
+            await sendRerollUI(_viThread, _viGame, _viCombat, 'defender');
+          }
         } else {
           _viCombat.rerollPhase = null;
           await proceedAfterRerolls(_viThread, _viGame, _viCombat, combatContext);
@@ -7724,6 +7930,11 @@ client.on('interactionCreate', async (interaction) => {
         _hpCombat.surgeRecover = (_hpCombat.surgeRecover || 0) + (_hpMod.recover ?? 0);
         _hpCombat.surgeCleave = (_hpCombat.surgeCleave || 0) + (_hpMod.cleave ?? 0);
         _hpCombat.surgeRemaining = Math.max(0, (_hpCombat.surgeRemaining || 0) - _hpCost);
+        // Track surge spend count for Overload compatibility
+        if (!_hpCombat.surgeSpentCount) _hpCombat.surgeSpentCount = {};
+        const _hpSurgeList = getAttackerSurgeAbilities(_hpCombat);
+        const _hpKeyIdx = _hpSurgeList.indexOf(_hpKey);
+        if (_hpKeyIdx >= 0) _hpCombat.surgeSpentCount[_hpKeyIdx] = (_hpCombat.surgeSpentCount[_hpKeyIdx] || 0) + 1;
         const _hpLabel = (SURGE_LABELS && SURGE_LABELS[_hpKey]) || getSurgeAbilityLabel?.(_hpKey) || _hpKey;
         if (_hpThread) await _hpThread.send(`**Hunter Protocol** — Triggered **${_hpLabel}** again (cost: ${_hpCost}). Surge remaining: ${_hpCombat.surgeRemaining}`).catch(() => {});
       } else {
@@ -7736,11 +7947,16 @@ client.on('interactionCreate', async (interaction) => {
       } else {
         const _hpSurgeAbilities = getAttackerSurgeAbilities(_hpCombat);
         const _hpRemaining = _hpCombat.surgeRemaining || 0;
+        // Overload (Rebel Saboteur): allow same surge to be used twice
+        const _hpAtkEff = getDcEffects()?.[_hpCombat.attackerDcName] || getDcEffects()?.[((_hpCombat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, ''))];
+        const _hpOverload = (_hpAtkEff?.specialAbilityIds || []).includes('overload_saboteur');
+        const _hpMaxUses = _hpOverload ? 2 : 1;
         const _hpRows = [];
         for (let _hi = 0; _hi < _hpSurgeAbilities.length; _hi++) {
           const _hpSkey = _hpSurgeAbilities[_hi];
           const _hpScost = (_hpSkey?.startsWith?.('double:') ? 2 : (getAbility?.(_hpSkey)?.surgeCost ?? 1));
           if (_hpScost > _hpRemaining) continue;
+          if (((_hpCombat.surgeSpentCount || {})[_hi] || 0) >= _hpMaxUses) continue;
           const _hpSlabel = ((SURGE_LABELS && SURGE_LABELS[_hpSkey]) || getSurgeAbilityLabel?.(_hpSkey) || _hpSkey).slice(0, 80);
           _hpRows.push(new ButtonBuilder().setCustomId(`combat_surge_${_hpGameId}_${_hi}`).setLabel((_hpScost > 1 ? `Spend ${_hpScost} surge: ${_hpSlabel}` : `Spend 1 surge: ${_hpSlabel}`).slice(0, 80)).setStyle(ButtonStyle.Secondary));
         }

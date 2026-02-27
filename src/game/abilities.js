@@ -175,6 +175,18 @@ export function resolveAbility(abilityId, context) {
 
     // Phase 3: apply push to chosen space
     if (targetFigureKey && chosenSpace) {
+      // Spiked Boots: cannot be pushed except by MASSIVE figures
+      const _pushTargetDcName = targetFigureKey.replace(/-\d+-\d+$/, '');
+      const _pushTargetStats = getStatsForDc(_pushTargetDcName);
+      const _pushTargetSIds = _pushTargetStats?.specialAbilityIds || [];
+      if (_pushTargetSIds.includes('spiked_boots_snowtrooper')) {
+        const pusherDcName = meta?.dcName || '';
+        const pusherStats = getStatsForDc(pusherDcName);
+        const pusherKws = (pusherStats?.keywords || []).map(k => String(k).toUpperCase());
+        if (!pusherKws.includes('MASSIVE')) {
+          return { applied: false, manualMessage: `**Spiked Boots** — **${_pushTargetDcName}** cannot be pushed except by MASSIVE figures.` };
+        }
+      }
       game.figurePositions = game.figurePositions || {};
       game.figurePositions[enemyNum] = game.figurePositions[enemyNum] || {};
       const prevPos = game.figurePositions[enemyNum][targetFigureKey];
@@ -237,6 +249,14 @@ export function resolveAbility(abilityId, context) {
       const targetStats = getStatsForDc(targetDcName);
       const kwds = (targetStats?.keywords || []).map((k) => String(k).toUpperCase());
       if (requiresSmall && (kwds.includes('LARGE') || kwds.includes('MASSIVE'))) continue;
+      // Spiked Boots: cannot be pushed except by MASSIVE figures
+      const _pushTargetSIdsP1 = targetStats?.specialAbilityIds || [];
+      if (_pushTargetSIdsP1.includes('spiked_boots_snowtrooper')) {
+        const _pusherDcName = meta?.dcName || '';
+        const _pusherStats = getStatsForDc(_pusherDcName);
+        const _pusherKws = (_pusherStats?.keywords || []).map(k => String(k).toUpperCase());
+        if (!_pusherKws.includes('MASSIVE')) continue;
+      }
       // Range check
       if (getRng && attackerPos && getRng(attackerPos, coord) > range) continue;
       // LOS check

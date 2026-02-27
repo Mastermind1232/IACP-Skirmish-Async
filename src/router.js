@@ -37,6 +37,8 @@ const BUTTON_PREFIXES = [
   'combat_roll_',
   'combat_surge_',
   'combat_reroll_',
+  'pre_reroll_',
+  'combat_passive_',
   'combat_token_',
   'sidewinder_apply_',
   'sidewinder_skip_',
