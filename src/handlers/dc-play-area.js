@@ -1804,9 +1804,9 @@ export async function handleArsenalPick(interaction, ctx) {
 
   const { getGame, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames, replyIfGameEnded } = ctx;
   const meta = dcMessageMeta.get(msgId);
-  if (!meta) return;
+  if (!meta) { await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(() => {}); return; }
   const game = getGame(gameId);
-  if (!game) return;
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
   if (await replyIfGameEnded(game, interaction)) return;
 
   const chosenDice = interaction.values[0].split(',');

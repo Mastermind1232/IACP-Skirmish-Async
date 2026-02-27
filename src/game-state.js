@@ -86,7 +86,9 @@ export function saveGames() {
   }
   syncHealthStateToGames();
   if (isDbConfigured()) {
-    void saveGamesToDb(games);
+    saveGamesToDb(games).catch((err) => {
+      console.error('[Games] saveGamesToDb promise rejected:', err);
+    });
     return;
   }
   try {

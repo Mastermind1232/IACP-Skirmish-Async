@@ -2917,7 +2917,9 @@ async function runDraftRandom(game, client, options = {}) {
 /** F14: Push one undo step. Trims to MAX_UNDO_DEPTH to prevent unbounded growth. */
 function pushUndo(game, entry) {
   game.undoStack = game.undoStack || [];
-  game.undoStack.push({ ...entry, ts: Date.now() });
+  const { undoStack, ...rest } = game;
+  const snapshot = JSON.parse(JSON.stringify(rest));
+  game.undoStack.push({ ...entry, snapshot, ts: Date.now() });
   if (game.undoStack.length > MAX_UNDO_DEPTH) game.undoStack.shift();
 }
 

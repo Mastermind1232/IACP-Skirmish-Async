@@ -3269,13 +3269,13 @@ export async function handlePowerTokenChoice(interaction, ctx) {
   await interaction.deferUpdate().catch(() => {});
   const { getGame, saveGames, canActAsPlayer } = ctx;
   const match = interaction.customId.match(/^power_token_choice_([^_]+)_(hit|surge|block|evade)$/);
-  if (!match) return;
+  if (!match) { await interaction.followUp({ content: 'Invalid token choice.', ephemeral: true }).catch(() => {}); return; }
   const [, gameId, typeRaw] = match;
   const type = typeRaw[0].toUpperCase() + typeRaw.slice(1); // 'Hit', 'Surge', 'Block', 'Evade'
   const game = getGame(gameId);
-  if (!game?.pendingPowerTokenGrant?.grants?.length) return;
+  if (!game?.pendingPowerTokenGrant?.grants?.length) { await interaction.followUp({ content: 'No pending token grant found.', ephemeral: true }).catch(() => {}); return; }
   const { grants, channelId, playerNum } = game.pendingPowerTokenGrant;
-  if (playerNum && !canActAsPlayer(game, interaction.user.id, playerNum)) return;
+  if (playerNum && !canActAsPlayer(game, interaction.user.id, playerNum)) { await interaction.followUp({ content: 'Not your token choice.', ephemeral: true }).catch(() => {}); return; }
   game.figurePowerTokens = game.figurePowerTokens || {};
   const lines = [];
   for (const { figureKey, figName, count } of grants) {
@@ -3330,12 +3330,12 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
   await interaction.deferUpdate().catch(() => {});
   const { getGame, saveGames } = ctx;
   const m = interaction.customId.match(/^spread_pain_cond_([^_]+)_(stun|weaken|bleed|skip)$/);
-  if (!m) return;
+  if (!m) { await interaction.followUp({ content: 'Invalid condition choice.', ephemeral: true }).catch(() => {}); return; }
   const [, gameId, condRaw] = m;
   const game = getGame(gameId);
-  if (!game?.pendingSpreadThePainCondPick) return;
+  if (!game?.pendingSpreadThePainCondPick) { await interaction.followUp({ content: 'No pending condition pick.', ephemeral: true }).catch(() => {}); return; }
   const { attackerPlayerNum, combatThreadId } = game.pendingSpreadThePainCondPick;
-  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) return;
+  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) { await interaction.followUp({ content: 'Not your choice.', ephemeral: true }).catch(() => {}); return; }
   await interaction.message.edit({ components: [] }).catch(() => {});
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) return;
