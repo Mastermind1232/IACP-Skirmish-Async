@@ -603,6 +603,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     DC_ACTIONS_PER_ACTIVATION,
     ThreadAutoArchiveDuration,
     ACTION_ICONS,
+    logGameAction,
     client,
     saveGames,
   } = ctx;
@@ -719,6 +720,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         }
       }
       await thread.send({ content: `😤 **Madness** — **${displayName}** has ${hand.length} CC card${hand.length !== 1 ? 's' : ''} in hand (≤2). Suffered **1 Strain** and became **Focused**.` }).catch(() => {});
+      await logGameAction(game, client, `**Madness** — **${displayName}** suffered 1 Strain and became Focused (${hand.length} CC in hand).`, { phase: 'ACTIVATION', icon: 'condition' });
     }
   }
   // Responsive (Shyla Varad): choose 1 MP or recover 1 Damage

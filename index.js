@@ -5247,7 +5247,7 @@ async function applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThre
   }
   const msg = `**Indiscriminate Fire** — ${dieDesc}:\n${lines.join('\n')}`;
   await thread.send(msg).catch(() => {});
-  await logGameAction(game, client, `**Indiscriminate Fire** — ${dieDesc}: splash to ${lines.length} figure(s).`, { phase: 'ROUND', icon: 'attack' });
+  await logGameAction(game, client, `**Indiscriminate Fire** — ${dieDesc}:\n${lines.join('\n')}`, { phase: 'ROUND', icon: 'attack' });
   saveGames();
 }
 

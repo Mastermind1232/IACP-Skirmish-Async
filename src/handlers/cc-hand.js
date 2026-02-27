@@ -240,6 +240,11 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     return;
   }
   const { playerNum, card } = game.pendingCcConfirmation;
+  // 5H: Verify the interacting user is the player who initiated this CC play
+  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Not your card to confirm.', ephemeral: true }).catch(() => {});
+    return;
+  }
   delete game.pendingCcConfirmation;
 
   // Signal Jammer intercept: cancel this CC and discard both it and Signal Jammer
@@ -578,6 +583,13 @@ export async function handleCcCancelPlay(interaction, ctx) {
   if (!game) {
     await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
+  }
+  // 5H: Verify the interacting user owns this pending confirmation
+  if (game.pendingCcConfirmation?.playerNum) {
+    if (!canActAsPlayer(game, interaction.user.id, game.pendingCcConfirmation.playerNum)) {
+      await interaction.followUp({ content: 'Not your card to cancel.', ephemeral: true }).catch(() => {});
+      return;
+    }
   }
   delete game.pendingCcConfirmation;
   await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
