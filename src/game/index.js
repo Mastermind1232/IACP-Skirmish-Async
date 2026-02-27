@@ -62,3 +62,25 @@ export {
 export { getAbility, resolveSurgeAbility, getSurgeAbilityLabel, resolveAbility } from './abilities.js';
 
 export { getCcPlayContext, isCcPlayableNow, getPlayableCcFromHand, isCcPlayLegalByRestriction } from './cc-timing.js';
+
+export { getGameLock, cleanupGameLock, withGameLock } from './action-queue.js';
+
+export { getConfig, setConfig, clearConfig, getAttachments, hasAttachment } from './figure-config.js';
+
+export {
+  getRange,
+  isAdjacentCoords,
+  isWithinRange,
+  hasLineOfSight,
+  isWithinSpaces,
+  getFiguresWithinRange,
+  getFiguresAdjacentTo,
+} from './spatial.js';
+
+export { cleanupActivation, cleanupRoundStart } from './activation-state.js';
+
+export { reduceHp, healHp, healHpDistributed } from './damage-helpers.js';
+
+export { filterCondition, isConditionImmune, HARMFUL_CONDITIONS } from './conditions.js';
+
+export { isFigurelessDc, hasDepleteEffect, getCompanionDescriptionForDc } from './dc-helpers.js';

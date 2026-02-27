@@ -4,6 +4,7 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal } from '../data-loader.js';
+import { isWithinSpaces as _isWithinSpaces } from '../game/spatial.js';
 
 /**
  * Check a player's hand for CC cards that match a timing trigger.
@@ -2078,27 +2079,8 @@ export async function handlePreReroll(interaction, ctx) {
   saveGames();
 }
 
-/** BFS check: is coordB reachable from coordA within maxDist hops via mapSpaces adjacency? */
-function isWithinSpaces(mapSpaces, coordA, coordB, maxDist) {
-  if (!mapSpaces?.adjacency || !coordA || !coordB) return false;
-  const a = coordA.toLowerCase(), b = coordB.toLowerCase();
-  if (a === b) return true;
-  const visited = new Set([a]);
-  let frontier = [a];
-  for (let d = 1; d <= maxDist; d++) {
-    const next = [];
-    for (const c of frontier) {
-      for (const adj of (mapSpaces.adjacency[c] || [])) {
-        const s = String(adj).toLowerCase();
-        if (s === b) return true;
-        if (!visited.has(s)) { visited.add(s); next.push(s); }
-      }
-    }
-    frontier = next;
-    if (!frontier.length) break;
-  }
-  return false;
-}
+// Delegate to src/game/spatial.js (canonical implementation)
+const isWithinSpaces = _isWithinSpaces;
 
 // --- DC passive stat helpers ---
 

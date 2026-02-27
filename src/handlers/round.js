@@ -3,6 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getDcEffects, getMapSpaces } from '../data-loader.js';
+import { cleanupRoundStart } from '../game/activation-state.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -266,21 +267,6 @@ export async function handleEndEndOfRound(interaction, ctx) {
     p2DrawCount = 0;
     game.noCommandDrawThisRound = false;
   }
-  if (game.shadowOpsBlockedPlayer) game.shadowOpsBlockedPlayer = null;
-  game.signalJammerActive = null;
-  game.harshEnvironmentActive = false;
-  game.terminalControlPlayerNum = null;
-  game.unlimitedPowerActive = null;
-  game.crippledFigures = [];
-  game.disabledFigures = [];
-  game.holdGroundPlayerNum = null;
-  game.windfallActive = null;
-  game.wreakVengeanceActive = null;
-  game.toughLuckPlayerNum = null;
-  game.thereIsNoTryPlayerNum = null;
-  game.youWillNotDenyMeActive = null;
-  game.mandaAsteelPlayerNum = null;
-  game.stillFasterPlayerNum = null;
 
   // Data Theft: return stolen card to opponent's discard if still in hand at end of round
   if (game.dataTheftStolenCard) {
@@ -397,103 +383,10 @@ export async function handleEndEndOfRound(interaction, ctx) {
     }
   }
 
-  game.p1LaunchPanelFlippedThisRound = false;
-  game.p2LaunchPanelFlippedThisRound = false;
   const prevInitiative = game.initiativePlayerId;
   game.initiativePlayerId = prevInitiative === game.player1Id ? game.player2Id : game.player1Id;
   game.currentRound = (game.currentRound || 1) + 1;
-  game.roundDefenseBonusBlock = {};
-  game.roundDefenseBonusEvade = {};
-  game.roundDefenderBonusBlockPerEvade = {};
-  game.roundTrooperAttackHitBonus = {};
-  game.roundVehicleSpeedBonus = {};
-  game.deflectionPending = {};
-  game.roundAttackRerollDice = {};
-  game.freeAttackBonusPending = {};
-  game.pendingOverrideAttackDice = {};
-  game.nextAttackReach = {};
-  game.hitAndRunPendingMp = null;
-  game.nextAttacksBonusHits = null;
-  game.nextAttackBonusSurgeAbilities = null;
-  game.nextAttackBonusPierce = null;
-  game.nextAttacksBonusConditions = null;
-  game.roundDefenderCannotBeTargetedUnlessWithinSpaces = null;
-  game.roundDebuffNextHostileActivation = null;
-  game.roundDroidExtraActionCostDamage = null;
-  game.sitTightPlayerNum = null;
-  game.roundInTheShadowsPlayerNum = null;
-  game.strengthInNumbersPlayerNum = null;
-  game.provokeNextActivation = null;
-  game.agitateNextActivation = null;
-  game.fellSwoopFreeAttack = {};
-  game.stillFasterExcludeMsgId = null;
-  game.pendingStillFaster = null;
-  game.roundAttackSurgeBonus = {};
-  game.roundUtinniJawaBuffs = null;
-  game.roundSmugglersTricksPlayerNum = null;
-  game.squadSwarmPlayerNum = null;
-  game.whenDefeatHostileWithin3GainBlockTokens = null;
-  game.overrunThisActivation = {};
-  game.roundFigureAbilityUsed = {};
-  game.roundEfficientTravel = {};
-  game.nextAttackIgnoreFigureLOS = {};
-  game.findsmanMeditationTarget = {};
-  game.etiquetteBlockPairs = [];
-  game.vanishImmunityUntilNextActivation = {};
-  game.falseOrdersUpgrade = {};
-  game.setTrapSpace = {};
-  game.reverseEngineerActive = {};
-  game.pendingMpBonus = {};
-  game.pummelTwoAttacksThisActivation = {};
-  game.pummelAttacksRemaining = {};
-  game.overrunDamagedThisMove = {};
-  game.overdriveUsedThisActivation = {};
-  game.stayDownPendingMsgId = {};
-  game.burstFirePendingMsgId = {};
-  game.cripplingBlowPending = {};
-  game.disruptorRiflePending = {};
-  game.tonfaStrikeSecondAttack = {};
-  game.pendingMultiTargetRoll = {};
-  game.closeQuartersActive = {};
-  game.selfDestructProtocolTriggered = {};
-  game.mobileMovementActive = {};
-  game.rushPending = {};
-  game.pendingRushPush = null;
-  game.forcedAttackTarget = {};
-  game.figureMoved = {};
-  game.tripodAttacked = {};
-  game.activationStartPositions = {};
-  game.selfDefeatsAfterAttackMsgId = {};
-  game.applySelfStunAfterAttackPlayerNum = {};
-  game.postActivationConditions = {};
-  game.pendingCombatResupply = {};
-  game.pendingEmperorInterrupt = null;
-  game.pendingExecutiveOrder = null;
-  game.pendingBombardmentSorin = null;
-  game.pendingFiringSquad = null;
-  game.pendingCoordinatedRaid = null;
-  game.pendingAwr = null;
-  game.sonOfSkywalkerActive = null;
-  game.dataTheftStolenCard = null;
-  game.pendingPostAttackConditions = {};
-  game.nextActivationFreeAttack = {};
-  game.conditionalFocusIfDamagedGte = null;
-  game.pendingToughLuck = null;
-  game.pendingBELReorder = null;
-  game.pendingThereIsNoTry = null;
-  game.pendingSelfDestruct = null;
-  game.priceBounties = game.priceBounties || {};
-  game.nextDefeatedFriendlyVpReduction = null;
-  game.recoverOnHostileDefeat = {};
-  game.nextHostileDefeatVpBonus = {};
-  game.forceDefenderRerollOne = null;
-  game.doubleMatchingIconsOnReroll = null;
-  game.vetInstinctsActiveThisActivation = {};
-  game.surgeDoublingActive = {};
-  game.optimalBombardmentBlastBonus = {};
-  game.pendingHunterProtocol = null;
-  delete game.commsJammerActivePlayerNum;
-  delete game.partingShotTriggered;
+  cleanupRoundStart(game);
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
   }

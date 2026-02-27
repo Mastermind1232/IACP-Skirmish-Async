@@ -8,6 +8,7 @@ import {
   getBotmenuArchiveConfirmButtons,
   getBotmenuKillConfirmButtons,
 } from '../discord/components.js';
+import { cleanupGameLock } from '../game/action-queue.js';
 
 const BOTMENU_ALLOWED_KILL_ROLES = ['Admin', 'Bothelpers'];
 
@@ -54,6 +55,7 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
     }
   }
   deleteGame(gameId);
+  cleanupGameLock(gameId);
   saveGames();
   if (deleteGameFromDb) await deleteGameFromDb(gameId).catch((err) => { console.error('[discord]', err?.message ?? err); });
   for (const [msgId, meta] of dcMessageMeta) {

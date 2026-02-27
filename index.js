@@ -60,6 +60,7 @@ import { getHandlerKey } from './src/router.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
 import { canActAsPlayer } from './src/utils/can-act-as-player.js';
 import { MAX_ACTIVE_GAMES_PER_PLAYER, PENDING_ILLEGAL_TTL_MS, MAX_UNDO_DEPTH } from './src/constants.js';
+import { withGameLock, cleanupGameLock } from './src/game/action-queue.js';
 import {
   getLobby,
   setLobby,
@@ -230,6 +231,19 @@ import {
   getPlayableCcFromHand,
   isCcPlayableNow,
   isCcPlayLegalByRestriction,
+  getRange as _getRange,
+  hasLineOfSight as _hasLineOfSight,
+  isWithinSpaces,
+  isAdjacentCoords,
+  isWithinRange,
+  getFiguresWithinRange,
+  getFiguresAdjacentTo,
+  filterCondition as _filterCondition,
+  isConditionImmune as _isConditionImmune,
+  HARMFUL_CONDITIONS as _HARMFUL_CONDITIONS,
+  isFigurelessDc as _isFigurelessDc,
+  hasDepleteEffect as _hasDepleteEffect,
+  getCompanionDescriptionForDc as _getCompanionDescriptionForDc,
 } from './src/game/index.js';
 import {
   buildScorecardEmbed,
@@ -743,126 +757,11 @@ function countTerminalsControlledByPlayer(game, playerNum, mapId) {
 }
 
 /** Manhattan distance in spaces between two coords. */
-function getRange(coord1, coord2) {
-  const a = parseCoord(coord1);
-  const b = parseCoord(coord2);
-  if (a.col < 0 || a.row < 0 || b.col < 0 || b.row < 0) return 999;
-  return Math.abs(a.col - b.col) + Math.abs(a.row - b.row);
-}
+// Delegate to src/game/spatial.js (canonical implementation)
+const getRange = _getRange;
 
-/**
- * Convert an impassable edge (pair of coord strings for adjacent spaces) to its
- * geometric wall segment — the shared boundary line between the two spaces.
- */
-function impassableEdgeToWallSegment(c1, c2) {
-  const a = parseCoord(String(c1).toLowerCase());
-  const b = parseCoord(String(c2).toLowerCase());
-  if (a.col < 0 || b.col < 0) return null;
-  const dc = b.col - a.col;
-  const dr = b.row - a.row;
-  if (Math.abs(dc) + Math.abs(dr) !== 1) return null; // non-adjacent, skip
-  if (dr === 0) {
-    // Horizontal neighbors → vertical wall between them
-    const x = Math.min(a.col, b.col) + 0.5;
-    return { x1: x, y1: a.row - 0.5, x2: x, y2: a.row + 0.5 };
-  } else {
-    // Vertical neighbors → horizontal wall between them
-    const y = Math.min(a.row, b.row) + 0.5;
-    return { x1: a.col - 0.5, y1: y, x2: a.col + 0.5, y2: y };
-  }
-}
-
-/** Check if two line segments strictly intersect (not at endpoints). */
-function segmentsStrictlyIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
-  const d1x = x2 - x1, d1y = y2 - y1;
-  const d2x = x4 - x3, d2y = y4 - y3;
-  const denom = d1x * d2y - d1y * d2x;
-  if (Math.abs(denom) < 1e-10) return false; // parallel
-  const t = ((x3 - x1) * d2y - (y3 - y1) * d2x) / denom;
-  const u = ((x3 - x1) * d1y - (y3 - y1) * d1x) / denom;
-  const EPS = 1e-6;
-  return t > EPS && t < 1 - EPS && u > EPS && u < 1 - EPS;
-}
-
-/**
- * Collect all grid cells (col, row) whose interior a line segment passes through.
- * Samples every 0.25 units along the line — fine enough for 1-unit cells.
- */
-function getCellsAlongLine(x1, y1, x2, y2) {
-  const dx = x2 - x1, dy = y2 - y1;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  const seen = new Set();
-  const result = [];
-  const steps = Math.max(Math.ceil(len * 4), 1);
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const col = Math.round(x1 + t * dx);
-    const row = Math.round(y1 + t * dy);
-    const key = `${col},${row}`;
-    if (!seen.has(key)) { seen.add(key); result.push([col, row]); }
-  }
-  return result;
-}
-
-/**
- * Line-of-sight: corner-to-corner tracing per IA rules.
- * LOS exists if ANY line from a corner of coord1's space to a corner of coord2's space
- * is unobstructed by blocking terrain or solid walls (impassable edges).
- * Dotted red movementBlockingEdges do NOT block LOS.
- */
-function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords) {
-  const blockingSet = new Set((mapSpaces?.blocking || []).map((s) => String(s).toLowerCase()));
-  const impassableEdges = mapSpaces?.impassableEdges || [];
-  const a = parseCoord(coord1);
-  const b = parseCoord(coord2);
-  if (a.col < 0 || a.row < 0 || b.col < 0 || b.row < 0) return false;
-  if (a.col === b.col && a.row === b.row) return true;
-
-  // Pre-build wall segments from impassable edges
-  const walls = [];
-  for (const edge of impassableEdges) {
-    const seg = impassableEdgeToWallSegment(edge[0], edge[1]);
-    if (seg) walls.push(seg);
-  }
-
-  // 4 corners of a space, slightly inset so exact corner touches don't count
-  const INSET = 0.49;
-  const corners = (col, row) => [
-    [col - INSET, row - INSET],
-    [col + INSET, row - INSET],
-    [col - INSET, row + INSET],
-    [col + INSET, row + INSET],
-  ];
-
-  const aCorners = corners(a.col, a.row);
-  const bCorners = corners(b.col, b.row);
-
-  // LOS exists if ANY corner-to-corner pair has a clear line
-  for (const [ax, ay] of aCorners) {
-    for (const [bx, by] of bCorners) {
-      // 1. Check wall crossings
-      let wallBlocked = false;
-      for (const w of walls) {
-        if (segmentsStrictlyIntersect(ax, ay, bx, by, w.x1, w.y1, w.x2, w.y2)) {
-          wallBlocked = true;
-          break;
-        }
-      }
-      if (wallBlocked) continue;
-      // 2. Check for blocking spaces along the path (skip attacker and target cells)
-      const cells = getCellsAlongLine(ax, ay, bx, by);
-      let spaceBlocked = false;
-      for (const [col, row] of cells) {
-        if (col === a.col && row === a.row) continue;
-        if (col === b.col && row === b.row) continue;
-        if (blockingSet.has(colRowToCoord(col, row))) { spaceBlocked = true; break; }
-        if (figureBlockingCoords?.has(colRowToCoord(col, row))) { spaceBlocked = true; break; }
-      }
-      if (!spaceBlocked) return true; // this corner pair is clear
-    }
-  }
-  return false;
-}
+// LOS + helpers delegated to src/game/spatial.js (canonical implementation)
+const hasLineOfSight = _hasLineOfSight;
 
 async function clearMoveGridMessages(game, moveKey, channel) {
   if (!channel) return;
@@ -1871,6 +1770,55 @@ function extractGameIdFromInteraction(interaction) {
   return null;
 }
 
+/**
+ * Resolve game ID for per-game mutex locking.
+ * Tries multiple strategies: prefix stripping, dcMessageMeta lookup, existing extractor, channel-based.
+ * Returns null for interactions that don't belong to a game (lobby, menu, etc.) — those run without lock.
+ */
+function resolveGameIdForLock(interaction) {
+  const customId = interaction.customId || '';
+  if (!customId) return null;
+
+  const type = interaction.isButton?.() ? 'button'
+    : interaction.isStringSelectMenu?.() ? 'select'
+    : interaction.isModalSubmit?.() ? 'modal'
+    : null;
+  if (!type) return null;
+
+  const prefix = getHandlerKey(customId, type);
+  if (!prefix) return null;
+
+  const payload = customId.slice(prefix.length);
+  const firstSegment = payload.split('_')[0];
+
+  // Strategy 1: first segment is a gameId directly (5-digit zero-padded)
+  if (firstSegment && getGame(firstSegment)) return firstSegment;
+
+  // Strategy 2: first segment is a Discord message ID → look up in dcMessageMeta
+  if (firstSegment && /^\d{10,}$/.test(firstSegment)) {
+    const meta = dcMessageMeta.get(firstSegment);
+    if (meta?.gameId) return meta.gameId;
+  }
+
+  // Strategy 3: fall back to existing extractor (handles more complex patterns)
+  const existing = extractGameIdFromInteraction(interaction);
+  if (existing) return existing;
+
+  // Strategy 4: resolve by channel (covers thread-based interactions)
+  const channelId = interaction.channelId;
+  if (channelId) {
+    for (const [gameId, g] of getGamesMap()) {
+      if (g.generalId === channelId || g.chatId === channelId || g.boardId === channelId ||
+          g.p1HandId === channelId || g.p2HandId === channelId ||
+          g.p1PlayAreaId === channelId || g.p2PlayAreaId === channelId) {
+        return gameId;
+      }
+    }
+  }
+
+  return null;
+}
+
 function extractGameIdFromMessage(message) {
   const chId = message.channel?.id;
   if (!chId) return null;
@@ -2461,6 +2409,7 @@ async function postAchievementNotification(client, channelId, userId, def) {
 async function postGameOver(game, client, winnerId, reason) {
   game.ended = true;
   game.winnerId = winnerId ?? game.winnerId ?? null;
+  cleanupGameLock(game.gameId);
   pendingIllegalSquad.delete(`${game.gameId}_1`);
   pendingIllegalSquad.delete(`${game.gameId}_2`);
   const embed = buildScorecardEmbed(game);
@@ -3222,21 +3171,9 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
 }
 
 /** Remove a specific condition from a figure. No-op if figure or condition not found. */
-function filterCondition(game, figureKey, cond) {
-  if (!game.figureConditions?.[figureKey]) return;
-  game.figureConditions[figureKey] = game.figureConditions[figureKey].filter((c) => c !== cond);
-  if (game.figureConditions[figureKey].length === 0) delete game.figureConditions[figureKey];
-}
-
-/** Check if a figure is immune to HARMFUL conditions (Stun, Bleed, Weaken). */
-function isConditionImmune(game, figureKey) {
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
-  const dcEff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
-  const sIds = dcEff?.specialAbilityIds || [];
-  return sIds.includes('immune_onar') || sIds.includes('immune_snowtrooper_elite');
-}
-
-const HARMFUL_CONDITIONS = ['Stun', 'Bleed', 'Weaken'];
+const filterCondition = _filterCondition;
+const isConditionImmune = _isConditionImmune;
+const HARMFUL_CONDITIONS = _HARMFUL_CONDITIONS;
 
 /** Send a Bleeding damage prompt to the given channel. Offers "Take 1 damage" or "Prevent (discard CC)". */
 async function sendBleedingPrompt(game, channel, figureKey, playerNum, displayName) {
@@ -5621,34 +5558,9 @@ async function handleMissileSalvoDone(interaction) {
 }
 
 /** DCs whose image is in DC Skirmish Upgrades are figureless (incl. Squad Upgrades like [Flame Trooper]); if image is in dc-figures, it's a figure. */
-function isFigurelessDc(dcName) {
-  if (!dcName || typeof dcName !== 'string') return false;
-  const n = dcName.trim();
-  if (!n) return false;
-  const path = getDcImages()[n] || getDcImages()[`[${n}]`] || (() => { const k = Object.keys(getDcImages()).find((key) => key === n || (key.startsWith('[') && key.slice(1, -1) === n)); return k ? getDcImages()[k] : ''; })();
-  if (path && path.includes('dc-figures')) return false;
-  if (path && path.includes('DC Skirmish Upgrades')) return true;
-  if (/^\[.+\]$/.test(n)) return true;
-  if (getDcImages()[`[${n}]`]) return true;
-  return Object.keys(getDcImages()).some((k) => /^\[.+\]$/.test(k) && (k.slice(1, -1) === n || k === n));
-}
-
-/** True if this Skirmish Upgrade has a Deplete effect (ability text contains "Deplete"). */
-function hasDepleteEffect(dcName) {
-  if (!dcName || !isFigurelessDc(dcName)) return false;
-  const card = getDcEffects()[dcName] || (typeof dcName === 'string' && !dcName.startsWith('[') ? getDcEffects()[`[${dcName}]`] : null);
-  const text = card?.abilityText || '';
-  return /deplete/i.test(text);
-}
-
-/** Description for the Companion embed under a DC (from dc-effects.companion). */
-function getCompanionDescriptionForDc(dcName) {
-  const card = getDcEffects()[dcName] || (typeof dcName === 'string' && !dcName.startsWith('[') ? getDcEffects()[`[${dcName}]`] : null);
-  const c = card?.companion;
-  if (!c) return '*None*';
-  if (typeof c === 'string' && c.trim()) return c.trim();
-  return 'Companion (see ability text)';
-}
+const isFigurelessDc = _isFigurelessDc;
+const hasDepleteEffect = _hasDepleteEffect;
+const getCompanionDescriptionForDc = _getCompanionDescriptionForDc;
 
 function getDcStats(dcName) {
   const effects = getDcEffects();
@@ -7259,6 +7171,8 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isModalSubmit()) {
     const modalKey = getHandlerKey(interaction.customId, 'modal');
     if (!modalKey) return;
+    const _modalLockId = resolveGameIdForLock(interaction);
+    await withGameLock(_modalLockId, async () => {
     const ccHandContext = {
       getGame,
       saveGames,
@@ -7335,12 +7249,15 @@ client.on('interactionCreate', async (interaction) => {
       }
       saveGames();
     }
+    }); // end withGameLock (modal)
     return;
   }
 
   if (interaction.isStringSelectMenu()) {
     const selectKey = getHandlerKey(interaction.customId, 'select');
     if (!selectKey) return;
+    const _selectLockId = resolveGameIdForLock(interaction);
+    await withGameLock(_selectLockId, async () => {
     if (selectKey === 'dc_fig_select_') {
       const msgId = interaction.customId.replace('dc_fig_select_', '');
       const selectedFigure = parseInt(interaction.values[0], 10);
@@ -7437,6 +7354,7 @@ client.on('interactionCreate', async (interaction) => {
     if (selectKey === 'cc_attach_to_') await handleCcAttachTo(interaction, ccHandSelectContext);
     else if (selectKey === 'cc_play_select_') await handleCcPlaySelect(interaction, ccHandSelectContext);
     else if (selectKey === 'cc_discard_select_') await handleCcDiscardSelect(interaction, ccHandSelectContext);
+    }); // end withGameLock (select)
     return;
   }
 
@@ -7444,6 +7362,9 @@ client.on('interactionCreate', async (interaction) => {
   const buttonKey = getHandlerKey(interaction.customId, 'button');
   if (!buttonKey) return;
   await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+
+  const _buttonLockId = resolveGameIdForLock(interaction);
+  await withGameLock(_buttonLockId, async () => {
 
     if (buttonKey === 'deck_illegal_play_' || buttonKey === 'deck_illegal_redo_' || buttonKey === 'cc_shuffle_draw_' || buttonKey === 'cc_play_' || buttonKey === 'cc_confirm_play_' || buttonKey === 'cc_cancel_play_' || buttonKey === 'cc_draw_' || buttonKey === 'cc_search_discard_' || buttonKey === 'cc_close_discard_' || buttonKey === 'cc_discard_' || buttonKey === 'cc_choice_' || buttonKey === 'cc_space_' || buttonKey === 'squad_select_' || buttonKey === 'illegal_cc_ignore_' || buttonKey === 'illegal_cc_unplay_' || buttonKey === 'negation_play_' || buttonKey === 'negation_let_resolve_' || buttonKey === 'celebration_play_' || buttonKey === 'celebration_pass_') {
     const ccHandButtonContext = {
@@ -9091,6 +9012,8 @@ client.on('interactionCreate', async (interaction) => {
     }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
+
+  }); // end withGameLock (button)
 
   } catch (err) {
     console.error('Interaction error:', err);

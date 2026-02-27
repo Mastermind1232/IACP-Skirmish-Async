@@ -4,6 +4,7 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapSpaces } from '../data-loader.js';
+import { cleanupActivation } from '../game/activation-state.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -460,55 +461,24 @@ export async function handleDcEndActivation(interaction, ctx) {
       console.error('Failed to delete DC activation thread on End Activation:', err);
     }
   }
-  if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
-  if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
-  if (game.nextAttacksBonusHits?.[meta.playerNum]) delete game.nextAttacksBonusHits[meta.playerNum];
-  if (game.nextAttacksBonusConditions?.[meta.playerNum]) delete game.nextAttacksBonusConditions[meta.playerNum];
-  if (game.nextAttackBonusSurgeAbilities?.[meta.playerNum]) delete game.nextAttackBonusSurgeAbilities[meta.playerNum];
-  if (game.nextAttackBonusPierce?.[meta.playerNum]) delete game.nextAttackBonusPierce[meta.playerNum];
-  if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
-  if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
-  // Comms Jammer: clear CC block at end of activation
-  delete game.commsJammerActivePlayerNum;
-  // Stun: discarded at end of activation
+  // Build figure keys for all figures in this DC's deployment groups
+  const endEff = getDcEffects()?.[meta.dcName];
+  const figCount = endEff?.figures || 1;
+  const dgCount = endEff?.subCost ? 2 : 1;
+  const figureKeys = [];
+  for (let fi = 0; fi < figCount; fi++) {
+    for (let di = 0; di < dgCount; di++) {
+      figureKeys.push(`${meta.dcName}-${di}-${fi}`);
+    }
+  }
+  cleanupActivation(game, msgId, meta.playerNum, figureKeys);
+  // Stun: discarded at end of activation (condition logic, not a flag)
   if (game.figureConditions && ctx.getDcStats) {
     const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
     const figures = ctx.getDcStats(meta.dcName).figures ?? 1;
     for (let f = 0; f < figures; f++) {
       const fk = `${meta.dcName}-${dgIndex}-${f}`;
       if (game.figureConditions[fk]) game.figureConditions[fk] = game.figureConditions[fk].filter((c) => c !== 'Stun');
-    }
-  }
-  // Clear figure movement tracking for all figures in this group
-  if (game.figureMoved) {
-    const endEff = getDcEffects()?.[meta.dcName];
-    const figCount = endEff?.figures || 1;
-    for (let fi = 0; fi < figCount; fi++) {
-      for (let di = 0; di < (endEff?.subCost ? 2 : 1); di++) {
-        const fk = `${meta.dcName}-${di}-${fi}`;
-        delete game.figureMoved[fk];
-      }
-    }
-  }
-  // Clear Tripod attack tracking for all figures in this group
-  if (game.tripodAttacked) {
-    const endEff2 = getDcEffects()?.[meta.dcName];
-    const figCount2 = endEff2?.figures || 1;
-    for (let fi = 0; fi < figCount2; fi++) {
-      for (let di = 0; di < (endEff2?.subCost ? 2 : 1); di++) {
-        const fk = `${meta.dcName}-${di}-${fi}`;
-        delete game.tripodAttacked[fk];
-      }
-    }
-  }
-  // Clear activation start positions for this group
-  if (game.activationStartPositions) {
-    const endEff3 = getDcEffects()?.[meta.dcName];
-    const figCount3 = endEff3?.figures || 1;
-    for (let fi = 0; fi < figCount3; fi++) {
-      for (let di = 0; di < (endEff3?.subCost ? 2 : 1); di++) {
-        delete game.activationStartPositions[`${meta.dcName}-${di}-${fi}`];
-      }
     }
   }
 
