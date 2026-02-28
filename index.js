@@ -175,6 +175,10 @@ import {
   handleRushPushFig,
   handleRushPushSpace,
   handleRushPushSkip,
+  handleOverwatchSpacePick,
+  handleOrbitalBombardmentDeplete,
+  handleOrbitalBombardmentSkip,
+  handleOrbitalBombardmentSpacePick,
   sendRerollUI,
   proceedAfterRerolls,
   sendReadyToResolveRolls,
@@ -419,21 +423,12 @@ async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, client) {
   }
 }
 
-/** True if this DC can legally play this CC (for Special Action timing). playableBy: "Any Figure", specific name, or trait. Handles compound "X or Y" playableBy. */
-function isCcPlayableByDc(ccName, dcName, displayName) {
-  const effect = getCcEffect(ccName);
-  if (!effect || (effect.timing || '').toLowerCase() !== 'specialaction') return false;
-  const playableBy = (effect.playableBy || '').trim();
+/** Check if DC keywords match a CC's playableBy (shared logic for all CC timing checks). */
+function _ccPlayableByMatches(playableBy, dcName, displayName, hasDarksaberImperial = false) {
   if (!playableBy) return false;
   if (playableBy.toLowerCase() === 'any figure') return true;
-  const dcBase = (dcName || '')
-    .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
-    .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
-    .trim();
-  const displayBase = (displayName || dcBase)
-    .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
-    .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
-    .trim();
+  const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+  const displayBase = (displayName || dcBase).replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
   const d = dcBase.toLowerCase();
   const disp = displayBase.toLowerCase();
   const keywords = getDcKeywords()[dcName] || getDcKeywords()[dcBase];
@@ -442,66 +437,62 @@ function isCcPlayableByDc(ccName, dcName, displayName) {
     if (d.includes(p) || p.includes(d) || disp.includes(p) || p.includes(disp)) return true;
     if (keywords && Array.isArray(keywords) && keywords.some((k) => String(k).toLowerCase() === p)) return true;
   }
+  // The Darksaber: FORCE USER with Darksaber can use IMPERIAL Command cards
+  if (hasDarksaberImperial && alternatives.includes('imperial')) return true;
   return false;
+}
+
+/** Check if activating DC has The Darksaber and is a FORCE USER → can use IMPERIAL CCs. */
+function _hasDarksaberImperial(game, playerNum, dcName) {
+  const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+  const keywords = getDcKeywords()[dcName] || getDcKeywords()[dcBase];
+  if (!keywords?.some((k) => String(k).toUpperCase() === 'FORCE USER')) return false;
+  const atts = playerNum === 1 ? (game.p1DcAttachments || {}) : (game.p2DcAttachments || {});
+  const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  for (let i = 0; i < msgIds.length; i++) {
+    if (dcList[i]?.dcName !== dcBase && dcList[i]?.dcName !== dcName) continue;
+    if ((atts[msgIds[i]] || []).includes('The Darksaber')) return true;
+  }
+  return false;
+}
+
+/** True if this DC can legally play this CC (for Special Action timing). playableBy: "Any Figure", specific name, or trait. Handles compound "X or Y" playableBy. */
+function isCcPlayableByDc(ccName, dcName, displayName, hasDarksaber = false) {
+  const effect = getCcEffect(ccName);
+  if (!effect || (effect.timing || '').toLowerCase() !== 'specialaction') return false;
+  return _ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber);
 }
 
 /** CC names in hand that are Special Action and legally playable by this DC. */
 function getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName) {
   const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
-  return hand.filter((ccName) => isCcPlayableByDc(ccName, dcName, displayName));
+  const darksaber = _hasDarksaberImperial(game, playerNum, dcName);
+  return hand.filter((ccName) => isCcPlayableByDc(ccName, dcName, displayName, darksaber));
 }
 
 /** True if this DC can legally play this CC (for Double Action Special timing). */
-function isCcDoubleActionPlayableByDc(ccName, dcName, displayName) {
+function isCcDoubleActionPlayableByDc(ccName, dcName, displayName, hasDarksaber = false) {
   const effect = getCcEffect(ccName);
   if (!effect || (effect.timing || '').toLowerCase() !== 'doubleactionspecial') return false;
-  const playableBy = (effect.playableBy || '').trim();
-  if (!playableBy) return false;
-  if (playableBy.toLowerCase() === 'any figure') return true;
-  const dcBase = (dcName || '')
-    .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
-    .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
-    .trim();
-  const displayBase = (displayName || dcBase)
-    .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
-    .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
-    .trim();
-  const d = dcBase.toLowerCase();
-  const disp = displayBase.toLowerCase();
-  const keywords = getDcKeywords()[dcName] || getDcKeywords()[dcBase];
-  const alternatives = playableBy.split(/\s+or\s+/i).map((s) => s.trim().toLowerCase());
-  for (const p of alternatives) {
-    if (d.includes(p) || p.includes(d) || disp.includes(p) || p.includes(disp)) return true;
-    if (keywords && Array.isArray(keywords) && keywords.some((k) => String(k).toLowerCase() === p)) return true;
-  }
-  return false;
+  return _ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber);
 }
 
 /** CC names in hand that are Double Action Special and legally playable by this DC. */
 function getPlayableCcDoubleActionsForDc(game, playerNum, dcName, displayName) {
   const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
-  return hand.filter((ccName) => isCcDoubleActionPlayableByDc(ccName, dcName, displayName));
+  const darksaber = _hasDarksaberImperial(game, playerNum, dcName);
+  return hand.filter((ccName) => isCcDoubleActionPlayableByDc(ccName, dcName, displayName, darksaber));
 }
 
 /** CC names in hand that are End-of-Activation timing and legally playable by this DC. */
 function getPlayableCcEndOfActivationForDc(game, playerNum, dcName, displayName) {
   const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+  const darksaber = _hasDarksaberImperial(game, playerNum, dcName);
   return hand.filter((ccName) => {
     const effect = getCcEffect(ccName);
     if (!effect || (effect.timing || '').toLowerCase() !== 'endofactivation') return false;
-    const playableBy = (effect.playableBy || '').trim();
-    if (!playableBy || playableBy.toLowerCase() === 'any figure') return true;
-    const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-    const displayBase = (displayName || dcBase).replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-    const d = dcBase.toLowerCase();
-    const disp = displayBase.toLowerCase();
-    const keywords = getDcKeywords()[dcName] || getDcKeywords()[dcBase];
-    const alternatives = playableBy.split(/\s+or\s+/i).map((s) => s.trim().toLowerCase());
-    for (const p of alternatives) {
-      if (d.includes(p) || p.includes(d) || disp.includes(p) || p.includes(disp)) return true;
-      if (keywords && Array.isArray(keywords) && keywords.some((k) => String(k).toLowerCase() === p)) return true;
-    }
-    return false;
+    return _ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, darksaber);
   });
 }
 
@@ -4252,7 +4243,16 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if (i >= 0 && dcL?.[i]) dcL[i].healthState = [...attHS];
       }
     }
-    if (totalBlast > 0 && hit && damage > 0 && game.selectedMap?.id) {
+    // The Darksaber: convert Blast X → Cleave X during Darksaber Strike attack (before blast applies)
+    let effectiveBlast = totalBlast;
+    if (combat.darksaberBlastToCleave && (combat.surgeBlast || 0) > 0) {
+      combat.surgeCleave = (combat.surgeCleave || 0) + combat.surgeBlast;
+      const _dsConvertedBlast = combat.surgeBlast;
+      combat.surgeBlast = 0;
+      effectiveBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
+      await logGameAction(game, client, `**The Darksaber** — Blast ${_dsConvertedBlast} converted to Cleave ${_dsConvertedBlast}.`, { phase: 'ROUND', icon: 'card' });
+    }
+    if (effectiveBlast > 0 && hit && damage > 0 && game.selectedMap?.id) {
       const adjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
       const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
       for (const { figureKey: blastFigureKey, playerNum: blastPlayerNum } of adjacent) {
@@ -4266,7 +4266,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const blastEntry = blastHS[blastFigIndex];
         if (!blastEntry) continue;
         const [bCur, bMax] = blastEntry;
-        const blastDmg = totalBlast;
+        const blastDmg = effectiveBlast;
         const newBCur = Math.max(0, (bCur ?? bMax) - blastDmg);
         blastHS[blastFigIndex] = [newBCur, bMax ?? newBCur];
         dcHealthState.set(blastMsgId, blastHS);
@@ -4574,7 +4574,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
     }
     // Blast damage also triggers Incinerate Strain on adjacent damaged figures — honor system
-    if (totalBlast > 0) {
+    if (effectiveBlast > 0) {
       await thread.send('**Incinerate** — Figures that suffered Blast damage also suffer 1 Strain. *(Honor system.)*').catch(() => {});
     }
     // Place Rubble token in target space (if attack didn't miss)
@@ -4790,6 +4790,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
     }
   }
+  // Embed refresh for Blast damage already applied earlier in this function
   if (totalBlast > 0 && hit && game.selectedMap?.id) {
     const blastAdjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
     for (const { figureKey: bk, playerNum: bp } of blastAdjacent) {
@@ -5306,6 +5307,15 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
       game.autofireChainTargetSpace[combat.attackerMsgId] = combat.autofireChainTargetSpace;
     }
     await logGameAction(game, client, `**Autofire** — Chain attack available! Target must be within 3 of the original target space.`, { phase: 'ROUND', icon: 'attack' });
+  }
+  // The Darksaber: "then you may perform an attack" — grant second free attack
+  if (game.darksaberSecondAttack?.[combat.attackerMsgId]) {
+    delete game.darksaberSecondAttack[combat.attackerMsgId];
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[combat.attackerMsgId] = { from: 'Darksaber Strike' };
+    // Clear the override so the second attack uses normal dice
+    if (game.pendingOverrideAttackDice?.[combat.attackerMsgId]) delete game.pendingOverrideAttackDice[combat.attackerMsgId];
+    await thread.send('**The Darksaber** — You may now perform a normal attack (use Attack button).').catch(() => {});
   }
 
   for (const msgId of embedRefreshMsgIds) {
@@ -7794,6 +7804,10 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'rush_push_fig_') await handleRushPushFig(interaction, dcPlayAreaContext);
     else if (buttonKey === 'rush_push_space_') await handleRushPushSpace(interaction, dcPlayAreaContext);
     else if (buttonKey === 'rush_push_skip_') await handleRushPushSkip(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'overwatch_space_') await handleOverwatchSpacePick(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'ob_deplete_') await handleOrbitalBombardmentDeplete(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'ob_skip_') await handleOrbitalBombardmentSkip(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'ob_space_') await handleOrbitalBombardmentSpacePick(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_ability_choice_') await handleDcAbilityChoice(interaction, dcPlayAreaContext);
     else if (buttonKey === 'ee3_pick_die_') await handleEe3DiePick(interaction, dcPlayAreaContext);
     else if (buttonKey === 'false_orders_action_') await handleFalseOrdersAction(interaction, dcPlayAreaContext);

@@ -49,6 +49,8 @@ const ACTIVATION_MSGID_FLAGS = [
   'autofireActive',
   'fireMissionActive',
   'autofireChainTargetSpace',
+  'darksaberSecondAttack',
+  'pendingOverwatchPlacement',
 ];
 
 /**
@@ -174,6 +176,8 @@ const ROUND_OBJECT_FLAGS = [
   'autofireActive',
   'fireMissionActive',
   'autofireChainTargetSpace',
+  'darksaberSecondAttack',
+  'pendingOverwatchPlacement',
 ];
 
 const ROUND_NULL_FLAGS = [
@@ -227,6 +231,7 @@ const ROUND_NULL_FLAGS = [
   'terminalControlPlayerNum',
   'unlimitedPowerActive',
   'shadowOpsBlockedPlayer',
+  'pendingOrbitalBombardment',
 ];
 
 const ROUND_ARRAY_FLAGS = [

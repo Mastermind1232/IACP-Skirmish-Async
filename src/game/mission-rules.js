@@ -20,7 +20,8 @@ function extractTokenCoords(missionTokenData) {
   return [];
 }
 
-/** Who controls a named area: player with more figures in the area's cells; tie or none = null. */
+/** Who controls a named area: player with more figures in the area's cells; tie or none = null.
+ *  Excludes companion figures not counted for control (Indentured Jester, Clan of Two incapacitated). */
 function getNamedAreaController(game, mapId, areaName, getMapTokensDataFn) {
   const allTokens = typeof getMapTokensDataFn === 'function' ? getMapTokensDataFn() : {};
   const mapData = allTokens[mapId];
@@ -28,15 +29,20 @@ function getNamedAreaController(game, mapId, areaName, getMapTokensDataFn) {
   const area = [].concat(areas).find((a) => a && String(a.name || '').toLowerCase() === String(areaName || '').toLowerCase());
   if (!area || !Array.isArray(area.cells) || area.cells.length === 0) return null;
   const cellSet = new Set(area.cells.map((c) => normalizeCoord(c)));
+  // Companions not counted for control: Salacious B. Crumb (Indentured Jester — always excluded),
+  // The Child (Clan of Two — excluded while incapacitated, i.e. when game.childIncapacitated is true)
+  const excludedNames = new Set(['salacious b. crumb']);
+  if (game.childIncapacitated) excludedNames.add('the child');
   let p1 = 0;
   let p2 = 0;
   for (const pn of [1, 2]) {
     const poses = game.figurePositions?.[pn] || {};
-    for (const cell of Object.values(poses)) {
-      if (cellSet.has(normalizeCoord(cell))) {
-        if (pn === 1) p1++;
-        else p2++;
-      }
+    for (const [fk, cell] of Object.entries(poses)) {
+      if (!cellSet.has(normalizeCoord(cell))) continue;
+      const dcName = (fk || '').replace(/-\d+-\d+$/, '').toLowerCase();
+      if (excludedNames.has(dcName)) continue;
+      if (pn === 1) p1++;
+      else p2++;
     }
   }
   if (p1 > p2) return 1;

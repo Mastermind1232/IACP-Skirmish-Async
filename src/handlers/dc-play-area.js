@@ -149,6 +149,34 @@ export async function handleDcActivate(interaction, ctx) {
         if (logGameAction) await logGameAction(game, client, `**Meditation** — **${displayName}** has a free Melee attack (1 red + 1 yellow) available this activation.`, { phase: 'ROUND', icon: 'card' });
       }
     }
+    // Orbital Bombardment: if this DC has tokens, prompt to deplete at start of activation
+    const _obTokens = game.orbitalBombardmentTokens?.[msgId] || 0;
+    if (_obTokens > 0) {
+      const _obAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+      if (_obAtts.includes('Orbital Bombardment')) {
+        const obRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`ob_deplete_${gameId}_${msgId}`).setLabel(`Deplete OB: ${_obTokens} spaces, 2 dmg each`).setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId(`ob_skip_${gameId}_${msgId}`).setLabel('Keep tokens').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send({
+          content: `**Orbital Bombardment** — You have **${_obTokens} Bombardment token${_obTokens > 1 ? 's' : ''}**. Deplete to choose ${_obTokens} space${_obTokens > 1 ? 's' : ''} — each figure on a chosen space suffers 2 Damage.`,
+          components: [obRow],
+        }).catch(() => {});
+      }
+    }
+    // Overwatch: remind if token is placed (for interrupt awareness)
+    const _owPos = game.overwatchTokenPosition?.[msgId];
+    if (_owPos) {
+      await thread.send(`**Overwatch** — Your token is at **${String(_owPos).toUpperCase()}**. Exhaust when a hostile enters a space on/adjacent to the token to interrupt and perform an attack.`).catch(() => {});
+    }
+    // Companion activation reminders (Clan of Two, Indentured Jester)
+    const _cmpAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    if (_cmpAtts.includes('Clan of Two')) {
+      await thread.send(`**Clan of Two** — **The Child** activates at the start or end of this activation. At the end, push The Child to your space or an adjacent space.`).catch(() => {});
+    }
+    if (_cmpAtts.includes('Indentured Jester')) {
+      await thread.send(`**Indentured Jester** — **Salacious B. Crumb** activates at the start or end of this activation. (Not counted for control.)`).catch(() => {});
+    }
     saveGames();
     const logCh = await client.channels.fetch(game.generalId);
     const icon = ACTION_ICONS.activate || '⚡';
@@ -1613,6 +1641,76 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       saveGames();
       return;
     }
+
+    // The Darksaber: Special Action — Melee attack with 1 red die, Blast→Cleave, then may perform an attack
+    if (_suHandler === 'Darksaber Strike') {
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[msgId] = { dice: ['red'], type: 'melee', darksaberBlastToCleave: true };
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = { from: 'Darksaber Strike' };
+      // Grant a second free attack after this one (the "then may perform an attack")
+      game.darksaberSecondAttack = game.darksaberSecondAttack || {};
+      game.darksaberSecondAttack[msgId] = true;
+      await thread.send(`**Darksaber Strike** — Your next attack: **1 red die, Melee**. **Blast → Cleave** conversion. Then you may perform another attack.`).catch(() => {});
+      saveGames();
+      return;
+    }
+
+    // Orbital Bombardment: Special Action — Place tokens equal to current round number
+    if (_suHandler === 'OB: Place Tokens') {
+      const roundNum = game.currentRound || 1;
+      game.orbitalBombardmentTokens = game.orbitalBombardmentTokens || {};
+      game.orbitalBombardmentTokens[msgId] = (game.orbitalBombardmentTokens[msgId] || 0) + roundNum;
+      await thread.send(`**Orbital Bombardment** — Placed **${roundNum} Bombardment token${roundNum > 1 ? 's' : ''}** (total: **${game.orbitalBombardmentTokens[msgId]}**). You may also perform an attack (use Attack button).`).catch(() => {});
+      // The card says "Then, you may perform an attack" — grant free attack
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = { from: 'Orbital Bombardment' };
+      await logGameAction(game, client, `**Orbital Bombardment** — **${displayName}** placed ${roundNum} Bombardment tokens (total: ${game.orbitalBombardmentTokens[msgId]}).`, { phase: 'ROUND', icon: 'card' });
+      saveGames();
+      return;
+    }
+
+    // Overwatch: Special Action — Place Overwatch token in a space within LOS
+    if (_suHandler === 'OW: Place Token') {
+      const selectedFig = actionsData?.selectedFigure ?? 0;
+      const dgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const figKey = `${meta.dcName}-${dgIdx}-${selectedFig}`;
+      const pos = game.figurePositions?.[meta.playerNum]?.[figKey];
+      if (!pos) {
+        await thread.send('**Overwatch** — Figure has no position.').catch(() => {});
+        saveGames();
+        return;
+      }
+      const mapId = game.selectedMap?.id;
+      const ms = getMapSpaces(mapId);
+      if (!ms?.adjacency) {
+        await thread.send('**Overwatch** — Map data not available.').catch(() => {});
+        saveGames();
+        return;
+      }
+      // Build LOS-valid spaces (all map spaces with LOS from this figure)
+      const allSpaces = Object.keys(ms.adjacency || {});
+      const losValid = [];
+      for (const sp of allSpaces) {
+        if (sp === String(pos).toLowerCase()) continue;
+        if (hasLineOfSight && hasLineOfSight(pos, sp, ms, game, meta.playerNum)) losValid.push(sp);
+      }
+      if (losValid.length === 0) {
+        await thread.send('**Overwatch** — No valid spaces in LOS to place the token.').catch(() => {});
+        saveGames();
+        return;
+      }
+      // Store pending state and show space picker
+      game.pendingOverwatchPlacement = game.pendingOverwatchPlacement || {};
+      game.pendingOverwatchPlacement[msgId] = { playerNum: meta.playerNum, figureKey: figKey };
+      const spaceRows = getSpaceChoiceRows(`overwatch_space_${game.gameId}_${msgId}_`, losValid, ms);
+      await thread.send({
+        content: `**Overwatch** — Choose a space within LOS to place your Overwatch token:`,
+        components: spaceRows.rows.slice(0, 5),
+      }).catch(() => {});
+      saveGames();
+      return;
+    }
   }
 
   // D1: Prefer abilityId from dc-effects (specialAbilityIds[specialIdx]) when present; else synthetic id for library lookup
@@ -2457,5 +2555,145 @@ export async function handleRushPushSkip(interaction, ctx) {
   if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
   delete game.pendingRushPush;
   await interaction.message.edit({ content: '**Rush** — Push skipped.', components: [] }).catch(() => {});
+  saveGames();
+}
+
+/** Handle Overwatch token space placement. */
+export async function handleOverwatchSpacePick(interaction, ctx) {
+  const m = interaction.customId.match(/^overwatch_space_([^_]+)_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, msgId, space] = m;
+  const { getGame, saveGames, logGameAction, dcMessageMeta } = ctx;
+  const game = getGame(gameId);
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const chosenSpace = String(space).toLowerCase();
+  game.overwatchTokenPosition = game.overwatchTokenPosition || {};
+  game.overwatchTokenPosition[msgId] = chosenSpace;
+  delete game.pendingOverwatchPlacement?.[msgId];
+  const meta = dcMessageMeta?.get(msgId);
+  const displayName = meta?.displayName || meta?.dcName || 'E-Web Engineer';
+  await interaction.message.edit({ content: `**Overwatch** — Token placed at **${chosenSpace.toUpperCase()}**. When a hostile figure enters a space on or adjacent to this token, you may interrupt to attack.`, components: [] }).catch(() => {});
+  if (logGameAction) await logGameAction(game, interaction.client, `**Overwatch** — **${displayName}** placed token at **${chosenSpace.toUpperCase()}**.`, { phase: 'ROUND', icon: 'card' });
+  saveGames();
+}
+
+/** Handle Orbital Bombardment deplete — start space selection for damage. */
+export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
+  const m = interaction.customId.match(/^ob_deplete_([^_]+)_([^_]+)$/);
+  if (!m) return;
+  const [, gameId, msgId] = m;
+  const { getGame, saveGames, logGameAction, dcMessageMeta, getMapSpaces, getSpaceChoiceRows } = ctx;
+  const game = getGame(gameId);
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const tokenCount = game.orbitalBombardmentTokens?.[msgId] || 0;
+  if (tokenCount <= 0) {
+    await interaction.followUp({ content: '**Orbital Bombardment** — No tokens on this card.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  // Deplete: remove card from attachments
+  const meta = dcMessageMeta?.get(msgId);
+  const playerNum = meta?.playerNum || 1;
+  const attKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+  if (game[attKey]?.[msgId]) {
+    game[attKey][msgId] = game[attKey][msgId].filter(c => c !== 'Orbital Bombardment');
+  }
+  delete game.orbitalBombardmentTokens[msgId];
+  // Set up multi-space selection
+  game.pendingOrbitalBombardment = { msgId, playerNum, spacesRemaining: tokenCount, spacesChosen: [], gameId };
+  // Show space picker (all occupied spaces)
+  const mapId = game.selectedMap?.id;
+  const ms = getMapSpaces?.(mapId);
+  const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
+  if (allSpaces.length === 0) {
+    await interaction.message.edit({ content: '**Orbital Bombardment** — Map data unavailable. Choose spaces manually.', components: [] }).catch(() => {});
+    saveGames();
+    return;
+  }
+  const spaceRows = getSpaceChoiceRows?.(`ob_space_${gameId}_${msgId}_`, allSpaces, ms) || { rows: [] };
+  await interaction.message.edit({
+    content: `**Orbital Bombardment** — Choose space **1 of ${tokenCount}** for bombardment (each figure on a chosen space suffers 2 Damage):`,
+    components: spaceRows.rows.slice(0, 5),
+  }).catch(() => {});
+  if (logGameAction) await logGameAction(game, interaction.client, `**Orbital Bombardment** — **${meta?.displayName || 'DC'}** depleted. Choosing ${tokenCount} spaces for bombardment.`, { phase: 'ROUND', icon: 'card' });
+  saveGames();
+}
+
+/** Handle Orbital Bombardment skip (decline to deplete at activation start). */
+export async function handleOrbitalBombardmentSkip(interaction, ctx) {
+  const m = interaction.customId.match(/^ob_skip_([^_]+)_([^_]+)$/);
+  if (!m) return;
+  const { getGame, saveGames } = ctx;
+  const game = getGame(m[1]);
+  if (!game) return;
+  await interaction.message.edit({ content: '**Orbital Bombardment** — Skipped (tokens remain on card).', components: [] }).catch(() => {});
+  saveGames();
+}
+
+/** Handle Orbital Bombardment space selection (sequential picker). */
+export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
+  const m = interaction.customId.match(/^ob_space_([^_]+)_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, msgId, space] = m;
+  const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapSpaces, getSpaceChoiceRows, findDcMessageIdForFigure } = ctx;
+  const game = getGame(gameId);
+  if (!game?.pendingOrbitalBombardment) return;
+  const pending = game.pendingOrbitalBombardment;
+  const chosenSpace = String(space).toLowerCase();
+  pending.spacesChosen.push(chosenSpace);
+
+  if (pending.spacesChosen.length < pending.spacesRemaining) {
+    // More spaces to pick — show picker again
+    const mapId = game.selectedMap?.id;
+    const ms = getMapSpaces?.(mapId);
+    const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
+    const spaceRows = getSpaceChoiceRows?.(`ob_space_${gameId}_${msgId}_`, allSpaces, ms) || { rows: [] };
+    await interaction.message.edit({
+      content: `**Orbital Bombardment** — Chosen: ${pending.spacesChosen.map(s => s.toUpperCase()).join(', ')}. Choose space **${pending.spacesChosen.length + 1} of ${pending.spacesRemaining}**:`,
+      components: spaceRows.rows.slice(0, 5),
+    }).catch(() => {});
+    saveGames();
+    return;
+  }
+
+  // All spaces chosen — apply 2 damage to each figure on chosen spaces
+  const meta = dcMessageMeta?.get(msgId);
+  const attackerPlayerNum = pending.playerNum;
+  const damageLog = [];
+  for (const sp of pending.spacesChosen) {
+    // Check both players' figures
+    for (const pn of [1, 2]) {
+      const positions = game.figurePositions?.[pn] || {};
+      for (const [fk, pos] of Object.entries(positions)) {
+        if (!pos || String(pos).toLowerCase() !== sp) continue;
+        // Apply 2 damage to this figure
+        const fkMsgId = findDcMessageIdForFigure?.(gameId, pn, fk);
+        if (!fkMsgId) continue;
+        const hs = dcHealthState?.get(fkMsgId) || [];
+        const figMatch = fk.match(/-(\d+)-(\d+)$/);
+        const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
+        const entry = hs[figIdx];
+        if (!entry) continue;
+        const [cur, max] = entry;
+        const newCur = Math.max(0, (cur ?? max) - 2);
+        hs[figIdx] = [newCur, max ?? newCur];
+        dcHealthState?.set(fkMsgId, hs);
+        const dcIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+        const idx = (dcIds || []).indexOf(fkMsgId);
+        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+        const dcName = fk.replace(/-\d+-\d+$/, '');
+        damageLog.push(`**${dcName}** (${cur ?? max} → ${newCur} HP)`);
+        if (newCur <= 0) damageLog[damageLog.length - 1] += ' *(may be defeated)*';
+      }
+    }
+  }
+  const spacesStr = pending.spacesChosen.map(s => s.toUpperCase()).join(', ');
+  const resultStr = damageLog.length > 0 ? `Damage: ${damageLog.join(', ')}` : 'No figures on chosen spaces.';
+  await interaction.message.edit({
+    content: `**Orbital Bombardment** — Spaces: ${spacesStr}. Each figure suffers 2 Damage.\n${resultStr}`,
+    components: [],
+  }).catch(() => {});
+  if (logGameAction) await logGameAction(game, interaction.client, `**Orbital Bombardment** — Bombarded spaces: ${spacesStr}. ${resultStr}`, { phase: 'ROUND', icon: 'attack' });
+  delete game.pendingOrbitalBombardment;
   saveGames();
 }

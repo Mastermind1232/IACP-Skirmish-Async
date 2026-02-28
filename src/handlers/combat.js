@@ -512,6 +512,7 @@ export async function handleAttackTarget(interaction, ctx) {
     attackRoll: null,
     defenseRoll: null,
     attackTargetMsgId: interaction.message.id,
+    darksaberBlastToCleave: overrideDice?.darksaberBlastToCleave || false,
   };
   // Imperial Loadout (Purge Trooper Elite): inject loadout surge abilities + store post-attack hook
   const _loadoutChoice = getConfig(game, attackerFigureKey)?.loadout;
@@ -662,6 +663,13 @@ export async function handleAttackTarget(interaction, ctx) {
       game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
       game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'Explosive Armaments'];
       await thread.send('**Explosive Armaments** — Exhausted: Blast 1 applied to this attack.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
+    // The Darksaber: exhaust while attacking → reroll 1 attack die
+    if (_atkUpgrades.includes('The Darksaber') && !_exh.includes('The Darksaber')) {
+      _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
+      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+      game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'The Darksaber'];
+      await thread.send('**The Darksaber** — Exhausted: +1 attack reroll.').catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
     // Feeding Frenzy: exhaust while attacking a damaged figure → +1 Hit
     if (_atkUpgrades.includes('Feeding Frenzy') && !_exh.includes('Feeding Frenzy')) {

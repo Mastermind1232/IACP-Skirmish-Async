@@ -733,6 +733,18 @@ export function getAttachmentSpecials(attachments, game, msgId) {
     names.push('Fire Mission');
     costs.push(2);
   }
+  if (attachments.includes('The Darksaber')) {
+    names.push('Darksaber Strike');
+    costs.push(1);
+  }
+  if (attachments.includes('Orbital Bombardment')) {
+    names.push('OB: Place Tokens');
+    costs.push(1);
+  }
+  if (attachments.includes('Overwatch')) {
+    names.push('OW: Place Token');
+    costs.push(1);
+  }
   return { names, costs };
 }
 

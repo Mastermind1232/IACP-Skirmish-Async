@@ -50,6 +50,10 @@ import {
   handleRushPushFig,
   handleRushPushSpace,
   handleRushPushSkip,
+  handleOverwatchSpacePick,
+  handleOrbitalBombardmentDeplete,
+  handleOrbitalBombardmentSkip,
+  handleOrbitalBombardmentSpacePick,
 } from './dc-play-area.js';
 import {
   handleSquadModal,
@@ -165,6 +169,10 @@ register('pounce_space_', handlePounceSpacePick);
 register('rush_push_fig_', handleRushPushFig);
 register('rush_push_space_', handleRushPushSpace);
 register('rush_push_skip_', handleRushPushSkip);
+register('overwatch_space_', handleOverwatchSpacePick);
+register('ob_deplete_', handleOrbitalBombardmentDeplete);
+register('ob_skip_', handleOrbitalBombardmentSkip);
+register('ob_space_', handleOrbitalBombardmentSpacePick);
 register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'));
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'));
 register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'));
@@ -256,6 +264,10 @@ export {
   handleRushPushFig,
   handleRushPushSpace,
   handleRushPushSkip,
+  handleOverwatchSpacePick,
+  handleOrbitalBombardmentDeplete,
+  handleOrbitalBombardmentSkip,
+  handleOrbitalBombardmentSpacePick,
 } from './dc-play-area.js';
 export {
   handleSquadModal,
