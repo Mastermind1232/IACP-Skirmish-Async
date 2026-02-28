@@ -2390,6 +2390,15 @@ function getAnchorheadPatronVpBonus(game) {
   return { p1: VP_TABLE[Math.min(p1, 4)] || 0, p2: VP_TABLE[Math.min(p2, 4)] || 0 };
 }
 
+/** Combined mission VP bonus (crate deployment + patron tokens). Returns { p1, p2 } or undefined if no bonuses apply. */
+function getMissionVpBonus(game) {
+  const crate = getCrateDeploymentVpBonus(game);
+  const patron = getAnchorheadPatronVpBonus(game);
+  const p1 = crate.p1 + patron.p1;
+  const p2 = crate.p2 + patron.p2;
+  return (p1 || p2) ? { p1, p2 } : undefined;
+}
+
 async function checkWinConditions(game, client) {
   const crateBonus = getCrateDeploymentVpBonus(game);
   const patronBonus = getAnchorheadPatronVpBonus(game);
@@ -2437,7 +2446,7 @@ async function postGameOver(game, client, winnerId, reason) {
   cleanupGameLock(game.gameId);
   pendingIllegalSquad.delete(`${game.gameId}_1`);
   pendingIllegalSquad.delete(`${game.gameId}_2`);
-  const embed = buildScorecardEmbed(game);
+  const embed = buildScorecardEmbed(game, getMissionVpBonus(game));
   const content = winnerId
     ? `\uD83C\uDFC1 **GAME OVER** — <@${winnerId}> wins by ${reason}!`
     : `\uD83C\uDFC1 **GAME OVER** — ${reason}`;
@@ -2591,7 +2600,7 @@ async function refreshAllGameComponents(game, client) {
 /** Returns { content, files?, embeds?, components } for posting the game map. Includes Scorecard embed. */
 async function buildBoardMapPayload(gameId, map, game) {
   const components = getBoardButtons(gameId, { game });
-  const embeds = game ? [buildScorecardEmbed(game)] : [];
+  const embeds = game ? [buildScorecardEmbed(game, getMissionVpBonus(game))] : [];
   const figures = game ? getFiguresForRender(game) : [];
   const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
   const hasFigures = figures.length > 0;
@@ -6992,7 +7001,7 @@ client.on('messageCreate', async (message) => {
           const messages = await boardChannel.messages.fetch({ limit: 15 });
           const withScorecard = messages.find((m) => m.embeds?.[0]?.title === 'Scorecard');
           if (withScorecard) {
-            const embed = buildScorecardEmbed(game);
+            const embed = buildScorecardEmbed(game, getMissionVpBonus(game));
             await withScorecard.edit({ embeds: [embed] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
           }
         } catch (err) {

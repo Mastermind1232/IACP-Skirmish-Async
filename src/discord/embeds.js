@@ -15,16 +15,27 @@ export function getInitiativePlayerZoneLabel(game) {
   return zone ? `[${zone.toUpperCase()}] ` : '';
 }
 
-/** Build Scorecard embed with VP breakdown per player. Initiative shown via bullet row (no token image). */
-export function buildScorecardEmbed(game) {
+/**
+ * Build Scorecard embed with VP breakdown per player. Initiative shown via bullet row (no token image).
+ * @param {object} game
+ * @param {{ p1: number, p2: number }} [missionBonus] - Optional mission-specific VP bonus (crate deployment, patron tokens, etc.)
+ */
+export function buildScorecardEmbed(game, missionBonus) {
   const vp1 = game.player1VP || { total: 0, kills: 0, objectives: 0 };
   const vp2 = game.player2VP || { total: 0, kills: 0, objectives: 0 };
+  const bonus1 = missionBonus?.p1 || 0;
+  const bonus2 = missionBonus?.p2 || 0;
+  const total1 = vp1.total + bonus1;
+  const total2 = vp2.total + bonus2;
   const p1HasInitiative = game.initiativeDetermined && game.initiativePlayerId === game.player1Id;
 
   // Single-line-per-stat layout: works on both desktop and mobile (no inline columns)
+  const totalLabel = (bonus1 || bonus2)
+    ? `**P1:** ${total1} (${vp1.total}+${bonus1}) \u2003 **P2:** ${total2} (${vp2.total}+${bonus2})`
+    : `**P1:** ${total1} \u2003 **P2:** ${total2}`;
   const fields = [
     { name: 'Players', value: `**P1:** <@${game.player1Id}>\n**P2:** <@${game.player2Id}>`, inline: false },
-    { name: 'Total VP', value: `**P1:** ${vp1.total} \u2003 **P2:** ${vp2.total}`, inline: false },
+    { name: 'Total VP', value: totalLabel, inline: false },
     { name: 'Kills', value: `**P1:** ${vp1.kills} \u2003 **P2:** ${vp2.kills}`, inline: false },
     { name: 'Objectives', value: `**P1:** ${vp1.objectives} \u2003 **P2:** ${vp2.objectives}`, inline: false },
   ];
