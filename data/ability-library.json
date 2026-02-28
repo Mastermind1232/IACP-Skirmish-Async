@@ -3604,9 +3604,7 @@
       "type": "dcSpecial",
       "label": "Sith Acolyte",
       "description": "Search your Command deck for a card with the FORCE USER or BRAWLER trait that costs 2 or less, reveal it, and put it into your hand. Then, shuffle your Command deck.",
-      "shuffleOneDiscardToDeck": false,
-      "informational": true,
-      "logMessage": "**Sith Acolyte** — Search your Command deck for a **FORCE USER** or **BRAWLER** card costing ≤2, put it into your hand, then shuffle your deck. *(Resolve manually.)*",
+      "searchDeckForCC": { "playableBy": ["FORCE USER", "BRAWLER"], "maxCost": 2 },
       "wiredStatus": "wired"
     },
     "shared_intuition": {

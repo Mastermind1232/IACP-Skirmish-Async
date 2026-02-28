@@ -533,6 +533,26 @@ export async function handleDcEndActivation(interaction, ctx) {
   }
   await maybeShowEndActivationPhaseButton(game, client);
 
+  // On a Diplomatic Mission (Skirmish Upgrade, LEADER): exhaust at end of activation if no attack → choice
+  {
+    const _odmUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _odmExh = game.exhaustedSkirmishUpgrades?.[msgId] || [];
+    if (_odmUpgrades.includes('On a Diplomatic Mission') && !_odmExh.includes('On a Diplomatic Mission') && !game.attackPerformedThisActivation?.[msgId]) {
+      const _odmRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_mp`).setLabel('+2 MP').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_evade`).setLabel('+1 Evade (rest of round)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_vp`).setLabel('+1 VP').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await logGameAction(game, client, `<@${ownerId}> **On a Diplomatic Mission** — No attack this activation. Choose a bonus:`, {
+        components: [_odmRow],
+        allowedMentions: { users: [ownerId] },
+      });
+    }
+  }
+  // Clean up attack tracking for this activation
+  if (game.attackPerformedThisActivation?.[msgId]) delete game.attackPerformedThisActivation[msgId];
+
   // Squad Swarm: after ending activation, offer to activate another DC with the same name (combined cost ≤ 15)
   if (game.squadSwarmPlayerNum === meta.playerNum) {
     const _sqDcList = meta.playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
@@ -558,6 +578,35 @@ export async function handleDcEndActivation(interaction, ctx) {
         components: [new ActionRowBuilder().addComponents(...btns)],
         allowedMentions: { users: [ownerId] },
       });
+    }
+  }
+
+  // Lie in Ambush: after opponent activates, if you have 3+ exhausted/defeated groups and it's not round 1, may deploy set-aside group
+  if ((game.currentRound || 1) > 1) {
+    const _liaOppNum = otherPlayerNum;
+    const _liaOppAtts = _liaOppNum === 1 ? (game.p1DcAttachments || {}) : (game.p2DcAttachments || {});
+    const _liaOppIds = _liaOppNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const _liaOppList = _liaOppNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    // Count opponent's exhausted or defeated groups
+    const _liaExhOrDefeated = _liaOppIds.filter((id, i) => {
+      return ctx.dcExhaustedState?.get(id) || _liaOppList[i]?.defeated;
+    }).length;
+    if (_liaExhOrDefeated >= 3) {
+      for (const _liaMid of _liaOppIds) {
+        if (!(_liaOppAtts[_liaMid] || []).includes('Lie in Ambush')) continue;
+        // Check if group already has figures on the board (already deployed)
+        const _liaMeta = ctx.dcMessageMeta?.get(_liaMid);
+        const _liaDcName = _liaMeta?.dcName || '';
+        const _liaDg = (_liaMeta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const _liaFk = `${_liaDcName}-${_liaDg}-0`;
+        const _liaHasPos = !!game.figurePositions?.[_liaOppNum]?.[_liaFk];
+        if (_liaHasPos) break; // already deployed, skip
+        const _liaOppOwnerId = game[`player${_liaOppNum}Id`];
+        await logGameAction(game, client, `<@${_liaOppOwnerId}> **Lie in Ambush** — You have **${_liaExhOrDefeated}** exhausted/defeated groups (need 3+). You may now deploy **${_liaMeta?.displayName || _liaDcName}** to **any deployment zone**. Use the Deploy button or coordinate with your opponent.`, {
+          allowedMentions: { users: [_liaOppOwnerId] },
+        });
+        break; // only one prompt needed
+      }
     }
   }
 
@@ -968,13 +1017,84 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (_mountedIds.includes('fast_learner_mara_jade') && !game.roundFigureAbilityUsed?.[`${meta.dcName}_fast_learner`]) {
     await thread.send({ content: `📚 **Fast Learner** — Once this round, Mara Jade may play a Command card whose restriction matches the name of another Deployment card in your army (except "Arcing Shot"). *(Honor system.)*` }).catch(() => {});
   }
-  // Imperial Loadout (Purge Trooper): loadout card abilities
+  // Imperial Loadout (Purge Trooper): show chosen loadout
   if (_mountedIds.includes('imperial_loadout_purge_trooper')) {
-    await thread.send({ content: `⚔️ **Imperial Loadout** — Remember to apply your chosen Loadout card abilities (Electrobatons/Electrohammer/Electrostaff). *(Honor system.)*` }).catch(() => {});
+    const { getConfig } = await import('../game/figure-config.js');
+    const { getLoadoutCards, getRootDir } = await import('../data-loader.js');
+    const { AttachmentBuilder } = await import('discord.js');
+    const { join } = await import('path');
+    const fks = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(fk => fk.startsWith(meta.dcName + '-'));
+    const chosenLoadout = fks.length > 0 ? getConfig(game, fks[0])?.loadout : null;
+    if (chosenLoadout) {
+      const lCard = getLoadoutCards()[chosenLoadout];
+      const files = [];
+      if (lCard?.imagePath) try { files.push(new AttachmentBuilder(join(getRootDir(), lCard.imagePath))); } catch {}
+      await thread.send({ content: `⚔️ **Imperial Loadout: ${chosenLoadout}** — ${lCard?.abilityText || 'Apply loadout abilities.'}`, files }).catch(() => {});
+    } else {
+      await thread.send({ content: `⚔️ **Imperial Loadout** — No loadout card selected. Apply abilities manually. *(Honor system.)*` }).catch(() => {});
+    }
+  }
+  // Clawdite Form: show chosen form card + apply Fleet MP bonus (Streetrat)
+  if (_mountedIds.includes('shape_clawdite_elite') || _mountedIds.includes('shape_clawdite_reg')) {
+    const { getConfig } = await import('../game/figure-config.js');
+    const { getFormCards, getRootDir } = await import('../data-loader.js');
+    const { AttachmentBuilder } = await import('discord.js');
+    const { join } = await import('path');
+    const fks = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(fk => fk.startsWith(meta.dcName + '-'));
+    const chosenForm = fks.length > 0 ? getConfig(game, fks[0])?.form : null;
+    if (chosenForm) {
+      const fCard = getFormCards()[chosenForm];
+      const files = [];
+      if (fCard?.imagePath) try { files.push(new AttachmentBuilder(join(getRootDir(), fCard.imagePath))); } catch {}
+      await thread.send({ content: `🔄 **Form: ${chosenForm}** — ${fCard?.abilityText || 'Apply form abilities.'}`, files }).catch(() => {});
+      // Fleet (Streetrat): gain MP at start of activation
+      if (fCard?.fleetMp && fCard.fleetMp > 0) {
+        game.movementBank = game.movementBank || {};
+        if (!game.movementBank[msgId]) {
+          game.movementBank[msgId] = { total: fCard.fleetMp, remaining: fCard.fleetMp, threadId: thread.id, messageId: null, displayName: meta.displayName || meta.dcName };
+        } else {
+          game.movementBank[msgId].total += fCard.fleetMp;
+          game.movementBank[msgId].remaining += fCard.fleetMp;
+        }
+        await thread.send({ content: `🏃 **Fleet** — **${meta.dcName}** gains **${fCard.fleetMp} MP** at start of activation.` }).catch(() => {});
+      }
+    } else {
+      await thread.send({ content: `🔄 **Shape** — No form card selected. Apply abilities manually. *(Honor system.)*` }).catch(() => {});
+    }
   }
   // Scrap Battalion (Ugnaught): Junk Droid readies and co-activates
   if (_mountedIds.includes('scrap_battalion_ugnaught_elite') || _mountedIds.includes('scrap_battalion_ugnaught_reg')) {
-    await thread.send({ content: `🤖 **Scrap Battalion** — Your Junk Droid readies at the start of this activation. It activates as though part of your group and may use your surge abilities. *(Honor system.)*` }).catch(() => {});
+    const isElite = _mountedIds.includes('scrap_battalion_ugnaught_elite');
+    await thread.send({ content: `🤖 **Scrap Battalion** — Your Junk Droid readies and activates as part of this group.\n• Speed 4, Health 1, Melee (1 green die), +1 Hit passive\n• Uses ${meta.dcName}'s surge abilities: Bleed, Pierce ${isElite ? '2' : '1'}${isElite ? '\n• **Overclock** (Special Action): Junk Droid may interrupt to move or attack' : ''}\n*(Companion movement + combat: honor system.)*` }).catch(() => {});
+  }
+  // --- Skirmish Upgrade attachment activation effects ---
+  const _suActivationUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+  if (_suActivationUpgrades.length) {
+    // Focused on the Kill (IG-88): +2 MP at start of activation
+    if (_suActivationUpgrades.includes('Focused on the Kill')) {
+      game.movementBank = game.movementBank || {};
+      if (!game.movementBank[msgId]) {
+        game.movementBank[msgId] = { total: 2, remaining: 2, threadId: thread.id, messageId: null, displayName: meta.displayName || meta.dcName };
+      } else {
+        game.movementBank[msgId].total += 2;
+        game.movementBank[msgId].remaining += 2;
+      }
+      await thread.send({ content: `**Focused on the Kill** — **${meta.dcName}** gains **2 MP** at start of activation.` }).catch(() => {});
+    }
+    // Survivalist: end-of-round recovery handled in round.js; movement cost ignore handled in movement.js
+    // Wookiee Avenger (Chewbacca): free Slam action handled as honor system (complex UI)
+    // Motivation (UNIQUE): exhaust during activation — friendly with lower cost + LOS discards harmful or recovers 1, gains 1 MP
+    if (_suActivationUpgrades.includes('Motivation') && !(game.exhaustedSkirmishUpgrades?.[msgId] || []).includes('Motivation')) {
+      await thread.send({ content: `**Motivation** — You may exhaust this card during activation. Choose a friendly figure with a lower figure cost in your LOS: it may discard a HARMFUL condition or recover 1 Damage, then gain 1 MP. *(Honor system.)*` }).catch(() => {});
+    }
+    // Trusted Ally (DROID): exhaust during activation — adjacent friendly recovers 1 or discards 1 harmful
+    if (_suActivationUpgrades.includes('Trusted Ally') && !(game.exhaustedSkirmishUpgrades?.[msgId] || []).includes('Trusted Ally')) {
+      await thread.send({ content: `**Trusted Ally** — You may exhaust this card during activation. An adjacent friendly figure recovers 1 Damage or discards 1 HARMFUL condition. *(Honor system.)*` }).catch(() => {});
+    }
+    // Driven by Hatred: end-of-round move + attack handled as honor-system reminder (complex multi-step)
+    // Rogue Smuggler: end-of-round exhaust interrupt attack handled as honor-system (complex multi-step)
+    // Vader's Finest, Smuggler's Run, Z-6 Autofire, Mortar Trooper Fire Mission: injected as special action buttons (automated)
+    // Headhunter: auto-triggered via applyStrainToFigure hook (automated)
   }
   // I Make the Rules Now (Cad Bane): when another figure activates, HUNTER within 4 of Cad Bane gains 1 MP
   // Scan all DCs on BOTH teams for this ability

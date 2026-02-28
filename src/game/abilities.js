@@ -2,7 +2,7 @@
  * F1 Ability library: lookup by id, resolve surge (code-per-ability). No Discord.
  * Surge resolution uses combat.parseSurgeEffect; DCs still reference keys in dc-effects (surgeAbilities array).
  */
-import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getMapSpaces, getMapTokensData } from '../data-loader.js';
+import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapSpaces, getMapTokensData } from '../data-loader.js';
 import { parseCoord } from './coords.js';
 
 /** Look up DC stats by name (handles display variants). */
@@ -7784,6 +7784,50 @@ export function resolveAbility(abilityId, context) {
       refreshHand: true,
       refreshDiscard: true,
       logMessage: `Took **${chosenOption}** from opponent's discard. It may be played once this round (returns at end of round if unplayed).`,
+    };
+  }
+
+  // dcSpecial: searchDeckForCC (Sith Acolyte) — search own CC deck for matching card, add to hand, shuffle
+  if (entry.searchDeckForCC && typeof entry.searchDeckForCC === 'object') {
+    const { game, playerNum, chosenOption } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const deck = game[deckKey] || [];
+    const { playableBy, maxCost } = entry.searchDeckForCC;
+    const ccEffects = getCcEffectsData() || {};
+    const cards = ccEffects.cards || ccEffects;
+    // Filter deck for eligible cards
+    const eligible = deck.filter(cardName => {
+      const ccData = cards[cardName];
+      if (!ccData) return false;
+      if (typeof maxCost === 'number' && (ccData.cost ?? 99) > maxCost) return false;
+      if (Array.isArray(playableBy) && playableBy.length > 0) {
+        const cardPlayableBy = (ccData.playableBy || '').toLowerCase();
+        const match = playableBy.some(trait => cardPlayableBy.includes(trait.toLowerCase()));
+        if (!match) return false;
+      }
+      return true;
+    });
+    if (chosenOption == null) {
+      if (eligible.length === 0) return { applied: true, logMessage: `**${entry.label}** — No eligible cards found in deck.` };
+      return { requiresChoice: true, choiceOptions: [...new Set(eligible)], choiceLabel: `Choose a card (${entry.label})` };
+    }
+    const idx = deck.indexOf(chosenOption);
+    if (idx < 0) return { applied: false, manualMessage: `"${chosenOption}" not found in deck.` };
+    deck.splice(idx, 1);
+    // Shuffle remaining deck
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    game[deckKey] = deck;
+    game[handKey] = [...(game[handKey] || []), chosenOption];
+    return {
+      applied: true,
+      drewCards: [chosenOption],
+      refreshHand: true,
+      logMessage: `**${entry.label}** — Searched deck and added **${chosenOption}** to hand. Deck shuffled.`,
     };
   }
 

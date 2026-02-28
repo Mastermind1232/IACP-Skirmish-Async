@@ -85,6 +85,10 @@ export const SURGE_LABELS = {
   'accuracy 2, surge 1': '+2 Accuracy, +1 Surge', 'damage 2, hide': '+2 Hits, Hide',
   'agitate': 'Agitate', 'fell_swoop': 'Fell Swoop', 'mastery': 'Mastery', 'interrogate': 'Interrogate',
   'utinni_vp_1': 'Utinni! (+1 VP)',
+  'autofire_chain': 'Chain Attack (within 3)',
+  'deadly': 'Deadly (-1 Dodge)',
+  'gain 1': '+1 VP',
+  'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1',
 };
 
 /** Get attacker's surge abilities from dc-effects + combat.bonusSurgeAbilities (CCs like Spinning Kick).
@@ -95,7 +99,12 @@ export function getAttackerSurgeAbilities(combat) {
   // Reverse Engineer: use the defender's DC surge abilities instead of the attacker's
   const surgeDcName = combat.reverseEngineerActive ? (combat.defenderDcName ?? combat.attackerDcName) : combat.attackerDcName;
   const card = getDcEffects()[surgeDcName] || getDcEffects()[surgeDcName?.replace(/\s*\[.*\]\s*$/, '')];
-  const base = card?.surgeAbilities || [];
+  let base = card?.surgeAbilities || [];
+  // Skirmish Upgrade attachments may remove base surge keys (e.g. Focused on the Kill removes "recover 3")
+  const removeKeys = combat?.removeSurgeKeys;
+  if (removeKeys?.length) {
+    base = base.filter(k => !removeKeys.includes(k));
+  }
   const doubles = (card?.doubleSurgeAbilities || []).map((k) => `double:${k}`);
   const bonus = combat?.bonusSurgeAbilities || [];
   return [...base, ...doubles, ...bonus];
@@ -113,6 +122,7 @@ export function parseSurgeEffect(key) {
   if (k === 'squad_command') { out.surgeSquadCommand = true; return out; }
   if (k === 'stalk_prey') { out.surgeStalkPrey = true; return out; }
   if (k === 'deadly_spin') { out.surgeCancelDodge = true; out.cleave = 3; return out; }
+  if (k === 'deadly') { out.surgeCancelDodge = true; return out; }
   if (k === 'shrapnel') { out.blast = 2; return out; }
   if (k === 'critical_hit') { out.pierce = 2; out.surgeCriticalHit = true; return out; }
   if (k === 'suppression') { out.surgeSuppressionStrain = true; return out; }
@@ -177,7 +187,8 @@ export function parseSurgeEffect(key) {
     else if (p === 'surge 1') out.surgeGrantExtraSurge = (out.surgeGrantExtraSurge || 0) + 1;
     else if (p === 'evade') out.surgeGrantEvade = (out.surgeGrantEvade || 0) + 1;
     else if (p === 'block 1') out.surgeAttackerBlock = (out.surgeAttackerBlock || 0) + 1;
-    else { const cm = p.match(/^cancel\s+(\d+)$/); if (cm) out.surgeCancel = (out.surgeCancel || 0) + parseInt(cm[1], 10); }
+    else { const gm = p.match(/^gain\s+(\d+)$/); if (gm) { out.surgeVpGain = (out.surgeVpGain || 0) + parseInt(gm[1], 10); continue; } }
+    { const cm = p.match(/^cancel\s+(\d+)$/); if (cm) out.surgeCancel = (out.surgeCancel || 0) + parseInt(cm[1], 10); }
   }
   return out;
 }
@@ -206,6 +217,11 @@ export function computeCombatResult(combat) {
   const totalAccuracy = roll.acc + surgeA + bonusAcc - hiddenAccPenalty;
   let hit = true;
   let missReason = '';
+  // Wookiee Avenger (Skirmish Upgrade): convert Dodge results to Evade results
+  if (defRoll.dodge && combat.wookieeAvengerDefend) {
+    defRoll.evade = (defRoll.evade || 0) + 1;
+    defRoll.dodge = false;
+  }
   if (defRoll.dodge && !combat.surgeCancelDodge) {
     hit = false;
     missReason = 'Dodge';
@@ -215,7 +231,9 @@ export function computeCombatResult(combat) {
       missReason = `insufficient accuracy (${totalAccuracy} < ${combat.distanceToTarget} distance)`;
     }
   }
-  const pierceToUse = combat.defenderIgnorePierce ? 0 : totalPierce;
+  // Combat Suit (Skirmish Upgrade): reduce total pierce by N, min 0 (already clamped above)
+  const defReducePierce = combat.defenderReducePierce || 0;
+  const pierceToUse = combat.defenderIgnorePierce ? 0 : Math.max(0, totalPierce - defReducePierce);
   // Cancel (Kuiil): remove N block results from defender's roll (applied before pierce)
   const surgeCancel = combat.surgeCancel || 0;
   // Cunning: +1 Block per rolled Evade result while defending (Han Solo, Jyn Odan, Nexu)

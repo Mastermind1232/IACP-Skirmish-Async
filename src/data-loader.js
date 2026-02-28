@@ -22,6 +22,8 @@ let mapTokensData = {};
 let ccEffectsData = { cards: {} };
 let abilityLibrary = { abilities: {} };
 let tournamentRotation = { missionIds: [] };
+let loadoutCardsData = {};
+let formCardsData = {};
 
 function loadAll() {
   try {
@@ -75,6 +77,14 @@ function loadAll() {
   try {
     const rotData = JSON.parse(readFileSync(join(rootDir, 'data', 'tournament-rotation.json'), 'utf8'));
     tournamentRotation = Array.isArray(rotData?.missionIds) ? { missionIds: rotData.missionIds } : { missionIds: [] };
+  } catch {}
+  try {
+    const lcData = JSON.parse(readFileSync(join(rootDir, 'data', 'loadout-cards.json'), 'utf8'));
+    loadoutCardsData = lcData?.cards || {};
+  } catch {}
+  try {
+    const fcData = JSON.parse(readFileSync(join(rootDir, 'data', 'form-cards.json'), 'utf8'));
+    formCardsData = fcData?.cards || {};
   } catch {}
   validateCriticalData();
 }
@@ -266,6 +276,14 @@ export function isDcUnique(dcName) {
   const effects = getDcEffects();
   const card = effects[n] || effects[`[${n}]`] || (n.startsWith('[') ? effects[n] : null);
   return card?.unique === true;
+}
+
+export function getLoadoutCards() {
+  return loadoutCardsData;
+}
+
+export function getFormCards() {
+  return formCardsData;
 }
 
 export function getRootDir() {

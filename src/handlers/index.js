@@ -25,6 +25,8 @@ import {
   handleDeploymentFig,
   handleDeploymentOrient,
   handleDeployPick,
+  handleLoadoutPick,
+  handleFormPick,
   handleDeploymentDone,
   handleAutoDeploy,
   handleMapConfirm,
@@ -145,6 +147,8 @@ register('deployment_zone_blue_', handleDeploymentZone);
 register('deployment_fig_', handleDeploymentFig);
 register('deployment_orient_', handleDeploymentOrient);
 register('deploy_pick_', handleDeployPick);
+register('loadout_pick_', handleLoadoutPick);
+register('form_pick_', handleFormPick);
 register('deployment_done_', handleDeploymentDone);
 register('auto_deploy_', handleAutoDeploy);
 register('map_confirm_', handleMapConfirm);
@@ -226,6 +230,8 @@ export {
   handleDeploymentFig,
   handleDeploymentOrient,
   handleDeployPick,
+  handleLoadoutPick,
+  handleFormPick,
   handleDeploymentDone,
   handleAutoDeploy,
   handleMapConfirm,

@@ -46,6 +46,9 @@ const ACTIVATION_MSGID_FLAGS = [
   'deflectionPending',
   'dcActivationLogMessageIds',
   'defenderThreadData',
+  'autofireActive',
+  'fireMissionActive',
+  'autofireChainTargetSpace',
 ];
 
 /**
@@ -163,6 +166,14 @@ const ROUND_OBJECT_FLAGS = [
   'dcActivationLogMessageIds',
   'defenderThreadData',
   'priceBounties',
+  'diplomaticMissionEvade',
+  'lastResortTriggered',
+  'attackPerformedThisActivation',
+  'vadersFocusUsedThisRound',
+  'scavengedWalkerAttackPenalty',
+  'autofireActive',
+  'fireMissionActive',
+  'autofireChainTargetSpace',
 ];
 
 const ROUND_NULL_FLAGS = [
@@ -199,6 +210,7 @@ const ROUND_NULL_FLAGS = [
   'pendingBELReorder',
   'pendingThereIsNoTry',
   'pendingSelfDestruct',
+  'pendingLastResort',
   'nextDefeatedFriendlyVpReduction',
   'forceDefenderRerollOne',
   'doubleMatchingIconsOnReroll',

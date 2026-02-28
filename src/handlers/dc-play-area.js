@@ -2,10 +2,12 @@
  * DC Play Area handlers: dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder } from 'discord.js';
-import { truncateLabel } from '../discord/components.js';
+import { truncateLabel, getAttachmentSpecials } from '../discord/components.js';
 import { bottomLeftCoord } from '../game/coords.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
+import { getConfig } from '../game/figure-config.js';
+import { getLoadoutCards } from '../data-loader.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -879,6 +881,26 @@ async function buildAndSendAttackTargets(
         if (hasLineOfSight(ac, tc, effectiveMs, losCoords)) { los = true; break outer; }
       }
     }
+    // Fire Mission: LOS from any figure in the group (not just acting figure)
+    if (!los && game.fireMissionActive?.[msgId]) {
+      const _fmDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _fmFigCount = getDcStats(meta.dcName)?.figures ?? 1;
+      const _fmSuAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+      const _fmTotalFigs = _fmFigCount + (_fmSuAtts.some(a => ['Z-6 Trooper', 'Mortar Trooper', 'Riot Trooper'].includes(a)) ? 1 : 0);
+      outer2: for (let fi2 = 0; fi2 < _fmTotalFigs; fi2++) {
+        if (fi2 === figureIndex) continue; // already checked
+        const otherFk = `${meta.dcName}-${_fmDgIdx}-${fi2}`;
+        const otherPos = game.figurePositions?.[playerNum]?.[otherFk];
+        if (!otherPos) continue;
+        const otherSize = game.figureOrientations?.[otherFk] || getFigureSize(meta.dcName);
+        const otherFpCells = getFootprintCells(otherPos, otherSize);
+        for (const oac of otherFpCells) {
+          for (const tc of cells) {
+            if (hasLineOfSight(oac, tc, effectiveMs, losCoords)) { los = true; break outer2; }
+          }
+        }
+      }
+    }
     const m = k.match(/-(\d+)-(\d+)$/);
     const dg = m ? parseInt(m[1], 10) : 1;
     const fi = m ? parseInt(m[2], 10) : 0;
@@ -940,6 +962,13 @@ async function buildAndSendAttackTargets(
       return (eff?.passives || []).some(p => String(p).toLowerCase() === 'priority target');
     });
     if (ptTargets.length > 0) targets.splice(0, targets.length, ...ptTargets);
+  }
+  // Autofire chain attack: restrict targets to within 3 spaces of original target
+  if (game.autofireChainTargetSpace?.[msgId]) {
+    const _chainSpace = game.autofireChainTargetSpace[msgId];
+    const _chainFiltered = targets.filter(t => getRange(_chainSpace, t.coord) <= 3);
+    if (_chainFiltered.length > 0) targets.splice(0, targets.length, ..._chainFiltered);
+    delete game.autofireChainTargetSpace[msgId];
   }
   if (targets.length === 0) {
     await interaction.followUp({ content: 'No valid targets in range.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -1048,6 +1077,17 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     await interaction.followUp({ content: 'Only the owner of this Play Area can use these actions.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
+  // Resolve attachment-injected special action names and costs
+  const _baseSpecialCount = (getDcStats(meta.dcName).specials || []).length;
+  let _effectiveActionCost = 1;
+  if (buttonKey === 'dc_special_' && specialIdx >= _baseSpecialCount) {
+    const _suAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _injected = getAttachmentSpecials(_suAtts, game, msgId);
+    action = _injected.names[specialIdx - _baseSpecialCount] || 'Special';
+    _effectiveActionCost = _injected.costs[specialIdx - _baseSpecialCount] ?? 1;
+  } else if (buttonKey === 'dc_special_') {
+    _effectiveActionCost = (getDcStats(meta.dcName).specialCosts || [])[specialIdx] ?? 1;
+  }
   const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
   const actionsData = game.dcActionsData?.[msgId];
   const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
@@ -1071,10 +1111,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await interaction.followUp({ content: `**${dispNameForDisable}** is Disabled — cannot use Special Actions this round.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
-    const specialCosts = getDcStats(meta.dcName).specialCosts || [];
-    const actionCost = specialCosts[specialIdx] ?? 1;
-    if (actionsRemaining < actionCost) {
-      await interaction.followUp({ content: `**${action}** costs both actions — you only have ${actionsRemaining} action(s) remaining this activation.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    if (actionsRemaining < _effectiveActionCost) {
+      await interaction.followUp({ content: `**${action}** costs ${_effectiveActionCost > 1 ? 'both actions' : '1 action'} — you only have ${actionsRemaining} action(s) remaining this activation.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
     // Snapshot state before any DC special changes (undo restores from this)
@@ -1113,6 +1151,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       if (vanishBonus?.msgId === msgId) {
         if (vanishBonus.nextMp > 0) mpRemaining += vanishBonus.nextMp;
         delete game.vanishImmunityUntilNextActivation[playerNum];
+      }
+      // The General's Ranks: +2 MP when performing a non-activation move
+      const _tgrMoveUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+      if (_tgrMoveUpgrades.includes("The General's Ranks") && !game.dcActionsData?.[msgId]?.threadId) {
+        mpRemaining += 2;
       }
       if (!game.movementBank[msgId]) {
         game.movementBank[msgId] = {
@@ -1227,7 +1270,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // Reach: melee figure can target 1–2 spaces away; no accuracy check (still counts as melee)
     const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
     const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
-    const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[playerNum];
+    // Reach from DC passives, keywords, CC-granted, or loadout card (Electrostaff)
+    const _loadoutCard = getLoadoutCards()[getConfig(game, figureKey)?.loadout];
+    const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[playerNum] || _loadoutCard?.passive === 'Reach';
     const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
     const ms = getMapSpaces(game.selectedMap?.id);
     if (!ms) {
@@ -1408,7 +1453,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         delete game.pummelAttacksRemaining[msgId];
       }
     } else {
-      const actionCost = buttonKey === 'dc_special_' ? (getDcStats(meta.dcName).specialCosts?.[specialIdx] ?? 1) : 1;
+      const actionCost = buttonKey === 'dc_special_' ? _effectiveActionCost : 1;
       actionsData.remaining = Math.max(0, actionsData.remaining - actionCost);
       await updateDcActionsMessage(game, msgId, client);
     }
@@ -1416,6 +1461,160 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   const displayName = meta.displayName || meta.dcName;
   const pLabel = `P${meta.playerNum}`;
   await logGameAction(game, client, `**${pLabel}:** <@${ownerId}> used **${action}**.`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'activate' });
+
+  // --- Attachment Special Actions (handle before resolveAbility) ---
+  if (buttonKey === 'dc_special_' && specialIdx >= _baseSpecialCount) {
+    const _suHandler = action;
+    const thread = interaction.channel;
+
+    // Smuggler's Run: deplete while in opponent's deployment zone → gain 5 VP
+    if (_suHandler === "Smuggler's Run") {
+      const selectedFig = actionsData?.selectedFigure ?? 0;
+      const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const figKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+      const pos = game.figurePositions?.[meta.playerNum]?.[figKey];
+      // Check position in opponent's deployment zone
+      const mapId = game.selectedMap?.id;
+      const getDeploymentZones = ctx.getDeploymentZones;
+      const zoneData = getDeploymentZones ? getDeploymentZones()[mapId] : null;
+      let inOppZone = false;
+      if (zoneData && pos) {
+        const initPNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+        const oppZoneColor = meta.playerNum === initPNum
+          ? (game.deploymentZoneChosen === 'red' ? 'blue' : 'red')
+          : game.deploymentZoneChosen;
+        const oppZoneSpaces = new Set((zoneData[oppZoneColor] || []).map(c => String(c).toLowerCase()));
+        const getFigureSize = ctx.getFigureSize;
+        const getFootprintCells = ctx.getFootprintCells;
+        if (getFigureSize && getFootprintCells) {
+          const size = game.figureOrientations?.[figKey] || getFigureSize(meta.dcName);
+          const fp = getFootprintCells(pos, size);
+          inOppZone = fp.some(c => oppZoneSpaces.has(String(c).toLowerCase()));
+        } else {
+          inOppZone = oppZoneSpaces.has(String(pos).toLowerCase());
+        }
+      }
+      if (!inOppZone) {
+        await thread.send(`**Smuggler's Run** — This figure is **not** in the opponent's deployment zone. Cannot deplete.`).catch(() => {});
+        // Refund action + undo
+        if (actionsData) {
+          actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + _effectiveActionCost);
+          actionsData.specialsUsed = (actionsData.specialsUsed || []).filter(i => i !== specialIdx);
+          await updateDcActionsMessage(game, msgId, client);
+        }
+        saveGames();
+        return;
+      }
+      // Deplete: remove card from attachments
+      const attKey = meta.playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+      if (game[attKey]?.[msgId]) {
+        game[attKey][msgId] = game[attKey][msgId].filter(c => c !== "Smuggler's Run");
+      }
+      // Award 5 VP
+      const vpKey = meta.playerNum === 1 ? 'player1VP' : 'player2VP';
+      game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+      game[vpKey].total += 5;
+      game[vpKey].objectives += 5;
+      await thread.send(`**Smuggler's Run** — Depleted! **+5 VP** (${game[vpKey].total} total).`).catch(() => {});
+      await logGameAction(game, client, `**Smuggler's Run** — **${displayName}** depleted in opponent's deployment zone. +5 VP.`, { phase: 'ROUND', icon: 'card' });
+      if (ctx.updateAttachmentMessageForDc) await ctx.updateAttachmentMessageForDc(game, meta.playerNum, msgId, client).catch(() => {});
+      if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
+      saveGames();
+      return;
+    }
+
+    // Vader's Finest: Attack+Move — perform an attack, then move up to 1 space
+    if (_suHandler === 'VF: Attack+Move') {
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = { from: "Vader's Finest" };
+      game.pendingMpBonus = game.pendingMpBonus || {};
+      game.pendingMpBonus[msgId] = 1;
+      await thread.send(`**Vader's Finest** — Your next attack is free. After attack resolves, gain **1 MP**.`).catch(() => {});
+      await updateDcActionsMessage(game, msgId, client);
+      saveGames();
+      return;
+    }
+
+    // Vader's Finest: Focus — if < 2 dice in printed attack pool, become Focused (limit once/round/group)
+    if (_suHandler === 'VF: Focus') {
+      if (game.vadersFocusUsedThisRound?.[msgId]) {
+        await thread.send(`**Vader's Finest** — Focus already used this round for this group.`).catch(() => {});
+        if (actionsData) {
+          actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + _effectiveActionCost);
+          actionsData.specialsUsed = (actionsData.specialsUsed || []).filter(i => i !== specialIdx);
+          await updateDcActionsMessage(game, msgId, client);
+        }
+        saveGames();
+        return;
+      }
+      // Check printed attack dice count for the acting figure
+      const selectedFig = actionsData?.selectedFigure ?? 0;
+      const baseDice = getDcStats(meta.dcName)?.attack?.dice || [];
+      // For squad upgrade figures, check their attack dice instead
+      const _suUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+      const baseFigCount = getDcStats(meta.dcName)?.figures ?? 1;
+      let printedDiceCount = baseDice.length;
+      if (selectedFig >= baseFigCount) {
+        // Squad upgrade figure — check attachment stats
+        const getDcEffects = ctx.getDcEffects;
+        const suNames = ['Z-6 Trooper', 'Mortar Trooper', 'Riot Trooper'];
+        for (const su of suNames) {
+          if (_suUpgrades.includes(su)) {
+            const suEff = getDcEffects?.()?.[`[${su}]`];
+            if (suEff?.attack?.dice) { printedDiceCount = suEff.attack.dice.length; break; }
+          }
+        }
+      }
+      if (printedDiceCount >= 2) {
+        await thread.send(`**Vader's Finest** — This figure has ${printedDiceCount} dice in its printed attack pool (need < 2). Cannot Focus.`).catch(() => {});
+        if (actionsData) {
+          actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + _effectiveActionCost);
+          actionsData.specialsUsed = (actionsData.specialsUsed || []).filter(i => i !== specialIdx);
+          await updateDcActionsMessage(game, msgId, client);
+        }
+        saveGames();
+        return;
+      }
+      // Apply Focus
+      const dgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const figKey = `${meta.dcName}-${dgIdx}-${selectedFig}`;
+      game.figureConditions = game.figureConditions || {};
+      game.figureConditions[figKey] = game.figureConditions[figKey] || [];
+      if (!game.figureConditions[figKey].includes('Focus')) {
+        game.figureConditions[figKey].push('Focus');
+      }
+      game.vadersFocusUsedThisRound = game.vadersFocusUsedThisRound || {};
+      game.vadersFocusUsedThisRound[msgId] = true;
+      await thread.send(`**Vader's Finest** — **${displayName}** becomes **Focused**.`).catch(() => {});
+      await logGameAction(game, client, `**Vader's Finest** — **${displayName}** becomes Focused.`, { phase: 'ROUND', icon: 'card' });
+      if (ctx.updateAttachmentMessageForDc) await ctx.updateAttachmentMessageForDc(game, meta.playerNum, msgId, client).catch(() => {});
+      saveGames();
+      return;
+    }
+
+    // Z-6 Trooper Autofire: perform an attack (defender +1 white die, surge: chain attack within 3)
+    if (_suHandler === 'Autofire') {
+      game.autofireActive = game.autofireActive || {};
+      game.autofireActive[msgId] = true;
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = { from: 'Autofire' };
+      await thread.send(`**Autofire** — Your next attack: defender adds **1 white die**. Surge: **Chain attack** targeting a figure within 3 of target space.`).catch(() => {});
+      saveGames();
+      return;
+    }
+
+    // Mortar Trooper Fire Mission: double-action attack with LOS from any group figure + Blast 1
+    if (_suHandler === 'Fire Mission') {
+      game.fireMissionActive = game.fireMissionActive || {};
+      game.fireMissionActive[msgId] = true;
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = { from: 'Fire Mission' };
+      await thread.send(`**Fire Mission** — Your next attack: LOS from **any figure in this group** (range from acting figure). **+Blast 1**.`).catch(() => {});
+      saveGames();
+      return;
+    }
+  }
+
   // D1: Prefer abilityId from dc-effects (specialAbilityIds[specialIdx]) when present; else synthetic id for library lookup
   let abilityId = null;
   if (buttonKey === 'dc_special_' && specialIdx >= 0) {

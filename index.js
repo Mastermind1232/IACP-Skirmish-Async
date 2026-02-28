@@ -332,7 +332,9 @@ import {
   getTournamentRotation,
   getMissionRules,
   getAbilityLibrary,
+  getLoadoutCards,
 } from './src/data-loader.js';
+import { getConfig as getLoadoutConfig } from './src/game/figure-config.js';
 import { runEndOfRoundRules, runStartOfRoundRules, runNpcThugActivation, runNpcKryknaActivation } from './src/game/mission-rules.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -705,13 +707,43 @@ function getSpaceController(game, mapId, coord) {
   const adjacency = mapSpaces.adjacency || {};
   const t = normalizeCoord(coord);
   const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
+  // Alter Mind (Obi-Wan): figures cost ≤9 within 3 spaces don't count for control
+  const alterMindExcluded = _getAlterMindExcludedCells(game);
   const p1Cells = getPlayerOccupiedCells(game, 1);
   const p2Cells = getPlayerOccupiedCells(game, 2);
-  const p1Has = [...controlSet].some((c) => p1Cells.has(c));
-  const p2Has = [...controlSet].some((c) => p2Cells.has(c));
+  const p1Has = [...controlSet].some((c) => p1Cells.has(c) && !alterMindExcluded[1]?.has(c));
+  const p2Has = [...controlSet].some((c) => p2Cells.has(c) && !alterMindExcluded[2]?.has(c));
   if (p1Has && !p2Has) return 1;
   if (p2Has && !p1Has) return 2;
   return null;
+}
+
+/** Alter Mind: returns { 1: Set<coord>, 2: Set<coord> } of cells that don't count for control. */
+function _getAlterMindExcludedCells(game) {
+  const excluded = {};
+  const allEff = getDcEffects();
+  for (const pn of [1, 2]) {
+    const oppPn = 3 - pn;
+    // Check if opponent has Alter Mind active
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[oppPn] || {})) {
+      if (!pos) continue;
+      const dcName = fk.replace(/-\d+-\d+$/, '');
+      const eff = allEff[dcName];
+      if (!(eff?.specialAbilityIds || []).includes('alter_mind_obiwan')) continue;
+      // This player's figures with cost ≤9 within 3 spaces of Obi-Wan don't count for control
+      if (!excluded[pn]) excluded[pn] = new Set();
+      for (const [tFk, tPos] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!tPos) continue;
+        const tDcName = tFk.replace(/-\d+-\d+$/, '');
+        const tEff = allEff[tDcName];
+        if ((tEff?.cost ?? 99) > 9) continue;
+        if (getRange(pos, tPos) > 3) continue;
+        const size = game.figureOrientations?.[tFk] || getFigureSize(tDcName);
+        for (const c of getFootprintCells(tPos, size)) excluded[pn].add(normalizeCoord(c));
+      }
+    }
+  }
+  return excluded;
 }
 
 /** Returns array of figure keys for playerNum whose positions are on or adjacent to coord. */
@@ -741,6 +773,7 @@ function countTerminalsControlledByPlayer(game, playerNum, mapId) {
   const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
   const adjacency = mapSpaces.adjacency || {};
 
+  const alterMindExcluded = _getAlterMindExcludedCells(game);
   const p1Cells = getPlayerOccupiedCells(game, 1);
   const p2Cells = getPlayerOccupiedCells(game, 2);
 
@@ -748,8 +781,8 @@ function countTerminalsControlledByPlayer(game, playerNum, mapId) {
   for (const term of mapData.terminals) {
     const t = normalizeCoord(term);
     const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
-    const p1Has = [...controlSet].some((c) => p1Cells.has(c));
-    const p2Has = [...controlSet].some((c) => p2Cells.has(c));
+    const p1Has = [...controlSet].some((c) => p1Cells.has(c) && !alterMindExcluded[1]?.has(c));
+    const p2Has = [...controlSet].some((c) => p2Cells.has(c) && !alterMindExcluded[2]?.has(c));
     if (playerNum === 1 && p1Has && !p2Has) count++;
     if (playerNum === 2 && p2Has && !p1Has) count++;
   }
@@ -3424,6 +3457,11 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
   game.lastAttackAttackerMsgId = combat.attackerMsgId ?? null;
   game.lastAttackAttackerFigureIndex = combat.attackerFigureIndex ?? 0;
   game.lastAttackTargetFigureKey = combat.target?.figureKey ?? null;
+  // Track that an attack was performed during this activation (for On a Diplomatic Mission, etc.)
+  if (combat.attackerMsgId) {
+    game.attackPerformedThisActivation = game.attackPerformedThisActivation || {};
+    game.attackPerformedThisActivation[combat.attackerMsgId] = true;
+  }
 
   // NPC target (thug / Krykna / Crate): apply damage directly, skip dcHealthState
   if (combat.target?.isNpc) {
@@ -3526,6 +3564,11 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const _sbAttDcName = combat.attackerDcName || '';
         const _sbAttEff = getDcEffects()?.[_sbAttDcName];
         if ((_sbAttEff?.passives || []).includes('Stun Batons')) {
+          // Flame Trooper Fireproof: cannot suffer Strain
+          const _sbTargetUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
+          if (_sbTargetUpgrades.includes('Flame Trooper')) {
+            await logGameAction(game, client, `**Fireproof** — **${combat.target.label}** is immune to Strain from Stun Batons.`, { phase: 'ROUND', icon: 'card' });
+          } else {
           game.figureConditions = game.figureConditions || {};
           game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
           // Strain = 1 direct HP damage (apply via health reduction)
@@ -3539,6 +3582,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             newCur = _sbNew;
           }
           await logGameAction(game, client, `⚡ **Stun Batons** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`, { phase: 'ROUND', icon: 'attack' });
+          }
         }
       }
       // Self-Preservation (Hired Gun Elite): when you suffer damage, become Focused
@@ -3552,6 +3596,19 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           if (!game.figureConditions[combat.target.figureKey].includes('Focus')) {
             game.figureConditions[combat.target.figureKey].push('Focus');
             await logGameAction(game, client, `🛡️ **Self-Preservation** — **${_spDcName}** became **Focused** (suffered damage).`, { phase: 'ROUND', icon: 'attack' });
+          }
+        }
+      }
+      // Fury of Kashyyyk (Skirmish Upgrade, WOOKIEE): if suffered 3+ damage and survived, become Focused
+      if (damage >= 3 && newCur > 0) {
+        const _fokUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
+        if (_fokUpgrades.includes('Fury of Kashyyyk')) {
+          game.figureConditions = game.figureConditions || {};
+          game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
+          if (!game.figureConditions[combat.target.figureKey].includes('Focus')) {
+            game.figureConditions[combat.target.figureKey].push('Focus');
+            const _fokDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+            await logGameAction(game, client, `**Fury of Kashyyyk** — **${_fokDcName}** became **Focused** (suffered ${damage} Damage).`, { phase: 'ROUND', icon: 'card' });
           }
         }
       }
@@ -3844,6 +3901,23 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           game.partingShotTriggered[targetMsgId] = true;
           const _psOwnerId = game[`player${defenderPlayerNum}Id`];
           await logGameAction(game, client, `<@${_psOwnerId}> ⚠️ **Parting Shot** — **${combat.target.label || _psDcName}** is about to be defeated! You may interrupt to perform an attack before defeat. Use the DC's Attack action to fire your parting shot, then click End Turn to proceed with defeat.`, { allowedMentions: { users: [_psOwnerId] } });
+        }
+      }
+      // Last Resort (Skirmish Upgrade): pre-defeat interrupt — roll 1 red die, adjacent figures suffer Hits as damage
+      if (newCur <= 0 && !_sbrImmune && !game.lastResortTriggered?.[targetMsgId]) {
+        const _lrUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
+        if (_lrUpgrades.includes('Last Resort')) {
+          game.lastResortTriggered = game.lastResortTriggered || {};
+          game.lastResortTriggered[targetMsgId] = true;
+          game.pendingLastResort = { targetMsgId, defenderPlayerNum, attackerPlayerNum, damage, hit, resultText, totalBlast, ownerId, targetFigIndex };
+          const _lrOwnerId = game[`player${defenderPlayerNum}Id`];
+          const _lrRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`last_resort_use_${game.gameId}_${targetMsgId}`).setLabel('Use Last Resort').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`last_resort_skip_${game.gameId}_${targetMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          );
+          await logGameAction(game, client, `<@${_lrOwnerId}> **Last Resort** — **${combat.target.label}** is about to be defeated! Deplete to roll 1 red die — adjacent figures suffer Hits as Damage.`, { components: [_lrRow], allowedMentions: { users: [_lrOwnerId] } });
+          saveGames();
+          return;
         }
       }
       if (newCur <= 0 && !_sbrImmune && !(game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum && ((idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, ''))?.toLowerCase().includes('fifth')))) {
@@ -4182,6 +4256,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       const adjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
       const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
       for (const { figureKey: blastFigureKey, playerNum: blastPlayerNum } of adjacent) {
+        // Flame Trooper Fireproof: own Blast does not affect friendly figures
+        if (blastPlayerNum === attackerPlayerNum && _ftAtkUpgrades.includes('Flame Trooper')) continue;
         const blastMsgId = findDcMessageIdForFigure(game.gameId, blastPlayerNum, blastFigureKey);
         if (!blastMsgId) continue;
         const blastM = blastFigureKey.match(/-(\d+)-(\d+)$/);
@@ -4328,6 +4404,193 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     game.freeAttackBonusPending[combat.attackerMsgId] = true;
     await thread.send('**Tonfa Strike** — You may perform an additional attack (use Attack button).');
   }
+  // Imperial Loadout post-attack effects
+  if (combat.loadoutPostAttack) {
+    const _lpa = combat.loadoutPostAttack;
+    // Electro-pulse (Electrohammer): each other figure adjacent to target suffers 1 Damage
+    if (_lpa === 'electro_pulse' && combat.target?.figureKey) {
+      const _epTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+      if (_epTargetPos) {
+        const _epLines = [];
+        for (const [pNum, poses] of [[1, game.figurePositions?.[1] || {}], [2, game.figurePositions?.[2] || {}]]) {
+          for (const [fk, pos] of Object.entries(poses)) {
+            if (fk === combat.target.figureKey) continue;
+            if (getRange(pos, _epTargetPos) !== 1) continue;
+            const _epFkDcName = fk.replace(/-\d+-\d+$/, '');
+            const _epMid = pNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+            const _epDcL = pNum === 1 ? game.p1DcList : game.p2DcList;
+            const _epFm = fk.match(/-(\d+)-(\d+)$/);
+            const _epDgIdx = _epFm ? parseInt(_epFm[1], 10) : 1;
+            const _epFigIdx = _epFm ? parseInt(_epFm[2], 10) : 0;
+            const _epMsgId = _epMid.find((mid, idx) => _epDcL?.[idx]?.dcName === _epFkDcName && _epDcL?.[idx]?.dgIndex === _epDgIdx);
+            if (_epMsgId) {
+              const _epHS = dcHealthState.get(_epMsgId) || [];
+              const _epEntry = _epHS[_epFigIdx];
+              if (_epEntry) {
+                const [_epC, _epM] = _epEntry;
+                _epHS[_epFigIdx] = [Math.max(0, (_epC ?? _epM) - 1), _epM ?? _epC];
+                dcHealthState.set(_epMsgId, _epHS);
+                const _epDcIdx = _epMid.indexOf(_epMsgId);
+                if (_epDcIdx >= 0 && _epDcL?.[_epDcIdx]) _epDcL[_epDcIdx].healthState = [..._epHS];
+              }
+            }
+            _epLines.push(`**${_epFkDcName}** suffers 1 Damage`);
+          }
+        }
+        if (_epLines.length > 0) {
+          await logGameAction(game, client, `⚡ **Electro-pulse** — Adjacent figures:\n${_epLines.join('\n')}`, { phase: 'ROUND', icon: 'attack' });
+        }
+      }
+    }
+    // Quick Strike (Electrostaff): if defender rerolled/modified dice, defender suffers 1 Damage
+    if (_lpa === 'quick_strike' && hit && combat.target?.figureKey && targetMsgId) {
+      const _qsModified = combat.defenderRerolledOrModified;
+      if (_qsModified) {
+        const _qsHS = dcHealthState.get(targetMsgId) || [];
+        const _qsEntry = _qsHS[targetFigIndex];
+        if (_qsEntry) {
+          const [_qsC, _qsM] = _qsEntry;
+          _qsHS[targetFigIndex] = [Math.max(0, (_qsC ?? _qsM) - 1), _qsM ?? _qsC];
+          dcHealthState.set(targetMsgId, _qsHS);
+          const _qsDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const _qsDcL = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+          const _qsIdx = (_qsDcIds || []).indexOf(targetMsgId);
+          if (_qsIdx >= 0 && _qsDcL?.[_qsIdx]) _qsDcL[_qsIdx].healthState = [..._qsHS];
+          await logGameAction(game, client, `⚡ **Quick Strike** — Defender modified dice/results: **${combat.target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
+        }
+      }
+    }
+    // Flurry of Blows (Electrobatons): free melee attack with 1 green die + +1 Hit, limit once per activation
+    if (_lpa === 'flurry_of_blows' && hit && combat.attackerMsgId) {
+      const _fobKey = `flurryOfBlows_${combat.attackerMsgId}`;
+      if (!game.roundFigureAbilityUsed?.[_fobKey]) {
+        if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
+        game.roundFigureAbilityUsed[_fobKey] = true;
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[combat.attackerMsgId] = true;
+        game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+        game.pendingOverrideAttackDice[combat.attackerMsgId] = { dice: ['green'], type: 'melee', bonusHits: 1 };
+        await thread.send('**Flurry of Blows** — You may perform a Melee attack using 1 green die (+1 Hit). Use the Attack button.');
+      }
+    }
+  }
+  // Clawdite Streetrat Assassin's Blade post-attack: choose an adjacent hostile, roll 1 red die, deal Hits
+  if (combat.formPostAttack === 'assassins_blade' && combat.attackerFigureKey) {
+    const _abAttackerPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
+    if (_abAttackerPos) {
+      // Find adjacent hostile figures
+      const _abAdjacentHostiles = [];
+      for (const [_abFk, _abPos] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
+        if (!_abPos) continue;
+        if (getRange(_abAttackerPos, _abPos) === 1) _abAdjacentHostiles.push({ fk: _abFk, pos: _abPos });
+      }
+      if (_abAdjacentHostiles.length === 0) {
+        await thread.send(`🗡️ **Assassin's Blade** — No adjacent hostile figures.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      } else {
+        const _abDiceData = getDiceData();
+        const _abRedFaces = _abDiceData?.attack?.red || [];
+        if (_abRedFaces.length > 0) {
+          const _abRoll = _abRedFaces[Math.floor(Math.random() * _abRedFaces.length)];
+          const _abHits = (_abRoll.damage || 0);
+          const _abRollStr = Object.entries(_abRoll).filter(([k,v]) => v > 0 && k !== 'blank').map(([k,v]) => `${v} ${k}`).join(', ') || 'blank';
+          if (_abAdjacentHostiles.length === 1 && _abHits > 0) {
+            // Auto-apply to the only adjacent hostile
+            const { fk: _abFk2 } = _abAdjacentHostiles[0];
+            const _abDcName = _abFk2.replace(/-\d+-\d+$/, '');
+            for (const [_abMsgId, _abMeta] of dcMessageMeta) {
+              if (_abMeta.gameId !== game.gameId || _abMeta.playerNum !== defenderPlayerNum || _abMeta.dcName !== _abDcName) continue;
+              const _abHS = dcHealthState.get(_abMsgId) || [];
+              const _abFigIdx = parseInt(_abFk2.split('-').pop(), 10) || 0;
+              if (_abHS[_abFigIdx]) {
+                const [_abCur, _abMax] = _abHS[_abFigIdx];
+                _abHS[_abFigIdx] = [Math.max(0, (_abCur ?? _abMax ?? 0) - _abHits), _abMax ?? _abCur];
+                dcHealthState.set(_abMsgId, _abHS);
+                const _abDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+                const _abDcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+                const _abIdx = (_abDcIds || []).indexOf(_abMsgId);
+                if (_abIdx >= 0 && _abDcList?.[_abIdx]) _abDcList[_abIdx].healthState = [..._abHS];
+              }
+              break;
+            }
+            await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}**. **${_abDcName}** suffers **${_abHits} Damage**.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            await logGameAction(game, client, `🗡️ **Assassin's Blade** — **${_abDcName}** suffers **${_abHits} Damage**.`, { phase: 'ROUND', icon: 'attack' });
+          } else if (_abHits > 0) {
+            // Multiple adjacent hostiles — honor system for the choice
+            const _abNames = _abAdjacentHostiles.map(({ fk }) => fk.replace(/-\d+-\d+$/, '')).join(', ');
+            await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}** (${_abHits} Damage). Choose an adjacent hostile figure to apply damage: ${_abNames}. *(Honor system.)*`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          } else {
+            await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}**. No hits.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }
+        }
+      }
+    }
+  }
+  // Suppressive Fire (Skirmish Upgrade): exhaust after Ranged attack → Weaken target + 2 MP to SMALL friendly within 3
+  const _sfUpgrades = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
+  const _sfExh = game.exhaustedSkirmishUpgrades?.[combat.attackerMsgId] || [];
+  if (_sfUpgrades.includes('Suppressive Fire') && !_sfExh.includes('Suppressive Fire') && combat.isRanged && damage > 0) {
+    game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+    game.exhaustedSkirmishUpgrades[combat.attackerMsgId] = [..._sfExh, 'Suppressive Fire'];
+    // Apply Weaken to the target
+    const _sfTargetFk = combat.target?.figureKey;
+    if (_sfTargetFk && !isConditionImmune(game, _sfTargetFk)) {
+      game.figureConditions = game.figureConditions || {};
+      game.figureConditions[_sfTargetFk] = game.figureConditions[_sfTargetFk] || [];
+      if (!game.figureConditions[_sfTargetFk].includes('Weaken')) {
+        game.figureConditions[_sfTargetFk].push('Weaken');
+      }
+    }
+    const _sfTargetName = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '') || combat.defenderDcName;
+    await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. You may choose a SMALL friendly figure within 3 spaces to gain 2 MP. *(Honor system for MP grant.)*`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened after Ranged attack.`, { phase: 'ROUND', icon: 'card' });
+  }
+  // Flame Trooper Incinerate: after attacking, each figure that suffered damage suffers 1 Strain (HP loss). Place Rubble in target space.
+  const _ftAtkUpgrades = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
+  if (_ftAtkUpgrades.includes('Flame Trooper') && hit) {
+    // Apply 1 Strain (1 HP loss) to target if it suffered damage and survived
+    if (damage > 0 && targetMsgId) {
+      // Fireproof: target immune to Strain if it also has Flame Trooper attachment
+      const _ftTargetUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
+      if (_ftTargetUpgrades.includes('Flame Trooper')) {
+        await thread.send('**Incinerate** — Target is **Fireproof**, immune to Strain.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+      } else {
+        const _ftHs = dcHealthState.get(targetMsgId);
+        if (_ftHs?.[targetFigIndex]) {
+          const [_ftCur, _ftMax] = _ftHs[targetFigIndex];
+          if (_ftCur > 0) {
+            const _ftNew = Math.max(0, _ftCur - 1);
+            _ftHs[targetFigIndex] = [_ftNew, _ftMax];
+            dcHealthState.set(targetMsgId, _ftHs);
+            const _ftDcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+            const _ftDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+            const _ftIdx = (_ftDcIds || []).indexOf(targetMsgId);
+            if (_ftIdx >= 0 && _ftDcList?.[_ftIdx]) _ftDcList[_ftIdx].healthState = [..._ftHs];
+            await thread.send(`**Incinerate** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            if (_ftNew <= 0) {
+              await thread.send(`⚠️ **${combat.target.label}** may be defeated from Incinerate Strain. *(Apply defeat manually.)*`).catch(() => {});
+            }
+          }
+        }
+      }
+    }
+    // Blast damage also triggers Incinerate Strain on adjacent damaged figures — honor system
+    if (totalBlast > 0) {
+      await thread.send('**Incinerate** — Figures that suffered Blast damage also suffer 1 Strain. *(Honor system.)*').catch(() => {});
+    }
+    // Place Rubble token in target space (if attack didn't miss)
+    if (combat.target?.figureKey) {
+      const _ftTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+      if (_ftTargetPos) {
+        game.rubbleTokens = game.rubbleTokens || [];
+        const _ftCoord = String(_ftTargetPos).toLowerCase();
+        if (!game.rubbleTokens.includes(_ftCoord)) {
+          game.rubbleTokens.push(_ftCoord);
+        }
+        await thread.send(`**Incinerate** — Rubble token placed at **${String(_ftTargetPos).toUpperCase()}**.`).catch(() => {});
+      }
+    }
+  }
+
   const embedRefreshMsgIds = new Set(damage > 0 && targetMsgId ? [targetMsgId] : []);
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
   // Force Deflection embed refresh (flag set earlier in pre-defeat section)
@@ -5034,6 +5297,17 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
       await rollMsg.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     } catch {}
   }
+  // Autofire chain attack: grant free attack restricted to within 3 of target
+  if (combat.autofireChainPending && combat.attackerMsgId) {
+    game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
+    game.fellSwoopFreeAttack[combat.attackerMsgId] = true;
+    if (combat.autofireChainTargetSpace) {
+      game.autofireChainTargetSpace = game.autofireChainTargetSpace || {};
+      game.autofireChainTargetSpace[combat.attackerMsgId] = combat.autofireChainTargetSpace;
+    }
+    await logGameAction(game, client, `**Autofire** — Chain attack available! Target must be within 3 of the original target space.`, { phase: 'ROUND', icon: 'attack' });
+  }
+
   for (const msgId of embedRefreshMsgIds) {
     try {
       const meta = dcMessageMeta.get(msgId);
@@ -7324,6 +7598,7 @@ client.on('interactionCreate', async (interaction) => {
         client,
         saveGames,
         finishSetupAttachments,
+        dcHealthState,
       };
       await handleSetupAttachTo(interaction, setupSelectContext);
       return;
@@ -7503,6 +7778,10 @@ client.on('interactionCreate', async (interaction) => {
       getSpaceChoiceRows,
       getMapAttachmentForSpaces,
       getMapTokensData,
+      getDeploymentZones,
+      getPlayableCcSpecialsForDc,
+      getPlayableCcEndOfActivationForDc,
+      getPlayableCcDoubleActionsForDc,
     };
     if (buttonKey === 'dc_activate_') await handleDcActivate(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_unactivate_') await handleDcUnactivate(interaction, dcPlayAreaContext);
@@ -8523,6 +8802,153 @@ client.on('interactionCreate', async (interaction) => {
     saveGames(); return;
   }
 
+  // Last Resort (Skirmish Upgrade): pre-defeat interrupt — roll 1 red die, adjacent figures suffer Hits as damage
+  if (buttonKey === 'last_resort_use_' || buttonKey === 'last_resort_skip_') {
+    await interaction.deferUpdate().catch(() => {});
+    const _lrSuffix = interaction.customId.replace(buttonKey, '');
+    const _lrParts = _lrSuffix.split('_');
+    const _lrGameId = _lrParts[0]; const _lrTargetMsgId = _lrParts[1];
+    const _lrGame = getGame(_lrGameId);
+    if (!_lrGame || !_lrGame.pendingLastResort) {
+      await interaction.followUp({ content: 'No pending Last Resort.', ephemeral: true }).catch(() => {}); return;
+    }
+    const _lrPending = _lrGame.pendingLastResort;
+    if (!canActAsPlayer(_lrGame, interaction.user.id, _lrPending.defenderPlayerNum)) {
+      await interaction.followUp({ content: 'Only the DC owner may respond.', ephemeral: true }).catch(() => {}); return;
+    }
+    delete _lrGame.pendingLastResort;
+    const _lrCombat = _lrGame.pendingCombat;
+    if (buttonKey === 'last_resort_use_') {
+      // Deplete: remove Last Resort from attachments
+      const _lrAttKey = _lrPending.defenderPlayerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+      const _lrAtts = _lrGame[_lrAttKey]?.[_lrPending.targetMsgId];
+      if (_lrAtts) {
+        _lrGame[_lrAttKey][_lrPending.targetMsgId] = _lrAtts.filter(a => a !== 'Last Resort');
+      }
+      // Roll 1 red die, apply Hit results as Damage to adjacent figures (both players)
+      const _lrDiceData = getDiceData ? getDiceData() : null;
+      const _lrFaces = _lrDiceData?.attack?.red || [];
+      const _lrFace = _lrFaces[Math.floor(Math.random() * Math.max(_lrFaces.length, 1))] || {};
+      const _lrHits = _lrFace.dmg ?? 0;
+      const _lrFaceLabel = `${_lrHits}H`;
+      const _lrFigKey = _lrCombat?.target?.figureKey;
+      const _lrPos = _lrFigKey ? _lrGame.figurePositions?.[_lrPending.defenderPlayerNum]?.[_lrFigKey] : null;
+      let _lrResultLog = `Rolled red die: **${_lrFaceLabel}** — `;
+      if (_lrHits > 0 && _lrPos && _lrGame.selectedMap?.id) {
+        const _lrMs = getMapSpaces ? getMapSpaces(_lrGame.selectedMap.id) : null;
+        const _lrAdj = _lrMs?.adjacency?.[String(_lrPos).toLowerCase()] || [];
+        const _lrDamaged = [];
+        for (const pn of [1, 2]) {
+          for (const [_lfk, _lfkPos] of Object.entries(_lrGame.figurePositions?.[pn] || {})) {
+            if (!_lfkPos) continue;
+            if (_lfk === _lrFigKey) continue; // skip the dying figure itself
+            if (!_lrAdj.includes(String(_lfkPos).toLowerCase()) && String(_lfkPos).toLowerCase() !== String(_lrPos).toLowerCase()) continue;
+            let _lfkMsgId = null;
+            for (const [_mid, _mm] of dcMessageMeta) { if (_mm.playerNum === pn && _lfk.startsWith(_mm.dcName + '-')) { _lfkMsgId = _mid; break; } }
+            if (!_lfkMsgId) continue;
+            const _lfkMatch = _lfk.match(/^(.+)-(\d+)-(\d+)$/);
+            if (!_lfkMatch) continue;
+            const _lfkFigIdx = parseInt(_lfkMatch[3], 10);
+            const _lfkHS = dcHealthState.get(_lfkMsgId) || [];
+            if (!_lfkHS[_lfkFigIdx]) continue;
+            const [_lhc, _lhm] = _lfkHS[_lfkFigIdx];
+            if (_lhc === null || _lhc <= 0) continue;
+            const _lhnc = Math.max(0, _lhc - _lrHits);
+            _lfkHS[_lfkFigIdx] = [_lhnc, _lhm ?? _lhc];
+            dcHealthState.set(_lfkMsgId, _lfkHS);
+            const _lfkDcIds = pn === 1 ? _lrGame.p1DcMessageIds : _lrGame.p2DcMessageIds;
+            const _lfkDcList = pn === 1 ? _lrGame.p1DcList : _lrGame.p2DcList;
+            const _lfkIdx = (_lfkDcIds || []).indexOf(_lfkMsgId);
+            if (_lfkIdx >= 0 && _lfkDcList?.[_lfkIdx]) _lfkDcList[_lfkIdx].healthState = [..._lfkHS];
+            _lrDamaged.push(`${dcMessageMeta.get(_lfkMsgId)?.displayName || _lfkMatch[1]} (HP: ${_lhc}→${_lhnc})`);
+          }
+        }
+        _lrResultLog += _lrDamaged.length ? _lrDamaged.join(', ') : 'No adjacent figures.';
+      } else {
+        _lrResultLog += 'No hits.';
+      }
+      await logGameAction(_lrGame, client, `**Last Resort** — ${_lrCombat?.target?.label || 'Figure'}: ${_lrResultLog}`, { phase: 'ROUND', icon: 'attack' });
+    } else {
+      await logGameAction(_lrGame, client, `**Last Resort** — Skipped.`, { phase: 'ROUND', icon: 'card' });
+    }
+    // Finalize defeat by re-calling applyDamageAndFinishCombat (lastResortTriggered flag already set)
+    await applyDamageAndFinishCombat(_lrGame, _lrCombat, {
+      damage: _lrPending.damage, hit: _lrPending.hit, resultText: _lrPending.resultText,
+      totalBlast: _lrPending.totalBlast, defenderPlayerNum: _lrPending.defenderPlayerNum,
+      attackerPlayerNum: _lrPending.attackerPlayerNum, ownerId: _lrPending.ownerId,
+      targetMsgId: _lrPending.targetMsgId, targetFigIndex: _lrPending.targetFigIndex,
+    }, client);
+    saveGames(); return;
+  }
+
+  // Scavenged Walker: end-of-round interrupt attack (honor-system acknowledgment)
+  if (buttonKey === 'scavenged_walker_attack_' || buttonKey === 'scavenged_walker_skip_') {
+    await interaction.deferUpdate().catch(() => {});
+    const _swSuffix = interaction.customId.replace(buttonKey, '');
+    const _swParts = _swSuffix.split('_');
+    const _swGameId = _swParts[0]; const _swMsgId = _swParts[1];
+    const _swGame = getGame(_swGameId);
+    const _swMeta = dcMessageMeta.get(_swMsgId);
+    if (!_swGame || !_swMeta) { await interaction.followUp({ content: 'Game or DC not found.', ephemeral: true }).catch(() => {}); return; }
+    if (!canActAsPlayer(_swGame, interaction.user.id, _swMeta.playerNum)) {
+      await interaction.followUp({ content: 'Only the DC owner may respond.', ephemeral: true }).catch(() => {}); return;
+    }
+    if (buttonKey === 'scavenged_walker_attack_') {
+      // Set -1 Hit penalty flag for the next attack from this DC
+      _swGame.scavengedWalkerAttackPenalty = _swGame.scavengedWalkerAttackPenalty || {};
+      _swGame.scavengedWalkerAttackPenalty[_swMsgId] = true;
+      await logGameAction(_swGame, client, `**Scavenged Walker** — **${_swMeta.displayName || _swMeta.dcName}** will perform an interrupt attack with -1 Hit. Use the Attack button.`, { phase: 'ROUND', icon: 'card' });
+    } else {
+      await logGameAction(_swGame, client, `**Scavenged Walker** — **${_swMeta.displayName || _swMeta.dcName}** skipped end-of-round attack.`, { phase: 'ROUND', icon: 'card' });
+    }
+    saveGames(); return;
+  }
+
+  // On a Diplomatic Mission (Skirmish Upgrade): end-of-activation choice
+  if (buttonKey === 'on_diplomatic_') {
+    await interaction.deferUpdate().catch(() => {});
+    const _odmSuffix = interaction.customId.replace('on_diplomatic_', '');
+    const _odmParts = _odmSuffix.split('_');
+    const _odmGameId = _odmParts[0]; const _odmMsgId = _odmParts[1]; const _odmChoice = _odmParts[2];
+    const _odmGame = getGame(_odmGameId);
+    const _odmMeta = dcMessageMeta.get(_odmMsgId);
+    if (!_odmGame || !_odmMeta) {
+      await interaction.followUp({ content: 'Game or DC not found.', ephemeral: true }).catch(() => {}); return;
+    }
+    if (!canActAsPlayer(_odmGame, interaction.user.id, _odmMeta.playerNum)) {
+      await interaction.followUp({ content: 'Only the DC owner may respond.', ephemeral: true }).catch(() => {}); return;
+    }
+    if (_odmChoice === 'skip') {
+      await logGameAction(_odmGame, client, '**On a Diplomatic Mission** — Skipped.', { phase: 'ROUND', icon: 'card' });
+    } else {
+      // Exhaust the card
+      _odmGame.exhaustedSkirmishUpgrades = _odmGame.exhaustedSkirmishUpgrades || {};
+      _odmGame.exhaustedSkirmishUpgrades[_odmMsgId] = [...(_odmGame.exhaustedSkirmishUpgrades[_odmMsgId] || []), 'On a Diplomatic Mission'];
+      if (_odmChoice === 'mp') {
+        _odmGame.movementBank = _odmGame.movementBank || {};
+        if (!_odmGame.movementBank[_odmMsgId]) {
+          _odmGame.movementBank[_odmMsgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: _odmMeta.displayName || _odmMeta.dcName };
+        } else {
+          _odmGame.movementBank[_odmMsgId].total += 2;
+          _odmGame.movementBank[_odmMsgId].remaining += 2;
+        }
+        await logGameAction(_odmGame, client, `**On a Diplomatic Mission** — **${_odmMeta.displayName || _odmMeta.dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
+      } else if (_odmChoice === 'evade') {
+        _odmGame.diplomaticMissionEvade = _odmGame.diplomaticMissionEvade || {};
+        _odmGame.diplomaticMissionEvade[_odmMsgId] = true;
+        await logGameAction(_odmGame, client, `**On a Diplomatic Mission** — **${_odmMeta.displayName || _odmMeta.dcName}** gains +1 Evade on defense for the rest of the round.`, { phase: 'ROUND', icon: 'card' });
+      } else if (_odmChoice === 'vp') {
+        const _odmVpKey = _odmMeta.playerNum === 1 ? 'player1VP' : 'player2VP';
+        _odmGame[_odmVpKey] = _odmGame[_odmVpKey] || { total: 0, kills: 0, objectives: 0 };
+        _odmGame[_odmVpKey].total += 1;
+        _odmGame[_odmVpKey].objectives += 1;
+        await logGameAction(_odmGame, client, `**On a Diplomatic Mission** — **${_odmMeta.displayName || _odmMeta.dcName}** gains 1 VP.`, { phase: 'ROUND', icon: 'card' });
+        await checkWinConditions(_odmGame, client);
+      }
+    }
+    saveGames(); return;
+  }
+
   // Behind Enemy Lines: sequential card reorder pickers
   if (buttonKey === 'bel_reorder_1_' || buttonKey === 'bel_reorder_2_') {
     const _belParts = interaction.customId.replace(buttonKey, '').split('_');
@@ -8816,6 +9242,8 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'deployment_fig_') await handleDeploymentFig(interaction, setupContext);
     else if (buttonKey === 'deployment_orient_') await handleDeploymentOrient(interaction, setupContext);
     else if (buttonKey === 'deploy_pick_') await handleDeployPick(interaction, setupContext);
+    else if (buttonKey === 'loadout_pick_') await handleLoadoutPick(interaction, setupContext);
+    else if (buttonKey === 'form_pick_') await handleFormPick(interaction, setupContext);
     else if (buttonKey === 'deployment_done_') await handleDeploymentDone(interaction, setupContext);
     else if (buttonKey === 'auto_deploy_') await handleAutoDeploy(interaction, setupContext);
     return;

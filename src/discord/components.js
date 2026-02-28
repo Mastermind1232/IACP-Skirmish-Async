@@ -710,6 +710,32 @@ export function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces
   return { rows: rows.slice(0, MAX_ROWS_PER_MESSAGE), available };
 }
 
+/** Get special actions injected by Skirmish Upgrade attachments. */
+export function getAttachmentSpecials(attachments, game, msgId) {
+  const names = [];
+  const costs = [];
+  if (!attachments?.length) return { names, costs };
+  if (attachments.includes("Vader's Finest")) {
+    names.push('VF: Attack+Move');
+    costs.push(1);
+    names.push('VF: Focus');
+    costs.push(1);
+  }
+  if (attachments.includes("Smuggler's Run")) {
+    names.push("Smuggler's Run");
+    costs.push(1);
+  }
+  if (attachments.includes('Z-6 Trooper')) {
+    names.push('Autofire');
+    costs.push(1);
+  }
+  if (attachments.includes('Mortar Trooper')) {
+    names.push('Fire Mission');
+    costs.push(2);
+  }
+  return { names, costs };
+}
+
 /**
  * Action rows for DC: figure dropdown (multi-fig) + [Move][Attack][Interact] for selected figure, then specials, then CC specials. Max 5 rows.
  * @param {object} [helpers] - { getDcStats(dcName), getPlayerNumForMsgId(msgId), getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName) }
@@ -718,8 +744,25 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const { getDcStats = () => ({}), getPlayerNumForMsgId = () => 1, getPlayableCcSpecialsForDc = () => [], getPlayableCcEndOfActivationForDc = () => [], getPlayableCcDoubleActionsForDc = () => [] } = helpers;
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
-  const specials = stats.specials || [];
-  const specialCosts = stats.specialCosts || [];
+  let specials = stats.specials || [];
+  let specialCosts = stats.specialCosts || [];
+  // Skirmish Upgrade attachments may remove DC specials (e.g. Driven by Hatred removes Brutality)
+  const _suUpgrades = game ? (game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || []) : [];
+  if (_suUpgrades.length) {
+    const _lostSpecials = new Set();
+    if (_suUpgrades.includes('Driven by Hatred')) _lostSpecials.add('Brutality');
+    if (_lostSpecials.size) {
+      const _filteredPairs = specials.map((s, i) => [s, specialCosts[i] ?? 1]).filter(([s]) => !_lostSpecials.has(s));
+      specials = _filteredPairs.map(([s]) => s);
+      specialCosts = _filteredPairs.map(([, c]) => c);
+    }
+    // Inject attachment-provided special actions
+    const injected = getAttachmentSpecials(_suUpgrades, game, msgId);
+    if (injected.names.length) {
+      specials = [...specials, ...injected.names];
+      specialCosts = [...specialCosts, ...injected.costs];
+    }
+  }
   const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const actionsData = typeof actionsDataOrRemaining === 'object' && actionsDataOrRemaining != null ? actionsDataOrRemaining : { remaining: actionsDataOrRemaining, specialsUsed: [] };
   const actionsRemaining = actionsData.remaining ?? 2;
@@ -775,14 +818,20 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       const alreadyUsed = specialsUsed.includes(idx);
       const cost = specialCosts[idx] ?? 1;
       const needsDoubleAction = cost >= 2;
+      // VF: Focus — limit once per round per group
+      const isVfFocusUsed = name === 'VF: Focus' && !!game?.vadersFocusUsedThisRound?.[msgId];
       const label = needsDoubleAction ? `${name} (2 Actions)`.slice(0, 80) : name.slice(0, 80);
       return new ButtonBuilder()
         .setCustomId(`dc_special_${idx}_${msgId}`)
         .setLabel(label)
         .setStyle(ButtonStyle.Primary)
-        .setDisabled(isStunned || alreadyUsed || (actionsRemaining ?? 2) < cost);
+        .setDisabled(isStunned || alreadyUsed || isVfFocusUsed || (actionsRemaining ?? 2) < cost);
     });
-    rows.push(new ActionRowBuilder().addComponents(...specialBtns));
+    // Split into multiple rows if > 5 specials
+    for (let i = 0; i < specialBtns.length; i += 5) {
+      if (rows.length >= 5) break;
+      rows.push(new ActionRowBuilder().addComponents(...specialBtns.slice(i, i + 5)));
+    }
   }
   if (game && rows.length < 5) {
     const playableCc = getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName);

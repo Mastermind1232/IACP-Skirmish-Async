@@ -153,6 +153,13 @@ export function getBoardStateForMovement(game, excludeFigureKey = null) {
   for (const [coord, type] of Object.entries(mapSpaces.terrain || {})) {
     terrain[normalizeCoord(coord)] = String(type || 'normal').toLowerCase();
   }
+  // Rubble tokens (Flame Trooper Incinerate): treat as difficult terrain
+  if (Array.isArray(game.rubbleTokens)) {
+    for (const rc of game.rubbleTokens) {
+      const nc = normalizeCoord(rc);
+      if (!terrain[nc] || terrain[nc] === 'normal') terrain[nc] = 'difficult';
+    }
+  }
   const adjacency = {};
   for (const [coord, neighbors] of Object.entries(mapSpaces.adjacency || {})) {
     adjacency[normalizeCoord(coord)] = (neighbors || []).map((n) => normalizeCoord(n));
@@ -191,6 +198,40 @@ export function getMovementProfile(dcName, figureKey, game) {
       }
     }
   }
+  // Survivalist (Skirmish Upgrade): ignore difficult terrain and hostile figure movement costs
+  let hasSurvivalist = false;
+  if (figureKey && game) {
+    const _svDcName = figureKey.replace(/-\d+-\d+$/, '');
+    for (const pn of [1, 2]) {
+      if (!(figureKey in (game.figurePositions?.[pn] || {}))) continue;
+      const _svList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const _svIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      for (let i = 0; i < _svList.length; i++) {
+        if (_svList[i]?.dcName !== _svDcName) continue;
+        const _svAtt = pn === 1 ? game.p1DcAttachments?.[_svIds[i]] : game.p2DcAttachments?.[_svIds[i]];
+        if (_svAtt?.includes('Survivalist')) hasSurvivalist = true;
+        break;
+      }
+      break;
+    }
+  }
+  // Mortar Trooper Haul: treat blocking and impassable terrain as difficult terrain
+  let hasMortarHaul = false;
+  if (figureKey && game) {
+    const _mhDcName = figureKey.replace(/-\d+-\d+$/, '');
+    for (const pn of [1, 2]) {
+      if (!(figureKey in (game.figurePositions?.[pn] || {}))) continue;
+      const _mhList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const _mhIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      for (let i = 0; i < _mhList.length; i++) {
+        if (_mhList[i]?.dcName !== _mhDcName) continue;
+        const _mhAtt = pn === 1 ? game.p1DcAttachments?.[_mhIds[i]] : game.p2DcAttachments?.[_mhIds[i]];
+        if (_mhAtt?.includes('Mortar Trooper')) hasMortarHaul = true;
+        break;
+      }
+      break;
+    }
+  }
   return {
     size: storedSize,
     cols,
@@ -200,10 +241,11 @@ export function getMovementProfile(dcName, figureKey, game) {
     canRotate: cols !== rows,
     isMassive,
     isMobile,
-    ignoreDifficult: isMassive || isMobile || hasEfficientTravel,
+    ignoreDifficult: isMassive || isMobile || hasEfficientTravel || hasSurvivalist,
     ignoreBlocking: isMassive || isMobile,
-    ignoreFigureCost: isMassive || isMobile || hasEfficientTravel,
+    ignoreFigureCost: isMassive || isMobile || hasEfficientTravel || hasSurvivalist,
     canEndOnOccupied: isMassive,
+    treatBlockingAsDifficult: hasMortarHaul,
     keywords,
   };
 }
@@ -325,7 +367,7 @@ function evaluateMovementStep(current, neighbor, board, profile) {
   for (const cell of nextFootprint) {
     if (!board.spacesSet.has(cell)) return null;
   }
-  if (!profile.ignoreBlocking) {
+  if (!profile.ignoreBlocking && !profile.treatBlockingAsDifficult) {
     for (const cell of nextFootprint) {
       if (board.blockingSet.has(cell)) return null;
     }
@@ -361,11 +403,12 @@ function evaluateMovementStep(current, neighbor, board, profile) {
       if (board.movementBlockingSet.has(edgeKey(cell, prevCoord))) return null;
     }
   }
-  const enteringBlocking = !profile.ignoreBlocking && entering.some((cell) => board.blockingSet.has(cell));
-  if (enteringBlocking) return null;
+  const enteringBlockingCells = !profile.ignoreBlocking ? entering.filter((cell) => board.blockingSet.has(cell)) : [];
+  // Mortar Trooper Haul: blocking/impassable become difficult instead of impassable
+  if (enteringBlockingCells.length > 0 && !profile.treatBlockingAsDifficult) return null;
   const enteringDifficult =
     !profile.ignoreDifficult &&
-    entering.some((cell) => (board.terrain[cell] || 'normal') === 'difficult');
+    (entering.some((cell) => (board.terrain[cell] || 'normal') === 'difficult') || (profile.treatBlockingAsDifficult && enteringBlockingCells.length > 0));
   const enteringOccupied = entering.some((cell) => board.occupiedSet.has(cell));
   const enteringHostile = board.hostileOccupiedSet
     ? entering.some((cell) => board.hostileOccupiedSet.has(cell))

@@ -3,7 +3,8 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal } from '../data-loader.js';
+import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getLoadoutCards, getFormCards } from '../data-loader.js';
+import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces } from '../game/spatial.js';
 
 /**
@@ -68,6 +69,13 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
   if (!dcHealthState || !findDcMessageIdForFigure) return;
   const msgId = findDcMessageIdForFigure(game.gameId, playerNum, figureKey);
   if (!msgId) return;
+  // Flame Trooper Fireproof: cannot suffer Strain
+  const _fpUpg = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+  if (_fpUpg.includes('Flame Trooper')) {
+    const dcName = figureKey.replace(/-\d+-\d+$/, '');
+    await thread.send(`**Fireproof** — **${dcName}** is immune to Strain from ${abilityLabel}.`).catch(() => {});
+    return;
+  }
   const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
   const figureIndex = figMatch ? parseInt(figMatch[2], 10) : 0;
   const dcName = figureKey.replace(/-\d+-\d+$/, '');
@@ -75,14 +83,60 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
   const entry = healthState[figureIndex];
   if (!entry) return;
   const [cur, max] = entry;
-  const newCur = Math.max(0, (cur ?? max) - amount);
+
+  // Headhunter: when a hostile figure suffers Strain during the Headhunter owner's activation
+  let headhunterTriggered = false;
+  let headhunterDmg = 0;
+  const _hhOwnerNum = 3 - playerNum;
+  const _hhOwnerMsgIds = _hhOwnerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+  const _hhOwnerAtts = _hhOwnerNum === 1 ? (game.p1DcAttachments || {}) : (game.p2DcAttachments || {});
+  const _hhInActivation = _hhOwnerMsgIds.some(mid => game.dcActionsData?.[mid]?.threadId);
+  if (_hhInActivation) {
+    for (const _hhMid of _hhOwnerMsgIds) {
+      const _hhAtts = _hhOwnerAtts[_hhMid] || [];
+      const _hhExh = game.exhaustedSkirmishUpgrades?.[_hhMid] || [];
+      if (_hhAtts.includes('Headhunter') && !_hhExh.includes('Headhunter')) {
+        headhunterTriggered = true;
+        amount = Math.max(0, amount - 1); // reduce Strain by 1
+        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+        game.exhaustedSkirmishUpgrades[_hhMid] = [..._hhExh, 'Headhunter'];
+        // Opponent discards random CC or figure suffers 1 Damage
+        const oppHand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+        if (oppHand.length > 0) {
+          const randIdx = Math.floor(Math.random() * oppHand.length);
+          const discarded = oppHand.splice(randIdx, 1)[0];
+          const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+          game[discardKey] = game[discardKey] || [];
+          game[discardKey].push(discarded);
+          await thread.send(`**Headhunter** — Strain reduced by 1. P${playerNum} discards **${discarded}** from hand.`).catch(() => {});
+          if (logGameAction) await logGameAction(game, client, `**Headhunter** — Reduced Strain on **${dcName}**; P${playerNum} discards **${discarded}**.`, { phase: 'ROUND', icon: 'card' });
+        } else {
+          headhunterDmg = 1;
+          await thread.send(`**Headhunter** — Strain reduced by 1, but P${playerNum} has no CCs. **${dcName}** suffers 1 Damage instead.`).catch(() => {});
+          if (logGameAction) await logGameAction(game, client, `**Headhunter** — Reduced Strain on **${dcName}**; no CCs, dealt 1 Damage.`, { phase: 'ROUND', icon: 'card' });
+        }
+        break;
+      }
+    }
+  }
+
+  const totalHpLoss = amount + headhunterDmg;
+  if (totalHpLoss <= 0 && headhunterTriggered) {
+    // Headhunter fully prevented strain + opponent had CCs to discard
+    return;
+  }
+  const newCur = Math.max(0, (cur ?? max) - totalHpLoss);
   healthState[figureIndex] = [newCur, max ?? newCur];
   dcHealthState.set(msgId, healthState);
   const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
   const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
   const idx = (dcIds || []).indexOf(msgId);
   if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-  await thread.send(`**${abilityLabel}** (${sourceLabel}) — **${dcName}** suffers 1 Strain (${cur ?? max} → ${newCur} HP).`);
+  if (!headhunterTriggered) {
+    await thread.send(`**${abilityLabel}** (${sourceLabel}) — **${dcName}** suffers 1 Strain (${cur ?? max} → ${newCur} HP).`);
+  } else {
+    await thread.send(`**${abilityLabel}** — **${dcName}** suffers 1 Damage from Headhunter (${cur ?? max} → ${newCur} HP).`);
+  }
   if (logGameAction) {
     await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** suffered 1 Strain.`, { phase: 'ROUND', icon: 'attack' });
   }
@@ -459,14 +513,217 @@ export async function handleAttackTarget(interaction, ctx) {
     defenseRoll: null,
     attackTargetMsgId: interaction.message.id,
   };
+  // Imperial Loadout (Purge Trooper Elite): inject loadout surge abilities + store post-attack hook
+  const _loadoutChoice = getConfig(game, attackerFigureKey)?.loadout;
+  if (_loadoutChoice) {
+    const _loadoutCard = getLoadoutCards()[_loadoutChoice];
+    if (_loadoutCard?.surgeKeys) game.pendingCombat.bonusSurgeAbilities.push(..._loadoutCard.surgeKeys);
+    if (_loadoutCard?.postAttack) game.pendingCombat.loadoutPostAttack = _loadoutCard.postAttack;
+  }
+  // Clawdite Form: inject form surge abilities, passives, and Rifleman dice replacement
+  const _formChoice = getConfig(game, attackerFigureKey)?.form;
+  if (_formChoice) {
+    const _formCard = getFormCards()[_formChoice];
+    if (_formCard?.surgeKeys) game.pendingCombat.bonusSurgeAbilities.push(..._formCard.surgeKeys);
+    if (_formCard?.combatPassives) game.pendingCombat.formCombatPassives = _formCard.combatPassives;
+    // Streetrat Assassin's Blade post-attack hook
+    if (_formChoice === 'Streetrat') game.pendingCombat.formPostAttack = 'assassins_blade';
+    // Scout Rifleman: replace 1 non-red die with 1 blue die
+    if (_formChoice === 'Scout') {
+      const dice = [...(game.pendingCombat.attackInfo.dice || [])];
+      const replaceOrder = ['yellow', 'green']; // prefer replacing weaker dice
+      let replaced = false;
+      for (const color of replaceOrder) {
+        const idx = dice.indexOf(color);
+        if (idx !== -1) { dice[idx] = 'blue'; replaced = true; break; }
+      }
+      if (replaced) {
+        game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice };
+        await thread.send(`🎯 **Rifleman** — Replaced 1 attack die with 1 blue die.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
+    }
+  }
   // Clean up temp flags after transferring to combat object
   if (game._pendingBlockSurgeAbilities) delete game._pendingBlockSurgeAbilities;
   if (game._closeQuartersBonusAcc) delete game._closeQuartersBonusAcc;
   if (game._closeQuartersRemoveDefDie) delete game._closeQuartersRemoveDefDie;
   // Apply printed passive stat bonuses from attacker only (NPC has no passives)
-  const attackerPassives = getDcStats(meta.dcName).passives || [];
+  // Merge form passives (e.g. "+2 Accuracy") and form combat passives (e.g. "Professional") with DC passives
+  const attackerPassives = [...(getDcStats(meta.dcName).passives || [])];
+  if (_formChoice) {
+    const _fCard = getFormCards()[_formChoice];
+    if (_fCard?.passives) attackerPassives.push(..._fCard.passives);
+    if (_fCard?.combatPassives) attackerPassives.push(..._fCard.combatPassives);
+  }
   const defenderPassives = target.isNpc ? [] : (getDcStats(targetDcName).passives || []);
   applyDcPassivesToCombat(game.pendingCombat, attackerPassives, defenderPassives);
+
+  // --- Skirmish Upgrade attachment combat effects ---
+  const _atkUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+  const _defMsgId = target.isNpc ? null : (findDcMessageIdForFigure?.(game.gameId, game.pendingCombat.defenderPlayerNum, target.figureKey) || null);
+  const _defUpgrades = _defMsgId ? (game.p1DcAttachments?.[_defMsgId] || game.p2DcAttachments?.[_defMsgId] || []) : [];
+  if (_atkUpgrades.length || _defUpgrades.length) {
+    const _pc = game.pendingCombat;
+    // Targeting Computer (attachment): +1 atk reroll while attacking
+    if (_atkUpgrades.includes('Targeting Computer')) {
+      _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
+    }
+    // Driven by Hatred (Darth Vader): +1 Hit, reroll 1 atk die (Brutality loss handled separately)
+    if (_atkUpgrades.includes('Driven by Hatred')) {
+      _pc.bonusHits = (_pc.bonusHits || 0) + 1;
+      _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
+    }
+    // Heir to the Jedi (Luke): reroll 1 atk die; +1 Hit on Ranged; Saber Strike Focus handled at declaration
+    if (_atkUpgrades.includes('Heir to the Jedi')) {
+      _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
+      if (isRanged) _pc.bonusHits = (_pc.bonusHits || 0) + 1;
+    }
+    // Rogue Smuggler (Han Solo): reroll 1 atk die (Distracting loss handled separately)
+    if (_atkUpgrades.includes('Rogue Smuggler')) {
+      _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
+    }
+    // Wookiee Avenger (Chewbacca): +1 Hit while attacking
+    if (_atkUpgrades.includes('Wookiee Avenger')) {
+      _pc.bonusHits = (_pc.bonusHits || 0) + 1;
+    }
+    // Prey on the Weak (HUNTER): Pierce 1 + Accuracy 1 vs lower-cost figure
+    if (_atkUpgrades.includes('Prey on the Weak')) {
+      const _potwAtkCost = getDcStats(meta.dcName)?.cost ?? 0;
+      const _potwDefCost = _pc.targetStats?.cost ?? 99;
+      if (_potwAtkCost > _potwDefCost) {
+        _pc.bonusPierce = (_pc.bonusPierce || 0) + 1;
+        _pc.bonusAccuracy = (_pc.bonusAccuracy || 0) + 1;
+      }
+    }
+    // Explosive Armaments (HUNTER/DROID): Surge: +1 Damage, Blast 1
+    if (_atkUpgrades.includes('Explosive Armaments')) {
+      _pc.bonusSurgeAbilities.push('damage 1, blast 1');
+    }
+    // Feeding Frenzy (CREATURE): Surge: Recover 2 while attacking adjacent
+    if (_atkUpgrades.includes('Feeding Frenzy') && distanceToTarget <= 1) {
+      _pc.bonusSurgeAbilities.push('recover 2');
+    }
+    // Focused on the Kill (IG-88): lose Surge: Recover 3, gain Surge: Pierce 1; pre-attack Focus
+    if (_atkUpgrades.includes('Focused on the Kill')) {
+      _pc.removeSurgeKeys = (_pc.removeSurgeKeys || []).concat(['recover 3']);
+      _pc.bonusSurgeAbilities.push('pierce 1');
+      // Pre-attack Focus: apply Focus if not already Focused
+      if (!attackerConds.includes('Focus')) {
+        game.figureConditions = game.figureConditions || {};
+        game.figureConditions[attackerFigureKey] = game.figureConditions[attackerFigureKey] || [];
+        if (!game.figureConditions[attackerFigureKey].includes('Focus')) {
+          game.figureConditions[attackerFigureKey].push('Focus');
+          _pc.attackInfo = { ..._pc.attackInfo, dice: [...(_pc.attackInfo.dice || []), 'green'] };
+          await thread.send('**Focused on the Kill** — IG-88 becomes Focused before attacking.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }
+      }
+    }
+    // Heir to the Jedi: Saber Strike pre-attack Focus (when using Saber Strike override)
+    if (_atkUpgrades.includes('Heir to the Jedi') && game.pendingOverrideAttackDice?.[msgId]?.source === 'saber_strike') {
+      if (!attackerConds.includes('Focus')) {
+        game.figureConditions = game.figureConditions || {};
+        game.figureConditions[attackerFigureKey] = game.figureConditions[attackerFigureKey] || [];
+        if (!game.figureConditions[attackerFigureKey].includes('Focus')) {
+          game.figureConditions[attackerFigureKey].push('Focus');
+          _pc.attackInfo = { ..._pc.attackInfo, dice: [...(_pc.attackInfo.dice || []), 'green'] };
+          await thread.send('**Heir to the Jedi** — Luke becomes Focused before Saber Strike.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }
+      }
+    }
+    // --- Defender attachments ---
+    // Combat Suit: reduce Pierce value of attack results by 1 (min 0, handled in computeCombatResult)
+    if (_defUpgrades.includes('Combat Suit')) {
+      _pc.defenderReducePierce = (_pc.defenderReducePierce || 0) + 1;
+    }
+    // Wookiee Avenger (defending): convert Dodge → Evade (handled in computeCombatResult)
+    if (_defUpgrades.includes('Wookiee Avenger')) {
+      _pc.wookieeAvengerDefend = true;
+    }
+    // Cross Training (defending): replace 1 defense die with white die (handled in handleCombatRoll)
+    if (_defUpgrades.includes('Cross Training')) {
+      _pc.crossTrainingDefend = true;
+    }
+    // Rogue Smuggler (defender): lose Distracting — negate the passive if present
+    if (_defUpgrades.includes('Rogue Smuggler')) {
+      _pc.rougeSmuggler_loseDistracting = true;
+    }
+    // --- Exhaust-based attacker attachments (auto-applied, once per round) ---
+    const _exh = game.exhaustedSkirmishUpgrades?.[msgId] || [];
+    // Scavenged Weaponry: exhaust when declare attack → +1 Hit
+    if (_atkUpgrades.includes('Scavenged Weaponry') && !_exh.includes('Scavenged Weaponry')) {
+      _pc.bonusHits = (_pc.bonusHits || 0) + 1;
+      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+      game.exhaustedSkirmishUpgrades[msgId] = [..._exh, 'Scavenged Weaponry'];
+      await thread.send('**Scavenged Weaponry** — Exhausted: +1 Hit applied to this attack.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
+    // Explosive Armaments: exhaust while attacking → Blast 1
+    if (_atkUpgrades.includes('Explosive Armaments') && !_exh.includes('Explosive Armaments')) {
+      _pc.bonusBlast = (_pc.bonusBlast || 0) + 1;
+      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+      game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'Explosive Armaments'];
+      await thread.send('**Explosive Armaments** — Exhausted: Blast 1 applied to this attack.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
+    // Feeding Frenzy: exhaust while attacking a damaged figure → +1 Hit
+    if (_atkUpgrades.includes('Feeding Frenzy') && !_exh.includes('Feeding Frenzy')) {
+      const _ffDefHs = _defMsgId ? dcHealthState?.get(_defMsgId) : null;
+      const _ffDefFi = target.figureKey ? parseInt((target.figureKey.match(/-(\d+)$/) || [])[1] || '0', 10) : 0;
+      const _ffHp = _ffDefHs?.[_ffDefFi];
+      if (_ffHp && _ffHp[0] < _ffHp[1]) {
+        _pc.bonusHits = (_pc.bonusHits || 0) + 1;
+        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+        game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'Feeding Frenzy'];
+        await thread.send('**Feeding Frenzy** — Exhausted: target has suffered damage, +1 Hit applied.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
+    }
+  }
+  // Z-6 Trooper Rotary Cannon: before attacking, become Focused
+  if (_atkUpgrades.includes('Z-6 Trooper')) {
+    const _z6Pc = game.pendingCombat;
+    if (!attackerConds.includes('Focus')) {
+      game.figureConditions = game.figureConditions || {};
+      game.figureConditions[attackerFigureKey] = game.figureConditions[attackerFigureKey] || [];
+      if (!game.figureConditions[attackerFigureKey].includes('Focus')) {
+        game.figureConditions[attackerFigureKey].push('Focus');
+        _z6Pc.attackInfo = { ..._z6Pc.attackInfo, dice: [...(_z6Pc.attackInfo.dice || []), 'green'] };
+        await thread.send('**Rotary Cannon** — Z-6 Trooper becomes Focused before attacking.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
+    }
+  }
+  // The General's Ranks: +1 Hit when attacking during a non-activation (not this group's activation)
+  if (_atkUpgrades.includes("The General's Ranks")) {
+    const _tgrActionsData = game.dcActionsData?.[msgId];
+    if (!_tgrActionsData?.threadId) {
+      // Not in this group's activation — non-activation attack
+      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+      await thread.send("**The General's Ranks** — +1 Hit (non-activation attack).").catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }
+  }
+  // Scavenged Walker: -1 Hit penalty on end-of-round interrupt attack
+  if (game.scavengedWalkerAttackPenalty?.[msgId]) {
+    game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) - 1;
+    delete game.scavengedWalkerAttackPenalty[msgId];
+    await thread.send('**Scavenged Walker** — -1 Hit applied to this interrupt attack.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }
+  // Flame Trooper Fireproof: this figure cannot suffer Strain (mark on combat object for handlers)
+  if (_atkUpgrades.includes('Flame Trooper')) {
+    game.pendingCombat.attackerFireproof = true;
+  }
+  if (_defUpgrades.includes('Flame Trooper')) {
+    game.pendingCombat.defenderFireproof = true;
+  }
+  // Autofire: add chain attack surge ability + mark on combat
+  if (game.autofireActive?.[msgId]) {
+    game.pendingCombat.bonusSurgeAbilities.push('autofire_chain');
+    game.pendingCombat.autofireAttack = true;
+    delete game.autofireActive[msgId]; // consumed
+  }
+  // Fire Mission: +Blast 1
+  if (game.fireMissionActive?.[msgId]) {
+    game.pendingCombat.bonusBlast = (game.pendingCombat.bonusBlast || 0) + 1;
+    game.pendingCombat.fireMissionAttack = true;
+    delete game.fireMissionActive[msgId]; // consumed
+    await thread.send('**Fire Mission** — +Blast 1 applied to this attack.').catch(() => {});
+  }
 
   // Payback (Dengar CC reaction): if attacker has a pending Payback surge bonus, apply it now
   const paybackBonus = game.paybackBonusSurge?.[msgId];
@@ -555,6 +812,10 @@ export async function handleAttackTarget(interaction, ctx) {
       const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
       if (!(fkEff?.specialAbilityIds || []).some(id => distractingIds.includes(id))) continue;
       if (!adjToTarget.has(String(pos).toLowerCase())) continue;
+      // Rogue Smuggler: "You lose Distracting" — skip if this figure's DC has the attachment
+      const _distMsgId = findDcMessageIdForFigure?.(game.gameId, defenderPlayerNum, fk);
+      const _distUpg = _distMsgId ? (game.p1DcAttachments?.[_distMsgId] || game.p2DcAttachments?.[_distMsgId] || []) : [];
+      if (_distUpg.includes('Rogue Smuggler')) continue;
       game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) + 1;
       await thread.send(`**Distracting** (${fkDcName}) — adjacent to target, +1 Evade for defender.`);
       break; // only one Distracting bonus
@@ -571,6 +832,12 @@ export async function handleAttackTarget(interaction, ctx) {
       game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) + 1;
       await thread.send('**Hunker Down** — Cara Dune is adjacent to terrain, +1 Evade.');
     }
+  }
+
+  // On a Diplomatic Mission: +1 Evade on defense for rest of round
+  if (_defMsgId && game.diplomaticMissionEvade?.[_defMsgId]) {
+    game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) + 1;
+    await thread.send("**On a Diplomatic Mission** — +1 Evade on defense (rest of round).");
   }
 
   // Relentless (Trandoshan Hunter, IG-88, Fifth Brother): 1 Strain to target within 3
@@ -958,11 +1225,13 @@ export async function handleAttackTarget(interaction, ctx) {
     const pierceStr = overrideDice.pierce > 0 ? `, Pierce ${overrideDice.pierce}` : '';
     await thread.send(`**Override dice** — Attack uses [${diceStr}]${typeStr}${pierceStr}.`);
   }
-  // Apply bonusHits from overrideDice (e.g. Overheated: -1 Hit per attack)
+  // Apply bonusHits from overrideDice (e.g. Overheated: -1 Hit, Flurry of Blows: +1 Hit)
   if (overrideDice?.bonusHits) {
     game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + overrideDice.bonusHits;
     if (overrideDice.bonusHits < 0) {
       await thread.send(`**Overheated** — −${Math.abs(overrideDice.bonusHits)} Hit applied automatically.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    } else if (overrideDice.bonusHits > 0) {
+      await thread.send(`**+${overrideDice.bonusHits} Hit** applied to attack results.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
   }
   // Optimal Bombardment: apply +Blast bonus if this figure was granted one
@@ -1242,6 +1511,16 @@ export async function handleCombatRoll(interaction, ctx) {
     const baseColor = combat.targetStats.defense || 'white';
     const bonusDice = combat.defenseBonusDice || [];
     const pool = [baseColor, ...bonusDice];
+    // Cross Training (Skirmish Upgrade): replace 1 non-white defense die with white
+    if (combat.crossTrainingDefend) {
+      const _ctIdx = pool.findIndex(c => c !== 'white');
+      if (_ctIdx !== -1) pool[_ctIdx] = 'white';
+    }
+    // Autofire: defender adds 1 white die
+    if (game.autofireActive?.[combat.attackerMsgId]) {
+      pool.push('white');
+      await thread.send('**Autofire** — Defender adds 1 white die to defense pool.').catch(() => {});
+    }
     const removeMax = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
     const removeCount = Math.min(removeMax, pool.length);
     const diceToRoll = pool.slice(0, pool.length - removeCount);
@@ -1480,6 +1759,36 @@ export async function handleCombatRoll(interaction, ctx) {
     if (game.deviceRerollGranted?.[combat.attackerMsgId]) {
       atkSpecialReroll += 1;
       delete game.deviceRerollGranted[combat.attackerMsgId];
+    }
+    // Trusted Ally (Skirmish Upgrade): if a friendly DROID within 3 has this attachment (not exhausted), +1 atk reroll
+    {
+      const _taFigs = game.figurePositions?.[attackerPlayerNum] || {};
+      const _taMapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const _taAtkPos = _taFigs[combat.attackerFigureKey];
+      if (_taAtkPos && _taMapSp) {
+        for (const [fk, pos] of Object.entries(_taFigs)) {
+          if (fk === combat.attackerFigureKey) continue;
+          const fn = fk.replace(/-\d+-\d+$/, '');
+          if (!isWithinSpaces(_taMapSp, String(pos).toLowerCase(), String(_taAtkPos).toLowerCase(), 3)) continue;
+          // Check if this figure's DC has Trusted Ally attachment and it's not exhausted
+          const _taMsgIds = attackerPlayerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+          const _taDcList = attackerPlayerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+          for (let i = 0; i < _taDcList.length; i++) {
+            if (_taDcList[i]?.dcName !== fn) continue;
+            const _taMid = _taMsgIds[i];
+            const _taAtts = game.p1DcAttachments?.[_taMid] || game.p2DcAttachments?.[_taMid] || [];
+            if (!_taAtts.includes('Trusted Ally')) break;
+            if ((game.exhaustedSkirmishUpgrades?.[_taMid] || []).includes('Trusted Ally')) break;
+            // Auto-exhaust and grant reroll
+            game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+            game.exhaustedSkirmishUpgrades[_taMid] = [...(game.exhaustedSkirmishUpgrades[_taMid] || []), 'Trusted Ally'];
+            atkSpecialReroll += 1;
+            await thread.send(`**Trusted Ally** (${fn}) — Exhausted: friendly within 3 spaces, +1 attack reroll granted.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            break;
+          }
+          if (atkSpecialReroll > 0) break; // only one Trusted Ally bonus per attack
+        }
+      }
     }
     const atkRerolls = (combat.rerollOneAttackDie || 0) + (game.roundAttackRerollDice?.[attackerPlayerNum] || 0) + atkInnate.attackReroll + atkSpecialReroll;
     const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll + defSpecialReroll + _dmForcedReroll;
@@ -1892,6 +2201,7 @@ export async function handleCombatReroll(interaction, ctx) {
         const totals = recalcDefenseTotals(dice);
         combat.defenseRoll = { block: totals.block, evade: totals.evade, dodge: totals.dodge };
         combat.defenderRerollsRemaining -= 1;
+        combat.defenderRerolledOrModified = true; // Track for Quick Strike (Electrostaff loadout)
         const dodgeTag = newDie.dodge ? '/DODGE' : '';
         await thread.send(`**Rerolled** defense ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
         // Double or Nothing: if DON flag is set for defense side, check dominant icon match
@@ -2852,6 +3162,14 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeFellSwoop) combat.surgeFellSwoop = true;
       if (mod.surgeMastery) combat.surgeMastery = true;
       if (mod.surgeInterrogate) combat.surgeInterrogate = true;
+      // Autofire chain attack: mark pending so applyDamageAndFinishCombat grants free attack
+      if (key === 'autofire_chain') {
+        const _afTargetPos = game.figurePositions?.[combat.defenderPlayerNum]?.[combat.targetFigureKey];
+        combat.autofireChainPending = true;
+        combat.autofireChainTargetSpace = _afTargetPos || null;
+        combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);
+        await thread.send('**Autofire** — Chain attack queued! After this attack resolves, perform another attack targeting within 3 of the target space.').catch(() => {});
+      }
       // Utinni! (Jawa Scavenger): spending this surge earns 1 VP
       if (key === 'utinni_vp_1') {
         const _utinniVpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
@@ -2861,6 +3179,15 @@ export async function handleCombatSurge(interaction, ctx) {
         combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);
         await thread.send(`**Utinni!** — +1 VP earned (${game[_utinniVpKey].total} total).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
         if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Utinni!** — Jawa Scavenger earned +1 VP.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+      }
+      // Gain VP (Senator/Streetrat form surge): spending this surge earns N VP
+      if (mod.surgeVpGain && mod.surgeVpGain > 0) {
+        const _gvpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+        game[_gvpKey] = game[_gvpKey] || { total: 0, kills: 0, objectives: 0 };
+        game[_gvpKey].total += mod.surgeVpGain;
+        game[_gvpKey].objectives += mod.surgeVpGain;
+        await thread.send(`**+${mod.surgeVpGain} VP** earned (${game[_gvpKey].total} total).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Surge: +${mod.surgeVpGain} VP** (${game[_gvpKey].total} total).`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
       }
       // Bargain (Jawa Scavenger Elite): inline VP exchange during surge phase
       if (mod.surgeBargain) {
@@ -3073,6 +3400,8 @@ export async function handleCombatToken(interaction, ctx) {
     removeSpentToken(game, figKey, combat.pendingWildTokenIndex);
     await thread.send(`**Power Token spent:** Wild → +1 ${resolvedType}`);
     logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${combat.pendingWildRole === 'attacker' ? 'Attacker' : 'Defender'}: Wild → +1 ${resolvedType}`, { phase: 'ROUND', icon: 'attack' });
+    // Track defender modifications for Quick Strike (Electrostaff loadout)
+    if (combat.pendingWildRole === 'defender') combat.defenderRerolledOrModified = true;
     // Track Block spending for Mandalorian Steel / Personal Combat Shield
     if (combat.pendingWildRole === 'defender' && resolvedType === 'Block') {
       combat.defenderSpentBlock = true;
@@ -3130,6 +3459,8 @@ export async function handleCombatToken(interaction, ctx) {
   removeSpentToken(game, figureKey, tokenIndex);
   await thread.send(`**Power Token spent:** +1 ${tokenType}`);
   logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${tokenType}`, { phase: 'ROUND', icon: 'attack' });
+  // Track defender modifications for Quick Strike (Electrostaff loadout)
+  if (!isAttacker) combat.defenderRerolledOrModified = true;
   // Track Block token spending for Mandalorian Steel
   if (!isAttacker && tokenType === 'Block') combat.defenderSpentBlock = true;
   // Personal Combat Shield (Gar Saxon): when spending a Block token while defending, +1 Evade

@@ -1,0 +1,31 @@
+{
+  "source": "IACP Shape Cards (Clawdite Shapeshifter form options); dc-supplemental",
+  "cards": {
+    "Scout": {
+      "abilityText": "Rifleman: When you declare an attack, replace 1 die in your attack pool with 1 blue die.\n\nPriority Target: Figures do not block line of sight for your attacks.",
+      "passives": ["+2 Accuracy"],
+      "surgeKeys": ["accuracy 2, pierce 1"],
+      "imagePath": "vassal_extracted/images/dc-supplemental/IACP_Shape Card--Clawdite Shapeshifter - Scout.png"
+    },
+    "Senator": {
+      "abilityText": "Conspire: Distribute 1 Focus for each die in your printed attack pool to friendly figures within 1 space.",
+      "passives": ["+1 Accuracy"],
+      "surgeKeys": ["recover 2", "gain 1"],
+      "imagePath": "vassal_extracted/images/dc-supplemental/IACP_Shape Card--Clawdite Shapeshifter - Senator.png"
+    },
+    "Soldier": {
+      "abilityText": "Shields Up: Place 1 energy shield in an adjacent space. A figure can attack this energy shield (Health 4, Defense: None).\n\nProfessional: While attacking, you may reroll 1 attack die.",
+      "passives": ["+1 Accuracy"],
+      "surgeKeys": ["accuracy 2", "blast 1"],
+      "combatPassives": ["Professional"],
+      "imagePath": "vassal_extracted/images/dc-supplemental/IACP_Shape Card--Clawdite Shapeshifter - Soldier.png"
+    },
+    "Streetrat": {
+      "abilityText": "Assassin's Blade: After this attack resolves, choose an adjacent hostile figure and roll 1 red die. That figure suffers damage equal to the Hit results.\n\nFleet: At the start of your activation, gain 2 movement points.",
+      "passives": ["+1 Hit"],
+      "surgeKeys": ["gain 1"],
+      "fleetMp": 2,
+      "imagePath": "vassal_extracted/images/dc-supplemental/IACP_Shape Card--Clawdite Shapeshifter - Streetrat.png"
+    }
+  }
+}

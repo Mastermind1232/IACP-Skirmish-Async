@@ -8,6 +8,8 @@
         { "surgeCost": 1, "label": "Pierce 2" },
         { "surgeCost": 1, "label": "Apply -1 Dodge to the defense results", "name": "Deadly" }
       ],
+      "surgeKeys": ["damage 1", "pierce 2", "deadly"],
+      "postAttack": "flurry_of_blows",
       "imagePath": "vassal_extracted/images/dc-supplemental/IACP_Loadout Card--Electrobatons.png"
     },
     "Electrohammer": {
@@ -16,6 +18,8 @@
         { "surgeCost": 1, "label": "+2 Hits" },
         { "surgeCost": 1, "label": "Pierce 2" }
       ],
+      "surgeKeys": ["damage 2", "pierce 2"],
+      "postAttack": "electro_pulse",
       "imagePath": "vassal_extracted/images/dc-supplemental/IACP_Loadout Card--Electrohammer.png"
     },
     "Electrostaff": {
@@ -24,7 +28,9 @@
         { "surgeCost": 1, "label": "+1 Hit" },
         { "surgeCost": 1, "label": "Pierce 2" }
       ],
+      "surgeKeys": ["damage 1", "pierce 2"],
       "passive": "Reach",
+      "postAttack": "quick_strike",
       "imagePath": "vassal_extracted/images/dc-supplemental/IACP_Loadout Card--Electrostaff.png"
     }
   }

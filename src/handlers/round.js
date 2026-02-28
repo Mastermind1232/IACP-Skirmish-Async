@@ -2,7 +2,8 @@
  * Round handlers: end_end_of_round_, end_start_of_round_
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getDcEffects, getMapSpaces } from '../data-loader.js';
+import { getDcEffects, getMapSpaces, getFormCards } from '../data-loader.js';
+import { getConfig } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
 
 /**
@@ -224,12 +225,70 @@ export async function handleEndEndOfRound(interaction, ctx) {
     }
     game.endOfRoundSelfDamage = {};
   }
+  // Scavenged Walker: end of round, may interrupt to perform an attack with -1 Hit
+  for (const pn of [1, 2]) {
+    const _swMsgIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const _swDcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const _swAtts = pn === 1 ? (game.p1DcAttachments || {}) : (game.p2DcAttachments || {});
+    for (let i = 0; i < _swMsgIds.length; i++) {
+      const _swMid = _swMsgIds[i];
+      if (!(_swAtts[_swMid] || []).includes('Scavenged Walker')) continue;
+      const _swDc = _swDcList[i];
+      if (!_swDc?.dcName || _swDc.defeated) continue;
+      const _swOwnerId = game[`player${pn}Id`];
+      const _swRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`scavenged_walker_attack_${gameId}_${_swMid}`).setLabel('Interrupt Attack (-1 Hit)').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`scavenged_walker_skip_${gameId}_${_swMid}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await logGameAction(game, client, `<@${_swOwnerId}> **Scavenged Walker** — **${_swDc.displayName || _swDc.dcName}** may interrupt to perform an attack with -1 Hit at end of round. Use Attack button to perform this attack (remember -1 Hit penalty). *(Honor system for -1 Hit.)*`, {
+        components: [_swRow],
+        allowedMentions: { users: [_swOwnerId] },
+      });
+    }
+  }
+  // Survivalist (Skirmish Upgrade): end of round, if in exterior space, recover 1 Damage
+  const _svMapSpaces = game.selectedMap?.id ? getMapSpaces?.(game.selectedMap.id) : null;
+  if (_svMapSpaces?.exterior) {
+    const _svExterior = new Set((Array.isArray(_svMapSpaces.exterior) ? _svMapSpaces.exterior : []).map(s => String(s).toLowerCase()));
+    for (const pn of [1, 2]) {
+      const _svMsgIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const _svDcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const _svAtts = pn === 1 ? (game.p1DcAttachments || {}) : (game.p2DcAttachments || {});
+      for (let i = 0; i < _svMsgIds.length; i++) {
+        const _svMid = _svMsgIds[i];
+        if (!(_svAtts[_svMid] || []).includes('Survivalist')) continue;
+        const _svDc = _svDcList[i];
+        if (!_svDc?.dcName || _svDc.defeated) continue;
+        // Check if any figure in this group is in an exterior space
+        const _svDgIdx = (_svDc.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const _svFigs = game.figurePositions?.[pn] || {};
+        for (const [fk, pos] of Object.entries(_svFigs)) {
+          if (!fk.startsWith(`${_svDc.dcName}-${_svDgIdx}-`)) continue;
+          if (!_svExterior.has(String(pos).toLowerCase())) continue;
+          // Recover 1 HP for this figure
+          const _svHs = dcHealthState.get(_svMid);
+          const _svFi = parseInt(fk.split('-').pop(), 10);
+          if (_svHs?.[_svFi]) {
+            const [_svCur, _svMax] = _svHs[_svFi];
+            if (_svCur < _svMax) {
+              _svHs[_svFi] = [Math.min(_svMax, _svCur + 1), _svMax];
+              dcHealthState.set(_svMid, _svHs);
+              const _svIdx = _svMsgIds.indexOf(_svMid);
+              if (_svIdx >= 0 && _svDcList[_svIdx]) _svDcList[_svIdx].healthState = [..._svHs];
+              await logGameAction(game, client, `**Survivalist** — **${_svDc.displayName || _svDc.dcName}** recovers 1 Damage (exterior space).`, { phase: 'ROUND', icon: 'round' });
+            }
+          }
+        }
+      }
+    }
+  }
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId) continue;
     if (isDepletedRemovedFromGame(game, msgId)) continue;
     dcExhaustedState.set(msgId, false);
     if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
     if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
+    if (game.exhaustedSkirmishUpgrades?.[msgId]) delete game.exhaustedSkirmishUpgrades[msgId];
     try {
       const chId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
       const ch = await client.channels.fetch(chId);
@@ -639,13 +698,27 @@ export async function handleEndStartOfRound(interaction, ctx) {
           });
         }
 
-        // Shape/Shift (Clawdite Shapeshifter): reminder about form card at start of round
+        // Shape/Shift (Clawdite Shapeshifter): form picker at start of round
         if (sIds.includes('shape_clawdite_elite') || sIds.includes('shape_clawdite_reg') || sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
           const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
-          await logGameAction(game, client, `🔄 **Shift** — <@${ownerId}>, you may switch **${dc.displayName || dc.dcName}**'s Form card at the start of this round. *(Honor system.)*`, {
-            phase: 'ROUND', icon: 'round',
-            allowedMentions: { users: [ownerId] },
-          });
+          const _fk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith(dc.dcName + '-'));
+          const _curForm = _fk ? getConfig(game, _fk)?.form : null;
+          const formCards = getFormCards();
+          const formNames = Object.keys(formCards);
+          if (_fk && formNames.length > 0) {
+            const btns = formNames.map(name => new ButtonBuilder()
+              .setCustomId(`form_pick_${gameId}_${_fk}_${name}`)
+              .setLabel(name === _curForm ? `${name} (current)` : name)
+              .setStyle(name === _curForm ? ButtonStyle.Secondary : ButtonStyle.Primary)
+            );
+            const rows = [];
+            for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+            await logGameAction(game, client, `🔄 **Shift** — <@${ownerId}>, you may switch **${dc.displayName || dc.dcName}**'s Form card (current: **${_curForm || 'none'}**):`, {
+              phase: 'ROUND', icon: 'round',
+              components: rows,
+              allowedMentions: { users: [ownerId] },
+            });
+          }
         }
       }
     }

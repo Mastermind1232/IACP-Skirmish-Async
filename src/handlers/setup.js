@@ -2,7 +2,9 @@
  * Setup handlers: map_selection_, draft_random_, determine_initiative_, deployment_zone_red_/blue_, deployment_fig_, deployment_orient_, deploy_pick_, deployment_done_
  * F17: map_selection_menu_ (Random/Competitive/Select Draw/Selection), map_selection_draw_, map_selection_pick_
  */
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { getLoadoutCards, getFormCards, getDcEffects } from '../data-loader.js';
+import { setConfig } from '../game/figure-config.js';
 
 /**
  * Build options for mission select menus (Select Draw / Selection). Value format: "mapId:variant".
@@ -956,6 +958,145 @@ export async function handleDeployPick(interaction, ctx) {
     components: [],
     attachments: [],
   }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+
+  // Imperial Loadout: if Purge Trooper (Elite) was just deployed, show loadout picker
+  const dcEff = getDcEffects()?.[figMeta.dcName];
+  if (dcEff?.specialAbilityIds?.includes('imperial_loadout_purge_trooper')) {
+    const loadoutCards = getLoadoutCards();
+    const names = Object.keys(loadoutCards);
+    if (names.length > 0) {
+      const row = new ActionRowBuilder().addComponents(
+        ...names.map((name) =>
+          new ButtonBuilder()
+            .setCustomId(`loadout_pick_${game.gameId}_${figureKey}_${name}`)
+            .setLabel(name)
+            .setStyle(ButtonStyle.Primary)
+        )
+      );
+      try {
+        const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+        const handChannel = await client.channels.fetch(handId);
+        await handChannel.send({
+          content: `⚔️ **Imperial Loadout** — Choose a Loadout card for **${figMeta.dcName}**:`,
+          components: [row],
+        });
+      } catch (err) {
+        console.error('Failed to send loadout picker:', err);
+      }
+    }
+  }
+
+  // Shape (Clawdite Shapeshifter): show form picker after deployment
+  const _shapeIds = ['shape_clawdite_elite', 'shape_clawdite_reg'];
+  if (dcEff?.specialAbilityIds?.some(id => _shapeIds.includes(id))) {
+    const formCards = getFormCards();
+    const formNames = Object.keys(formCards);
+    if (formNames.length > 0) {
+      const row = new ActionRowBuilder().addComponents(
+        ...formNames.map((name) =>
+          new ButtonBuilder()
+            .setCustomId(`form_pick_${game.gameId}_${figureKey}_${name}`)
+            .setLabel(name)
+            .setStyle(ButtonStyle.Primary)
+        )
+      );
+      try {
+        const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+        const handChannel = await client.channels.fetch(handId);
+        await handChannel.send({
+          content: `🔄 **Shape** — Choose a Form card for **${figMeta.dcName}**:`,
+          components: [row],
+        });
+      } catch (err) {
+        console.error('Failed to send form picker:', err);
+      }
+    }
+  }
+}
+
+/**
+ * Handle loadout card selection: loadout_pick_{gameId}_{figureKey}_{loadoutName}
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - getGame, logGameAction, client, saveGames
+ */
+export async function handleLoadoutPick(interaction, ctx) {
+  await interaction.deferUpdate().catch(() => {});
+  const { getGame, logGameAction, client, saveGames } = ctx;
+  // Parse: loadout_pick_{gameId}_{dcName}-{dgIdx}-{figIdx}_{loadoutName}
+  const prefix = 'loadout_pick_';
+  const rest = interaction.customId.slice(prefix.length);
+  const gameIdEnd = rest.indexOf('_');
+  if (gameIdEnd < 0) return;
+  const gameId = rest.slice(0, gameIdEnd);
+  const afterGameId = rest.slice(gameIdEnd + 1);
+  // figureKey is dcName-dgIdx-figIdx, loadoutName follows after last _ that's part of loadout
+  // Since DC names can contain spaces/hyphens, figure key ends at -\d+-\d+_
+  const fkMatch = afterGameId.match(/^(.+-\d+-\d+)_(.+)$/);
+  if (!fkMatch) return;
+  const [, figureKey, loadoutName] = fkMatch;
+  const game = getGame(gameId);
+  if (!game) return;
+
+  const loadoutCards = getLoadoutCards();
+  const card = loadoutCards[loadoutName];
+  if (!card) return;
+
+  setConfig(game, figureKey, 'loadout', loadoutName);
+  saveGames();
+
+  // Show chosen card image and update the message
+  const { join } = await import('path');
+  const { getRootDir } = await import('../data-loader.js');
+  const files = [];
+  if (card.imagePath) {
+    try {
+      files.push(new AttachmentBuilder(join(getRootDir(), card.imagePath)));
+    } catch {}
+  }
+  await interaction.message.edit({
+    content: `✓ **Imperial Loadout** — **${figureKey.replace(/-\d+-\d+$/, '')}** equipped **${loadoutName}**.\n${card.abilityText}`,
+    components: [],
+    files,
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await logGameAction?.(game, client, `**Imperial Loadout** — **${figureKey.replace(/-\d+-\d+$/, '')}** chose **${loadoutName}**.`, { phase: 'DEPLOYMENT', icon: 'deploy' });
+}
+
+/**
+ * Handle form card selection (deployment or round-start shift): form_pick_{gameId}_{figureKey}_{formName}
+ */
+export async function handleFormPick(interaction, ctx) {
+  await interaction.deferUpdate().catch(() => {});
+  const { getGame, logGameAction, client, saveGames } = ctx;
+  const prefix = 'form_pick_';
+  const rest = interaction.customId.slice(prefix.length);
+  const gameIdEnd = rest.indexOf('_');
+  if (gameIdEnd < 0) return;
+  const gameId = rest.slice(0, gameIdEnd);
+  const afterGameId = rest.slice(gameIdEnd + 1);
+  const fkMatch = afterGameId.match(/^(.+-\d+-\d+)_(.+)$/);
+  if (!fkMatch) return;
+  const [, figureKey, formName] = fkMatch;
+  const game = getGame(gameId);
+  if (!game) return;
+  const formCards = getFormCards();
+  const card = formCards[formName];
+  if (!card) return;
+  setConfig(game, figureKey, 'form', formName);
+  saveGames();
+  const { join } = await import('path');
+  const { getRootDir } = await import('../data-loader.js');
+  const files = [];
+  if (card.imagePath) {
+    try { files.push(new AttachmentBuilder(join(getRootDir(), card.imagePath))); } catch {}
+  }
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  await interaction.message.edit({
+    content: `✓ **Form: ${formName}** — **${dcName}** gains ${formName} abilities.\n${card.abilityText}`,
+    components: [],
+    files,
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  const isRoundShift = (game.currentRound || 0) >= 1 && game.p1ActivationsRemaining != null;
+  await logGameAction?.(game, client, `🔄 **${isRoundShift ? 'Shift' : 'Shape'}** — **${dcName}** chose **${formName}** form.`, { phase: isRoundShift ? 'ROUND' : 'DEPLOYMENT', icon: isRoundShift ? 'round' : 'deploy' });
 }
 
 /**
@@ -1339,6 +1480,36 @@ export async function handleSetupAttachTo(interaction, ctx) {
   if (!Array.isArray(game[attachKey][dcMsgId])) game[attachKey][dcMsgId] = [];
   game[attachKey][dcMsgId].push(card);
   pending.shift();
+
+  // Focused on the Kill (IG-88): +5 Health applied at setup when attached
+  if (card === 'Focused on the Kill') {
+    const dcHS = ctx.dcHealthState;
+    const hs = dcHS?.get(dcMsgId);
+    if (hs) {
+      for (let fi = 0; fi < hs.length; fi++) {
+        if (hs[fi]) { hs[fi] = [hs[fi][0] + 5, hs[fi][1] + 5]; }
+      }
+      dcHS.set(dcMsgId, hs);
+      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const idx = dcMsgIds.indexOf(dcMsgId);
+      if (idx >= 0 && dcList[idx]) dcList[idx].healthState = [...hs];
+    }
+  }
+  // Wookiee Avenger: search deck for "Debts Repaid", put into hand, draw 1 fewer in starting hand
+  if (card === 'Wookiee Avenger') {
+    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const deck = game[deckKey] || [];
+    const dIdx = deck.indexOf('Debts Repaid');
+    if (dIdx >= 0) {
+      deck.splice(dIdx, 1);
+      game[deckKey] = deck;
+      game[handKey] = [...(game[handKey] || []), 'Debts Repaid'];
+      game.wookieeAvengerDrawPenalty = (game.wookieeAvengerDrawPenalty || 0) + 1;
+      await logGameAction(game, client, `**Wookiee Avenger** — Searched deck for **Debts Repaid**, added to hand. Will draw 1 fewer starting card.`, { phase: 'SETUP', icon: 'card' });
+    }
+  }
 
   try {
     await updateAttachmentMessageForDc(game, playerNum, dcMsgId, client);
