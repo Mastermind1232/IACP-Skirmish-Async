@@ -34,21 +34,20 @@ export function parseVsav(content) {
 
   const dcList = [];
   const ccList = [];
-  const dcSeen = new Set();
   const ccSeen = new Set();
 
   // Deployment cards: D card-Imp--, D card-Reb--, D card-Merc--, D card-Neu--, etc.
+  // NOTE: DCs can have duplicates (e.g. 2x Probe Droid Elite), so no deduplication here.
   const dcRegex = /D card-[^;]+\.(?:jpg|png|gif);([^/\\]+?)(?:\/|;;|$)/g;
   let m;
   while ((m = dcRegex.exec(content)) !== null) {
     const raw = m[1].trim();
     if (raw && !/^[;\s]*$|^;?true$/i.test(raw) && /[A-Za-z]/.test(raw) && raw.length > 2) {
-      const name = normalizeCardName(raw);
-      if (!dcSeen.has(name)) { dcSeen.add(name); dcList.push(name); }
+      dcList.push(normalizeCardName(raw));
     }
   }
 
-  // Command cards: C card--Name.jpg;Name/
+  // Command cards: C card--Name.jpg;Name/ (CCs are unique — deduplicate)
   const ccRegex = /C card--[^;]+\.(?:jpg|png|gif);([^/\\]+?)(?:\/|;;|$)/g;
   while ((m = ccRegex.exec(content)) !== null) {
     const raw = m[1].trim();
