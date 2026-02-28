@@ -142,7 +142,7 @@ export async function handleMapTypeChoice(interaction, ctx) {
       ? getMissionSelectDrawMenu(gameId, options)
       : getMissionSelectionPickMenu(gameId, options);
     saveGames();
-    await interaction.editReply({ content, components: [getMapTypeButtons(gameId, type), missionMenu] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.editReply({ content, embeds: [], components: [getMapTypeButtons(gameId, type), missionMenu] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
 
@@ -193,6 +193,7 @@ export async function handleMapTypeChoice(interaction, ctx) {
   saveGames();
   await interaction.editReply({
     content: `**${typeLabel}**\nMap selected. Click **Confirm Selection** to reveal and proceed, or pick a different method.`,
+    embeds: [],
     components: [getMapTypeButtons(gameId, type), getMapConfirmButton(gameId)],
   }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }

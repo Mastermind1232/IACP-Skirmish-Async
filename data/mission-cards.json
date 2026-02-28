@@ -107,7 +107,7 @@
       "a": {
         "name": "Blitz",
         "tokenLabel": "",
-        "imagePath": "",
+        "imagePath": "vassal_extracted/images/mission-cards/Lothal Wastes-A-Blitz.png",
         "setup": "Players do not deploy normally. instead, players alternate deploying groups, following the rules for passing. When a figure is deployed, it may move up to 8 spaces.",
         "persistent": "",
         "startOfRound": "",
@@ -124,7 +124,7 @@
       "b": {
         "name": "Fluctuations",
         "tokenLabel": "",
-        "imagePath": "",
+        "imagePath": "vassal_extracted/images/mission-cards/Lothal Wastes-B-Fluctuations.png",
         "setup": "",
         "persistent": "",
         "startOfRound": "",
