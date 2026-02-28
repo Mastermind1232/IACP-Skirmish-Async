@@ -171,6 +171,19 @@ export function getLobbyEmbed(lobby) {
     .setColor(0x2f3136);
 }
 
+/** Tooltip embed explaining the 4 map selection methods. */
+export function getMapSelectionTooltipEmbed() {
+  return new EmbedBuilder()
+    .setTitle('Map Selection Methods')
+    .setDescription(
+      '**Competitive** — Random map from the current tournament rotation\n' +
+      '**Random** — Random map from all available maps\n' +
+      '**Select Draw** — Pick 2+ maps; one is chosen at random\n' +
+      '**Selection** — Pick the exact map you want to play'
+    )
+    .setColor(0x2f3136);
+}
+
 /** Display names for deploy list: duplicate DCs get [DG 1], [DG 2], etc. */
 export function getDeployDisplayNames(dcList) {
   if (!dcList?.length) return [];

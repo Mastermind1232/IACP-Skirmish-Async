@@ -64,8 +64,10 @@ export async function handleMapSelection(interaction, ctx) {
     }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
+  const tooltipEmbed = ctx.getMapSelectionTooltipEmbed?.();
   await interaction.followUp({
     content: 'Choose how to select the map:',
+    embeds: tooltipEmbed ? [tooltipEmbed] : [],
     components: [getMapTypeButtons(gameId)],
     ephemeral: false,
   }).catch((err) => { console.error('[discord]', err?.message ?? err); });

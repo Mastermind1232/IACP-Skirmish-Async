@@ -464,14 +464,28 @@ export async function getLeaderboard(limit = 10) {
 // ── Achievements ─────────────────────────────────────────────────────────────
 
 const ACHIEVEMENT_SEED = [
-  { id: 'complete_1_game',  name: 'First Game',    description: 'Complete your first game',    icon: '🏆', trigger: 'game_complete', threshold: 1  },
-  { id: 'complete_5_games', name: 'Regular',       description: 'Complete 5 games',            icon: '🏆', trigger: 'game_complete', threshold: 5  },
-  { id: 'complete_10_games',name: 'Veteran',       description: 'Complete 10 games',           icon: '🏆', trigger: 'game_complete', threshold: 10 },
-  { id: 'complete_25_games',name: 'Hardened',      description: 'Complete 25 games',           icon: '🏆', trigger: 'game_complete', threshold: 25 },
-  { id: 'win_1_game',       name: 'First Victory', description: 'Win your first game',         icon: '🥇', trigger: 'game_win',      threshold: 1  },
-  { id: 'win_5_games',      name: 'On a Roll',     description: 'Win 5 games',                 icon: '🥇', trigger: 'game_win',      threshold: 5  },
-  { id: 'win_10_games',     name: 'Dominant',      description: 'Win 10 games',                icon: '🥇', trigger: 'game_win',      threshold: 10 },
-  { id: 'win_25_games',     name: 'Champion',      description: 'Win 25 games',                icon: '🥇', trigger: 'game_win',      threshold: 25 },
+  // Games played milestones
+  { id: 'complete_1_game',   name: 'New Recruit',             description: 'Complete your first game',  icon: '🏆', trigger: 'game_complete', threshold: 1   },
+  { id: 'complete_5_games',  name: 'Field Tested',            description: 'Complete 5 games',          icon: '🏆', trigger: 'game_complete', threshold: 5   },
+  { id: 'complete_10_games', name: 'Battle-Hardened',         description: 'Complete 10 games',         icon: '🏆', trigger: 'game_complete', threshold: 10  },
+  { id: 'complete_25_games', name: 'Veteran of the Outer Rim',description: 'Complete 25 games',         icon: '🏆', trigger: 'game_complete', threshold: 25  },
+  { id: 'complete_50_games', name: 'Galactic Campaigner',     description: 'Complete 50 games',         icon: '🏆', trigger: 'game_complete', threshold: 50  },
+  { id: 'complete_100_games',name: 'Legend of the Empire',     description: 'Complete 100 games',        icon: '🏆', trigger: 'game_complete', threshold: 100 },
+  // Win milestones
+  { id: 'win_1_game',        name: 'A New Hope',              description: 'Win your first game',       icon: '🥇', trigger: 'game_win',      threshold: 1   },
+  { id: 'win_5_games',       name: 'Rising Force',            description: 'Win 5 games',               icon: '🥇', trigger: 'game_win',      threshold: 5   },
+  { id: 'win_10_games',      name: 'Rebel Commander',         description: 'Win 10 games',              icon: '🥇', trigger: 'game_win',      threshold: 10  },
+  { id: 'win_25_games',      name: 'Grand Admiral',           description: 'Win 25 games',              icon: '🥇', trigger: 'game_win',      threshold: 25  },
+  { id: 'win_50_games',      name: 'The Chosen One',          description: 'Win 50 games',              icon: '🥇', trigger: 'game_win',      threshold: 50  },
+  // In-game highlights
+  { id: 'devastator',        name: 'Devastator',              description: 'Deal 10+ damage in a single attack',            icon: '💥', trigger: 'single_attack_damage', threshold: 10 },
+  { id: 'double_kill',       name: 'Double Kill',             description: 'Defeat 2 figures in a single activation',       icon: '⚔️', trigger: 'activation_kills',     threshold: 2  },
+  { id: 'triple_kill',       name: 'Triple Kill',             description: 'Defeat 3 figures in a single activation',       icon: '⚔️', trigger: 'activation_kills',     threshold: 3  },
+  { id: 'pentakill',         name: 'PENTAKILL',               description: 'Defeat 5 figures in a single activation',       icon: '💀', trigger: 'activation_kills',     threshold: 5  },
+  // Game-end conditions
+  { id: 'shutout',           name: 'Shutout',                 description: 'Win a game where your opponent scored 0 VP',    icon: '🔒', trigger: 'shutout_win',          threshold: 1  },
+  { id: 'survivor',          name: 'Survivor',                description: 'Win a game without losing any figures',         icon: '🛡️', trigger: 'no_losses_win',        threshold: 1  },
+  { id: 'brutalist',         name: 'Brutalist',               description: 'Win by eliminating all opponent figures',       icon: '☠️', trigger: 'full_wipe_win',        threshold: 1  },
 ];
 
 async function seedAchievements() {
@@ -480,7 +494,7 @@ async function seedAchievements() {
     await pool.query(
       `INSERT INTO achievement_defs (id, name, description, icon, trigger, threshold)
        VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (id) DO NOTHING`,
+       ON CONFLICT (id) DO UPDATE SET name = $2, description = $3, icon = $4, trigger = $5, threshold = $6`,
       [def.id, def.name, def.description, def.icon, def.trigger, def.threshold]
     ).catch((err) => console.error('[DB] seedAchievements:', err.message));
   }
@@ -509,7 +523,7 @@ export async function getEarnedAchievements(userId) {
  * Check which achievements for `trigger` are newly earned given `statCount`,
  * insert them, and return the newly granted defs.
  * @param {string} userId
- * @param {'game_complete'|'game_win'} trigger
+ * @param {'game_complete'|'game_win'|'single_attack_damage'|'activation_kills'|'shutout_win'|'no_losses_win'|'full_wipe_win'} trigger
  * @param {number} statCount
  * @returns {Promise<Array<{id, name, description, icon}>>}
  */

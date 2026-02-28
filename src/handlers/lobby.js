@@ -21,7 +21,7 @@ export async function handleLobbyJoin(interaction, ctx) {
   const threadId = interaction.customId.replace('lobby_join_', '');
   const lobby = lobbies.get(threadId);
   if (!lobby) {
-    await interaction.followUp({ content: 'This lobby has expired (bot was restarted). Please ask your opponent to create a new game.', ephemeral: true });
+    await interaction.followUp({ content: 'This lobby could not be found. If the bot was recently restarted, try again in a moment — lobbies are restored automatically. Otherwise, please create a new game in **#new-games**.', ephemeral: true });
     return;
   }
   if (lobby.joinedId) {
@@ -139,7 +139,7 @@ export async function handleLobbyStart(interaction, ctx) {
     });
     game.generalSetupMessageId = setupMsg.id;
     await interaction.followUp({
-      content: `Game **IA Game #${gameId}** is ready! Select the map in Game Log to get started.`,
+      content: `Game **IA Game #${gameId}** is ready! Head to <#${generalChannel.id}> to select your map.`,
       ephemeral: true,
     });
     await updateThreadName(interaction.channel, lobby);

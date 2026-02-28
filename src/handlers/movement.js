@@ -84,7 +84,9 @@ export async function handleMoveMp(interaction, ctx) {
   const cache = ensureMovementCache(moveState, startCoord, mpRemaining, boardState, profile);
   const spaces = getSpacesAtCost(cache, mp);
   if (spaces.length === 0) {
-    await interaction.followUp({ content: `No spaces exactly **${mp}** MP away.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    const validCosts = [...new Set([...cache.cells.values()].map((c) => c.cost))].filter((c) => c > 0 && c <= mpRemaining).sort((a, b) => a - b);
+    const altText = validCosts.length > 0 ? ` Reachable: ${validCosts.join(', ')} MP.` : '';
+    await interaction.followUp({ content: `No spaces exactly **${mp}** MP away.${altText}`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   // cache.cells now only stores topLeft cells, so spaces is already topLeft-only.

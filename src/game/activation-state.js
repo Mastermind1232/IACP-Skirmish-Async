@@ -51,6 +51,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'autofireChainTargetSpace',
   'darksaberSecondAttack',
   'pendingOverwatchPlacement',
+  'activationKills',
 ];
 
 /**

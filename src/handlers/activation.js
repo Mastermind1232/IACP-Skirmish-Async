@@ -78,7 +78,7 @@ export async function handleStatusPhase(interaction, ctx) {
         .setStyle(ButtonStyle.Secondary)
     );
     await interaction.message.edit({
-      content: `**Round ${round}** — ${game.p1ActivationPhaseEnded ? '✓ P1' : 'P1'} ended activation. ${game.p2ActivationPhaseEnded ? '✓ P2' : 'P2'} ended activation. Both players must click the button when done with activations and any end-of-activation effects.`,
+      content: `**Round ${round}** — End Activation Phase: ${game.p1ActivationPhaseEnded ? 'P1 ✅' : 'P1 ⏳'} | ${game.p2ActivationPhaseEnded ? 'P2 ✅' : 'P2 ⏳'}\nBoth players must click the button when done with activations and any end-of-activation effects.`,
       embeds: [roundEmbed],
       components: [endBtn],
     }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -129,7 +129,7 @@ export async function handlePassActivationTurn(interaction, ctx) {
   const myRem = turnPlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
   const otherRem = turnPlayerId === game.player1Id ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
   if (otherRem <= myRem) {
-    await interaction.followUp({ content: 'The other player does not have more activations than you.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `You have **${myRem}** activation${myRem !== 1 ? 's' : ''} remaining; opponent has **${otherRem}**. You can only pass when they have more.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const otherPlayerId = turnPlayerId === game.player1Id ? game.player2Id : game.player1Id;

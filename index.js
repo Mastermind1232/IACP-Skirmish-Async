@@ -267,6 +267,7 @@ import {
   getDiscardPileEmbed,
   getLobbyRosterText,
   getLobbyEmbed,
+  getMapSelectionTooltipEmbed,
   getDeployDisplayNames,
   EMBEDS_PER_MESSAGE,
   getDiscardPileButtons,
@@ -2480,6 +2481,28 @@ async function postGameOver(game, client, winnerId, reason) {
             const winnerStats = wId === game.player1Id ? stats1 : stats2;
             const grantedWin = await checkAndGrantAchievements(wId, 'game_win', winnerStats.wins);
             for (const def of grantedWin) await postAchievementNotification(client, achievementsChannelId, wId, def);
+            // Shutout: opponent scored 0 VP
+            const loserId = wId === game.player1Id ? game.player2Id : game.player1Id;
+            const loserVP = wId === game.player1Id ? game.player2VP : game.player1VP;
+            if ((loserVP?.total ?? 0) === 0) {
+              const grantedShutout = await checkAndGrantAchievements(wId, 'shutout_win', 1);
+              for (const def of grantedShutout) await postAchievementNotification(client, achievementsChannelId, wId, def);
+            }
+            // Survivor: winner lost no figures (all health entries have HP > 0)
+            const winnerDcList = wId === game.player1Id ? game.p1DcList : game.p2DcList;
+            const allSurvived = (winnerDcList || []).every((dc) => {
+              if (!dc?.healthState?.length) return true;
+              return dc.healthState.every((entry) => !entry || entry[0] > 0);
+            });
+            if (allSurvived && winnerDcList?.length > 0) {
+              const grantedSurvivor = await checkAndGrantAchievements(wId, 'no_losses_win', 1);
+              for (const def of grantedSurvivor) await postAchievementNotification(client, achievementsChannelId, wId, def);
+            }
+            // Brutalist: win by eliminating all opponent figures
+            if (reason && reason.toLowerCase().includes('eliminat')) {
+              const grantedBrutalist = await checkAndGrantAchievements(wId, 'full_wipe_win', 1);
+              for (const def of grantedBrutalist) await postAchievementNotification(client, achievementsChannelId, wId, def);
+            }
           }
         } catch (err) {
           console.error('[Achievements] postGameOver hook failed:', err.message);
@@ -3532,6 +3555,13 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       let newCur = Math.max(0, (cur ?? max) - damage);
       healthState[targetFigIndex] = [newCur, max ?? newCur];
       dcHealthState.set(targetMsgId, healthState);
+      // Achievement: Devastator (10+ damage in a single attack)
+      if (damage >= 10 && isDbConfigured() && achievementsChannelId) {
+        const _devUserId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+        checkAndGrantAchievements(_devUserId, 'single_attack_damage', damage).then((granted) => {
+          for (const def of granted) postAchievementNotification(client, achievementsChannelId, _devUserId, def);
+        }).catch((err) => console.error('[Achievements] Devastator check failed:', err.message));
+      }
       const dcMessageIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
       const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
       const idx = (dcMessageIds || []).indexOf(targetMsgId);
@@ -3931,6 +3961,17 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
         game[vpKey].kills += vp;
         game[vpKey].total += vp;
+        // Achievement: activation kill streak (Double Kill / Triple Kill / PENTAKILL)
+        if (combat.attackerMsgId) {
+          game.activationKills = game.activationKills || {};
+          game.activationKills[combat.attackerMsgId] = (game.activationKills[combat.attackerMsgId] || 0) + 1;
+          if (isDbConfigured() && achievementsChannelId) {
+            const _akUserId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+            checkAndGrantAchievements(_akUserId, 'activation_kills', game.activationKills[combat.attackerMsgId]).then((granted) => {
+              for (const def of granted) postAchievementNotification(client, achievementsChannelId, _akUserId, def);
+            }).catch((err) => console.error('[Achievements] activation_kills check failed:', err.message));
+          }
+        }
         // Of No Importance: reduce VP gained when CC owner's own non-unique figure is defeated
         if (game.nextDefeatedFriendlyVpReduction?.playerNum === defenderPlayerNum) {
           const _noImportDcName = idx >= 0 ? dcList[idx]?.dcName : null;
@@ -4295,6 +4336,17 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
           game[vpKey].kills += vp;
           game[vpKey].total += vp;
+          // Achievement: count blast kills for activation streak
+          if (combat.attackerMsgId) {
+            game.activationKills = game.activationKills || {};
+            game.activationKills[combat.attackerMsgId] = (game.activationKills[combat.attackerMsgId] || 0) + 1;
+            if (isDbConfigured() && achievementsChannelId) {
+              const _akUserId2 = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+              checkAndGrantAchievements(_akUserId2, 'activation_kills', game.activationKills[combat.attackerMsgId]).then((granted) => {
+                for (const def of granted) postAchievementNotification(client, achievementsChannelId, _akUserId2, def);
+              }).catch((err) => console.error('[Achievements] blast activation_kills check failed:', err.message));
+            }
+          }
           const blastLabel = blastDcList[blastIdx]?.displayName || blastFigureKey;
           await logGameAction(game, client, `Blast: <@${ownerId}> defeated **${blastLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
           if (blastIdx >= 0 && isGroupDefeated(game, blastPlayerNum, blastIdx)) {
@@ -6718,6 +6770,47 @@ client.once('ready', async () => {
       }
     } catch (err) {
       console.error(`Setup failed for ${guild.name}:`, err);
+    }
+  }
+
+  // Reconstruct lobbies from Discord threads so they survive bot restarts
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const forum = guild.channels.cache.find(
+        (c) => c.type === ChannelType.GuildForum && c.name === 'new-games'
+      );
+      if (!forum) continue;
+      const activeThreads = await forum.threads.fetchActive();
+      let reconstructed = 0;
+      for (const [threadId, thread] of activeThreads.threads) {
+        if (hasLobby(threadId)) continue; // already in memory
+        try {
+          const messages = await thread.messages.fetch({ limit: 10 });
+          const botMsg = messages.find(
+            (m) => m.author.id === client.user.id && m.embeds.length > 0 && m.embeds[0].title === 'Game Lobby'
+          );
+          if (!botMsg) continue;
+          const desc = botMsg.embeds[0].description || '';
+          const playerIds = [...desc.matchAll(/<@(\d+)>/g)].map((m) => m[1]);
+          if (playerIds.length === 0) continue;
+          const creatorId = playerIds[0];
+          const joinedId = playerIds.length >= 2 ? playerIds[1] : null;
+          // Determine status from thread name prefix
+          let status = 'LFG';
+          if (thread.name.startsWith('[Launched]')) continue; // game already created, skip
+          if (thread.name.startsWith('[Full]') || joinedId) status = 'Full';
+          setLobby(threadId, { creatorId, joinedId, status });
+          markLobbyEmbedSent(threadId);
+          reconstructed++;
+        } catch (err) {
+          console.error(`Failed to reconstruct lobby for thread ${threadId}:`, err.message);
+        }
+      }
+      if (reconstructed > 0) {
+        console.log(`Reconstructed ${reconstructed} lobby(s) from #new-games in ${guild.name}`);
+      }
+    } catch (err) {
+      console.error(`Lobby reconstruction failed for ${guild.name}:`, err.message);
     }
   }
 
@@ -9219,6 +9312,7 @@ client.on('interactionCreate', async (interaction) => {
       getMissionCardsData,
       getMapRegistry,
       getMapTypeButtons,
+      getMapSelectionTooltipEmbed,
       getMapConfirmButton,
       getMissionSelectDrawMenu,
       getMissionSelectionPickMenu,
