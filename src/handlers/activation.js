@@ -461,15 +461,13 @@ export async function handleDcEndActivation(interaction, ctx) {
       console.error('Failed to delete DC activation thread on End Activation:', err);
     }
   }
-  // Build figure keys for all figures in this DC's deployment groups
+  // Build figure keys for only the activated deployment group (not all DGs)
   const endEff = getDcEffects()?.[meta.dcName];
   const figCount = endEff?.figures || 1;
-  const dgCount = endEff?.subCost ? 2 : 1;
+  const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '0';
   const figureKeys = [];
   for (let fi = 0; fi < figCount; fi++) {
-    for (let di = 0; di < dgCount; di++) {
-      figureKeys.push(`${meta.dcName}-${di}-${fi}`);
-    }
+    figureKeys.push(`${meta.dcName}-${dgIndex}-${fi}`);
   }
   cleanupActivation(game, msgId, meta.playerNum, figureKeys);
   // Stun: discarded at end of activation (condition logic, not a flag)
@@ -752,7 +750,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Madness (Taron Malicos): if ≤2 CC cards in hand, suffer 1 Strain and become Focused
   if (meta.dcName === 'Taron Malicos') {
-    const hand = meta.playerNum === 1 ? (game.p1Hand || []) : (game.p2Hand || []);
+    const hand = meta.playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
     if (hand.length <= 2) {
       const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(fk => fk.startsWith('Taron Malicos-'));
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -764,8 +762,9 @@ export async function handleConfirmActivate(interaction, ctx) {
         const fkMsgId = msgId;
         const fkIdx = parseInt(fk.split('-').pop(), 10) || 0;
         const hs = dcHealthState.get(fkMsgId);
-        if (hs?.[fkIdx]) {
-          hs[fkIdx].current = Math.max(0, hs[fkIdx].current - 1);
+        if (hs?.[fkIdx] && Array.isArray(hs[fkIdx])) {
+          const [cur, max] = hs[fkIdx];
+          hs[fkIdx] = [Math.max(0, (cur ?? max) - 1), max];
         }
       }
       await thread.send({ content: `😤 **Madness** — **${displayName}** has ${hand.length} CC card${hand.length !== 1 ? 's' : ''} in hand (≤2). Suffered **1 Strain** and became **Focused**.` }).catch(() => {});

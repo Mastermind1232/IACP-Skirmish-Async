@@ -300,6 +300,7 @@ export async function handleAttackTarget(interaction, ctx) {
 
   // pendingOverrideAttackDice (Saber Strike, Bo-Rifle Staff Strike, Definition: 'Love'): replace dice/type/pierce for this attack
   const overrideDice = game.pendingOverrideAttackDice?.[msgId];
+  const overrideDiceSource = overrideDice?.source; // capture before deletion for Heir to the Jedi check
   if (overrideDice) {
     if (overrideDice.dice) attackInfo = { ...attackInfo, dice: overrideDice.dice };
     if (overrideDice.type === 'melee') attackInfo = { ...attackInfo, range: [1, 1] };
@@ -312,7 +313,7 @@ export async function handleAttackTarget(interaction, ctx) {
     }
     // Lightsaber Throw: must target non-adjacent figure
     if (overrideDice.mustTargetNonAdjacent && target.dist != null && target.dist <= 1) {
-      await thread.send('**Lightsaber Throw** requires targeting a non-adjacent figure. Choose a different target.');
+      await interaction.followUp({ content: '**Lightsaber Throw** requires targeting a non-adjacent figure. Choose a different target.', ephemeral: true }).catch(() => {});
       return;
     }
     // Tusken Cycler: no surge abilities during this attack — stored on pendingCombat
@@ -620,7 +621,7 @@ export async function handleAttackTarget(interaction, ctx) {
       }
     }
     // Heir to the Jedi: Saber Strike pre-attack Focus (when using Saber Strike override)
-    if (_atkUpgrades.includes('Heir to the Jedi') && game.pendingOverrideAttackDice?.[msgId]?.source === 'saber_strike') {
+    if (_atkUpgrades.includes('Heir to the Jedi') && overrideDiceSource === 'saber_strike') {
       if (!attackerConds.includes('Focus')) {
         game.figureConditions = game.figureConditions || {};
         game.figureConditions[attackerFigureKey] = game.figureConditions[attackerFigureKey] || [];

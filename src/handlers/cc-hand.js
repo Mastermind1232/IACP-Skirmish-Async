@@ -1088,7 +1088,7 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
 
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleCcShuffleDraw(interaction, ctx) {
-  const { getGame, shuffleArray, buildHandDisplayPayload, updateHandVisualMessage, updatePlayAreaDcButtons, sendRoundActivationPhaseMessage, logGameAction, saveGames, client } = ctx;
+  const { getGame, shuffleArray, buildHandDisplayPayload, updateHandVisualMessage, updatePlayAreaDcButtons, sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, logGameAction, saveGames, client } = ctx;
   const gameId = interaction.customId.replace('cc_shuffle_draw_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -1139,6 +1139,7 @@ export async function handleCcShuffleDraw(interaction, ctx) {
   await updateHandVisualMessage(game, playerNum, client);
   if (game.player1CcDrawn && game.player2CcDrawn) {
     await updatePlayAreaDcButtons(game, client);
+    if (runStartOfRoundDcEffects) await runStartOfRoundDcEffects(game, gameId, client, { logGameAction });
     await sendRoundActivationPhaseMessage(game, client);
   }
   saveGames();

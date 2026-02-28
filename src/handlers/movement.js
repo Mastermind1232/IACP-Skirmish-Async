@@ -4,7 +4,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getDcEffects, getMapSpaces } from '../data-loader.js';
-import { bottomLeftCoord } from '../game/coords.js';
+import { bottomLeftCoord, getFootprintCells } from '../game/coords.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
@@ -455,13 +455,22 @@ export async function handleMovePick(interaction, ctx) {
   if (game.holdGroundPlayerNum && game.holdGroundPlayerNum !== playerNum) {
     const isSMALL = getDcStats ? !((getDcStats(meta.dcName)?.keywords || []).some((k) => k === 'LARGE' || k === 'MASSIVE')) : false;
     if (isSMALL) {
-      const holdPlayerPositions = Object.values(game.figurePositions?.[game.holdGroundPlayerNum] || {}).filter(Boolean);
-      if (holdPlayerPositions.length > 0 && mapId) {
+      const holdPoses = game.figurePositions?.[game.holdGroundPlayerNum] || {};
+      const holdPlayerCells = [];
+      for (const [hfk, hPos] of Object.entries(holdPoses)) {
+        if (!hPos) continue;
+        const hSize = game.figureOrientations?.[hfk];
+        if (hSize && hSize !== '1x1') {
+          for (const c of getFootprintCells(hPos, hSize)) holdPlayerCells.push(String(c).toLowerCase());
+        } else {
+          holdPlayerCells.push(String(hPos).toLowerCase());
+        }
+      }
+      if (holdPlayerCells.length > 0 && mapId) {
         const boardState = getBoardStateForMovement(game, null);
         const adjacency = boardState?.mapSpaces?.adjacency || {};
         const adjacentToHolder = new Set();
-        for (const hPos of holdPlayerPositions) {
-          const hLow = String(hPos).toLowerCase();
+        for (const hLow of holdPlayerCells) {
           for (const adj of adjacency[hLow] || []) adjacentToHolder.add(String(adj).toLowerCase());
         }
         const currentPos = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];

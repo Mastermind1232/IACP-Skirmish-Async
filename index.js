@@ -90,6 +90,7 @@ import {
   handleInteractChoice,
   handleEndEndOfRound,
   handleEndStartOfRound,
+  runStartOfRoundDcEffects,
   handleMoveMp,
   handleMoveAdjustMp,
   handleMovePick,
@@ -863,6 +864,8 @@ function pushFigureToNearestValid(game, playerNum, figureKey, forbiddenSet) {
     for (const vec of moveVectors) {
       const nextTopLeft = shiftCoord(topLeft, vec.dx, vec.dy);
       if (!board.spacesSet.has(nextTopLeft)) continue;
+      // Check movement-blocking edges (walls, closed doors) between topLeft and nextTopLeft
+      if (board.movementBlockingSet && board.movementBlockingSet.has(edgeKey(topLeft, nextTopLeft))) continue;
       const stateKey = movementStateKey(nextTopLeft, profile.size);
       if (visited.has(stateKey)) continue;
       visited.add(stateKey);
@@ -2410,8 +2413,9 @@ async function checkWinConditions(game, client) {
   const p2Figures = Object.keys(game.figurePositions?.[2] || {}).length;
 
   if (vp1 >= 40 || vp2 >= 40) {
-    const winnerId = vp1 >= 40 ? game.player1Id : game.player2Id;
-    const reason = '40 VP';
+    // If both players hit 40+ VP simultaneously, player with more VP wins
+    const winnerId = vp1 > vp2 ? game.player1Id : vp2 > vp1 ? game.player2Id : (vp1 >= 40 ? game.player1Id : game.player2Id);
+    const reason = vp1 >= 40 && vp2 >= 40 ? `40 VP (${vp1} vs ${vp2})` : '40 VP';
     await postGameOver(game, client, winnerId, reason);
     return { ended: true, winnerId, reason };
   }
@@ -2967,6 +2971,7 @@ async function runDraftRandom(game, client, options = {}) {
   await logGameAction(game, client, '**Draft Random** — Auto-deployed all figures and drew starting CCs.', { phase: 'DEPLOYMENT', icon: 'deployed' });
 
   await updatePlayAreaDcButtons(game, client);
+  await runStartOfRoundDcEffects(game, game.gameId, client, { logGameAction });
   await sendRoundActivationPhaseMessage(game, client);
   await clearPreGameSetup(game, client);
   saveGames();
@@ -3693,20 +3698,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           }
         }
       }
-      // Leg Hydraulics (Tress Hacnua): after attack, gain 1 MP
-      {
-        const _lhAtkEff = getDcEffects()?.[combat.attackerDcName];
-        if ((_lhAtkEff?.passives || []).includes('Leg Hydraulics')) {
-          const _lhMsgId = combat.attackerMsgId;
-          if (_lhMsgId) {
-            game.movementBank = game.movementBank || {};
-            game.movementBank[_lhMsgId] = game.movementBank[_lhMsgId] || { total: 0, remaining: 0 };
-            game.movementBank[_lhMsgId].total = (game.movementBank[_lhMsgId].total || 0) + 1;
-            game.movementBank[_lhMsgId].remaining = (game.movementBank[_lhMsgId].remaining || 0) + 1;
-            await logGameAction(game, client, `🦿 **Leg Hydraulics** — **${combat.attackerDcName}** gains 1 MP after attack.`, { phase: 'ROUND', icon: 'attack' });
-          }
-        }
-      }
+      // Leg Hydraulics (Tress Hacnua): handled via specialAbilityIds check below (not passives) to avoid double-granting
       // Locked and Loaded (Migs Mayfeld): after attack, gain 2 Power Tokens (max 3 total)
       {
         const _llAtkEff = getDcEffects()?.[combat.attackerDcName];
@@ -3841,7 +3833,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const _fdKey = `${_fdYodaFigKey}_force_deflection`;
           if (!game.roundFigureAbilityUsed[_fdKey]) {
             game.roundFigureAbilityUsed[_fdKey] = true;
-            const _fdDiceCount = combat.attackRoll?.dice?.length || 0;
+            const _fdDiceCount = combat.attackDiceResults?.length || 0;
             if (_fdDiceCount > 0 && combat.attackerMsgId) {
               const _fdAtkHs = dcHealthState.get(combat.attackerMsgId) || [];
               const _fdAtkFigIdx = combat.attackerFigureIndex ?? 0;
@@ -4097,9 +4089,12 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           if (pn === defenderPlayerNum) continue; // Jabba's owner must be the one who defeated someone
           const _jabbaOnBoard = Object.keys(game.figurePositions?.[pn] || {}).some(fk => fk.startsWith('Jabba the Hutt-'));
           if (_jabbaOnBoard) {
-            const vpKey = pn === 1 ? 'p1VP' : 'p2VP';
-            game[vpKey] = (game[vpKey] || 0) + 1;
-            await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${pn} VP: ${game[vpKey]}`, { phase: 'ROUND', icon: 'card' });
+            const vpObj = pn === 1 ? game.player1VP : game.player2VP;
+            if (vpObj) {
+              vpObj.total = (vpObj.total || 0) + 1;
+              vpObj.objectives = (vpObj.objectives || 0) + 1;
+            }
+            await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${pn} VP: ${vpObj?.total ?? 0}`, { phase: 'ROUND', icon: 'card' });
           }
         }
         // Into the Force (Obi-Wan): when defeated, a friendly figure becomes Focused
@@ -7773,6 +7768,7 @@ client.on('interactionCreate', async (interaction) => {
       updateHandVisualMessage,
       updatePlayAreaDcButtons,
       sendRoundActivationPhaseMessage,
+      runStartOfRoundDcEffects,
       logGameAction,
       buildDiscardPileDisplayPayload,
       updateDiscardPileMessage,

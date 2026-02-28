@@ -888,7 +888,7 @@ async function buildAndSendAttackTargets(
     const dcName = k.replace(/-\d+-\d+$/, '');
     const size = game.figureOrientations?.[k] || getFigureSize(dcName);
     const cells = getFootprintCells(coord, size);
-    const dist = Math.min(...cells.map((c) => getRange(attackerPos, c)));
+    const dist = Math.min(...attackerFpCells.flatMap(ac => cells.map(tc => getRange(ac, tc))));
     if (dist < minRange || dist > effectiveMaxRange) continue;
     const iMustGoAlone = game.roundDefenderCannotBeTargetedUnlessWithinSpaces;
     if (iMustGoAlone?.playerNum === enemyPlayerNum && dist > iMustGoAlone.spaces) continue;
@@ -961,7 +961,7 @@ async function buildAndSendAttackTargets(
       const npc = npcArray[i];
       if (npc.defeated) continue;
       const coord = String(npc.coord).toLowerCase();
-      const dist = getRange(attackerPos, coord);
+      const dist = Math.min(...attackerFpCells.map(ac => getRange(ac, coord)));
       if (dist < minRange || dist > effectiveMaxRange) continue;
       const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, effectiveMs, allFigureBlockingCoords));
       const label = `${npcType === 'thug' ? 'Thug' : 'Krykna'} ${i + 1} (${npc.hp}/${npc.maxHp} ${hpLabel})`;
@@ -974,7 +974,7 @@ async function buildAndSendAttackTargets(
       const hp = typeof game.crateHealth?.[origCoord] === 'number' ? game.crateHealth[origCoord] : 5;
       if (hp <= 0) continue;
       const coord = String(curCoord).toLowerCase();
-      const dist = getRange(attackerPos, coord);
+      const dist = Math.min(...attackerFpCells.map(ac => getRange(ac, coord)));
       if (dist < minRange || dist > effectiveMaxRange) continue;
       const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, effectiveMs, allFigureBlockingCoords));
       targets.push({ figureKey: `npc_crate_${origCoord}`, coord, label: `Crate @ ${coord.toUpperCase()} (${hp}/5 HP)`, hasLOS: los, dist, isNpc: true, npcType: 'crate', crateOrigCoord: origCoord });

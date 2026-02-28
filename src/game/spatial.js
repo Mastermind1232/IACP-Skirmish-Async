@@ -3,7 +3,7 @@
  * Zero Discord dependency, zero game mutation.
  * Manhattan distance, LOS, BFS adjacency, figure enumeration.
  */
-import { parseCoord, colRowToCoord } from './coords.js';
+import { parseCoord, colRowToCoord, getFootprintCells } from './coords.js';
 
 /**
  * Manhattan distance between two coords.
@@ -182,7 +182,8 @@ export function isWithinSpaces(mapSpaces, coordA, coordB, maxDist) {
 
 /**
  * Get all figure keys within Manhattan range of a coord.
- * @param {object} game - game state with figurePositions
+ * Accounts for large figure footprints — distance is computed to the closest footprint cell.
+ * @param {object} game - game state with figurePositions, figureOrientations
  * @param {string} coord - center coord
  * @param {number} range - max Manhattan distance
  * @param {number|null} [playerNum] - filter to specific player (null = both)
@@ -195,7 +196,15 @@ export function getFiguresWithinRange(game, coord, range, playerNum = null) {
     const poses = game.figurePositions?.[pn] || {};
     for (const [fk, fCoord] of Object.entries(poses)) {
       if (!fCoord) continue;
-      const d = getRange(coord, fCoord);
+      // For large figures, compute distance to closest footprint cell
+      const size = game.figureOrientations?.[fk];
+      let d;
+      if (size && size !== '1x1') {
+        const cells = getFootprintCells(fCoord, size);
+        d = Math.min(...cells.map(c => getRange(coord, c)));
+      } else {
+        d = getRange(coord, fCoord);
+      }
       if (d <= range) results.push({ figureKey: fk, playerNum: pn, coord: fCoord, distance: d });
     }
   }

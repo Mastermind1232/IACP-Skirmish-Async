@@ -393,54 +393,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
 
   // NPC Krykna push+damage phase (Chopper Base A): build push queue here; damage runs after all pushes (in modal handler)
 
-  // Hardy + Regenerate: end-of-round passive effects
-  {
-    const _harmfulConds = ['Bleed', 'Stun', 'Weaken'];
-    const _allEff = getDcEffects() || {};
-    for (const pn of [1, 2]) {
-      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
-        if (!pos) continue;
-        const dcName = fk.replace(/-\d+-\d+$/, '');
-        const passives = _allEff[dcName]?.passives || [];
-        // Hardy: discard all harmful conditions
-        if (passives.includes('Hardy')) {
-          const conds = game.figureConditions?.[fk] || [];
-          const removed = conds.filter(c => _harmfulConds.includes(c));
-          if (removed.length > 0) {
-            game.figureConditions[fk] = conds.filter(c => !_harmfulConds.includes(c));
-            await logGameAction(game, client, `💪 **Hardy** — **${dcName}** discarded harmful conditions: ${removed.join(', ')}.`, { phase: 'ROUND', icon: 'round' });
-          }
-        }
-        // Regenerate: recover 2 HP + discard all harmful conditions
-        if (passives.includes('Regenerate')) {
-          const dcIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-          const dcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-          const _regMsgId = dcIds.find((id, i) => dcList[i]?.dcName === dcName);
-          if (_regMsgId) {
-            const _regHS = dcHealthState.get(_regMsgId);
-            const _regFigIdx = parseInt(fk.split('-').pop(), 10) || 0;
-            if (_regHS?.[_regFigIdx]) {
-              const [cur, max] = _regHS[_regFigIdx];
-              const newCur = Math.min((cur || 0) + 2, max || cur);
-              _regHS[_regFigIdx] = [newCur, max || cur];
-              dcHealthState.set(_regMsgId, _regHS);
-              const idx = dcIds.indexOf(_regMsgId);
-              if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [..._regHS];
-              if (newCur > (cur || 0)) {
-                await logGameAction(game, client, `🩹 **Regenerate** — **${dcName}** recovered ${newCur - (cur || 0)} HP (${cur} → ${newCur}).`, { phase: 'ROUND', icon: 'round' });
-              }
-            }
-          }
-          const conds = game.figureConditions?.[fk] || [];
-          const removed = conds.filter(c => _harmfulConds.includes(c));
-          if (removed.length > 0) {
-            game.figureConditions[fk] = conds.filter(c => !_harmfulConds.includes(c));
-            await logGameAction(game, client, `🩹 **Regenerate** — **${dcName}** discarded harmful conditions: ${removed.join(', ')}.`, { phase: 'ROUND', icon: 'round' });
-          }
-        }
-      }
-    }
-  }
+  // NOTE: Hardy + Regenerate already processed above (lines 103-154). Duplicate block removed.
 
   const prevInitiative = game.initiativePlayerId;
   game.initiativePlayerId = prevInitiative === game.player1Id ? game.player2Id : game.player1Id;
@@ -449,6 +402,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
   }
+  // Run start-of-round DC effects (post-deploy for R1, DC abilities every round)
+  await runStartOfRoundDcEffects(game, gameId, client, { logGameAction });
   await updateHandVisualMessage(game, 1, client);
   await updateHandVisualMessage(game, 2, client);
   for (const pn of [1, 2]) {
@@ -515,6 +470,174 @@ export async function handleEndEndOfRound(interaction, ctx) {
 
   await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   saveGames();
+}
+
+/**
+ * Run automatic start-of-round DC effects and post-deploy effects.
+ * Called from handleEndEndOfRound (rounds 2+) and after CC draw (round 1).
+ * @param {object} game
+ * @param {string} gameId
+ * @param {object} client - Discord client
+ * @param {object} ctx - { logGameAction, dcHealthState?, dcMessageMeta? }
+ */
+export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
+  const { logGameAction } = ctx;
+
+  // Post-deploy effects: fire once at the start of round 1
+  if (game.currentRound === 1 && !game.postDeployEffectsFired) {
+    game.postDeployEffectsFired = true;
+    const _pdEff = getDcEffects() || {};
+    for (const pn of [1, 2]) {
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!pos) continue;
+        const dcName = fk.replace(/-\d+-\d+$/, '');
+        const passives = _pdEff[dcName]?.passives || [];
+        // Beskar Armor (The Mandalorian / The Armorer): gain 2 Block Tokens
+        if (passives.includes('Beskar Armor')) {
+          game.figurePowerTokens = game.figurePowerTokens || {};
+          game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+          game.figurePowerTokens[fk].push('Block');
+          game.figurePowerTokens[fk].push('Block');
+          await logGameAction(game, client, `🛡️ **Beskar Armor** — **${dcName}** gains **2 Block Tokens** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
+        }
+        // Stealthy (Davith Elso): become Hidden at start of mission
+        if (passives.includes('Stealthy')) {
+          game.figureConditions = game.figureConditions || {};
+          game.figureConditions[fk] = game.figureConditions[fk] || [];
+          if (!game.figureConditions[fk].includes('Hide')) game.figureConditions[fk].push('Hide');
+          await logGameAction(game, client, `🥷 **Stealthy** — **${dcName}** becomes **Hidden** at start of mission.`, { phase: 'ROUND', icon: 'deployed' });
+        }
+        // Ambush (Ewok Warrior Elite): become Hidden after deployment
+        if (passives.includes('Ambush')) {
+          game.figureConditions = game.figureConditions || {};
+          game.figureConditions[fk] = game.figureConditions[fk] || [];
+          if (!game.figureConditions[fk].includes('Hide')) game.figureConditions[fk].push('Hide');
+          await logGameAction(game, client, `🥷 **Ambush** — **${dcName}** becomes **Hidden** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
+        }
+        // Security Detail (Death Trooper Regular): a friendly LEADER gains 1 Block Token
+        if (passives.includes('Security Detail')) {
+          const leaderFk = Object.keys(game.figurePositions?.[pn] || {}).find(lfk => {
+            if (!game.figurePositions[pn][lfk]) return false;
+            const ldn = lfk.replace(/-\d+-\d+$/, '');
+            return (_pdEff[ldn]?.keywords || []).some(k => k.toUpperCase() === 'LEADER');
+          });
+          if (leaderFk) {
+            game.figurePowerTokens = game.figurePowerTokens || {};
+            game.figurePowerTokens[leaderFk] = game.figurePowerTokens[leaderFk] || [];
+            game.figurePowerTokens[leaderFk].push('Block');
+            const leaderName = leaderFk.replace(/-\d+-\d+$/, '');
+            await logGameAction(game, client, `🛡️ **Security Detail** — **${leaderName}** gains **1 Block Token** (from ${dcName}).`, { phase: 'ROUND', icon: 'deployed' });
+          }
+        }
+        // Forward Emplacement (E-Web Engineer Elite): gain movement points equal to speed
+        if (passives.includes('Forward Emplacement')) {
+          const _feSpeed = _pdEff[dcName]?.speed || 0;
+          if (_feSpeed > 0) {
+            game.deployBonusMp = game.deployBonusMp || {};
+            game.deployBonusMp[fk] = (game.deployBonusMp[fk] || 0) + _feSpeed;
+            await logGameAction(game, client, `🏗️ **Forward Emplacement** — **${dcName}** gains **${_feSpeed} MP** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
+          }
+        }
+        // Smooth Landing (Bodhi Rook, Hera Syndulla): self + adjacent friendlies gain 1 MP
+        if (passives.includes('Smooth Landing')) {
+          const _slPos = game.figurePositions?.[pn]?.[fk];
+          if (_slPos) {
+            game.deployBonusMp = game.deployBonusMp || {};
+            game.deployBonusMp[fk] = (game.deployBonusMp[fk] || 0) + 1;
+            const _slGranted = [dcName];
+            const _slMs = getMapSpaces(game.selectedMap?.id);
+            const _slAdj = (_slMs?.adjacency?.[String(_slPos).toLowerCase()] || []).map(a => String(a).toLowerCase());
+            const _slDone = new Set();
+            for (const [afk, apos] of Object.entries(game.figurePositions?.[pn] || {})) {
+              if (!apos || afk === fk) continue;
+              if (!_slAdj.includes(String(apos).toLowerCase())) continue;
+              if (_slDone.has(afk)) continue;
+              _slDone.add(afk);
+              game.deployBonusMp[afk] = (game.deployBonusMp[afk] || 0) + 1;
+              _slGranted.push(afk.replace(/-\d+-\d+$/, ''));
+            }
+            await logGameAction(game, client, `🛬 **Smooth Landing** — ${_slGranted.join(', ')} gain${_slGranted.length === 1 ? 's' : ''} **1 MP** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
+          }
+        }
+      }
+    }
+  }
+
+  // Start-of-round DC passive hooks
+  {
+    const _sorEff = getDcEffects() || {};
+    for (const playerNum of [1, 2]) {
+      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      for (let i = 0; i < dcList.length; i++) {
+        const dc = dcList[i];
+        if (!dc || dc.defeated) continue;
+        const eff = _sorEff[dc.dcName] || _sorEff[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+        const sIds = eff?.specialAbilityIds || [];
+
+        // Brush (Ezra Bridger): gain 4 MP at start of round
+        if (sIds.includes('brush_ezra')) {
+          const mid = msgIds[i];
+          if (mid) {
+            game.movementBank = game.movementBank || {};
+            game.movementBank[mid] = game.movementBank[mid] || { total: 0, remaining: 0 };
+            game.movementBank[mid].total += 4;
+            game.movementBank[mid].remaining += 4;
+            await logGameAction(game, client, `🌿 **Brush** — **${dc.displayName || dc.dcName}** gains **4 MP** at the start of the round.`, { phase: 'ROUND', icon: 'round' });
+          }
+        }
+
+        // Unstable Devices (Saska Teft): gain 1 device token at start of round
+        if (sIds.includes('unstable_devices_saska')) {
+          game.deviceTokens = game.deviceTokens || {};
+          const _fk = `${dc.dcName}-0-0`;
+          game.deviceTokens[_fk] = (game.deviceTokens[_fk] || 0) + 1;
+          await logGameAction(game, client, `🔧 **Unstable Devices** — **${dc.displayName || dc.dcName}** gains 1 Device token (now ${game.deviceTokens[_fk]}).`, { phase: 'ROUND', icon: 'round' });
+        }
+
+        // Force Slow (Cal Kestis): choose a hostile within 3 to skip activation
+        if (sIds.includes('force_slow_cal')) {
+          const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+          await logGameAction(game, client, `🐌 **Force Slow** — <@${ownerId}>, choose a hostile figure within 3 spaces of **${dc.displayName || dc.dcName}**; that figure skips its next activation. *(Honor system.)*`, {
+            phase: 'ROUND', icon: 'round',
+            allowedMentions: { users: [ownerId] },
+          });
+        }
+
+        // Excavation (Doctor Aphra): choose a CC from discard with cost ≤1, add to hand
+        if (sIds.includes('excavation_aphra')) {
+          const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+          await logGameAction(game, client, `⛏️ **Excavation** — <@${ownerId}>, choose a Command Card from your discard pile with cost 1 or less and add it to your hand. *(Honor system.)*`, {
+            phase: 'ROUND', icon: 'round',
+            allowedMentions: { users: [ownerId] },
+          });
+        }
+
+        // Shape/Shift (Clawdite Shapeshifter): form picker at start of round
+        if (sIds.includes('shape_clawdite_elite') || sIds.includes('shape_clawdite_reg') || sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
+          const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+          const _fk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith(dc.dcName + '-'));
+          const _curForm = _fk ? getConfig(game, _fk)?.form : null;
+          const formCards = getFormCards();
+          const formNames = Object.keys(formCards);
+          if (_fk && formNames.length > 0) {
+            const btns = formNames.map(name => new ButtonBuilder()
+              .setCustomId(`form_pick_${gameId}_${_fk}_${name}`)
+              .setLabel(name === _curForm ? `${name} (current)` : name)
+              .setStyle(name === _curForm ? ButtonStyle.Secondary : ButtonStyle.Primary)
+            );
+            const rows = [];
+            for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+            await logGameAction(game, client, `🔄 **Shift** — <@${ownerId}>, you may switch **${dc.displayName || dc.dcName}**'s Form card (current: **${_curForm || 'none'}**):`, {
+              phase: 'ROUND', icon: 'round',
+              components: rows,
+              allowedMentions: { users: [ownerId] },
+            });
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
