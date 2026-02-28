@@ -56,16 +56,18 @@ function resolveDcInput(raw, dcEffects) {
   const fk = fuzzyKey(name);
   if (fuzzyMap[fk]) return fuzzyMap[fk];
   if (fuzzyMap[fuzzyKey(bracketed)]) return fuzzyMap[fuzzyKey(bracketed)];
-  // Partial parenthetical: "Luke Skywalker (Jedi)" matches "Luke Skywalker (Jedi Knight)"
-  // Strip trailing ) so "Luke Skywalker (Jedi)" becomes "Luke Skywalker (Jedi" for prefix matching
-  const lowerPrefix = lower.endsWith(')') ? lower.slice(0, -1) : lower;
-  const match = keys.find((k) => k.toLowerCase().startsWith(lowerPrefix) && k.includes('('));
-  if (match) return match;
-  // Bare name: "Wookiee Warrior" → prefer Elite, fallback Regular
+  // Bare name without (Regular)/(Elite): "Wookiee Warrior" → prefer Elite (competitive default)
   const eliteMatch = keys.find((k) => k.toLowerCase() === `${lower} (elite)`);
   if (eliteMatch) return eliteMatch;
   const regMatch = keys.find((k) => k.toLowerCase() === `${lower} (regular)`);
   if (regMatch) return regMatch;
+  // Partial parenthetical: "Luke Skywalker (Jedi)" matches "Luke Skywalker (Jedi Knight)"
+  // Only applies when input already contains a '(' — bare names are handled above
+  if (lower.includes('(')) {
+    const lowerPrefix = lower.endsWith(')') ? lower.slice(0, -1) : lower;
+    const match = keys.find((k) => k.toLowerCase().startsWith(lowerPrefix) && k.includes('('));
+    if (match) return match;
+  }
   return name; // unresolved — will produce error in validation
 }
 
