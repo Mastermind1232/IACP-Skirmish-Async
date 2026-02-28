@@ -4,6 +4,7 @@
  */
 export {
   validateDeckLegal,
+  normalizeSquadInput,
   validateArmyAffiliation,
   resolveDcName,
   DC_POINTS_LEGAL,

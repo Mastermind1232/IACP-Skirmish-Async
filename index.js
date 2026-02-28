@@ -186,6 +186,7 @@ import {
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
+  normalizeSquadInput,
   resolveDcName,
   DC_POINTS_LEGAL,
   CC_CARDS_LEGAL,
@@ -7146,6 +7147,7 @@ client.on('messageCreate', async (message) => {
           dcCount: parsed.dcList.length,
           ccCount: parsed.ccList.length,
         };
+        normalizeSquadInput(squad);
         const validation = validateDeckLegal(squad);
         if (!validation.legal) {
           await sendDeckIllegalAlert(game, isP1, squad, validation, message.client);
@@ -7181,6 +7183,7 @@ client.on('messageCreate', async (message) => {
         dcCount: parsed.dcList.length,
         ccCount: parsed.ccList.length,
       };
+      normalizeSquadInput(squad);
       const validation = validateDeckLegal(squad);
       if (!validation.legal) {
         await sendDeckIllegalAlert(game, isP1, squad, validation, message.client);

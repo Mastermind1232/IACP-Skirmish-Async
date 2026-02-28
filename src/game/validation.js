@@ -133,7 +133,11 @@ export function validateDeckLegal(squad) {
     const name = resolveDcName(entry);
     dcNameCounts[name] = (dcNameCounts[name] || 0) + 1;
     // Bracket fallback: "Black Market" → "[Black Market]" for attachment/upgrade cards
-    const stats = dcEffects[name] || (!name.startsWith('[') ? dcEffects[`[${name}]`] : null);
+    // Regular/Elite fallback: "Imperial Officer" → "Imperial Officer (Regular)" or "(Elite)"
+    const stats = dcEffects[name]
+      || (!name.startsWith('[') ? dcEffects[`[${name}]`] : null)
+      || dcEffects[`${name} (Regular)`]
+      || dcEffects[`${name} (Elite)`];
     const cost = stats?.cost;
     if (cost == null) {
       errors.push(`Unknown Deployment Card: "${name}" (cost not found).`);
@@ -203,9 +207,11 @@ export function validateArmyAffiliation(squad) {
   // ── Resolve each DC to its canonical name, affiliation, and keywords ──
   const resolved = dcList.map((entry) => {
     const name = resolveDcName(entry);
-    const stats = dcEffects[name] || (!name.startsWith('[') ? dcEffects[`[${name}]`] : null);
+    const stats = dcEffects[name] || (!name.startsWith('[') ? dcEffects[`[${name}]`] : null)
+      || dcEffects[`${name} (Regular)`] || dcEffects[`${name} (Elite)`];
+    const resolvedName = stats ? (Object.keys(dcEffects).find((k) => dcEffects[k] === stats) || name) : name;
     const affiliation = stats?.affiliation || 'Any';
-    const keywords = dcKeywords[name] || dcKeywords[`[${name}]`] || stats?.keywords || [];
+    const keywords = dcKeywords[resolvedName] || dcKeywords[name] || dcKeywords[`[${name}]`] || stats?.keywords || [];
     const isAttachment = stats?.attachment === true;
     return { name, affiliation, keywords, isAttachment };
   });
