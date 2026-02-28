@@ -433,7 +433,7 @@ export async function handleMapConfirm(interaction, ctx) {
  * @param {object} ctx - getGame, getMapTypeButtons, saveGames
  */
 export async function handleMapGoBack(interaction, ctx) {
-  const { getGame, getMapTypeButtons } = ctx;
+  const { getGame, getMapTypeButtons, getMapSelectionTooltipEmbed } = ctx;
   await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   const gameId = interaction.customId.replace('map_goback_', '');
   const game = getGame(gameId);
@@ -450,8 +450,10 @@ export async function handleMapGoBack(interaction, ctx) {
   delete game.selectedMission;
   delete game.mapSelectionType;
   ctx.saveGames();
+  const tooltipEmbed = getMapSelectionTooltipEmbed?.();
   await interaction.editReply({
     content: 'Choose how to select the map:',
+    embeds: tooltipEmbed ? [tooltipEmbed] : [],
     components: [getMapTypeButtons(gameId)],
   }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }

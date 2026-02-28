@@ -6786,7 +6786,7 @@ client.once('ready', async () => {
       for (const [threadId, thread] of activeThreads.threads) {
         if (hasLobby(threadId)) continue; // already in memory
         try {
-          const messages = await thread.messages.fetch({ limit: 10 });
+          const messages = await thread.messages.fetch({ limit: 10, after: '0' });
           const botMsg = messages.find(
             (m) => m.author.id === client.user.id && m.embeds.length > 0 && m.embeds[0].title === 'Game Lobby'
           );

@@ -179,6 +179,7 @@ const ROUND_OBJECT_FLAGS = [
   'autofireChainTargetSpace',
   'darksaberSecondAttack',
   'pendingOverwatchPlacement',
+  'activationKills',
 ];
 
 const ROUND_NULL_FLAGS = [
