@@ -164,18 +164,22 @@ export function getBoardButtons(gameId, opts = {}) {
   return rows;
 }
 
-/** F17: One row with Map Selection menu (Random / Competitive / Select Draw / Selection). */
-export function getMapSelectionMenu(gameId) {
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(`map_selection_menu_${gameId}`)
-    .setPlaceholder('Choose how to select the map')
-    .addOptions(
-      { label: 'Competitive', value: 'competitive', description: 'Random from tournament rotation' },
-      { label: 'Random', value: 'random', description: 'Random map and mission (A or B)' },
-      { label: 'Select Draw', value: 'select_draw', description: 'Pick several, then random draw' },
-      { label: 'Selection', value: 'selection', description: 'Pick one mission' },
-    );
-  return new ActionRowBuilder().addComponents(select);
+/** F17: One row with 4 map-type buttons (Competitive / Random / Select Draw / Selection). */
+export function getMapTypeButtons(gameId, selectedType = null) {
+  const types = [
+    { id: 'competitive', label: 'Competitive' },
+    { id: 'random', label: 'Random' },
+    { id: 'select_draw', label: 'Select Draw' },
+    { id: 'selection', label: 'Selection' },
+  ];
+  return new ActionRowBuilder().addComponents(
+    ...types.map((t) =>
+      new ButtonBuilder()
+        .setCustomId(`map_type_${t.id}_${gameId}`)
+        .setLabel(t.label)
+        .setStyle(t.id === selectedType ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    ),
+  );
 }
 
 export function getMapConfirmButton(gameId) {

@@ -1,6 +1,6 @@
 /**
- * Setup handlers: map_selection_, draft_random_, determine_initiative_, deployment_zone_red_/blue_, deployment_fig_, deployment_orient_, deploy_pick_, deployment_done_
- * F17: map_selection_menu_ (Random/Competitive/Select Draw/Selection), map_selection_draw_, map_selection_pick_
+ * Setup handlers: map_selection_, map_type_, draft_random_, determine_initiative_, deployment_zone_red_/blue_, deployment_fig_, deployment_orient_, deploy_pick_, deployment_done_
+ * F17: map_type_ buttons (Competitive/Random/Select Draw/Selection), map_selection_draw_, map_selection_pick_
  */
 import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { getLoadoutCards, getFormCards, getDcEffects } from '../data-loader.js';
@@ -36,12 +36,12 @@ export function buildPlayableMissionOptions(getPlayReadyMaps, getMissionCardsDat
 }
 
 /**
- * F17: Show Map Selection menu (Random / Competitive / Select Draw / Selection). Choice is handled by handleMapSelectionChoice.
+ * F17: Show Map Selection type buttons (Competitive / Random / Select Draw / Selection).
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, getMapSelectionMenu, ...
+ * @param {object} ctx - getGame, getMapTypeButtons, ...
  */
 export async function handleMapSelection(interaction, ctx) {
-  const { getGame, getMapSelectionMenu } = ctx;
+  const { getGame, getMapTypeButtons } = ctx;
   const gameId = interaction.customId.replace('map_selection_', '');
   const game = getGame(gameId);
   if (!game) {
@@ -66,41 +66,48 @@ export async function handleMapSelection(interaction, ctx) {
   }
   await interaction.followUp({
     content: 'Choose how to select the map:',
-    components: [getMapSelectionMenu(gameId)],
+    components: [getMapTypeButtons(gameId)],
     ephemeral: false,
   }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
 
 /**
- * F17: Apply map/mission choice (Random, Competitive, or "Not yet implemented" for Select Draw / Selection).
- * @param {import('discord.js').StringSelectMenuInteraction} interaction
- * @param {object} ctx - getGame, getPlayReadyMaps, getTournamentRotation, getMissionCardsData, getMapRegistry, getMissionSelectDrawMenu, getMissionSelectionPickMenu, postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState, buildBoardMapPayload, logGameAction, getGeneralSetupButtons, createPlayAreaChannels, createHandThreads, getHandTooltipEmbed, getSquadSelectEmbed, getHandSquadButtons, client, saveGames
+ * F17: Handle map-type button click (Competitive / Random / Select Draw / Selection).
+ * For Competitive/Random: rolls the map internally but does NOT reveal the name.
+ * For Select Draw/Selection: shows the mission dropdown.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - getGame, getPlayReadyMaps, getTournamentRotation, getMissionCardsData, getMapRegistry, getMapTypeButtons, getMapConfirmButton, getMissionSelectDrawMenu, getMissionSelectionPickMenu, saveGames
  */
-export async function handleMapSelectionChoice(interaction, ctx) {
+export async function handleMapTypeChoice(interaction, ctx) {
   const {
     getGame,
     getPlayReadyMaps,
     getTournamentRotation,
     getMissionCardsData,
     getMapRegistry,
-    getMapSelectionMenu,
+    getMapTypeButtons,
     getMapConfirmButton,
     getMissionSelectDrawMenu,
     getMissionSelectionPickMenu,
-    postMissionCardAfterMapSelection,
-    postPinnedMissionCardFromGameState,
-    buildBoardMapPayload,
-    logGameAction,
-    getGeneralSetupButtons,
-    createPlayAreaChannels,
-    createHandThreads,
-    getHandTooltipEmbed,
-    getHandSquadButtons,
-    client,
     saveGames,
   } = ctx;
   await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
-  const gameId = interaction.customId.replace('map_selection_menu_', '');
+  // Parse type and gameId from customId: map_type_{type}_{gameId}
+  const afterPrefix = interaction.customId.replace('map_type_', '');
+  const types = ['competitive', 'random', 'select_draw', 'selection'];
+  let type = null;
+  let gameId = null;
+  for (const t of types) {
+    if (afterPrefix.startsWith(t + '_')) {
+      type = t;
+      gameId = afterPrefix.slice(t.length + 1);
+      break;
+    }
+  }
+  if (!type || !gameId) {
+    await interaction.followUp({ content: 'Invalid selection.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
   const game = getGame(gameId);
   if (!game) {
     await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -110,10 +117,15 @@ export async function handleMapSelectionChoice(interaction, ctx) {
     await interaction.followUp({ content: 'Map already selected.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const value = interaction.values?.[0];
-  if (value === 'select_draw' || value === 'selection') {
+
+  // Clear any previous pending selection when switching types
+  delete game.selectedMap;
+  delete game.selectedMission;
+  game.mapSelectionType = type;
+
+  if (type === 'select_draw' || type === 'selection') {
     const options = buildPlayableMissionOptions(getPlayReadyMaps, getMissionCardsData);
-    if (value === 'select_draw' && options.length < 2) {
+    if (type === 'select_draw' && options.length < 2) {
       await interaction.followUp({ content: 'Need at least 2 playable missions for Select Draw. Use **Random** or **Selection**.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
@@ -121,17 +133,19 @@ export async function handleMapSelectionChoice(interaction, ctx) {
       await interaction.followUp({ content: 'No playable missions. Add mission data and deployment zones for at least one map.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
-    const content = value === 'select_draw'
+    const content = type === 'select_draw'
       ? 'Choose at least 2 missions (we\'ll pick one at random):'
       : 'Choose one mission:';
-    const components = value === 'select_draw'
-      ? [getMissionSelectDrawMenu(gameId, options)]
-      : [getMissionSelectionPickMenu(gameId, options)];
-    await interaction.editReply({ content, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    const missionMenu = type === 'select_draw'
+      ? getMissionSelectDrawMenu(gameId, options)
+      : getMissionSelectionPickMenu(gameId, options);
+    saveGames();
+    await interaction.editReply({ content, components: [getMapTypeButtons(gameId, type), missionMenu] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  let map = null;
-  if (value === 'competitive') {
+
+  // Competitive or Random — roll the map internally
+  if (type === 'competitive') {
     const rotation = getTournamentRotation?.();
     const missionIds = rotation?.missionIds ?? [];
     if (missionIds.length === 0) {
@@ -152,18 +166,17 @@ export async function handleMapSelectionChoice(interaction, ctx) {
       await interaction.followUp({ content: 'Invalid mission in rotation. Use **Random**.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
-    map = { id: mapDef.id, name: mapDef.name, imagePath: mapDef.imagePath };
-    game.selectedMap = map;
-    game.selectedMission = { variant: variant || 'a', name: missionData.name, fullName: `${map.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {} };
+    game.selectedMap = { id: mapDef.id, name: mapDef.name, imagePath: mapDef.imagePath };
+    game.selectedMission = { variant: variant || 'a', name: missionData.name, fullName: `${mapDef.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {} };
   } else {
+    // Random
     const playReadyMaps = getPlayReadyMaps();
     if (playReadyMaps.length === 0) {
       await interaction.followUp({ content: 'No play-ready maps.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
-    map = playReadyMaps[Math.floor(Math.random() * playReadyMaps.length)];
+    const map = playReadyMaps[Math.floor(Math.random() * playReadyMaps.length)];
     game.selectedMap = { id: map.id, name: map.name, imagePath: map.imagePath };
-    // Pick random mission variant
     const missionCards = getMissionCardsData?.()[map.id];
     const variants = missionCards ? Object.keys(missionCards) : ['a'];
     const variant = variants[Math.floor(Math.random() * variants.length)];
@@ -172,11 +185,14 @@ export async function handleMapSelectionChoice(interaction, ctx) {
       game.selectedMission = { variant, name: missionData.name, fullName: `${map.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {} };
     }
   }
-  // Show confirmation instead of immediately proceeding
-  const confirmLabel = game.selectedMission?.fullName || game.selectedMap?.name || 'Map';
-  const components = [getMapSelectionMenu(gameId), getMapConfirmButton(gameId)];
-  ctx.saveGames();
-  await interaction.editReply({ content: `Selected: **${confirmLabel}**\nClick **Confirm Selection** to proceed, or change your pick above.`, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+
+  // Show confirmation WITHOUT revealing the map name
+  const typeLabel = type === 'competitive' ? 'Competitive — Random from tournament rotation' : 'Random — Random map and mission';
+  saveGames();
+  await interaction.editReply({
+    content: `**${typeLabel}**\nMap selected. Click **Confirm Selection** to reveal and proceed, or pick a different method.`,
+    components: [getMapTypeButtons(gameId, type), getMapConfirmButton(gameId)],
+  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
 
 /**
@@ -294,7 +310,7 @@ function applyMissionToGame(game, missionId, getMapRegistry, getMissionCardsData
 /**
  * F17 Select Draw: user chose multiple missions; pick one at random and finish map selection.
  * @param {import('discord.js').StringSelectMenuInteraction} interaction
- * @param {object} ctx - same as handleMapSelectionChoice
+ * @param {object} ctx - same as handleMapTypeChoice
  */
 export async function handleMapSelectionDraw(interaction, ctx) {
   const {
@@ -321,11 +337,11 @@ export async function handleMapSelectionDraw(interaction, ctx) {
     await interaction.followUp({ content: 'Invalid mission. Try again or use Random.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  // Show confirmation
-  const { getMapConfirmButton, getMissionSelectDrawMenu } = ctx;
+  // Show confirmation with type buttons highlighted
+  const { getMapConfirmButton, getMapTypeButtons, getMissionSelectDrawMenu } = ctx;
   const options = buildPlayableMissionOptions(ctx.getPlayReadyMaps, getMissionCardsData);
   const confirmLabel = game.selectedMission?.fullName || game.selectedMap?.name || 'Map';
-  const components = [getMissionSelectDrawMenu(gameId, options), getMapConfirmButton(gameId)];
+  const components = [getMapTypeButtons(gameId, 'select_draw'), getMissionSelectDrawMenu(gameId, options), getMapConfirmButton(gameId)];
   ctx.saveGames();
   await interaction.editReply({ content: `Drew: **${confirmLabel}**\nClick **Confirm Selection** to proceed, or re-draw above.`, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
@@ -333,7 +349,7 @@ export async function handleMapSelectionDraw(interaction, ctx) {
 /**
  * F17 Selection: user chose one mission; apply and finish map selection.
  * @param {import('discord.js').StringSelectMenuInteraction} interaction
- * @param {object} ctx - same as handleMapSelectionChoice
+ * @param {object} ctx - same as handleMapTypeChoice
  */
 export async function handleMapSelectionPick(interaction, ctx) {
   const {
@@ -359,11 +375,11 @@ export async function handleMapSelectionPick(interaction, ctx) {
     await interaction.followUp({ content: 'Invalid mission. Try again or use Random.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  // Show confirmation
-  const { getMapConfirmButton, getMissionSelectionPickMenu } = ctx;
+  // Show confirmation with type buttons highlighted
+  const { getMapConfirmButton, getMapTypeButtons, getMissionSelectionPickMenu } = ctx;
   const options = buildPlayableMissionOptions(ctx.getPlayReadyMaps, getMissionCardsData);
   const confirmLabel = game.selectedMission?.fullName || game.selectedMap?.name || 'Map';
-  const components = [getMissionSelectionPickMenu(gameId, options), getMapConfirmButton(gameId)];
+  const components = [getMapTypeButtons(gameId, 'selection'), getMissionSelectionPickMenu(gameId, options), getMapConfirmButton(gameId)];
   ctx.saveGames();
   await interaction.editReply({ content: `Selected: **${confirmLabel}**\nClick **Confirm Selection** to proceed, or change your pick above.`, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
@@ -371,7 +387,7 @@ export async function handleMapSelectionPick(interaction, ctx) {
 /**
  * F17 Map Confirm: finalize the pending map selection.
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - same as handleMapSelectionChoice
+ * @param {object} ctx - same as handleMapTypeChoice
  */
 export async function handleMapConfirm(interaction, ctx) {
   const {
@@ -392,10 +408,11 @@ export async function handleMapConfirm(interaction, ctx) {
     return;
   }
   if (!game.selectedMap) {
-    await interaction.followUp({ content: 'No map selected yet. Use the dropdown first.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'No map selected yet. Pick a selection type first.', ephemeral: true }).catch(() => {});
     return;
   }
   game.mapSelected = true;
+  delete game.mapSelectionType;
   // Post mission card
   if (game.selectedMission) {
     await postPinnedMissionCardFromGameState(game, client);
@@ -408,12 +425,12 @@ export async function handleMapConfirm(interaction, ctx) {
 }
 
 /**
- * F17 Go Back: clear pending map selection and return to the initial map selection dropdown.
+ * F17 Go Back: clear pending map selection and return to the type buttons.
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, getMapSelectionMenu, saveGames
+ * @param {object} ctx - getGame, getMapTypeButtons, saveGames
  */
 export async function handleMapGoBack(interaction, ctx) {
-  const { getGame, getMapSelectionMenu } = ctx;
+  const { getGame, getMapTypeButtons } = ctx;
   await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   const gameId = interaction.customId.replace('map_goback_', '');
   const game = getGame(gameId);
@@ -428,10 +445,11 @@ export async function handleMapGoBack(interaction, ctx) {
   // Clear pending selection
   delete game.selectedMap;
   delete game.selectedMission;
+  delete game.mapSelectionType;
   ctx.saveGames();
   await interaction.editReply({
     content: 'Choose how to select the map:',
-    components: [getMapSelectionMenu(gameId)],
+    components: [getMapTypeButtons(gameId)],
   }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
 

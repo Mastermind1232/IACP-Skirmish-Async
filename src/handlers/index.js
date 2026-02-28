@@ -19,6 +19,7 @@ import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handle
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive } from './activation.js';
 import {
   handleMapSelection,
+  handleMapTypeChoice,
   handleDraftRandom,
   handleDetermineInitiative,
   handleDeploymentZone,
@@ -144,6 +145,7 @@ register('dc_end_activation_', handleDcEndActivation);
 register('confirm_activate_', handleConfirmActivate);
 register('cancel_activate_', handleCancelActivate);
 register('map_selection_', handleMapSelection);
+register('map_type_', handleMapTypeChoice);
 register('draft_random_', handleDraftRandom);
 register('determine_initiative_', handleDetermineInitiative);
 register('deployment_zone_red_', handleDeploymentZone);
@@ -229,7 +231,7 @@ export { handleAttackTarget, handleCleaveTarget, handleCombatReady, handleCombat
 export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive } from './activation.js';
 export {
   handleMapSelection,
-  handleMapSelectionChoice,
+  handleMapTypeChoice,
   handleMapSelectionDraw,
   handleMapSelectionPick,
   handleDraftRandom,

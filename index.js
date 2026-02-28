@@ -113,7 +113,7 @@ import {
   handleCancelActivate,
   handleActPassive,
   handleMapSelection,
-  handleMapSelectionChoice,
+  handleMapTypeChoice,
   handleMapSelectionDraw,
   handleMapSelectionPick,
   handleDraftRandom,
@@ -289,7 +289,7 @@ import {
   getUndoButton,
   getBoardButtons,
   getGeneralSetupButtons,
-  getMapSelectionMenu,
+  getMapTypeButtons,
   getMapConfirmButton,
   getMissionSelectDrawMenu,
   getMissionSelectionPickMenu,
@@ -7569,27 +7569,17 @@ client.on('interactionCreate', async (interaction) => {
       await handleArsenalPick(interaction, arsenalCtx);
       return;
     }
-    if (selectKey === 'map_selection_menu_' || selectKey === 'map_selection_draw_' || selectKey === 'map_selection_pick_') {
+    if (selectKey === 'map_selection_draw_' || selectKey === 'map_selection_pick_') {
       const setupChoiceContext = {
         getGame,
         getPlayReadyMaps,
-        getTournamentRotation,
         getMissionCardsData,
         getMapRegistry,
-        getMapSelectionMenu,
+        getMapTypeButtons,
         getMapConfirmButton,
         getMissionSelectDrawMenu,
         getMissionSelectionPickMenu,
-        postMissionCardAfterMapSelection,
         postPinnedMissionCardFromGameState,
-        buildBoardMapPayload,
-        logGameAction,
-        getGeneralSetupButtons,
-        createPlayAreaChannels,
-        createBoardChannel,
-        createHandThreads,
-        getHandTooltipEmbed,
-        getHandSquadButtons,
         isDcAttachment,
         resolveDcName,
         isFigurelessDc,
@@ -7597,8 +7587,7 @@ client.on('interactionCreate', async (interaction) => {
         client,
         saveGames,
       };
-      if (selectKey === 'map_selection_menu_') await handleMapSelectionChoice(interaction, setupChoiceContext);
-      else if (selectKey === 'map_selection_draw_') await handleMapSelectionDraw(interaction, setupChoiceContext);
+      if (selectKey === 'map_selection_draw_') await handleMapSelectionDraw(interaction, setupChoiceContext);
       else if (selectKey === 'map_selection_pick_') await handleMapSelectionPick(interaction, setupChoiceContext);
       return;
     }
@@ -9213,11 +9202,14 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'map_selection_' || buttonKey === 'map_confirm_' || buttonKey === 'map_goback_' || buttonKey === 'draft_random_' || buttonKey === 'determine_initiative_' || buttonKey === 'deployment_zone_red_' || buttonKey === 'deployment_zone_blue_' || buttonKey === 'deployment_fig_' || buttonKey === 'deployment_orient_' || buttonKey === 'deploy_pick_' || buttonKey === 'deployment_done_' || buttonKey === 'auto_deploy_' || buttonKey === 'loadout_pick_' || buttonKey === 'form_pick_') {
+  if (buttonKey === 'map_selection_' || buttonKey === 'map_type_' || buttonKey === 'map_confirm_' || buttonKey === 'map_goback_' || buttonKey === 'draft_random_' || buttonKey === 'determine_initiative_' || buttonKey === 'deployment_zone_red_' || buttonKey === 'deployment_zone_blue_' || buttonKey === 'deployment_fig_' || buttonKey === 'deployment_orient_' || buttonKey === 'deploy_pick_' || buttonKey === 'deployment_done_' || buttonKey === 'auto_deploy_' || buttonKey === 'loadout_pick_' || buttonKey === 'form_pick_') {
     const setupContext = {
       getGame,
       getPlayReadyMaps,
-      getMapSelectionMenu,
+      getTournamentRotation,
+      getMissionCardsData,
+      getMapRegistry,
+      getMapTypeButtons,
       getMapConfirmButton,
       getMissionSelectDrawMenu,
       getMissionSelectionPickMenu,
@@ -9257,6 +9249,7 @@ client.on('interactionCreate', async (interaction) => {
       finishSetupAttachments,
     };
     if (buttonKey === 'map_selection_') await handleMapSelection(interaction, setupContext);
+    else if (buttonKey === 'map_type_') await handleMapTypeChoice(interaction, setupContext);
     else if (buttonKey === 'map_confirm_') await handleMapConfirm(interaction, setupContext);
     else if (buttonKey === 'map_goback_') await handleMapGoBack(interaction, setupContext);
     else if (buttonKey === 'draft_random_') await handleDraftRandom(interaction, setupContext);
