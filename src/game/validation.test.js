@@ -55,6 +55,25 @@ test('validateDeckLegal wrong CC count', () => {
   assert.ok(result.errors.some((e) => e.includes('Command deck') && e.includes('15')));
 });
 
+test('validateDeckLegal rejects duplicate unique DC', () => {
+  const result = validateDeckLegal({
+    dcList: ['Darth Vader', 'Darth Vader'], // unique DC duplicated
+    ccList: [],
+  });
+  assert.strictEqual(result.legal, false);
+  assert.ok(result.errors.some((e) => e.includes('Unique') && e.includes('Darth Vader')));
+});
+
+test('validateDeckLegal allows duplicate non-unique DC', () => {
+  // Stormtrooper (Regular) is not unique — two copies allowed
+  const result = validateDeckLegal({
+    dcList: ['Stormtrooper (Regular)', 'Stormtrooper (Regular)'],
+    ccList: [],
+  });
+  // Will fail on point total (not 40) and CC count, but should NOT have a unique error
+  assert.ok(!result.errors.some((e) => e.includes('Unique')));
+});
+
 test('validateDeckLegal returns shape', () => {
   const result = validateDeckLegal({ dcList: [], ccList: [] });
   assert.ok('legal' in result);

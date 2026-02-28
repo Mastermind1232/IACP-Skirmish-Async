@@ -1286,6 +1286,22 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** is **Stunned** and cannot Move or Attack this activation.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
+    // Assault rule: non-Assault DCs can only perform 1 attack per activation (free attacks exempt)
+    if (game.attackPerformedThisActivation?.[msgId]) {
+      const isFreeAttack = hasFellSwoopFreeAttack || hasPummelFreeAttack ||
+        game.freeAttackBonusPending?.[msgId] != null || game.pounceAttackPending?.[msgId] != null;
+      if (!isFreeAttack) {
+        const dcAbilityText = getDcEffects()?.[meta.dcName]?.abilityText || '';
+        let hasAssault = /\bAssault:/i.test(dcAbilityText);
+        // Scavenged Walker: "You lose ASSAULT"
+        const _asFigKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+        if (hasAssault && (getConfig(game, _asFigKey)?.attachments || []).includes('Scavenged Walker')) hasAssault = false;
+        if (!hasAssault) {
+          await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** has already attacked this activation and does not have **Assault** (only 1 attack per activation without Assault).`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          return;
+        }
+      }
+    }
     const playerNum = meta.playerNum;
     const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
     if (!attackerPos) {

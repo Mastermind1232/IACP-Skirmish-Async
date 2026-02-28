@@ -128,8 +128,10 @@ export function validateDeckLegal(squad) {
   let dcTotal = 0;
   const dcList = squad?.dcList || [];
   const dcEffects = getDcEffects();
+  const dcNameCounts = {};
   for (const entry of dcList) {
     const name = resolveDcName(entry);
+    dcNameCounts[name] = (dcNameCounts[name] || 0) + 1;
     // Bracket fallback: "Black Market" → "[Black Market]" for attachment/upgrade cards
     const stats = dcEffects[name] || (!name.startsWith('[') ? dcEffects[`[${name}]`] : null);
     const cost = stats?.cost;
@@ -137,6 +139,10 @@ export function validateDeckLegal(squad) {
       errors.push(`Unknown Deployment Card: "${name}" (cost not found).`);
     } else {
       dcTotal += cost;
+      // Unique card duplicate check
+      if (stats.unique && dcNameCounts[name] > 1) {
+        errors.push(`"${name}" is a Unique deployment card and cannot be included more than once.`);
+      }
     }
   }
   if (dcTotal !== DC_POINTS_LEGAL) {
