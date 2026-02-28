@@ -206,7 +206,7 @@
       "a": {
         "name": "Inside Job",
         "tokenLabel": "",
-        "imagePath": "",
+        "imagePath": "vassal_extracted/images/mission-cards/Hoth Battle Station-A-Inside Job.jpg",
         "setup": "",
         "persistent": "While a figure inside its own deployment zone is defending, apply -1 Block to the defense results.\n\nWhile a figure inside its opponent's deployment zone is defending, apply +1 Evade to the defense results.",
         "startOfRound": "",
@@ -215,7 +215,7 @@
       "b": {
         "name": "Bomb Drop",
         "tokenLabel": "",
-        "imagePath": "",
+        "imagePath": "vassal_extracted/images/mission-cards/Hoth Battle Station-B-Bomb Drop.jpg",
         "setup": "",
         "persistent": "A figure can retrieve an explosive.\n\nFigures carrying 1 or more explosives gain:\nSpecial Action (\"Bomb Drop\"): Discard 1 explosive you are carrying and choose a space within 3 spaces. Each figure on or adjacent to the chosen space suffers 2 Damage.",
         "startOfRound": "",
