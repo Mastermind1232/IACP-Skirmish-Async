@@ -9,6 +9,13 @@ import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards } from '../data-loader.js';
 
+/** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
+function _hasFuryReach(game, playerNum, dcKws) {
+  if (!dcKws?.some(k => k === 'WOOKIEE')) return false;
+  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  return dcList.some(dc => dc.dcName === '[Fury of Kashyyyk]');
+}
+
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx
@@ -1314,9 +1321,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // Reach: melee figure can target 1–2 spaces away; no accuracy check (still counts as melee)
     const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
     const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
-    // Reach from DC passives, keywords, CC-granted, or loadout card (Electrostaff)
+    // Reach from DC passives, keywords, CC-granted, loadout card (Electrostaff), or Fury of Kashyyyk (WOOKIEE)
     const _loadoutCard = getLoadoutCards()[getConfig(game, figureKey)?.loadout];
-    const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[playerNum] || _loadoutCard?.passive === 'Reach';
+    const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[playerNum] || _loadoutCard?.passive === 'Reach' || _hasFuryReach(game, playerNum, attackerKws);
     const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
     const ms = getMapSpaces(game.selectedMap?.id);
     if (!ms) {
@@ -2132,7 +2139,7 @@ export async function handleArsenalPick(interaction, ctx) {
   const [minRange, maxRange] = attackInfo.range || [1, 3];
   const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
-  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum];
+  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum] || _hasFuryReach(game, meta.playerNum, attackerKws);
   const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
   const ms = getMapSpaces(game.selectedMap?.id);
   if (!ms) {
@@ -2196,7 +2203,7 @@ export async function handleEe3DiePick(interaction, ctx) {
   const [minRange, maxRange] = attackInfo.range || [1, 3];
   const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
-  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum];
+  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum] || _hasFuryReach(game, meta.playerNum, attackerKws);
   const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
   const ms = getMapSpaces(game.selectedMap?.id);
   if (!ms) {
@@ -2296,7 +2303,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   const [foMinRange, foMaxRange] = controlledAttackInfo.range || [1, 3];
   const controlledEff = getDcEffects()[controlledName] || getDcEffects()[controlledName?.replace(/\s*\[.*\]\s*$/, '')];
   const controlledKws = (controlledEff?.keywords || []).map((k) => String(k).toUpperCase());
-  const foHasReach = controlledKws.includes('REACH') || (controlledEff?.passives || []).some((p) => String(p).toUpperCase() === 'REACH');
+  const foHasReach = controlledKws.includes('REACH') || (controlledEff?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || _hasFuryReach(game, controlledPlayerNum, controlledKws);
   const foEffectiveMaxRange = foHasReach && foMaxRange < 2 ? 2 : foMaxRange;
   const ms = getMapSpaces(game.selectedMap?.id);
   if (!ms) {

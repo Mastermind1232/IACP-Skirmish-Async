@@ -3636,16 +3636,20 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           }
         }
       }
-      // Fury of Kashyyyk (Skirmish Upgrade, WOOKIEE): if suffered 3+ damage and survived, become Focused
+      // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage and survives, become Focused
       if (damage >= 3 && newCur > 0) {
-        const _fokUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
-        if (_fokUpgrades.includes('Fury of Kashyyyk')) {
-          game.figureConditions = game.figureConditions || {};
-          game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
-          if (!game.figureConditions[combat.target.figureKey].includes('Focus')) {
-            game.figureConditions[combat.target.figureKey].push('Focus');
-            const _fokDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
-            await logGameAction(game, client, `**Fury of Kashyyyk** — **${_fokDcName}** became **Focused** (suffered ${damage} Damage).`, { phase: 'ROUND', icon: 'card' });
+        const _fokDefDcList = defenderPlayerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+        const _fokHasFury = _fokDefDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]');
+        if (_fokHasFury) {
+          const _fokTargetName = (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+          const _fokTargetKws = (getDcKeywords()[_fokTargetName] || []).map(k => String(k).toUpperCase());
+          if (_fokTargetKws.includes('WOOKIEE')) {
+            game.figureConditions = game.figureConditions || {};
+            game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
+            if (!game.figureConditions[combat.target.figureKey].includes('Focus')) {
+              game.figureConditions[combat.target.figureKey].push('Focus');
+              await logGameAction(game, client, `**Fury of Kashyyyk** — **${_fokTargetName}** became **Focused** (suffered ${damage} Damage).`, { phase: 'ROUND', icon: 'card' });
+            }
           }
         }
       }

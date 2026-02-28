@@ -3,9 +3,9 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getLoadoutCards, getFormCards } from '../data-loader.js';
+import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
-import { isWithinSpaces as _isWithinSpaces } from '../game/spatial.js';
+import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
 
 /**
  * Check a player's hand for CC cards that match a timing trigger.
@@ -732,6 +732,32 @@ export async function handleAttackTarget(interaction, ctx) {
     game.pendingCombat.fireMissionAttack = true;
     delete game.fireMissionActive[msgId]; // consumed
     await thread.send('**Fire Mission** — +Blast 1 applied to this attack.').catch(() => {});
+  }
+
+  // Fury of Kashyyyk: elite WOOKIEE attacking within 2 + another friendly WOOKIEE within 2 of defender → Pierce 1
+  {
+    const _fokAtkDcList = attackerPlayerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    if (_fokAtkDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]')) {
+      const _fokAtkKws = (getDcKeywordsGlobal()[meta.dcName] || []).map(k => String(k).toUpperCase());
+      const _fokAtkEff = getDcEffectsGlobal()[meta.dcName];
+      const _fokIsElite = meta.dcName?.includes('(Elite)') || _fokAtkEff?.elite === true;
+      if (_fokAtkKws.includes('WOOKIEE') && _fokIsElite && distanceToTarget <= 2 && !target.isNpc) {
+        const defPos = game.figurePositions?.[game.pendingCombat.defenderPlayerNum]?.[target.figureKey];
+        if (defPos) {
+          const friendlyPositions = game.figurePositions?.[attackerPlayerNum] || {};
+          const hasFriendlyWookiee = Object.entries(friendlyPositions).some(([fk, pos]) => {
+            if (!pos || fk === attackerFigureKey) return false;
+            const fkDcName = fk.replace(/-\d+-\d+$/, '');
+            const fkKws = (getDcKeywordsGlobal()[fkDcName] || []).map(k => String(k).toUpperCase());
+            return fkKws.includes('WOOKIEE') && _getRange(pos, defPos) <= 2;
+          });
+          if (hasFriendlyWookiee) {
+            game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 1;
+            await thread.send('**Fury of Kashyyyk** — Another friendly WOOKIEE within 2 spaces of defender: Pierce 1 applied.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }
+        }
+      }
+    }
   }
 
   // Payback (Dengar CC reaction): if attacker has a pending Payback surge bonus, apply it now

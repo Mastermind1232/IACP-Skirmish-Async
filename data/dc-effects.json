@@ -190,12 +190,11 @@
       "affiliation": "Scum"
     },
     "[Fury of Kashyyyk]": {
-      "abilityText": "WOOKIE ONLY\n\nAfter an attack targeting a figure in this group is resolved, if that figure suffered 3 or more Damage, it becomes Focused.",
+      "abilityText": "WOOKIEE ONLY\n\nFriendly WOOKIEES gain Reach.\n\nWhen a friendly WOOKIEE suffers 3 or more Damage, that figure becomes Focused.\n\nWhile a friendly elite WOOKIEE is attacking a figure within 2 spaces, if there is another friendly WOOKIEE within 2 spaces of the defender, apply Pierce 1 to the attack results.",
       "keywords": [
         "WOOKIE"
       ],
       "cost": 1,
-      "attachment": true,
       "unique": true,
       "affiliation": "Rebel"
     },
