@@ -213,7 +213,6 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     createBoardChannel,
     createHandThreads,
     getHandTooltipEmbed,
-    getHandSquadButtons,
     saveGames,
   } = ctx;
   const map = game.selectedMap;
@@ -273,16 +272,14 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     const p1Id = game.player1Id;
     const p2Id = game.player2Id;
     await p1Hand.send({
-      content: `<@${p1Id}>, this is your hand — pick your squad below!`,
+      content: `<@${p1Id}>, this is your hand — submit your squad below!`,
       allowedMentions: { users: [p1Id] },
       embeds: [getHandTooltipEmbed(game, 1)],
-      components: [getHandSquadButtons(game.gameId, 1)],
     });
     await p2Hand.send({
-      content: `<@${p2Id}>, this is your hand — pick your squad below!`,
+      content: `<@${p2Id}>, this is your hand — submit your squad below!`,
       allowedMentions: { users: [p2Id] },
       embeds: [getHandTooltipEmbed(game, 2)],
-      components: [getHandSquadButtons(game.gameId, 2)],
     });
   } catch (err) {
     console.error('Failed to create/populate Hand threads:', err);

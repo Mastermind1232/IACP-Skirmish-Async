@@ -1052,7 +1052,7 @@ export async function handleDeckIllegalPlay(interaction, ctx) {
 
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleDeckIllegalRedo(interaction, ctx) {
-  const { getGame, pendingIllegalSquad, getHandTooltipEmbed, getHandSquadButtons, saveGames } = ctx;
+  const { getGame, pendingIllegalSquad, getHandTooltipEmbed, saveGames } = ctx;
   const parts = interaction.customId.replace('deck_illegal_redo_', '').split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
@@ -1078,12 +1078,12 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
   if (botMsg) {
     await botMsg.edit({
       embeds: [getHandTooltipEmbed(game, playerNum)],
-      components: [getHandSquadButtons(game.gameId, playerNum)],
+      components: [],
     }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   }
   saveGames();
-  await interaction.message.edit({ content: 'Squad cleared. Please submit again using Select Squad, .vsav upload, or pasted list.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
-  await interaction.followUp({ content: 'Your squad has been cleared. Submit a new squad using **Select Squad**, upload a .vsav file, or paste your list.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ content: 'Squad cleared. Paste your list or upload a .vsav file below to resubmit.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.followUp({ content: 'Your squad has been cleared. Paste your army list or upload a .vsav file in this thread to resubmit.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction */

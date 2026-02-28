@@ -123,11 +123,19 @@ export function getHandTooltipEmbed(game, playerNum, squad) {
       .setColor(0x57f287);
   }
   return new EmbedBuilder()
-    .setTitle('Your Hand')
+    .setTitle('Submit Your Squad')
     .setDescription(
-      'Your private thread for **Command Cards** and squad selection. Only you can see this thread.\n\n' +
-      '• Select your squad below (form), **upload a .vsav file**, or **copy-paste** your list from the IACP builder Share button\n' +
-      '• During the game, your hand is shown here — played cards will show up in the **Game Log**'
+      'This is your private hand thread. Submit your squad using **one** of these methods:\n\n' +
+      '**OPTION 1 — Paste your list**\n' +
+      'Copy your army list from the IACP Skirmish Builder and paste it as a message right here.\n\n' +
+      '**OPTION 2 — Upload a .vsav file**\n' +
+      'Drag and drop your VASSAL save file (.vsav) into this thread.\n\n' +
+      '```\n' +
+      '            PASTE or UPLOAD below\n' +
+      '                    |\n' +
+      '                    |\n' +
+      '                    V\n' +
+      '```'
     )
     .setColor(0x5865f2);
 }
