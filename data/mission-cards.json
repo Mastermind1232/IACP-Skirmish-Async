@@ -142,9 +142,9 @@
     },
     "devaron-garrison": {
       "a": {
-        "name": "Crate Control",
+        "name": "Arms Salvage",
         "tokenLabel": "Crate",
-        "imagePath": "",
+        "imagePath": "vassal_extracted/images/mission-cards/Devaron Garrison-A-Arms Salvage.png",
         "setup": "",
         "persistent": "",
         "startOfRound": "Place 1 Power Token on each crate, according to that crate's color: (Red: Hit Token), (Yellow: Surge Token), (Blue: Block Token)",
@@ -161,9 +161,9 @@
         }
       },
       "b": {
-        "name": "Crate Rush",
+        "name": "Secure Munitions",
         "tokenLabel": "Crate",
-        "imagePath": "",
+        "imagePath": "vassal_extracted/images/mission-cards/Devaron Garrison-B-Secure Munitions.png",
         "setup": "",
         "persistent": "Doors are locked.\n\nA figure can attack a crate (Health: 5, Defense: 1 Block). When a crate is destroyed, all figures and objects on or adjacent to that crate suffer 2 Damage.\n\nFor each crate in a player's deployment zone, that player counts as having 6 additional VPs.",
         "startOfRound": "",
