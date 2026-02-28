@@ -83,6 +83,8 @@ export async function handleMapSelectionChoice(interaction, ctx) {
     getTournamentRotation,
     getMissionCardsData,
     getMapRegistry,
+    getMapSelectionMenu,
+    getMapConfirmButton,
     getMissionSelectDrawMenu,
     getMissionSelectionPickMenu,
     postMissionCardAfterMapSelection,
@@ -128,7 +130,6 @@ export async function handleMapSelectionChoice(interaction, ctx) {
     await interaction.editReply({ content, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const { getMapConfirmButton } = ctx;
   let map = null;
   if (value === 'competitive') {
     const rotation = getTournamentRotation?.();

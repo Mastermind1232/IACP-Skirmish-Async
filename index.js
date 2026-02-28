@@ -5464,10 +5464,10 @@ async function handleBoltslingerTarget(interaction) {
 }
 
 async function handleBoltslingerSkip(interaction) {
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   const m = interaction.customId.match(/^boltslinger_skip_([^_]+)$/);
   if (!m) return;
   const game = getGame(m[1]);
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   if (game) delete game.pendingBoltslinger;
   await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   saveGames();
@@ -5654,6 +5654,7 @@ async function handleFightingKnifeSkip(interaction) {
 
 /** Concussive Bolt push target: concussive_bolt_push_{gameId}_{space} */
 async function handleConcussiveBoltPush(interaction) {
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   const m = interaction.customId.match(/^concussive_bolt_push_([^_]+)_([a-z0-9]+)$/);
   if (!m) return;
   const [, gameId, space] = m;
@@ -5668,7 +5669,6 @@ async function handleConcussiveBoltPush(interaction) {
     await interaction.followUp({ content: 'Invalid push destination.', ephemeral: true }).catch(() => {});
     return;
   }
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   await interaction.message.edit({ components: [] }).catch(() => {});
   delete game.pendingConcussiveBolt;
   // Move the figure to the chosen space
@@ -5683,12 +5683,12 @@ async function handleConcussiveBoltPush(interaction) {
 
 /** Concussive Bolt skip: concussive_bolt_skip_{gameId} */
 async function handleConcussiveBoltSkip(interaction) {
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   const m = interaction.customId.match(/^concussive_bolt_skip_([^_]+)$/);
   if (!m) return;
   const game = getGame(m[1]);
   if (!game?.pendingConcussiveBolt) return;
   const pending = game.pendingConcussiveBolt;
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   await interaction.message.edit({ components: [] }).catch(() => {});
   delete game.pendingConcussiveBolt;
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
@@ -5793,6 +5793,7 @@ async function handleSpreadThePainSkip(interaction) {
 
 /** Missile Salvo die choice: missile_salvo_die_{color}_{gameId}_{msgId} */
 async function handleMissileSalvoDie(interaction) {
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   const m = interaction.customId.match(/^missile_salvo_die_([a-z]+)_([^_]+)_(.+)$/);
   if (!m) return;
   const [, color, gameId, msgId] = m;
@@ -5807,7 +5808,6 @@ async function handleMissileSalvoDie(interaction) {
     await interaction.followUp({ content: `The ${color} die is no longer available for this salvo.`, ephemeral: true }).catch(() => {});
     return;
   }
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   // Remove chosen die from available pool
   game.pendingMissileSalvo[msgId].diceAvailable = diceAvailable.filter((c) => c !== color);
   // Set up overridden ranged attack with this die + +3 accuracy
@@ -5827,6 +5827,7 @@ async function handleMissileSalvoDie(interaction) {
 
 /** Missile Salvo done: missile_salvo_done_{gameId}_{msgId} */
 async function handleMissileSalvoDone(interaction) {
+  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   const m = interaction.customId.match(/^missile_salvo_done_([^_]+)_(.+)$/);
   if (!m) return;
   const [, gameId, msgId] = m;
@@ -5837,7 +5838,6 @@ async function handleMissileSalvoDone(interaction) {
     await interaction.followUp({ content: 'Only the activating player can end the salvo.', ephemeral: true }).catch(() => {});
     return;
   }
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   delete game.pendingMissileSalvo[msgId];
   await interaction.message.edit({ components: [] }).catch(() => {});
   saveGames();
@@ -7589,6 +7589,10 @@ client.on('interactionCreate', async (interaction) => {
         createHandThreads,
         getHandTooltipEmbed,
         getHandSquadButtons,
+        isDcAttachment,
+        resolveDcName,
+        isFigurelessDc,
+        finishSetupAttachments,
         client,
         saveGames,
       };
