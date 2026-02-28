@@ -3606,7 +3606,7 @@ export async function handleCleaveTarget(interaction, ctx) {
  */
 export async function handlePowerTokenChoice(interaction, ctx) {
   await interaction.deferUpdate().catch(() => {});
-  const { getGame, saveGames, canActAsPlayer } = ctx;
+  const { getGame, saveGames } = ctx;
   const match = interaction.customId.match(/^power_token_choice_([^_]+)_(hit|surge|block|evade)$/);
   if (!match) { await interaction.followUp({ content: 'Invalid token choice.', ephemeral: true }).catch(() => {}); return; }
   const [, gameId, typeRaw] = match;
