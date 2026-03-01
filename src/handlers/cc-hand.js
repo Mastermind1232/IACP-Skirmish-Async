@@ -47,13 +47,13 @@ export async function handleSquadModal(interaction, ctx) {
   const squad = { name, dcList, ccList, dcCount: dcList.length, ccCount: ccList.length };
   normalizeSquadInput(squad);
   const validation = validateDeckLegal(squad);
-  if (!validation.legal) {
-    await sendDeckIllegalAlert(game, isP1, squad, validation, interaction.client);
-    await interaction.reply({ content: 'Your deck did not pass validation. Check your **Your Hand** thread for details and choose **PLAY IT ANYWAY** or **REDO**.', ephemeral: true });
-    return;
-  }
   await applySquadSubmission(game, isP1, squad, interaction.client);
-  await interaction.reply({ content: `Squad **${name}** submitted. (${dcList.length} DCs, ${ccList.length} CCs)`, ephemeral: true });
+  if (!validation.legal) {
+    const errorList = validation.errors.map((e) => `• ${e}`).join('\n');
+    await interaction.reply({ content: `Squad **${name}** submitted. (${dcList.length} DCs, ${ccList.length} CCs)\n\n⚠️ **Heads up** — the bot detected possible issues with this list:\n${errorList}\n\nIf the bot is wrong here, ignore this message!`, ephemeral: true });
+  } else {
+    await interaction.reply({ content: `Squad **${name}** submitted. (${dcList.length} DCs, ${ccList.length} CCs)`, ephemeral: true });
+  }
 }
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */

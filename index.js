@@ -7148,13 +7148,13 @@ client.on('messageCreate', async (message) => {
         };
         normalizeSquadInput(squad);
         const validation = validateDeckLegal(squad);
-        if (!validation.legal) {
-          await sendDeckIllegalAlert(game, isP1, squad, validation, message.client);
-          await message.reply(`Your deck did not pass validation. Check the message above for details and choose **PLAY IT ANYWAY** or **REDO**.`);
-          return;
-        }
         await applySquadSubmission(game, isP1, squad, message.client);
-        await message.reply(`✓ Squad **${squad.name}** submitted from .vsav (${squad.dcCount} DCs, ${squad.ccCount} CCs)`);
+        if (!validation.legal) {
+          const errorList = validation.errors.map((e) => `• ${e}`).join('\n');
+          await message.reply(`✓ Squad **${squad.name}** submitted from .vsav (${squad.dcCount} DCs, ${squad.ccCount} CCs)\n\n⚠️ **Heads up** — the bot detected possible issues with this list:\n${errorList}\n\nIf the bot is wrong here, ignore this message!`);
+        } else {
+          await message.reply(`✓ Squad **${squad.name}** submitted from .vsav (${squad.dcCount} DCs, ${squad.ccCount} CCs)`);
+        }
       } catch (err) {
         console.error('vsav parse error:', err);
         await logGameErrorToBotLogs(message.client, message.guild, null, err, 'messageCreate_vsav');
@@ -7184,13 +7184,13 @@ client.on('messageCreate', async (message) => {
       };
       normalizeSquadInput(squad);
       const validation = validateDeckLegal(squad);
-      if (!validation.legal) {
-        await sendDeckIllegalAlert(game, isP1, squad, validation, message.client);
-        await message.reply(`Your deck did not pass validation. Check the message above for details and choose **PLAY IT ANYWAY** or **REDO**.`);
-        return;
-      }
       await applySquadSubmission(game, isP1, squad, message.client);
-      await message.reply(`✓ Squad **${squad.name}** submitted from pasted list (${squad.dcCount} DCs, ${squad.ccCount} CCs)`);
+      if (!validation.legal) {
+        const errorList = validation.errors.map((e) => `• ${e}`).join('\n');
+        await message.reply(`✓ Squad **${squad.name}** submitted from pasted list (${squad.dcCount} DCs, ${squad.ccCount} CCs)\n\n⚠️ **Heads up** — the bot detected possible issues with this list:\n${errorList}\n\nIf the bot is wrong here, ignore this message!`);
+      } else {
+        await message.reply(`✓ Squad **${squad.name}** submitted from pasted list (${squad.dcCount} DCs, ${squad.ccCount} CCs)`);
+      }
       return;
     }
   }
