@@ -245,7 +245,11 @@ export function getCcEffectsData() {
 }
 
 export function getCcEffect(cardName) {
-  return ccEffectsData.cards?.[cardName] || null;
+  const result = ccEffectsData.cards?.[cardName];
+  if (result) return result;
+  // Fallback: strip trailing faction suffix like " (Mercenary)" from pasted list names
+  const stripped = typeof cardName === 'string' ? cardName.replace(/\s+\((?:Mercenary|Imperial|Rebel)\)$/i, '').trim() : null;
+  return (stripped && stripped !== cardName) ? (ccEffectsData.cards?.[stripped] || null) : null;
 }
 
 /** Ability library (F1): id → { type, surgeCost?, label?, ... }. Used by game/abilities.js. */

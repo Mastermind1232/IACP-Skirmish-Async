@@ -7,6 +7,94 @@ import { getLoadoutCards, getFormCards, getDcEffects } from '../data-loader.js';
 import { setConfig } from '../game/figure-config.js';
 
 /**
+ * Check if an attachment card targets a specific DC by name (not by keyword).
+ * Returns the dcMsgId if exactly 1 DC in dcList matches, otherwise null.
+ */
+function findAutoAttachTarget(cardName, dcList, dcMsgIds) {
+  const effects = getDcEffects();
+  const card = effects[cardName] || effects[`[${cardName}]`];
+  if (!card?.abilityText) return null;
+  const firstLine = card.abilityText.split('\n')[0].trim();
+  const onlyMatch = firstLine.match(/^(.+?)\s+ONLY$/i);
+  if (!onlyMatch) return null;
+  const restriction = onlyMatch[1];
+  // Split on " OR " / " or " and strip quotes/parens
+  const alternatives = restriction
+    .replace(/"/g, '')
+    .split(/\s+(?:OR|or)\s+/)
+    .map((s) => s.trim().replace(/\([^)]*\)/g, '').trim())
+    .filter(Boolean);
+  // If any alternative is a keyword category, show the picker instead
+  const KEYWORDS = ['LEADER', 'HUNTER', 'DROID', 'CREATURE', 'TROOPER', 'VEHICLE',
+    'SMUGGLER', 'WOOKIEE', 'WOOKIE', 'FORCE USER', 'HEAVY WEAPON', 'UNIQUE FIGURE',
+    'NON-UNIQUE', 'NON-MASSIVE', 'BRAWLER', 'SPY', 'GUARDIAN', 'IMPERIAL', 'REBEL',
+    'SCUM', 'FIGURE WITH', 'FIGURE COST', 'GROUP WITH', 'MASSIVE'];
+  const isKeyword = alternatives.some((a) =>
+    KEYWORDS.some((k) => a.toUpperCase().includes(k)),
+  );
+  if (isKeyword) return null;
+  // Match alternatives against DC names (case-insensitive)
+  const matches = [];
+  for (let i = 0; i < dcList.length; i++) {
+    const name = (dcList[i].dcName || '').toLowerCase();
+    for (const alt of alternatives) {
+      if (name.includes(alt.toLowerCase())) {
+        matches.push(dcMsgIds[i]);
+        break;
+      }
+    }
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
+/**
+ * Apply a setup attachment to a DC (shared by manual picker and auto-attach).
+ * Handles special cards (Focused on the Kill health boost, Wookiee Avenger deck search).
+ */
+async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) {
+  const { dcHealthState, logGameAction, client, updateAttachmentMessageForDc } = ctx;
+  const attachKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+  game[attachKey] = game[attachKey] || {};
+  if (!Array.isArray(game[attachKey][dcMsgId])) game[attachKey][dcMsgId] = [];
+  game[attachKey][dcMsgId].push(card);
+
+  // Focused on the Kill (IG-88): +5 Health applied at setup when attached
+  if (card === 'Focused on the Kill') {
+    const dcHS = dcHealthState;
+    const hs = dcHS?.get(dcMsgId);
+    if (hs) {
+      for (let fi = 0; fi < hs.length; fi++) {
+        if (hs[fi]) { hs[fi] = [hs[fi][0] + 5, hs[fi][1] + 5]; }
+      }
+      dcHS.set(dcMsgId, hs);
+      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const idx = dcMsgIds.indexOf(dcMsgId);
+      if (idx >= 0 && dcList[idx]) dcList[idx].healthState = [...hs];
+    }
+  }
+  // Wookiee Avenger: search deck for "Debts Repaid", put into hand, draw 1 fewer in starting hand
+  if (card === 'Wookiee Avenger') {
+    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const deck = game[deckKey] || [];
+    const dIdx = deck.indexOf('Debts Repaid');
+    if (dIdx >= 0) {
+      deck.splice(dIdx, 1);
+      game[deckKey] = deck;
+      game[handKey] = [...(game[handKey] || []), 'Debts Repaid'];
+      game.wookieeAvengerDrawPenalty = (game.wookieeAvengerDrawPenalty || 0) + 1;
+      if (logGameAction) await logGameAction(game, client, '**Wookiee Avenger** — Searched deck for **Debts Repaid**, added to hand. Will draw 1 fewer starting card.', { phase: 'SETUP', icon: 'card' });
+    }
+  }
+
+  if (updateAttachmentMessageForDc) {
+    try { await updateAttachmentMessageForDc(game, playerNum, dcMsgId, client); }
+    catch (err) { console.error('Failed to update attachment message after setup attach:', err); }
+  }
+}
+
+/**
  * Build options for mission select menus (Select Draw / Selection). Value format: "mapId:variant".
  * @param {() => { id: string, name: string, imagePath?: string }[]} getPlayReadyMaps
  * @param {() => Record<string, Record<string, { name: string }>>} getMissionCardsData
@@ -726,7 +814,6 @@ export async function handleDeploymentFig(interaction, ctx) {
       return;
     }
     const BTM_PER_MSG = 5;
-    const firstRows = rows.slice(0, BTM_PER_MSG);
     game.deploySpaceGridMessageIds = game.deploySpaceGridMessageIds || {};
     const gridKey = `${playerNum}_${flatIndex}`;
     const promptText = isLarge
@@ -745,19 +832,26 @@ export async function handleDeploymentFig(interaction, ctx) {
       } catch {}
     }
     const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
-    const replyPayload = { content: promptText, components: firstRows, ephemeral: false, fetchReply: true };
-    if (mapAttachment) replyPayload.files = [mapAttachment];
-    const replyMsg = await interaction.followUp(replyPayload).catch(() => null);
-    const gridIds = [];
-    if (replyMsg?.id) gridIds.push(replyMsg.id);
-    for (let i = BTM_PER_MSG; i < rows.length; i += BTM_PER_MSG) {
-      const more = rows.slice(i, i + BTM_PER_MSG);
-      if (more.length > 0) {
-        const followMsg = await interaction.followUp({ content: null, components: more, fetchReply: true }).catch(() => null);
-        if (followMsg?.id) gridIds.push(followMsg.id);
-      }
+    // If too many rows for one message, use two-tier row picker
+    const useRowPicker = rows.length > BTM_PER_MSG;
+    if (useRowPicker) {
+      const { buildDeployRowButtons } = ctx;
+      const { rows: rowBtns } = buildDeployRowButtons(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
+      const replyPayload = { content: `${promptText}\nChoose a row:`, components: rowBtns.slice(0, BTM_PER_MSG), ephemeral: false, fetchReply: true };
+      if (mapAttachment) replyPayload.files = [mapAttachment];
+      const replyMsg = await interaction.followUp(replyPayload).catch(() => null);
+      const gridIds = [];
+      if (replyMsg?.id) gridIds.push(replyMsg.id);
+      game.deploySpaceGridMessageIds[gridKey] = gridIds;
+    } else {
+      const firstRows = rows.slice(0, BTM_PER_MSG);
+      const replyPayload = { content: promptText, components: firstRows, ephemeral: false, fetchReply: true };
+      if (mapAttachment) replyPayload.files = [mapAttachment];
+      const replyMsg = await interaction.followUp(replyPayload).catch(() => null);
+      const gridIds = [];
+      if (replyMsg?.id) gridIds.push(replyMsg.id);
+      game.deploySpaceGridMessageIds[gridKey] = gridIds;
     }
-    game.deploySpaceGridMessageIds[gridKey] = gridIds;
   } else {
     const modal = new ModalBuilder()
       .setCustomId(`deploy_modal_${gameId}_${playerNum}_${flatIndex}`)
@@ -845,10 +939,10 @@ export async function handleDeploymentOrient(interaction, ctx) {
   }
   const { rows } = getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
   const BTM_PER_MSG = 5;
-  const firstRows = rows.slice(0, BTM_PER_MSG);
   game.deploySpaceGridMessageIds = game.deploySpaceGridMessageIds || {};
   const gridKey = `${playerNum}_${flatIndex}`;
   const gridIds = [];
+  const useRowPicker = rows.length > BTM_PER_MSG;
   try {
     const isInitiative = playerNum === initiativePlayerNum;
     const idsKey = isInitiative ? 'initiativeDeployMessageIds' : 'nonInitiativeDeployMessageIds';
@@ -863,24 +957,183 @@ export async function handleDeploymentOrient(interaction, ctx) {
       } catch {}
     }
     const mapAttachment = await getDeploymentMapAttachment(game, playerZone);
-    const editPayload = {
-      content: `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${orientation} unit):`,
-      components: firstRows,
-    };
-    if (mapAttachment) editPayload.files = [mapAttachment];
-    await interaction.message.edit(editPayload);
-    if (interaction.message?.id) gridIds.push(interaction.message.id);
-    for (let i = BTM_PER_MSG; i < rows.length; i += BTM_PER_MSG) {
-      const more = rows.slice(i, i + BTM_PER_MSG);
-      if (more.length > 0) {
-        const sent = await interaction.channel.send({ content: null, components: more });
-        if (sent?.id) gridIds.push(sent.id);
-      }
+    const promptText = `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${orientation} unit):`;
+    if (useRowPicker) {
+      const { buildDeployRowButtons } = ctx;
+      const { rows: rowBtns } = buildDeployRowButtons(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
+      const editPayload = { content: `${promptText}\nChoose a row:`, components: rowBtns.slice(0, BTM_PER_MSG) };
+      if (mapAttachment) editPayload.files = [mapAttachment];
+      await interaction.message.edit(editPayload);
+      if (interaction.message?.id) gridIds.push(interaction.message.id);
+    } else {
+      const firstRows = rows.slice(0, BTM_PER_MSG);
+      const editPayload = { content: promptText, components: firstRows };
+      if (mapAttachment) editPayload.files = [mapAttachment];
+      await interaction.message.edit(editPayload);
+      if (interaction.message?.id) gridIds.push(interaction.message.id);
     }
   } catch (err) {
     console.error('Failed to show deploy grid after orientation:', err);
   }
   game.deploySpaceGridMessageIds[gridKey] = gridIds;
+}
+
+/**
+ * Second tier of the deploy row picker: user clicked "Row X" → show spaces in that row.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - getGame, getDeploymentZones, getFigureSize, getFootprintCells, filterValidTopLeftSpaces, getDeploySpaceGridRows, buildDeployRowButtons, client
+ */
+export async function handleDeployRow(interaction, ctx) {
+  const match = interaction.customId.match(/^deploy_row_([^_]+)_(\d+)_(\d+)_(\d+)$/);
+  if (!match) {
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const [, gameId, playerNumStr, flatIndexStr, rowNumStr] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const flatIndex = parseInt(flatIndexStr, 10);
+  const rowNum = parseInt(rowNumStr, 10);
+  const { getGame, getDeploymentZones, getFigureSize, getFootprintCells, filterValidTopLeftSpaces, getDeploySpaceGridRows, buildDeployRowButtons, client } = ctx;
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const mapId = game.selectedMap?.id;
+  const zones = mapId ? getDeploymentZones()[mapId] : null;
+  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+  const deployMeta = playerNum === 1 ? game.player1DeployMetadata : game.player2DeployMetadata;
+  const figMeta = deployMeta?.[flatIndex];
+  const figureKey = figMeta ? `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}` : null;
+  const occupied = [];
+  if (game.figurePositions) {
+    for (const p of [1, 2]) {
+      for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
+        if (p === playerNum && k === figureKey) continue;
+        const dcName = k.replace(/-\d+-\d+$/, '');
+        const size = game.figureOrientations?.[k] || getFigureSize(dcName);
+        occupied.push(...getFootprintCells(s, size));
+      }
+    }
+  }
+  const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
+  const dcName = figMeta?.dcName;
+  const figureSize = game.pendingDeployOrientation?.[`${playerNum}_${flatIndex}`] || (dcName ? getFigureSize(dcName) : '1x1');
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize);
+  // Filter to only spaces in the chosen row
+  const rowSpaces = validSpaces.filter((s) => {
+    const m = s.match(/^[a-z]+(\d+)$/i);
+    return m && parseInt(m[1], 10) === rowNum;
+  });
+  if (rowSpaces.length === 0) {
+    await interaction.followUp({ content: `No available spaces in Row ${rowNum}.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const zoneStyle = playerZone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
+  rowSpaces.sort((a, b) => (a || '').localeCompare(b || ''));
+  const btns = rowSpaces.map((space) =>
+    new ButtonBuilder()
+      .setCustomId(`deploy_pick_${gameId}_${playerNum}_${flatIndex}_${space}`)
+      .setLabel(space.toUpperCase())
+      .setStyle(zoneStyle)
+  );
+  const spaceRows = [];
+  for (let i = 0; i < btns.length; i += 5) {
+    spaceRows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+  }
+  // Add a "back to rows" button
+  const backRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`deploy_row_back_${gameId}_${playerNum}_${flatIndex}`)
+      .setLabel('Back to Rows')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  const components = [...spaceRows.slice(0, 4), backRow];
+  // Clear previous grid messages
+  const gridKey = `${playerNum}_${flatIndex}`;
+  const oldGridIds = game.deploySpaceGridMessageIds?.[gridKey] || [];
+  const currentMsgId = interaction.message.id;
+  for (const id of oldGridIds) {
+    if (id === currentMsgId) continue;
+    try {
+      const msg = await interaction.channel.messages.fetch(id);
+      await msg.delete();
+    } catch {}
+  }
+  try {
+    await interaction.message.edit({ content: `**Row ${rowNum}** — pick a space:`, components });
+  } catch {
+    await interaction.followUp({ content: `**Row ${rowNum}** — pick a space:`, components, ephemeral: false }).catch(() => null);
+  }
+  game.deploySpaceGridMessageIds = game.deploySpaceGridMessageIds || {};
+  game.deploySpaceGridMessageIds[gridKey] = [interaction.message.id];
+}
+
+/**
+ * Handle deploy_row_back_ button: return to the row picker.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handleDeployRowBack(interaction, ctx) {
+  const match = interaction.customId.match(/^deploy_row_back_([^_]+)_(\d+)_(\d+)$/);
+  if (!match) {
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const [, gameId, playerNumStr, flatIndexStr] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const flatIndex = parseInt(flatIndexStr, 10);
+  const { getGame, getDeploymentZones, getFigureSize, getFootprintCells, filterValidTopLeftSpaces, buildDeployRowButtons } = ctx;
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owner can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    return;
+  }
+  const mapId = game.selectedMap?.id;
+  const zones = mapId ? getDeploymentZones()[mapId] : null;
+  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+  const deployMeta = playerNum === 1 ? game.player1DeployMetadata : game.player2DeployMetadata;
+  const figMeta = deployMeta?.[flatIndex];
+  const figureKey = figMeta ? `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}` : null;
+  const occupied = [];
+  if (game.figurePositions) {
+    for (const p of [1, 2]) {
+      for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
+        if (p === playerNum && k === figureKey) continue;
+        const dcName = k.replace(/-\d+-\d+$/, '');
+        const size = game.figureOrientations?.[k] || getFigureSize(dcName);
+        occupied.push(...getFootprintCells(s, size));
+      }
+    }
+  }
+  const zoneSpaces = (zones?.[playerZone] || []).map((s) => String(s).toLowerCase());
+  const dcName = figMeta?.dcName;
+  const figureSize = game.pendingDeployOrientation?.[`${playerNum}_${flatIndex}`] || (dcName ? getFigureSize(dcName) : '1x1');
+  const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize);
+  const labels = playerNum === 1 ? game.player1DeployLabels : game.player2DeployLabels;
+  const label = labels?.[flatIndex] || 'figure';
+  const isLarge = figureSize !== '1x1';
+  const promptText = isLarge
+    ? `Pick the **top-left square** for **${label.replace(/^Deploy /, '')}** (${figureSize} unit):`
+    : `Pick a space for **${label.replace(/^Deploy /, '')}**:`;
+  const { rows: rowBtns } = buildDeployRowButtons(gameId, playerNum, flatIndex, validSpaces, [], playerZone);
+  try {
+    await interaction.message.edit({ content: `${promptText}\nChoose a row:`, components: rowBtns.slice(0, 5) });
+  } catch {
+    await interaction.followUp({ content: `${promptText}\nChoose a row:`, components: rowBtns.slice(0, 5), ephemeral: false }).catch(() => null);
+  }
 }
 
 /**
@@ -1140,6 +1393,7 @@ export async function handleDeploymentDone(interaction, ctx) {
     isDcAttachment,
     resolveDcName,
     isFigurelessDc,
+    finishSetupAttachments,
   } = ctx;
   const gameId = interaction.customId.replace('deployment_done_', '');
   const game = getGame(gameId);
@@ -1283,10 +1537,20 @@ export async function handleDeploymentDone(interaction, ctx) {
     for (const pn of [1, 2]) {
       const pending = game.setupAttachmentPending[pn];
       if (pending.length === 0) continue;
-      const handId = pn === 1 ? game.p1HandId : game.p2HandId;
-      const handChannel = await client.channels.fetch(handId);
+      // Auto-attach all character-specific attachments first
       const dcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
       const dcMsgIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      while (pending.length > 0) {
+        const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds);
+        if (!autoTarget) break; // needs manual picker
+        const card = pending[0];
+        await applySetupAttachment(game, pn, card, autoTarget, ctx);
+        pending.shift();
+        await logGameAction(game, client, `**${card}** auto-attached to **${ctx.dcMessageMeta?.get(autoTarget)?.displayName || 'DC'}** (setup).`, { phase: 'SETUP', icon: 'card' });
+      }
+      if (pending.length === 0) continue; // all auto-attached
+      const handId = pn === 1 ? game.p1HandId : game.p2HandId;
+      const handChannel = await client.channels.fetch(handId);
       const options = dcList.slice(0, 25).map((dc, i) => ({
         label: (dc.displayName || dc.dcName || `DC ${i + 1}`).slice(0, 100),
         value: (dcMsgIds[i] || String(i)).toString(),
@@ -1299,6 +1563,13 @@ export async function handleDeploymentDone(interaction, ctx) {
         content: `**Setup — place Skirmish Upgrade (1 of ${pending.length}):** **${pending[0]}**. Choose which Deployment Card to attach it to:`,
         components: [new ActionRowBuilder().addComponents(select)],
       });
+    }
+    // Check if all attachments were auto-placed (no picker needed for either player)
+    const allDone = (game.setupAttachmentPending[1] || []).length === 0 && (game.setupAttachmentPending[2] || []).length === 0;
+    if (allDone) {
+      game.setupAttachmentPhase = false;
+      game.setupAttachmentPending = null;
+      await finishSetupAttachments(game, client);
     }
     saveGames();
     return;
@@ -1496,55 +1767,28 @@ export async function handleSetupAttachTo(interaction, ctx) {
   const dcMsgId = interaction.values[0];
   if (!dcMsgId) return;
 
-  const attachKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
-  game[attachKey] = game[attachKey] || {};
-  if (!Array.isArray(game[attachKey][dcMsgId])) game[attachKey][dcMsgId] = [];
-  game[attachKey][dcMsgId].push(card);
+  await applySetupAttachment(game, playerNum, card, dcMsgId, ctx);
   pending.shift();
 
-  // Focused on the Kill (IG-88): +5 Health applied at setup when attached
-  if (card === 'Focused on the Kill') {
-    const dcHS = ctx.dcHealthState;
-    const hs = dcHS?.get(dcMsgId);
-    if (hs) {
-      for (let fi = 0; fi < hs.length; fi++) {
-        if (hs[fi]) { hs[fi] = [hs[fi][0] + 5, hs[fi][1] + 5]; }
-      }
-      dcHS.set(dcMsgId, hs);
-      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-      const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-      const idx = dcMsgIds.indexOf(dcMsgId);
-      if (idx >= 0 && dcList[idx]) dcList[idx].healthState = [...hs];
-    }
-  }
-  // Wookiee Avenger: search deck for "Debts Repaid", put into hand, draw 1 fewer in starting hand
-  if (card === 'Wookiee Avenger') {
-    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-    const deck = game[deckKey] || [];
-    const dIdx = deck.indexOf('Debts Repaid');
-    if (dIdx >= 0) {
-      deck.splice(dIdx, 1);
-      game[deckKey] = deck;
-      game[handKey] = [...(game[handKey] || []), 'Debts Repaid'];
-      game.wookieeAvengerDrawPenalty = (game.wookieeAvengerDrawPenalty || 0) + 1;
-      await logGameAction(game, client, `**Wookiee Avenger** — Searched deck for **Debts Repaid**, added to hand. Will draw 1 fewer starting card.`, { phase: 'SETUP', icon: 'card' });
-    }
-  }
+  const dcDisplayName = ctx.dcMessageMeta?.get(dcMsgId)?.displayName || 'DC';
+  await logGameAction(game, client, `<@${interaction.user.id}> placed **${card}** on **${dcDisplayName}** (setup).`, { phase: 'SETUP', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
 
-  try {
-    await updateAttachmentMessageForDc(game, playerNum, dcMsgId, client);
-  } catch (err) {
-    console.error('Failed to update attachment message after setup attach:', err);
+  // Auto-attach any subsequent character-specific attachments
+  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+  while (pending.length > 0) {
+    const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds);
+    if (!autoTarget) break;
+    const autoCard = pending[0];
+    await applySetupAttachment(game, playerNum, autoCard, autoTarget, ctx);
+    pending.shift();
+    const autoDisplayName = ctx.dcMessageMeta?.get(autoTarget)?.displayName || 'DC';
+    await logGameAction(game, client, `**${autoCard}** auto-attached to **${autoDisplayName}** (setup).`, { phase: 'SETUP', icon: 'card' });
   }
-  await logGameAction(game, client, `<@${interaction.user.id}> placed **${card}** on a Deployment Card (setup).`, { phase: 'SETUP', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-
-  const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
-  const handChannel = await client.channels.fetch(handId);
 
   if (pending.length > 0) {
-    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-    const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+    const handChannel = await client.channels.fetch(handId);
     const options = dcList.slice(0, 25).map((dc, i) => ({
       label: (dc.displayName || dc.dcName || `DC ${i + 1}`).slice(0, 100),
       value: (dcMsgIds[i] || String(i)).toString(),

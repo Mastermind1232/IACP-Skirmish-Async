@@ -135,6 +135,8 @@ const BUTTON_PREFIXES = [
   'deployment_fig_',
   'deployment_orient_',
   'deploy_pick_',
+  'deploy_row_back_',
+  'deploy_row_',
   'loadout_pick_',
   'form_pick_',
   'deployment_done_',
@@ -166,6 +168,7 @@ const BUTTON_PREFIXES = [
   'fast_forward_',
   'lobby_join_',
   'lobby_start_',
+  'dc_rename_',
   'create_game',
   'join_game',
 ];
@@ -176,6 +179,7 @@ const MODAL_PREFIXES = [
   'deploy_modal_',
   'devaron_crate_modal_',
   'krykna_push_modal_',
+  'dc_rename_modal_',
 ];
 
 /** String select menu prefixes. */

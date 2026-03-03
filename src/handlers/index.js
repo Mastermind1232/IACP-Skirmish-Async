@@ -26,6 +26,8 @@ import {
   handleDeploymentFig,
   handleDeploymentOrient,
   handleDeployPick,
+  handleDeployRow,
+  handleDeployRowBack,
   handleLoadoutPick,
   handleFormPick,
   handleDeploymentDone,
@@ -39,6 +41,7 @@ import {
   handleDcUnactivate,
   handleDcToggle,
   handleDcDeplete,
+  handleDcRename,
   handleDcCcSpecial,
   handleDcCcEndOfActivation,
   handleDcCcDoubleAction,
@@ -153,6 +156,8 @@ register('deployment_zone_blue_', handleDeploymentZone);
 register('deployment_fig_', handleDeploymentFig);
 register('deployment_orient_', handleDeploymentOrient);
 register('deploy_pick_', handleDeployPick);
+register('deploy_row_back_', handleDeployRowBack);
+register('deploy_row_', handleDeployRow);
 register('loadout_pick_', handleLoadoutPick);
 register('form_pick_', handleFormPick);
 register('deployment_done_', handleDeploymentDone);
@@ -164,6 +169,7 @@ register('dc_activate_', handleDcActivate);
 register('dc_unactivate_', handleDcUnactivate);
 register('dc_toggle_', handleDcToggle);
 register('dc_deplete_', handleDcDeplete);
+register('dc_rename_', handleDcRename);
 register('dc_cc_special_', handleDcCcSpecial);
 register('dc_cc_eoa_', handleDcCcEndOfActivation);
 register('dc_cc_double_', handleDcCcDoubleAction);
@@ -240,6 +246,8 @@ export {
   handleDeploymentFig,
   handleDeploymentOrient,
   handleDeployPick,
+  handleDeployRow,
+  handleDeployRowBack,
   handleLoadoutPick,
   handleFormPick,
   handleDeploymentDone,
@@ -253,6 +261,7 @@ export {
   handleDcUnactivate,
   handleDcToggle,
   handleDcDeplete,
+  handleDcRename,
   handleDcCcSpecial,
   handleDcCcEndOfActivation,
   handleDcCcDoubleAction,

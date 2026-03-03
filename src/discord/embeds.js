@@ -57,14 +57,19 @@ export function buildScorecardEmbed(game, missionBonus) {
  * @param {string[][]} [conditionsByFigure] - Optional per-figure condition names (e.g. [['Stun'], ['Weaken']])
  * @param {string[][]} [tokensByFigure] - Optional per-figure power token names (e.g. [['Hit', 'Block']])
  */
-export function formatHealthSection(dgIndex, healthState, conditionsByFigure, tokensByFigure) {
+export function formatHealthSection(dgIndex, healthState, conditionsByFigure, tokensByFigure, nicknamesByFigure) {
   if (!healthState?.length) return 'Health\n—/—';
   const labels = 'abcdefghij';
   const lines = healthState.map(([cur, max], i) => {
     const c = cur != null ? cur : (max != null ? max : '?');
     const m = max != null ? max : '?';
-    if (healthState.length === 1) return `${c}/${m}`;
-    return `${dgIndex}${labels[i]}: ${c}/${m}`;
+    if (healthState.length === 1) {
+      const nick = nicknamesByFigure?.[i];
+      return nick ? `${nick}: ${c}/${m}` : `${c}/${m}`;
+    }
+    const figLabel = `${dgIndex}${labels[i]}`;
+    const nick = nicknamesByFigure?.[i];
+    return nick ? `${nick} (${figLabel}): ${c}/${m}` : `${figLabel}: ${c}/${m}`;
   });
   let out = `Health\n${lines.join('\n')}`;
   if (conditionsByFigure?.length) {

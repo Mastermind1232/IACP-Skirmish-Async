@@ -42,6 +42,7 @@ export {
   getDeployFigureLabels as getDeployFigureLabelsFromDiscord,
   getDeployButtonRows as getDeployButtonRowsFromDiscord,
   getDeploySpaceGridRows,
+  buildDeployRowButtons,
   getDcActionButtons,
   getActivateDcButtons,
 } from './components.js';

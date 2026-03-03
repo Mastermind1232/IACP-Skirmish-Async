@@ -1376,9 +1376,8 @@ export async function handleAttackTarget(interaction, ctx) {
       'whileAdjacentFriendlyFigureDefending',
     ]);
     const defOwnerId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
-    const defPrompt = buildReactionPrompt(defReactions, `<@${defOwnerId}>`);
-    if (defPrompt) {
-      await thread.send({ content: defPrompt, allowedMentions: { users: [defOwnerId] } }).catch(() => {});
+    if (defReactions.length) {
+      await thread.send({ content: `<@${defOwnerId}> — You have ${defReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defOwnerId] } }).catch(() => {});
     }
     // Auto-prompt attacker for whenYouDeclareAttack cards
     const atkReactions = getPlayableReactionCards(game, attackerPlayerNum, [
@@ -1389,9 +1388,8 @@ export async function handleAttackTarget(interaction, ctx) {
       'whenAnotherFriendlyTrooperDeclaresAttackTargetingInYourLineOfSight',
     ]);
     const atkOwnerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
-    const atkPrompt = buildReactionPrompt(atkReactions, `<@${atkOwnerId}>`);
-    if (atkPrompt) {
-      await thread.send({ content: atkPrompt, allowedMentions: { users: [atkOwnerId] } }).catch(() => {});
+    if (atkReactions.length) {
+      await thread.send({ content: `<@${atkOwnerId}> — You have ${atkReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [atkOwnerId] } }).catch(() => {});
     }
   } catch (err) {
     console.error('Reaction prompt error:', err?.message ?? err);

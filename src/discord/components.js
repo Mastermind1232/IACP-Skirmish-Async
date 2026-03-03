@@ -105,7 +105,7 @@ export function getDcToggleButton(msgId, exhausted, game = null) {
  * @param {{ isDepletedRemovedFromGame: (game, msgId) => boolean, hasDepleteEffect: (dcName) => boolean }} helpers
  */
 export function getDcPlayAreaComponents(msgId, exhausted, game, dcName, helpers = {}) {
-  const { isDepletedRemovedFromGame = () => false, hasDepleteEffect = () => false } = helpers;
+  const { isDepletedRemovedFromGame = () => false, hasDepleteEffect = () => false, getDcStats, gameStarted } = helpers;
   if (game && isDepletedRemovedFromGame(game, msgId)) return [];
   const toggleRow = getDcToggleButton(msgId, exhausted, game);
   const rows = toggleRow ? [toggleRow] : [];
@@ -118,6 +118,19 @@ export function getDcPlayAreaComponents(msgId, exhausted, game, dcName, helpers 
           .setStyle(ButtonStyle.Primary)
       )
     );
+  }
+  if (getDcStats && !gameStarted) {
+    const stats = getDcStats(dcName);
+    if (stats && stats.figures > 1) {
+      rows.push(
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`dc_rename_${msgId}`)
+            .setLabel('Rename Figures')
+            .setStyle(ButtonStyle.Secondary)
+        )
+      );
+    }
   }
   return rows;
 }
@@ -676,7 +689,7 @@ export function getDeployButtonRows(gameId, playerNum, dcList, zone, figurePosit
   return { deployRows, doneRow };
 }
 
-/** Action rows of deploy space buttons (deploy_pick_...) grouped by map row. */
+/** Action rows of deploy space buttons (deploy_pick_...) grouped by map row. Returns ALL rows (caller handles overflow). */
 export function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces, occupiedSpaces, zone) {
   const occupied = new Set((occupiedSpaces || []).map((s) => String(s).toLowerCase()));
   const available = (validSpaces || [])
@@ -710,6 +723,34 @@ export function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces
         )
       );
     }
+  }
+  return { rows, available };
+}
+
+/** Two-tier deploy row picker: deploy_row_{gameId}_{playerNum}_{flatIndex}_{rowNum}. Used when zone has >5 action rows. */
+export function buildDeployRowButtons(gameId, playerNum, flatIndex, validSpaces, occupiedSpaces, zone) {
+  const occupied = new Set((occupiedSpaces || []).map((s) => String(s).toLowerCase()));
+  const available = (validSpaces || [])
+    .map((s) => String(s).toLowerCase())
+    .filter((s) => !occupied.has(s));
+  const byRow = {};
+  for (const s of available) {
+    const m = s.match(/^([a-z]+)(\d+)$/i);
+    const row = m ? parseInt(m[2], 10) : 0;
+    if (!byRow[row]) byRow[row] = [];
+    byRow[row].push(s);
+  }
+  const sortedRows = Object.keys(byRow).map(Number).sort((a, b) => a - b);
+  const zoneStyle = zone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
+  const btns = sortedRows.map((rowNum) =>
+    new ButtonBuilder()
+      .setCustomId(`deploy_row_${gameId}_${playerNum}_${flatIndex}_${rowNum}`)
+      .setLabel(`Row ${rowNum} (${byRow[rowNum].length})`)
+      .setStyle(zoneStyle)
+  );
+  const rows = [];
+  for (let i = 0; i < btns.length; i += 5) {
+    rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
   }
   return { rows: rows.slice(0, MAX_ROWS_PER_MESSAGE), available };
 }

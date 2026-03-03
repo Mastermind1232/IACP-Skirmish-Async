@@ -1,7 +1,7 @@
 /**
  * DC Play Area handlers: dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_
  */
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { truncateLabel, getAttachmentSpecials } from '../discord/components.js';
 import { bottomLeftCoord } from '../game/coords.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
@@ -219,9 +219,8 @@ export async function handleDcActivate(interaction, ctx) {
       const reactCards = [...new Set(oppHand)].filter(c => ccCards[c]?.timing && activationTimings.has(ccCards[c].timing));
       if (reactCards.length) {
         const oppId = oppNum === 1 ? game.player1Id : game.player2Id;
-        const cardList = reactCards.map(c => `**${c}** (cost ${ccCards[c].cost ?? 0})`).join(', ');
         await thread.send({
-          content: `<@${oppId}> — Hostile activated! Reaction card(s) in hand: ${cardList}. Play from Hand if desired.`,
+          content: `<@${oppId}> — Hostile activated! You have ${reactCards.length} reaction card(s) playable now. Check your Hand channel.`,
           allowedMentions: { users: [oppId] },
         }).catch(() => {});
       }
@@ -556,6 +555,52 @@ export async function handleDcDeplete(interaction, ctx) {
   await interaction.message.edit({ embeds: [embed], files, components: [] });
   await logGameAction(game, client, `**P${meta.playerNum}:** <@${ownerId}> depleted **${displayName}** — removed from game`, { allowedMentions: { users: [ownerId] }, icon: 'deplete' });
   saveGames();
+}
+
+/**
+ * Show a modal to rename figures in a multi-figure DC (deployment phase only).
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handleDcRename(interaction, ctx) {
+  const { dcMessageMeta, getDcStats, FIGURE_LETTERS } = ctx;
+  const msgId = interaction.customId.replace('dc_rename_', '');
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const stats = getDcStats(meta.dcName);
+  const figures = stats?.figures ?? 1;
+  if (figures <= 1) {
+    await interaction.reply({ content: 'This DC only has one figure.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const dgIndex = meta.displayName.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+  const letters = FIGURE_LETTERS || 'abcdefghij';
+  const game = ctx.getGame(meta.gameId);
+  game.figureNicknames = game.figureNicknames || {};
+
+  const modal = new ModalBuilder()
+    .setCustomId(`dc_rename_modal_${msgId}`)
+    .setTitle(`Rename ${meta.displayName}`.slice(0, 45));
+
+  const count = Math.min(figures, 5); // Discord modal limit: 5 text inputs
+  for (let i = 0; i < count; i++) {
+    const figLabel = `${dgIndex}${letters[i]}`;
+    const figKey = `${meta.dcName}-${dgIndex}-${i}`;
+    const currentNick = game.figureNicknames[figKey] || '';
+    const input = new TextInputBuilder()
+      .setCustomId(`fig_${i}`)
+      .setLabel(`Figure ${figLabel}`)
+      .setPlaceholder(figLabel)
+      .setValue(currentNick)
+      .setRequired(false)
+      .setMaxLength(20)
+      .setStyle(TextInputStyle.Short);
+    modal.addComponents(new ActionRowBuilder().addComponents(input));
+  }
+  await interaction.showModal(modal);
 }
 
 /**
@@ -1747,7 +1792,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   const resolveResult = resolveAbility ? resolveAbility(abilityId, {
     game, msgId, meta, playerNum: meta.playerNum, dcMessageMeta, dcHealthState: ctx.dcHealthState, specialLabel: action,
     hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapSpaces: ctx.getMapSpaces,
-    findDcMessageIdForFigure: ctx.findDcMessageIdForFigure,
+    findDcMessageIdForFigure: ctx.findDcMessageIdForFigure, getDcEffects,
   }) : { applied: false, manualMessage: 'Resolve manually (see rules).' };
   // Handle choice-required abilities (e.g. Dual-Bladed Fury: Focus or Reach+Cleave)
   if (!resolveResult.applied && resolveResult.requiresChoice && Array.isArray(resolveResult.choiceOptions) && resolveResult.choiceOptions.length > 0) {
@@ -1919,7 +1964,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
 
   // Wreak Vengeance: when dual_bladed_fury is used and wreakVengeanceActive is set, resolve BOTH chooseOne options
   if (abilityId === 'dual_bladed_fury' && game.wreakVengeanceActive?.playerNum === playerNum && resolveAbility) {
-    const commonCtx = { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapSpaces: ctx.getMapSpaces, findDcMessageIdForFigure: ctx.findDcMessageIdForFigure };
+    const commonCtx = { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapSpaces: ctx.getMapSpaces, findDcMessageIdForFigure: ctx.findDcMessageIdForFigure, getDcEffects: ctx.getDcEffects };
     const r0 = resolveAbility(abilityId, { ...commonCtx, choiceIndex: 0 });
     const r1 = resolveAbility(abilityId, { ...commonCtx, choiceIndex: 1 });
     delete game.wreakVengeanceActive;
@@ -1935,7 +1980,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, choiceIndex,
     targetFigureKey: targetFigureKeys?.[choiceIndex] || null,
     hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapSpaces: ctx.getMapSpaces,
-    findDcMessageIdForFigure: ctx.findDcMessageIdForFigure,
+    findDcMessageIdForFigure: ctx.findDcMessageIdForFigure, getDcEffects: ctx.getDcEffects,
   }) : { applied: false, manualMessage: 'Resolve manually.' };
 
   // False Orders Phase 2: figure chosen → show Move/Attack choice buttons

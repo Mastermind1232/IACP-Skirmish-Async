@@ -15,9 +15,11 @@
  */
 function normalizeCardName(name) {
   let n = name.replace(/\s+IACP$/i, '').trim();
-  // Strip single-letter faction/variant suffixes like " (M)", " (F)", " (R)", " (I)"
-  // The regex matches a space + one uppercase letter in parens at the end of the string.
+  // Strip faction/variant suffixes:
+  //   Single-letter: " (M)", " (F)", " (R)", " (I)"
+  //   Full-word: " (Mercenary)", " (Imperial)", " (Rebel)"
   n = n.replace(/\s+\([A-Z]\)$/i, '').trim();
+  n = n.replace(/\s+\((?:Mercenary|Imperial|Rebel)\)$/i, '').trim();
   // Convert elite/regular bracket notation to paren notation used in the data
   n = n.replace(/\s+\[E\]$/i, ' (Elite)');
   n = n.replace(/\s+\[R\]$/i, ' (Regular)');

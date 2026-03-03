@@ -615,8 +615,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     const hand = meta.playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
     const reactCards = [...new Set(hand)].filter(c => ccCards[c]?.timing && _endActTimings.has(ccCards[c].timing));
     if (reactCards.length) {
-      const cardList = reactCards.map(c => `**${c}** (cost ${ccCards[c].cost ?? 0})`).join(', ');
-      await logGameAction(game, client, `<@${ownerId}> — Activation ended! Reaction card(s) in hand: ${cardList}. Play from Hand if desired.`, {
+      await logGameAction(game, client, `<@${ownerId}> — Activation ended! You have ${reactCards.length} reaction card(s) playable now. Check your Hand channel.`, {
         allowedMentions: { users: [ownerId] },
         phase: 'ROUND',
         icon: 'card',

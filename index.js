@@ -123,6 +123,8 @@ import {
   handleDeploymentFig,
   handleDeploymentOrient,
   handleDeployPick,
+  handleDeployRow,
+  handleDeployRowBack,
   handleDeploymentDone,
   handleAutoDeploy,
   handleMapConfirm,
@@ -132,6 +134,7 @@ import {
   handleDcUnactivate,
   handleDcToggle,
   handleDcDeplete,
+  handleDcRename,
   handleDcCcSpecial,
   handleDcCcEndOfActivation,
   handleDcCcDoubleAction,
@@ -282,6 +285,7 @@ import {
   getDeployFigureLabelsFromDiscord,
   getDeployButtonRowsFromDiscord,
   getDeploySpaceGridRows,
+  buildDeployRowButtons,
   getActivationsLine,
   getThreadName,
   updateThreadName,
@@ -352,7 +356,7 @@ const rootDir = join(__dirname);
 let achievementsChannelId = process.env.ACHIEVEMENTS_CHANNEL_ID || null;
 
 /** Build embeds and files for the "Attachments" message under a DC: CC attachments then DC (Skirmish Upgrade) attachments. */
-async function buildAttachmentEmbedsAndFiles(ccNames, dcNames = []) {
+async function buildAttachmentEmbedsAndFiles(ccNames, dcNames = [], attachedToDcName = null) {
   const embeds = [];
   const files = [];
   for (let i = 0; i < (ccNames || []).length; i++) {
@@ -363,6 +367,7 @@ async function buildAttachmentEmbedsAndFiles(ccNames, dcNames = []) {
     const embed = new EmbedBuilder()
       .setTitle(`📎 ${card || `Attachment ${i + 1}`}`)
       .setColor(0x5865f2);
+    if (attachedToDcName) embed.setDescription(`Attached to: **${attachedToDcName}**`);
     if (path && existsSync(path)) {
       files.push(new AttachmentBuilder(path, { name: fileName }));
       embed.setThumbnail(`attachment://${fileName}`);
@@ -378,6 +383,7 @@ async function buildAttachmentEmbedsAndFiles(ccNames, dcNames = []) {
     const embed = new EmbedBuilder()
       .setTitle(`📎 ${dcName || `Skirmish Upgrade ${i + 1}`}`)
       .setColor(0x5865f2);
+    if (attachedToDcName) embed.setDescription(`Attached to: **${attachedToDcName}**`);
     if (path && existsSync(path)) {
       files.push(new AttachmentBuilder(path, { name: fileName }));
       embed.setThumbnail(`attachment://${fileName}`);
@@ -404,11 +410,12 @@ async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, client) {
   const ccList = (game[ccKey] || {})[dcMsgId] || [];
   const dcList = (game[dcKey] || {})[dcMsgId] || [];
   const hasContent = ccList.length > 0 || dcList.length > 0;
+  const dcDisplayName = dcMessageMeta.get(dcMsgId)?.displayName || null;
   try {
     const channel = await client.channels.fetch(channelId);
     if (!attachMsgId) {
       if (!hasContent) return;
-      const { embeds, files } = await buildAttachmentEmbedsAndFiles(ccList, dcList);
+      const { embeds, files } = await buildAttachmentEmbedsAndFiles(ccList, dcList, dcDisplayName);
       const newMsg = await channel.send({ embeds, files });
       attachMsgIds[idx] = newMsg.id;
       return;
@@ -420,7 +427,7 @@ async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, client) {
       return;
     }
     const msg = await channel.messages.fetch(attachMsgId);
-    const { embeds, files } = await buildAttachmentEmbedsAndFiles(ccList, dcList);
+    const { embeds, files } = await buildAttachmentEmbedsAndFiles(ccList, dcList, dcDisplayName);
     await msg.edit({ embeds, files });
   } catch (err) {
     console.error('Failed to update attachment message for DC:', err);
@@ -1341,17 +1348,19 @@ const CARDBACKS_DIR = join(IMAGES_DIR, 'cardbacks');
 /** Resolve command card image path. Looks in cc/ subfolder first, then root. Tries C card--Name, IACP variants. Returns cardback path if not found. */
 function getCommandCardImagePath(cardName) {
   if (!cardName || typeof cardName !== 'string') return null;
-  const clean = cardName.replace(/[':]/g, '').replace(/\s+/g, ' ').trim();
-  const iacp = `${cardName} (IACP)`;
+  // Strip trailing faction suffixes like " (Mercenary)", " (Imperial)", " (Rebel)" from card name
+  const stripped = cardName.replace(/\s+\((?:Mercenary|Imperial|Rebel)\)$/i, '').trim();
+  const clean = stripped.replace(/[':]/g, '').replace(/\s+/g, ' ').trim();
+  const iacp = `${stripped} (IACP)`;
   const cleanIacp = `${clean} (IACP)`;
   const candidates = [];
-  if (cardName.trim().toLowerCase() === 'smoke grenade') {
+  if (stripped.trim().toLowerCase() === 'smoke grenade') {
     candidates.push('Smoke Grenade Final.png', '003 Smoke Grenade Final.png');
   }
-  for (const base of [iacp, cleanIacp, cardName, clean]) {
+  for (const base of [iacp, cleanIacp, stripped, clean]) {
     candidates.push(`${base}.jpg`, `${base}.png`);
   }
-  for (const base of [cardName, clean]) {
+  for (const base of [stripped, clean]) {
     candidates.push(
       `C card--${base}.jpg`,
       `C card--${base}.png`,
@@ -2725,8 +2734,119 @@ async function clearPreGameSetup(game, client) {
   }
 }
 
+/**
+ * Reorder one player's play area so attachment messages appear directly after their parent DC.
+ * Deletes all DC + attachment messages, then re-sends them interleaved in correct order.
+ * Only runs when the player actually has attachment messages to interleave.
+ */
+async function reorderPlayAreaAfterAttachments(game, playerNum, client) {
+  const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+  const dcMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+  const attachMsgIds = playerNum === 1 ? (game.p1DcAttachmentMessageIds || []) : (game.p2DcAttachmentMessageIds || []);
+  const ccAttachKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+  const dcAttachKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+  const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+
+  // Only reorder if there are attachment messages to interleave
+  const hasAttachments = attachMsgIds.some((id) => id != null);
+  if (!hasAttachments) return;
+
+  const channel = await client.channels.fetch(channelId);
+  const oldDcMsgIds = [...dcMsgIds];
+  const oldAttachMsgIds = [...attachMsgIds];
+
+  // 1. Delete all existing DC messages and attachment messages
+  for (const msgId of oldDcMsgIds) {
+    if (msgId) {
+      try { await (await channel.messages.fetch(msgId)).delete(); }
+      catch (err) { console.error('[reorder] Failed to delete DC msg:', err.message); }
+    }
+  }
+  for (const msgId of oldAttachMsgIds) {
+    if (msgId) {
+      try { await (await channel.messages.fetch(msgId)).delete(); }
+      catch (err) { console.error('[reorder] Failed to delete attachment msg:', err.message); }
+    }
+  }
+
+  // 2. Re-send in correct interleaved order: DC → its attachments → next DC → ...
+  const newDcMsgIds = [];
+  const newAttachMsgIds = [];
+  const dcMsgIdRemap = new Map();
+
+  for (let i = 0; i < dcList.length; i++) {
+    const dc = dcList[i];
+    const oldDcMsgId = oldDcMsgIds[i];
+    const healthState = dc.healthState || [];
+
+    // Re-send DC embed
+    const { embed, files } = await buildDcEmbedAndFiles(dc.dcName, false, dc.displayName, healthState);
+    const newDcMsg = await channel.send({ embeds: [embed], files });
+    const newDcMsgId = newDcMsg.id;
+    newDcMsgIds.push(newDcMsgId);
+
+    // Clean up old Map entries and set new ones
+    if (oldDcMsgId) {
+      dcMessageMeta.delete(oldDcMsgId);
+      dcExhaustedState.delete(oldDcMsgId);
+      dcDepletedState.delete(oldDcMsgId);
+      dcHealthState.delete(oldDcMsgId);
+      dcMsgIdRemap.set(oldDcMsgId, newDcMsgId);
+    }
+    dcMessageMeta.set(newDcMsgId, { gameId: game.gameId, playerNum, dcName: dc.dcName, displayName: dc.displayName });
+    dcExhaustedState.set(newDcMsgId, false);
+    dcDepletedState.set(newDcMsgId, false);
+    dcHealthState.set(newDcMsgId, healthState);
+
+    // Add components (buttons)
+    const components = getDcPlayAreaComponents(newDcMsgId, false, game, dc.dcName);
+    await newDcMsg.edit({ components });
+
+    // Re-send attachment message interleaved right after its DC
+    const ccAttachments = oldDcMsgId ? ((game[ccAttachKey] || {})[oldDcMsgId] || []) : [];
+    const dcAttachments = oldDcMsgId ? ((game[dcAttachKey] || {})[oldDcMsgId] || []) : [];
+    if (ccAttachments.length > 0 || dcAttachments.length > 0) {
+      const { embeds, files: attachFiles } = await buildAttachmentEmbedsAndFiles(ccAttachments, dcAttachments, dc.displayName);
+      const attachMsg = await channel.send({ embeds, files: attachFiles });
+      newAttachMsgIds.push(attachMsg.id);
+    } else {
+      newAttachMsgIds.push(null);
+    }
+  }
+
+  // 3. Update game arrays
+  if (playerNum === 1) {
+    game.p1DcMessageIds = newDcMsgIds;
+    game.p1DcAttachmentMessageIds = newAttachMsgIds;
+    game.p1DcCompanionMessageIds = newDcMsgIds.map(() => null);
+  } else {
+    game.p2DcMessageIds = newDcMsgIds;
+    game.p2DcAttachmentMessageIds = newAttachMsgIds;
+    game.p2DcCompanionMessageIds = newDcMsgIds.map(() => null);
+  }
+
+  // 4. Remap msgId-keyed attachment objects (CC and DC attachments)
+  for (const key of [ccAttachKey, dcAttachKey]) {
+    const obj = game[key];
+    if (!obj) continue;
+    const newObj = {};
+    for (const [oldId, val] of Object.entries(obj)) {
+      const newId = dcMsgIdRemap.get(oldId) || oldId;
+      newObj[newId] = val;
+    }
+    game[key] = newObj;
+  }
+}
+
 /** Called when all setup attachments are placed: start Round 1 and send shuffle/draw prompts. */
 async function finishSetupAttachments(game, client) {
+  // Reorder play area messages so attachments appear right after their parent DCs
+  try {
+    await reorderPlayAreaAfterAttachments(game, 1, client);
+    await reorderPlayAreaAfterAttachments(game, 2, client);
+  } catch (err) {
+    console.error('Failed to reorder play area after attachments:', err);
+  }
   game.currentRound = 1;
   const generalChannel = await client.channels.fetch(game.generalId);
   const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
@@ -4239,16 +4359,14 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const atkHand = attackerPlayerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
           const atkDefeatCards = [...new Set(atkHand)].filter(c => ccCards[c]?.timing && _defeatTimings.has(ccCards[c].timing));
           if (atkDefeatCards.length) {
-            const cardList = atkDefeatCards.map(c => `**${c}** (cost ${ccCards[c].cost ?? 0})`).join(', ');
-            await thread.send({ content: `<@${ownerId}> — Hostile defeated! Reaction card(s) in hand: ${cardList}. Play from Hand if desired.`, allowedMentions: { users: [ownerId] } }).catch(() => {});
+            await thread.send({ content: `<@${ownerId}> — Hostile defeated! You have ${atkDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [ownerId] } }).catch(() => {});
           }
           // Notify defender about own-figure-defeat reactions in hand
           const defId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
           const defHand = defenderPlayerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
           const defDefeatCards = [...new Set(defHand)].filter(c => ccCards[c]?.timing && _ownDefeatTimings.has(ccCards[c].timing));
           if (defDefeatCards.length) {
-            const cardList = defDefeatCards.map(c => `**${c}** (cost ${ccCards[c].cost ?? 0})`).join(', ');
-            await thread.send({ content: `<@${defId}> — Your figure was defeated! Reaction card(s) in hand: ${cardList}. Play from Hand if desired.`, allowedMentions: { users: [defId] } }).catch(() => {});
+            await thread.send({ content: `<@${defId}> — Your figure was defeated! You have ${defDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defId] } }).catch(() => {});
           }
         } catch (_defeatPromptErr) {
           console.error('Defeat reaction prompt error:', _defeatPromptErr?.message ?? _defeatPromptErr);
@@ -5336,8 +5454,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     const _defPostHand = _defPostPn === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
     const _defPostCards = [...new Set(_defPostHand)].filter(c => _ccCardsAll[c]?.timing && _postAtkTimings.has(_ccCardsAll[c].timing));
     if (_defPostCards.length) {
-      const _cardList = _defPostCards.map(c => `**${c}** (cost ${_ccCardsAll[c].cost ?? 0})`).join(', ');
-      await thread.send({ content: `<@${_defPostId}> — Attack resolved! Reaction card(s) in hand: ${_cardList}. Play from Hand if desired.`, allowedMentions: { users: [_defPostId] } }).catch(() => {});
+      await thread.send({ content: `<@${_defPostId}> — Attack resolved! You have ${_defPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_defPostId] } }).catch(() => {});
     }
     // Attacker: cards triggered by resolving an attack
     const _atkPostTimings = new Set(['afterAttack', 'afterYouResolveAttackTargetingFigure', 'afterYouResolveAttackThatDidNotMissDueToAccuracy']);
@@ -5345,8 +5462,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     const _atkPostHand = combat.attackerPlayerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
     const _atkPostCards = [...new Set(_atkPostHand)].filter(c => _ccCardsAll[c]?.timing && _atkPostTimings.has(_ccCardsAll[c].timing));
     if (_atkPostCards.length) {
-      const _cardList = _atkPostCards.map(c => `**${c}** (cost ${_ccCardsAll[c].cost ?? 0})`).join(', ');
-      await thread.send({ content: `<@${_atkPostId}> — Attack resolved! Reaction card(s) in hand: ${_cardList}. Play from Hand if desired.`, allowedMentions: { users: [_atkPostId] } }).catch(() => {});
+      await thread.send({ content: `<@${_atkPostId}> — Attack resolved! You have ${_atkPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_atkPostId] } }).catch(() => {});
     }
   } catch (_postAtkErr) {
     console.error('Post-attack reaction prompt error:', _postAtkErr?.message ?? _postAtkErr);
@@ -6124,6 +6240,7 @@ async function updateDcActionsMessage(game, msgId, client) {
         getDcUpgradeAttachments(game, msgId),
         getTokensForDcMessage(game, meta),
         data,
+        getNicknamesForDcMessage(game, meta),
       );
       const _comps = getDcPlayAreaComponents(msgId, true, game, meta.dcName);
       await _dcMsg.edit({ embeds: [_emb], files: _files, components: _comps }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -6183,7 +6300,8 @@ function isDepletedRemovedFromGame(game, msgId) {
 
 /** Returns component rows for a DC message in Play Area (delegates to discord with game-specific helpers). */
 function getDcPlayAreaComponents(msgId, exhausted, game, dcName) {
-  return getDcPlayAreaComponentsFromDiscord(msgId, exhausted, game, dcName, { isDepletedRemovedFromGame, hasDepleteEffect });
+  const gameStarted = (game?.currentRound || 0) >= 1;
+  return getDcPlayAreaComponentsFromDiscord(msgId, exhausted, game, dcName, { isDepletedRemovedFromGame, hasDepleteEffect, getDcStats, gameStarted });
 }
 
 /** True if all figures in this deployment group are defeated (or never deployed). */
@@ -6257,7 +6375,25 @@ function getTokensForDcMessage(game, meta) {
   return hasAny ? out : undefined;
 }
 
-async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, conditionsByFigure, dcAttachments = [], tokensByFigure = null, actionsData = null) {
+function getNicknamesForDcMessage(game, meta) {
+  if (!game?.figureNicknames || !meta?.dcName) return undefined;
+  const stats = getDcStats(meta.dcName);
+  const figures = stats.figures ?? 1;
+  if (figures <= 1) return undefined;
+  const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const out = [];
+  let hasAny = false;
+  for (let i = 0; i < figures; i++) {
+    const fk = `${meta.dcName}-${dgIndex}-${i}`;
+    const nick = game.figureNicknames[fk] || null;
+    out.push(nick);
+    if (nick) hasAny = true;
+  }
+  return hasAny ? out : undefined;
+}
+
+async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, conditionsByFigure, dcAttachments = [], tokensByFigure = null, actionsData = null, nicknamesByFigure = null) {
   const status = exhausted ? 'EXHAUSTED' : 'READIED';
   const color = exhausted ? 0xed4245 : 0x57f287; // red : green
   const figureless = isFigurelessDc(dcName);
@@ -6265,7 +6401,7 @@ async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState,
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   const variant = dcName?.includes('(Elite)') ? 'Elite' : dcName?.includes('(Regular)') ? 'Regular' : null;
-  const healthSection = figureless ? null : formatHealthSection(Number(dgIndex), healthState, conditionsByFigure, tokensByFigure);
+  const healthSection = figureless ? null : formatHealthSection(Number(dgIndex), healthState, conditionsByFigure, tokensByFigure, nicknamesByFigure);
   const actionsLine = (actionsData != null && exhausted) ? getActionsCounterContent(actionsData.remaining, actionsData.total) : null;
   const lines = figureless
     ? [actionsLine, variant ? `**Variant:** ${variant}` : null].filter(Boolean)
@@ -6461,6 +6597,17 @@ async function populatePlayAreas(game, client) {
   const p2DcsRaw = processDcList(game.player2Squad.dcList || []);
   const p1Dcs = p1DcsRaw.filter((dc) => !isDcAttachment(dc.dcName));
   const p2Dcs = p2DcsRaw.filter((dc) => !isDcAttachment(dc.dcName));
+  // Sort: figure DCs first (preserve squad order), figureless DCs (skirmish upgrades) last
+  p1Dcs.sort((a, b) => {
+    const af = isFigurelessDc(a.dcName) ? 1 : 0;
+    const bf = isFigurelessDc(b.dcName) ? 1 : 0;
+    return af - bf;
+  });
+  p2Dcs.sort((a, b) => {
+    const af = isFigurelessDc(a.dcName) ? 1 : 0;
+    const bf = isFigurelessDc(b.dcName) ? 1 : 0;
+    return af - bf;
+  });
   game.p1DcList = p1Dcs;
   game.p2DcList = p2Dcs;
   game.p1ActivatedDcIndices = game.p1ActivatedDcIndices || [];
@@ -7639,6 +7786,46 @@ client.on('interactionCreate', async (interaction) => {
         if (kryknaEvt2.length > 0) await checkWinConditions(game2, client);
       }
       saveGames();
+    } else if (modalKey === 'dc_rename_modal_') {
+      const renameMsgId = interaction.customId.replace('dc_rename_modal_', '');
+      const renameMeta = dcMessageMeta.get(renameMsgId);
+      if (!renameMeta) { await interaction.reply({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
+      const renameGame = getGame(renameMeta.gameId);
+      if (!renameGame) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+      const renameStats = getDcStats(renameMeta.dcName);
+      const renameFigures = renameStats?.figures ?? 1;
+      const renameDgMatch = (renameMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const renameDgIndex = renameDgMatch ? renameDgMatch[1] : '1';
+      renameGame.figureNicknames = renameGame.figureNicknames || {};
+      const renameCount = Math.min(renameFigures, 5);
+      for (let ri = 0; ri < renameCount; ri++) {
+        const val = interaction.fields.getTextInputValue(`fig_${ri}`).trim();
+        const figKey = `${renameMeta.dcName}-${renameDgIndex}-${ri}`;
+        if (val) renameGame.figureNicknames[figKey] = val;
+        else delete renameGame.figureNicknames[figKey];
+      }
+      // Refresh the DC embed to show nicknames
+      try {
+        const renameChId = renameMeta.playerNum === 1 ? renameGame.p1PlayAreaId : renameGame.p2PlayAreaId;
+        const renameCh = await client.channels.fetch(renameChId);
+        const renameMsg = await renameCh.messages.fetch(renameMsgId);
+        const renameExhausted = dcExhaustedState.get(renameMsgId) ?? false;
+        const renameHs = dcHealthState.get(renameMsgId) || [];
+        const { embed: renameEmbed, files: renameFiles } = await buildDcEmbedAndFiles(
+          renameMeta.dcName, renameExhausted, renameMeta.displayName, renameHs,
+          getConditionsForDcMessage(renameGame, renameMeta),
+          getDcUpgradeAttachments(renameGame, renameMsgId),
+          getTokensForDcMessage(renameGame, renameMeta),
+          null,
+          getNicknamesForDcMessage(renameGame, renameMeta),
+        );
+        const renameComponents = getDcPlayAreaComponents(renameMsgId, renameExhausted, renameGame, renameMeta.dcName);
+        await renameMsg.edit({ embeds: [renameEmbed], files: renameFiles, components: renameComponents });
+      } catch (err) {
+        console.error('Failed to refresh DC embed after rename:', err);
+      }
+      await interaction.reply({ content: 'Figures renamed!', ephemeral: true }).catch(() => {});
+      saveGames();
     }
     }); // end withGameLock (modal)
     return;
@@ -7707,6 +7894,7 @@ client.on('interactionCreate', async (interaction) => {
         saveGames,
         finishSetupAttachments,
         dcHealthState,
+        dcMessageMeta,
       };
       await handleSetupAttachTo(interaction, setupSelectContext);
       return;
@@ -7819,7 +8007,7 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_cc_double_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_' || buttonKey === 'dc_ability_choice_' || buttonKey === 'ee3_pick_die_' || buttonKey === 'false_orders_action_' || buttonKey === 'false_orders_space_' || buttonKey === 'rush_push_fig_' || buttonKey === 'rush_push_space_' || buttonKey === 'rush_push_skip_' || buttonKey === 'overwatch_space_' || buttonKey === 'ob_deplete_' || buttonKey === 'ob_skip_' || buttonKey === 'ob_space_') {
+  if (buttonKey === 'dc_activate_' || buttonKey === 'dc_unactivate_' || buttonKey === 'dc_toggle_' || buttonKey === 'dc_deplete_' || buttonKey === 'dc_rename_' || buttonKey === 'dc_cc_special_' || buttonKey === 'dc_cc_eoa_' || buttonKey === 'dc_cc_double_' || buttonKey === 'dc_move_' || buttonKey === 'dc_attack_' || buttonKey === 'dc_interact_' || buttonKey === 'dc_special_' || buttonKey === 'pounce_space_' || buttonKey === 'dc_ability_choice_' || buttonKey === 'ee3_pick_die_' || buttonKey === 'false_orders_action_' || buttonKey === 'false_orders_space_' || buttonKey === 'rush_push_fig_' || buttonKey === 'rush_push_space_' || buttonKey === 'rush_push_skip_' || buttonKey === 'overwatch_space_' || buttonKey === 'ob_deplete_' || buttonKey === 'ob_skip_' || buttonKey === 'ob_space_') {
     const dcPlayAreaContext = {
       getGame,
       replyIfGameEnded,
@@ -7896,6 +8084,7 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'dc_unactivate_') await handleDcUnactivate(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_toggle_') await handleDcToggle(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_deplete_') await handleDcDeplete(interaction, dcPlayAreaContext);
+    else if (buttonKey === 'dc_rename_') await handleDcRename(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_cc_special_') await handleDcCcSpecial(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_cc_eoa_') await handleDcCcEndOfActivation(interaction, dcPlayAreaContext);
     else if (buttonKey === 'dc_cc_double_') await handleDcCcDoubleAction(interaction, dcPlayAreaContext);
@@ -9343,6 +9532,7 @@ client.on('interactionCreate', async (interaction) => {
       filterValidTopLeftSpaces,
       parseCoord,
       getDeploySpaceGridRows,
+      buildDeployRowButtons,
       pushUndo,
       updateDeployPromptMessages,
       getInitiativePlayerZoneLabel,
@@ -9353,6 +9543,9 @@ client.on('interactionCreate', async (interaction) => {
       resolveDcName,
       isFigurelessDc,
       finishSetupAttachments,
+      dcHealthState,
+      dcMessageMeta,
+      updateAttachmentMessageForDc,
     };
     if (buttonKey === 'map_selection_') await handleMapSelection(interaction, setupContext);
     else if (buttonKey === 'map_type_') await handleMapTypeChoice(interaction, setupContext);
@@ -9364,6 +9557,8 @@ client.on('interactionCreate', async (interaction) => {
     else if (buttonKey === 'deployment_fig_') await handleDeploymentFig(interaction, setupContext);
     else if (buttonKey === 'deployment_orient_') await handleDeploymentOrient(interaction, setupContext);
     else if (buttonKey === 'deploy_pick_') await handleDeployPick(interaction, setupContext);
+    else if (buttonKey === 'deploy_row_back_') await handleDeployRowBack(interaction, setupContext);
+    else if (buttonKey === 'deploy_row_') await handleDeployRow(interaction, setupContext);
     else if (buttonKey === 'loadout_pick_') await handleLoadoutPick(interaction, setupContext);
     else if (buttonKey === 'form_pick_') await handleFormPick(interaction, setupContext);
     else if (buttonKey === 'deployment_done_') await handleDeploymentDone(interaction, setupContext);
