@@ -619,6 +619,48 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && pathname === '/api/button-review-save') {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    try {
+      const patch = JSON.parse(body);
+      let dcCount = 0;
+      let abilityCount = 0;
+      // Patch dc-effects.json: add buttonType to bracketed upgrade entries
+      if (patch.dcEffects && Object.keys(patch.dcEffects).length > 0) {
+        const dcPath = join(root, 'data', 'dc-effects.json');
+        const dcData = JSON.parse(readFileSync(dcPath, 'utf8'));
+        const cards = dcData.cards || dcData;
+        for (const [key, updates] of Object.entries(patch.dcEffects)) {
+          if (cards[key]) {
+            Object.assign(cards[key], updates);
+            dcCount++;
+          }
+        }
+        writeFileSync(dcPath, JSON.stringify(dcData, null, 2), 'utf8');
+      }
+      // Patch ability-library.json: add passive flag to ability entries
+      if (patch.abilityLibrary && Object.keys(patch.abilityLibrary).length > 0) {
+        const alPath = join(root, 'data', 'ability-library.json');
+        const alData = JSON.parse(readFileSync(alPath, 'utf8'));
+        const abilities = alData.abilities || {};
+        for (const [abilityId, updates] of Object.entries(patch.abilityLibrary)) {
+          if (abilities[abilityId]) {
+            Object.assign(abilities[abilityId], updates);
+            abilityCount++;
+          }
+        }
+        writeFileSync(alPath, JSON.stringify(alData, null, 2), 'utf8');
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, dcCount, abilityCount }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
+    return;
+  }
+
   let decodedPath;
   try {
     decodedPath = decodeURIComponent(pathname.replace(/^\//, ''));

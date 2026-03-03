@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IA Skirmish — Button Type Review Tool</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; padding: 20px; background: #1e1e1e; color: #eee; max-width: 1400px; margin: 0 auto; }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    .subtitle { font-size: 12px; color: #999; margin-bottom: 16px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab { padding: 8px 16px; border: 1px solid #555; border-radius: 6px; cursor: pointer; background: #2d2d2d; color: #ccc; font-size: 13px; }
+    .tab.active { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+    .tab:hover:not(.active) { background: #383838; }
+    .filter-bar { margin-bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .filter-bar select, .filter-bar input { padding: 6px 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 13px; }
+    .filter-bar input { width: 240px; }
+    .stats { font-size: 12px; color: #888; }
+    .card-list { display: flex; flex-direction: column; gap: 6px; }
+    .card-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #2a2a2a; border-radius: 6px; border-left: 4px solid transparent; }
+    .card-row.changed { border-left-color: #0d6; }
+    .card-row.reviewed { opacity: 0.7; }
+    .card-name { flex: 0 0 260px; font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-name.bracket { color: #f0ad4f; }
+    .card-meta { flex: 1; font-size: 12px; color: #999; min-width: 200px; }
+    .card-meta code { background: #333; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+    .card-select { flex: 0 0 auto; }
+    .card-select select { padding: 5px 8px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; font-size: 13px; min-width: 140px; }
+    .card-select select.activate { background: rgba(40,167,69,0.25); border-color: #28a745; }
+    .card-select select.exhaust { background: rgba(255,193,7,0.25); border-color: #ffc107; }
+    .card-select select.none { background: rgba(108,117,125,0.25); border-color: #6c757d; }
+    .card-select select.endOfRound { background: rgba(13,110,253,0.25); border-color: #0d6efd; }
+    .card-select select.passive { background: rgba(108,117,125,0.25); border-color: #6c757d; }
+    .card-select select.active { background: rgba(40,167,69,0.25); border-color: #28a745; }
+    .section-header { font-size: 13px; font-weight: 600; color: #aaa; margin: 16px 0 8px; padding: 6px 0; border-bottom: 1px solid #444; }
+    .actions { margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap; }
+    button { padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    button.primary { background: #0d6efd; color: #fff; }
+    button.primary:hover { background: #0b5ed7; }
+    button.export { background: #198754; color: #fff; }
+    button.export:hover { background: #157347; }
+    button.danger { background: #dc3545; color: #fff; }
+    button.danger:hover { background: #bb2d3b; }
+    #toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px; background: #198754; color: #fff; border-radius: 8px; display: none; font-size: 13px; z-index: 1000; }
+    .ability-row { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: #2a2a2a; border-radius: 6px; border-left: 4px solid transparent; }
+    .ability-row.changed { border-left-color: #0d6; }
+    .ability-name { flex: 0 0 200px; font-weight: 600; font-size: 13px; }
+    .ability-dc { flex: 0 0 200px; font-size: 12px; color: #aaa; }
+    .ability-meta { flex: 1; font-size: 11px; color: #888; }
+    .img-preview { width: 300px; max-height: 420px; object-fit: contain; border-radius: 6px; margin: 8px 0; cursor: pointer; }
+    .preview-panel { position: fixed; top: 60px; right: 20px; width: 320px; background: #2d2d2d; border-radius: 8px; padding: 12px; display: none; z-index: 50; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+    .preview-panel img { width: 100%; border-radius: 6px; }
+    .preview-panel .close { position: absolute; top: 6px; right: 10px; cursor: pointer; font-size: 18px; color: #999; }
+  </style>
+</head>
+<body>
+  <h1>Button Type Review Tool</h1>
+  <p class="subtitle">Categorize skirmish upgrade toggle buttons and DC special ability buttons. Changes are saved to dc-effects.json and ability-library.json.</p>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="upgrades">Skirmish Upgrades</div>
+    <div class="tab" data-tab="abilities">DC Special Abilities</div>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" id="search" placeholder="Search by name...">
+    <select id="filterStatus">
+      <option value="all">All</option>
+      <option value="unreviewed">Unreviewed</option>
+      <option value="changed">Changed</option>
+    </select>
+    <span class="stats" id="stats"></span>
+  </div>
+
+  <div id="upgradesTab" class="card-list"></div>
+  <div id="abilitiesTab" class="card-list" style="display:none"></div>
+
+  <div class="actions">
+    <button class="export" onclick="exportChanges()">Export JSON Patch</button>
+    <button class="primary" onclick="saveToServer()">Save to Server</button>
+  </div>
+
+  <div class="preview-panel" id="preview">
+    <span class="close" onclick="closePreview()">&times;</span>
+    <img id="previewImg" src="">
+  </div>
+
+  <div id="toast"></div>
+
+<script>
+let dcEffects = {};
+let abilityLibrary = {};
+let upgradeChanges = {};   // key → buttonType
+let abilityChanges = {};   // abilityId → "passive" | "active"
+let currentTab = 'upgrades';
+
+async function init() {
+  try {
+    const [dcResp, alResp] = await Promise.all([
+      fetch('/data/dc-effects.json'),
+      fetch('/data/ability-library.json'),
+    ]);
+    dcEffects = await dcResp.json();
+    abilityLibrary = await alResp.json();
+  } catch (err) {
+    document.body.innerHTML = '<h1 style="color:#f66">Failed to load data. Is the review server running? (npm run cc-review)</h1>';
+    return;
+  }
+  renderUpgrades();
+  renderAbilities();
+  updateStats();
+}
+
+// ── Tab switching ──
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentTab = tab.dataset.tab;
+    document.getElementById('upgradesTab').style.display = currentTab === 'upgrades' ? '' : 'none';
+    document.getElementById('abilitiesTab').style.display = currentTab === 'abilities' ? '' : 'none';
+    updateStats();
+  });
+});
+
+// ── Search & filter ──
+document.getElementById('search').addEventListener('input', () => { renderCurrent(); updateStats(); });
+document.getElementById('filterStatus').addEventListener('change', () => { renderCurrent(); updateStats(); });
+
+function renderCurrent() {
+  if (currentTab === 'upgrades') renderUpgrades();
+  else renderAbilities();
+}
+
+// ── Skirmish Upgrades ──
+function getUpgradeEntries() {
+  return Object.entries(dcEffects)
+    .filter(([k]) => k.startsWith('['))
+    .sort(([a], [b]) => a.localeCompare(b));
+}
+
+function guessButtonType(key, eff) {
+  if (eff.buttonType) return eff.buttonType;
+  // Heuristic defaults
+  const text = (eff.abilityText || '').toLowerCase();
+  if (text.includes('passive') || (!text.includes('exhaust') && !text.includes('activate') && !text.includes('action'))) return 'none';
+  if (text.includes('exhaust') && !text.includes('activate') && !text.includes('action')) return 'exhaust';
+  return 'activate';
+}
+
+function renderUpgrades() {
+  const container = document.getElementById('upgradesTab');
+  const search = document.getElementById('search').value.toLowerCase();
+  const filter = document.getElementById('filterStatus').value;
+  const entries = getUpgradeEntries();
+  let html = '';
+  let shown = 0;
+  for (const [key, eff] of entries) {
+    const name = key;
+    if (search && !name.toLowerCase().includes(search)) continue;
+    const current = upgradeChanges[key] || eff.buttonType || '';
+    const hasChange = !!upgradeChanges[key];
+    if (filter === 'changed' && !hasChange) continue;
+    if (filter === 'unreviewed' && (eff.buttonType || upgradeChanges[key])) continue;
+    shown++;
+    const meta = [];
+    if (eff.attachment === true) meta.push('attachment');
+    if (eff.attachment === false) meta.push('non-attachment');
+    if ((eff.keywords || []).length) meta.push(`keywords: ${eff.keywords.join(', ')}`);
+    const textSnippet = (eff.abilityText || '').slice(0, 120).replace(/\n/g, ' ');
+    const selectClass = current || '';
+    html += `<div class="card-row ${hasChange ? 'changed' : ''}">
+      <span class="card-name bracket" title="${escHtml(eff.abilityText || '')}" onclick="showCardImage('${escAttr(key)}')">${escHtml(name)}</span>
+      <span class="card-meta">${meta.map(m => `<code>${escHtml(m)}</code>`).join(' ')} ${escHtml(textSnippet)}</span>
+      <span class="card-select">
+        <select class="${selectClass}" onchange="setUpgradeType('${escAttr(key)}', this.value); this.className=this.value;">
+          <option value="" ${!current ? 'selected' : ''}>-- pick --</option>
+          <option value="activate" ${current === 'activate' ? 'selected' : ''}>Activate</option>
+          <option value="exhaust" ${current === 'exhaust' ? 'selected' : ''}>Exhaust</option>
+          <option value="none" ${current === 'none' ? 'selected' : ''}>No Button</option>
+          <option value="endOfRound" ${current === 'endOfRound' ? 'selected' : ''}>End of Round</option>
+        </select>
+      </span>
+    </div>`;
+  }
+  container.innerHTML = html || '<div style="color:#888;padding:20px;">No matching entries.</div>';
+}
+
+function setUpgradeType(key, value) {
+  if (!value) { delete upgradeChanges[key]; }
+  else { upgradeChanges[key] = value; }
+  updateStats();
+}
+
+// ── DC Special Abilities ──
+function getAbilityEntries() {
+  // Find all specialAbilityIds that auto-generate buttons (no explicit specials array)
+  const results = [];
+  for (const [dcName, eff] of Object.entries(dcEffects)) {
+    if (dcName.startsWith('[')) continue; // skip upgrades
+    if (!eff.specialAbilityIds?.length) continue;
+    if (eff.specials) continue; // has explicit specials — already curated
+    for (const abilityId of eff.specialAbilityIds) {
+      const entry = abilityLibrary.abilities?.[abilityId];
+      results.push({
+        abilityId,
+        dcName,
+        label: entry?.label || abilityId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        entry: entry || {},
+      });
+    }
+  }
+  // Deduplicate by abilityId (same ability on multiple DCs)
+  const seen = new Map();
+  for (const r of results) {
+    if (!seen.has(r.abilityId)) {
+      seen.set(r.abilityId, { ...r, dcNames: [r.dcName] });
+    } else {
+      seen.get(r.abilityId).dcNames.push(r.dcName);
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function guessAbilityPassive(entry) {
+  if (entry.passive !== undefined) return entry.passive;
+  // Heuristic: if it has active properties, it's active
+  const activeProps = ['freeAttackBonus', 'mpBonus', 'freeMoveBonus', 'freeMoveEqualToSpeed', 'applyFocus',
+    'targetHostileFigure', 'healFriendlyAdjacent', 'drawCCIfAdjacentTerminal', 'rollOneDie', 'fixedAreaEffect',
+    'pushTargetWithinRange', 'pounceRange', 'freeAction', 'searchDeckForCC', 'shuffleOneDiscardToDeck',
+    'informational', 'medicalLoadoutEffect', 'envRecoveryGearEffect', 'missileSalvoStart',
+    'chooseOne', 'applySelfCondition', 'recoverSelf', 'healAndClearConditionFriendlyAdjacent',
+    'applyHideToFriendlyWithinRange', 'chooseFriendlyToFocus', 'spendMpForBlockToken',
+    'targetFriendlyFigureAdjacent', 'flatDamageToFigureWithin'];
+  for (const p of activeProps) {
+    if (entry[p] !== undefined) return false;
+  }
+  // Check category hints
+  const cat = (entry.category || '').toLowerCase();
+  if (cat.includes('passive') || cat.includes('combat-declare') || cat.includes('when-targeted') ||
+      cat.includes('combat-defense') || cat.includes('combat-dice') || cat.includes('post-deploy') ||
+      cat.includes('on-damage') || cat.includes('on-defeat') || cat.includes('end-of-round')) {
+    return true;
+  }
+  return null; // unknown
+}
+
+function renderAbilities() {
+  const container = document.getElementById('abilitiesTab');
+  const search = document.getElementById('search').value.toLowerCase();
+  const filter = document.getElementById('filterStatus').value;
+  const entries = getAbilityEntries();
+  let html = '';
+  let shown = 0;
+  for (const item of entries) {
+    const { abilityId, label, entry, dcNames } = item;
+    if (search && !label.toLowerCase().includes(search) && !abilityId.includes(search) && !dcNames.some(d => d.toLowerCase().includes(search))) continue;
+    const current = abilityChanges[abilityId] || (entry.passive === true ? 'passive' : entry.passive === false ? 'active' : '');
+    const hasChange = !!abilityChanges[abilityId];
+    if (filter === 'changed' && !hasChange) continue;
+    if (filter === 'unreviewed' && (entry.passive !== undefined || abilityChanges[abilityId])) continue;
+    shown++;
+    const guess = guessAbilityPassive(entry);
+    const guessLabel = guess === true ? '(likely passive)' : guess === false ? '(likely active)' : '(unknown)';
+    const meta = [];
+    if (entry.category) meta.push(entry.category);
+    if (entry.type) meta.push(entry.type);
+    const selectClass = current || '';
+    html += `<div class="ability-row ${hasChange ? 'changed' : ''}">
+      <span class="ability-name" title="${escHtml(entry.description || '')}">${escHtml(label)}</span>
+      <span class="ability-dc">${escHtml(dcNames.slice(0, 3).join(', '))}${dcNames.length > 3 ? '...' : ''}</span>
+      <span class="ability-meta"><code>${escHtml(abilityId)}</code> ${meta.map(m => `<code>${m}</code>`).join(' ')} <em style="color:#777">${guessLabel}</em></span>
+      <span class="card-select">
+        <select class="${selectClass}" onchange="setAbilityType('${escAttr(abilityId)}', this.value); this.className=this.value;">
+          <option value="" ${!current ? 'selected' : ''}>-- pick --</option>
+          <option value="active" ${current === 'active' ? 'selected' : ''}>Active (Button)</option>
+          <option value="passive" ${current === 'passive' ? 'selected' : ''}>Passive (No Button)</option>
+        </select>
+      </span>
+    </div>`;
+  }
+  container.innerHTML = html || '<div style="color:#888;padding:20px;">No matching entries.</div>';
+}
+
+function setAbilityType(abilityId, value) {
+  if (!value) { delete abilityChanges[abilityId]; }
+  else { abilityChanges[abilityId] = value; }
+  updateStats();
+}
+
+// ── Stats ──
+function updateStats() {
+  const upgradeEntries = getUpgradeEntries();
+  const abilityEntries = getAbilityEntries();
+  const upgradeReviewed = upgradeEntries.filter(([k, e]) => upgradeChanges[k] || e.buttonType).length;
+  const abilityReviewed = abilityEntries.filter(i => abilityChanges[i.abilityId] || i.entry.passive !== undefined).length;
+  if (currentTab === 'upgrades') {
+    document.getElementById('stats').textContent = `${upgradeReviewed}/${upgradeEntries.length} reviewed | ${Object.keys(upgradeChanges).length} changed this session`;
+  } else {
+    document.getElementById('stats').textContent = `${abilityReviewed}/${abilityEntries.length} reviewed | ${Object.keys(abilityChanges).length} changed this session`;
+  }
+}
+
+// ── Card image preview ──
+function showCardImage(key) {
+  const cleanName = key.replace(/^\[|\]$/g, '');
+  const img = document.getElementById('previewImg');
+  // Try DC Skirmish Upgrades folder first
+  img.src = `/api/dc-image/${encodeURIComponent(key)}`;
+  img.onerror = () => {
+    img.src = `/api/dc-image/${encodeURIComponent(cleanName)}`;
+    img.onerror = () => { img.src = ''; };
+  };
+  document.getElementById('preview').style.display = 'block';
+}
+function closePreview() { document.getElementById('preview').style.display = 'none'; }
+
+// ── Export ──
+function exportChanges() {
+  const patch = {
+    dcEffects: {},
+    abilityLibrary: {},
+  };
+  for (const [key, buttonType] of Object.entries(upgradeChanges)) {
+    patch.dcEffects[key] = { buttonType };
+  }
+  for (const [abilityId, type] of Object.entries(abilityChanges)) {
+    patch.abilityLibrary[abilityId] = { passive: type === 'passive' };
+  }
+  const blob = new Blob([JSON.stringify(patch, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'button-review-patch.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Patch exported!');
+}
+
+async function saveToServer() {
+  const patch = { dcEffects: {}, abilityLibrary: {} };
+  for (const [key, buttonType] of Object.entries(upgradeChanges)) {
+    patch.dcEffects[key] = { buttonType };
+  }
+  for (const [abilityId, type] of Object.entries(abilityChanges)) {
+    patch.abilityLibrary[abilityId] = { passive: type === 'passive' };
+  }
+  try {
+    const resp = await fetch('/api/button-review-save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    const result = await resp.json();
+    if (result.ok) {
+      toast(`Saved! ${result.dcCount} upgrades, ${result.abilityCount} abilities updated.`);
+      // Reload data
+      const [dcResp, alResp] = await Promise.all([
+        fetch('/data/dc-effects.json'),
+        fetch('/data/ability-library.json'),
+      ]);
+      dcEffects = await dcResp.json();
+      abilityLibrary = await alResp.json();
+      upgradeChanges = {};
+      abilityChanges = {};
+      renderCurrent();
+      updateStats();
+    } else {
+      toast('Save failed: ' + (result.error || 'unknown'), true);
+    }
+  } catch (err) {
+    toast('Save failed: ' + err.message, true);
+  }
+}
+
+function toast(msg, isError) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = isError ? '#dc3545' : '#198754';
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+function escHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function escAttr(s) { return (s || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\'); }
+
+init();
+</script>
+</body>
+</html>

@@ -188,6 +188,8 @@ export async function handleMoveAdjustMp(interaction, ctx) {
     await interaction.message.edit({
       content: `**Move** — Pick distance (**${mpRemaining}** MP remaining):`,
       components: mpRows.length > 0 ? mpRows : [],
+      files: [],
+      attachments: [], // clear old minimap image
     });
     moveState.distanceMessageId = currentMsgId;
   } catch {
@@ -266,6 +268,8 @@ export async function handleMoveLetter(interaction, ctx) {
     await interaction.message.edit({
       content: `**Move** — Column **${letter.toUpperCase()}** (${letterCells.length} space${letterCells.length !== 1 ? 's' : ''}):${multiTileNote}`,
       components: firstRows,
+      files: [],
+      attachments: [], // clear minimap image from previous step
     });
   } catch { /* ignore */ }
   // Send overflow messages if the column has more than 20 cells
@@ -340,6 +344,8 @@ export async function handleMoveLetterBack(interaction, ctx) {
     await interaction.message.edit({
       content: `**Move** — Pick a column (**${mpRemaining}** MP remaining):`,
       components: firstRows,
+      files: [],
+      attachments: [], // clear minimap image from previous step
     });
   } catch { /* ignore */ }
 }
@@ -403,6 +409,9 @@ export async function handleMovePick(interaction, ctx) {
     return;
   }
   await clearMoveGridMessages(game, moveKey, interaction.channel);
+  // Also delete the message the user clicked on (it may have been edited in-place
+  // by handleMoveLetter and removed from moveGridMessageIds tracking)
+  try { await interaction.message.delete(); } catch { /* already gone or no perms */ }
   const boardState = getBoardStateForMovement(game, figureKey);
   if (!boardState) {
     delete game.moveInProgress[moveKey];
@@ -651,6 +660,21 @@ export async function handleMovePick(interaction, ctx) {
         const distMsg = await interaction.channel.messages.fetch(moveState.distanceMessageId);
         await distMsg.delete();
       } catch { /* already gone */ }
+    }
+    // Sweep thread for any leftover movement minimap messages (belt-and-suspenders cleanup)
+    const actionsMessageId = game.dcActionsData?.[msgId]?.messageId;
+    if (actionsMessageId && interaction.channel) {
+      try {
+        const msgs = await interaction.channel.messages.fetch({ limit: 30 });
+        for (const [mId, m] of msgs) {
+          if (mId === actionsMessageId) continue; // never delete the DC actions message
+          if (m.author?.id !== client?.user?.id) continue; // only our own messages
+          const hasMoveMinimap = m.attachments?.some(a => a.name === 'move-destinations.png');
+          if (hasMoveMinimap) {
+            try { await m.delete(); } catch { /* already gone */ }
+          }
+        }
+      } catch { /* ignore fetch errors */ }
     }
     delete game.moveInProgress[moveKey];
     // Force Jump: clear mobileMovementActive when all MP is spent

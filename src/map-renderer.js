@@ -397,6 +397,141 @@ export async function renderMap(mapId, options = {}) {
     await drawDoorSpan(span);
   }
 
+  // Figure markers: drawn AFTER tokens/doors so figures render on top
+  // Circular clip to hide white background; size-scaled to fill footprint
+  // Coord is top-left for large units; center the figure on its footprint
+  // 2x2 footprint = 2 cells → diameter should span ~2 cells; 2x3 = 2–3 cells
+  const sizeMultipliers = { '1x1': 1, '1x2': 1.4, '2x2': 2.05, '2x3': 2.4 };
+  const baseTokenSize = Math.min(Math.max(52, 64 * scale), sdx * 0.95, sdy * 0.95);
+  for (const fig of figures) {
+    const coord = fig.coord?.toLowerCase?.() || fig.coord;
+    if (!coord) continue;
+    const letter = coord.match(/[a-z]+/)?.[0] || '';
+    const num = parseInt(coord.match(/\d+/)?.[0] || '0', 10);
+    const col = letter
+      ? [...letter.toUpperCase()].reduce((acc, c) => acc * 26 + (c.charCodeAt(0) - 64), 0) - 1
+      : -1;
+    const row = num - 1;
+    if (row < 0 || col < 0) continue;
+    const size = (fig.figureSize || '1x1').toLowerCase();
+    const [cols = 1, rows = 1] = size.split('x').map(Number);
+    const centerCol = col + cols / 2;
+    const centerRow = row + rows / 2;
+    const cx = sx0 + centerCol * sdx;
+    const cy = sy0 + centerRow * sdy;
+    const mult = sizeMultipliers[fig.figureSize] || 1;
+    const figTokenSize = baseTokenSize * mult;
+    const clipRadius = figTokenSize / 2;
+    let drewImage = false;
+    if (fig.imagePath) {
+      const figPath = join(rootDir, fig.imagePath);
+      if (existsSync(figPath)) {
+        try {
+          const figImg = await loadImage(figPath);
+          const tw = figImg.width;
+          const th = figImg.height;
+          const tScale = Math.min(figTokenSize / tw, figTokenSize / th);
+          const dw = Math.round(tw * tScale);
+          const dh = Math.round(th * tScale);
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cx, cy, clipRadius, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(figImg, cx - dw / 2, cy - dh / 2, dw, dh);
+          ctx.restore();
+          ctx.strokeStyle = fig.color || '#fff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, clipRadius, 0, Math.PI * 2);
+          ctx.stroke();
+          drewImage = true;
+        } catch (err) {
+          console.error('Map figure image load failed:', fig.imagePath, err);
+        }
+      }
+    }
+    if (fig.label) {
+      const fontSize = Math.max(10, Math.round(12 * scale));
+      ctx.font = `bold ${fontSize}px "${FONT_FAMILY}"`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const labelY = cy - clipRadius * 0.6;
+      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(fig.label, cx, labelY);
+      ctx.fillStyle = fig.color || '#fff';
+      ctx.fillText(fig.label, cx, labelY);
+    }
+    if (!drewImage) {
+      console.error(`Map figure image missing for DC "${fig.dcName || '?'}" at ${fig.coord} - run: node scripts/extract-figure-images.js`);
+      ctx.fillStyle = fig.color || '#f00';
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(4, 8 * scale), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = fig.color || '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    // Power Tokens: 2 slots at top-left of unit (slot 1, slot 2 right next to it)
+    const powerTokenTypes = (fig.powerTokens || []).slice(0, 2);
+    const ptSize = Math.max(12, clipRadius * 0.45);
+    const ptConfig = getTokenImagesConfig().powerTokens || {};
+    const figX0 = cx - clipRadius;
+    const figY0 = cy - clipRadius;
+    for (let i = 0; i < 2; i++) {
+      const ptType = powerTokenTypes[i];
+      const px = figX0 + i * (ptSize * 0.9);
+      const py = figY0;
+      if (ptType) {
+        const filename = ptConfig[ptType] || ptConfig.Surge;
+        if (filename) {
+          const resolved = resolveImagePath(join('vassal_extracted', 'images', filename), 'tokens');
+          const imgPath = join(rootDir, resolved);
+          if (existsSync(imgPath)) {
+            try {
+              const ptImg = await loadImage(imgPath);
+              const tw = ptImg.width;
+              const th = ptImg.height;
+              const tScale = Math.min(ptSize / tw, ptSize / th);
+              const dw = Math.round(tw * tScale);
+              const dh = Math.round(th * tScale);
+              ctx.drawImage(ptImg, px, py, dw, dh);
+            } catch (err) {
+              console.error('Power token image load failed:', filename, err);
+            }
+          }
+        }
+      }
+    }
+    // Condition icons: rendered at top-right of figure, stacking left, using pre-sized slot images
+    const conditionIcons = (fig.conditions || []).slice(0, 5);
+    if (conditionIcons.length > 0) {
+      // Slot assignment per condition (matches file naming: Icon-{slot}-{Condition} {size}.png)
+      const COND_SLOT = { Bleeding: 1, Stunned: 2, Weakened: 3, Focused: 4, Hidden: 5 };
+      const condSizeStr = (fig.figureSize || '1x1');
+      const iconSize = Math.max(12, clipRadius * 0.5);
+      // Start from top-right corner, stack icons leftward
+      let ciX = cx + clipRadius;
+      const ciY = cy - clipRadius;
+      for (const cond of conditionIcons) {
+        const slot = COND_SLOT[cond] || 1;
+        const condIconFile = `Icon-${slot}-${cond} ${condSizeStr}.png`;
+        const condIconPath = join(rootDir, 'vassal_extracted', 'images', 'conditions', condIconFile);
+        if (existsSync(condIconPath)) {
+          try {
+            const condImg = await loadImage(condIconPath);
+            ciX -= iconSize;
+            ctx.drawImage(condImg, ciX, ciY, iconSize, iconSize);
+            ciX -= iconSize * 0.05; // small gap between icons
+          } catch (err) {
+            console.error('Condition icon load failed:', condIconFile, err);
+          }
+        }
+      }
+    }
+  }
+
   // Player zone labels: draw player Discord names over their deployment zones
   const playerLabels = options.playerLabels || [];
   for (const { label, zone } of playerLabels) {
