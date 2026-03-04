@@ -24,6 +24,16 @@ const games = new Map();
  */
 let gamesLoadedOk = false;
 
+/** Strip faction suffixes like (Mercenary), (Imperial), (Rebel) from CC card names. */
+function sanitizeCcNames(arr) {
+  if (!Array.isArray(arr)) return;
+  for (let i = 0; i < arr.length; i++) {
+    if (typeof arr[i] === 'string') {
+      arr[i] = arr[i].replace(/\s+\((?:Mercenary|Imperial|Rebel)\)$/i, '').trim();
+    }
+  }
+}
+
 /** Run migrations on a loaded game so old saves keep working (DB4). */
 function migrateGame(g) {
   if (!g || typeof g !== 'object') return;
@@ -34,6 +44,16 @@ function migrateGame(g) {
   if (g.version < CURRENT_GAME_VERSION) {
     g.version = CURRENT_GAME_VERSION;
   }
+
+  // Strip faction suffixes from stored CC names (e.g. "Opportunistic (Mercenary)" → "Opportunistic")
+  sanitizeCcNames(g.player1CcHand);
+  sanitizeCcNames(g.player1CcDeck);
+  sanitizeCcNames(g.player1CcDiscard);
+  sanitizeCcNames(g.player2CcHand);
+  sanitizeCcNames(g.player2CcDeck);
+  sanitizeCcNames(g.player2CcDiscard);
+  if (g.player1Squad?.ccList) sanitizeCcNames(g.player1Squad.ccList);
+  if (g.player2Squad?.ccList) sanitizeCcNames(g.player2Squad.ccList);
 }
 
 /** messageId -> { gameId, playerNum, dcName, displayName } */
