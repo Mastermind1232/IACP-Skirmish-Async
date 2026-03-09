@@ -73,8 +73,9 @@ export function getInitiativePlayerNum(game) {
 }
 ```
 
-**Call sites:** 16 instances across 5 files:
+**Call sites:** 25 instances across 6 files:
 - `src/handlers/setup.js` — 10 instances (including 1 nonInitiativePlayerNum variant → use `opponentPlayerNum(getInitiativePlayerNum(game))`)
+- `index.js` — 9 instances (lines 432, 1669, 1721, 1984, 2569, 2682, 2741, 5369, 5407)
 - `src/handlers/round.js` — 3 instances
 - `src/handlers/activation.js` — 1 instance
 - `src/handlers/cc-hand.js` — 1 instance
@@ -105,20 +106,23 @@ export const COLORS = {
   DARK_EMBED: 0x2f3136,
   BLURPLE: 0x5865f2,
   GREEN: 0x57f287,
+  RED: 0xed4245,
   ORANGE: 0xe67e22,
   GRAY: 0x95a5a6,
+  GOLD: 0xffd700,
 };
 ```
 
-**Note:** `0xf39c12` (gold) already exported as `PHASE_COLOR` from `src/discord/messages.js`. `0xed4245` (red) does NOT exist in the codebase — omitted.
+**Note:** `0xf39c12` (gold/orange) already exported as `PHASE_COLOR` from `src/discord/messages.js` — leave as-is.
 
-**Call sites:** 15 hardcoded hex values across 5 files:
-- `src/discord/embeds.js` — 8 instances (4× DARK_EMBED, 2× BLURPLE, 1× GREEN, 1× unused-if-only-orange)
+**Call sites:** 29 hardcoded hex values across 7 files:
+- `index.js` — 14 instances (9× DARK_EMBED, 2× GOLD, 1× BLURPLE, 1× GREEN, 1× RED)
+- `src/discord/embeds.js` — 8 instances (4× DARK_EMBED, 2× BLURPLE, 1× GREEN, 1× DARK_EMBED)
 - `src/handlers/cc-hand.js` — 2 instances (DARK_EMBED)
 - `src/handlers/dc-play-area.js` — 2 instances (DARK_EMBED, GRAY)
 - `src/handlers/combat.js` — 1 instance (ORANGE)
 - `src/handlers/lobby.js` — 1 instance (DARK_EMBED)
-- `index.js` — 1 instance (if any DARK_EMBED)
+- `src/discord/messages.js` — 1 instance (already named PHASE_COLOR, leave as-is)
 
 ---
 
@@ -256,13 +260,14 @@ export async function requirePlayer(interaction, game, userId, playerNum, canAct
 }
 ```
 
-**Call sites:** 65 instances across 8 handler files. 45+ unique error messages — each is preserved via the `message` parameter.
+**Call sites:** 74 instances across 9 files. 45+ unique error messages — each is preserved via the `message` parameter.
 
 **Files by count:**
 - `src/handlers/cc-hand.js` — 17 instances
+- `src/handlers/combat.js` — 14 instances
 - `src/handlers/dc-play-area.js` — 12 instances
-- `src/handlers/combat.js` — 12 instances
-- `src/handlers/interrupts.js` — 10 instances
+- `src/handlers/interrupts.js` — 11 instances
+- `index.js` — 9 instances (Sidewinder, Boltslinger, Indiscriminate Fire, Fighting Knife, Concussive Bolt, Spread Pain, Missile Salvo ×2, dc_fig_select)
 - `src/handlers/movement.js` — 5 instances
 - `src/handlers/combat-reactions.js` — 4 instances
 - `src/handlers/map-events.js` — 3 instances
@@ -331,7 +336,16 @@ export function matchCustomId(customId, regex) {
 
 **Existing:** `src/game/dc-helpers.js:12` — `dcNameFromFigureKey(fk)` does `fk.replace(/-\d+-\d+$/, '')`.
 
-**Task:** Grep for raw `.replace(/-\d+-\d+$/, '')` patterns that should use the helper instead. Replace where the helper is already imported or easily importable.
+**22 raw instances found across 7 files:**
+- `src/handlers/combat.js` — 12 instances (lines 83, 89, 382, 2671, 2688, 2710, 2819, 2832, 2848, 2878, 3944, 3947)
+- `src/handlers/setup.js` — 3 instances (lines 1337, 1341, 1372)
+- `src/game/movement.js` — 4 instances (lines 137, 217, 234, 613)
+- `src/game/abilities.js` — 2 instances (lines 1653, 1750 — inside `.map()` callbacks)
+- `src/game/conditions.js` — 1 instance (line 29)
+- `src/handlers/dc-play-area.js` — 1 instance (line 1032)
+- `src/handlers/round.js` — 1 instance (line 107)
+
+**Task:** Replace all raw `.replace(/-\d+-\d+$/, '')` with `dcNameFromFigureKey()`. Import where not already imported.
 
 ### Step 4.2: Add tests for existing `parseFigureKey`
 
@@ -359,13 +373,13 @@ test('dcNameFromFigureKey extracts DC name', () => {
 ```
 Phase 1.1 (opponentPlayerNum)     ← No dependencies, biggest impact (99 sites)
   ↓
-Phase 1.2 (getInitiativePlayerNum) ← Same file, 16 sites (was underestimated)
+Phase 1.2 (getInitiativePlayerNum) ← Same file, 25 sites (incl. 9 in index.js)
   ↓
-Phase 1.3 (COLORS)                 ← Independent, 15 sites across 5 files
+Phase 1.3 (COLORS)                 ← Independent, 29 sites across 7 files
   ↓
 Phase 2.1 (requireGame)            ← Needs mockInteraction test util, 96 sites
   ↓
-Phase 2.2 (requirePlayer)          ← Same test util, same file, 65 sites
+Phase 2.2 (requirePlayer)          ← Same test util, same file, 74 sites
   ↓
 Phase 3.1 (parseCustomId)          ← Independent, gradual adoption (79+ sites)
   ↓
@@ -432,7 +446,7 @@ Phase 4 (verify existing helpers)  ← Audit + test only
 1. All 312 passing tests still pass (2 infrastructure scripts excluded)
 2. All new test files pass (est. 30+ new tests)
 3. `grep -rn "=== 1 ? 2 : 1" src/` count drops from 99 to 0
-4. `grep -rn "initiativePlayerId === game.player1Id ? " src/` drops from 16 to 0
+4. `grep -rn "initiativePlayerId === game.player1Id ? "` drops from 25 to 0
 5. `grep -c "'Game not found.'" src/handlers/*.js` drops from ~87 to 0
 6. No hardcoded hex colors remain in handler/embed files
 7. Zero regressions in game behavior
