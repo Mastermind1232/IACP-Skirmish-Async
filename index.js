@@ -281,6 +281,7 @@ import {
   getMoveSpaceGridRows,
   buildLetterRows,
   getSpaceChoiceRows,
+  buildSpaceSelectMenu,
   getDeployFigureLabelsFromDiscord,
   getDeployButtonRowsFromDiscord,
   getDeploySpaceGridRows,
@@ -7914,12 +7915,82 @@ client.on('interactionCreate', async (interaction) => {
       pushUndo,
       getBoardStateForMovement,
       getSpaceChoiceRows,
+      buildSpaceSelectMenu,
       getMapAttachmentForSpaces,
       buildBoardMapPayload,
     };
     if (selectKey === 'cc_attach_to_') await handleCcAttachTo(interaction, ccHandSelectContext);
     else if (selectKey === 'cc_play_select_') await handleCcPlaySelect(interaction, ccHandSelectContext);
     else if (selectKey === 'cc_discard_select_') await handleCcDiscardSelect(interaction, ccHandSelectContext);
+
+    // Space-select overflow adapters: rewrite customId as if it were a button click, then delegate.
+    const SPACE_SEL_MAP = {
+      'overwatch_space_sel_': 'overwatch_space_',
+      'pounce_space_sel_': 'pounce_space_',
+      'false_orders_space_sel_': 'false_orders_space_',
+      'rush_push_space_sel_': 'rush_push_space_',
+      'cc_space_sel_': 'cc_space_',
+    };
+    if (SPACE_SEL_MAP[selectKey]) {
+      const space = interaction.values?.[0];
+      if (!space) return;
+      const suffix = interaction.customId.slice(selectKey.length);
+      // Reconstruct button-style customId: buttonPrefix + suffix + _ + space
+      interaction.customId = `${SPACE_SEL_MAP[selectKey]}${suffix}_${space}`;
+      await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+      // Re-dispatch as button
+      const fakeButtonKey = SPACE_SEL_MAP[selectKey];
+      if (fakeButtonKey === 'overwatch_space_' || fakeButtonKey === 'pounce_space_' || fakeButtonKey === 'false_orders_space_' || fakeButtonKey === 'rush_push_space_') {
+        const dcPlayAreaContext = {
+          getGame,
+          replyIfGameEnded,
+          saveGames,
+          pushUndo,
+          client,
+          dcMessageMeta,
+          dcExhaustedState,
+          dcHealthState,
+          buildDcEmbedAndFiles,
+          getConditionsForDcMessage,
+          getDcPlayAreaComponents,
+          getDcActionButtons,
+          getActionsCounterContent,
+          getActivationMinimapAttachment,
+          updateActivationsMessage,
+          getActivateDcButtons,
+          DC_ACTIONS_PER_ACTIVATION,
+          ACTION_ICONS,
+          getDcStats,
+          getDcEffects,
+          resolveDcName,
+          isFigurelessDc,
+          resolveAbility,
+          logGameAction,
+          getBoardStateForMovement,
+          buildLetterRows,
+          getMoveSpaceGridRows,
+          getSpaceChoiceRows,
+          buildSpaceSelectMenu,
+          getMapAttachmentForSpaces,
+          buildBoardMapPayload,
+          FIGURE_LETTERS,
+          getFigureSize,
+          getFootprintCells,
+          getRange,
+          hasLineOfSight,
+          getMapSpaces,
+          updateHandVisualMessage,
+          updateDiscardPileMessage,
+        };
+        if (fakeButtonKey === 'overwatch_space_') await handleOverwatchSpacePick(interaction, dcPlayAreaContext);
+        else if (fakeButtonKey === 'pounce_space_') await handlePounceSpacePick(interaction, dcPlayAreaContext);
+        else if (fakeButtonKey === 'false_orders_space_') await handleFalseOrdersMovePick(interaction, dcPlayAreaContext);
+        else if (fakeButtonKey === 'rush_push_space_') await handleRushPushSpace(interaction, dcPlayAreaContext);
+      } else if (fakeButtonKey === 'cc_space_') {
+        await handleCcSpacePick(interaction, ccHandSelectContext);
+      }
+      return;
+    }
     }); // end withGameLock (select)
     return;
   }
@@ -7973,6 +8044,7 @@ client.on('interactionCreate', async (interaction) => {
       buildBoardMapPayload,
       getBoardStateForMovement,
       getSpaceChoiceRows,
+      buildSpaceSelectMenu,
       getMapAttachmentForSpaces,
       ensureMovementBankMessage,
       updateMovementBankMessage,
@@ -8065,6 +8137,7 @@ client.on('interactionCreate', async (interaction) => {
       isGroupDefeated,
       checkWinConditions,
       getSpaceChoiceRows,
+      buildSpaceSelectMenu,
       getMapAttachmentForSpaces,
       getMapTokensData,
       getDeploymentZones,

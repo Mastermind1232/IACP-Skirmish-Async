@@ -1772,9 +1772,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.pendingOverwatchPlacement = game.pendingOverwatchPlacement || {};
       game.pendingOverwatchPlacement[msgId] = { playerNum: meta.playerNum, figureKey: figKey };
       const spaceRows = getSpaceChoiceRows(`overwatch_space_${game.gameId}_${msgId}_`, losValid, ms);
+      const owComponents = spaceRows.overflowed
+        ? [ctx.buildSpaceSelectMenu('overwatch_space_sel_', `${game.gameId}_${msgId}`, spaceRows.available)]
+        : spaceRows.rows.slice(0, 5);
       await thread.send({
         content: `**Overwatch** — Choose a space within LOS to place your Overwatch token:`,
-        components: spaceRows.rows.slice(0, 5),
+        components: owComponents,
       }).catch(() => {});
       saveGames();
       return;
@@ -1829,12 +1832,15 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     if (getSpaceChoiceRows && getMapAttachmentForSpaces) {
       const boardState = ctx.getBoardStateForMovement ? ctx.getBoardStateForMovement(game, null) : null;
       const mapSpaces = boardState?.mapSpaces || { spaces: resolveResult.validSpaces };
-      const { rows } = getSpaceChoiceRows(`pounce_space_${game.gameId}_${msgId}_${figureIndex}_`, resolveResult.validSpaces, mapSpaces);
+      const { rows, available, overflowed } = getSpaceChoiceRows(`pounce_space_${game.gameId}_${msgId}_${figureIndex}_`, resolveResult.validSpaces, mapSpaces);
       const mapAttachment = await getMapAttachmentForSpaces(game, resolveResult.validSpaces);
       game.pendingPounceSpaceChoice = game.pendingPounceSpaceChoice || {};
       game.pendingPounceSpaceChoice[msgId] = { gameId: game.gameId, playerNum: meta.playerNum, figureIndex, msgId, abilityId, validSpaces: resolveResult.validSpaces, targetFigureKey: resolveResult.targetFigureKey || null };
       const spacePickLabel = resolveResult.spaceChoiceLabel || `**Pounce** — Pick a space to place your figure:`;
-      const payload = { content: spacePickLabel, components: rows.slice(0, 5), ephemeral: false, fetchReply: true };
+      const pounceComponents = overflowed
+        ? [ctx.buildSpaceSelectMenu('pounce_space_sel_', `${game.gameId}_${msgId}_${figureIndex}`, available)]
+        : rows.slice(0, 5);
+      const payload = { content: spacePickLabel, components: pounceComponents, ephemeral: false, fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
       await interaction.followUp(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
       saveGames();
@@ -2014,12 +2020,15 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     if (getSpaceChoiceRows && getMapAttachmentForSpaces) {
       const boardState = getBoardStateForMovement ? getBoardStateForMovement(game, null) : null;
       const mapSpaces = boardState?.mapSpaces || {};
-      const { rows } = getSpaceChoiceRows(`pounce_space_${game.gameId}_${msgId}_${figureIndex}_`, resolveResult.validSpaces, mapSpaces);
+      const { rows, available, overflowed } = getSpaceChoiceRows(`pounce_space_${game.gameId}_${msgId}_${figureIndex}_`, resolveResult.validSpaces, mapSpaces);
       const mapAttachment = await getMapAttachmentForSpaces(game, resolveResult.validSpaces);
       game.pendingPounceSpaceChoice = game.pendingPounceSpaceChoice || {};
       game.pendingPounceSpaceChoice[msgId] = { gameId: game.gameId, playerNum, figureIndex, msgId, abilityId, validSpaces: resolveResult.validSpaces, targetFigureKey: resolveResult.targetFigureKey || null };
       const spacePickLabel = resolveResult.spaceChoiceLabel || `Pick a landing space:`;
-      const payload = { content: spacePickLabel, components: rows.slice(0, 5), ephemeral: false };
+      const pounce2Components = overflowed
+        ? [ctx.buildSpaceSelectMenu('pounce_space_sel_', `${game.gameId}_${msgId}_${figureIndex}`, available)]
+        : rows.slice(0, 5);
+      const payload = { content: spacePickLabel, components: pounce2Components, ephemeral: false };
       if (mapAttachment) payload.files = [mapAttachment];
       await interaction.followUp(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
       saveGames();
@@ -2323,14 +2332,19 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     }
     const prefix = `false_orders_space_${gameId}_${msgId}_`;
     let rows = [];
+    let foOverflowed = false;
+    let foAvailable = [];
     if (getSpaceChoiceRows) {
       const mapSpaces = boardState?.mapSpaces || {};
-      ({ rows } = getSpaceChoiceRows(prefix, reachableSpaces, mapSpaces));
+      ({ rows, available: foAvailable, overflowed: foOverflowed } = getSpaceChoiceRows(prefix, reachableSpaces, mapSpaces));
     }
     const mapAttachment = getMapAttachmentForSpaces ? await getMapAttachmentForSpaces(game, reachableSpaces) : null;
+    const foComponents = foOverflowed
+      ? [ctx.buildSpaceSelectMenu('false_orders_space_sel_', `${gameId}_${msgId}`, foAvailable)]
+      : rows.slice(0, 5);
     const payload = {
       content: `**False Orders** — Choose a space for **${controlledName}** to move to:`,
-      components: rows.slice(0, 5),
+      components: foComponents,
       ephemeral: false,
     };
     if (mapAttachment) payload.files = [mapAttachment];
@@ -2549,11 +2563,14 @@ export async function handleRushPushFig(interaction, ctx) {
   pending.chosenTarget = targetFk;
   const boardState = ctx.getBoardStateForMovement ? ctx.getBoardStateForMovement(game, null) : null;
   const bMapSpaces = boardState?.mapSpaces || {};
-  const { rows } = getSpaceChoiceRows(`rush_push_space_${gameId}_${msgId}_`, validSpaces, bMapSpaces);
+  const { rows, available: rushAvail, overflowed: rushOverflowed } = getSpaceChoiceRows(`rush_push_space_${gameId}_${msgId}_`, validSpaces, bMapSpaces);
   const mapAttachment = await getMapAttachmentForSpaces(game, validSpaces);
+  const rushComponents = rushOverflowed
+    ? [ctx.buildSpaceSelectMenu('rush_push_space_sel_', `${gameId}_${msgId}`, rushAvail)]
+    : rows.slice(0, 5);
   const payload = {
     content: `**Rush** — Pick landing space for **${targetFk.replace(/-\d+-\d+$/, '')}** (or stay at **${targetPos.toUpperCase()}**):`,
-    components: rows.slice(0, 5),
+    components: rushComponents,
   };
   if (mapAttachment) payload.files = [mapAttachment];
   await interaction.message.edit({ content: '**Rush** — Choosing push destination...', components: [] }).catch(() => {});

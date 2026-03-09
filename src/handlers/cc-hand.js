@@ -409,9 +409,12 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       game.pendingCcSpaceChoice = { abilityId, gameId, playerNum, card, validSpaces: result.validSpaces, chosenFigureKey: result.chosenFigureKey ?? null };
       const boardState = getBoardStateForMovement(game, null);
       const mapSpaces = boardState?.mapSpaces || { spaces: result.validSpaces };
-      const { rows } = getSpaceChoiceRows(`cc_space_${gameId}_`, result.validSpaces, mapSpaces);
+      const { rows, available: ccAvail, overflowed: ccOverflowed } = getSpaceChoiceRows(`cc_space_${gameId}_`, result.validSpaces, mapSpaces);
       const mapAttachment = await getMapAttachmentForSpaces(game, result.validSpaces);
-      const payload = { content: `**Pick a space** (for **${card}**):`, components: rows.slice(0, 5), fetchReply: true };
+      const ccComponents = ccOverflowed
+        ? [ctx.buildSpaceSelectMenu('cc_space_sel_', gameId, ccAvail)]
+        : rows.slice(0, 5);
+      const payload = { content: `**Pick a space** (for **${card}**):`, components: ccComponents, fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
       await handChannel.send(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
       saveGames();
@@ -751,9 +754,12 @@ export async function handleCcChoice(interaction, ctx) {
     if (handCh) {
       const boardState2 = getBoardStateForMovement(game, null);
       const mapSpaces2 = boardState2?.mapSpaces || { spaces: result.validSpaces };
-      const { rows: spaceRows } = getSpaceChoiceRows(`cc_space_${gameId}_`, result.validSpaces, mapSpaces2);
+      const { rows: spaceRows, available: ccAvail2, overflowed: ccOverflowed2 } = getSpaceChoiceRows(`cc_space_${gameId}_`, result.validSpaces, mapSpaces2);
       const mapAttachment2 = await getMapAttachmentForSpaces(game, result.validSpaces);
-      const payload2 = { content: `**Pick a space** (for **${pending.card ?? pending.abilityId}**):`, components: spaceRows.slice(0, 5) };
+      const ccComponents2 = ccOverflowed2
+        ? [ctx.buildSpaceSelectMenu('cc_space_sel_', gameId, ccAvail2)]
+        : spaceRows.slice(0, 5);
+      const payload2 = { content: `**Pick a space** (for **${pending.card ?? pending.abilityId}**):`, components: ccComponents2 };
       if (mapAttachment2) payload2.files = [mapAttachment2];
       await handCh.send(payload2).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }

@@ -192,6 +192,11 @@ const SELECT_PREFIXES = [
   'cc_attach_to_',
   'cc_play_select_',
   'cc_discard_select_',
+  'overwatch_space_sel_',
+  'pounce_space_sel_',
+  'false_orders_space_sel_',
+  'rush_push_space_sel_',
+  'cc_space_sel_',
 ];
 
 /**

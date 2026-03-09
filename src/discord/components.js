@@ -629,7 +629,29 @@ export function getSpaceChoiceRows(customIdPrefix, validSpaces, mapSpaces, maxRo
       );
     }
   }
-  return { rows: rows.slice(0, maxRows), available };
+  const sliced = rows.slice(0, maxRows);
+  return { rows: sliced, available, overflowed: rows.length > maxRows };
+}
+
+/**
+ * Build a StringSelectMenu dropdown for space selection when buttons overflow (>25 spaces).
+ * The select menu customId is `${selectPrefix}${contextSuffix}` and each option value is the space coordinate.
+ * @param {string} selectPrefix - e.g. 'overwatch_space_sel_'
+ * @param {string} contextSuffix - e.g. `${gameId}_${msgId}`
+ * @param {string[]} available - normalized space coordinates
+ * @param {Record<string, string>} [labelMap] - optional display label overrides
+ * @returns {ActionRowBuilder}
+ */
+export function buildSpaceSelectMenu(selectPrefix, contextSuffix, available, labelMap = {}) {
+  const options = available.slice(0, 25).map((space) => ({
+    label: (labelMap[space] || space).toUpperCase(),
+    value: space,
+  }));
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`${selectPrefix}${contextSuffix}`)
+    .setPlaceholder('Pick a space…')
+    .addOptions(options);
+  return new ActionRowBuilder().addComponents(select);
 }
 
 /** Per-figure deploy labels; helpers = { resolveDcName, isFigurelessDc, getDcStats }. */
