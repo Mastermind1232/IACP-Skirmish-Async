@@ -27,6 +27,16 @@ export function parseFigureKey(figureKey) {
 }
 
 /**
+ * Look up a DC's effects, falling back to the name with bracket suffixes stripped.
+ * e.g. "Luke Skywalker [Jedi]" → tries that first, then "Luke Skywalker".
+ * @param {string} dcName
+ * @returns {object|undefined}
+ */
+export function getDcEffect(dcName) {
+  return getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+}
+
+/**
  * True if this DC is a "figureless" card (Skirmish Upgrade, attachment, etc.) — no physical figure on the map.
  * @param {string} dcName
  * @returns {boolean}

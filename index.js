@@ -160,6 +160,7 @@ import {
   applyCondition as _applyCondition,
   dcNameFromFigureKey,
   parseFigureKey,
+  getDcEffect,
   isFigurelessDc as _isFigurelessDc,
   hasDepleteEffect as _hasDepleteEffect,
   getCompanionDescriptionForDc as _getCompanionDescriptionForDc,
@@ -376,7 +377,7 @@ function getPlayerOccupiedCells(game, playerNum) {
   const poses = game.figurePositions?.[playerNum] || {};
   for (const [k, coord] of Object.entries(poses)) {
     const dcName = dcNameFromFigureKey(k);
-    const size = game.figureOrientations?.[k] || getFigureSize(dcName);
+    const size = getEffectiveFigureSize(game, k, dcName);
     for (const c of getFootprintCells(coord, size)) {
       cells.add(normalizeCoord(c));
     }
@@ -408,7 +409,7 @@ function isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, mapId, mis
   const pos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!pos) return false;
   const dcName = dcNameFromFigureKey(figureKey);
-  const footprint = getFootprintCells(pos, game.figureOrientations?.[figureKey] || getFigureSize(dcName));
+  const footprint = getFootprintCells(pos, getEffectiveFigureSize(game, figureKey, dcName));
   for (const c of footprint) {
     const n = normalizeCoord(c);
     if (tokenSet.has(n)) return true;
@@ -428,7 +429,7 @@ function getEffectiveSpeed(dcName, figureKey, game, playerNum) {
   }
   // Fuel Upgrade: round VEHICLE speed bonus
   if (playerNum && game?.roundVehicleSpeedBonus?.[playerNum]) {
-    const eff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const eff = getDcEffect(dcName);
     const keywords = (eff?.keywords || []).map((k) => String(k).toUpperCase());
     if (keywords.includes('VEHICLE')) base += game.roundVehicleSpeedBonus[playerNum];
   }
@@ -445,7 +446,7 @@ function isFigureInDeploymentZone(game, playerNum, figureKey, mapId) {
   const pos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!pos) return false;
   const dcName = dcNameFromFigureKey(figureKey);
-  const footprint = getFootprintCells(pos, game.figureOrientations?.[figureKey] || getFigureSize(dcName));
+  const footprint = getFootprintCells(pos, getEffectiveFigureSize(game, figureKey, dcName));
   return footprint.some((c) => zoneSpaces.has(normalizeCoord(c)));
 }
 
@@ -463,7 +464,7 @@ function getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, coord
   const pos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!pos) return [];
   const dcName = dcNameFromFigureKey(figureKey);
-  const footprint = getFootprintCells(pos, game.figureOrientations?.[figureKey] || getFigureSize(dcName));
+  const footprint = getFootprintCells(pos, getEffectiveFigureSize(game, figureKey, dcName));
   const result = new Set();
   for (const c of footprint) {
     const n = normalizeCoord(c);
@@ -597,7 +598,7 @@ function _getAlterMindExcludedCells(game) {
         const tEff = allEff[tDcName];
         if ((tEff?.cost ?? 99) > 9) continue;
         if (getRange(pos, tPos) > 3) continue;
-        const size = game.figureOrientations?.[tFk] || getFigureSize(tDcName);
+        const size = getEffectiveFigureSize(game, tFk, tDcName);
         for (const c of getFootprintCells(tPos, size)) excluded[pn].add(normalizeCoord(c));
       }
     }
@@ -1852,7 +1853,7 @@ async function getActivationMinimapAttachment(game, msgId) {
   }
   if (!figureKey || !pos) return null;
   const speed = getEffectiveSpeed(dcName, figureKey, game, playerNum);
-  const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName);
+  const size = getEffectiveFigureSize(game, figureKey, dcName);
   const { col: tlCol, row: tlRow } = parseCoord(pos);
   const [cols = 1, rows = 1] = String(size || '1x1').split('x').map(Number);
   const centerCol = Math.floor(tlCol + (cols - 1) / 2);
@@ -1894,7 +1895,7 @@ async function getMovementMinimapAttachment(game, msgId, figureKey, spacesAtCost
   if (!pos) return null;
   const dcName = dcNameFromFigureKey(figureKey);
   const speed = getEffectiveSpeed(dcName, figureKey, game, playerNum);
-  const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName);
+  const size = getEffectiveFigureSize(game, figureKey, dcName);
   const { col: tlCol, row: tlRow } = parseCoord(pos);
   const [cols = 1, rows = 1] = String(size || '1x1').split('x').map(Number);
   const centerCol = Math.floor(tlCol + (cols - 1) / 2);
@@ -2723,7 +2724,7 @@ async function runDraftRandom(game, client, options = {}) {
       for (const p of [1, 2]) {
         for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
           const dcName = dcNameFromFigureKey(k);
-          const size = game.figureOrientations?.[k] || getFigureSize(dcName);
+          const size = getEffectiveFigureSize(game, k, dcName);
           occupied.push(...getFootprintCells(s, size));
         }
       }
@@ -2858,6 +2859,39 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
     if (meta.dcName === dcName && dn && String(dn[1]) === String(dgIndex)) return msgId;
   }
   return null;
+}
+
+/** Get a figure's effective size, preferring stored orientation over base size. */
+function getEffectiveFigureSize(game, figureKey, dcName) {
+  return getEffectiveFigureSize(game, figureKey, dcName);
+}
+
+/**
+ * Look up a figure's DC message and its index in the player's DC list.
+ * Combines findDcMessageIdForFigure + getDcMessageIds + getDcList + indexOf.
+ * @returns {{ msgId: string|null, dcList: Array, idx: number }}
+ */
+function lookupFigureDcIndex(game, playerNum, figureKey) {
+  const msgId = findDcMessageIdForFigure(game.gameId, playerNum, figureKey);
+  const dcIds = getDcMessageIds(game, playerNum);
+  const dcList = getDcList(game, playerNum);
+  const idx = (dcIds || []).indexOf(msgId);
+  return { msgId, dcList, idx };
+}
+
+/**
+ * Get a display label for a figure — uses DC displayName if found, otherwise falls back.
+ * @param {object} game
+ * @param {number} playerNum
+ * @param {string} figureKey
+ * @param {string} [fallback] - if omitted, uses dcNameFromFigureKey(figureKey)
+ * @param {number} [maxLen=80] - truncate label to this length
+ * @returns {{ msgId: string|null, label: string }}
+ */
+function getFigureLabel(game, playerNum, figureKey, fallback, maxLen = 80) {
+  const { msgId, dcList, idx } = lookupFigureDcIndex(game, playerNum, figureKey);
+  const raw = (idx >= 0 && dcList?.[idx]?.displayName) ? dcList[idx].displayName : (fallback ?? dcNameFromFigureKey(figureKey));
+  return { msgId, label: String(raw).slice(0, maxLen) };
 }
 
 /**
@@ -3058,7 +3092,7 @@ function findFigureheadFigure(game, defenderPlayerNum, targetFigureKey) {
     const dc = dcList[i];
     if (!dc) continue;
     const dcName = dc.dcName;
-    const eff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const eff = getDcEffect(dcName);
     if (!(eff?.specialAbilityIds || []).includes('figurehead')) continue;
     const figures = game.figurePositions?.[defenderPlayerNum] || {};
     for (const [fk, pos] of Object.entries(figures)) {
@@ -3118,7 +3152,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
   // Cavalry Charge: round TROOPER attack hit bonus
   const trooperHitBonus = game.roundTrooperAttackHitBonus?.[combat.attackerPlayerNum] || 0;
   if (trooperHitBonus) {
-    const attackerEff = getDcEffects()?.[combat.attackerDcName] || getDcEffects()?.[combat.attackerDcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const attackerEff = getDcEffect(combat.attackerDcName);
     const attackerKws = (attackerEff?.keywords || []).map((k) => String(k).toUpperCase());
     if (attackerKws.includes('TROOPER')) combat.bonusHits = (combat.bonusHits || 0) + trooperHitBonus;
   }
@@ -3132,7 +3166,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
       const board = getBoardStateForMovement(game, null);
       if (board?.adjacency) {
         const targetDcName = dcNameFromFigureKey(combat.target.figureKey);
-        const targetSize = game.figureOrientations?.[combat.target.figureKey] || getFigureSize(targetDcName);
+        const targetSize = getEffectiveFigureSize(game, combat.target.figureKey, targetDcName);
         const targetCells = getFootprintCells(targetCoord, targetSize || '1x1').map((c) => normalizeCoord(c));
         const rubbleSet = new Set(targetCells);
         for (const c of targetCells) {
@@ -3889,9 +3923,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if (!blastMsgId) continue;
         const { figureIndex: blastFigIndex } = parseFigureKey(blastFigureKey);
         const { newHp: newBCur, wasDefeated: blastDefeated } = reduceHp(dcHealthState, game, blastMsgId, blastFigIndex, effectiveBlast, blastPlayerNum);
-        const blastDcIds = getDcMessageIds(game, blastPlayerNum);
-        const blastDcList = getDcList(game, blastPlayerNum);
-        const blastIdx = (blastDcIds || []).indexOf(blastMsgId);
+        const { dcList: blastDcList, idx: blastIdx } = lookupFigureDcIndex(game, blastPlayerNum, blastFigureKey);
         if (blastDefeated) {
           removeFigurePosition(game, blastPlayerNum, blastFigureKey);
           if (game.figureConditions?.[blastFigureKey]) delete game.figureConditions[blastFigureKey];
@@ -4274,7 +4306,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     for (const { figureKey: sqFk, playerNum: sqPn } of sqAdj) {
       if (sqPn !== attackerPlayerNum) continue;
       const sqDcName = dcNameFromFigureKey(sqFk);
-      const sqEff = getDcEffects()?.[sqDcName] || getDcEffects()?.[sqDcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const sqEff = getDcEffect(sqDcName);
       const sqKws = (sqEff?.keywords || []).map((k) => String(k).toUpperCase());
       if (!sqKws.includes('TROOPER')) continue;
       if (_applyCondition(game, sqFk, 'Focus')) {
@@ -4328,12 +4360,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       );
       if (cleaveTargets.length > 0) {
         const targetsWithLabels = cleaveTargets.map((c) => {
-          const msgId = findDcMessageIdForFigure(game.gameId, c.playerNum, c.figureKey);
-          const dcIds = getDcMessageIds(game, c.playerNum);
-          const dcList = getDcList(game, c.playerNum);
-          const idx = (dcIds || []).indexOf(msgId);
-          const label = (idx >= 0 && dcList?.[idx]?.displayName) ? dcList[idx].displayName : c.figureKey;
-          return { figureKey: c.figureKey, playerNum: c.playerNum, label: String(label).slice(0, 80) };
+          const { msgId, label } = getFigureLabel(game, c.playerNum, c.figureKey, c.figureKey);
+          return { figureKey: c.figureKey, playerNum: c.playerNum, label };
         });
         game.pendingCleave = {
           gameId: game.gameId,
@@ -4396,12 +4424,8 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
       .filter((c) => c.playerNum === defenderPlayerNum);
     if (adjHostiles.length > 0) {
       const targetsWithLabels = adjHostiles.map((c) => {
-        const mid = findDcMessageIdForFigure(game.gameId, c.playerNum, c.figureKey);
-        const dcList = getDcList(game, c.playerNum);
-        const dcIds = getDcMessageIds(game, c.playerNum);
-        const idx = (dcIds || []).indexOf(mid);
-        const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : dcNameFromFigureKey(c.figureKey);
-        return { figureKey: c.figureKey, playerNum: c.playerNum, label: String(label).slice(0, 80), msgId: mid };
+        const { msgId: mid, label } = getFigureLabel(game, c.playerNum, c.figureKey);
+        return { figureKey: c.figureKey, playerNum: c.playerNum, label, msgId: mid };
       });
       game.pendingFightingKnife = {
         gameId: game.gameId,
@@ -4431,11 +4455,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
       const ms = getMapSpaces(game.selectedMap.id);
       const adjSpaces = (ms?.adjacency?.[String(targetPos).toLowerCase()] || []).map((s) => String(s).toLowerCase());
       if (adjSpaces.length > 0) {
-        const targetMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, combat.target.figureKey);
-        const defDcList = getDcList(game, defenderPlayerNum);
-        const defDcIds = getDcMessageIds(game, defenderPlayerNum);
-        const defIdx = (defDcIds || []).indexOf(targetMsgId);
-        const targetLabel = (defIdx >= 0 && defDcList?.[defIdx]?.displayName) ? defDcList[defIdx].displayName : targetDcName;
+        const { msgId: targetMsgId, label: targetLabel } = getFigureLabel(game, defenderPlayerNum, combat.target.figureKey, targetDcName);
         game.pendingConcussiveBolt = {
           gameId: game.gameId,
           combatThreadId: combat.combatThreadId,
@@ -4475,13 +4495,8 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
       for (const p of [1, 2]) {
         for (const [figKey, figPos] of Object.entries(game.figurePositions?.[p] || {})) {
           if (candSpaces.has(String(figPos).toLowerCase())) {
-            const mid = findDcMessageIdForFigure(game.gameId, p, figKey);
-            const dcList = getDcList(game, p);
-            const dcIds = getDcMessageIds(game, p);
-            const idx = (dcIds || []).indexOf(mid);
-            const dcName = dcNameFromFigureKey(figKey);
-            const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : dcName;
-            figuresAtSpaces.push({ figureKey: figKey, playerNum: p, label: String(label).slice(0, 70), msgId: mid });
+            const { msgId: mid, label } = getFigureLabel(game, p, figKey, undefined, 70);
+            figuresAtSpaces.push({ figureKey: figKey, playerNum: p, label, msgId: mid });
           }
         }
       }
@@ -4665,7 +4680,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     delete game.hitAndRunPendingMp;
   }
   // --- Post-combat ability prompts (before clearing pendingCombat) ---
-  const pcAttEff = getDcEffects()?.[combat.attackerDcName] || getDcEffects()?.[combat.attackerDcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const pcAttEff = getDcEffect(combat.attackerDcName);
   const pcAttIds = pcAttEff?.specialAbilityIds || [];
   const pcOwnerId = getPlayerId(game, combat.attackerPlayerNum);
   // Sidewinder (Jyn Odan): suffer 1 Strain to move 2 after attack (once/round)
@@ -4691,12 +4706,8 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     for (const [fk, pos] of Object.entries(defFigs)) {
       if (fk === combat.target?.figureKey) continue;
       if (!isWithinN(atkPos, pos, 3, game.selectedMap.id)) continue;
-      const blMsgId = findDcMessageIdForFigure(game.gameId, blDefPlayerNum, fk);
-      const blDcIds = getDcMessageIds(game, blDefPlayerNum);
-      const blDcList = getDcList(game, blDefPlayerNum);
-      const blIdx = (blDcIds || []).indexOf(blMsgId);
-      const blLabel = (blIdx >= 0 && blDcList?.[blIdx]?.displayName) ? blDcList[blIdx].displayName : dcNameFromFigureKey(fk);
-      boltslingerTargets.push({ figureKey: fk, playerNum: blDefPlayerNum, label: String(blLabel).slice(0, 80) });
+      const { label: blLabel } = getFigureLabel(game, blDefPlayerNum, fk);
+      boltslingerTargets.push({ figureKey: fk, playerNum: blDefPlayerNum, label: blLabel });
     }
     if (boltslingerTargets.length > 0) {
       game.pendingBoltslinger = { gameId: game.gameId, attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: boltslingerTargets };
@@ -4725,12 +4736,8 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
         for (const [fk, pos] of Object.entries(figs)) {
           if (fk === combat.target.figureKey) continue;
           if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
-          const mid = findDcMessageIdForFigure(game.gameId, pn, fk);
-          const dcIds = getDcMessageIds(game, pn);
-          const dcList = getDcList(game, pn);
-          const idx2 = (dcIds || []).indexOf(mid);
-          const lbl = (idx2 >= 0 && dcList?.[idx2]?.displayName) ? dcList[idx2].displayName : dcNameFromFigureKey(fk);
-          splashTargets.push({ figureKey: fk, playerNum: pn, label: String(lbl).slice(0, 80) });
+          const { label: lbl } = getFigureLabel(game, pn, fk);
+          splashTargets.push({ figureKey: fk, playerNum: pn, label: lbl });
         }
       }
       if (nonRedDice.length === 1) {
@@ -5178,13 +5185,8 @@ async function advanceSpreadThePain(game, pending) {
     for (const p of [1, 2]) {
       for (const [figKey, figPos] of Object.entries(game.figurePositions?.[p] || {})) {
         if (candSpaces.has(String(figPos).toLowerCase())) {
-          const mid = findDcMessageIdForFigure(game.gameId, p, figKey);
-          const dcList = getDcList(game, p);
-          const dcIds = getDcMessageIds(game, p);
-          const idx = (dcIds || []).indexOf(mid);
-          const dcName = dcNameFromFigureKey(figKey);
-          const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : dcName;
-          figuresAtSpaces.push({ figureKey: figKey, playerNum: p, label: String(label).slice(0, 70) });
+          const { label } = getFigureLabel(game, p, figKey, undefined, 70);
+          figuresAtSpaces.push({ figureKey: figKey, playerNum: p, label });
         }
       }
     }
