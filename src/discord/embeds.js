@@ -1,6 +1,7 @@
 import { EmbedBuilder } from 'discord.js';
 import { getPlayerId, getCcDeck, getDcList, getSquad, getInitiativePlayerNum } from '../game/player-helpers.js';
 import { enforceContentLimit, DISCORD_EMBED_FIELD_LIMIT } from './limits.js';
+import { COLORS } from './colors.js';
 
 /**
  * Initiative zone label for scorecard (e.g. "[RED] P1 has the initiative!").
@@ -49,7 +50,7 @@ export function buildScorecardEmbed(game, missionBonus) {
     fields.push({ name: 'Initiative', value: initiativeValue, inline: false });
   }
 
-  return new EmbedBuilder().setTitle('Scorecard').setColor(0x2f3136).addFields(fields);
+  return new EmbedBuilder().setTitle('Scorecard').setColor(COLORS.DARK_EMBED).addFields(fields);
 }
 
 /**
@@ -114,7 +115,7 @@ export function getPlayAreaTooltipEmbed(game, playerNum) {
       `**Command Cards in Deck:** ${deckCount}\n` +
       `**Deployment Cards:** ${dcText}`
     )
-    .setColor(0x5865f2);
+    .setColor(COLORS.BLURPLE);
 }
 
 /** Tooltip embed for Hand thread. */
@@ -127,7 +128,7 @@ export function getHandTooltipEmbed(game, playerNum, squad) {
         `**Deployment Cards:** ${squad.dcCount ?? '—'}\n` +
         `**Command Cards:** ${squad.ccCount ?? '—'}\n\n✓ Squad submitted.`
       )
-      .setColor(0x57f287);
+      .setColor(COLORS.GREEN);
   }
   return new EmbedBuilder()
     .setTitle('Submit Your Squad')
@@ -144,7 +145,7 @@ export function getHandTooltipEmbed(game, playerNum, squad) {
       '                    V\n' +
       '```'
     )
-    .setColor(0x5865f2);
+    .setColor(COLORS.BLURPLE);
 }
 
 /** Embed showing command cards in hand as card backs. */
@@ -154,7 +155,7 @@ export function getHandVisualEmbed(handCount) {
   return new EmbedBuilder()
     .setTitle('Command Cards in Hand')
     .setDescription(`**${count}** cards\n${cards}`)
-    .setColor(0x2f3136);
+    .setColor(COLORS.DARK_EMBED);
 }
 
 /** Embed showing discard pile count. */
@@ -164,7 +165,7 @@ export function getDiscardPileEmbed(discardCount) {
   return new EmbedBuilder()
     .setTitle('Command Cards in Discard Pile')
     .setDescription(`**${count}** cards\n${cards}`)
-    .setColor(0x2f3136);
+    .setColor(COLORS.DARK_EMBED);
 }
 
 /** Roster text for lobby (Player 1 / Player 2). */
@@ -183,7 +184,7 @@ export function getLobbyEmbed(lobby) {
   return new EmbedBuilder()
     .setTitle('Game Lobby')
     .setDescription(`${roster}\n\n${isReady ? 'Both players ready! Click **Start Game** to begin.' : 'Click **Join Game** to play!'}`)
-    .setColor(0x2f3136);
+    .setColor(COLORS.DARK_EMBED);
 }
 
 /** Tooltip embed explaining the 4 map selection methods. */
@@ -196,7 +197,7 @@ export function getMapSelectionTooltipEmbed() {
       '**Select Draw** — Pick 2+ maps; one is chosen at random\n' +
       '**Selection** — Pick the exact map you want to play'
     )
-    .setColor(0x2f3136);
+    .setColor(COLORS.DARK_EMBED);
 }
 
 /** Display names for deploy list: duplicate DCs get [DG 1], [DG 2], etc. */

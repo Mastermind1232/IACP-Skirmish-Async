@@ -2,6 +2,7 @@
  * Lobby handlers: lobby_join_, lobby_start_.
  * Dependencies passed via context from index (no import from index).
  */
+import { COLORS } from '../discord/colors.js';
 import { CURRENT_GAME_VERSION } from '../game-state.js';
 
 /**
@@ -133,7 +134,7 @@ export async function handleLobbyStart(interaction, ctx) {
         new EmbedBuilder()
           .setTitle('Game Setup')
           .setDescription('Select your **map and mission** below to begin. Once confirmed, Play Areas and **Your Hand** threads will appear for squad selection.')
-          .setColor(0x2f3136),
+          .setColor(COLORS.DARK_EMBED),
       ],
       components: [getGeneralSetupButtons(game)],
     });

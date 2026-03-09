@@ -23,6 +23,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import 'dotenv/config';
+import { COLORS } from './src/discord/colors.js';
 import { parseVsav, parseIacpListPaste } from './src/vsav-parser.js';
 import {
   isDbConfigured,
@@ -310,7 +311,7 @@ async function buildAttachmentEmbedsAndFiles(ccNames, dcNames = [], attachedToDc
     const fileName = `${prefix}-${i}-${(name || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
     const embed = new EmbedBuilder()
       .setTitle(`📎 ${name || fallbackLabel}`)
-      .setColor(0x5865f2);
+      .setColor(COLORS.BLURPLE);
     if (attachedToDcName) embed.setDescription(`Attached to: **${attachedToDcName}**`);
     if (path && existsSync(path)) {
       files.push(new AttachmentBuilder(path, { name: fileName }));
@@ -1136,7 +1137,7 @@ function buildHandDisplayPayload(hand, deck, gameId, game = null, playerNum = 1)
   embeds.push(new EmbedBuilder()
     .setTitle('Command Cards in Hand')
     .setDescription(`**${hand.length}** cards in hand • **${deck.length}** in deck`)
-    .setColor(0x2f3136));
+    .setColor(COLORS.DARK_EMBED));
 
   // One embed per card (thumbnail = same size as DC embeds in Play Area)
   for (let i = 0; i < hand.length; i++) {
@@ -1146,7 +1147,7 @@ function buildHandDisplayPayload(hand, deck, gameId, game = null, playerNum = 1)
     const fileName = `cc-${i}-${(card || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
     const embed = new EmbedBuilder()
       .setTitle(card || `Card ${i + 1}`)
-      .setColor(0x2f3136);
+      .setColor(COLORS.DARK_EMBED);
     if (path && existsSync(path)) {
       files.push(new AttachmentBuilder(path, { name: fileName }));
       embed.setThumbnail(`attachment://${fileName}`);
@@ -1465,7 +1466,7 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
           new EmbedBuilder()
             .setTitle('Game Setup (Test)')
             .setDescription(setupDesc)
-            .setColor(0x2f3136),
+            .setColor(COLORS.DARK_EMBED),
         ],
         components: [getGeneralSetupButtons(game)],
       });
@@ -2166,7 +2167,7 @@ async function postAchievementNotification(client, channelId, userId, def) {
   try {
     const ch = await client.channels.fetch(channelId);
     const embed = new EmbedBuilder()
-      .setColor(0xffd700)
+      .setColor(COLORS.GOLD)
       .setTitle(`${def.icon || '🏆'} Achievement Unlocked!`)
       .setDescription(`<@${userId}> unlocked **${def.name}**\n${def.description}`);
     await ch.send({ content: `<@${userId}>`, embeds: [embed], allowedMentions: { users: [userId] } });
@@ -2329,7 +2330,7 @@ async function refreshAllGameComponents(game, client) {
       const ch = await client.channels.fetch(p1PlayAreaId);
       const companionMsg = await ch.messages.fetch(p1CompanionIds[i]);
       const desc = getCompanionDescriptionForDc(dcName);
-      await companionMsg.edit({ embeds: [new EmbedBuilder().setTitle('Companion').setDescription(desc).setColor(0x2f3136)] });
+      await companionMsg.edit({ embeds: [new EmbedBuilder().setTitle('Companion').setDescription(desc).setColor(COLORS.DARK_EMBED)] });
     } catch (err) {
       console.error('Refresh All: P1 companion message failed', p1CompanionIds[i], err);
     }
@@ -2342,7 +2343,7 @@ async function refreshAllGameComponents(game, client) {
       const ch = await client.channels.fetch(p2PlayAreaId);
       const companionMsg = await ch.messages.fetch(p2CompanionIds[i]);
       const desc = getCompanionDescriptionForDc(dcName);
-      await companionMsg.edit({ embeds: [new EmbedBuilder().setTitle('Companion').setDescription(desc).setColor(0x2f3136)] });
+      await companionMsg.edit({ embeds: [new EmbedBuilder().setTitle('Companion').setDescription(desc).setColor(COLORS.DARK_EMBED)] });
     } catch (err) {
       console.error('Refresh All: P2 companion message failed', p2CompanionIds[i], err);
     }
@@ -2836,7 +2837,7 @@ function getSquadSelectEmbed(playerNum, squad) {
           '2. **Upload a .vsav file** — export from [IACP List Builder](https://iacp-list-builder.onrender.com/)\n' +
           '3. **Copy-paste your list** — from the IACP builder, press the **Share** button and paste the full list below'
     )
-    .setColor(0x2f3136);
+    .setColor(COLORS.DARK_EMBED);
   return embed;
 }
 
@@ -5615,7 +5616,7 @@ function getNicknamesForDcMessage(game, meta) {
 
 async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, conditionsByFigure, dcAttachments = [], tokensByFigure = null, actionsData = null, nicknamesByFigure = null) {
   const status = exhausted ? 'EXHAUSTED' : 'READIED';
-  const color = exhausted ? 0xed4245 : 0x57f287; // red : green
+  const color = exhausted ? COLORS.RED : COLORS.GREEN; // red : green
   const figureless = isFigurelessDc(dcName);
   const dgIndex = displayName.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const stats = getDcStats(dcName);
@@ -5669,7 +5670,7 @@ function buildDiscardPileDisplayPayload(discard) {
     const fileName = `cc-discard-${i}-${(card || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
     const embed = new EmbedBuilder()
       .setTitle(card || `Card ${i + 1}`)
-      .setColor(0x2f3136);
+      .setColor(COLORS.DARK_EMBED);
     let file = null;
     if (path && existsSync(path)) {
       file = new AttachmentBuilder(path, { name: fileName });
@@ -5680,7 +5681,7 @@ function buildDiscardPileDisplayPayload(discard) {
   const header = new EmbedBuilder()
     .setTitle('Command Cards in Discard Pile')
     .setDescription(`**${discard.length}** cards discarded`)
-    .setColor(0x2f3136);
+    .setColor(COLORS.DARK_EMBED);
   const chunks = [];
   let embeds = [header];
   let files = [];
@@ -5963,7 +5964,7 @@ async function applySquadSubmission(game, isP1, squad, client) {
               `**Player 2:** ${game.player2Squad.name || 'Unnamed'} (${game.player2Squad.dcCount} DCs, ${game.player2Squad.ccCount} CCs)\n\n` +
               'Play Area channels have been populated with one thread per Deployment Card. Next: Determine Initiative.'
           )
-          .setColor(0x57f287),
+          .setColor(COLORS.GREEN),
       ],
       components: [getDetermineInitiativeButtons(game)],
     });
@@ -6413,7 +6414,7 @@ client.on('messageCreate', async (message) => {
     const embed = new EmbedBuilder()
       .setTitle('Imperial Assault Skirmish')
       .setDescription('Choose an action:')
-      .setColor(0x2f3136);
+      .setColor(COLORS.DARK_EMBED);
     await message.reply({
       embeds: [embed],
       components: [getMainMenu()],
@@ -6894,7 +6895,7 @@ client.on('interactionCreate', async (interaction) => {
         const targetUser = interaction.options.getUser('player') || interaction.user;
         const earned = await getEarnedAchievements(targetUser.id);
         const embed = new EmbedBuilder()
-          .setColor(0xffd700)
+          .setColor(COLORS.GOLD)
           .setTitle(`${targetUser.username}'s Achievements`)
           .setDescription(
             earned.length

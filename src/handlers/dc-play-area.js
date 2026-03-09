@@ -4,6 +4,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { truncateLabel, getAttachmentSpecials } from '../discord/components.js';
 import { bottomLeftCoord } from '../game/coords.js';
+import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { getConfig } from '../game/figure-config.js';
@@ -545,7 +546,7 @@ export async function handleDcDeplete(interaction, ctx) {
   const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, displayName, [], getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
   embed.setTitle(`REMOVED FROM GAME (Depleted) — ${displayName}`);
   embed.setDescription((embed.data.description || '') + '\n\n*This upgrade was depleted and is no longer in play (one-time use).*');
-  embed.setColor(0x95a5a6);
+  embed.setColor(COLORS.GRAY);
   await interaction.message.edit({ embeds: [embed], files, components: [] });
   await logGameAction(game, client, `**P${meta.playerNum}:** <@${ownerId}> depleted **${displayName}** — removed from game`, { allowedMentions: { users: [ownerId] }, icon: 'deplete' });
   saveGames();
@@ -716,7 +717,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
           const { AttachmentBuilder: _AB, EmbedBuilder: _EB } = await import('discord.js');
           const _ext = _imgPath.toLowerCase().endsWith('.png') ? 'png' : 'jpg';
           const _fn = `cc-log-${(card || '').replace(/[^a-zA-Z0-9]/g, '')}.${_ext}`;
-          const _embed = new _EB().setTitle(card).setColor(0x2f3136).setImage(`attachment://${_fn}`);
+          const _embed = new _EB().setTitle(card).setColor(COLORS.DARK_EMBED).setImage(`attachment://${_fn}`);
           const _logCh = await interaction.client.channels.fetch(game.generalId).catch(() => null);
           if (_logCh) await _logCh.send({ embeds: [_embed], files: [new _AB(_imgPath, { name: _fn })] }).catch(discordCatch);
         }

@@ -2,6 +2,7 @@
  * Combat handlers: attack_target_, combat_ready_, combat_roll_, combat_surge_, combat_resolve_ready_ (F10), cleave_target_ (F6)
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
@@ -1406,7 +1407,7 @@ export async function handleCombatReady(interaction, ctx) {
   const combatRound = game.currentRound ?? 1;
   const combatEmbed = new EmbedBuilder()
     .setTitle(`COMBAT: ROUND ${combatRound}`)
-    .setColor(0xe67e22)
+    .setColor(COLORS.ORANGE)
     .setDescription(`Attacker rolls offense, Defender rolls defense.`);
   const rollRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()

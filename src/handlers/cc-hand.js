@@ -15,6 +15,7 @@ import {
   EmbedBuilder,
   ThreadAutoArchiveDuration,
 } from 'discord.js';
+import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { normalizeSquadInput } from '../game/validation.js';
@@ -206,7 +207,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
   saveGames();
   const { existsSync } = await import('fs');
   const { AttachmentBuilder } = await import('discord.js');
-  const embed = new EmbedBuilder().setTitle(card).setDescription(`Play **${card}**?`).setColor(0x2f3136);
+  const embed = new EmbedBuilder().setTitle(card).setDescription(`Play **${card}**?`).setColor(COLORS.DARK_EMBED);
   const files = [];
   if (getCommandCardImagePath) {
     const imgPath = getCommandCardImagePath(card);
@@ -1293,7 +1294,7 @@ export async function handleCcSearchDiscard(interaction, ctx) {
   if (chunks.length === 0) {
     await thread.send({
       content: 'Discard pile is empty.',
-      embeds: [new EmbedBuilder().setTitle('Command Cards in Discard Pile').setDescription('*Empty*').setColor(0x2f3136)],
+      embeds: [new EmbedBuilder().setTitle('Command Cards in Discard Pile').setDescription('*Empty*').setColor(COLORS.DARK_EMBED)],
       components: [closeRow],
     });
   } else {
