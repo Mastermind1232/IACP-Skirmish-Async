@@ -1,5 +1,6 @@
 import { getPlayAreaId } from '../game/player-helpers.js';
 import { enforceContentLimit } from './limits.js';
+import { withDiscordRetry } from '../error-handling.js';
 
 /**
  * Unified handler for resolveAbility() result fields.
@@ -60,7 +61,7 @@ export async function applyAbilityResult(result, opts) {
             meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta)
           );
           const components = getDcPlayAreaComponents(id, false, game, meta.dcName);
-          await msg.edit({ embeds: [embed], files, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch((err) => { console.error('[discord]', err?.message ?? err); });
         } catch (err) {
           console.error('Failed to update DC embed after ready:', err);
         }
@@ -136,7 +137,7 @@ export async function applyAbilityResult(result, opts) {
           meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta)
         );
         const components = getDcPlayAreaComponents(id, exhausted, game, meta.dcName);
-        await msg.edit({ embeds: [embed], files, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch((err) => { console.error('[discord]', err?.message ?? err); });
       } catch (err) {
         console.error('Failed to refresh DC play area embed:', err);
       }
@@ -172,7 +173,7 @@ export async function applyAbilityResult(result, opts) {
       if (!data?.threadId) continue;
       try {
         const thread = await client.channels.fetch(data.threadId);
-        await thread.send({ content: enforceContentLimit(`💡 ${result.logMessage}`) }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await withDiscordRetry(() => thread.send({ content: enforceContentLimit(`💡 ${result.logMessage}`) })).catch((err) => { console.error('[discord]', err?.message ?? err); });
       } catch (err) {
         console.error('Failed to send CC effect to DC thread:', err);
       }

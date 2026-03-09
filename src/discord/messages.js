@@ -4,6 +4,7 @@
 import { EmbedBuilder, ChannelType, ThreadAutoArchiveDuration } from 'discord.js';
 import { getActivationsMessageId, getActivationsRemaining, getActivationsTotal, getPlayAreaId } from '../game/player-helpers.js';
 import { enforceContentLimit, DISCORD_CONTENT_LIMIT } from './limits.js';
+import { withDiscordRetry } from '../error-handling.js';
 
 /** Orange sidebar color for phase embeds */
 export const PHASE_COLOR = 0xf39c12;
@@ -50,7 +51,7 @@ export async function logPhaseHeader(game, client, phase, roundNum = null) {
     const embed = new EmbedBuilder()
       .setTitle(`${phase.emoji}  ${phaseName}`)
       .setColor(phase.color);
-    const msg = await ch.send({ embeds: [embed] });
+    const msg = await withDiscordRetry(() => ch.send({ embeds: [embed] }));
     const setupPhases = ['SETUP', 'INITIATIVE', 'DEPLOYMENT'];
     if (setupPhases.includes(phase.name)) {
       game.setupLogMessageIds = game.setupLogMessageIds || [];
@@ -74,7 +75,7 @@ export async function logGameAction(game, client, content, options = {}) {
     const msgContent = enforceContentLimit(`${icon}${timestamp} — ${content}`);
     const payload = { content: msgContent, allowedMentions: options.allowedMentions };
     if (options.files?.length) payload.files = options.files;
-    const sentMsg = await ch.send(payload);
+    const sentMsg = await withDiscordRetry(() => ch.send(payload));
     const setupPhases = ['SETUP', 'INITIATIVE', 'DEPLOYMENT'];
     if (phase && setupPhases.includes(phase)) {
       game.setupLogMessageIds = game.setupLogMessageIds || [];
@@ -149,9 +150,9 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
         }
       }
       const target = threadId ? await client.channels.fetch(threadId).catch(() => null) : ch;
-      if (target) await target.send(sendPayload);
+      if (target) await withDiscordRetry(() => target.send(sendPayload));
     } else {
-      await ch.send(sendPayload);
+      await withDiscordRetry(() => ch.send(sendPayload));
     }
   } catch (e) {
     console.error('Failed to log game error to bot-logs:', e);
