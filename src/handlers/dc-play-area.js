@@ -881,7 +881,7 @@ async function buildAndSendAttackTargets(
     for (const poses_ of [game.figurePositions?.[playerNum] || {}, game.figurePositions?.[enemyPlayerNum] || {}]) {
       for (const [fk, pos] of Object.entries(poses_)) {
         if (!pos || attackerFpSet.has(String(pos).toLowerCase())) continue;
-        const fkDcName = fk.replace(/-\d+-\d+$/, '');
+        const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
         if (fkEff?.companion === true) continue; // companions don't block LOS (rules: "non-companion figure")
         if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
@@ -903,7 +903,7 @@ async function buildAndSendAttackTargets(
       const vanishMeta = dcMessageMeta.get(vanishImmunity.msgId);
       if (vanishMeta && k.startsWith(`${vanishMeta.dcName}-`)) continue;
     }
-    const dcName = k.replace(/-\d+-\d+$/, '');
+    const dcName = dcNameFromFigureKey(k);
     const size = game.figureOrientations?.[k] || getFigureSize(dcName);
     const cells = getFootprintCells(coord, size);
     const dist = Math.min(...attackerFpCells.flatMap(ac => cells.map(tc => getRange(ac, tc))));
@@ -1003,7 +1003,7 @@ async function buildAndSendAttackTargets(
   {
     const ptTargets = targets.filter(t => {
       if (t.isNpc) return false;
-      const dcN = t.figureKey.replace(/-\d+-\d+$/, '');
+      const dcN = dcNameFromFigureKey(t.figureKey);
       const eff = getDcEffects()[dcN] || getDcEffects()[dcN.replace(/\s*\[.*\]\s*$/, '')];
       return (eff?.passives || []).some(p => String(p).toLowerCase() === 'priority target');
     });
@@ -1943,7 +1943,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
       saveGames();
       return;
     }
-    const controlledName = fo.controlledFigureKey.replace(/-\d+-\d+$/, '');
+    const controlledName = dcNameFromFigureKey(fo.controlledFigureKey);
     const moveBtn = new ButtonBuilder()
       .setCustomId(`false_orders_action_${gameId}_${msgId}_move`)
       .setLabel(`Move — ${controlledName}`)
@@ -2245,7 +2245,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   }
   const { controlledFigureKey, controlledPlayerNum, controllerPlayerNum } = fo;
   if (!await requirePlayer(interaction, game, interaction.user.id, controllerPlayerNum, canActAsPlayer, 'Only the controller may choose.')) return;
-  const controlledName = controlledFigureKey.replace(/-\d+-\d+$/, '');
+  const controlledName = dcNameFromFigureKey(controlledFigureKey);
   const controlledStats = getDcStats(controlledName);
   const controlledPos = game.figurePositions?.[controlledPlayerNum]?.[controlledFigureKey];
 
@@ -2320,7 +2320,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     if (dist < foMinRange || dist > foEffectiveMaxRange) continue;
     const los = hasLineOfSight ? hasLineOfSight(controlledPos, targetPos, ms, []) : true;
     const fkMatch = figKey.match(/^(.+)-(\d+)-(\d+)$/);
-    const targetDcName = fkMatch ? figKey.replace(/-\d+-\d+$/, '') : figKey;
+    const targetDcName = fkMatch ? dcNameFromFigureKey(figKey) : figKey;
     const dg = fkMatch ? fkMatch[2] : '1';
     const fi = fkMatch ? parseInt(fkMatch[3], 10) : 0;
     const figCount = getDcStats(targetDcName)?.figures ?? 1;
@@ -2376,7 +2376,7 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
   }
   const { controlledFigureKey, controlledPlayerNum, controllerPlayerNum } = fo;
   if (!await requirePlayer(interaction, game, interaction.user.id, controllerPlayerNum, canActAsPlayer, 'Only the controller may choose.')) return;
-  const controlledName = controlledFigureKey.replace(/-\d+-\d+$/, '');
+  const controlledName = dcNameFromFigureKey(controlledFigureKey);
   game.figurePositions = game.figurePositions || {};
   game.figurePositions[controlledPlayerNum] = game.figurePositions[controlledPlayerNum] || {};
   game.figurePositions[controlledPlayerNum][controlledFigureKey] = chosenSpace;
@@ -2466,7 +2466,7 @@ export async function handleRushPushFig(interaction, ctx) {
   const validSpaces = [targetPos, ...adjToTarget.filter(s => !occupied.has(s))];
   if (validSpaces.length === 1) {
     // Only current space — auto-resolve (damage only, no actual push)
-    const targetName = targetFk.replace(/-\d+-\d+$/, '');
+    const targetName = dcNameFromFigureKey(targetFk);
     const t = _applyHpDamage(game, dcHealthState, dcMessageMeta, targetFk, 1);
     const a = _applyHpDamage(game, dcHealthState, dcMessageMeta, pending.activatorFigureKey, 1);
     const tNote = t.wasDefeated ? ' **(may be defeated)**' : '';
@@ -2489,7 +2489,7 @@ export async function handleRushPushFig(interaction, ctx) {
     ? [ctx.buildSpaceSelectMenu('rush_push_space_sel_', `${gameId}_${msgId}`, rushAvail)]
     : rows.slice(0, 5);
   const payload = {
-    content: `**Rush** — Pick landing space for **${targetFk.replace(/-\d+-\d+$/, '')}** (or stay at **${targetPos.toUpperCase()}**):`,
+    content: `**Rush** — Pick landing space for **${dcNameFromFigureKey(targetFk)}** (or stay at **${targetPos.toUpperCase()}**):`,
     components: rushComponents,
   };
   if (mapAttachment) payload.files = [mapAttachment];
@@ -2519,7 +2519,7 @@ export async function handleRushPushSpace(interaction, ctx) {
   const targetFk = pending.chosenTarget;
   const oppNum = opponentPlayerNum(pending.playerNum);
   const prevPos = game.figurePositions?.[oppNum]?.[targetFk];
-  const targetName = targetFk.replace(/-\d+-\d+$/, '');
+  const targetName = dcNameFromFigureKey(targetFk);
   // Move target to chosen space
   game.figurePositions[oppNum][targetFk] = chosenSpace;
   const pushed = chosenSpace !== prevPos;
@@ -2683,7 +2683,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
         const dcList = getDcList(game, pn);
         const idx = (dcIds || []).indexOf(fkMsgId);
         if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
-        const dcName = fk.replace(/-\d+-\d+$/, '');
+        const dcName = dcNameFromFigureKey(fk);
         damageLog.push(`**${dcName}** (${cur ?? max} → ${newCur} HP)`);
         if (newCur <= 0) damageLog[damageLog.length - 1] += ' *(may be defeated)*';
       }

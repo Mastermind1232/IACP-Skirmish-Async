@@ -730,7 +730,7 @@ export async function handleMovePick(interaction, ctx) {
     const rushTargets = [];
     for (const [fk, pos] of Object.entries(rushOppPos)) {
       if (!pos || !rushAdjSet.has(pos)) continue;
-      const rDcName = fk.replace(/-\d+-\d+$/, '');
+      const rDcName = dcNameFromFigureKey(fk);
       const rEff = rushEffects?.[rDcName];
       const rKw = (rEff?.keywords || []).map(k => String(k).toUpperCase());
       if (rKw.includes('LARGE') || rKw.includes('MASSIVE')) continue;

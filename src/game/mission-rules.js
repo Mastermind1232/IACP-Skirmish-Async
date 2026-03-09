@@ -41,7 +41,7 @@ function getNamedAreaController(game, mapId, areaName, getMapTokensDataFn) {
     const poses = game.figurePositions?.[pn] || {};
     for (const [fk, cell] of Object.entries(poses)) {
       if (!cellSet.has(normalizeCoord(cell))) continue;
-      const dcName = (fk || '').replace(/-\d+-\d+$/, '').toLowerCase();
+      const dcName = dcNameFromFigureKey((fk || '')).toLowerCase();
       if (excludedNames.has(dcName)) continue;
       if (pn === 1) p1++;
       else p2++;

@@ -95,7 +95,7 @@ function findFirstActiveDcIndex(game, playerNum) {
     const displayName = typeof dc === 'object' ? (dc.displayName || dcName) : dcName;
     const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const hasPosition = Object.keys(poses).some((k) => {
-      const kDcName = k.replace(/-\d+-\d+$/, '');
+      const kDcName = dcNameFromFigureKey(k);
       const kDg = k.match(/-(\d+)-\d+$/)?.[1] ?? '1';
       return kDcName === dcName && kDg === dgIndex;
     });
@@ -136,7 +136,7 @@ export function simulateMovementRounds(game, activatorNum, defenderNum, timing, 
     if ((timing === 'combatAttacker' || timing === 'combatDefender') && coordDistance(aPos, dPos) <= 1) break;
 
     // Move activator toward defender
-    const aDcName = aFigKey.replace(/-\d+-\d+$/, '');
+    const aDcName = dcNameFromFigureKey(aFigKey);
     const aBoardState = getBoardStateForMovement(game, aFigKey);
     if (aBoardState) {
       const aProfile = getMovementProfile(aDcName, aFigKey, game);
@@ -154,7 +154,7 @@ export function simulateMovementRounds(game, activatorNum, defenderNum, timing, 
 
     // For non-combat timing, also move defender toward activator
     if (timing !== 'combatAttacker' && timing !== 'combatDefender') {
-      const dDcName = dFigKey.replace(/-\d+-\d+$/, '');
+      const dDcName = dcNameFromFigureKey(dFigKey);
       const dBoardState = getBoardStateForMovement(game, dFigKey);
       if (dBoardState) {
         const dProfile = getMovementProfile(dDcName, dFigKey, game);

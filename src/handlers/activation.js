@@ -253,7 +253,7 @@ export async function handleEndTurn(interaction, ctx) {
         game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
         if (game.figurePowerTokens[fk].length < 2) {
           game.figurePowerTokens[fk].push('Block');
-          const fkName = fk.replace(/-\d+-\d+$/, '');
+          const fkName = dcNameFromFigureKey(fk);
           await logGameAction(game, client, `🛡️ **Shield** — **${fkName}** gained 1 **Block Token** at end of activation.`, { phase: 'ROUND', icon: 'activate' });
         }
       }
@@ -289,11 +289,11 @@ export async function handleEndTurn(interaction, ctx) {
         if (!ePos) continue;
         if (!adj.includes(String(ePos).toLowerCase())) continue;
         // Condition Immunity: skip Weaken for immune figures
-        const _unnEff = getDcEffects()?.[eFk.replace(/-\d+-\d+$/, '')] || getDcEffects()?.[eFk.replace(/-\d+-\d+$/, '')?.replace(/\s*\[.*\]\s*$/, '')];
+        const _unnEff = getDcEffects()dcNameFromFigureKey(?.[eFk)] || getDcEffects()dcNameFromFigureKey(?.[eFk)?.replace(/\s*\[.*\]\s*$/, '')];
         const _unnImm = (_unnEff?.specialAbilityIds || []).includes('immune_onar') || (_unnEff?.specialAbilityIds || []).includes('immune_snowtrooper_elite');
         if (_unnImm) continue;
         if (applyCondition(game, eFk, 'Weaken')) {
-          weakened.push(eFk.replace(/-\d+-\d+$/, ''));
+          weakened.push(dcNameFromFigureKey(eFk));
         }
       }
     }
@@ -840,7 +840,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         .filter(([fk, fp]) => fk !== selfFk && fp && _getRange(selfPos, fp) <= 3);
       if (friendlyFigs.length > 0) {
         const btns = friendlyFigs.slice(0, 4).map(([fk]) => {
-          const label = fk.replace(/-\d+-\d+$/, '');
+          const label = dcNameFromFigureKey(fk);
           return new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tacmove_${fk}`).setLabel(label).setStyle(ButtonStyle.Primary);
         });
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tacmove_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
@@ -892,7 +892,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         .filter(([fk, fp]) => fk !== selfFk && fp && _getRange(selfPos, fp) <= 2);
       if (friendlyFigs.length > 0) {
         const btns = friendlyFigs.slice(0, 3).map(([fk]) => {
-          const label = fk.replace(/-\d+-\d+$/, '');
+          const label = dcNameFromFigureKey(fk);
           return new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_${fk}`).setLabel(label).setStyle(ButtonStyle.Primary);
         });
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
@@ -1110,7 +1110,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       const friendlyFigs = game.figurePositions?.[pn] || {};
       for (const [fk, fp] of Object.entries(friendlyFigs)) {
         if (!fp) continue;
-        const fDcName = fk.replace(/-\d+-\d+$/, '');
+        const fDcName = dcNameFromFigureKey(fk);
         const fEff = getDcEffects()?.[fDcName];
         if (!(fEff?.keywords || []).some(k => String(k).toUpperCase() === 'HUNTER')) continue;
         if (_getRange(cadPos, fp) > 4) continue;
@@ -1260,7 +1260,7 @@ export async function handleActPassive(interaction, ctx) {
     } else {
       // choice is the figureKey of the target
       const targetFk = choice;
-      const targetDcName = targetFk.replace(/-\d+-\d+$/, '');
+      const targetDcName = dcNameFromFigureKey(targetFk);
       // Find the target's msgId to add MP to their movement bank
       let targetMsgId = null;
       for (const [mId, mMeta] of dcMessageMeta) {
@@ -1286,7 +1286,7 @@ export async function handleActPassive(interaction, ctx) {
       // choice is the figureKey of the target — now offer Hit or Surge token choice
       game.pendingAwr = game.pendingAwr || {};
       game.pendingAwr.targetFk = choice;
-      const targetDcName = choice.replace(/-\d+-\d+$/, '');
+      const targetDcName = dcNameFromFigureKey(choice);
       const tokenRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awrtoken_hit`).setLabel('Hit Token').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awrtoken_surge`).setLabel('Surge Token').setStyle(ButtonStyle.Primary),
@@ -1296,7 +1296,7 @@ export async function handleActPassive(interaction, ctx) {
   } else if (ability === 'awrtoken') {
     const targetFk = game.pendingAwr?.targetFk;
     if (!targetFk) return;
-    const targetDcName = targetFk.replace(/-\d+-\d+$/, '');
+    const targetDcName = dcNameFromFigureKey(targetFk);
     const tokenType = choice === 'hit' ? 'Hit' : 'Surge';
     game.figurePowerTokens = game.figurePowerTokens || {};
     game.figurePowerTokens[targetFk] = game.figurePowerTokens[targetFk] || [];

@@ -81,7 +81,7 @@ export function getOccupiedSpacesForMovement(game, excludeFigureKey = null) {
   for (const p of [1, 2]) {
     for (const [k, coord] of Object.entries(poses[p] || {})) {
       if (k === excludeFigureKey) continue;
-      const dcName = k.replace(/-\d+-\d+$/, '');
+      const dcName = dcNameFromFigureKey(k);
       const size = game.figureOrientations?.[k] || getFigureSize(dcName);
       occupied.push(...getFootprintCells(coord, size));
     }
@@ -98,7 +98,7 @@ export function getHostileOccupiedSpacesForMovement(game, excludeFigureKey = nul
   if (movingPlayerNum == null) return hostile;
   const other = opponentPlayerNum(movingPlayerNum);
   for (const [k, coord] of Object.entries(poses[other] || {})) {
-    const dcName = k.replace(/-\d+-\d+$/, '');
+    const dcName = dcNameFromFigureKey(k);
     const size = game.figureOrientations?.[k] || getFigureSize(dcName);
     hostile.push(...getFootprintCells(coord, size));
   }
@@ -123,7 +123,7 @@ export function getFiguresAdjacentToTarget(game, targetFigureKey, mapId) {
   const mapDef = getMapRegistry().find((m) => m.id === mapId);
   const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
   const adjacency = mapSpaces.adjacency || {};
-  const targetDcName = targetFigureKey.replace(/-\d+-\d+$/, '');
+  const targetDcName = dcNameFromFigureKey(targetFigureKey);
   const targetSize = game.figureOrientations?.[targetFigureKey] || getFigureSize(targetDcName);
   const targetCells = getFootprintCells(targetCoord, targetSize).map((c) => normalizeCoord(c));
   const adjacentSet = new Set();
@@ -134,7 +134,7 @@ export function getFiguresAdjacentToTarget(game, targetFigureKey, mapId) {
   for (const p of [1, 2]) {
     for (const [figureKey, coord] of Object.entries(poses[p] || {})) {
       if (figureKey === targetFigureKey) continue;
-      const dcName = figureKey.replace(/-\d+-\d+$/, '');
+      const dcName = dcNameFromFigureKey(figureKey);
       const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName);
       const cells = getFootprintCells(coord, size).map((c) => normalizeCoord(c));
       if (cells.some((cell) => adjacentSet.has(cell))) out.push({ figureKey, playerNum: p });
@@ -214,7 +214,7 @@ export function getMovementProfile(dcName, figureKey, game) {
   // Survivalist (Skirmish Upgrade): ignore difficult terrain and hostile figure movement costs
   let hasSurvivalist = false;
   if (figureKey && game) {
-    const _svDcName = figureKey.replace(/-\d+-\d+$/, '');
+    const _svDcName = dcNameFromFigureKey(figureKey);
     for (const pn of [1, 2]) {
       if (!(figureKey in (game.figurePositions?.[pn] || {}))) continue;
       const _svList = getDcList(game, pn) || [];
@@ -231,7 +231,7 @@ export function getMovementProfile(dcName, figureKey, game) {
   // Mortar Trooper Haul: treat blocking and impassable terrain as difficult terrain
   let hasMortarHaul = false;
   if (figureKey && game) {
-    const _mhDcName = figureKey.replace(/-\d+-\d+$/, '');
+    const _mhDcName = dcNameFromFigureKey(figureKey);
     for (const pn of [1, 2]) {
       if (!(figureKey in (game.figurePositions?.[pn] || {}))) continue;
       const _mhList = getDcList(game, pn) || [];
@@ -591,7 +591,7 @@ export function collectOverlappingFigures(game, movingPlayerNum, movingFigureKey
     const poses = game.figurePositions?.[p] || {};
     for (const [key, coord] of Object.entries(poses)) {
       if (key === movingFigureKey) continue;
-      const dcName = key.replace(/-\d+-\d+$/, '');
+      const dcName = dcNameFromFigureKey(key);
       const size = game.figureOrientations?.[key] || getFigureSize(dcName);
       const cells = getNormalizedFootprint(coord, size);
       const intersects = cells.some((cell) => footprint.has(cell));
@@ -610,7 +610,7 @@ export function collectOverlappingFigures(game, movingPlayerNum, movingFigureKey
 export function pushFigureToNearestValid(game, playerNum, figureKey, forbiddenSet) {
   const coord = game.figurePositions?.[playerNum]?.[figureKey];
   if (!coord) return false;
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const dcName = dcNameFromFigureKey(figureKey);
   const board = getBoardStateForMovement(game, figureKey);
   if (!board) return false;
   const profile = getMovementProfile(dcName, figureKey, game);

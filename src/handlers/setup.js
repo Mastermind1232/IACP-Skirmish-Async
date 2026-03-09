@@ -755,7 +755,7 @@ export async function handleDeploymentFig(interaction, ctx) {
     for (const p of [1, 2]) {
       for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
         if (p === playerNum && k === figureKey) continue;
-        const dcName = k.replace(/-\d+-\d+$/, '');
+        const dcName = dcNameFromFigureKey(k);
         const size = game.figureOrientations?.[k] || getFigureSize(dcName);
         occupied.push(...getFootprintCells(s, size));
       }
@@ -899,7 +899,7 @@ export async function handleDeploymentOrient(interaction, ctx) {
     for (const p of [1, 2]) {
       for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
         if (p === playerNum && k === figureKey) continue;
-        const dcName = k.replace(/-\d+-\d+$/, '');
+        const dcName = dcNameFromFigureKey(k);
         const size = game.figureOrientations?.[k] || getFigureSize(dcName);
         occupied.push(...getFootprintCells(s, size));
       }
@@ -988,7 +988,7 @@ export async function handleDeployRow(interaction, ctx) {
     for (const p of [1, 2]) {
       for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
         if (p === playerNum && k === figureKey) continue;
-        const dcName = k.replace(/-\d+-\d+$/, '');
+        const dcName = dcNameFromFigureKey(k);
         const size = game.figureOrientations?.[k] || getFigureSize(dcName);
         occupied.push(...getFootprintCells(s, size));
       }
@@ -1081,7 +1081,7 @@ export async function handleDeployRowBack(interaction, ctx) {
     for (const p of [1, 2]) {
       for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
         if (p === playerNum && k === figureKey) continue;
-        const dcName = k.replace(/-\d+-\d+$/, '');
+        const dcName = dcNameFromFigureKey(k);
         const size = game.figureOrientations?.[k] || getFigureSize(dcName);
         occupied.push(...getFootprintCells(s, size));
       }
@@ -1294,11 +1294,11 @@ export async function handleLoadoutPick(interaction, ctx) {
     } catch {}
   }
   await interaction.message.edit({
-    content: `✓ **Imperial Loadout** — **${figureKey.replace(/-\d+-\d+$/, '')}** equipped **${loadoutName}**.\n${card.abilityText}`,
+    content: `✓ **Imperial Loadout** — **${dcNameFromFigureKey(figureKey)}** equipped **${loadoutName}**.\n${card.abilityText}`,
     components: [],
     files,
   }).catch(discordCatch);
-  await logGameAction?.(game, client, `**Imperial Loadout** — **${figureKey.replace(/-\d+-\d+$/, '')}** chose **${loadoutName}**.`, { phase: 'DEPLOYMENT', icon: 'deploy' });
+  await logGameAction?.(game, client, `**Imperial Loadout** — **${dcNameFromFigureKey(figureKey)}** chose **${loadoutName}**.`, { phase: 'DEPLOYMENT', icon: 'deploy' });
 }
 
 /**
@@ -1329,7 +1329,7 @@ export async function handleFormPick(interaction, ctx) {
   if (card.imagePath) {
     try { files.push(new AttachmentBuilder(join(getRootDir(), card.imagePath))); } catch {}
   }
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const dcName = dcNameFromFigureKey(figureKey);
   await interaction.message.edit({
     content: `✓ **Form: ${formName}** — **${dcName}** gains ${formName} abilities.\n${card.abilityText}`,
     components: [],
@@ -1625,7 +1625,7 @@ export async function handleAutoDeploy(interaction, ctx) {
     const occupied = [];
     for (const p of [1, 2]) {
       for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
-        const dcName = k.replace(/-\d+-\d+$/, '');
+        const dcName = dcNameFromFigureKey(k);
         const size = game.figureOrientations?.[k] || getFigureSize(dcName);
         occupied.push(...getFootprintCells(s, size));
       }

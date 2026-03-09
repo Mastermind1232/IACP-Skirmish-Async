@@ -104,7 +104,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   }
   if (clearedConditions.length > 0) {
     const condSummary = clearedConditions.map(({ figureKey, cleared }) => {
-      const dcName = figureKey.replace(/-\d+-\d+$/, '');
+      const dcName = dcNameFromFigureKey(figureKey);
       return `**${dcName}**: ${cleared.join(', ')} removed`;
     }).join('; ');
     await logGameAction(game, client, `🔄 **End of Round** — Conditions cleared: ${condSummary}.`, { phase: 'ROUND', icon: 'round' });
@@ -466,7 +466,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
     for (const pn of [1, 2]) {
       for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
         if (!pos) continue;
-        const dcName = fk.replace(/-\d+-\d+$/, '');
+        const dcName = dcNameFromFigureKey(fk);
         const passives = _pdEff[dcName]?.passives || [];
         // Beskar Armor (The Mandalorian / The Armorer): gain 2 Block Tokens
         if (passives.includes('Beskar Armor')) {
@@ -490,14 +490,14 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
         if (passives.includes('Security Detail')) {
           const leaderFk = Object.keys(game.figurePositions?.[pn] || {}).find(lfk => {
             if (!game.figurePositions[pn][lfk]) return false;
-            const ldn = lfk.replace(/-\d+-\d+$/, '');
+            const ldn = dcNameFromFigureKey(lfk);
             return (_pdEff[ldn]?.keywords || []).some(k => k.toUpperCase() === 'LEADER');
           });
           if (leaderFk) {
             game.figurePowerTokens = game.figurePowerTokens || {};
             game.figurePowerTokens[leaderFk] = game.figurePowerTokens[leaderFk] || [];
             game.figurePowerTokens[leaderFk].push('Block');
-            const leaderName = leaderFk.replace(/-\d+-\d+$/, '');
+            const leaderName = dcNameFromFigureKey(leaderFk);
             await logGameAction(game, client, `🛡️ **Security Detail** — **${leaderName}** gains **1 Block Token** (from ${dcName}).`, { phase: 'ROUND', icon: 'deployed' });
           }
         }
@@ -526,7 +526,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
               if (_slDone.has(afk)) continue;
               _slDone.add(afk);
               game.deployBonusMp[afk] = (game.deployBonusMp[afk] || 0) + 1;
-              _slGranted.push(afk.replace(/-\d+-\d+$/, ''));
+              _slGranted.push(dcNameFromFigureKey(afk));
             }
             await logGameAction(game, client, `🛬 **Smooth Landing** — ${_slGranted.join(', ')} gain${_slGranted.length === 1 ? 's' : ''} **1 MP** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
           }
@@ -663,7 +663,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
     for (const pn of [1, 2]) {
       for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
         if (!pos) continue;
-        const dcName = fk.replace(/-\d+-\d+$/, '');
+        const dcName = dcNameFromFigureKey(fk);
         const passives = _pdEff[dcName]?.passives || [];
         // Beskar Armor (The Mandalorian / The Armorer): gain 2 Block Tokens
         if (passives.includes('Beskar Armor')) {
@@ -688,14 +688,14 @@ export async function handleEndStartOfRound(interaction, ctx) {
           const _sdEff = _pdEff || {};
           const leaderFk = Object.keys(game.figurePositions?.[pn] || {}).find(lfk => {
             if (!game.figurePositions[pn][lfk]) return false;
-            const ldn = lfk.replace(/-\d+-\d+$/, '');
+            const ldn = dcNameFromFigureKey(lfk);
             return (_sdEff[ldn]?.keywords || []).some(k => k.toUpperCase() === 'LEADER');
           });
           if (leaderFk) {
             game.figurePowerTokens = game.figurePowerTokens || {};
             game.figurePowerTokens[leaderFk] = game.figurePowerTokens[leaderFk] || [];
             game.figurePowerTokens[leaderFk].push('Block');
-            const leaderName = leaderFk.replace(/-\d+-\d+$/, '');
+            const leaderName = dcNameFromFigureKey(leaderFk);
             await logGameAction(game, client, `🛡️ **Security Detail** — **${leaderName}** gains **1 Block Token** (from ${dcName}).`, { phase: 'ROUND', icon: 'deployed' });
           }
         }
@@ -727,7 +727,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
               if (_slDone.has(afk)) continue;
               _slDone.add(afk);
               game.deployBonusMp[afk] = (game.deployBonusMp[afk] || 0) + 1;
-              _slGranted.push(afk.replace(/-\d+-\d+$/, ''));
+              _slGranted.push(dcNameFromFigureKey(afk));
             }
             await logGameAction(game, client, `🛬 **Smooth Landing** — ${_slGranted.join(', ')} gain${_slGranted.length === 1 ? 's' : ''} **1 MP** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
           }

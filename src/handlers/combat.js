@@ -7,7 +7,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
-import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
   getCcHand, getActivatedDcIndices,
@@ -83,13 +83,13 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
   // Flame Trooper Fireproof: cannot suffer Strain
   const _fpUpg = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
   if (_fpUpg.includes('Flame Trooper')) {
-    const dcName = figureKey.replace(/-\d+-\d+$/, '');
+    const dcName = dcNameFromFigureKey(figureKey);
     await thread.send(`**Fireproof** — **${dcName}** is immune to Strain from ${abilityLabel}.`).catch(() => {});
     return;
   }
   const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
   const figureIndex = figMatch ? parseInt(figMatch[2], 10) : 0;
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const dcName = dcNameFromFigureKey(figureKey);
   const healthState = dcHealthState.get(msgId) || [];
   const entry = healthState[figureIndex];
   if (!entry) return;
@@ -250,7 +250,7 @@ export async function handleAttackTarget(interaction, ctx) {
   // Mandalorian Whip: forced attack target validation — must target the pushed figure
   if (game.forcedAttackTarget?.[msgId] && target.figureKey) {
     if (target.figureKey !== game.forcedAttackTarget[msgId]) {
-      const forcedName = game.forcedAttackTarget[msgId].replace(/-\d+-\d+$/, '');
+      const forcedName = dcNameFromFigureKey(game.forcedAttackTarget[msgId]);
       await interaction.followUp({ content: `**Mandalorian Whip** — You must target the pushed figure (**${forcedName.replace(/_/g, ' ')}**).`, ephemeral: true }).catch(discordCatch);
       return;
     }
@@ -337,7 +337,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const cqOppPositions = game.figurePositions?.[cqOppNum] || {};
         let cqHostileName = null;
         for (const [fk, pos] of Object.entries(cqOppPositions)) {
-          if (pos && cqAdjSpaces.has(pos)) { cqHostileName = fk.replace(/-\d+-\d+$/, ''); break; }
+          if (pos && cqAdjSpaces.has(pos)) { cqHostileName = dcNameFromFigureKey(fk); break; }
         }
         if (cqHostileName) {
           const cqHostileStats = getDcStats(cqHostileName);
@@ -376,7 +376,7 @@ export async function handleAttackTarget(interaction, ctx) {
       targetEff = {};
     }
   } else {
-    targetDcName = target.figureKey.replace(/-\d+-\d+$/, '');
+    targetDcName = dcNameFromFigureKey(target.figureKey);
     targetStats = getDcStats(targetDcName);
     targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName.replace(/\s*\[.*\]\s*$/, '')];
   }
@@ -722,7 +722,7 @@ export async function handleAttackTarget(interaction, ctx) {
           const friendlyPositions = game.figurePositions?.[attackerPlayerNum] || {};
           const hasFriendlyWookiee = Object.entries(friendlyPositions).some(([fk, pos]) => {
             if (!pos || fk === attackerFigureKey) return false;
-            const fkDcName = fk.replace(/-\d+-\d+$/, '');
+            const fkDcName = dcNameFromFigureKey(fk);
             const fkKws = (getDcKeywordsGlobal()[fkDcName] || []).map(k => String(k).toUpperCase());
             return fkKws.includes('WOOKIEE') && _getRange(pos, defPos) <= 2;
           });
@@ -816,7 +816,7 @@ export async function handleAttackTarget(interaction, ctx) {
     adjToTarget.add(targetCoord); // figure in same space also counts
     const defenderFigPositions = game.figurePositions?.[defenderPlayerNum] || {};
     for (const [fk, pos] of Object.entries(defenderFigPositions)) {
-      const fkDcName = fk.replace(/-\d+-\d+$/, '');
+      const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
       if (!(fkEff?.specialAbilityIds || []).some(id => distractingIds.includes(id))) continue;
       if (!adjToTarget.has(String(pos).toLowerCase())) continue;
@@ -926,7 +926,7 @@ export async function handleAttackTarget(interaction, ctx) {
       let found = false;
       for (const [fk, pos] of Object.entries(friendlyPoses)) {
         if (found || fk === attackerFigureKey) continue;
-        const fkDcName = fk.replace(/-\d+-\d+$/, '');
+        const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         const fkKeywords = (fkEff?.keywords || []).map((k) => String(k).toUpperCase());
         if (!fkKeywords.includes('HUNTER')) continue;
@@ -1031,7 +1031,7 @@ export async function handleAttackTarget(interaction, ctx) {
       const friendlyPos = game.figurePositions?.[attackerPlayerNum] || {};
       for (const [fk, pos] of Object.entries(friendlyPos)) {
         if (fk === attackerFigureKey) continue;
-        const fkDcName = fk.replace(/-\d+-\d+$/, '');
+        const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!fkEff?.unique) continue;
         if (getRange(atkPos, pos) > 3) continue;
@@ -1064,7 +1064,7 @@ export async function handleAttackTarget(interaction, ctx) {
     for (const [fk, pos] of Object.entries(defFigPos)) {
       if (sentinelApplied) break;
       if (fk === target.figureKey) continue; // skip the defender itself
-      const fkDcName = fk.replace(/-\d+-\d+$/, '');
+      const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
       const fkAbilityIds = fkEff?.specialAbilityIds || [];
       if (!adjToTargetSP.has(String(pos).toLowerCase())) continue;
@@ -1091,7 +1091,7 @@ export async function handleAttackTarget(interaction, ctx) {
     let ktpApplied = false;
     for (const [fk, pos] of Object.entries(defFigPosKP)) {
       if (ktpApplied) break;
-      const fkDcName = fk.replace(/-\d+-\d+$/, '');
+      const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
       const fkAbilityIds = fkEff?.specialAbilityIds || [];
       if (!adjToTargetKP.has(String(pos).toLowerCase())) continue;
@@ -1130,7 +1130,7 @@ export async function handleAttackTarget(interaction, ctx) {
         if (bespinApplied) break;
         if (fk === attackerFigureKey) continue;
         if (!adjToAtk.has(String(pos).toLowerCase())) continue;
-        const fkDcName = fk.replace(/-\d+-\d+$/, '');
+        const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if ((fkEff?.specialAbilityIds || []).includes('bespin_security')) {
           game.pendingCombat.rerollOneAttackDie = (game.pendingCombat.rerollOneAttackDie || 0) + 1;
@@ -1260,7 +1260,7 @@ export async function handleAttackTarget(interaction, ctx) {
     }
     if (_tfiwmTarget) {
       game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) - 1;
-      const _tfiwmDcName = _tfiwmTarget.replace(/-\d+-\d+$/, '');
+      const _tfiwmDcName = dcNameFromFigureKey(_tfiwmTarget);
       // Deal 1 damage to the adjacent hostile
       const _tfiwmMatch = _tfiwmTarget.match(/^(.+)-(\d+)-(\d+)$/);
       if (_tfiwmMatch) {
@@ -1525,7 +1525,7 @@ export async function handleCombatRoll(interaction, ctx) {
 
     // There Is No Try (TINT): if thereIsNoTryPlayerNum is set for the defender, and the defending DC has REBEL + FORCE USER keywords
     if (game.thereIsNoTryPlayerNum === defenderPlayerNum && !combat.tintResolved) {
-      const _tintDefDcName = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '');
+      const _tintDefDcName = dcNameFromFigureKey(combat.target?.figureKey || '');
       const _tintStats = ctx.getDcStats?.(_tintDefDcName) || {};
       const _tintAllKws = [...(_tintStats.keywords || []), ...(_tintStats.traits || [])].map((k) => String(k).toUpperCase());
       if (_tintAllKws.includes('REBEL') && _tintAllKws.includes('FORCE USER')) {
@@ -1548,7 +1548,7 @@ export async function handleCombatRoll(interaction, ctx) {
 
     // --- Enter reroll window ---
     const atkInnate = getInnateRerolls(combat.attackerDcName);
-    const defenderDcName = combat.target?.figureKey?.replace(/-\d+-\d+$/, '') || '';
+    const defenderDcName = dcNameFromFigureKey(combat.target?.figureKey ?? '');
     const defInnate = getInnateRerolls(defenderDcName);
 
     // Ability-based rerolls from specialAbilityIds
@@ -1584,7 +1584,7 @@ export async function handleCombatRoll(interaction, ctx) {
       const atkPos = atkFigs[combat.attackerFigureKey];
       for (const [fk, pos] of Object.entries(atkFigs)) {
         if (fk === combat.attackerFigureKey) continue;
-        const fn = fk.replace(/-\d+-\d+$/, '');
+        const fn = dcNameFromFigureKey(fk);
         const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
         if (!(fe?.specialAbilityIds || []).includes('inspiring')) continue;
         if (atkPos && isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkPos).toLowerCase(), 3)) {
@@ -1598,7 +1598,7 @@ export async function handleCombatRoll(interaction, ctx) {
       const mapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
       const defPos = combat.target?.coord;
       for (const [fk, pos] of Object.entries(defFigs)) {
-        const fn = fk.replace(/-\d+-\d+$/, '');
+        const fn = dcNameFromFigureKey(fk);
         const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
         if (!(fe?.specialAbilityIds || []).includes('soresu_form')) continue;
         if (defPos && isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defPos).toLowerCase(), 3)) {
@@ -1638,7 +1638,7 @@ export async function handleCombatRoll(interaction, ctx) {
         for (const [fk, pos] of Object.entries(stFigs)) {
           if (fk === combat.attackerFigureKey) continue;
           if (!stAdj.has(String(pos).toLowerCase())) continue;
-          const fn = fk.replace(/-\d+-\d+$/, '');
+          const fn = dcNameFromFigureKey(fk);
           const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
           if ((fe?.keywords || []).some(k => String(k).toUpperCase() === 'TROOPER')) {
             atkSpecialReroll += 1; break;
@@ -1661,7 +1661,7 @@ export async function handleCombatRoll(interaction, ctx) {
           if (chAtkPos && chMapSp && ctx.hasLineOfSight) {
             for (const [fk, pos] of Object.entries(chFigs)) {
               if (fk === combat.attackerFigureKey) continue;
-              const fn = fk.replace(/-\d+-\d+$/, '');
+              const fn = dcNameFromFigureKey(fk);
               const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
               if (!(fe?.specialAbilityIds || []).includes('coordinated_hunt_purge_commander')) continue;
               if (pos && ctx.hasLineOfSight(String(pos).toLowerCase(), String(chAtkPos).toLowerCase(), chMapSp)) {
@@ -1695,7 +1695,7 @@ export async function handleCombatRoll(interaction, ctx) {
       if (scMapSp) {
         for (const [fk, pos] of Object.entries(scFigs)) {
           if (fk === combat.attackerFigureKey) continue;
-          const fn = fk.replace(/-\d+-\d+$/, '');
+          const fn = dcNameFromFigureKey(fk);
           const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
           if (!(fe?.keywords || []).some(k => String(k).toUpperCase() === 'DROID')) continue;
           if (!pos) continue;
@@ -1751,7 +1751,7 @@ export async function handleCombatRoll(interaction, ctx) {
       if (_taAtkPos && _taMapSp) {
         for (const [fk, pos] of Object.entries(_taFigs)) {
           if (fk === combat.attackerFigureKey) continue;
-          const fn = fk.replace(/-\d+-\d+$/, '');
+          const fn = dcNameFromFigureKey(fk);
           if (!isWithinSpaces(_taMapSp, String(pos).toLowerCase(), String(_taAtkPos).toLowerCase(), 3)) continue;
           // Check if this figure's DC has Trusted Ally attachment and it's not exhausted
           const _taMsgIds = getDcMessageIds(game, attackerPlayerNum) || [];
@@ -2149,7 +2149,7 @@ export async function handleCombatReroll(interaction, ctx) {
         // Advanced Targeting Computer (Dark Trooper Mk III): if rerolled die has fewer Hits, +1 Hit
         if (!combat.advTcBonusApplied) {
           const _atcDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-          const _atcDcName = (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+          const _atcDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
           const _atcEff = _atcDcEff[_atcDcName] || _atcDcEff[_atcDcName?.replace(/\s*\[.*\]\s*$/, '')];
           if ((_atcEff?.specialAbilityIds || []).includes('adv_targeting_computer_dark_trooper')) {
             if ((newDie.dmg || 0) < (oldDie.dmg || 0)) {
@@ -2627,7 +2627,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       // Find which player is Lando
       const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
       const atkSIds = (getDcEff[combat.attackerDcName] || getDcEff[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')])?.specialAbilityIds || [];
-      const defDcN = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '');
+      const defDcN = dcNameFromFigureKey(combat.target?.figureKey || '');
       const defSIds = (getDcEff[defDcN] || getDcEff[(defDcN || '').replace(/\s*\[.*\]\s*$/, '')])?.specialAbilityIds || [];
       const landoPN = atkSIds.includes('shrewd_scoundrel_lando') ? combat.attackerPlayerNum : (defSIds.includes('shrewd_scoundrel_lando') ? opponentPlayerNum(combat.attackerPlayerNum) : null);
       if (landoPN) {
@@ -2644,7 +2644,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
   // Agile (Jet Trooper E/R): while defending, convert 1 Block to 1 Evade
   if (combat.target?.figureKey && !combat.agileJetTrooperApplied) {
     const _agDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const _agDefDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const _agDefDcName = dcNameFromFigureKey(combat.target.figureKey);
     const _agDefEff = _agDcEff[_agDefDcName] || _agDcEff[(_agDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
     const _agDefSIds = _agDefEff?.specialAbilityIds || [];
     if (_agDefSIds.includes('agile_jet_trooper_elite') || _agDefSIds.includes('agile_jet_trooper_reg')) {
@@ -2661,7 +2661,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
   // Defensible (SC2-M): while defending, apply +1 Block or +1 Evade (player chooses)
   if (!combat.defensibleResolved && combat.target?.figureKey) {
     const _defsDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const _defsDefDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const _defsDefDcName = dcNameFromFigureKey(combat.target.figureKey);
     const _defsDefEff = _defsDcEff[_defsDefDcName] || _defsDcEff[(_defsDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
     if ((_defsDefEff?.specialAbilityIds || []).includes('defensible_sc2m')) {
       combat.pendingCombatPassive = 'defensible';
@@ -2683,7 +2683,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
   // Get Down (Onar Koma): while a SMALL figure within 2 is defending, apply +1 Block or +1 Evade (once/round)
   if (!combat.getDownResolved && combat.target?.figureKey) {
     const _gdDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const _gdDefDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const _gdDefDcName = dcNameFromFigureKey(combat.target.figureKey);
     const _gdDefEff = _gdDcEff[_gdDefDcName] || _gdDcEff[(_gdDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
     // Defender must be SMALL (no LARGE/MASSIVE keyword)
     const _gdDefKws = (_gdDefEff?.keywords || []).map(k => String(k).toUpperCase());
@@ -2697,7 +2697,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       if (defCoord && mapSp) {
         for (const [fk, pos] of Object.entries(friendlyFigs)) {
           if (fk === combat.target.figureKey) continue;
-          const fDcName = fk.replace(/-\d+-\d+$/, '');
+          const fDcName = dcNameFromFigureKey(fk);
           const fEff = _gdDcEff[fDcName] || _gdDcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
           if (!(fEff?.specialAbilityIds || []).includes('get_down_onar')) continue;
           if (isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defCoord).toLowerCase(), 2)) {
@@ -2709,7 +2709,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       if (_gdOnarFk && !game.roundFigureAbilityUsed?.[`${_gdOnarFk}_get_down`]) {
         combat.pendingCombatPassive = 'get_down';
         combat.getDownFigKey = _gdOnarFk;
-        const _gdOnarDcName = _gdOnarFk.replace(/-\d+-\d+$/, '');
+        const _gdOnarDcName = dcNameFromFigureKey(_gdOnarFk);
         const btns = [
           new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_getdown_block`).setLabel('+1 Block').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_getdown_evade`).setLabel('+1 Evade').setStyle(ButtonStyle.Primary),
@@ -2737,7 +2737,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     if (atkCoord && mapSp) {
       for (const [fk, pos] of Object.entries(friendlyFigs)) {
         if (fk === combat.attackerFigureKey) continue; // "another friendly"
-        const fDcName = fk.replace(/-\d+-\d+$/, '');
+        const fDcName = dcNameFromFigureKey(fk);
         const fEff = _ctsDcEff[fDcName] || _ctsDcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!(fEff?.specialAbilityIds || []).includes('call_the_shots_hera')) continue;
         if (isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkCoord).toLowerCase(), 3)) {
@@ -2749,7 +2749,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     if (_ctsHeraFk && !game.roundFigureAbilityUsed?.[`${_ctsHeraFk}_call_the_shots`]) {
       combat.pendingCombatPassive = 'call_the_shots';
       combat.callTheShotsFigKey = _ctsHeraFk;
-      const _ctsHeraDcName = _ctsHeraFk.replace(/-\d+-\d+$/, '');
+      const _ctsHeraDcName = dcNameFromFigureKey(_ctsHeraFk);
       const btns = [
         new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_acc`).setLabel('+2 Accuracy').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_cts_hit`).setLabel('+1 Hit').setStyle(ButtonStyle.Primary),
@@ -2769,7 +2769,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
   // Lasat Honor Guard (Zeb Orrelios): after rerolls, may turn 1 die showing only a single attack icon to any other side
   if (!combat.lasatHonorGuardUsed && combat.attackDiceResults?.length > 0) {
     const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const atkDcName = (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+    const atkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
     const atkEff = getDcEff[atkDcName] || getDcEff[atkDcName?.replace(/\s*\[.*\]\s*$/, '')];
     if ((atkEff?.specialAbilityIds || []).includes('lasat_honor_guard')) {
       const eligibleIdxs = combat.attackDiceResults
@@ -2792,7 +2792,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
   // Defensive Stance (Diala Passil): if a Dodge is rolled while defending, convert it to +2 Block, +1 Evade
   if (defRoll.dodge && combat.target?.figureKey) {
     const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const defDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const defDcName = dcNameFromFigureKey(combat.target.figureKey);
     const defEff = getDcEff[defDcName] || getDcEff[defDcName?.replace(/\s*\[.*\]\s*$/, '')];
     if ((defEff?.specialAbilityIds || []).includes('defensive_stance')) {
       combat.defenseRoll = { block: (defRoll.block || 0) + 2, evade: (defRoll.evade || 0) + 1, dodge: false };
@@ -2805,7 +2805,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     const sr = combat.defenseRoll;
     combat.defenseRoll = { block: (sr.block || 0) + 2, evade: (sr.evade || 0) + 1, dodge: false };
     const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const defDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const defDcName = dcNameFromFigureKey(combat.target.figureKey);
     const defEff = getDcEff[defDcName] || getDcEff[defDcName?.replace(/\s*\[.*\]\s*$/, '')];
     const allKws = [...(defEff?.keywords || []), ...(defEff?.traits || [])].map((k) => String(k).toUpperCase());
     const isFORCE_USER = allKws.includes('FORCE USER');
@@ -2821,7 +2821,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
   // Lucky (R2-D2): while defending, if Dodge rolled, recover 2 damage
   if (combat.defenseRoll.dodge && combat.target?.figureKey) {
     const _luckyDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const _luckyDefDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const _luckyDefDcName = dcNameFromFigureKey(combat.target.figureKey);
     const _luckyDefEff = _luckyDcEff[_luckyDefDcName] || _luckyDcEff[(_luckyDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
     if ((_luckyDefEff?.specialAbilityIds || []).includes('lucky_r2d2') && ctx.dcHealthState) {
       const _luckyFkMatch = combat.target.figureKey.match(/^(.+)-(\d+)-(\d+)$/);
@@ -2851,7 +2851,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
   let _vagueBlockTokens = false;
   if (combat.target?.figureKey) {
     const _vuDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const _vuDefDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const _vuDefDcName = dcNameFromFigureKey(combat.target.figureKey);
     const _vuDefEff = _vuDcEff[_vuDefDcName] || _vuDcEff[(_vuDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
     if ((_vuDefEff?.specialAbilityIds || []).includes('vague_and_unconvincing_k2s0')) {
       _vagueBlockTokens = true;
@@ -2892,7 +2892,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     let _sisArmorerFk = null;
     if (defCoord && mapSp) {
       for (const [fk, pos] of Object.entries(friendlyFigs)) {
-        const fDcName = fk.replace(/-\d+-\d+$/, '');
+        const fDcName = dcNameFromFigureKey(fk);
         const fEff = _sisDcEff[fDcName] || _sisDcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!(fEff?.specialAbilityIds || []).includes('survival_is_strength_armorer')) continue;
         if (isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defCoord).toLowerCase(), 3)) {
@@ -2904,7 +2904,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     if (_sisArmorerFk && !game.roundFigureAbilityUsed?.[`${_sisArmorerFk}_survival_is_strength`]) {
       combat.pendingCombatPassive = 'survival';
       combat.survivalFigKey = _sisArmorerFk;
-      const _sisArmorerDcName = _sisArmorerFk.replace(/-\d+-\d+$/, '');
+      const _sisArmorerDcName = dcNameFromFigureKey(_sisArmorerFk);
       const dice = combat.attackDiceResults;
       const btns = dice.map((d, i) =>
         new ButtonBuilder()
@@ -2970,7 +2970,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     // Krayt Dragon Fury (Tress Hacnua): resolve X in surge labels to actual surge count
     const _kdfXVal = combat.attackRoll?.surge ?? 0;
     const _kdfDcEffL = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const _kdfAtkDcNameL = (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+    const _kdfAtkDcNameL = dcNameFromFigureKey(combat.attackerFigureKey || '');
     const _kdfAtkEffL = _kdfDcEffL[_kdfAtkDcNameL] || _kdfDcEffL[(_kdfAtkDcNameL || '').replace(/\s*\[.*\]\s*$/, '')];
     const _kdfHasL = (_kdfAtkEffL?.specialAbilityIds || []).includes('krayt_dragon_fury_tress');
     for (let i = 0; i < surgeAbilities.length; i++) {
@@ -3185,7 +3185,7 @@ export async function handleCombatSurge(interaction, ctx) {
         for (let _i = 0; _i < mod.surgeGrantBlockToken; _i++) game.figurePowerTokens[combat.attackerFigureKey].push('Block');
       }
       if ((mod.surgeGrantPowerToken || 0) > 0 && combat.attackerFigureKey) {
-        const figName = combat.attackerFigureKey.replace(/-\d+-\d+$/, '');
+        const figName = dcNameFromFigureKey(combat.attackerFigureKey);
         game.pendingPowerTokenGrant = { grants: [{ figureKey: combat.attackerFigureKey, figName, count: mod.surgeGrantPowerToken }], channelId: null, playerNum: combat.attackerPlayerNum };
       }
       if ((mod.surgeGrantEvade || 0) > 0 && combat.attackerFigureKey) {
@@ -3205,7 +3205,7 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeComplex) {
         // Krayt Dragon Fury (Tress Hacnua): X = number of Surge rolled on the attack dice
         const _kdfDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-        const _kdfAtkDcName = (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+        const _kdfAtkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
         const _kdfAtkEff = _kdfDcEff[_kdfAtkDcName] || _kdfDcEff[(_kdfAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
         const _kdfHas = (_kdfAtkEff?.specialAbilityIds || []).includes('krayt_dragon_fury_tress');
         if (_kdfHas) {
@@ -3280,7 +3280,7 @@ export async function handleCombatSurge(interaction, ctx) {
     // Krayt Dragon Fury: resolve X in labels
     const _kdfXValR = combat.attackRoll?.surge ?? 0;
     const _kdfDcEffR = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const _kdfAtkDcNameR = (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+    const _kdfAtkDcNameR = dcNameFromFigureKey(combat.attackerFigureKey || '');
     const _kdfAtkEffR = _kdfDcEffR[_kdfAtkDcNameR] || _kdfDcEffR[(_kdfAtkDcNameR || '').replace(/\s*\[.*\]\s*$/, '')];
     const _kdfHasR = (_kdfAtkEffR?.specialAbilityIds || []).includes('krayt_dragon_fury_tress');
     const surgeRows = [];
@@ -3359,7 +3359,7 @@ export async function handleCombatToken(interaction, ctx) {
     if (combat.pendingWildRole === 'defender' && resolvedType === 'Block') {
       combat.defenderSpentBlock = true;
       const _pcsWDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-      const _pcsWDefDcName = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '');
+      const _pcsWDefDcName = dcNameFromFigureKey(combat.target?.figureKey || '');
       const _pcsWDefEff = _pcsWDcEff[_pcsWDefDcName] || _pcsWDcEff[(_pcsWDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
       if ((_pcsWDefEff?.specialAbilityIds || []).includes('personal_combat_shield_gar_saxon')) {
         combat.bonusEvade = (combat.bonusEvade || 0) + 1;
@@ -3416,7 +3416,7 @@ export async function handleCombatToken(interaction, ctx) {
   // Personal Combat Shield (Gar Saxon): when spending a Block token while defending, +1 Evade
   if (!isAttacker && tokenType === 'Block') {
     const _pcsDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const _pcsDefDcName = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '');
+    const _pcsDefDcName = dcNameFromFigureKey(combat.target?.figureKey || '');
     const _pcsDefEff = _pcsDcEff[_pcsDefDcName] || _pcsDcEff[(_pcsDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
     if ((_pcsDefEff?.specialAbilityIds || []).includes('personal_combat_shield_gar_saxon')) {
       combat.bonusEvade = (combat.bonusEvade || 0) + 1;
@@ -3692,7 +3692,7 @@ export async function handleFigureheadDecision(interaction, ctx) {
           // Murne Rin defeated
           if (game.figurePositions?.[defenderPlayerNum]) delete game.figurePositions[defenderPlayerNum][fhFigKey];
           if (game.figureConditions?.[fhFigKey]) delete game.figureConditions[fhFigKey];
-          const fhDcName = fhFigKey.replace(/-\d+-\d+$/, '');
+          const fhDcName = dcNameFromFigureKey(fhFigKey);
           const fhStats = getDcStats?.(fhDcName);
           const fhEff = getDcEffects?.()?.[fhDcName];
           const fhFigures = fhStats?.figures ?? 1;
@@ -3889,10 +3889,10 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   }
   delete game.falseOrdersAttackTargets?.[msgId];
   delete game.pendingFalseOrders;
-  const controlledName = controlledFigureKey.replace(/-\d+-\d+$/, '');
+  const controlledName = dcNameFromFigureKey(controlledFigureKey);
   const controlledStats = getDcStats(controlledName);
   const attackInfo = controlledStats?.attack || { dice: ['red'], range: [1, 3] };
-  const targetDcName = target.figureKey.replace(/-\d+-\d+$/, '');
+  const targetDcName = dcNameFromFigureKey(target.figureKey);
   const targetStats = getDcStats(targetDcName);
   const targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
   const defenderPlayerNum = opponentPlayerNum(controlledPlayerNum);

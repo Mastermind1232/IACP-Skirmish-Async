@@ -26,7 +26,7 @@ export function filterCondition(game, figureKey, cond) {
  * @returns {boolean}
  */
 export function isConditionImmune(game, figureKey) {
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const dcName = dcNameFromFigureKey(figureKey);
   const dcEff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const sIds = dcEff?.specialAbilityIds || [];
   return sIds.includes('immune_onar') || sIds.includes('immune_snowtrooper_elite');
