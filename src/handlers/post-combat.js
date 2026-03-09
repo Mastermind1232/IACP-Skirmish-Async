@@ -15,20 +15,6 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 
 /**
- * bleed_accept_ / bleed_prevent_ — delegates to the existing handleBleedResolve
- * that lives in index.js (not yet extracted). For now this is a passthrough;
- * the caller in index.js already invokes handleBleedResolve(interaction) directly.
- */
-export async function handleBleedResolve(interaction, ctx) {
-  // The bleed handler is a standalone function in index.js with many deps.
-  // The call-site in index.js already calls that function directly, so this
-  // export exists only as a placeholder for future extraction.
-  if (ctx && ctx.handleBleedResolveImpl) {
-    await ctx.handleBleedResolveImpl(interaction);
-  }
-}
-
-/**
  * reaction_skip_
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, client, saveGames, checkPostCombatSurges, finishCombatResolution
@@ -326,8 +312,7 @@ export async function handleInterrogatePick(interaction, ctx) {
       intGame[intOppDiscardKey] = intGame[intOppDiscardKey] || [];
       intGame[intOppDiscardKey].push(intChosen);
       if (intThread) await intThread.send(`**Interrogate** — Discarded **${intOwnCard}** from your hand; **${intChosen}** removed from opponent's hand.`).catch(discordCatch);
-      await updateHandChannelMessages(intGame, intAPN, client).catch(() => {});
-      await updateHandChannelMessages(intGame, intOPN, client).catch(() => {});
+      await updateHandChannelMessages(intGame, client).catch(() => {});
     }
   } else {
     // Skip — just log

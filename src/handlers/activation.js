@@ -1236,9 +1236,9 @@ export async function handleActPassive(interaction, ctx) {
       const fk = `${meta.dcName}-${dgIndex}-0`;
       const fkIdx = 0;
       const hs = dcHealthState.get(msgId);
-      if (hs?.[fkIdx]) {
-        const max = hs[fkIdx].max ?? hs[fkIdx].current;
-        hs[fkIdx].current = Math.min(max, hs[fkIdx].current + 1);
+      if (hs?.[fkIdx] && Array.isArray(hs[fkIdx])) {
+        const [cur, max] = hs[fkIdx];
+        hs[fkIdx] = [Math.min(max, (cur ?? max) + 1), max];
       }
       await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** recovered **1 Damage**.`, components: [] }).catch(() => {});
     }

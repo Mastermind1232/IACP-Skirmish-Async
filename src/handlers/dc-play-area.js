@@ -1713,7 +1713,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const losValid = [];
       for (const sp of allSpaces) {
         if (sp === String(pos).toLowerCase()) continue;
-        if (hasLineOfSight && hasLineOfSight(pos, sp, ms, game, meta.playerNum)) losValid.push(sp);
+        if (hasLineOfSight && hasLineOfSight(pos, sp, ms, null)) losValid.push(sp);
       }
       if (losValid.length === 0) {
         await thread.send('**Overwatch** — No valid spaces in LOS to place the token.').catch(() => {});

@@ -517,8 +517,13 @@ export async function handleMovePick(interaction, ctx) {
       }
       if (!hostileMsgId) continue;
       const hFigIndex = parseInt(hostileFigIndexStr, 10);
-      const { prevHp: curHp, newHp, maxHp: _orMaxHp } = reduceHp(_dcHealthState, game, hostileMsgId, hFigIndex, 2, hostilePlayerNum);
-      if (_orMaxHp === 0 || curHp === null || curHp <= 0) continue;
+      const hHealthState = _dcHealthState.get(hostileMsgId);
+      const hEntry = hHealthState?.[hFigIndex];
+      if (!hEntry || !Array.isArray(hEntry)) continue;
+      const [hCur, hMax] = hEntry;
+      const hCurHp = hCur ?? hMax ?? 0;
+      if (hMax === 0 || hCurHp <= 0) continue;
+      const { prevHp: curHp, newHp } = reduceHp(_dcHealthState, game, hostileMsgId, hFigIndex, 2, hostilePlayerNum);
       const hDisplayName = dcMessageMeta.get(hostileMsgId)?.displayName || hostileDcName;
       const defeatNote = newHp <= 0 ? ' **(may be defeated — check manually)**' : '';
       await logGameAction(game, client, `**Overrun** — **${displayName}** entered **${hDisplayName}**'s space: 2 Damage${defeatNote} (HP: ${curHp}→${newHp}).`, { phase: 'ROUND', icon: 'attack' });
@@ -558,8 +563,13 @@ export async function handleMovePick(interaction, ctx) {
         }
         if (!hMsgId) continue;
         const hFigIdx = parseInt(hFigIdxStr, 10);
-        const { prevHp: hCur, newHp: hNewHp, maxHp: _carMaxHp } = reduceHp(_dcHs, game, hMsgId, hFigIdx, 1, hostilePlayerNum);
-        if (_carMaxHp === 0 || hCur === null || hCur <= 0) continue;
+        const hHealthState2 = _dcHs.get(hMsgId);
+        const hEntry2 = hHealthState2?.[hFigIdx];
+        if (!hEntry2 || !Array.isArray(hEntry2)) continue;
+        const [hCur2, hMax2] = hEntry2;
+        const hCurHp2 = hCur2 ?? hMax2 ?? 0;
+        if (hMax2 === 0 || hCurHp2 <= 0) continue;
+        const { prevHp: hCur, newHp: hNewHp } = reduceHp(_dcHs, game, hMsgId, hFigIdx, 1, hostilePlayerNum);
         const hDispName = dcMessageMeta.get(hMsgId)?.displayName || hDcName;
         const defeatNote = hNewHp <= 0 ? ' **(may be defeated)**' : '';
         await logGameAction(game, client, `⚔️ **Cut and Run** — **${displayName}** exits **${hDispName}**'s space: 1 Damage${defeatNote} (HP: ${hCur}→${hNewHp}).`, { phase: 'ROUND', icon: 'attack' });

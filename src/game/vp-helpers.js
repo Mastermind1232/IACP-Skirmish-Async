@@ -46,6 +46,14 @@ export function awardObjectiveVp(game, playerNum, amount) {
  */
 export function deductVp(game, playerNum, amount) {
   const vp = ensureVp(game, playerNum);
+  let remaining = amount;
+  // Deduct from objectives first
+  const objDeduct = Math.min(vp.objectives || 0, remaining);
+  vp.objectives = (vp.objectives || 0) - objDeduct;
+  remaining -= objDeduct;
+  // Then from kills
+  if (remaining > 0) {
+    vp.kills = Math.max(0, (vp.kills || 0) - remaining);
+  }
   vp.total = Math.max(0, vp.total - amount);
-  vp.objectives = Math.max(0, (vp.objectives || 0) - amount);
 }

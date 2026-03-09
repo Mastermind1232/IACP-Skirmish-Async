@@ -35,7 +35,7 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 export async function handleSquadModal(interaction, ctx) {
   const { getGame, validateDeckLegal, sendDeckIllegalAlert, applySquadSubmission } = ctx;
   const [, , gameId, playerNum] = interaction.customId.split('_');
-  const game = await requireGame(interaction, getGame, gameId);
+  const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
   if (!game.mapSelected) {
     await interaction.reply({ content: 'Map selection must be completed before you can submit your squad.', ephemeral: true });
@@ -72,7 +72,7 @@ export async function handleDeployModal(interaction, ctx) {
   const gameId = parts[2];
   const playerNum = parseInt(parts[3], 10);
   const flatIndex = parseInt(parts[4], 10);
-  const game = await requireGame(interaction, getGame, gameId);
+  const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner of this deck can deploy.', { useReply: true })) return;
   const deployMeta = playerNum === 1 ? game.player1DeployMetadata : game.player2DeployMetadata;
@@ -174,7 +174,7 @@ export async function handleCcAttachTo(interaction, ctx) {
 export async function handleCcPlaySelect(interaction, ctx) {
   const { getGame, getCommandCardImagePath, saveGames } = ctx;
   const gameId = interaction.customId.replace('cc_play_select_', '');
-  const game = await requireGame(interaction, getGame, gameId);
+  const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
@@ -637,7 +637,7 @@ export async function handleCcSpacePick(interaction, ctx) {
   }
   const [, gameId, space] = match;
   const chosenSpace = String(space).toLowerCase();
-  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildBoardMapPayload, client, saveGames } = ctx;
+  const { getGame, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildBoardMapPayload, client, saveGames } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const pending = game.pendingCcSpaceChoice;
@@ -931,7 +931,7 @@ export async function handleIllegalCcUnplay(interaction, ctx) {
 export async function handleCcDiscardSelect(interaction, ctx) {
   const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames } = ctx;
   const gameId = interaction.customId.replace('cc_discard_select_', '');
-  const game = await requireGame(interaction, getGame, gameId);
+  const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
@@ -1286,7 +1286,7 @@ export async function handleCcDiscard(interaction, ctx) {
 export async function handleSquadSelect(interaction, ctx) {
   const { getGame } = ctx;
   const [, , gameId, playerNum] = interaction.customId.split('_');
-  const game = await requireGame(interaction, getGame, gameId);
+  const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
   if (!game.mapSelected) {
     await interaction.followUp({ content: 'Map selection must be completed before you can select your squad.', ephemeral: true });

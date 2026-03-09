@@ -832,7 +832,7 @@ export function resolveAbility(abilityId, context) {
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       // Check if this is the second pick or if we should offer another
       if ((game.pendingFiringSquad || []).length >= 2) {
-        const names = game.pendingFiringSquad.map(p => p.dcNameFromFigureKey(chosenFigureKey));
+        const names = game.pendingFiringSquad.map(p => dcNameFromFigureKey(p.chosenFigureKey));
         return { applied: true, logMessage: `**Firing Squad** — **${names.join('** and **')}** may each interrupt to perform a free attack targeting the same hostile figure (no action cost). Use their **Attack** buttons.` };
       }
       // Offer second pick (or allow finishing with 1)

@@ -5718,7 +5718,11 @@ client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return;
   const buttonKey = getHandlerKey(interaction.customId, 'button');
   if (!buttonKey) return;
-  await interaction.deferUpdate().catch(discordCatch);
+  // Don't deferUpdate for handlers that need to show a modal (modal requires unacknowledged interaction)
+  const MODAL_PREFIXES = ['devaron_crate_push_', 'krykna_push_'];
+  if (!MODAL_PREFIXES.includes(buttonKey)) {
+    await interaction.deferUpdate().catch(discordCatch);
+  }
 
   const _buttonLockId = resolveGameIdForLock(interaction);
   await withGameLock(_buttonLockId, async () => {

@@ -874,7 +874,7 @@ export async function handleAttackTarget(interaction, ctx) {
       game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'yellow'] };
       game.pendingPowerTokenGrant = { grants: [{ figureKey: attackerFigureKey, figName: meta.dcName, count: 1 }], channelId: thread.id, playerNum: attackerPlayerNum };
       await thread.send('**Flawless Execution** — Cad Bane was already Focused: +1 yellow die. Choose a power token type:');
-      await sendPowerTokenChoicePrompt(thread, gameId, game.pendingPowerTokenGrant.grants);
+      await sendPowerTokenChoicePrompt(thread, game.gameId, game.pendingPowerTokenGrant.grants);
     }
   }
 
@@ -1294,12 +1294,12 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Loku Recon Token: Set Your Sights — Pierce 2 when attacking figure with recon token
-  if (game.reconToken?.figureKey === targetFigureKey && game.reconToken?.playerNum === attackerPlayerNum) {
+  if (game.reconToken?.figureKey === target.figureKey && game.reconToken?.playerNum === attackerPlayerNum) {
     game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 2;
     await thread.send('**Set Your Sights** — Attacking figure with Recon token: +Pierce 2.');
   }
   // Loku Recon Token: Mon Cala SF — Loku becomes Focused when attacking recon-tokened figure
-  if (game.reconToken?.figureKey === targetFigureKey && game.reconToken?.playerNum === attackerPlayerNum) {
+  if (game.reconToken?.figureKey === target.figureKey && game.reconToken?.playerNum === attackerPlayerNum) {
     if (atkSpecialIds.includes('mon_cala_sf_loku')) {
       applyCondition(game, attackerFigureKey, 'Focus');
       await thread.send('**Mon Cala Special Forces** — Loku gains Focus for attacking Recon-tokened figure.');
@@ -3125,7 +3125,7 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeInterrogate) combat.surgeInterrogate = true;
       // Autofire chain attack: mark pending so applyDamageAndFinishCombat grants free attack
       if (key === 'autofire_chain') {
-        const _afTargetPos = game.figurePositions?.[combat.defenderPlayerNum]?.[combat.targetFigureKey];
+        const _afTargetPos = game.figurePositions?.[combat.defenderPlayerNum]?.[combat.target?.figureKey];
         combat.autofireChainPending = true;
         combat.autofireChainTargetSpace = _afTargetPos || null;
         combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);

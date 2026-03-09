@@ -47,6 +47,7 @@ import {
   handleDcCcDoubleAction,
   handleDcAction,
   handlePounceSpacePick,
+  handleDcAbilityChoice,
   handleArsenalPick,
   handleEe3DiePick,
   handleFalseOrdersAction,
@@ -199,10 +200,14 @@ register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'));
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'));
 register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'));
 register('dc_special_', (i, ctx) => handleDcAction(i, ctx, 'dc_special_'));
+register('dc_ability_choice_', handleDcAbilityChoice);
+register('ee3_pick_die_', handleEe3DiePick);
 register('deck_illegal_play_', handleDeckIllegalPlay);
 register('deck_illegal_redo_', handleDeckIllegalRedo);
 register('cc_shuffle_draw_', handleCcShuffleDraw);
 register('cc_play_', handleCcPlay);
+register('cc_confirm_play_', handleCcConfirmPlay);
+register('cc_cancel_play_', handleCcCancelPlay);
 register('cc_draw_', handleCcDraw);
 register('cc_search_discard_', handleCcSearchDiscard);
 register('cc_close_discard_', handleCcCloseDiscard);

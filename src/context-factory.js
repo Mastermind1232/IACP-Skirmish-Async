@@ -19,6 +19,7 @@ const CONTEXT_GROUPS = {
     'getDcPlayAreaComponents', 'buildBoardMapPayload', 'getBoardStateForMovement',
     'getSpaceChoiceRows', 'buildSpaceSelectMenu', 'getMapAttachmentForSpaces',
     'ensureMovementBankMessage', 'updateMovementBankMessage', 'getConditionCardPath',
+    'getCommandCardImagePath', 'getDeploymentZones', 'updateDeployPromptMessages',
   ],
 
   dcPlayArea: [
@@ -92,12 +93,22 @@ const CONTEXT_GROUPS = {
   ],
 
   combatReactions: [
-    'getGame', 'canActAsPlayer', 'saveGames', 'client',
-    'recalcAttackTotals', 'recalcDefenseTotals',
-    'sendRerollUI', 'proceedAfterRerolls', 'sendReadyToResolveRolls',
-    'logGameAction', 'getAttackerSurgeAbilities', 'SURGE_LABELS',
-    'parseSurgeEffect', 'getAbility', 'resolveSurgeAbility', 'getSurgeAbilityLabel',
-    'getDcEffects', 'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
+    // Needs all combat deps since proceedAfterRerolls flows into full combat resolution
+    'getGame', 'replyIfGameEnded', 'dcMessageMeta', 'dcHealthState',
+    'findDcMessageIdForFigure', 'getDcStats', 'getDcEffects',
+    'updateDcActionsMessage', 'updateActivationsMessage',
+    'updateAttachmentMessageForDc', 'logGameAction', 'isGroupDefeated',
+    'checkWinConditions', 'finishCombatResolution', 'checkPostCombatSurges',
+    'ACTION_ICONS', 'ThreadAutoArchiveDuration', 'resolveCombatAfterRolls',
+    'saveGames', 'client', 'rollAttackDice', 'rollDefenseDice',
+    'rollSingleAttackDie', 'rollSingleDefenseDie', 'recalcAttackTotals',
+    'recalcDefenseTotals', 'getInnateRerolls', 'getAttackerSurgeAbilities',
+    'SURGE_LABELS', 'parseSurgeEffect', 'getAbility', 'resolveSurgeAbility',
+    'getSurgeAbilityLabel', 'getRange', 'hasLineOfSight', 'getDiceData',
+    'applyDamageAndFinishCombat', 'isDcUnique', 'getCelebrationButtons',
+    // Plus combatReactions-specific deps
+    'canActAsPlayer', 'sendRerollUI', 'proceedAfterRerolls', 'sendReadyToResolveRolls',
+    'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
   ],
 
   postCombat: [

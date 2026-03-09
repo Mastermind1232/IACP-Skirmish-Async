@@ -26,28 +26,14 @@ export function cleanupGameLock(gameId) {
   gameLocks.delete(gameId);
 }
 
-/** Lock acquisition timeout (30 seconds). Prevents indefinite hangs if a handler never resolves. */
-const LOCK_TIMEOUT_MS = 30_000;
-
 /**
  * Run a handler under the per-game mutex.
  * If gameId is null/undefined, runs without a lock.
- * Times out after LOCK_TIMEOUT_MS to prevent deadlocks.
  * @param {string|null} gameId
  * @param {() => Promise<void>} fn
  */
 export async function withGameLock(gameId, fn) {
   if (!gameId) return fn();
   const lock = getGameLock(gameId);
-  const release = await Promise.race([
-    lock.acquire(),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Game lock timeout after ${LOCK_TIMEOUT_MS}ms for ${gameId}`)), LOCK_TIMEOUT_MS)
-    ),
-  ]);
-  try {
-    return await fn();
-  } finally {
-    release();
-  }
+  return lock.runExclusive(fn);
 }

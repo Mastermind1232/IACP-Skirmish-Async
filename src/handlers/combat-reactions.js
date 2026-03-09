@@ -7,59 +7,56 @@ export async function handleToughLuck(interaction, ctx) {
     getGame, canActAsPlayer, saveGames, client,
     recalcAttackTotals, recalcDefenseTotals,
     sendRerollUI, proceedAfterRerolls,
-    logGameAction, combatContext,
+    logGameAction,
   } = ctx;
 
   const buttonKey = interaction.customId.startsWith('tough_luck_remove_') ? 'tough_luck_remove_' : 'tough_luck_skip_';
 
   // Tough Luck: remove a rerolled die or skip, then continue reroll flow
-  const _tlParts = interaction.customId.split('_');
-  const _tlGameId = _tlParts[3];
-  const _tlGame = await requireGame(interaction, getGame, _tlGameId, { silent: true });
-  if (!_tlGame) return;
-  if (!_tlGame.pendingToughLuck) { await interaction.followUp({ content: 'No pending Tough Luck.', ephemeral: true }).catch(() => {}); return; }
-  const _tlData = _tlGame.pendingToughLuck;
-  const _tlCombat = _tlGame.pendingCombat;
-  const _tlAtk = _tlCombat?.attackerPlayerNum;
-  const _tlDef = opponentPlayerNum(_tlAtk);
-  // TL player is the one who set toughLuckPlayerNum
-  const _tlResponder = _tlGame.toughLuckPlayerNum;
-  if (!await requirePlayer(interaction, _tlGame, interaction.user.id, _tlResponder, canActAsPlayer, 'Only the Tough Luck player may respond.')) return;
+  const parts = interaction.customId.split('_');
+  const gameId = parts[3];
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (!game.pendingToughLuck) { await interaction.followUp({ content: 'No pending Tough Luck.', ephemeral: true }).catch(() => {}); return; }
+  const tlData = game.pendingToughLuck;
+  const combat = game.pendingCombat;
+  const responder = game.toughLuckPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, responder, canActAsPlayer, 'Only the Tough Luck player may respond.')) return;
   if (buttonKey === 'tough_luck_remove_') {
-    const _tlDieIdx = parseInt(_tlParts[4], 10);
-    if (_tlData.side === 'atk' && _tlCombat?.attackDiceResults?.[_tlDieIdx]) {
-      const _tlDie = _tlCombat.attackDiceResults[_tlDieIdx];
-      _tlCombat.attackDiceResults.splice(_tlDieIdx, 1);
-      const t = recalcAttackTotals(_tlCombat.attackDiceResults);
-      _tlCombat.attackRoll = { acc: t.acc, dmg: t.dmg, surge: t.surge };
-      await logGameAction(_tlGame, client, `**Tough Luck** — Removed rerolled ${_tlDie.color} attack die. New totals: ${t.acc} acc, ${t.dmg} dmg, ${t.surge} surge.`, { phase: 'ROUND', icon: 'card' });
-    } else if (_tlData.side === 'def' && _tlCombat?.defenseDiceResults?.[_tlDieIdx]) {
-      const _tlDie = _tlCombat.defenseDiceResults[_tlDieIdx];
-      _tlCombat.defenseDiceResults.splice(_tlDieIdx, 1);
-      const t = recalcDefenseTotals(_tlCombat.defenseDiceResults);
-      _tlCombat.defenseRoll = { block: t.block, evade: t.evade, dodge: t.dodge };
-      await logGameAction(_tlGame, client, `**Tough Luck** — Removed rerolled ${_tlDie.color} defense die. New totals: ${t.block} block, ${t.evade} evade.`, { phase: 'ROUND', icon: 'card' });
+    const dieIdx = parseInt(parts[4], 10);
+    if (tlData.side === 'atk' && combat?.attackDiceResults?.[dieIdx]) {
+      const die = combat.attackDiceResults[dieIdx];
+      combat.attackDiceResults.splice(dieIdx, 1);
+      const t = recalcAttackTotals(combat.attackDiceResults);
+      combat.attackRoll = { acc: t.acc, dmg: t.dmg, surge: t.surge };
+      await logGameAction(game, client, `**Tough Luck** — Removed rerolled ${die.color} attack die. New totals: ${t.acc} acc, ${t.dmg} dmg, ${t.surge} surge.`, { phase: 'ROUND', icon: 'card' });
+    } else if (tlData.side === 'def' && combat?.defenseDiceResults?.[dieIdx]) {
+      const die = combat.defenseDiceResults[dieIdx];
+      combat.defenseDiceResults.splice(dieIdx, 1);
+      const t = recalcDefenseTotals(combat.defenseDiceResults);
+      combat.defenseRoll = { block: t.block, evade: t.evade, dodge: t.dodge };
+      await logGameAction(game, client, `**Tough Luck** — Removed rerolled ${die.color} defense die. New totals: ${t.block} block, ${t.evade} evade.`, { phase: 'ROUND', icon: 'card' });
     }
   } else {
-    await logGameAction(_tlGame, client, '**Tough Luck** — Skipped.', { phase: 'ROUND', icon: 'card' });
+    await logGameAction(game, client, '**Tough Luck** — Skipped.', { phase: 'ROUND', icon: 'card' });
   }
-  _tlGame.pendingToughLuck = null;
+  game.pendingToughLuck = null;
   // Continue reroll flow
-  const _tlThread = await client.channels.fetch(_tlCombat?.combatThreadId).catch(() => null);
-  if (_tlThread && _tlCombat) {
-    const _tlSide = _tlData.side;
-    const _tlAtkRem = _tlCombat.attackerRerollsRemaining || 0;
-    const _tlDefRem = _tlCombat.defenderRerollsRemaining || 0;
-    if (_tlSide === 'atk' && _tlAtkRem > 0) {
-      await sendRerollUI(_tlThread, _tlGame, _tlCombat, 'attacker');
-    } else if (_tlSide === 'def' && _tlDefRem > 0) {
-      await sendRerollUI(_tlThread, _tlGame, _tlCombat, 'defender');
-    } else if (_tlSide === 'atk' && _tlDefRem > 0) {
-      _tlCombat.rerollPhase = 'defender';
-      await sendRerollUI(_tlThread, _tlGame, _tlCombat, 'defender');
+  const thread = await client.channels.fetch(combat?.combatThreadId).catch(() => null);
+  if (thread && combat) {
+    const side = tlData.side;
+    const atkRem = combat.attackerRerollsRemaining || 0;
+    const defRem = combat.defenderRerollsRemaining || 0;
+    if (side === 'atk' && atkRem > 0) {
+      await sendRerollUI(thread, game, combat, 'attacker');
+    } else if (side === 'def' && defRem > 0) {
+      await sendRerollUI(thread, game, combat, 'defender');
+    } else if (side === 'atk' && defRem > 0) {
+      combat.rerollPhase = 'defender';
+      await sendRerollUI(thread, game, combat, 'defender');
     } else {
-      _tlCombat.rerollPhase = null;
-      await proceedAfterRerolls(_tlThread, _tlGame, _tlCombat, combatContext);
+      combat.rerollPhase = null;
+      await proceedAfterRerolls(thread, game, combat, ctx);
     }
   }
   saveGames(); return;
@@ -68,81 +65,81 @@ export async function handleToughLuck(interaction, ctx) {
 export async function handleThereIsNoTry(interaction, ctx) {
   const {
     getGame, canActAsPlayer, saveGames, client,
-    sendRerollUI, proceedAfterRerolls, combatContext,
+    sendRerollUI, proceedAfterRerolls,
   } = ctx;
 
   // There Is No Try: die picker → face picker → apply, then enter reroll window
-  const _tintParts = interaction.customId.split('_');
+  const parts = interaction.customId.split('_');
   // Prefix pattern: there_is_no_try_{die|face|skip}_ → parts[0..4] are the prefix words
-  const _tintType = _tintParts[4]; // 'die', 'face', or 'skip'
-  const _tintGameId = _tintParts[5];
-  const _tintGame = await requireGame(interaction, getGame, _tintGameId);
-  if (!_tintGame) return;
-  const _tintCombat = _tintGame.pendingCombat;
-  const _tintDefNum = _tintCombat?.defenderPlayerNum ?? opponentPlayerNum(_tintCombat?.attackerPlayerNum);
-  if (!await requirePlayer(interaction, _tintGame, interaction.user.id, _tintDefNum, canActAsPlayer, 'Only the defender may respond.')) return;
-  if (!_tintGame.pendingThereIsNoTry && _tintType !== 'skip') {
+  const type = parts[4]; // 'die', 'face', or 'skip'
+  const gameId = parts[5];
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const combat = game.pendingCombat;
+  const defNum = combat?.defenderPlayerNum ?? opponentPlayerNum(combat?.attackerPlayerNum);
+  if (!await requirePlayer(interaction, game, interaction.user.id, defNum, canActAsPlayer, 'Only the defender may respond.')) return;
+  if (!game.pendingThereIsNoTry && type !== 'skip') {
     await interaction.followUp({ content: 'No pending There Is No Try.', ephemeral: true }).catch(() => {}); return;
   }
-  const _tintThread = await client.channels.fetch(_tintCombat?.combatThreadId).catch(() => null);
-  if (_tintType === 'die') {
-    const _tintDieIdx = parseInt(_tintParts[6], 10);
-    const _tintDefDice = _tintCombat?.defenseDiceResults || [];
-    const _tintDie = _tintDefDice[_tintDieIdx];
-    if (!_tintDie) { await interaction.followUp({ content: 'Die not found.', ephemeral: true }).catch(() => {}); return; }
-    _tintGame.pendingThereIsNoTry.pickedDieIdx = _tintDieIdx;
+  const thread = await client.channels.fetch(combat?.combatThreadId).catch(() => null);
+  if (type === 'die') {
+    const dieIdx = parseInt(parts[6], 10);
+    const defDice = combat?.defenseDiceResults || [];
+    const die = defDice[dieIdx];
+    if (!die) { await interaction.followUp({ content: 'Die not found.', ephemeral: true }).catch(() => {}); return; }
+    game.pendingThereIsNoTry.pickedDieIdx = dieIdx;
     // Build face options based on die color (white/black)
-    const _tintColor = _tintDie.color || 'white';
+    const color = die.color || 'white';
     // Standard defense die faces: white: 0/0, 1/0, 1/1, 0/0/dodge; black: 0/0, 1/0, 2/0, 1/1, 0/1, dodge
-    const _tintFaceOptions = _tintColor === 'black'
+    const faceOptions = color === 'black'
       ? [{ block: 0, evade: 0 }, { block: 1, evade: 0 }, { block: 2, evade: 0 }, { block: 1, evade: 1 }, { block: 0, evade: 1 }, { block: 0, evade: 0, dodge: true }]
       : [{ block: 0, evade: 0 }, { block: 1, evade: 0 }, { block: 1, evade: 1 }, { block: 0, evade: 0, dodge: true }];
-    const _tintFaceBtns = _tintFaceOptions.map((face, fi) =>
+    const faceBtns = faceOptions.map((face) =>
       new ButtonBuilder()
-        .setCustomId(`there_is_no_try_face_${_tintGameId}_${_tintDieIdx}_${face.block ?? 0}_${face.evade ?? 0}_${face.dodge ? 1 : 0}`)
+        .setCustomId(`there_is_no_try_face_${gameId}_${dieIdx}_${face.block ?? 0}_${face.evade ?? 0}_${face.dodge ? 1 : 0}`)
         .setLabel(`${face.block ?? 0}B/${face.evade ?? 0}E${face.dodge ? '/Dodge' : ''}`.slice(0, 80))
         .setStyle(ButtonStyle.Primary)
     );
-    if (_tintThread) await _tintThread.send({ content: `**There Is No Try** — Choose any face for die #${_tintDieIdx + 1} (${_tintColor}):`, components: [new ActionRowBuilder().addComponents(..._tintFaceBtns.slice(0, 5))] }).catch(() => {});
+    if (thread) await thread.send({ content: `**There Is No Try** — Choose any face for die #${dieIdx + 1} (${color}):`, components: [new ActionRowBuilder().addComponents(...faceBtns.slice(0, 5))] }).catch(() => {});
     saveGames(); return;
   }
-  if (_tintType === 'face') {
-    const _tintDieIdxF = parseInt(_tintParts[6], 10);
-    const _tintBlock = parseInt(_tintParts[7], 10) || 0;
-    const _tintEvade = parseInt(_tintParts[8], 10) || 0;
-    const _tintDodgeFlag = parseInt(_tintParts[9], 10) === 1;
-    const _tintDefDiceF = _tintCombat?.defenseDiceResults || [];
-    if (_tintDefDiceF[_tintDieIdxF]) {
-      const _tintOld = _tintDefDiceF[_tintDieIdxF];
+  if (type === 'face') {
+    const dieIdx = parseInt(parts[6], 10);
+    const block = parseInt(parts[7], 10) || 0;
+    const evade = parseInt(parts[8], 10) || 0;
+    const dodgeFlag = parseInt(parts[9], 10) === 1;
+    const defDice = combat?.defenseDiceResults || [];
+    if (defDice[dieIdx]) {
+      const old = defDice[dieIdx];
       // Apply chosen face; convert any Dodge results on this die to Block+Block+Evade
-      _tintDefDiceF[_tintDieIdxF] = { ..._tintOld, block: _tintBlock, evade: _tintEvade, dodge: _tintDodgeFlag };
+      defDice[dieIdx] = { ...old, block, evade, dodge: dodgeFlag };
       // Convert Dodge on this die to +2 Block +1 Evade (no dice dodge result)
-      if (_tintDodgeFlag) {
-        _tintDefDiceF[_tintDieIdxF] = { ..._tintOld, block: _tintBlock + 2, evade: _tintEvade + 1, dodge: false };
+      if (dodgeFlag) {
+        defDice[dieIdx] = { ...old, block: block + 2, evade: evade + 1, dodge: false };
       }
-      _tintCombat.defenseDiceResults = _tintDefDiceF;
-      const _tintNewTotal = _tintDefDiceF.reduce((acc, d) => ({ block: acc.block + (d.block ?? 0), evade: acc.evade + (d.evade ?? 0), dodge: acc.dodge || !!d.dodge }), { block: 0, evade: 0, dodge: false });
-      _tintCombat.defenseRoll = { block: _tintNewTotal.block, evade: _tintNewTotal.evade, dodge: _tintNewTotal.dodge };
-      if (_tintThread) await _tintThread.send(`**There Is No Try** — Die set to ${_tintBlock}B/${_tintEvade}E${_tintDodgeFlag ? ' (Dodge→+2B+1E)' : ''}. New defense totals: ${_tintCombat.defenseRoll.block} block, ${_tintCombat.defenseRoll.evade} evade.`).catch(() => {});
+      combat.defenseDiceResults = defDice;
+      const newTotal = defDice.reduce((acc, d) => ({ block: acc.block + (d.block ?? 0), evade: acc.evade + (d.evade ?? 0), dodge: acc.dodge || !!d.dodge }), { block: 0, evade: 0, dodge: false });
+      combat.defenseRoll = { block: newTotal.block, evade: newTotal.evade, dodge: newTotal.dodge };
+      if (thread) await thread.send(`**There Is No Try** — Die set to ${block}B/${evade}E${dodgeFlag ? ' (Dodge→+2B+1E)' : ''}. New defense totals: ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade.`).catch(() => {});
     }
-    _tintGame.pendingThereIsNoTry = null;
-    _tintCombat.tintResolved = true;
+    game.pendingThereIsNoTry = null;
+    combat.tintResolved = true;
   } else {
     // Skip
-    _tintGame.pendingThereIsNoTry = null;
-    _tintCombat.tintResolved = true;
-    if (_tintThread) await _tintThread.send('**There Is No Try** — Skipped.').catch(() => {});
+    game.pendingThereIsNoTry = null;
+    combat.tintResolved = true;
+    if (thread) await thread.send('**There Is No Try** — Skipped.').catch(() => {});
   }
   // After TINT resolves (face set or skipped): enter reroll window
-  if (_tintThread && _tintCombat) {
-    const _tintAtkRem = _tintCombat.attackerRerollsRemaining || 0;
-    const _tintDefRem = _tintCombat.defenderRerollsRemaining || 0;
-    if (_tintAtkRem > 0 || _tintDefRem > 0) {
-      _tintCombat.rerollPhase = _tintAtkRem > 0 ? 'attacker' : 'defender';
-      await sendRerollUI(_tintThread, _tintGame, _tintCombat, _tintCombat.rerollPhase);
+  if (thread && combat) {
+    const atkRem = combat.attackerRerollsRemaining || 0;
+    const defRem = combat.defenderRerollsRemaining || 0;
+    if (atkRem > 0 || defRem > 0) {
+      combat.rerollPhase = atkRem > 0 ? 'attacker' : 'defender';
+      await sendRerollUI(thread, game, combat, combat.rerollPhase);
     } else {
-      _tintCombat.rerollPhase = null;
-      await proceedAfterRerolls(_tintThread, _tintGame, _tintCombat, combatContext);
+      combat.rerollPhase = null;
+      await proceedAfterRerolls(thread, game, combat, ctx);
     }
   }
   saveGames(); return;
@@ -151,72 +148,72 @@ export async function handleThereIsNoTry(interaction, ctx) {
 export async function handleVetInstincts(interaction, ctx) {
   const {
     getGame, canActAsPlayer, saveGames, client,
-    sendRerollUI, proceedAfterRerolls, combatContext,
+    sendRerollUI, proceedAfterRerolls,
   } = ctx;
 
   // Veteran Instincts: attacker adds +1 Hit/Surge, defender adds +1 Block/Evade
-  const _viParts = interaction.customId.split('_');
-  const _viGameId = _viParts[3];
-  const _viChoice = _viParts[4]; // hit/surge/block/evade/skip
-  const _viGame = await requireGame(interaction, getGame, _viGameId);
-  if (!_viGame) return;
-  const _viCombat = _viGame.pendingCombat;
-  if (!_viCombat) { await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(() => {}); return; }
-  const _viAtk = _viCombat.attackerPlayerNum;
-  const _viDef = opponentPlayerNum(_viAtk);
+  const parts = interaction.customId.split('_');
+  const gameId = parts[3];
+  const choice = parts[4]; // hit/surge/block/evade/skip
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const combat = game.pendingCombat;
+  if (!combat) { await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(() => {}); return; }
+  const atkPN = combat.attackerPlayerNum;
+  const defPN = opponentPlayerNum(atkPN);
   // Determine phase: block/evade = defense; hit/surge = attack; skip depends on which phase is pending
-  const _viIsDefPhase = _viChoice === 'block' || _viChoice === 'evade' || (_viChoice === 'skip' && _viCombat.vetInstinctsAttackApplied);
-  const _viExpectedPlayer = _viIsDefPhase ? _viDef : _viAtk;
-  if (!await requirePlayer(interaction, _viGame, interaction.user.id, _viExpectedPlayer, canActAsPlayer, `Only P${_viExpectedPlayer} may respond to Veteran Instincts.`)) return;
-  const _viThread = await client.channels.fetch(_viCombat.combatThreadId).catch(() => null);
-  if (_viChoice === 'hit') {
-    _viCombat.attackRoll = { ..._viCombat.attackRoll, dmg: (_viCombat.attackRoll?.dmg || 0) + 1 };
-    _viCombat.vetInstinctsAttackApplied = true;
-    if (_viThread) await _viThread.send('**Veteran Instincts** — +1 Hit added to attack roll.').catch(() => {});
-  } else if (_viChoice === 'surge') {
-    _viCombat.attackRoll = { ..._viCombat.attackRoll, surge: (_viCombat.attackRoll?.surge || 0) + 1 };
-    _viCombat.vetInstinctsAttackApplied = true;
-    if (_viThread) await _viThread.send('**Veteran Instincts** — +1 Surge added to attack roll.').catch(() => {});
-  } else if (_viChoice === 'block') {
-    _viCombat.defenseRoll = { ..._viCombat.defenseRoll, block: (_viCombat.defenseRoll?.block || 0) + 1 };
-    _viCombat.vetInstinctsDefenseApplied = true;
-    if (_viThread) await _viThread.send('**Veteran Instincts** — +1 Block added to defense roll.').catch(() => {});
-  } else if (_viChoice === 'evade') {
-    _viCombat.defenseRoll = { ..._viCombat.defenseRoll, evade: (_viCombat.defenseRoll?.evade || 0) + 1 };
-    _viCombat.vetInstinctsDefenseApplied = true;
-    if (_viThread) await _viThread.send('**Veteran Instincts** — +1 Evade added to defense roll.').catch(() => {});
+  const isDefPhase = choice === 'block' || choice === 'evade' || (choice === 'skip' && combat.vetInstinctsAttackApplied);
+  const expectedPlayer = isDefPhase ? defPN : atkPN;
+  if (!await requirePlayer(interaction, game, interaction.user.id, expectedPlayer, canActAsPlayer, `Only P${expectedPlayer} may respond to Veteran Instincts.`)) return;
+  const thread = await client.channels.fetch(combat.combatThreadId).catch(() => null);
+  if (choice === 'hit') {
+    combat.attackRoll = { ...combat.attackRoll, dmg: (combat.attackRoll?.dmg || 0) + 1 };
+    combat.vetInstinctsAttackApplied = true;
+    if (thread) await thread.send('**Veteran Instincts** — +1 Hit added to attack roll.').catch(() => {});
+  } else if (choice === 'surge') {
+    combat.attackRoll = { ...combat.attackRoll, surge: (combat.attackRoll?.surge || 0) + 1 };
+    combat.vetInstinctsAttackApplied = true;
+    if (thread) await thread.send('**Veteran Instincts** — +1 Surge added to attack roll.').catch(() => {});
+  } else if (choice === 'block') {
+    combat.defenseRoll = { ...combat.defenseRoll, block: (combat.defenseRoll?.block || 0) + 1 };
+    combat.vetInstinctsDefenseApplied = true;
+    if (thread) await thread.send('**Veteran Instincts** — +1 Block added to defense roll.').catch(() => {});
+  } else if (choice === 'evade') {
+    combat.defenseRoll = { ...combat.defenseRoll, evade: (combat.defenseRoll?.evade || 0) + 1 };
+    combat.vetInstinctsDefenseApplied = true;
+    if (thread) await thread.send('**Veteran Instincts** — +1 Evade added to defense roll.').catch(() => {});
   } else {
     // skip
-    if (!_viCombat.vetInstinctsAttackApplied) {
-      _viCombat.vetInstinctsAttackApplied = true;
-      if (_viThread) await _viThread.send('**Veteran Instincts** — Attack bonus skipped.').catch(() => {});
+    if (!combat.vetInstinctsAttackApplied) {
+      combat.vetInstinctsAttackApplied = true;
+      if (thread) await thread.send('**Veteran Instincts** — Attack bonus skipped.').catch(() => {});
     } else {
-      _viCombat.vetInstinctsDefenseApplied = true;
-      if (_viThread) await _viThread.send('**Veteran Instincts** — Defense bonus skipped.').catch(() => {});
+      combat.vetInstinctsDefenseApplied = true;
+      if (thread) await thread.send('**Veteran Instincts** — Defense bonus skipped.').catch(() => {});
     }
   }
-  if (_viIsDefPhase && _viThread && _viCombat) {
+  if (isDefPhase && thread && combat) {
     // Enter or continue the reroll window using stored pending counts
-    const _viAtkRem = _viCombat.viPendingAtkRerolls || 0;
-    const _viDefRem = _viCombat.viPendingDefRerolls || 0;
-    const _viHasForced = (_viCombat.forcedRerollQueue || []).length > 0;
-    const _viHasPreRerolls = (_viCombat.pendingPreRerolls || []).length > 0;
-    if (_viAtkRem > 0 || _viDefRem > 0 || _viHasForced || _viHasPreRerolls) {
-      _viCombat.attackerRerollsRemaining = _viAtkRem;
-      _viCombat.defenderRerollsRemaining = _viDefRem;
-      if (_viAtkRem > 0 || _viHasPreRerolls) {
-        _viCombat.rerollPhase = 'attacker';
-        await sendRerollUI(_viThread, _viGame, _viCombat, 'attacker');
-      } else if (_viHasForced) {
-        _viCombat.rerollPhase = 'forced';
-        await sendRerollUI(_viThread, _viGame, _viCombat, 'forced');
+    const atkRem = combat.viPendingAtkRerolls || 0;
+    const defRem = combat.viPendingDefRerolls || 0;
+    const hasForced = (combat.forcedRerollQueue || []).length > 0;
+    const hasPreRerolls = (combat.pendingPreRerolls || []).length > 0;
+    if (atkRem > 0 || defRem > 0 || hasForced || hasPreRerolls) {
+      combat.attackerRerollsRemaining = atkRem;
+      combat.defenderRerollsRemaining = defRem;
+      if (atkRem > 0 || hasPreRerolls) {
+        combat.rerollPhase = 'attacker';
+        await sendRerollUI(thread, game, combat, 'attacker');
+      } else if (hasForced) {
+        combat.rerollPhase = 'forced';
+        await sendRerollUI(thread, game, combat, 'forced');
       } else {
-        _viCombat.rerollPhase = 'defender';
-        await sendRerollUI(_viThread, _viGame, _viCombat, 'defender');
+        combat.rerollPhase = 'defender';
+        await sendRerollUI(thread, game, combat, 'defender');
       }
     } else {
-      _viCombat.rerollPhase = null;
-      await proceedAfterRerolls(_viThread, _viGame, _viCombat, combatContext);
+      combat.rerollPhase = null;
+      await proceedAfterRerolls(thread, game, combat, ctx);
     }
   }
   saveGames(); return;
