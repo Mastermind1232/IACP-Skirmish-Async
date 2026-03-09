@@ -5,7 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { getDcEffects, getMapSpaces, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
-import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition } from '../game/index.js';
+import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
   getCcHand, getCcDeck, getDcAttachments,

@@ -3,6 +3,7 @@
  * No Discord dependency.
  */
 import { getDcEffects } from '../data-loader.js';
+import { dcNameFromFigureKey } from './dc-helpers.js';
 
 export const HARMFUL_CONDITIONS = ['Stun', 'Bleed', 'Weaken'];
 

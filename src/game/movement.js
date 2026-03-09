@@ -21,6 +21,7 @@ import {
   getFigureSize,
 } from '../data-loader.js';
 import { getDcList, getDcMessageIds, getDcAttachments, opponentPlayerNum } from './player-helpers.js';
+import { dcNameFromFigureKey } from './dc-helpers.js';
 
 export function isWithinGridBounds(coord, gridBounds) {
   if (!gridBounds || (gridBounds.maxCol == null && gridBounds.maxRow == null)) return true;

@@ -98,6 +98,16 @@ import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterPr
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder } from './interrupts.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
+import {
+  handleBleedResolve,
+  handleSidewinderApply, handleSidewinderSkip,
+  handleBoltslingerTarget, handleBoltslingerSkip,
+  handleIndiscriminateFireDie, handleIndiscriminateFireSkip,
+  handleFightingKnifeTarget, handleFightingKnifeSkip,
+  handleConcussiveBoltPush, handleConcussiveBoltSkip,
+  handleSpreadThePainFigPick, handleSpreadThePainSkip,
+  handleMissileSalvoDie, handleMissileSalvoDone,
+} from './combat-special-effects.js';
 
 const HANDLERS = new Map();
 
@@ -254,6 +264,24 @@ register('devaron_door_open_', handleDevaronDoorOpen);
 register('devaron_crate_push_', handleDevaronCratePush);
 register('krykna_push_', handleKryknaPush);
 
+// Combat special effects (extracted from index.js)
+register('bleed_accept_', handleBleedResolve);
+register('bleed_prevent_', handleBleedResolve);
+register('sidewinder_apply_', handleSidewinderApply);
+register('sidewinder_skip_', handleSidewinderSkip);
+register('boltslinger_target_', handleBoltslingerTarget);
+register('boltslinger_skip_', handleBoltslingerSkip);
+register('indiscriminate_die_', handleIndiscriminateFireDie);
+register('indiscriminate_skip_', handleIndiscriminateFireSkip);
+register('fighting_knife_target_', handleFightingKnifeTarget);
+register('fighting_knife_skip_', handleFightingKnifeSkip);
+register('concussive_bolt_push_', handleConcussiveBoltPush);
+register('concussive_bolt_skip_', handleConcussiveBoltSkip);
+register('spread_pain_fig_', handleSpreadThePainFigPick);
+register('spread_pain_skip_', handleSpreadThePainSkip);
+register('missile_salvo_die_', handleMissileSalvoDie);
+register('missile_salvo_done_', handleMissileSalvoDone);
+
 // Context group mapping: handler key → context group name (from context-factory.js)
 const HANDLER_GROUPS = new Map();
 function setGroup(keys, group) { for (const k of keys) HANDLER_GROUPS.set(k, group); }
@@ -319,6 +347,14 @@ setGroup(['end_start_of_round_'], 'startOfRound');
 setGroup([
   'devaron_door_open_', 'devaron_crate_push_', 'krykna_push_',
 ], 'mapEvents');
+
+setGroup([
+  'bleed_accept_', 'bleed_prevent_', 'sidewinder_apply_', 'sidewinder_skip_',
+  'boltslinger_target_', 'boltslinger_skip_', 'indiscriminate_die_',
+  'indiscriminate_skip_', 'fighting_knife_target_', 'fighting_knife_skip_',
+  'concussive_bolt_push_', 'concussive_bolt_skip_', 'spread_pain_fig_',
+  'spread_pain_skip_', 'missile_salvo_die_', 'missile_salvo_done_',
+], 'combatSpecialEffects');
 
 setGroup([
   'map_selection_', 'map_type_', 'map_confirm_', 'map_goback_', 'draft_random_',
@@ -460,3 +496,13 @@ export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterPr
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder } from './interrupts.js';
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
+export {
+  handleBleedResolve,
+  handleSidewinderApply, handleSidewinderSkip,
+  handleBoltslingerTarget, handleBoltslingerSkip,
+  handleIndiscriminateFireDie, handleIndiscriminateFireSkip,
+  handleFightingKnifeTarget, handleFightingKnifeSkip,
+  handleConcussiveBoltPush, handleConcussiveBoltSkip,
+  handleSpreadThePainFigPick, handleSpreadThePainSkip,
+  handleMissileSalvoDie, handleMissileSalvoDone,
+} from './combat-special-effects.js';

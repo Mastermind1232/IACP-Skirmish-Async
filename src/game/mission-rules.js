@@ -4,6 +4,7 @@
  */
 import { awardObjectiveVp } from './vp-helpers.js';
 import { getPlayerId, getCcHand } from './player-helpers.js';
+import { dcNameFromFigureKey } from './dc-helpers.js';
 
 function normalizeCoord(c) {
   if (c == null || typeof c !== 'string') return '';

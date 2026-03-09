@@ -5,7 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapSpaces } from '../data-loader.js';
 import { cleanupActivation } from '../game/activation-state.js';
-import { applyCondition, filterCondition } from '../game/index.js';
+import { applyCondition, filterCondition, dcNameFromFigureKey } from '../game/index.js';
 import {
   getPlayerId,
   getDcList,
@@ -289,7 +289,7 @@ export async function handleEndTurn(interaction, ctx) {
         if (!ePos) continue;
         if (!adj.includes(String(ePos).toLowerCase())) continue;
         // Condition Immunity: skip Weaken for immune figures
-        const _unnEff = getDcEffects()dcNameFromFigureKey(?.[eFk)] || getDcEffects()dcNameFromFigureKey(?.[eFk)?.replace(/\s*\[.*\]\s*$/, '')];
+        const _unnEff = getDcEffects()?.[dcNameFromFigureKey(eFk)] || getDcEffects()?.[dcNameFromFigureKey(eFk)?.replace(/\s*\[.*\]\s*$/, '')];
         const _unnImm = (_unnEff?.specialAbilityIds || []).includes('immune_onar') || (_unnEff?.specialAbilityIds || []).includes('immune_snowtrooper_elite');
         if (_unnImm) continue;
         if (applyCondition(game, eFk, 'Weaken')) {

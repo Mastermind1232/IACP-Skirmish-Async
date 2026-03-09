@@ -245,6 +245,17 @@ const CONTEXT_GROUPS = {
     'getMapTokensData', 'postDevaronDoorButtons', 'postDevaronCratePushPrompts',
     'getSpaceController',
   ],
+
+  combatSpecialEffects: [
+    'getGame', 'saveGames', 'client', 'canActAsPlayer',
+    'dcMessageMeta', 'dcHealthState', 'dcExhaustedState',
+    'findDcMessageIdForFigure', 'buildDcEmbedAndFiles', 'getConditionsForDcMessage',
+    'getDcUpgradeAttachments', 'logGameAction', 'calculateKillVp',
+    'decrementActivationIfGroupDefeated', 'checkWinConditions',
+    'finishCombatResolution', 'ensureMovementBankMessage',
+    'rollSingleAttackDie', 'getDcEffects', 'getMapSpaces', 'getFigureLabel',
+    'filterCondition', 'isConditionImmune', 'applyCondition', 'HARMFUL_CONDITIONS',
+  ],
 };
 
 /**

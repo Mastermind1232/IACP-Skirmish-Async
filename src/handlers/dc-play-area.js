@@ -9,7 +9,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards } from '../data-loader.js';
-import { reduceHp, awardObjectiveVp, applyCondition, filterCondition } from '../game/index.js';
+import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
   getActivationsRemaining, getActivationsTotal, getActivatedDcIndices,

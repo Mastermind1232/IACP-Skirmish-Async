@@ -10,6 +10,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getMapSpaces, getCcEffect } from '../data-loader.js';
 import { ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
+import { dcNameFromFigureKey } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 
