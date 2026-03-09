@@ -59,6 +59,7 @@ import { getHandlerKey } from './src/router.js';
 import { getHandler, getHandlerGroup } from './src/handlers/index.js';
 import { buildContext } from './src/context-factory.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
+import { getCommandCardImagePath, getDcImagePath, getConditionCardPath, getFigureImagePath, resolveAssetPath, resolveDcImagePath, resolveMissionCardImagePath, UPGRADE_IMAGE_OVERRIDES } from './src/asset-paths.js';
 import { canActAsPlayer } from './src/utils/can-act-as-player.js';
 import { MAX_ACTIVE_GAMES_PER_PLAYER, PENDING_ILLEGAL_TTL_MS, MAX_UNDO_DEPTH } from './src/constants.js';
 import { withGameLock, cleanupGameLock } from './src/game/action-queue.js';
@@ -259,6 +260,15 @@ import {
   getDcStats,
 } from './src/data-loader.js';
 import { getConfig as getLoadoutConfig } from './src/game/figure-config.js';
+import {
+  ccPlayableByMatches as _ccPlayableByMatches,
+  hasDarksaberImperial as _hasDarksaberImperial,
+  isCcPlayableByDc,
+  getPlayableCcSpecialsForDc,
+  isCcDoubleActionPlayableByDc,
+  getPlayableCcDoubleActionsForDc,
+  getPlayableCcEndOfActivationForDc,
+} from './src/game/cc-timing.js';
 import { runEndOfRoundRules, runStartOfRoundRules, runNpcThugActivation, runNpcKryknaActivation } from './src/game/mission-rules.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
@@ -354,79 +364,6 @@ async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, client) {
   } catch (err) {
     console.error('Failed to update attachment message for DC:', err);
   }
-}
-
-/** Check if DC keywords match a CC's playableBy (shared logic for all CC timing checks). */
-function _ccPlayableByMatches(playableBy, dcName, displayName, hasDarksaberImperial = false) {
-  if (!playableBy) return false;
-  if (playableBy.toLowerCase() === 'any figure') return true;
-  const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-  const displayBase = (displayName || dcBase).replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-  const d = dcBase.toLowerCase();
-  const disp = displayBase.toLowerCase();
-  const keywords = getDcKeywords()[dcName] || getDcKeywords()[dcBase];
-  const alternatives = playableBy.split(/\s+or\s+/i).map((s) => s.trim().toLowerCase());
-  for (const p of alternatives) {
-    if (d.includes(p) || p.includes(d) || disp.includes(p) || p.includes(disp)) return true;
-    if (keywords && Array.isArray(keywords) && keywords.some((k) => String(k).toLowerCase() === p)) return true;
-  }
-  // The Darksaber: FORCE USER with Darksaber can use IMPERIAL Command cards
-  if (hasDarksaberImperial && alternatives.includes('imperial')) return true;
-  return false;
-}
-
-/** Check if activating DC has The Darksaber and is a FORCE USER → can use IMPERIAL CCs. */
-function _hasDarksaberImperial(game, playerNum, dcName) {
-  const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-  const keywords = getDcKeywords()[dcName] || getDcKeywords()[dcBase];
-  if (!keywords?.some((k) => String(k).toUpperCase() === 'FORCE USER')) return false;
-  const atts = getDcAttachments(game, playerNum) || {};
-  const msgIds = getDcMessageIds(game, playerNum) || [];
-  const dcList = getDcList(game, playerNum) || [];
-  for (let i = 0; i < msgIds.length; i++) {
-    if (dcList[i]?.dcName !== dcBase && dcList[i]?.dcName !== dcName) continue;
-    if ((atts[msgIds[i]] || []).includes('The Darksaber')) return true;
-  }
-  return false;
-}
-
-/** True if this DC can legally play this CC (for Special Action timing). playableBy: "Any Figure", specific name, or trait. Handles compound "X or Y" playableBy. */
-function isCcPlayableByDc(ccName, dcName, displayName, hasDarksaber = false) {
-  const effect = getCcEffect(ccName);
-  if (!effect || (effect.timing || '').toLowerCase() !== 'specialaction') return false;
-  return _ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber);
-}
-
-/** CC names in hand that are Special Action and legally playable by this DC. */
-function getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName) {
-  const hand = getCcHand(game, playerNum) || [];
-  const darksaber = _hasDarksaberImperial(game, playerNum, dcName);
-  return hand.filter((ccName) => isCcPlayableByDc(ccName, dcName, displayName, darksaber));
-}
-
-/** True if this DC can legally play this CC (for Double Action Special timing). */
-function isCcDoubleActionPlayableByDc(ccName, dcName, displayName, hasDarksaber = false) {
-  const effect = getCcEffect(ccName);
-  if (!effect || (effect.timing || '').toLowerCase() !== 'doubleactionspecial') return false;
-  return _ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber);
-}
-
-/** CC names in hand that are Double Action Special and legally playable by this DC. */
-function getPlayableCcDoubleActionsForDc(game, playerNum, dcName, displayName) {
-  const hand = getCcHand(game, playerNum) || [];
-  const darksaber = _hasDarksaberImperial(game, playerNum, dcName);
-  return hand.filter((ccName) => isCcDoubleActionPlayableByDc(ccName, dcName, displayName, darksaber));
-}
-
-/** CC names in hand that are End-of-Activation timing and legally playable by this DC. */
-function getPlayableCcEndOfActivationForDc(game, playerNum, dcName, displayName) {
-  const hand = getCcHand(game, playerNum) || [];
-  const darksaber = _hasDarksaberImperial(game, playerNum, dcName);
-  return hand.filter((ccName) => {
-    const effect = getCcEffect(ccName);
-    if (!effect || (effect.timing || '').toLowerCase() !== 'endofactivation') return false;
-    return _ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, darksaber);
-  });
 }
 
 /** Get set of normalized coords occupied by a player's figures. */
@@ -1189,55 +1126,6 @@ const CHANNELS = {
   requestsAndSuggestions: { name: 'bot-requests-and-suggestions', parent: 'general', type: ChannelType.GuildForum },
 };
 
-const IMAGES_DIR = join(rootDir, 'vassal_extracted', 'images');
-const CC_DIR = join(IMAGES_DIR, 'cc');
-const CARDBACKS_DIR = join(IMAGES_DIR, 'cardbacks');
-
-/** Resolve command card image path. Looks in cc/ subfolder first, then root. Tries C card--Name, IACP variants. Returns cardback path if not found. */
-function getCommandCardImagePath(cardName) {
-  if (!cardName || typeof cardName !== 'string') return null;
-  // Strip trailing faction suffixes like " (Mercenary)", " (Imperial)", " (Rebel)" from card name
-  const stripped = cardName.replace(/\s+\((?:Mercenary|Imperial|Rebel)\)$/i, '').trim();
-  const clean = stripped.replace(/[':]/g, '').replace(/\s+/g, ' ').trim();
-  const iacp = `${stripped} (IACP)`;
-  const cleanIacp = `${clean} (IACP)`;
-  const candidates = [];
-  if (stripped.trim().toLowerCase() === 'smoke grenade') {
-    candidates.push('Smoke Grenade Final.png', '003 Smoke Grenade Final.png');
-  }
-  for (const base of [iacp, cleanIacp, stripped, clean]) {
-    candidates.push(`${base}.jpg`, `${base}.png`);
-  }
-  for (const base of [stripped, clean]) {
-    candidates.push(
-      `C card--${base}.jpg`,
-      `C card--${base}.png`,
-      `IACP_C card--${base}.png`,
-      `IACP_C card--${base}.jpg`,
-      `IACP9_C card--${base}.png`,
-      `IACP9_C card--${base}.jpg`,
-      `IACP10_C card--${base}.png`,
-      `IACP10_C card--${base}.jpg`,
-      `IACP11_C card--${base}.png`,
-      `IACP11_C card--${base}.jpg`,
-    );
-  }
-  for (const c of candidates) {
-    const inCc = join(CC_DIR, c);
-    if (existsSync(inCc)) return inCc;
-    const inRoot = join(IMAGES_DIR, c);
-    if (existsSync(inRoot)) return inRoot;
-  }
-  const cardbackCandidates = [
-    join(CARDBACKS_DIR, 'Command cardback.jpg'),
-    join(CC_DIR, 'Command cardback.jpg'),
-    join(IMAGES_DIR, 'Command cardback.jpg'),
-  ];
-  for (const p of cardbackCandidates) {
-    if (existsSync(p)) return p;
-  }
-  return null;
-}
 
 /** Get window button row for Hand channel when in End of Round window and it's this player's turn. */
 function getHandWindowButtonRow(game, playerNum, gameId) {
@@ -2965,121 +2853,6 @@ function getSquadSelectEmbed(playerNum, squad) {
     )
     .setColor(0x2f3136);
   return embed;
-}
-
-/**
- * Maps figure DC name → { upgradeName → upgraded card image path }.
- * When a figure has the named skirmish upgrade attached, the embed shows the upgraded art.
- */
-const UPGRADE_IMAGE_OVERRIDES = {
-  'Darth Vader': { 'Driven by Hatred': 'vassal_extracted/images/dc-figures/Darth Vader Driven by Hatred.jpg' },
-  'Han Solo':    { 'Rogue Smuggler':   'vassal_extracted/images/dc-figures/Han Solo Rogue Smuggler.jpg' },
-  'Chewbacca':   { 'Wookiee Avenger':  'vassal_extracted/images/dc-figures/Chewbacca Wookiee Avenger.jpg' },
-  'IG-88':       { 'Focused on the Kill': 'vassal_extracted/images/dc-figures/IG-88 Focused on the Kill.jpg' },
-};
-
-/** Resolve DC name to DC card image path (for deployment card embeds). Looks in dc-figures/ or DC Skirmish Upgrades/ first, then root. */
-function getDcImagePath(dcName) {
-  if (!dcName || typeof dcName !== 'string') return null;
-  const exact = getDcImages()[dcName];
-  if (exact) return resolveDcImagePath(exact, dcName);
-  const trimmed = dcName.trim();
-  if (!/^\[.+\]$/.test(trimmed) && getDcImages()[`[${trimmed}]`]) return resolveDcImagePath(getDcImages()[`[${trimmed}]`], `[${trimmed}]`);
-  const lower = dcName.toLowerCase();
-  let key = Object.keys(getDcImages()).find((k) => k.toLowerCase() === lower);
-  if (key) return resolveDcImagePath(getDcImages()[key], key);
-  const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-  if (base !== dcName) {
-    key = Object.keys(getDcImages()).find((k) => k.toLowerCase() === base.toLowerCase());
-    if (key) return resolveDcImagePath(getDcImages()[key], key);
-    key = Object.keys(getDcImages()).find((k) => k.toLowerCase().startsWith(base.toLowerCase()));
-    if (key) return resolveDcImagePath(getDcImages()[key], key);
-  }
-  key = Object.keys(getDcImages()).find((k) => k.toLowerCase().startsWith(lower) || lower.startsWith(k.toLowerCase()));
-  return key ? resolveDcImagePath(getDcImages()[key], key) : null;
-}
-
-/** Prefer IACP variant image when it exists (e.g. "Boba Fett (IACP).jpg" in same folder). Then prefer dc-figures/ or DC Skirmish Upgrades/ subfolder. */
-function resolveDcImagePath(relPath, dcName) {
-  if (!relPath || typeof relPath !== 'string') return null;
-  const parts = relPath.split(/[/\\]/);
-  const dirRel = parts.slice(0, -1).join('/');
-  const baseWithExt = parts[parts.length - 1] || relPath;
-  const baseName = baseWithExt.replace(/\.[^.]+$/, '');
-  for (const ext of ['.jpg', '.png', '.gif']) {
-    const iacpRel = dirRel + '/' + baseName + ' (IACP)' + ext;
-    if (existsSync(join(rootDir, ...iacpRel.split('/')))) return iacpRel;
-  }
-  const filename = baseWithExt;
-  const subfolder = dcName && isFigurelessDc(dcName) ? 'DC Skirmish Upgrades' : 'dc-figures';
-  const inSub = `vassal_extracted/images/${subfolder}/${filename}`;
-  if (existsSync(join(rootDir, inSub))) return inSub;
-  const otherSub = subfolder === 'dc-figures' ? 'DC Skirmish Upgrades' : 'dc-figures';
-  const inOther = `vassal_extracted/images/${otherSub}/${filename}`;
-  if (existsSync(join(rootDir, inOther))) return inOther;
-  if (existsSync(join(rootDir, relPath))) return relPath;
-  return relPath;
-}
-
-
-/** Return absolute path to condition card image, or null if not found. */
-function getConditionCardPath(conditionName) {
-  if (!conditionName) return null;
-  const fname = `Condition card--${conditionName}.jpg`;
-  const p = join(rootDir, 'vassal_extracted', 'images', 'conditions', fname);
-  return existsSync(p) ? p : null;
-}
-
-/** Resolve DC name to circular figure image (for map tokens). Tries figures/ subfolder first, then root. */
-function getFigureImagePath(dcName) {
-  if (!dcName || typeof dcName !== 'string') return null;
-  const exact = getFigureImages()[dcName];
-  if (exact) return resolveAssetPath(exact, 'figures');
-  const lower = dcName.toLowerCase();
-  let key = Object.keys(getFigureImages()).find((k) => k.toLowerCase() === lower);
-  if (key) return resolveAssetPath(getFigureImages()[key], 'figures');
-  const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-  if (base !== dcName) {
-    key = Object.keys(getFigureImages()).find((k) => k.toLowerCase() === base.toLowerCase());
-    if (key) return resolveAssetPath(getFigureImages()[key], 'figures');
-    key = Object.keys(getFigureImages()).find((k) => k.toLowerCase().startsWith(base.toLowerCase()));
-    if (key) return resolveAssetPath(getFigureImages()[key], 'figures');
-  }
-  key = Object.keys(getFigureImages()).find((k) => k.toLowerCase().startsWith(lower) || lower.startsWith(k.toLowerCase()));
-  return key ? resolveAssetPath(getFigureImages()[key], 'figures') : null;
-}
-
-/** Try subfolder first, then root. relPath is e.g. "vassal_extracted/images/X.gif". */
-function resolveAssetPath(relPath, subfolder) {
-  if (!relPath || typeof relPath !== 'string') return null;
-  const filename = relPath.split(/[/\\]/).pop() || relPath;
-  const inSub = `vassal_extracted/images/${subfolder}/${filename}`;
-  if (existsSync(join(rootDir, inSub))) return inSub;
-  // figure-tokens/ is the physical folder for Vassal figure GIFs (figure-images.json stores paths as figures/)
-  if (subfolder === 'figures') {
-    const inTokens = `vassal_extracted/images/figure-tokens/${filename}`;
-    if (existsSync(join(rootDir, inTokens))) return inTokens;
-  }
-  if (existsSync(join(rootDir, relPath))) return relPath;
-  return relPath;
-}
-
-/** Resolve mission card image path; tries .png, .jpg, .jpeg so data can say .png while files are .jpg. */
-function resolveMissionCardImagePath(relPath) {
-  if (!relPath || typeof relPath !== 'string') return null;
-  const subfolder = 'mission-cards';
-  const filename = relPath.split(/[/\\]/).pop() || relPath;
-  const base = filename.replace(/\.[^.]+$/i, '') || filename;
-  const exts = ['.png', '.jpg', '.jpeg'];
-  const tried = new Set();
-  for (const ext of exts) {
-    const name = base + ext;
-    if (tried.has(name.toLowerCase())) continue;
-    tried.add(name.toLowerCase());
-    const inSub = `vassal_extracted/images/${subfolder}/${name}`;
-    if (existsSync(join(rootDir, inSub))) return inSub;
-  }
-  return resolveAssetPath(relPath, subfolder);
 }
 
 /** Find msgId for DC message containing the given figure (for dcHealthState lookup). */
