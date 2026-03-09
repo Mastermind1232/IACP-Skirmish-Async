@@ -92,7 +92,10 @@ export function parseIacpListPaste(content) {
   const nameMatch = text.match(/^[-]*\s*(.+?)\s*-{2,}/m);
   if (nameMatch) name = nameMatch[1].trim();
 
-  const dcSection = text.split(/Command Cards:/i)[0];
+  const beforeCC = text.split(/Command Cards:/i)[0];
+  // Only parse lines after the "Deployment Cards:" header — excludes the army name header line
+  const dcSectionStart = beforeCC.indexOf('Deployment Cards:');
+  const dcSection = dcSectionStart >= 0 ? beforeCC.slice(dcSectionStart) : beforeCC;
   const ccSection = text.split(/Command Cards:/i)[1]?.split(/Stats:/i)[0] || '';
 
   const parseSection = (section) => {
@@ -100,9 +103,15 @@ export function parseIacpListPaste(content) {
     for (const line of section.split('\n')) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.endsWith(':') || trimmed.startsWith('--') || trimmed.startsWith('#')) continue;
-      // "- Card Name" (bullet format)
+      // "- Card Name" or "- 8 Card Name" (bullet format, optionally with cost prefix)
       const bulletMatch = trimmed.match(/^-\s+(.+)$/);
-      if (bulletMatch) { items.push(normalizeCardName(bulletMatch[1].trim())); continue; }
+      if (bulletMatch) {
+        let cardText = bulletMatch[1].trim();
+        // Strip leading cost number if present (e.g. "8 Zeb Orrelios" → "Zeb Orrelios")
+        cardText = cardText.replace(/^\d+\s+/, '');
+        items.push(normalizeCardName(cardText));
+        continue;
+      }
       // "12 Card Name" (cost-prefix format)
       const costMatch = trimmed.match(/^\d+\s+(.+)$/);
       if (costMatch) { items.push(normalizeCardName(costMatch[1].trim())); continue; }

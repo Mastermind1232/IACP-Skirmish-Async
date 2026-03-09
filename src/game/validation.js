@@ -68,6 +68,9 @@ function resolveDcInput(raw, dcEffects) {
     const match = keys.find((k) => k.toLowerCase().startsWith(lowerPrefix) && k.includes('('));
     if (match) return match;
   }
+  // Quoted subname: 'C1-10P' matches 'C1-10P "Chopper"', 'IG-88' matches 'IG-88 "The Droid With No Name"'
+  const quotedMatch = keys.find((k) => k.toLowerCase().startsWith(lower + ' "'));
+  if (quotedMatch) return quotedMatch;
   return name; // unresolved — will produce error in validation
 }
 
