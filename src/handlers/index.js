@@ -94,6 +94,10 @@ import {
   handleBotmenuKillNo,
 } from './botmenu.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
+import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol } from './combat-reactions.js';
+import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
+import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder } from './interrupts.js';
+import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
 
 const HANDLERS = new Map();
 
@@ -211,6 +215,134 @@ register('botmenu_kill_no_', handleBotmenuKillNo);
 register('fast_forward_', handleFastForward);
 register('dc_cc_defender_', handleDefenderCcPlay);
 
+// New: extracted inline handlers
+register('tough_luck_remove_', handleToughLuck);
+register('tough_luck_skip_', handleToughLuck);
+register('there_is_no_try_die_', handleThereIsNoTry);
+register('there_is_no_try_face_', handleThereIsNoTry);
+register('there_is_no_try_skip_', handleThereIsNoTry);
+register('vet_instincts_pick_', handleVetInstincts);
+register('hunter_protocol_trigger_', handleHunterProtocol);
+register('hunter_protocol_skip_', handleHunterProtocol);
+register('reaction_skip_', handleReactionSkip);
+register('reaction_use_', handleReactionUse);
+register('right_back_block_', handleRightBack);
+register('right_back_nodmg_', handleRightBack);
+register('mastery_pick_', handleMasteryPick);
+register('mastery_skip_', handleMasteryPick);
+register('interrogate_pick_', handleInterrogatePick);
+register('interrogate_discard_', handleInterrogatePick);
+register('interrogate_skip_', handleInterrogatePick);
+register('still_faster_use_', handleStillFaster);
+register('still_faster_skip_', handleStillFaster);
+register('still_faster_dc_pick_', handleStillFaster);
+register('squad_swarm_yes_', handleSquadSwarm);
+register('squad_swarm_no_', handleSquadSwarm);
+register('overdrive_use_', handleOverdrive);
+register('self_destruct_probe_use_', handleSelfDestructProbe);
+register('self_destruct_probe_skip_', handleSelfDestructProbe);
+register('self_destruct_protocol_use_', handleSelfDestructProtocol);
+register('self_destruct_protocol_skip_', handleSelfDestructProtocol);
+register('last_resort_use_', handleLastResort);
+register('last_resort_skip_', handleLastResort);
+register('scavenged_walker_attack_', handleScavengedWalker);
+register('scavenged_walker_skip_', handleScavengedWalker);
+register('on_diplomatic_', handleOnDiplomatic);
+register('bel_reorder_1_', handleBelReorder);
+register('bel_reorder_2_', handleBelReorder);
+register('devaron_door_open_', handleDevaronDoorOpen);
+register('devaron_crate_push_', handleDevaronCratePush);
+register('krykna_push_', handleKryknaPush);
+
+// Context group mapping: handler key → context group name (from context-factory.js)
+const HANDLER_GROUPS = new Map();
+function setGroup(keys, group) { for (const k of keys) HANDLER_GROUPS.set(k, group); }
+
+setGroup([
+  'deck_illegal_play_', 'deck_illegal_redo_', 'cc_shuffle_draw_', 'cc_play_',
+  'cc_confirm_play_', 'cc_cancel_play_', 'cc_draw_', 'cc_search_discard_',
+  'cc_close_discard_', 'cc_discard_', 'cc_choice_', 'cc_space_', 'squad_select_',
+  'illegal_cc_ignore_', 'illegal_cc_unplay_', 'negation_play_', 'negation_let_resolve_',
+  'celebration_play_', 'celebration_pass_',
+], 'ccHand');
+
+setGroup([
+  'dc_activate_', 'dc_unactivate_', 'dc_toggle_', 'dc_deplete_', 'dc_rename_',
+  'dc_cc_special_', 'dc_cc_eoa_', 'dc_cc_double_', 'dc_move_', 'dc_attack_',
+  'dc_interact_', 'dc_special_', 'pounce_space_', 'dc_ability_choice_', 'ee3_pick_die_',
+  'false_orders_action_', 'false_orders_space_', 'rush_push_fig_', 'rush_push_space_',
+  'rush_push_skip_', 'overwatch_space_', 'ob_deplete_', 'ob_skip_', 'ob_space_',
+], 'dcPlayArea');
+
+setGroup(['move_mp_'], 'move');
+setGroup(['move_adjust_mp_'], 'moveAdjust');
+setGroup(['move_letter_'], 'moveLetter');
+setGroup(['move_back_letters_'], 'moveBackLetters');
+setGroup(['move_pick_'], 'movePick');
+
+setGroup([
+  'cleave_target_', 'attack_target_', 'combat_resolve_ready_', 'combat_ready_',
+  'combat_roll_', 'combat_surge_', 'combat_reroll_', 'pre_reroll_', 'combat_passive_',
+  'combat_token_', 'power_token_choice_', 'spread_pain_cond_', 'figurehead_use_',
+  'figurehead_skip_', 'lasat_die_', 'lasat_face_', 'false_orders_atk_',
+], 'combat');
+
+setGroup([
+  'tough_luck_remove_', 'tough_luck_skip_', 'there_is_no_try_die_',
+  'there_is_no_try_face_', 'there_is_no_try_skip_', 'vet_instincts_pick_',
+  'hunter_protocol_trigger_', 'hunter_protocol_skip_',
+], 'combatReactions');
+
+setGroup([
+  'reaction_skip_', 'reaction_use_', 'right_back_block_', 'right_back_nodmg_',
+  'mastery_pick_', 'mastery_skip_', 'interrogate_pick_', 'interrogate_discard_',
+  'interrogate_skip_',
+], 'postCombat');
+
+setGroup([
+  'still_faster_use_', 'still_faster_skip_', 'still_faster_dc_pick_',
+  'squad_swarm_yes_', 'squad_swarm_no_', 'overdrive_use_',
+  'self_destruct_probe_use_', 'self_destruct_probe_skip_',
+  'self_destruct_protocol_use_', 'self_destruct_protocol_skip_',
+  'last_resort_use_', 'last_resort_skip_', 'scavenged_walker_attack_',
+  'scavenged_walker_skip_', 'on_diplomatic_', 'bel_reorder_1_', 'bel_reorder_2_',
+], 'interrupts');
+
+setGroup([
+  'act_passive_', 'status_phase_', 'pass_activation_turn_', 'end_turn_',
+  'dc_end_activation_', 'confirm_activate_', 'cancel_activate_',
+], 'activation');
+
+setGroup(['end_end_of_round_'], 'round');
+setGroup(['end_start_of_round_'], 'startOfRound');
+
+setGroup([
+  'devaron_door_open_', 'devaron_crate_push_', 'krykna_push_',
+], 'mapEvents');
+
+setGroup([
+  'map_selection_', 'map_type_', 'map_confirm_', 'map_goback_', 'draft_random_',
+  'determine_initiative_', 'deployment_zone_red_', 'deployment_zone_blue_',
+  'deployment_fig_', 'deployment_orient_', 'deploy_pick_', 'deploy_row_back_',
+  'deploy_row_', 'loadout_pick_', 'form_pick_', 'deployment_done_', 'auto_deploy_',
+], 'setup');
+
+setGroup(['interact_cancel_'], 'interactCancel');
+setGroup(['interact_choice_'], 'interact');
+setGroup(['refresh_map_'], 'refreshMap');
+setGroup(['refresh_all_'], 'refreshAll');
+setGroup(['undo_'], 'undo');
+setGroup([
+  'botmenu_archive_', 'botmenu_kill_', 'botmenu_archive_yes_',
+  'botmenu_archive_no_', 'botmenu_kill_yes_', 'botmenu_kill_no_',
+], 'botmenu');
+setGroup(['fast_forward_'], 'fastForward');
+setGroup(['dc_cc_defender_'], 'defenderCc');
+setGroup(['kill_game_'], 'killGame');
+setGroup(['default_deck_'], 'defaultDeck');
+setGroup(['lobby_join_'], 'lobbyJoin');
+setGroup(['lobby_start_'], 'lobbyStart');
+
 /**
  * Return the handler for the given key (prefix), or null if none.
  * @param {string} handlerKey - e.g. 'lobby_join_', 'dc_activate_'
@@ -218,6 +350,15 @@ register('dc_cc_defender_', handleDefenderCcPlay);
  */
 export function getHandler(handlerKey) {
   return HANDLERS.get(handlerKey) ?? null;
+}
+
+/**
+ * Return the context group name for the given handler key, or null.
+ * @param {string} handlerKey
+ * @returns {string|null}
+ */
+export function getHandlerGroup(handlerKey) {
+  return HANDLER_GROUPS.get(handlerKey) ?? null;
 }
 
 export { handleLobbyJoin, handleLobbyStart } from './lobby.js';
@@ -315,3 +456,7 @@ export {
   handleBotmenuKillNo,
 } from './botmenu.js';
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
+export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol } from './combat-reactions.js';
+export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
+export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder } from './interrupts.js';
+export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
