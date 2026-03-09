@@ -34,7 +34,47 @@ Full line-by-line audit of all 47,000+ lines across 47 production files. Below a
 
 **Files:** `router.js`, `index.js`
 
-### 1C. Dead Code: `dcDepletedState` is Write-Only
+### 1C. `updateHandChannelMessages` Called With Wrong Arguments
+
+**Problem:** At `index.js:8712`, inside the Mastery handler, the function is called as:
+```js
+await updateHandChannelMessages(mastGame, mastAPN, client).catch(() => {});
+```
+But the function signature at `index.js:6481` is:
+```js
+async function updateHandChannelMessages(game, client)
+```
+This means `mastAPN` (a number like `1` or `2`) is passed as the Discord `client` parameter. When the function tries to call `client.channels.fetch(handId)`, it crashes because `(2).channels` is `undefined`. The `.catch(() => {})` silently swallows the error.
+
+**Impact:** After Mastery returns a card from discard to hand, the Hand channel message never updates. The player doesn't see the returned card in their hand UI until the next natural refresh.
+
+**Fix:** Change the call to `updateHandChannelMessages(mastGame, client)`.
+
+**Files:** `index.js`
+
+### 1D. DC Name Extraction Uses `split('-')[0]` Instead of Regex
+
+**Problem:** At `index.js:2999`, inside `runDraftRandom`'s `deployForPlayer`:
+```js
+const dcName = k.split('-')[0];
+```
+For figure keys like `Obi-Wan Kenobi-1-0`, this extracts `Obi` instead of `Obi-Wan Kenobi`. The rest of the codebase correctly uses `.replace(/-\d+-\d+$/, '')`.
+
+**Impact:** During random auto-deployment, footprint size is looked up using the wrong DC name, potentially allowing overlapping figure placements or throwing errors for unrecognized names.
+
+**Fix:** Change to `const dcName = k.replace(/-\d+-\d+$/, '');`
+
+**Files:** `index.js`
+
+### 1E. Dead Variable `_spDefEff` (Minor)
+
+**Problem:** At `index.js:3747`, `_spDefEff` is assigned but never read. The Self-Preservation logic correctly uses `_spEff` (line 3750) instead. This is dead code left over from a refactor.
+
+**Fix:** Remove the unused variable.
+
+**Files:** `index.js`
+
+### 1F. Dead Code: `dcDepletedState` is Write-Only
 
 **Problem:** `dcDepletedState` Map (game-state.js:64) is written to in 6 places but **never read anywhere**. It's populated on load, set during setup, and deleted on cleanup — but no handler ever calls `.get()` on it.
 
@@ -300,14 +340,18 @@ await lock.runExclusive(() => handler(interaction, ctx));
 ## Implementation Order (Recommended)
 
 ```
-Phase 1 (Bugs):     1A → 1B → 1C
+Phase 1 (Bugs):     1C → 1D → 1E → 1A → 1B → 1F
 Phase 2 (Helpers):   2A → 2C → 2B → 2D
 Phase 3 (Structure): 3A → 3C → 3B
 Phase 4 (Safety):    4A → 4B → 4C → 4D → 4E
 Phase 5 (Quality):   5A → 5B → 5C → 5D → 5E
 ```
 
-Phases 1 and 2 can start immediately. Phase 3 depends on Phase 2 (helpers need to exist before moving code). Phase 4 is independent. Phase 5 is ongoing.
+Phases 1 and 2 can start immediately.
+
+### Open Questions
+
+- **Initiative swap timing (round.js:398-406):** `swapInitiative()` and `roundNumber++` happen BEFORE `cleanupRoundStart()`. If cleanup logic depends on the old round/initiative context, this ordering could cause subtle bugs. Needs investigation. Phase 3 depends on Phase 2 (helpers need to exist before moving code). Phase 4 is independent. Phase 5 is ongoing.
 
 ---
 
