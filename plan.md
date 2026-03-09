@@ -384,9 +384,125 @@ Phase 2.2 (requirePlayer)          ← Same test util, same file, 74 sites
 Phase 3.1 (parseCustomId)          ← Independent, gradual adoption (79+ sites)
   ↓
 Phase 4 (verify existing helpers)  ← Audit + test only
+  ↓
+Phase 5 (extract index.js)        ← Structural, 3 tiers (~3,200 lines out)
 ```
 
 ---
+
+## Phase 5: Extract `index.js` into Modules
+
+**Goal:** Reduce `index.js` from 7,400 → ~4,200 lines by extracting cohesive handler groups into the existing handler registry pattern.
+
+### Step 5.1: Combat Special Effects → `src/handlers/combat-special-effects.js` (new file)
+
+**What moves:** 15 inline handlers currently in LOCAL_HANDLERS table:
+- `handleBleedResolve` (lines 3009-3080)
+- `handleSidewinderApply/Skip` (lines 4856-4907)
+- `handleBoltslingerTarget/Skip` (lines 4908-4954)
+- `handleIndiscriminateFireDie/Skip` (lines 5005-5037)
+- `handleFightingKnifeTarget/Skip` (lines 5038-5100)
+- `handleConcussiveBoltPush/Skip` (lines 5101-5144)
+- `handleSpreadThePainFigPick/CondPick/Skip` (lines 5145-5232)
+- `handleMissileSalvoDie/Done` (lines 5233-5288)
+
+**Impact:** ~500 lines extracted. These are self-contained combat effects that follow the existing handler pattern. Register with the handler registry just like combat-reactions.js.
+
+**Dependencies to inject via context:** `getGame`, `saveGames`, `canActAsPlayer`, `client`, combat state access.
+
+**Risk:** LOW — each handler is already a standalone function.
+
+---
+
+### Step 5.2: Combat Damage Resolution → `src/handlers/combat-damage.js` (new file)
+
+**What moves:**
+- `applyDamageAndFinishCombat` (lines 3209-4375 — **1,167 lines**)
+- `resolveCombatAfterRolls` (lines 3108-3208)
+- `checkPostCombatSurges` (lines 4403-4648)
+- `finishCombatResolution` (lines 4649-4855)
+- `applyNpcDamageToFigure` (lines 2920-2961)
+- `applyDirectDamageToFigure` (lines 2962-2988)
+- `sendBleedingPrompt` (lines 2989-3008)
+- `applyIndiscriminateFireSplash` (lines 4955-5004)
+
+**Impact:** ~1,700 lines extracted. This is the single largest extraction.
+
+**Dependencies:** Heavy — combat state, game state, Discord messaging, figure lookups, ability resolution. Will need a well-defined context interface.
+
+**Risk:** MEDIUM-HIGH — `applyDamageAndFinishCombat` is deeply interconnected. Must be extracted as a whole unit with its callees. Test coverage exists in combat.test.js to validate.
+
+---
+
+### Step 5.3: Game Creation & Rendering → `src/game-creation.js` + `src/rendering.js` (new files)
+
+**game-creation.js moves:**
+- `createTestGame` (lines 1383-1490)
+- `createGameChannels` (lines 1238-1294)
+- `createPlayAreaChannels` (lines 1191-1215)
+- `createBoardChannel` (lines 1295-1346)
+- `createHandThreads` (lines 1216-1237)
+- `setupServer` (lines 5973-6012)
+- `applySquadSubmission` (lines 5902-5971)
+- `finishSetupAttachments` (lines 2559-2607)
+
+**rendering.js moves:**
+- `buildBoardMapPayload` (lines 2357-2430)
+- `buildDcEmbedAndFiles` (lines 5614-5660)
+- `buildDiscardPileDisplayPayload` (lines 5661-5698)
+- `buildHandDisplayPayload` (lines 1129-1170)
+- `getFiguresForRender`, `buildMissionTokens`, `getMapTokensForRender` (lines 1716-1824)
+- `getActivationMinimapAttachment`, `getMovementMinimapAttachment` (lines 1825-1945)
+- `getDeploymentMapAttachment` (lines 1946-1977)
+
+**Impact:** ~1,000 lines extracted across two files.
+
+**Risk:** MEDIUM — game creation functions touch Discord channel APIs and need careful dependency injection.
+
+---
+
+### Step 5.4: Board Helpers → `src/game/board-helpers.js` (new file)
+
+**What moves:** Pure game logic functions with no Discord dependency:
+- `getPlayerOccupiedCells` (line 364)
+- `getMissionTokenCoords` (line 378)
+- `isFigureAdjacentOrOnMissionToken` (line 390)
+- `getEffectiveSpeed` (line 413)
+- `isFigureInDeploymentZone` (line 429)
+- `isFigureAdjacentOrOnAny` (line 443)
+- `getFigureAdjacentCoordsFromSet` (line 448)
+- `getLegalInteractOptions` (line 482)
+- `getSpaceController` (line 553)
+- `getFiguresOnOrAdjacentToSpace` (line 599)
+- `countTerminalsControlledByPlayer` (line 614)
+
+**Impact:** ~300 lines. These are **fully testable** pure functions — highest value extraction for test coverage.
+
+**Risk:** LOW — pure functions, no side effects.
+
+---
+
+### Phase 5 Execution Order
+
+```
+5.1 (combat-special-effects)  ← Easiest, 15 standalone handlers, ~500 lines
+  ↓
+5.4 (board-helpers)            ← Pure functions, most testable, ~300 lines
+  ↓
+5.3 (game-creation + rendering) ← Medium complexity, ~1,000 lines
+  ↓
+5.2 (combat-damage)            ← Hardest, 1,700 lines, most dependencies
+```
+
+### Phase 5 New Files
+
+| File | Purpose | Lines (est.) |
+|---|---|---|
+| `src/handlers/combat-special-effects.js` | 15 inline combat effect handlers | ~500 |
+| `src/handlers/combat-damage.js` | Damage resolution mega-functions | ~1,700 |
+| `src/game-creation.js` | Game/channel initialization | ~500 |
+| `src/rendering.js` | Board/map/UI payload builders | ~500 |
+| `src/game/board-helpers.js` | Pure board state query functions | ~300 |
 
 ## New Files Created
 
@@ -440,6 +556,10 @@ Phase 4 (verify existing helpers)  ← Audit + test only
 | requireGame | MEDIUM | Changes control flow (early return). Silent vs messaging variants need care. Each site must verify the `return` still correctly exits the handler (all confirmed top-level). |
 | requirePlayer | MEDIUM | Same control flow concern. 45+ unique custom error messages must be preserved in each call. |
 | parseCustomId | LOW | Gradual opt-in adoption, no forced migration. |
+| combat-special-effects extraction | LOW | Self-contained handlers, existing registry pattern. |
+| board-helpers extraction | LOW | Pure functions, no side effects, easy to test. |
+| game-creation + rendering extraction | MEDIUM | Discord channel APIs, careful DI needed. |
+| combat-damage extraction | HIGH | 1,700 lines, deeply interconnected. Highest payoff but highest risk. |
 
 ## Success Criteria
 
@@ -450,3 +570,5 @@ Phase 4 (verify existing helpers)  ← Audit + test only
 5. `grep -c "'Game not found.'" src/handlers/*.js` drops from ~87 to 0
 6. No hardcoded hex colors remain in handler/embed files
 7. Zero regressions in game behavior
+8. `index.js` reduced from 7,400 → ~4,200 lines (Phase 5)
+9. All extracted modules registered in handler registry or importable standalone
