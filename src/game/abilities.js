@@ -1163,8 +1163,8 @@ export function resolveAbility(abilityId, context) {
     // Phase 1: enumerate valid friendly figures
     // VP cost check (Order Hit: requires 2 VP to use)
     if (entry.autoDeductVp > 0) {
-      const vpKey = vpKey(playerNum);
-      const currentVp = game[vpKey]?.total || 0;
+      const vk = vpKey(playerNum);
+      const currentVp = game[vk]?.total || 0;
       if (currentVp < entry.autoDeductVp) {
         return { applied: false, manualMessage: `**${entry.label}** requires ${entry.autoDeductVp} VP but you only have ${currentVp}.` };
       }
@@ -1252,7 +1252,13 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta } = context;
     const msgId = context.msgId ?? (playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null);
     const dcHealthState = context.dcHealthState;
-    if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (!game || !msgId) {
+      const diceDesc = entry.overrideAttackDice.join(' + ');
+      const pierceNote = entry.overrideAttackPierce ? `, Pierce ${entry.overrideAttackPierce}` : '';
+      const accNote = entry.overrideBonusAccuracy ? `, +${entry.overrideBonusAccuracy} Accuracy` : '';
+      const typeNote = entry.overrideAttackType ? ` ${entry.overrideAttackType}` : '';
+      return { applied: true, logMessage: `**${entry.label || 'Override Attack'}** — Free${typeNote} attack: ${diceDesc}${pierceNote}${accNote}. Resolve manually (no active activation).` };
+    }
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[msgId] = true;
     game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
@@ -2234,9 +2240,9 @@ export function resolveAbility(abilityId, context) {
     game[discardKey] = (game[discardKey] || []).concat(toDiscard);
     const eff = getCcEffect(toDiscard);
     const cost = typeof eff?.cost === 'number' ? eff.cost : 0;
-    const vpKey = vpKey(playerNum);
-    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-    game[vpKey].total = (game[vpKey].total ?? 0) + cost;
+    const vk = vpKey(playerNum);
+    game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
+    game[vk].total = (game[vk].total ?? 0) + cost;
     const kept = drew.slice(0, -1);
     return {
       applied: true,
@@ -3639,8 +3645,8 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     awardObjectiveVp(game, playerNum, entry.vpGain);
-    const vpKey = vpKey(playerNum);
-    return { applied: true, logMessage: `Gained **${entry.vpGain} VP** (total: ${game[vpKey].total}).` };
+    const vk = vpKey(playerNum);
+    return { applied: true, logMessage: `Gained **${entry.vpGain} VP** (total: ${game[vk].total}).` };
   }
 
   // ccEffect: applyDamageToAttacker (Reactive Loyalties IMPERIAL) — deal N damage to the last attacker
@@ -4747,9 +4753,9 @@ export function resolveAbility(abilityId, context) {
           refreshOpponentDiscard: true,
         };
       }
-      const vpKey = vpKey(playerNum);
-      game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-      game[vpKey].total = (game[vpKey].total ?? 0) + entry.elseGainVp;
+      const vk = vpKey(playerNum);
+      game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
+      game[vk].total = (game[vk].total ?? 0) + entry.elseGainVp;
       return {
         applied: true,
         logMessage: `Opponent had fewer than ${entry.opponentDiscardDeckTop} cards in deck; you gained ${entry.elseGainVp} VP.`,
@@ -4819,9 +4825,9 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, defenderDefeated } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     if (!defenderDefeated) return { applied: false, manualMessage: 'Field Promotion: defender was not defeated.' };
-    const vpKey = vpKey(playerNum);
-    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-    game[vpKey].total = (game[vpKey].total ?? 0) + entry.celebrationVp;
+    const vk = vpKey(playerNum);
+    game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
+    game[vk].total = (game[vk].total ?? 0) + entry.celebrationVp;
     const costKey = armyCostModifierKey(playerNum);
     game[costKey] = (game[costKey] || 0) + entry.increaseArmyCostBy;
     return {
@@ -4834,9 +4840,9 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.celebrationVp === 'number' && !entry.increaseArmyCostBy) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const vpKey = vpKey(playerNum);
-    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-    game[vpKey].total = (game[vpKey].total ?? 0) + entry.celebrationVp;
+    const vk = vpKey(playerNum);
+    game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
+    game[vk].total = (game[vk].total ?? 0) + entry.celebrationVp;
     return {
       applied: true,
       logMessage: `**Celebration** — Gained ${entry.celebrationVp} VP (honor: play after a unique hostile figure is defeated).`,
@@ -5141,9 +5147,9 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.rebelGraffitiVp === 'number' && entry.rebelGraffitiVp > 0) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const vpKey = vpKey(playerNum);
-    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-    game[vpKey].total = (game[vpKey].total ?? 0) + entry.rebelGraffitiVp;
+    const vk = vpKey(playerNum);
+    game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
+    game[vk].total = (game[vk].total ?? 0) + entry.rebelGraffitiVp;
     return { applied: true, logMessage: `Gained ${entry.rebelGraffitiVp} VP (end of activation; honor: no adjacent hostiles).` };
   }
 
@@ -5924,7 +5930,7 @@ export function resolveAbility(abilityId, context) {
     // Phase 1: space picker — show all spaces within 8 of activating figure
     const boardState = getBoardStateForMovement(game, null);
     const adj = boardState?.mapSpaces?.adjacency;
-    if (!adj) return { applied: false, manualMessage: 'Apply Hidden Trap manually (no map data).' };
+    if (!adj) return { applied: true, logMessage: '**Hidden Trap** — Choose a terminal space; each adjacent figure suffers 2 Damage. Resolve manually (no map data).' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     const meta = msgId ? dcMessageMeta?.get(msgId) : null;
     const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];

@@ -52,6 +52,7 @@ import {
   dcExhaustedState,
   dcHealthState,
   pendingIllegalSquad,
+  cleanupGameMaps,
 } from './src/game-state.js';
 import { rotateImage90 } from './src/dc-image-utils.js';
 import { renderMap } from './src/map-renderer.js';
@@ -296,29 +297,17 @@ let achievementsChannelId = process.env.ACHIEVEMENTS_CHANNEL_ID || null;
 async function buildAttachmentEmbedsAndFiles(ccNames, dcNames = [], attachedToDcName = null) {
   const embeds = [];
   const files = [];
-  for (let i = 0; i < (ccNames || []).length; i++) {
-    const card = ccNames[i];
-    const path = getCommandCardImagePath(card);
+  const items = [
+    ...(ccNames || []).map((name, i) => ({ name, prefix: 'cc-attach', fallbackLabel: `Attachment ${i + 1}`, resolvePath: getCommandCardImagePath })),
+    ...(dcNames || []).map((name, i) => ({ name, prefix: 'dc-attach', fallbackLabel: `Skirmish Upgrade ${i + 1}`, resolvePath: (n) => { const rel = getDcImagePath(n); return rel ? join(rootDir, rel) : null; } })),
+  ];
+  for (let i = 0; i < items.length; i++) {
+    const { name, prefix, fallbackLabel, resolvePath } = items[i];
+    const path = resolvePath(name);
     const ext = path ? (path.toLowerCase().endsWith('.png') ? 'png' : 'jpg') : 'jpg';
-    const fileName = `cc-attach-${i}-${(card || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
+    const fileName = `${prefix}-${i}-${(name || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
     const embed = new EmbedBuilder()
-      .setTitle(`📎 ${card || `Attachment ${i + 1}`}`)
-      .setColor(0x5865f2);
-    if (attachedToDcName) embed.setDescription(`Attached to: **${attachedToDcName}**`);
-    if (path && existsSync(path)) {
-      files.push(new AttachmentBuilder(path, { name: fileName }));
-      embed.setThumbnail(`attachment://${fileName}`);
-    }
-    embeds.push(embed);
-  }
-  for (let i = 0; i < (dcNames || []).length; i++) {
-    const dcName = dcNames[i];
-    const relPath = getDcImagePath(dcName);
-    const path = relPath ? join(rootDir, relPath) : null;
-    const ext = path ? (path.toLowerCase().endsWith('.png') ? 'png' : 'jpg') : 'jpg';
-    const fileName = `dc-attach-${i}-${(dcName || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
-    const embed = new EmbedBuilder()
-      .setTitle(`📎 ${dcName || `Skirmish Upgrade ${i + 1}`}`)
+      .setTitle(`📎 ${name || fallbackLabel}`)
       .setColor(0x5865f2);
     if (attachedToDcName) embed.setDescription(`Attached to: **${attachedToDcName}**`);
     if (path && existsSync(path)) {
@@ -2188,6 +2177,7 @@ async function postGameOver(game, client, winnerId, reason) {
   game.ended = true;
   game.winnerId = winnerId ?? game.winnerId ?? null;
   cleanupGameLock(game.gameId);
+  cleanupGameMaps(game.gameId);
   pendingIllegalSquad.delete(`${game.gameId}_1`);
   pendingIllegalSquad.delete(`${game.gameId}_2`);
   const embed = buildScorecardEmbed(game, getMissionVpBonus(game));
@@ -7343,40 +7333,34 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ── Local handlers (closures over index.js scope, not yet extracted) ──
-    if (buttonKey === 'bleed_accept_' || buttonKey === 'bleed_prevent_') {
-      await handleBleedResolve(interaction);
-      return;
-    }
-    if (buttonKey === 'sidewinder_apply_') { await handleSidewinderApply(interaction); return; }
-    if (buttonKey === 'sidewinder_skip_') { await handleSidewinderSkip(interaction); return; }
-    if (buttonKey === 'boltslinger_target_') { await handleBoltslingerTarget(interaction); return; }
-    if (buttonKey === 'boltslinger_skip_') { await handleBoltslingerSkip(interaction); return; }
-    if (buttonKey === 'indiscriminate_die_') { await handleIndiscriminateFireDie(interaction); return; }
-    if (buttonKey === 'indiscriminate_skip_') { await handleIndiscriminateFireSkip(interaction); return; }
-    if (buttonKey === 'fighting_knife_target_') { await handleFightingKnifeTarget(interaction); return; }
-    if (buttonKey === 'fighting_knife_skip_') { await handleFightingKnifeSkip(interaction); return; }
-    if (buttonKey === 'concussive_bolt_push_') { await handleConcussiveBoltPush(interaction); return; }
-    if (buttonKey === 'concussive_bolt_skip_') { await handleConcussiveBoltSkip(interaction); return; }
-    if (buttonKey === 'spread_pain_fig_') { await handleSpreadThePainFigPick(interaction); return; }
-    if (buttonKey === 'spread_pain_skip_') { await handleSpreadThePainSkip(interaction); return; }
-    if (buttonKey === 'missile_salvo_die_') { await handleMissileSalvoDie(interaction); return; }
-    if (buttonKey === 'missile_salvo_done_') { await handleMissileSalvoDone(interaction); return; }
-
-    // ── Inline replies ──
-    if (buttonKey === 'create_game') {
-      await interaction.followUp({
-        content: 'Go to **#new-games** and click **Create Post** to start a lobby. The bot will add the Join Game button.',
-        components: [getMainMenu()],
-        ephemeral: true,
-      }).catch(discordCatch);
-      return;
-    }
-    if (buttonKey === 'join_game') {
-      await interaction.followUp({
-        content: 'Browse **#new-games** and click **Join Game** on a lobby post that needs an opponent.',
-        components: [getMainMenu()],
-        ephemeral: true,
-      }).catch(discordCatch);
+    // Table-driven dispatch for handlers that still close over index.js locals.
+    const LOCAL_HANDLERS = {
+      'bleed_accept_': handleBleedResolve,
+      'bleed_prevent_': handleBleedResolve,
+      'sidewinder_apply_': handleSidewinderApply,
+      'sidewinder_skip_': handleSidewinderSkip,
+      'boltslinger_target_': handleBoltslingerTarget,
+      'boltslinger_skip_': handleBoltslingerSkip,
+      'indiscriminate_die_': handleIndiscriminateFireDie,
+      'indiscriminate_skip_': handleIndiscriminateFireSkip,
+      'fighting_knife_target_': handleFightingKnifeTarget,
+      'fighting_knife_skip_': handleFightingKnifeSkip,
+      'concussive_bolt_push_': handleConcussiveBoltPush,
+      'concussive_bolt_skip_': handleConcussiveBoltSkip,
+      'spread_pain_fig_': handleSpreadThePainFigPick,
+      'spread_pain_skip_': handleSpreadThePainSkip,
+      'missile_salvo_die_': handleMissileSalvoDie,
+      'missile_salvo_done_': handleMissileSalvoDone,
+      'create_game': async (i) => {
+        await i.followUp({ content: 'Go to **#new-games** and click **Create Post** to start a lobby. The bot will add the Join Game button.', components: [getMainMenu()], ephemeral: true }).catch(discordCatch);
+      },
+      'join_game': async (i) => {
+        await i.followUp({ content: 'Browse **#new-games** and click **Join Game** on a lobby post that needs an opponent.', components: [getMainMenu()], ephemeral: true }).catch(discordCatch);
+      },
+    };
+    const localHandler = LOCAL_HANDLERS[buttonKey];
+    if (localHandler) {
+      await localHandler(interaction);
       return;
     }
 

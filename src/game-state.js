@@ -81,6 +81,12 @@ export function deleteGame(gameId) {
   games.delete(gameId);
 }
 
+/** Set game and persist in one call. Convenience wrapper to DRY up setGame+saveGames. */
+export function persistGame(gameId, game) {
+  games.set(gameId, game);
+  saveGames();
+}
+
 /** Sync live dcHealthState Map back into game objects so persisted health is always current. */
 function syncHealthStateToGames() {
   for (const [msgId, healthState] of dcHealthState) {
@@ -191,6 +197,17 @@ function repopulateDcMapsFromGames() {
 /** For db.js deleteGameFromDb and any code that needs to iterate or pass the Map. */
 export function getGamesMap() {
   return games;
+}
+
+/** Remove all dcMessageMeta/dcExhaustedState/dcHealthState entries for a game. Prevents memory leaks on game end. */
+export function cleanupGameMaps(gameId) {
+  for (const [msgId, meta] of dcMessageMeta) {
+    if (meta?.gameId === gameId) {
+      dcMessageMeta.delete(msgId);
+      dcExhaustedState.delete(msgId);
+      dcHealthState.delete(msgId);
+    }
+  }
 }
 
 export {

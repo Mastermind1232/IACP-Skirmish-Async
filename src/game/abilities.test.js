@@ -428,7 +428,7 @@ test('resolveAbility Price of Glory applies discard 1 HARMFUL and gain 2 MP', ()
     figureConditions: { 'Stormtroopers-1-0': ['Weaken'] },
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-pog', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [DG 1]' }]]);
-  const result = resolveAbility('Price of Glory', { game, playerNum: 1, dcMessageMeta });
+  const result = resolveAbility('Price of Glory', { game, playerNum: 1, dcMessageMeta, chosenFigureKey: 'skip' });
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.includes('HARMFUL'));
   assert.ok(result.logMessage?.includes('MP'));
@@ -1226,8 +1226,8 @@ test('resolveAbility Lightbow returns informational logMessage', () => {
   const game = { gameId: 'g-lb' };
   const result = resolveAbility('Lightbow', { game, playerNum: 1 });
   assert.strictEqual(result.applied, true);
-  assert.ok(result.logMessage?.includes('Lightbow'));
-  assert.ok(result.logMessage?.includes('Pierce 4'));
+  assert.ok(result.logMessage?.includes('Ranged'));
+  assert.ok(result.logMessage?.includes('Accuracy'));
   assert.ok(result.logMessage?.includes('blue'));
 });
 
