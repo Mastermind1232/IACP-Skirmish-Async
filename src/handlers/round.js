@@ -6,6 +6,13 @@ import { getDcEffects, getMapSpaces, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
 import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition } from '../game/index.js';
+import {
+  getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
+  getCcHand, getCcDeck, getDcAttachments,
+  setActivationsRemaining, setActivatedDcIndices,
+  getActivationsTotal,
+  ccHandKey, ccDiscardKey,
+} from '../game/player-helpers.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -141,8 +148,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
   {
     const _wymEff = getDcEffects() || {};
     for (const pn of [1, 2]) {
-      const dcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-      const msgIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const dcList = getDcList(game, pn) || [];
+      const msgIds = getDcMessageIds(game, pn) || [];
       for (let i = 0; i < dcList.length; i++) {
         const dc = dcList[i];
         if (!dc || dc.defeated) continue;
@@ -150,7 +157,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
         if (!(eff?.specialAbilityIds || []).includes('whats_yours_is_mine_hondo')) continue;
         const mid = msgIds[i];
         if (!mid) continue;
-        const ownerId = pn === 1 ? game.player1Id : game.player2Id;
+        const ownerId = getPlayerId(game, pn);
         const oppNum = pn === 1 ? 2 : 1;
         await logGameAction(game, client, `💰 **What's Yours is Mine** — <@${ownerId}>, if **${dc.displayName || dc.dcName}** is in the opponent's deployment zone, steal 2 VP from Player ${oppNum}. *(Honor system.)*`, {
           phase: 'ROUND', icon: 'round',
@@ -172,7 +179,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
       if (!_probeDc || _probeDc.defeated) continue;
       const _probeEff = _sdpEffs[_probeDc.dcName] || _sdpEffs[_probeDc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
       if (!(_probeEff?.specialAbilityIds || []).includes('self_destruct_probe')) continue;
-      const _probeOwnerId = _pNum === 1 ? game.player1Id : game.player2Id;
+      const _probeOwnerId = getPlayerId(game, _pNum);
       const _sdpRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`self_destruct_probe_use_${gameId}_${_probeMsgId}`).setLabel('Use Self-Destruct').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`self_destruct_probe_skip_${gameId}_${_probeMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
@@ -201,9 +208,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
   }
   // Scavenged Walker: end of round, may interrupt to perform an attack with -1 Hit
   for (const pn of [1, 2]) {
-    const _swMsgIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-    const _swDcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-    const _swAtts = pn === 1 ? (game.p1DcAttachments || {}) : (game.p2DcAttachments || {});
+    const _swMsgIds = getDcMessageIds(game, pn) || [];
+    const _swDcList = getDcList(game, pn) || [];
+    const _swAtts = getDcAttachments(game, pn) || {};
     for (let i = 0; i < _swMsgIds.length; i++) {
       const _swMid = _swMsgIds[i];
       if (!(_swAtts[_swMid] || []).includes('Scavenged Walker')) continue;
@@ -225,9 +232,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
   if (_svMapSpaces?.exterior) {
     const _svExterior = new Set((Array.isArray(_svMapSpaces.exterior) ? _svMapSpaces.exterior : []).map(s => String(s).toLowerCase()));
     for (const pn of [1, 2]) {
-      const _svMsgIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-      const _svDcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-      const _svAtts = pn === 1 ? (game.p1DcAttachments || {}) : (game.p2DcAttachments || {});
+      const _svMsgIds = getDcMessageIds(game, pn) || [];
+      const _svDcList = getDcList(game, pn) || [];
+      const _svAtts = getDcAttachments(game, pn) || {};
       for (let i = 0; i < _svMsgIds.length; i++) {
         const _svMid = _svMsgIds[i];
         if (!(_svAtts[_svMid] || []).includes('Survivalist')) continue;
@@ -257,7 +264,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
     if (game.exhaustedSkirmishUpgrades?.[msgId]) delete game.exhaustedSkirmishUpgrades[msgId];
     try {
-      const chId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+      const chId = getPlayAreaId(game, meta.playerNum);
       const ch = await client.channels.fetch(chId);
       const msg = await ch.messages.fetch(msgId);
       const healthState = dcHealthState.get(msgId) || [];
@@ -278,10 +285,10 @@ export async function handleEndEndOfRound(interaction, ctx) {
       console.error('Failed to refresh board at end of round:', err);
     }
   }
-  game.p1ActivationsRemaining = game.p1ActivationsTotal ?? 0;
-  game.p2ActivationsRemaining = game.p2ActivationsTotal ?? 0;
-  game.p1ActivatedDcIndices = [];
-  game.p2ActivatedDcIndices = [];
+  for (const pn of [1, 2]) {
+    setActivationsRemaining(game, pn, getActivationsTotal(game, pn) ?? 0);
+    setActivatedDcIndices(game, pn, []);
+  }
   const mapId = game.selectedMap?.id;
   const p1Terminals = mapId ? countTerminalsControlledByPlayer(game, 1, mapId) : 0;
   const p2Terminals = mapId ? countTerminalsControlledByPlayer(game, 2, mapId) : 0;
@@ -297,8 +304,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
   // Data Theft: return stolen card to opponent's discard if still in hand at end of round
   if (game.dataTheftStolenCard) {
     const dt = game.dataTheftStolenCard;
-    const dtHandKey = dt.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-    const dtOppDiscardKey = dt.playerNum === 1 ? 'player2CcDiscard' : 'player1CcDiscard';
+    const dtHandKey = ccHandKey(dt.playerNum);
+    const dtOppNum = dt.playerNum === 1 ? 2 : 1;
+    const dtOppDiscardKey = ccDiscardKey(dtOppNum);
     const dtHand = game[dtHandKey] || [];
     const dtIdx = dtHand.indexOf(dt.cardName);
     if (dtIdx >= 0) {
@@ -374,9 +382,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
   await updateHandVisualMessage(game, 1, client);
   await updateHandVisualMessage(game, 2, client);
   for (const pn of [1, 2]) {
-    const hand = pn === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
-    const deck = pn === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
-    const handId = pn === 1 ? game.p1HandId : game.p2HandId;
+    const hand = getCcHand(game, pn) || [];
+    const deck = getCcDeck(game, pn) || [];
+    const handId = getHandChannelId(game, pn);
     if (!handId) continue;
     try {
       const handCh = await client.channels.fetch(handId);
@@ -530,8 +538,8 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
   {
     const _sorEff = getDcEffects() || {};
     for (const playerNum of [1, 2]) {
-      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-      const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const dcList = getDcList(game, playerNum) || [];
+      const msgIds = getDcMessageIds(game, playerNum) || [];
       for (let i = 0; i < dcList.length; i++) {
         const dc = dcList[i];
         if (!dc || dc.defeated) continue;
@@ -560,7 +568,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
 
         // Force Slow (Cal Kestis): choose a hostile within 3 to skip activation
         if (sIds.includes('force_slow_cal')) {
-          const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+          const ownerId = getPlayerId(game, playerNum);
           await logGameAction(game, client, `🐌 **Force Slow** — <@${ownerId}>, choose a hostile figure within 3 spaces of **${dc.displayName || dc.dcName}**; that figure skips its next activation. *(Honor system.)*`, {
             phase: 'ROUND', icon: 'round',
             allowedMentions: { users: [ownerId] },
@@ -569,7 +577,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
 
         // Excavation (Doctor Aphra): choose a CC from discard with cost ≤1, add to hand
         if (sIds.includes('excavation_aphra')) {
-          const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+          const ownerId = getPlayerId(game, playerNum);
           await logGameAction(game, client, `⛏️ **Excavation** — <@${ownerId}>, choose a Command Card from your discard pile with cost 1 or less and add it to your hand. *(Honor system.)*`, {
             phase: 'ROUND', icon: 'round',
             allowedMentions: { users: [ownerId] },
@@ -578,7 +586,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
 
         // Shape/Shift (Clawdite Shapeshifter): form picker at start of round
         if (sIds.includes('shape_clawdite_elite') || sIds.includes('shape_clawdite_reg') || sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
-          const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+          const ownerId = getPlayerId(game, playerNum);
           const _fk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith(dc.dcName + '-'));
           const _curForm = _fk ? getConfig(game, _fk)?.form : null;
           const formCards = getFormCards();
@@ -734,8 +742,8 @@ export async function handleEndStartOfRound(interaction, ctx) {
   {
     const _sorEff = getDcEffects() || {};
     for (const playerNum of [1, 2]) {
-      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-      const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const dcList = getDcList(game, playerNum) || [];
+      const msgIds = getDcMessageIds(game, playerNum) || [];
       for (let i = 0; i < dcList.length; i++) {
         const dc = dcList[i];
         if (!dc || dc.defeated) continue;
@@ -764,7 +772,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
 
         // Force Slow (Cal Kestis): choose a hostile within 3 to skip activation
         if (sIds.includes('force_slow_cal')) {
-          const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+          const ownerId = getPlayerId(game, playerNum);
           await logGameAction(game, client, `🐌 **Force Slow** — <@${ownerId}>, choose a hostile figure within 3 spaces of **${dc.displayName || dc.dcName}**; that figure skips its next activation. *(Honor system.)*`, {
             phase: 'ROUND', icon: 'round',
             allowedMentions: { users: [ownerId] },
@@ -773,7 +781,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
 
         // Excavation (Doctor Aphra): choose a CC from discard with cost ≤1, add to hand
         if (sIds.includes('excavation_aphra')) {
-          const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+          const ownerId = getPlayerId(game, playerNum);
           await logGameAction(game, client, `⛏️ **Excavation** — <@${ownerId}>, choose a Command Card from your discard pile with cost 1 or less and add it to your hand. *(Honor system.)*`, {
             phase: 'ROUND', icon: 'round',
             allowedMentions: { users: [ownerId] },
@@ -782,7 +790,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
 
         // Shape/Shift (Clawdite Shapeshifter): form picker at start of round
         if (sIds.includes('shape_clawdite_elite') || sIds.includes('shape_clawdite_reg') || sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
-          const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+          const ownerId = getPlayerId(game, playerNum);
           const _fk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith(dc.dcName + '-'));
           const _curForm = _fk ? getConfig(game, _fk)?.form : null;
           const formCards = getFormCards();

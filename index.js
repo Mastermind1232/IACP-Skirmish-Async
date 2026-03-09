@@ -354,6 +354,15 @@ import {
 } from './src/data-loader.js';
 import { getConfig as getLoadoutConfig } from './src/game/figure-config.js';
 import { runEndOfRoundRules, runStartOfRoundRules, runNpcThugActivation, runNpcKryknaActivation } from './src/game/mission-rules.js';
+import {
+  getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
+  getSquad, getCcHand, getCcDeck, getCcDiscard, getCcAttachments, getDcAttachments,
+  getActivationsRemaining, getActivationsTotal, getActivatedDcIndices,
+  getDiscardThreadId, getActivationsMessageId,
+  setActivationsRemaining, setActivationsTotal, setActivatedDcIndices,
+  ccHandKey, ccDiscardKey, ccDeckKey, ccDrawnKey, ccAttachmentsKey, dcAttachmentsKey,
+  dcAttachmentMessageIdsKey, vpKey, deployMetadataKey, deployLabelsKey, armyCostModifierKey,
+} from './src/game/player-helpers.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname);
@@ -402,17 +411,17 @@ async function buildAttachmentEmbedsAndFiles(ccNames, dcNames = [], attachedToDc
 /** Update the Play Area "Attachments" message for a DC (CC + DC Skirmish Upgrade attachments).
  * Creates the message on demand when first attachment is added; deletes when last is removed. */
 async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, client) {
-  const ccKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
-  const dcKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+  const ccKey = ccAttachmentsKey(playerNum);
+  const dcKey = dcAttachmentsKey(playerNum);
   const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-  const attachMsgIdsKey = playerNum === 1 ? 'p1DcAttachmentMessageIds' : 'p2DcAttachmentMessageIds';
+  const attachMsgIdsKey = dcAttachmentMessageIdsKey(playerNum);
   game[attachMsgIdsKey] = game[attachMsgIdsKey] || [];
   const attachMsgIds = game[attachMsgIdsKey];
   const idx = msgIds.indexOf(dcMsgId);
   if (idx < 0) return;
   while (attachMsgIds.length <= idx) attachMsgIds.push(null);
   const attachMsgId = attachMsgIds[idx];
-  const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+  const channelId = getPlayAreaId(game, playerNum);
   const ccList = (game[ccKey] || {})[dcMsgId] || [];
   const dcList = (game[dcKey] || {})[dcMsgId] || [];
   const hasContent = ccList.length > 0 || dcList.length > 0;
@@ -1401,7 +1410,7 @@ function getCommandCardImagePath(cardName) {
 function getHandWindowButtonRow(game, playerNum, gameId) {
   if (!game) return null;
   const whoseTurn = game.endOfRoundWhoseTurn;
-  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const playerId = getPlayerId(game, playerNum);
   if (!whoseTurn || whoseTurn !== playerId) return null;
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -1956,9 +1965,9 @@ async function updateDeployPromptMessages(game, playerNum, client) {
   const idsKey = isInitiative ? 'initiativeDeployMessageIds' : 'nonInitiativeDeployMessageIds';
   const msgIds = game[idsKey];
   if (!msgIds?.length) return;
-  const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+  const handId = getHandChannelId(game, playerNum);
   const zone = isInitiative ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
-  const squad = playerNum === 1 ? game.player1Squad : game.player2Squad;
+  const squad = getSquad(game, playerNum);
   const dcList = squad?.dcList || [];
   try {
     const handChannel = await client.channels.fetch(handId);
@@ -2012,7 +2021,7 @@ function getFiguresForRender(game) {
     const zone = p === initiativePlayerNum ? chosen : otherZone;
     const color = zoneColors[zone] || '#888';
     const poses = pos[p] || {};
-    const dcList = (p === 1 ? game.player1Squad : game.player2Squad)?.dcList || [];
+    const dcList = getSquad(game, p)?.dcList || [];
     const totals = {};
     for (const d of dcList) {
       const n = resolveDcName(d);
@@ -2295,7 +2304,7 @@ async function postDevaronDoorButtons(game, allDoors, channel, gameId) {
   if (!game.pendingDoorSelections || game.pendingDoorSelections.length === 0) return;
   const pending = game.pendingDoorSelections[0];
   const { playerNum, doorsRemaining } = pending;
-  const pid = playerNum === 1 ? game.player1Id : game.player2Id;
+  const pid = getPlayerId(game, playerNum);
   const openedSet = new Set((game.openedDoors || []).map((k) => String(k).toLowerCase()));
   const available = (allDoors || []).filter(([a, b]) => {
     const ek1 = `${a}|${b}`.toLowerCase();
@@ -2336,7 +2345,7 @@ async function postDevaronCratePushPrompts(game, channel, gameId) {
   const allOrigCoords = Object.values(mapData?.missionB?.positions || {}).flat().filter(Boolean).map((c) => String(c).toLowerCase());
   if (allOrigCoords.length === 0) return;
   for (const pn of [1, 2]) {
-    const pid = pn === 1 ? game.player1Id : game.player2Id;
+    const pid = getPlayerId(game, pn);
     const controlled = allOrigCoords.filter((origCoord) => {
       const cur = String(game.cratePositions?.[origCoord] || origCoord).toLowerCase();
       return getSpaceController(game, 'devaron-garrison', cur) === pn;
@@ -2370,7 +2379,7 @@ async function postDevaronCratePushPrompts(game, channel, gameId) {
 async function postKryknaPushButtons(game, channel, gameId) {
   if (!game.pendingKryknaPushQueue || game.pendingKryknaPushQueue.length === 0) return;
   const playerNum = game.pendingKryknaPushQueue[0];
-  const pid = playerNum === 1 ? game.player1Id : game.player2Id;
+  const pid = getPlayerId(game, playerNum);
   const pushedIds = new Set(game.kryknaPushedIds || []);
   const activeKrykna = (game.npcKrykna || []).filter((k) => !k.defeated && !pushedIds.has(k.id));
   if (activeKrykna.length === 0) return;
@@ -2588,7 +2597,7 @@ async function refreshAllGameComponents(game, client) {
       dcHealthState.set(msgId, healthState);
     }
     try {
-      const channelId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+      const channelId = meta.getPlayAreaId(game, playerNum);
       const channel = await client.channels.fetch(channelId);
       const msg = await channel.messages.fetch(msgId);
       const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState, getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, msgId));
@@ -2746,12 +2755,12 @@ async function clearPreGameSetup(game, client) {
  * Only runs when the player actually has attachment messages to interleave.
  */
 async function reorderPlayAreaAfterAttachments(game, playerNum, client) {
-  const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
-  const dcMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+  const dcList = getDcList(game, playerNum);
+  const dcMsgIds = getDcMessageIds(game, playerNum);
   const attachMsgIds = playerNum === 1 ? (game.p1DcAttachmentMessageIds || []) : (game.p2DcAttachmentMessageIds || []);
-  const ccAttachKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
-  const dcAttachKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
-  const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+  const ccAttachKey = ccAttachmentsKey(playerNum);
+  const dcAttachKey = dcAttachmentsKey(playerNum);
+  const channelId = getPlayAreaId(game, playerNum);
 
   // Only reorder if there are attachment messages to interleave
   const hasAttachments = attachMsgIds.some((id) => id != null);
@@ -2988,7 +2997,7 @@ async function runDraftRandom(game, client, options = {}) {
   game.figureOrientations = game.figureOrientations || {};
 
   const deployForPlayer = (playerNum, zone, opponentZone) => {
-    const squad = playerNum === 1 ? game.player1Squad : game.player2Squad;
+    const squad = getSquad(game, playerNum);
     const dcList = squad?.dcList || [];
     const { metadata } = getDeployFigureLabels(dcList);
     // Compute centroid of opponent zone to rank spaces by proximity to the "entrance"
@@ -3046,7 +3055,7 @@ async function runDraftRandom(game, client, options = {}) {
 
   // Shuffle + draw starting 3 CCs. Scenario may seed P1 hand (e.g. smoke_grenade forces Smoke Grenade)
   const drawStartingHand = async (playerNum) => {
-    const squad = playerNum === 1 ? game.player1Squad : game.player2Squad;
+    const squad = getSquad(game, playerNum);
     const ccList = squad?.ccList || [];
     const deck = [...ccList];
     shuffleArray(deck);
@@ -3061,19 +3070,19 @@ async function runDraftRandom(game, client, options = {}) {
         if (pcIdx >= 0) deck.splice(pcIdx, 1);
       }
     }
-    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-    const drawnKey = playerNum === 1 ? 'player1CcDrawn' : 'player2CcDrawn';
+    const deckKey = ccDeckKey(playerNum);
+    const handKey = ccHandKey(playerNum);
+    const drawnKey = ccDrawnKey(playerNum);
     game[deckKey] = deck;
     game[handKey] = hand;
     game[drawnKey] = true;
-    const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+    const playerId = getPlayerId(game, playerNum);
     await logGameAction(game, client, `<@${playerId}> shuffled and drew 3 Command Cards.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
-    const handChannelId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+    const handChannelId = getHandChannelId(game, playerNum);
     const handChannel = await client.channels.fetch(handChannelId);
     const existingMsgs = await handChannel.messages.fetch({ limit: 5 });
     if (existingMsgs.size === 0) {
-      const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+      const playerId = getPlayerId(game, playerNum);
       await handChannel.send({
         content: `<@${playerId}>, this is your hand.`,
         embeds: [getHandTooltipEmbed(game, playerNum)],
@@ -3320,8 +3329,8 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
   const { newHp, wasDefeated } = reduceHp(dcHealthState, game, msgId, figIdx, damage, playerNum);
   const figName = figKey.replace(/-\d+-\d+$/, '');
   if (thread) await thread.send(`**${sourceName}** — ${figName} suffers **${damage} Damage**.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
-  const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-  const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+  const dcIds = getDcMessageIds(game, playerNum);
+  const dcList = getDcList(game, playerNum);
   const idx = (dcIds || []).indexOf(msgId);
   if (wasDefeated && idx >= 0) {
     if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figKey];
@@ -3344,7 +3353,7 @@ const HARMFUL_CONDITIONS = _HARMFUL_CONDITIONS;
 
 /** Send a Bleeding damage prompt to the given channel. Offers "Take 1 damage" or "Prevent (discard CC)". */
 async function sendBleedingPrompt(game, channel, figureKey, playerNum, displayName) {
-  const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+  const deckKey = ccDeckKey(playerNum);
   const deckCount = (game[deckKey] || []).length;
   const acceptBtn = new ButtonBuilder()
     .setCustomId(`bleed_accept_${game.gameId}_${playerNum}_${figureKey}`)
@@ -3373,7 +3382,7 @@ async function handleBleedResolve(interaction) {
     await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const playerId = getPlayerId(game, playerNum);
   if (interaction.user.id !== playerId && !game.isTestGame) {
     await interaction.followUp({ content: 'Only the figure owner can resolve Bleeding.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
@@ -3388,8 +3397,8 @@ async function handleBleedResolve(interaction) {
       const { newHp, wasDefeated } = reduceHp(dcHealthState, game, msgId, figureIndex, 1, playerNum);
       if (dcHealthState.get(msgId)?.[figureIndex]) {
         await logGameAction(game, interaction.client, `🩸 **Bleeding** — **${dcName}** suffered 1 damage.`, { phase: 'ROUND', icon: 'attack' });
-        const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const dcIds = getDcMessageIds(game, playerNum);
+        const dcList = getDcList(game, playerNum);
         const idx = (dcIds || []).indexOf(msgId);
         if (wasDefeated) {
           if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figureKey];
@@ -3414,7 +3423,7 @@ async function handleBleedResolve(interaction) {
         try {
           const meta = dcMessageMeta.get(msgId);
           if (meta) {
-            const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+            const channelId = getPlayAreaId(game, playerNum);
             const ch = await interaction.client.channels.fetch(channelId);
             const dcMsg = await ch.messages.fetch(msgId);
             const exhausted = dcExhaustedState.get(msgId) ?? false;
@@ -3429,7 +3438,7 @@ async function handleBleedResolve(interaction) {
     }
   } else {
     // prevent: discard top CC from deck
-    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const deckKey = ccDeckKey(playerNum);
     const deck = game[deckKey] || [];
     if (deck.length === 0) {
       await interaction.followUp({ content: 'No CCs in deck to discard!', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -3449,7 +3458,7 @@ function findFigureheadFigure(game, defenderPlayerNum, targetFigureKey) {
   if (!game.selectedMap?.id) return null;
   const targetPos = game.figurePositions?.[defenderPlayerNum]?.[targetFigureKey];
   if (!targetPos) return null;
-  const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+  const dcList = getDcList(game, defenderPlayerNum);
   if (!dcList) return null;
   for (let i = 0; i < dcList.length; i++) {
     const dc = dcList[i];
@@ -3541,7 +3550,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
       }
     }
   }
-  const ownerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, attackerPlayerNum);
   const targetMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, combat.target.figureKey);
   const tm = combat.target.figureKey.match(/-(\d+)-(\d+)$/);
   const targetFigIndex = tm ? parseInt(tm[2], 10) : 0;
@@ -3550,7 +3559,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
   if (damage > 0 && hit) {
     const fhResult = findFigureheadFigure(game, defenderPlayerNum, combat.target.figureKey);
     if (fhResult) {
-      const fhOwnerId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
+      const fhOwnerId = getPlayerId(game, defenderPlayerNum);
       const fhThread = await client.channels.fetch(combat.combatThreadId);
       game.pendingFigurehead = {
         damage, hit, resultText, totalBlast,
@@ -3648,13 +3657,13 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     if (dcHealthState.get(targetMsgId)?.[targetFigIndex]) {
       // Achievement: Devastator (10+ damage in a single attack)
       if (damage >= 10 && isDbConfigured() && achievementsChannelId) {
-        const _devUserId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+        const _devUserId = getPlayerId(game, attackerPlayerNum);
         checkAndGrantAchievements(_devUserId, 'single_attack_damage', damage).then((granted) => {
           for (const def of granted) postAchievementNotification(client, achievementsChannelId, _devUserId, def);
         }).catch((err) => console.error('[Achievements] Devastator check failed:', err.message));
       }
-      const dcMessageIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+      const dcMessageIds = getDcMessageIds(game, defenderPlayerNum);
+      const dcList = getDcList(game, defenderPlayerNum);
       const idx = (dcMessageIds || []).indexOf(targetMsgId);
       let allConditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
       // Condition Immunity: filter out harmful conditions for immune figures
@@ -4000,14 +4009,14 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if (game.figureConditions?.[combat.target.figureKey]) delete game.figureConditions[combat.target.figureKey];
         const { cost, subCost, figures } = combat.targetStats;
         const vp = (figures > 1 && subCost != null) ? subCost : (cost ?? 5);
-        const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+        const _vpK = vpKey(attackerPlayerNum);
         awardKillVp(game, attackerPlayerNum, vp);
         // Achievement: activation kill streak (Double Kill / Triple Kill / PENTAKILL)
         if (combat.attackerMsgId) {
           game.activationKills = game.activationKills || {};
           game.activationKills[combat.attackerMsgId] = (game.activationKills[combat.attackerMsgId] || 0) + 1;
           if (isDbConfigured() && achievementsChannelId) {
-            const _akUserId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+            const _akUserId = getPlayerId(game, attackerPlayerNum);
             checkAndGrantAchievements(_akUserId, 'activation_kills', game.activationKills[combat.attackerMsgId]).then((granted) => {
               for (const def of granted) postAchievementNotification(client, achievementsChannelId, _akUserId, def);
             }).catch((err) => console.error('[Achievements] activation_kills check failed:', err.message));
@@ -4019,8 +4028,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           if (_noImportDcName && !isDcUnique(_noImportDcName)) {
             const _reduceAmt = game.nextDefeatedFriendlyVpReduction.amount || 0;
             const _reduced = Math.min(_reduceAmt, vp);
-            game[vpKey].kills = Math.max(0, game[vpKey].kills - _reduced);
-            game[vpKey].total = Math.max(0, game[vpKey].total - _reduced);
+            game[_vpK].kills = Math.max(0, game[_vpK].kills - _reduced);
+            game[_vpK].total = Math.max(0, game[_vpK].total - _reduced);
             resultText += ` (−${_reduced} VP: Of No Importance)`;
             await logGameAction(game, client, `**Of No Importance** — VP reduced by ${_reduced}.`, { phase: 'ROUND', icon: 'card' });
           }
@@ -4033,8 +4042,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const _bountySetterNum = typeof _priceBounty === 'object' ? _priceBounty.playerNum : attackerPlayerNum;
           awardObjectiveVp(game, _bountySetterNum, _bountyAmt);
           delete game.priceBounties[combat.target.label];
-          const _bountyVpKey = _bountySetterNum === 1 ? 'player1VP' : 'player2VP';
-          await logGameAction(game, client, `**Price on Their Heads** — +${_bountyAmt} VP bounty awarded to P${_bountySetterNum} (${game[_bountyVpKey].total} total).`, { phase: 'ROUND', icon: 'card' });
+          const _bountyVpK = vpKey(_bountySetterNum);
+          await logGameAction(game, client, `**Price on Their Heads** — +${_bountyAmt} VP bounty awarded to P${_bountySetterNum} (${game[_bountyVpK].total} total).`, { phase: 'ROUND', icon: 'card' });
         }
         // Paid in Beskar: grant Block tokens when hostile is defeated within range
         if (game.whenDefeatHostileWithin3GainBlockTokens) {
@@ -4057,7 +4066,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const _wecAmt = typeof _wecData === 'object' ? (_wecData.amount ?? 2) : _wecData;
           awardObjectiveVp(game, attackerPlayerNum, _wecAmt);
           delete game.nextHostileDefeatVpBonus[attackerPlayerNum];
-          await logGameAction(game, client, `**Worth Every Credit** — +${_wecAmt} bonus VP (${game[vpKey].total} total).`, { phase: 'ROUND', icon: 'card' });
+          await logGameAction(game, client, `**Worth Every Credit** — +${_wecAmt} bonus VP (${game[_vpK].total} total).`, { phase: 'ROUND', icon: 'card' });
         }
         // You Will Not Deny Me: prevent Fifth Brother defeat; on any hostile defeat recover 2 HP
         if (game.youWillNotDenyMeActive) {
@@ -4114,7 +4123,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           if (pn === defenderPlayerNum) continue; // Jabba's owner must be the one who defeated someone
           const _jabbaOnBoard = Object.keys(game.figurePositions?.[pn] || {}).some(fk => fk.startsWith('Jabba the Hutt-'));
           if (_jabbaOnBoard) {
-            const vpObj = pn === 1 ? game.player1VP : game.player2VP;
+            const vpObj = game[vpKey(pn)];
             if (vpObj) {
               vpObj.total = (vpObj.total || 0) + 1;
               vpObj.objectives = (vpObj.objectives || 0) + 1;
@@ -4174,8 +4183,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const _bountyEff = getDcEffects()?.[_bountyDcName];
           if ((_bountyEff?.passives || []).includes('Bounty')) {
             awardObjectiveVp(game, attackerPlayerNum, 2);
-            const _bountyVpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-            await logGameAction(game, client, `💰 **Bounty** — **${_bountyDcName}** was defeated. Opponent (P${attackerPlayerNum}) gains **2 VP** (${game[_bountyVpKey].total} total).`, { phase: 'ROUND', icon: 'card' });
+            const _bountyVpK2 = vpKey(attackerPlayerNum);
+            await logGameAction(game, client, `💰 **Bounty** — **${_bountyDcName}** was defeated. Opponent (P${attackerPlayerNum}) gains **2 VP** (${game[_bountyVpK2].total} total).`, { phase: 'ROUND', icon: 'card' });
           }
         }
         // Brutal Tactics (Saw Gerrerra): when a hostile figure is defeated, each hostile within 3 of that figure becomes Weakened
@@ -4217,7 +4226,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
             await updateActivationsMessage(game, defenderPlayerNum, client);
           }
-          const ccAttachKey = defenderPlayerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+          const ccAttachKey = ccAttachmentsKey(defenderPlayerNum);
           if (game[ccAttachKey]?.[targetMsgId]?.length) {
             delete game[ccAttachKey][targetMsgId];
             await updateAttachmentMessageForDc(game, defenderPlayerNum, targetMsgId, client);
@@ -4252,7 +4261,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             await thread.send({ content: `<@${ownerId}> — Hostile defeated! You have ${atkDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [ownerId] } }).catch(() => {});
           }
           // Notify defender about own-figure-defeat reactions in hand
-          const defId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
+          const defId = getPlayerId(game, defenderPlayerNum);
           const defHand = defenderPlayerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
           const defDefeatCards = [...new Set(defHand)].filter(c => ccCards[c]?.timing && _ownDefeatTimings.has(ccCards[c].timing));
           if (defDefeatCards.length) {
@@ -4282,7 +4291,6 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     }
     if (effectiveBlast > 0 && hit && damage > 0 && game.selectedMap?.id) {
       const adjacent = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
-      const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
       for (const { figureKey: blastFigureKey, playerNum: blastPlayerNum } of adjacent) {
         // Flame Trooper Fireproof: own Blast does not affect friendly figures
         if (blastPlayerNum === attackerPlayerNum && _ftAtkUpgrades.includes('Flame Trooper')) continue;
@@ -4291,8 +4299,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const blastM = blastFigureKey.match(/-(\d+)-(\d+)$/);
         const blastFigIndex = blastM ? parseInt(blastM[2], 10) : 0;
         const { newHp: newBCur, wasDefeated: blastDefeated } = reduceHp(dcHealthState, game, blastMsgId, blastFigIndex, effectiveBlast, blastPlayerNum);
-        const blastDcIds = blastPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const blastDcList = blastPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+        const blastDcIds = getDcMessageIds(game, blastPlayerNum);
+        const blastDcList = getDcList(game, blastPlayerNum);
         const blastIdx = (blastDcIds || []).indexOf(blastMsgId);
         if (blastDefeated) {
           if (game.figurePositions?.[blastPlayerNum]) delete game.figurePositions[blastPlayerNum][blastFigureKey];
@@ -4308,7 +4316,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             game.activationKills = game.activationKills || {};
             game.activationKills[combat.attackerMsgId] = (game.activationKills[combat.attackerMsgId] || 0) + 1;
             if (isDbConfigured() && achievementsChannelId) {
-              const _akUserId2 = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+              const _akUserId2 = getPlayerId(game, attackerPlayerNum);
               checkAndGrantAchievements(_akUserId2, 'activation_kills', game.activationKills[combat.attackerMsgId]).then((granted) => {
                 for (const def of granted) postAchievementNotification(client, achievementsChannelId, _akUserId2, def);
               }).catch((err) => console.error('[Achievements] blast activation_kills check failed:', err.message));
@@ -4317,13 +4325,12 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const blastLabel = blastDcList[blastIdx]?.displayName || blastFigureKey;
           await logGameAction(game, client, `Blast: <@${ownerId}> defeated **${blastLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
           if (blastIdx >= 0 && isGroupDefeated(game, blastPlayerNum, blastIdx)) {
-            const activatedIndices = blastPlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+            const activatedIndices = getActivatedDcIndices(game, blastPlayerNum) || [];
             if (!activatedIndices.includes(blastIdx)) {
-              if (blastPlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
-              else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+              setActivationsRemaining(game, blastPlayerNum, Math.max(0, (getActivationsRemaining(game, blastPlayerNum) ?? 0) - 1));
               await updateActivationsMessage(game, blastPlayerNum, client);
             }
-            const blastCcAttachKey = blastPlayerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+            const blastCcAttachKey = ccAttachmentsKey(blastPlayerNum);
             if (game[blastCcAttachKey]?.[blastMsgId]?.length) {
               delete game[blastCcAttachKey][blastMsgId];
               await updateAttachmentMessageForDc(game, blastPlayerNum, blastMsgId, client);
@@ -4435,8 +4442,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             if (fk === combat.target.figureKey) continue;
             if (getRange(pos, _epTargetPos) !== 1) continue;
             const _epFkDcName = fk.replace(/-\d+-\d+$/, '');
-            const _epMid = pNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-            const _epDcL = pNum === 1 ? game.p1DcList : game.p2DcList;
+            const _epMid = getDcMessageIds(game, pNum) || [];
+            const _epDcL = getDcList(game, pNum);
             const _epFm = fk.match(/-(\d+)-(\d+)$/);
             const _epDgIdx = _epFm ? parseInt(_epFm[1], 10) : 1;
             const _epFigIdx = _epFm ? parseInt(_epFm[2], 10) : 0;
@@ -4616,8 +4623,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       if (_sdaPrevHs?.[_sdaFigIdx]) {
         const _sdaMaxHp = _sdaPrevHs[_sdaFigIdx][1] ?? _sdaPrevHs[_sdaFigIdx][0] ?? 99;
         reduceHp(dcHealthState, game, _sdaMsgId, _sdaFigIdx, _sdaMaxHp, attackerPlayerNum);
-        const _sdaDcIds = attackerPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const _sdaDcList = attackerPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+        const _sdaDcIds = getDcMessageIds(game, attackerPlayerNum);
+        const _sdaDcList = getDcList(game, attackerPlayerNum);
         const _sdaIdx = (_sdaDcIds || []).indexOf(_sdaMsgId);
         if (game.figurePositions?.[attackerPlayerNum]) delete game.figurePositions[attackerPlayerNum][_sdaFigKey];
         if (game.figureConditions?.[_sdaFigKey]) delete game.figureConditions[_sdaFigKey];
@@ -4706,7 +4713,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       const { maxHp: deflectMax } = reduceHp(dcHealthState, game, attMsgId, attFigIdx, deflectDmg, attackerPlayerNum);
       if (deflectMax > 0) {
         embedRefreshMsgIds.add(attMsgId);
-        const defOwnerId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
+        const defOwnerId = getPlayerId(game, defenderPlayerNum);
         await logGameAction(game, client, `<@${defOwnerId}> **Deflection** — Attacker suffers **${deflectDmg} Damage** (you took no damage).`, { allowedMentions: { users: [defOwnerId] }, phase: 'ROUND', icon: 'card' });
       }
     }
@@ -4734,8 +4741,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       if (cleaveTargets.length > 0) {
         const targetsWithLabels = cleaveTargets.map((c) => {
           const msgId = findDcMessageIdForFigure(game.gameId, c.playerNum, c.figureKey);
-          const dcIds = c.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const dcList = c.playerNum === 1 ? game.p1DcList : game.p2DcList;
+          const dcIds = c.getDcMessageIds(game, playerNum);
+          const dcList = c.getDcList(game, playerNum);
           const idx = (dcIds || []).indexOf(msgId);
           const label = (idx >= 0 && dcList?.[idx]?.displayName) ? dcList[idx].displayName : c.figureKey;
           return { figureKey: c.figureKey, playerNum: c.playerNum, label: String(label).slice(0, 80) };
@@ -4802,8 +4809,8 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
     if (adjHostiles.length > 0) {
       const targetsWithLabels = adjHostiles.map((c) => {
         const mid = findDcMessageIdForFigure(game.gameId, c.playerNum, c.figureKey);
-        const dcList = c.playerNum === 1 ? game.p1DcList : game.p2DcList;
-        const dcIds = c.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const dcList = c.getDcList(game, playerNum);
+        const dcIds = c.getDcMessageIds(game, playerNum);
         const idx = (dcIds || []).indexOf(mid);
         const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : c.figureKey.replace(/-\d+-\d+$/, '');
         return { figureKey: c.figureKey, playerNum: c.playerNum, label: String(label).slice(0, 80), msgId: mid };
@@ -4837,8 +4844,8 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
       const adjSpaces = (ms?.adjacency?.[String(targetPos).toLowerCase()] || []).map((s) => String(s).toLowerCase());
       if (adjSpaces.length > 0) {
         const targetMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, combat.target.figureKey);
-        const defDcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-        const defDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const defDcList = getDcList(game, defenderPlayerNum);
+        const defDcIds = getDcMessageIds(game, defenderPlayerNum);
         const defIdx = (defDcIds || []).indexOf(targetMsgId);
         const targetLabel = (defIdx >= 0 && defDcList?.[defIdx]?.displayName) ? defDcList[defIdx].displayName : targetDcName;
         game.pendingConcussiveBolt = {
@@ -4881,8 +4888,8 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
         for (const [figKey, figPos] of Object.entries(game.figurePositions?.[p] || {})) {
           if (candSpaces.has(String(figPos).toLowerCase())) {
             const mid = findDcMessageIdForFigure(game.gameId, p, figKey);
-            const dcList = p === 1 ? game.p1DcList : game.p2DcList;
-            const dcIds = p === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+            const dcList = getDcList(game, p);
+            const dcIds = getDcMessageIds(game, p);
             const idx = (dcIds || []).indexOf(mid);
             const dcName = figKey.replace(/-\d+-\d+$/, '');
             const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : dcName;
@@ -4935,7 +4942,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
     if (!targetFigKey.startsWith(targetDcName + '-')) continue;
     // Prompt the defender for this reaction
     combat.promptedReactions.add(name);
-    const defOwnerId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
+    const defOwnerId = getPlayerId(game, defenderPlayerNum);
     // Tentatively remove from hand to prevent double-prompt; restored on skip
     const handKey = defenderPlayerNum === 1 ? 'player1CcHand' : 'player2CcHand';
     const cardIdx = (game[handKey] || []).indexOf(name);
@@ -5064,7 +5071,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     bank.total = (bank.total ?? 0) + n;
     bank.remaining = (bank.remaining ?? 0) + n;
     game.movementBank[pending.msgId] = bank;
-    const ownerId = combat.attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+    const ownerId = combat.getPlayerId(game, attackerPlayerNum);
     await logGameAction(game, client, `Hit and Run: <@${ownerId}> gained **${n}** movement point${n === 1 ? '' : 's'} after the attack.`, { allowedMentions: { users: [ownerId] }, phase: 'ACTION', icon: 'card' });
     await ensureMovementBankMessage(game, pending.msgId, client);
     delete game.hitAndRunPendingMp;
@@ -5072,7 +5079,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
   // --- Post-combat ability prompts (before clearing pendingCombat) ---
   const pcAttEff = getDcEffects()?.[combat.attackerDcName] || getDcEffects()?.[combat.attackerDcName?.replace(/\s*\[.*\]\s*$/, '')];
   const pcAttIds = pcAttEff?.specialAbilityIds || [];
-  const pcOwnerId = combat.attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+  const pcOwnerId = combat.getPlayerId(game, attackerPlayerNum);
   // Sidewinder (Jyn Odan): suffer 1 Strain to move 2 after attack (once/round)
   if (pcAttIds.includes('sidewinder') && combat.attackerMsgId != null) {
     const swKey = combat.attackerFigureKey + '_sidewinder';
@@ -5131,8 +5138,8 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
           if (fk === combat.target.figureKey) continue;
           if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
           const mid = findDcMessageIdForFigure(game.gameId, pn, fk);
-          const dcIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+          const dcIds = getDcMessageIds(game, pn);
+          const dcList = getDcList(game, pn);
           const idx2 = (dcIds || []).indexOf(mid);
           const lbl = (idx2 >= 0 && dcList?.[idx2]?.displayName) ? dcList[idx2].displayName : fk.replace(/-\d+-\d+$/, '');
           splashTargets.push({ figureKey: fk, playerNum: pn, label: String(lbl).slice(0, 80) });
@@ -5160,7 +5167,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     const ms = game.pendingMissileSalvo[combat.attackerMsgId];
     if (combat.target?.figureKey) ms.targetsFired = [...(ms.targetsFired || []), combat.target.figureKey];
     if (ms.diceAvailable?.length > 0) {
-      const salvoOwnerId = combat.attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+      const salvoOwnerId = combat.getPlayerId(game, attackerPlayerNum);
       const colorStyle = { blue: ButtonStyle.Primary, red: ButtonStyle.Danger, yellow: ButtonStyle.Secondary };
       const salvoBtns = ms.diceAvailable.map((c) =>
         new ButtonBuilder().setCustomId(`missile_salvo_die_${c}_${game.gameId}_${combat.attackerMsgId}`).setLabel(`${c.charAt(0).toUpperCase() + c.slice(1)} Die`).setStyle(colorStyle[c] || ButtonStyle.Secondary)
@@ -5197,7 +5204,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     }
     // Attacker: cards triggered by resolving an attack
     const _atkPostTimings = new Set(['afterAttack', 'afterYouResolveAttackTargetingFigure', 'afterYouResolveAttackThatDidNotMissDueToAccuracy']);
-    const _atkPostId = combat.attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+    const _atkPostId = combat.getPlayerId(game, attackerPlayerNum);
     const _atkPostHand = combat.attackerPlayerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
     const _atkPostCards = [...new Set(_atkPostHand)].filter(c => _ccCardsAll[c]?.timing && _atkPostTimings.has(_ccCardsAll[c].timing));
     if (_atkPostCards.length) {
@@ -5239,7 +5246,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     try {
       const meta = dcMessageMeta.get(msgId);
       if (meta) {
-        const channelId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+        const channelId = meta.getPlayAreaId(game, playerNum);
         const channel = await client.channels.fetch(channelId);
         const dcMsg = await channel.messages.fetch(msgId);
         const exhausted = dcExhaustedState.get(msgId) ?? false;
@@ -5304,7 +5311,7 @@ async function handleSidewinderApply(interaction) {
   await logGameAction(game, client, `**Sidewinder** — Jyn Odan suffered 1 Strain and gained +2 MP.`, { phase: 'ROUND', icon: 'card' });
   await ensureMovementBankMessage(game, attackerMsgId, client);
   try {
-    const ch = await client.channels.fetch(meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
+    const ch = await client.channels.fetch(meta.getPlayAreaId(game, playerNum));
     const msg = await ch.messages.fetch(attackerMsgId);
     const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, dcExhaustedState.get(attackerMsgId) ?? false, meta.displayName, dcHealthState.get(attackerMsgId) || [], getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, attackerMsgId));
     await msg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -5341,7 +5348,7 @@ async function handleBoltslingerTarget(interaction) {
     try {
       const tMeta = dcMessageMeta.get(targetMsgId);
       if (tMeta) {
-        const ch = await client.channels.fetch(tMeta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
+        const ch = await client.channels.fetch(tMeta.getPlayAreaId(game, playerNum));
         const msg = await ch.messages.fetch(targetMsgId);
         const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId));
         await msg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -5404,7 +5411,7 @@ async function applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThre
     try {
       const tMeta = dcMessageMeta.get(mid);
       if (tMeta) {
-        const ch = await client.channels.fetch(tMeta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
+        const ch = await client.channels.fetch(tMeta.getPlayAreaId(game, playerNum));
         const msg = await ch.messages.fetch(mid);
         const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(mid) ?? false, tMeta.displayName, dcHealthState.get(mid) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, mid));
         await msg.edit({ embeds: [embed], files }).catch(() => {});
@@ -5487,7 +5494,7 @@ async function handleFightingKnifeTarget(interaction) {
       const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
       awardKillVp(game, pending.attackerPlayerNum, vp);
       await logGameAction(game, client, `**Fighting Knife** — **${target.label}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
-      const dcIds = target.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const dcIds = target.getDcMessageIds(game, playerNum);
       const idx = (dcIds || []).indexOf(target.msgId);
       if (idx >= 0 && isGroupDefeated(game, target.playerNum, idx)) {
         const activatedIndices = target.playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
@@ -5588,8 +5595,8 @@ async function advanceSpreadThePain(game, pending) {
       for (const [figKey, figPos] of Object.entries(game.figurePositions?.[p] || {})) {
         if (candSpaces.has(String(figPos).toLowerCase())) {
           const mid = findDcMessageIdForFigure(game.gameId, p, figKey);
-          const dcList = p === 1 ? game.p1DcList : game.p2DcList;
-          const dcIds = p === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcList = getDcList(game, p);
+          const dcIds = getDcMessageIds(game, p);
           const idx = (dcIds || []).indexOf(mid);
           const dcName = figKey.replace(/-\d+-\d+$/, '');
           const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : dcName;
@@ -5686,7 +5693,7 @@ async function handleMissileSalvoDie(interaction) {
   await interaction.message.edit({ components: [] }).catch(() => {});
   const threadId = game.pendingMissileSalvo[msgId].threadId || game.dcActionsData?.[msgId]?.threadId;
   const salvoThread = threadId ? await client.channels.fetch(threadId).catch(() => null) : null;
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, playerNum);
   const colorLabel = color.charAt(0).toUpperCase() + color.slice(1);
   const msg = `<@${ownerId}> **Missile Salvo** — **${colorLabel} die** selected (+3 Accuracy). Click **Attack** to target a different hostile figure. This attack costs no action.`;
   if (salvoThread) await salvoThread.send({ content: msg, allowedMentions: { users: [ownerId] } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -5920,7 +5927,7 @@ async function updateDcActionsMessage(game, msgId, client) {
   // P4/P5: Refresh the DC embed in the play area with live action count + power tokens
   if (meta && game) {
     try {
-      const _chId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+      const _chId = meta.getPlayAreaId(game, playerNum);
       const _ch = await client.channels.fetch(_chId);
       const _dcMsg = await _ch.messages.fetch(msgId);
       const _hs = dcHealthState.get(msgId) || [];
@@ -5943,7 +5950,7 @@ async function updateDcActionsMessage(game, msgId, client) {
     game.dcFinishedPinged = game.dcFinishedPinged || {};
     game.pendingEndTurn = game.pendingEndTurn || {};
     if (!game.dcFinishedPinged[msgId] && !game.pendingEndTurn[msgId]) {
-      const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+      const ownerId = meta.getPlayerId(game, playerNum);
       const initPlayerNum = meta.playerNum;
       try {
         const ch = await client.channels.fetch(game.generalId);
@@ -6172,7 +6179,7 @@ async function updateHandChannelMessages(game, client) {
   for (const pn of [1, 2]) {
     const hand = pn === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
     const deck = pn === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
-    const handId = pn === 1 ? game.p1HandId : game.p2HandId;
+    const handId = getHandChannelId(game, pn);
     if (!handId) continue;
     try {
       const handCh = await client.channels.fetch(handId);
@@ -6194,7 +6201,7 @@ async function updateHandVisualMessage(game, playerNum, client) {
   const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
   if (msgId == null) return;
   try {
-    const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+    const channelId = getPlayAreaId(game, playerNum);
     const channel = await client.channels.fetch(channelId);
     const msg = await channel.messages.fetch(msgId);
     await msg.edit({ embeds: [getHandVisualEmbed(hand.length)] });
@@ -6209,10 +6216,10 @@ async function updateDiscardPileMessage(game, playerNum, client) {
   const msgId = playerNum === 1 ? game.p1DiscardPileMessageId : game.p2DiscardPileMessageId;
   if (msgId == null) return;
   const discard = playerNum === 1 ? (game.player1CcDiscard || []) : (game.player2CcDiscard || []);
-  const threadId = playerNum === 1 ? game.p1DiscardThreadId : game.p2DiscardThreadId;
+  const threadId = getDiscardThreadId(game, playerNum);
   const hasOpenThread = !!threadId;
   try {
-    const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+    const channelId = getPlayAreaId(game, playerNum);
     const channel = await client.channels.fetch(channelId);
     const msg = await channel.messages.fetch(msgId);
     await msg.edit({
@@ -6229,7 +6236,7 @@ async function updatePlayAreaDcButtons(game, client) {
   if (!game.player1CcDrawn || !game.player2CcDrawn) return;
   for (const playerNum of [1, 2]) {
     const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-    const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+    const channelId = getPlayAreaId(game, playerNum);
     if (!channelId || msgIds.length === 0) continue;
     try {
       const channel = await client.channels.fetch(channelId);
@@ -7078,7 +7085,7 @@ async function refreshGameVisuals(game) {
   // 3. DC play-area embeds — rebuild all deployed DCs for both players
   for (const playerNum of [1, 2]) {
     const msgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-    const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+    const channelId = getPlayAreaId(game, playerNum);
     if (!channelId || !msgIds.length) continue;
     (async () => {
       try {
@@ -9131,7 +9138,7 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
     game.openedDoors = game.openedDoors || [];
     if (!game.openedDoors.includes(openedEdgeKey)) game.openedDoors.push(openedEdgeKey);
-    const pid = pending.playerNum === 1 ? game.player1Id : game.player2Id;
+    const pid = pending.getPlayerId(game, playerNum);
     await logGameAction(game, client, `🚪 <@${pid}> opened door **${edgeA.toUpperCase()}↔${afterPipe.toUpperCase()}** (Crate Rush — terminal effect).`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
     pending.doorsRemaining--;
     if (pending.doorsRemaining <= 0) game.pendingDoorSelections.shift();

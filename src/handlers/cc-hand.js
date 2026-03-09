@@ -21,7 +21,7 @@ import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects } from '../data-loader.js';
 import { awardObjectiveVp } from '../game/index.js';
 import {
-  getPlayerId, getHandChannelId, getSquad, getCcHand, getCcDiscard, getCcDeck,
+  getPlayerId, getHandChannelId, getSquad, getCcDiscard, getCcDeck,
   getDiscardThreadId,
   ccHandKey, ccDiscardKey, ccDeckKey, ccDrawnKey, ccAttachmentsKey, vpKey as vpKeyFn,
 } from '../game/player-helpers.js';
@@ -257,8 +257,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   if (game.signalJammerActive && card !== 'Signal Jammer') {
     const jammerOwnerNum = game.signalJammerActive.playerNum;
     game.signalJammerActive = null;
-    const playedHandKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-    const playedDiscardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const playedHandKey = ccHandKey(playerNum);
+    const playedDiscardKey = ccDiscardKey(playerNum);
     const playedHand = game[playedHandKey] || [];
     const playedIdx = playedHand.indexOf(card);
     if (playedIdx >= 0) {
@@ -266,7 +266,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       game[playedHandKey] = playedHand;
       game[playedDiscardKey] = [...(game[playedDiscardKey] || []), card];
     }
-    const jammerDiscardKey = jammerOwnerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const jammerDiscardKey = ccDiscardKey(jammerOwnerNum);
     game[jammerDiscardKey] = [...(game[jammerDiscardKey] || []), 'Signal Jammer'];
     await logGameAction(game, client, `**Signal Jammer** cancelled **${card}** — both cards discarded.`, { phase: 'ACTION', icon: 'card' });
     await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -275,8 +275,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
 
   const isP1Hand = playerNum === 1;
-  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-  const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const handKey = ccHandKey(playerNum);
+  const discardKey = ccDiscardKey(playerNum);
   const hand = game[handKey] || [];
   const idx = hand.indexOf(card);
   if (idx < 0) {
@@ -294,7 +294,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   const restriction = isCcPlayLegalByRestriction(game, playerNum, card);
   if (!restriction.legal) {
     game.pendingIllegalCcPlay = { playerNum, card, reason: restriction.reason };
-    const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+    const handId = getHandChannelId(game, playerNum);
     const handChannel = await client.channels.fetch(handId);
     const msg = await handChannel.send({
       content: `⚠️ The bot thinks playing **${card}** is illegal: ${restriction.reason}\n\nChoose **Ignore and play** to play it anyway, or **Unplay card** to cancel.`,
@@ -450,7 +450,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc3}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       await applyAbilityResult(result, { game, playerNum, client: interaction.client, ctx });
       if (result.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
-        const handChannelId2 = playerNum === 1 ? game.p1HandId : game.p2HandId;
+        const handChannelId2 = getHandChannelId(game, playerNum);
         if (handChannelId2) {
           game.pendingPowerTokenGrant.channelId = handChannelId2;
           const ptCh = await interaction.client.channels.fetch(handChannelId2).catch(() => null);
@@ -483,7 +483,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
             .setLabel(`1st: ${c}`.slice(0, 80))
             .setStyle(ButtonStyle.Primary)
         );
-        const _belHandId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+        const _belHandId = getHandChannelId(game, playerNum);
         const _belHandCh = await interaction.client.channels.fetch(_belHandId);
         await _belHandCh.send({
           content: `**Behind Enemy Lines** — Choose which card goes **on top** of the opponent's deck:`,
@@ -493,7 +493,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       // Windfall: award VP to windfall owner when a cost > 0 card is played (skip when Windfall itself is played)
       if (game.windfallActive && cost > 0 && card !== 'Windfall') {
         const wfNum = game.windfallActive.playerNum;
-        const wfKey = wfNum === 1 ? 'player1VP' : 'player2VP';
+        const wfKey = vpKeyFn(wfNum);
         game[wfKey] = game[wfKey] || { total: 0, kills: 0, objectives: 0 };
         game[wfKey].total = (game[wfKey].total || 0) + cost;
         await logGameAction(game, interaction.client, `**Windfall**: P${wfNum} gains +${cost} VP.`, { icon: 'card' });
@@ -504,7 +504,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     if (!result.applied && result.manualMessage) {
       // Timing/context mismatch: don't move the card; ping in hand with Play anyway / Unplay (same as illegal-CC flow).
       game.pendingIllegalCcPlay = { playerNum, card, reason: result.manualMessage, fromContext: true };
-      const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+      const handId = getHandChannelId(game, playerNum);
       const handChannel = await client.channels.fetch(handId);
       const msg = await handChannel.send({
         content: `We don't think you can do this right now: ${result.manualMessage}\n\nChoose **Ignore and play** to play it anyway (resolve manually), or **Unplay** to cancel.`,
@@ -545,10 +545,10 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   if (cost === 0 && ctx.getNegationResponseButtons) {
     game.pendingNegation = { playedBy: playerNum, card, fromDc: false, handChannelId: handChannel.id };
     const oppNum = playerNum === 1 ? 2 : 1;
-    const oppHandId = oppNum === 1 ? game.p1HandId : game.p2HandId;
+    const oppHandId = getHandChannelId(game, oppNum);
     const oppHandChannel = await interaction.client.channels.fetch(oppHandId).catch(() => null);
     if (oppHandChannel) {
-      const oppId = oppNum === 1 ? game.player1Id : game.player2Id;
+      const oppId = getPlayerId(game, oppNum);
       await oppHandChannel.send({
         content: `Your opponent played **${card}** (cost 0). You may play **Negation** to cancel it.`,
         components: [ctx.getNegationResponseButtons(gameId)],
@@ -573,7 +573,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   // Windfall: award VP to windfall owner when a cost > 0 card is played (skip when Windfall itself is played)
   if (game.windfallActive && cost > 0 && card !== 'Windfall') {
     const wfNum = game.windfallActive.playerNum;
-    const wfKey = wfNum === 1 ? 'player1VP' : 'player2VP';
+    const wfKey = vpKeyFn(wfNum);
     game[wfKey] = game[wfKey] || { total: 0, kills: 0, objectives: 0 };
     game[wfKey].total = (game[wfKey].total || 0) + cost;
     await logGameAction(game, interaction.client, `**Windfall**: P${wfNum} gains +${cost} VP.`, { icon: 'card' });
@@ -614,19 +614,19 @@ export async function handleCcCancelPlay(interaction, ctx) {
  */
 async function resolveCcPlay(game, playerNum, card, ctx) {
   const { buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, resolveAbility, dcMessageMeta, dcHealthState } = ctx;
-  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-  const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const handKey = ccHandKey(playerNum);
+  const discardKey = ccDiscardKey(playerNum);
   const hand = (game[handKey] || []).slice();
   const idx = hand.indexOf(card);
   if (idx >= 0) hand.splice(idx, 1);
   game[handKey] = hand;
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push(card);
-  const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+  const handId = getHandChannelId(game, playerNum);
   const handChannel = await client.channels.fetch(handId);
   const handMessages = await handChannel.messages.fetch({ limit: 20 });
   const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
-  const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+  const deck = getCcDeck(game, playerNum) || [];
   const effectData = getCcEffect(card);
   if (handMsg) {
     const handPayload = buildHandDisplayPayload(hand, deck, game.gameId, game, playerNum);
@@ -755,7 +755,7 @@ export async function handleCcChoice(interaction, ctx) {
       validSpaces: result.validSpaces,
       chosenFigureKey: result.chosenFigureKey ?? pending.choiceValues?.[choiceIndex] ?? null,
     };
-    const handChannelId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+    const handChannelId = getHandChannelId(game, playerNum);
     const handCh = await client.channels.fetch(handChannelId).catch(() => null);
     if (handCh) {
       const boardState2 = getBoardStateForMovement(game, null);
@@ -821,8 +821,8 @@ export async function handleNegationPlay(interaction, ctx) {
     await interaction.followUp({ content: 'Only the opponent can play Negation.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const handKey = oppNum === 1 ? 'player1CcHand' : 'player2CcHand';
-  const discardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const handKey = ccHandKey(oppNum);
+  const discardKey = ccDiscardKey(oppNum);
   const hand = game[handKey] || [];
   const idx = hand.indexOf('Negation');
   if (idx < 0) {
@@ -837,14 +837,14 @@ export async function handleNegationPlay(interaction, ctx) {
   await updateHandVisualMessage(game, oppNum, client);
   await updateDiscardPileMessage(game, oppNum, client);
   await interaction.message.edit({ content: `**Negation** cancelled **${card}**.`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
-  const negPlayerId = oppNum === 1 ? game.player1Id : game.player2Id;
+  const negPlayerId = getPlayerId(game, oppNum);
   await logGameAction(game, client, `<@${negPlayerId}> played **Negation** — cancelled **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [negPlayerId] } });
   // Notify the player whose card was cancelled
   if (waitingMsgId && handChannelId) {
     const playingHandChannel = await client.channels.fetch(handChannelId).catch(() => null);
     if (playingHandChannel) {
       const waitingMsg = await playingHandChannel.messages.fetch(waitingMsgId).catch(() => null);
-      const playedById = playedBy === 1 ? game.player1Id : game.player2Id;
+      const playedById = getPlayerId(game, playedBy);
       if (waitingMsg) await waitingMsg.edit({ content: `❌ Your **${card}** was cancelled by your opponent's **Negation**. <@${playedById}>` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
   }
@@ -869,8 +869,8 @@ export async function handleNegationLetResolve(interaction, ctx) {
   delete game.pendingNegation;
   await interaction.message.edit({ content: `**${card}** resolves.`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   if (fromDc && msgId && wasAttachment && updateAttachmentMessageForDc && isCcAttachment?.(card)) {
-    const attachKey = playedBy === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
-    const discardKey = playedBy === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const attachKey = ccAttachmentsKey(playedBy);
+    const discardKey = ccDiscardKey(playedBy);
     const discard = game[discardKey] || [];
     const idx = discard.indexOf(card);
     if (idx >= 0) {
@@ -893,7 +893,7 @@ export async function handleNegationLetResolve(interaction, ctx) {
     const playingHandChannel = await client.channels.fetch(handChannelId).catch(() => null);
     if (playingHandChannel) {
       const waitingMsg = await playingHandChannel.messages.fetch(waitingMsgId).catch(() => null);
-      const playedById = playedBy === 1 ? game.player1Id : game.player2Id;
+      const playedById = getPlayerId(game, playedBy);
       if (waitingMsg) await waitingMsg.edit({ content: `✅ **${card}** resolved! <@${playedById}>` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     }
   }
@@ -914,8 +914,8 @@ export async function handleCelebrationPlay(interaction, ctx) {
     await interaction.followUp({ content: 'Only the player who defeated the figure can play Celebration.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const handKey = attackerPlayerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-  const discardKey = attackerPlayerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const handKey = ccHandKey(attackerPlayerNum);
+  const discardKey = ccDiscardKey(attackerPlayerNum);
   const hand = game[handKey] || [];
   const idx = hand.indexOf('Celebration');
   if (idx < 0) {
@@ -931,7 +931,7 @@ export async function handleCelebrationPlay(interaction, ctx) {
   await updateHandVisualMessage(game, attackerPlayerNum, client);
   await updateDiscardPileMessage(game, attackerPlayerNum, client);
   await interaction.message.edit({ content: `**Celebration** — +4 VP.`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
-  const celPlayerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+  const celPlayerId = getPlayerId(game, attackerPlayerNum);
   await logGameAction(game, client, `<@${celPlayerId}> played **Celebration** — gained 4 VP.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [celPlayerId] } });
   saveGames();
 }
@@ -996,8 +996,8 @@ export async function handleCcDiscardSelect(interaction, ctx) {
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
-  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-  const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const handKey = ccHandKey(playerNum);
+  const discardKey = ccDiscardKey(playerNum);
   const hand = game[handKey] || [];
   const card = interaction.values[0];
   const idx = hand.indexOf(card);
@@ -1112,20 +1112,20 @@ export async function handleCcShuffleDraw(interaction, ctx) {
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
-  const squad = playerNum === 1 ? game.player1Squad : game.player2Squad;
+  const squad = getSquad(game, playerNum);
   const ccList = squad?.ccList || [];
-  const drawnKey = playerNum === 1 ? 'player1CcDrawn' : 'player2CcDrawn';
+  const drawnKey = ccDrawnKey(playerNum);
   if (game[drawnKey]) {
     await interaction.followUp({ content: "You've already drawn your starting hand.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const attachKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+  const attachKey = ccAttachmentsKey(playerNum);
   const placed = (game[attachKey] && Object.values(game[attachKey]).flat()) || [];
   const deck = ccList.filter((c) => !placed.includes(c));
   shuffleArray(deck);
   let hand = deck.splice(0, 3);
-  const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  const deckKey = ccDeckKey(playerNum);
+  const handKey = ccHandKey(playerNum);
   if (game.testScenarioPrimaryCard && playerNum === 1 && !hand.includes(game.testScenarioPrimaryCard)) {
     const replaced = hand[0];
     hand = [game.testScenarioPrimaryCard, hand[1], hand[2]].filter(Boolean);
@@ -1136,7 +1136,7 @@ export async function handleCcShuffleDraw(interaction, ctx) {
   game[deckKey] = deck;
   game[handKey] = hand;
   game[drawnKey] = true;
-  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const playerId = getPlayerId(game, playerNum);
   await logGameAction(game, client, `<@${playerId}> shuffled and drew 3 Command Cards.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
   const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
   await interaction.message.edit({
@@ -1212,8 +1212,8 @@ export async function handleCcDraw(interaction, ctx) {
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
-  const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  const deckKey = ccDeckKey(playerNum);
+  const handKey = ccHandKey(playerNum);
   let deck = (game[deckKey] || []).slice();
   const hand = (game[handKey] || []).slice();
   if (deck.length === 0) {
@@ -1260,7 +1260,7 @@ export async function handleCcSearchDiscard(interaction, ctx) {
     await interaction.followUp({ content: 'Only the owner of this Play Area can search their discard pile.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const existingThreadId = playerNum === 1 ? game.p1DiscardThreadId : game.p2DiscardThreadId;
+  const existingThreadId = getDiscardThreadId(game, playerNum);
   if (existingThreadId) {
     try {
       const existing = await client.channels.fetch(existingThreadId);
@@ -1272,7 +1272,7 @@ export async function handleCcSearchDiscard(interaction, ctx) {
     if (playerNum === 1) delete game.p1DiscardThreadId;
     else delete game.p2DiscardThreadId;
   }
-  const discard = playerNum === 1 ? (game.player1CcDiscard || []) : (game.player2CcDiscard || []);
+  const discard = getCcDiscard(game, playerNum) || [];
   const threadName = `Discard Pile (${discard.length} cards)`;
   const thread = await interaction.message.startThread({
     name: threadName.slice(0, 100),
@@ -1319,7 +1319,7 @@ export async function handleCcCloseDiscard(interaction, ctx) {
     await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const threadId = playerNum === 1 ? game.p1DiscardThreadId : game.p2DiscardThreadId;
+  const threadId = getDiscardThreadId(game, playerNum);
   if (!threadId) {
     await interaction.followUp({ content: 'No discard pile thread is open.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;

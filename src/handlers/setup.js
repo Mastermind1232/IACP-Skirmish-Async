@@ -5,6 +5,11 @@
 import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { getLoadoutCards, getFormCards, getDcEffects } from '../data-loader.js';
 import { setConfig } from '../game/figure-config.js';
+import {
+  getPlayerId, getSquad, getDcList, getDcMessageIds, getHandChannelId,
+  dcAttachmentsKey, ccDeckKey, ccHandKey,
+  deployLabelsKey as _deployLabelsKey, deployMetadataKey as _deployMetadataKey,
+} from '../game/player-helpers.js';
 
 /**
  * Check if an attachment card targets a specific DC by name (not by keyword).
@@ -53,7 +58,7 @@ function findAutoAttachTarget(cardName, dcList, dcMsgIds) {
  */
 async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) {
   const { dcHealthState, logGameAction, client, updateAttachmentMessageForDc } = ctx;
-  const attachKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+  const attachKey = dcAttachmentsKey(playerNum);
   game[attachKey] = game[attachKey] || {};
   if (!Array.isArray(game[attachKey][dcMsgId])) game[attachKey][dcMsgId] = [];
   game[attachKey][dcMsgId].push(card);
@@ -67,16 +72,16 @@ async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) {
         if (hs[fi]) { hs[fi] = [hs[fi][0] + 5, hs[fi][1] + 5]; }
       }
       dcHS.set(dcMsgId, hs);
-      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-      const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const dcList = getDcList(game, playerNum) || [];
+      const dcMsgIds = getDcMessageIds(game, playerNum) || [];
       const idx = dcMsgIds.indexOf(dcMsgId);
       if (idx >= 0 && dcList[idx]) dcList[idx].healthState = [...hs];
     }
   }
   // Wookiee Avenger: search deck for "Debts Repaid", put into hand, draw 1 fewer in starting hand
   if (card === 'Wookiee Avenger') {
-    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const deckKey = ccDeckKey(playerNum);
+    const handKey = ccHandKey(playerNum);
     const deck = game[deckKey] || [];
     const dIdx = deck.indexOf('Debts Repaid');
     if (dIdx >= 0) {
@@ -680,11 +685,11 @@ export async function handleDeploymentZone(interaction, ctx) {
     }
   }
   const initiativeHandId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
-  const initiativeSquad = initiativePlayerNum === 1 ? game.player1Squad : game.player2Squad;
+  const initiativeSquad = getSquad(game, initiativePlayerNum);
   const initiativeDcList = initiativeSquad?.dcList || [];
   const { labels: initiativeLabels, metadata: initiativeMetadata } = getDeployFigureLabels(initiativeDcList);
-  const deployLabelsKey = initiativePlayerNum === 1 ? 'player1DeployLabels' : 'player2DeployLabels';
-  const deployMetadataKey = initiativePlayerNum === 1 ? 'player1DeployMetadata' : 'player2DeployMetadata';
+  const deployLabelsKey = _deployLabelsKey(initiativePlayerNum);
+  const deployMetadataKey = _deployMetadataKey(initiativePlayerNum);
   game[deployLabelsKey] = initiativeLabels;
   game[deployMetadataKey] = initiativeMetadata;
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
@@ -754,12 +759,12 @@ export async function handleDeploymentFig(interaction, ctx) {
     await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const labels = playerNum === 1 ? game.player1DeployLabels : game.player2DeployLabels;
+  const labels = game[_deployLabelsKey(playerNum)];
   const label = labels?.[flatIndex];
   if (!label) {
     await interaction.followUp({ content: 'Figure not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -769,7 +774,7 @@ export async function handleDeploymentFig(interaction, ctx) {
   const zones = mapId ? getDeploymentZones()[mapId] : null;
   const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
   const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
-  const deployMeta = playerNum === 1 ? game.player1DeployMetadata : game.player2DeployMetadata;
+  const deployMeta = game[_deployMetadataKey(playerNum)];
   const figMeta = deployMeta?.[flatIndex];
   const figureKey = figMeta ? `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}` : null;
   const occupied = [];
@@ -825,7 +830,7 @@ export async function handleDeploymentFig(interaction, ctx) {
     const firstDeployMsgId = deployMsgIds[0];
     if (firstDeployMsgId) {
       try {
-        const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+        const handId = getHandChannelId(game, playerNum);
         const handChannel = await client.channels.fetch(handId);
         const deployMsg = await handChannel.messages.fetch(firstDeployMsgId);
         await deployMsg.edit({ attachments: [] });
@@ -899,13 +904,13 @@ export async function handleDeploymentOrient(interaction, ctx) {
     await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const labels = playerNum === 1 ? game.player1DeployLabels : game.player2DeployLabels;
-  const deployMeta = playerNum === 1 ? game.player1DeployMetadata : game.player2DeployMetadata;
+  const labels = game[_deployLabelsKey(playerNum)];
+  const deployMeta = game[_deployMetadataKey(playerNum)];
   const label = labels?.[flatIndex];
   const figMeta = deployMeta?.[flatIndex];
   if (!label || !figMeta) {
@@ -950,7 +955,7 @@ export async function handleDeploymentOrient(interaction, ctx) {
     const firstDeployMsgId = deployMsgIds[0];
     if (firstDeployMsgId) {
       try {
-        const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+        const handId = getHandChannelId(game, playerNum);
         const handChannel = await client.channels.fetch(handId);
         const deployMsg = await handChannel.messages.fetch(firstDeployMsgId);
         await deployMsg.edit({ attachments: [] });
@@ -999,7 +1004,7 @@ export async function handleDeployRow(interaction, ctx) {
     await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
@@ -1008,7 +1013,7 @@ export async function handleDeployRow(interaction, ctx) {
   const zones = mapId ? getDeploymentZones()[mapId] : null;
   const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
   const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
-  const deployMeta = playerNum === 1 ? game.player1DeployMetadata : game.player2DeployMetadata;
+  const deployMeta = game[_deployMetadataKey(playerNum)];
   const figMeta = deployMeta?.[flatIndex];
   const figureKey = figMeta ? `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}` : null;
   const occupied = [];
@@ -1095,7 +1100,7 @@ export async function handleDeployRowBack(interaction, ctx) {
     await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the owner can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
@@ -1104,7 +1109,7 @@ export async function handleDeployRowBack(interaction, ctx) {
   const zones = mapId ? getDeploymentZones()[mapId] : null;
   const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
   const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
-  const deployMeta = playerNum === 1 ? game.player1DeployMetadata : game.player2DeployMetadata;
+  const deployMeta = game[_deployMetadataKey(playerNum)];
   const figMeta = deployMeta?.[flatIndex];
   const figureKey = figMeta ? `${figMeta.dcName}-${figMeta.dgIndex}-${figMeta.figureIndex}` : null;
   const occupied = [];
@@ -1122,7 +1127,7 @@ export async function handleDeployRowBack(interaction, ctx) {
   const dcName = figMeta?.dcName;
   const figureSize = game.pendingDeployOrientation?.[`${playerNum}_${flatIndex}`] || (dcName ? getFigureSize(dcName) : '1x1');
   const validSpaces = filterValidTopLeftSpaces(zoneSpaces, occupied, figureSize);
-  const labels = playerNum === 1 ? game.player1DeployLabels : game.player2DeployLabels;
+  const labels = game[_deployLabelsKey(playerNum)];
   const label = labels?.[flatIndex] || 'figure';
   const isLarge = figureSize !== '1x1';
   const promptText = isLarge
@@ -1155,13 +1160,13 @@ export async function handleDeployPick(interaction, ctx) {
     await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const deployMeta = playerNum === 1 ? game.player1DeployMetadata : game.player2DeployMetadata;
-  const deployLabels = playerNum === 1 ? game.player1DeployLabels : game.player2DeployLabels;
+  const deployMeta = game[_deployMetadataKey(playerNum)];
+  const deployLabels = game[_deployLabelsKey(playerNum)];
   const figMeta = deployMeta?.[flatIndex];
   const figLabel = deployLabels?.[flatIndex];
   if (!figMeta || !figLabel) {
@@ -1185,7 +1190,7 @@ export async function handleDeployPick(interaction, ctx) {
   const clickedMsgId = interaction.message?.id;
   if (gridMsgIds.length > 0) {
     try {
-      const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+      const handId = getHandChannelId(game, playerNum);
       const handChannel = await client.channels.fetch(handId);
       for (const msgId of gridMsgIds) {
         if (msgId === clickedMsgId) continue;
@@ -1248,7 +1253,7 @@ export async function handleDeployPick(interaction, ctx) {
         )
       );
       try {
-        const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+        const handId = getHandChannelId(game, playerNum);
         const handChannel = await client.channels.fetch(handId);
         await handChannel.send({
           content: `⚔️ **Imperial Loadout** — Choose a Loadout card for **${figMeta.dcName}**:`,
@@ -1275,7 +1280,7 @@ export async function handleDeployPick(interaction, ctx) {
         )
       );
       try {
-        const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+        const handId = getHandChannelId(game, playerNum);
         const handChannel = await client.channels.fetch(handId);
         await handChannel.send({
           content: `🔄 **Shape** — Choose a Form card for **${figMeta.dcName}**:`,
@@ -1447,16 +1452,16 @@ export async function handleDeploymentDone(interaction, ctx) {
     }
     const nonInitiativeHandId = game.initiativePlayerId === game.player1Id ? game.p2HandId : game.p1HandId;
     const nonInitiativePlayerNum = game.initiativePlayerId === game.player1Id ? 2 : 1;
-    const nonInitiativeSquad = nonInitiativePlayerNum === 1 ? game.player1Squad : game.player2Squad;
+    const nonInitiativeSquad = getSquad(game, nonInitiativePlayerNum);
     const nonInitiativeDcList = nonInitiativeSquad?.dcList || [];
     const { labels: nonInitiativeLabels, metadata: nonInitiativeMetadata } = getDeployFigureLabels(nonInitiativeDcList);
-    const deployLabelsKey = nonInitiativePlayerNum === 1 ? 'player1DeployLabels' : 'player2DeployLabels';
-    const deployMetadataKey = nonInitiativePlayerNum === 1 ? 'player1DeployMetadata' : 'player2DeployMetadata';
+    const deployLabelsKey = _deployLabelsKey(nonInitiativePlayerNum);
+    const deployMetadataKey = _deployMetadataKey(nonInitiativePlayerNum);
     game[deployLabelsKey] = nonInitiativeLabels;
     game[deployMetadataKey] = nonInitiativeMetadata;
     if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
     try {
-      const nonInitiativePlayerId = nonInitiativePlayerNum === 1 ? game.player1Id : game.player2Id;
+      const nonInitiativePlayerId = getPlayerId(game, nonInitiativePlayerNum);
       const nonInitiativeHandChannel = await client.channels.fetch(nonInitiativeHandId);
       const { deployRows, doneRow } = getDeployButtonRows(gameId, nonInitiativePlayerNum, nonInitiativeDcList, otherZone, game.figurePositions);
       const DEPLOY_ROWS_PER_MSG = 4;
@@ -1538,8 +1543,8 @@ export async function handleDeploymentDone(interaction, ctx) {
       const pending = game.setupAttachmentPending[pn];
       if (pending.length === 0) continue;
       // Auto-attach all character-specific attachments first
-      const dcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-      const dcMsgIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const dcList = getDcList(game, pn) || [];
+      const dcMsgIds = getDcMessageIds(game, pn) || [];
       while (pending.length > 0) {
         const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds);
         if (!autoTarget) break; // needs manual picker
@@ -1549,7 +1554,7 @@ export async function handleDeploymentDone(interaction, ctx) {
         await logGameAction(game, client, `**${card}** auto-attached to **${ctx.dcMessageMeta?.get(autoTarget)?.displayName || 'DC'}** (setup).`, { phase: 'SETUP', icon: 'card' });
       }
       if (pending.length === 0) continue; // all auto-attached
-      const handId = pn === 1 ? game.p1HandId : game.p2HandId;
+      const handId = getHandChannelId(game, pn);
       const handChannel = await client.channels.fetch(handId);
       const options = dcList.slice(0, 25).map((dc, i) => ({
         label: (dc.displayName || dc.dcName || `DC ${i + 1}`).slice(0, 100),
@@ -1631,7 +1636,7 @@ export async function handleAutoDeploy(interaction, ctx) {
     await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {});
     return;
   }
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch(() => {});
     return;
@@ -1649,7 +1654,7 @@ export async function handleAutoDeploy(interaction, ctx) {
   if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
   game.figureOrientations = game.figureOrientations || {};
 
-  const squad = playerNum === 1 ? game.player1Squad : game.player2Squad;
+  const squad = getSquad(game, playerNum);
   const dcList = squad?.dcList || [];
   const { metadata } = getDeployFigureLabels(dcList);
 
@@ -1689,7 +1694,7 @@ export async function handleAutoDeploy(interaction, ctx) {
   // Refresh the deploy buttons to show updated positions
   const isInitiative = playerNum === initiativePlayerNum;
   const idsKey = isInitiative ? 'initiativeDeployMessageIds' : 'nonInitiativeDeployMessageIds';
-  const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+  const handId = getHandChannelId(game, playerNum);
   try {
     const handChannel = await client.channels.fetch(handId);
     // Delete old deploy messages
@@ -1701,7 +1706,7 @@ export async function handleAutoDeploy(interaction, ctx) {
     // Re-post deploy buttons with updated positions
     const { deployRows, doneRow } = getDeployButtonRows(gameId, playerNum, dcList, playerZone, game.figurePositions);
     const DEPLOY_ROWS_PER_MSG = 4;
-    const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+    const playerId = getPlayerId(game, playerNum);
     for (let i = 0; i < deployRows.length; i += DEPLOY_ROWS_PER_MSG) {
       const chunk = deployRows.slice(i, i + DEPLOY_ROWS_PER_MSG);
       const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
@@ -1756,7 +1761,7 @@ export async function handleSetupAttachTo(interaction, ctx) {
     await interaction.followUp({ content: 'Game or setup phase not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the owner of this hand can place setup attachments.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
@@ -1774,8 +1779,8 @@ export async function handleSetupAttachTo(interaction, ctx) {
   await logGameAction(game, client, `<@${interaction.user.id}> placed **${card}** on **${dcDisplayName}** (setup).`, { phase: 'SETUP', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
 
   // Auto-attach any subsequent character-specific attachments
-  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-  const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+  const dcList = getDcList(game, playerNum) || [];
+  const dcMsgIds = getDcMessageIds(game, playerNum) || [];
   while (pending.length > 0) {
     const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds);
     if (!autoTarget) break;
@@ -1787,7 +1792,7 @@ export async function handleSetupAttachTo(interaction, ctx) {
   }
 
   if (pending.length > 0) {
-    const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+    const handId = getHandChannelId(game, playerNum);
     const handChannel = await client.channels.fetch(handId);
     const options = dcList.slice(0, 25).map((dc, i) => ({
       label: (dc.displayName || dc.dcName || `DC ${i + 1}`).slice(0, 100),
