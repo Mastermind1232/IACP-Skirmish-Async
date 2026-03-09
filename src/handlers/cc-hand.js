@@ -20,6 +20,11 @@ import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects } from '../data-loader.js';
 import { awardObjectiveVp } from '../game/index.js';
+import {
+  getPlayerId, getHandChannelId, getSquad, getCcHand, getCcDiscard, getCcDeck,
+  getDiscardThreadId,
+  ccHandKey, ccDiscardKey, ccDeckKey, ccDrawnKey, ccAttachmentsKey, vpKey as vpKeyFn,
+} from '../game/player-helpers.js';
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
 export async function handleSquadModal(interaction, ctx) {
@@ -130,8 +135,8 @@ export async function handleCcAttachTo(interaction, ctx) {
     return;
   }
   const dcMsgId = interaction.values[0];
-  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-  const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const handKey = ccHandKey(playerNum);
+  const discardKey = ccDiscardKey(playerNum);
   const hand = game[handKey] || [];
   const idx = hand.indexOf(card);
   if (idx < 0) {
@@ -143,7 +148,7 @@ export async function handleCcAttachTo(interaction, ctx) {
   await interaction.deferUpdate();
   hand.splice(idx, 1);
   game[handKey] = hand;
-  const attachKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+  const attachKey = ccAttachmentsKey(playerNum);
   game[attachKey] = game[attachKey] || {};
   if (!Array.isArray(game[attachKey][dcMsgId])) game[attachKey][dcMsgId] = [];
   game[attachKey][dcMsgId].push(card);
@@ -188,7 +193,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
     return;
   }
   const playerNum = isP1Hand ? 1 : 2;
-  const hand = game[playerNum === 1 ? 'player1CcHand' : 'player2CcHand'] || [];
+  const hand = game[ccHandKey(playerNum)] || [];
   const card = interaction.values[0];
   if (!hand.includes(card)) {
     await interaction.reply({ content: "That card isn't in your hand.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -215,7 +220,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
   );
   await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   await interaction.message.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
-  const handId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+  const handId = getHandChannelId(game, playerNum);
   const handChannel = await interaction.client.channels.fetch(handId);
   await handChannel.send({ embeds: [embed], files, components: [row] });
 }
