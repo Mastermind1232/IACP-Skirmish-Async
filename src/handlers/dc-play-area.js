@@ -8,7 +8,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards } from '../data-loader.js';
-import { reduceHp, awardObjectiveVp } from '../game/index.js';
+import { reduceHp, awardObjectiveVp, applyCondition, filterCondition } from '../game/index.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
@@ -319,9 +319,7 @@ export async function handleDcUnactivate(interaction, ctx) {
     const figures = stats.figures ?? 1;
     for (let f = 0; f < figures; f++) {
       const fk = `${meta.dcName}-${dgIndex}-${f}`;
-      if (game.figureConditions[fk]) {
-        game.figureConditions[fk] = game.figureConditions[fk].filter((c) => c !== 'Stun');
-      }
+      filterCondition(game, fk, 'Stun');
     }
   }
   if (game.dcActivationLogMessageIds?.[msgId]) {
@@ -1532,9 +1530,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         const _sdEff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
         const _sdImm = (_sdEff?.specialAbilityIds || []).includes('immune_onar') || (_sdEff?.specialAbilityIds || []).includes('immune_snowtrooper_elite');
         if (!_sdImm) {
-          game.figureConditions = game.figureConditions || {};
-          game.figureConditions[_sdFigKey] = game.figureConditions[_sdFigKey] || [];
-          if (!game.figureConditions[_sdFigKey].includes('Stun')) game.figureConditions[_sdFigKey].push('Stun');
+          applyCondition(game, _sdFigKey, 'Stun');
           await logGameAction(game, client, `**Stay Down** — **${meta.displayName || meta.dcName}** is now **Stunned**.`, { phase: 'ROUND', icon: 'activate' });
         } else {
           await logGameAction(game, client, `**Condition Immunity** — **${meta.displayName || meta.dcName}** is immune to Stun (Stay Down).`, { phase: 'ROUND', icon: 'card' });
@@ -1673,11 +1669,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       // Apply Focus
       const dgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const figKey = `${meta.dcName}-${dgIdx}-${selectedFig}`;
-      game.figureConditions = game.figureConditions || {};
-      game.figureConditions[figKey] = game.figureConditions[figKey] || [];
-      if (!game.figureConditions[figKey].includes('Focus')) {
-        game.figureConditions[figKey].push('Focus');
-      }
+      applyCondition(game, figKey, 'Focus');
       game.vadersFocusUsedThisRound = game.vadersFocusUsedThisRound || {};
       game.vadersFocusUsedThisRound[msgId] = true;
       await thread.send(`**Vader's Finest** — **${displayName}** becomes **Focused**.`).catch(() => {});

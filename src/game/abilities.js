@@ -15,6 +15,7 @@ function getStatsForDc(dcName) {
     return key ? map[key] : {};
   })();
 }
+import { applyCondition, resetCondition, filterCondition } from './conditions.js';
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces } from './movement.js';
 
@@ -121,10 +122,8 @@ export function resolveAbility(abilityId, context) {
     const parts = [];
     if (chosen.applyFocusToSelf && game && meta) {
       const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-      game.figureConditions = game.figureConditions || {};
       for (const fk of figureKeys) {
-        const existing = game.figureConditions[fk] || [];
-        if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+        applyCondition(game, fk, 'Focus');
       }
       parts.push('Became **Focused**');
     }
@@ -303,7 +302,7 @@ export function resolveAbility(abilityId, context) {
   // dcSpecial: targetHostileFigure (Force Choke, Force Lightning) — pick enemy target, apply damage/strain/condition
   // First call: returns requiresChoice with enemy figure list; second call: applies effect to chosen figure.
   if (entry.type === 'dcSpecial' && entry.targetHostileFigure && typeof entry.targetHostileFigure === 'object') {
-    const { damage = 0, strain = 0, applyCondition, requiresLos = false, range: maxRange = 999, splashDamageNote, splashDamage = 0, splashConditions = [] } = entry.targetHostileFigure;
+    const { damage = 0, strain = 0, applyCondition: condToApply, requiresLos = false, range: maxRange = 999, splashDamageNote, splashDamage = 0, splashConditions = [] } = entry.targetHostileFigure;
     const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSight: losCheck, getRange: getRng, getMapSpaces: getMs, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.logMessage || `Resolve ${entry.label} manually.` };
     const enemyPlayerNum = playerNum === 1 ? 2 : 1;
@@ -336,12 +335,9 @@ export function resolveAbility(abilityId, context) {
         const dmgStr = damage > 0 && strain > 0 ? `${damage} Damage + ${strain} Strain` : damage > 0 ? `${damage} Damage` : `${strain} Strain`;
         parts.push(`(apply ${dmgStr} manually)`);
       }
-      if (applyCondition) {
-        game.figureConditions = game.figureConditions || {};
-        const existing = game.figureConditions[targetFigureKey] || [];
-        if (!existing.includes(applyCondition)) {
-          game.figureConditions[targetFigureKey] = [...existing, applyCondition];
-          parts.push(`became **${applyCondition}**`);
+      if (condToApply) {
+        if (applyCondition(game, targetFigureKey, condToApply)) {
+          parts.push(`became **${condToApply}**`);
         }
       }
       const dcName = targetFigureKey.replace(/-\d+-\d+$/, '');
@@ -376,11 +372,8 @@ export function resolveAbility(abilityId, context) {
               splashParts.push(`**${adjName}** (apply ${splashDamage} Damage manually)`);
             }
             if (splashConditions.length > 0) {
-              game.figureConditions = game.figureConditions || {};
-              const adjExisting = game.figureConditions[adjFk] || [];
-              const adjToAdd = splashConditions.filter((c) => !adjExisting.includes(c));
+              const adjToAdd = splashConditions.filter((c) => applyCondition(game, adjFk, c));
               if (adjToAdd.length > 0) {
-                game.figureConditions[adjFk] = [...adjExisting, ...adjToAdd];
                 splashParts.push(`**${adjName}** gains ${adjToAdd.join(', ')}`);
               }
             }
@@ -394,9 +387,7 @@ export function resolveAbility(abilityId, context) {
         const figureKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
         const selfKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
         if (selfKey) {
-          game.figureConditions = game.figureConditions || {};
-          game.figureConditions[selfKey] = game.figureConditions[selfKey] || [];
-          if (!game.figureConditions[selfKey].includes(entry.selfCondition)) game.figureConditions[selfKey].push(entry.selfCondition);
+          applyCondition(game, selfKey, entry.selfCondition);
           selfCondLog = ` You became **${entry.selfCondition}ed**.`;
         }
       }
@@ -565,11 +556,9 @@ export function resolveAbility(abilityId, context) {
     if (candidates.length === 0) return { applied: true, logMessage: `**${entry.label}** — No qualifying friendly figures within ${maxRange} spaces (≤${maxDiceCount} attack dice).` };
     const toHide = candidates.slice(0, maxTargets);
     const skipped = candidates.length > maxTargets ? ` (${candidates.length - maxTargets} additional candidates not hidden — choose manually if needed)` : '';
-    game.figureConditions = game.figureConditions || {};
     const hidden = [];
     for (const fk of toHide) {
-      const existing = game.figureConditions[fk] || [];
-      if (!existing.includes('Hide')) { game.figureConditions[fk] = [...existing, 'Hide']; hidden.push(fk.replace(/-\d+-\d+$/, '')); }
+      if (applyCondition(game, fk, 'Hide')) { hidden.push(fk.replace(/-\d+-\d+$/, '')); }
     }
     if (hidden.length === 0) return { applied: true, logMessage: `**${entry.label}** — Qualifying figures already Hidden.` };
     return { applied: true, logMessage: `**${entry.label}** — **${hidden.join('**, **')}** became **Hidden**.${skipped}`, refreshDcEmbed: true };
@@ -680,9 +669,7 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **On My Mark** manually.' };
     if (choiceIndex != null && targetFigureKey) {
-      game.figureConditions = game.figureConditions || {};
-      game.figureConditions[targetFigureKey] = game.figureConditions[targetFigureKey] || [];
-      if (!game.figureConditions[targetFigureKey].includes('Focus')) game.figureConditions[targetFigureKey].push('Focus');
+      applyCondition(game, targetFigureKey, 'Focus');
       const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
       return { applied: true, logMessage: `**On My Mark** — **${chosenName}** is now **Focused** (+1 green die on next attack).`, refreshDcEmbed: true };
     }
@@ -914,9 +901,7 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getDcEffects: getEff } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Incentivize** manually.' };
     if (choiceIndex != null && targetFigureKey) {
-      game.figureConditions = game.figureConditions || {};
-      game.figureConditions[targetFigureKey] = game.figureConditions[targetFigureKey] || [];
-      if (!game.figureConditions[targetFigureKey].includes('Focus')) game.figureConditions[targetFigureKey].push('Focus');
+      applyCondition(game, targetFigureKey, 'Focus');
       const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
       return { applied: true, logMessage: `**Incentivize** — **${chosenName}** is now **Focused**.`, refreshDcEmbed: true };
     }
@@ -947,9 +932,7 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng, getDcEffects: getEff } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Do or Do Not** manually.' };
     if (choiceIndex != null && targetFigureKey) {
-      game.figureConditions = game.figureConditions || {};
-      game.figureConditions[targetFigureKey] = game.figureConditions[targetFigureKey] || [];
-      if (!game.figureConditions[targetFigureKey].includes('Focus')) game.figureConditions[targetFigureKey].push('Focus');
+      applyCondition(game, targetFigureKey, 'Focus');
       const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
       return { applied: true, logMessage: `**Do or Do Not** — **${chosenName}** is now **Focused**.`, refreshDcEmbed: true };
     }
@@ -1053,9 +1036,7 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng, getDcEffects: getEff } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Bartered Information** manually.' };
     if (choiceIndex != null && targetFigureKey) {
-      game.figureConditions = game.figureConditions || {};
-      game.figureConditions[targetFigureKey] = game.figureConditions[targetFigureKey] || [];
-      if (!game.figureConditions[targetFigureKey].includes('Focus')) game.figureConditions[targetFigureKey].push('Focus');
+      applyCondition(game, targetFigureKey, 'Focus');
       const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
       return { applied: true, logMessage: `**Bartered Information** — **${chosenName}** is now **Focused**. *(You may spend 1 VP to Focus another friendly SCUM within 2: honor system.)*`, refreshDcEmbed: true };
     }
@@ -1154,11 +1135,7 @@ export function resolveAbility(abilityId, context) {
     const dcEffects = getDcEffects() || {};
     // Phase 2: figure chosen → apply Focus
     if (targetFigureKey) {
-      game.figureConditions = game.figureConditions || {};
-      const conds = game.figureConditions[targetFigureKey] || [];
-      if (!conds.includes('Focus')) {
-        game.figureConditions[targetFigureKey] = [...conds, 'Focus'];
-      }
+      applyCondition(game, targetFigureKey, 'Focus');
       const dcName = targetFigureKey.replace(/-\d+-\d+$/, '');
       // autoDeductVp (Order Hit): deduct VP from player's total
       if (entry.autoDeductVp > 0) {
@@ -1519,10 +1496,7 @@ export function resolveAbility(abilityId, context) {
               }
             }
             if (entry.rollOneDieSurgeCondition && surges >= 1) {
-              game.figureConditions = game.figureConditions || {};
-              const existing = game.figureConditions[tFk] || [];
-              if (!existing.includes(entry.rollOneDieSurgeCondition)) {
-                game.figureConditions[tFk] = [...existing, entry.rollOneDieSurgeCondition];
+              if (applyCondition(game, tFk, entry.rollOneDieSurgeCondition)) {
                 subParts.push(`**${entry.rollOneDieSurgeCondition}**`);
               }
             }
@@ -1611,9 +1585,7 @@ export function resolveAbility(abilityId, context) {
         }
         const surgeCondition = entry.rollOneDieSurgeCondition;
         if (surgeCondition && surges >= 1) {
-          game.figureConditions = game.figureConditions || {};
-          const existing = game.figureConditions[targetFigureKey] || [];
-          if (!existing.includes(surgeCondition)) game.figureConditions[targetFigureKey] = [...existing, surgeCondition];
+          applyCondition(game, targetFigureKey, surgeCondition);
           resultParts.push(`became **${surgeCondition}**`);
         }
         const targetName = targetFigureKey.replace(/-\d+-\d+$/, '');
@@ -1928,10 +1900,7 @@ export function resolveAbility(abilityId, context) {
             }
           }
           if (conditions.length) {
-            game.figureConditions = game.figureConditions || {};
-            const existing = game.figureConditions[fk] || [];
-            game.figureConditions[fk] = [...new Set([...existing, ...conditions])];
-            const added = conditions.filter((c) => !existing.includes(c));
+            const added = conditions.filter((c) => applyCondition(game, fk, c));
             if (added.length) parts.push(added.join(', '));
           }
           // fixedAreaDiscardToken (Gar Saxon Flamethrower): discard 1 Power Token per affected figure
@@ -2170,10 +2139,8 @@ export function resolveAbility(abilityId, context) {
     }
     if (doFocus) {
       const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-      game.figureConditions = game.figureConditions || {};
       for (const fk of figureKeys) {
-        const existing = game.figureConditions[fk] || [];
-        if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+        applyCondition(game, fk, 'Focus');
       }
     }
     const parts = [`Suffered ${damage} Damage.`];
@@ -2482,13 +2449,9 @@ export function resolveAbility(abilityId, context) {
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
     if (figureKeys.length > 1) return { applied: false, manualMessage: 'Resolve manually: choose which figure gains Power Tokens.' };
-    game.figureConditions = game.figureConditions || {};
     for (const fk of figureKeys) {
-      const existing = game.figureConditions[fk] || [];
-      const updated = [...existing];
-      if (!updated.includes('Focus')) updated.push('Focus');
-      if (!updated.includes('Hide')) updated.push('Hide');
-      game.figureConditions[fk] = updated;
+      applyCondition(game, fk, 'Focus');
+      applyCondition(game, fk, 'Hide');
     }
     const fk = figureKeys[0];
     game.figurePowerTokens = game.figurePowerTokens || {};
@@ -2523,10 +2486,8 @@ export function resolveAbility(abilityId, context) {
     const meta = dcMessageMeta.get(msgId);
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    game.figureConditions = game.figureConditions || {};
     for (const fk of figureKeys) {
-      const existing = game.figureConditions[fk] || [];
-      if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+      applyCondition(game, fk, 'Focus');
     }
     game.movementBank = game.movementBank || {};
     const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
@@ -2775,10 +2736,8 @@ export function resolveAbility(abilityId, context) {
     if (adjacent.length > entry.focusGainToAdjacentUpToN) {
       return { applied: false, manualMessage: `Resolve manually: choose up to ${entry.focusGainToAdjacentUpToN} of ${adjacent.length} adjacent friendly figures to become Focused.` };
     }
-    game.figureConditions = game.figureConditions || {};
     for (const fk of adjacent) {
-      const existing = game.figureConditions[fk] || [];
-      if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+      applyCondition(game, fk, 'Focus');
     }
     return { applied: true, logMessage: `${adjacent.length} adjacent figure(s) became Focused.`, refreshBoard: true };
   }
@@ -2797,10 +2756,8 @@ export function resolveAbility(abilityId, context) {
     if (allKeys.length === 0) return { applied: true };
     const n = Math.min(entry.focusGainToUpToNFigures, allKeys.length);
     if (allKeys.length > n) return { applied: false, manualMessage: `Resolve manually: choose up to ${n} of your ${allKeys.length} figures to become Focused.` };
-    game.figureConditions = game.figureConditions || {};
     for (const fk of allKeys) {
-      const existing = game.figureConditions[fk] || [];
-      if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+      applyCondition(game, fk, 'Focus');
     }
     return { applied: true, logMessage: `${allKeys.length} figure(s) became Focused.`, refreshBoard: true };
   }
@@ -3101,10 +3058,8 @@ export function resolveAbility(abilityId, context) {
         if (meta) {
           const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
           if (figureKeys.length > 0) {
-            game.figureConditions = game.figureConditions || {};
             for (const fk of figureKeys) {
-              const existing = game.figureConditions[fk] || [];
-              if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+              applyCondition(game, fk, 'Focus');
             }
             focusApplied = true;
           }
@@ -3131,10 +3086,8 @@ export function resolveAbility(abilityId, context) {
         if (meta) {
           const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
           if (figureKeys.length > 0) {
-            game.figureConditions = game.figureConditions || {};
             for (const fk of figureKeys) {
-              const existing = game.figureConditions[fk] || [];
-              if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+              applyCondition(game, fk, 'Focus');
             }
             focusApplied = true;
           }
@@ -3166,10 +3119,8 @@ export function resolveAbility(abilityId, context) {
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found for activation.' };
-    game.figureConditions = game.figureConditions || {};
     for (const fk of figureKeys) {
-      const existing = game.figureConditions[fk] || [];
-      if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+      applyCondition(game, fk, 'Focus');
     }
     return { applied: true, logMessage: `Spent ${entry.mpCost} MP and became Focused.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
   }
@@ -3186,10 +3137,8 @@ export function resolveAbility(abilityId, context) {
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found for activation.' };
-    game.figureConditions = game.figureConditions || {};
     for (const fk of figureKeys) {
-      const existing = game.figureConditions[fk] || [];
-      if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+      applyCondition(game, fk, 'Focus');
     }
     if (entry.readyActiveDc) {
       return { applied: true, logMessage: 'Became Focused. Readied active Deployment card.', readyDcMsgIds: [msgId], refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
@@ -3232,10 +3181,8 @@ export function resolveAbility(abilityId, context) {
     bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
     game.movementBank[msgId] = bank;
     // Apply Focus to all figures in group
-    game.figureConditions = game.figureConditions || {};
     for (const fk of figureKeys) {
-      const existing = game.figureConditions[fk] || [];
-      if (!existing.includes('Focus')) game.figureConditions[fk] = [...existing, 'Focus'];
+      applyCondition(game, fk, 'Focus');
     }
     return { applied: true, logMessage: `Gained ${entry.mpBonus} movement point${entry.mpBonus !== 1 ? 's' : ''}. Became Focused.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
   }
@@ -3247,10 +3194,8 @@ export function resolveAbility(abilityId, context) {
     const figureKeys = getFigureKeysForDcMsg(game, meta.playerNum, meta);
     if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found for this activation.' };
     const cond = entry.applySelfCondition;
-    game.figureConditions = game.figureConditions || {};
     for (const fk of figureKeys) {
-      const existing = game.figureConditions[fk] || [];
-      if (!existing.includes(cond)) game.figureConditions[fk] = [...existing, cond];
+      applyCondition(game, fk, cond);
     }
     return { applied: true, logMessage: `Became ${cond}.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true, conditionCardsToPost: [cond] };
   }
@@ -3290,7 +3235,7 @@ export function resolveAbility(abilityId, context) {
       const harmful = conds.filter(c => harmfulConditions.includes(c));
       if (harmful.length > 0) {
         const removed = harmful[0];
-        game.figureConditions[figKey] = conds.filter(c => c !== removed);
+        filterCondition(game, figKey, removed);
         return `**${dcName}** discarded **${removed}**`;
       }
       return null;
@@ -3542,13 +3487,11 @@ export function resolveAbility(abilityId, context) {
           }
         }
       }
-      game.figureConditions = game.figureConditions || {};
-      const existing = game.figureConditions[fk] || [];
-      const harmfulIdx = existing.findIndex((c) => HARMFUL.includes(c));
-      if (harmfulIdx !== -1) {
-        const removed = existing[harmfulIdx];
-        game.figureConditions[fk] = existing.filter((_, i) => i !== harmfulIdx);
-        parts.push(`discarded ${removed}`);
+      const existing = game.figureConditions?.[fk] || [];
+      const harmful = existing.find((c) => HARMFUL.includes(c));
+      if (harmful) {
+        filterCondition(game, fk, harmful);
+        parts.push(`discarded ${harmful}`);
       } else {
         parts.push('no HARMFUL condition to discard');
       }
@@ -3592,12 +3535,9 @@ export function resolveAbility(abilityId, context) {
     const label = entry.label || 'Inform';
 
     const applyFocus = (targets) => {
-      game.figureConditions = game.figureConditions || {};
       const conditioned = [];
       for (const fk of targets) {
-        const existing = game.figureConditions[fk] || [];
-        if (!existing.includes('Focus')) {
-          game.figureConditions[fk] = [...existing, 'Focus'];
+        if (applyCondition(game, fk, 'Focus')) {
           conditioned.push(fk.match(/^(.+)-\d+-\d+$/)?.[1] || fk);
         }
       }
@@ -3670,10 +3610,8 @@ export function resolveAbility(abilityId, context) {
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found for activation.' };
-    game.figureConditions = game.figureConditions || {};
     for (const fk of figureKeys) {
-      const existing = game.figureConditions[fk] || [];
-      if (!existing.includes('Hide')) game.figureConditions[fk] = [...existing, 'Hide'];
+      applyCondition(game, fk, 'Hide');
     }
     return { applied: true, logMessage: 'Became Hidden.' };
   }
@@ -4097,11 +4035,7 @@ export function resolveAbility(abilityId, context) {
       return { applied: false, manualMessage: 'Resolve manually: play when an attack targeting you is declared (as the defender).' };
     }
     const figureKey = cbt.target.figureKey;
-    game.figureConditions = game.figureConditions || {};
-    const existing = game.figureConditions[figureKey] || [];
-    if (!existing.includes('Hide')) {
-      game.figureConditions[figureKey] = [...existing, 'Hide'];
-    }
+    applyCondition(game, figureKey, 'Hide');
     return { applied: true, logMessage: 'Became Hidden.' };
   }
 
@@ -4329,10 +4263,7 @@ export function resolveAbility(abilityId, context) {
       if (idx2 >= 0 && dcList2?.[idx2]) dcList2[idx2].healthState = [...healthState];
       // Apply conditions to target
       if (targetConditions.length > 0) {
-        game.figureConditions = game.figureConditions || {};
-        const existing = game.figureConditions[targetFk] || [];
-        const toAdd = targetConditions.filter((c) => !existing.includes(c));
-        if (toAdd.length > 0) game.figureConditions[targetFk] = [...existing, ...toAdd];
+        for (const c of targetConditions) applyCondition(game, targetFk, c);
       }
       // Apply self-strain to activating figure(s)
       const refreshIds = [targetMsgId];
@@ -4401,9 +4332,7 @@ export function resolveAbility(abilityId, context) {
         const tMsgId = findMsgIdForFigureKey(game, oppNum, actualFk, dcMessageMeta);
         const tMeta = tMsgId ? dcMessageMeta.get(tMsgId) : null;
         const tName = tMeta?.displayName || tMeta?.dcName || actualFk;
-        game.figureConditions = game.figureConditions || {};
-        const existing = game.figureConditions[actualFk] || [];
-        if (!existing.includes('Stun')) game.figureConditions[actualFk] = [...existing, 'Stun'];
+        applyCondition(game, actualFk, 'Stun');
         return { applied: true, logMessage: `**${tName}** becomes Stunned.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: tMsgId ? [tMsgId] : [] };
       }
       const strainKey = typeof chosenFigureKey === 'string' && chosenFigureKey.startsWith('strain:') ? chosenFigureKey.slice(7) : chosenFigureKey;
@@ -4439,10 +4368,7 @@ export function resolveAbility(abilityId, context) {
               splashParts.push(`**${adjName}** (apply ${splashDmg} Damage manually)`);
             }
             if (splashConds.length > 0) {
-              game.figureConditions = game.figureConditions || {};
-              const adjEx = game.figureConditions[adjFk] || [];
-              const toAdd = splashConds.filter((c) => !adjEx.includes(c));
-              if (toAdd.length > 0) game.figureConditions[adjFk] = [...adjEx, ...toAdd];
+              for (const c of splashConds) applyCondition(game, adjFk, c);
             }
           }
           if (splashParts.length > 0 && mainResult.logMessage) {
@@ -5057,11 +4983,9 @@ export function resolveAbility(abilityId, context) {
     const targetMeta = dcMessageMeta.get(chosenFigureKey);
     if (!targetMeta) return { applied: false, manualMessage: `Could not find hostile DC. Resolve manually.` };
     const figureKeys = getFigureKeysForDcMsg(game, oppNum, targetMeta);
-    game.figureConditions = game.figureConditions || {};
     let stunned = 0;
     for (const fk of figureKeys.slice(0, entry.applyStunToUpToNAdjacentHostiles)) {
-      const existing = game.figureConditions[fk] || [];
-      if (!existing.includes('Stun')) game.figureConditions[fk] = [...existing, 'Stun'];
+      applyCondition(game, fk, 'Stun');
       stunned++;
     }
     const label = targetMeta.displayName || targetMeta.dcName || 'hostile figure(s)';
@@ -5410,12 +5334,10 @@ export function resolveAbility(abilityId, context) {
       if (!hasAdjacentFriendly) qualified.push(fk);
     }
     game.figurePowerTokens = game.figurePowerTokens || {};
-    game.figureConditions = game.figureConditions || {};
     for (const fk of qualified) {
       game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
       game.figurePowerTokens[fk].push('Block');
-      const existing = game.figureConditions[fk] || [];
-      if (!existing.includes('Hide')) game.figureConditions[fk] = [...existing, 'Hide'];
+      applyCondition(game, fk, 'Hide');
     }
     if (qualified.length === 0) return { applied: true, logMessage: `**Guerilla Warfare** — No isolated friendly figures (all have adjacent friendlies).` };
     const names = qualified.map((fk) => fk.replace(/-\d+-\d+$/, '')).join(', ');
@@ -5630,9 +5552,7 @@ export function resolveAbility(abilityId, context) {
           results.push(`**${dcName}** 2 Strain (apply manually)`);
         }
       } else {
-        game.figureConditions = game.figureConditions || {};
-        const existing = game.figureConditions[fk] || [];
-        if (!existing.includes('Weaken')) game.figureConditions[fk] = [...existing, 'Weaken'];
+        applyCondition(game, fk, 'Weaken');
         results.push(`**${dcName}** Weakened`);
       }
     }
@@ -5948,9 +5868,7 @@ export function resolveAbility(abilityId, context) {
     if (!j4xFk) {
       return { applied: true, logMessage: '**Droid Mastery** — J4X-7 is not in play. Deploy J4X-7 to Jarrod Kelvin\'s space manually, then apply this card again.' };
     }
-    game.figureConditions = game.figureConditions || {};
-    const existing = game.figureConditions[j4xFk] || [];
-    if (!existing.includes('Focus')) game.figureConditions[j4xFk] = [...existing, 'Focus'];
+    applyCondition(game, j4xFk, 'Focus');
     // Grant free attack to J4X-7's DC
     const j4xMsgId = findMsgIdForFigureKey(game, playerNum, j4xFk, dcMessageMeta);
     if (j4xMsgId) {
@@ -6305,9 +6223,7 @@ export function resolveAbility(abilityId, context) {
       bank.total = (bank.total ?? 0) + 1;
       bank.remaining = (bank.remaining ?? 0) + 1;
       game.movementBank[msgId] = bank;
-      game.figureConditions = game.figureConditions || {};
-      const existing = game.figureConditions[activatorFk] || [];
-      if (!existing.includes('Focus')) game.figureConditions[activatorFk] = [...existing, 'Focus'];
+      applyCondition(game, activatorFk, 'Focus');
     };
     // Phase 2: apply damage to chosen (chosenFigureKey = 'self' or a friendly figure key)
     if (chosenFigureKey) {
@@ -6962,8 +6878,7 @@ export function resolveAbility(abilityId, context) {
       const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
       const meta = msgId ? dcMessageMeta?.get(msgId) : null;
       const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
-      game.figureConditions = game.figureConditions || {};
-      actKeys.forEach((fk) => { game.figureConditions[fk] = [...new Set([...(game.figureConditions[fk] || []), 'Focus'])]; });
+      actKeys.forEach((fk) => { applyCondition(game, fk, 'Focus'); });
       const ownNew = game[ownVpKey]?.total ?? 0;
       const oppNew = game[oppVpKey]?.total ?? 0;
       return { applied: true, logMessage: `**Let's Make a Deal** — Paid ${X} VP (your total: ${ownNew}, theirs: ${oppNew}). ${X > 0 ? `Applied −${X} Hits to this attack.` : 'No VP paid.'} Hondo becomes Focused.` };
@@ -7200,8 +7115,7 @@ export function resolveAbility(abilityId, context) {
     game.pendingOverrideAttackDice[msgId] = { ...(game.pendingOverrideAttackDice[msgId] || {}), pierce: (game.pendingOverrideAttackDice[msgId]?.pierce || 0) + 2 };
     // Apply Weaken to activating figure
     const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    game.figureConditions = game.figureConditions || {};
-    actKeys.forEach((fk) => { game.figureConditions[fk] = [...new Set([...(game.figureConditions[fk] || []), 'Weaken'])]; });
+    actKeys.forEach((fk) => { applyCondition(game, fk, 'Weaken'); });
     // Exhaust the DC card (if dcExhaustedState is available)
     if (dcExhaustedState) dcExhaustedState.set(msgId, true);
     return { applied: true, logMessage: `**Overcharged Weapons** — **${meta?.dcName || 'VEHICLE'}** gains 1 free attack (+Pierce 2). ${meta?.dcName || 'Vehicle'} is exhausted and Weakened.` };
@@ -7219,8 +7133,7 @@ export function resolveAbility(abilityId, context) {
     game.freeAttackBonusPending[msgId] = true;
     // Apply Stun to activating figure
     const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    game.figureConditions = game.figureConditions || {};
-    actKeys.forEach((fk) => { game.figureConditions[fk] = [...new Set([...(game.figureConditions[fk] || []), 'Stun'])]; });
+    actKeys.forEach((fk) => { applyCondition(game, fk, 'Stun'); });
     return { applied: true, logMessage: `**Parting Blow** — **${meta?.dcName || 'BRAWLER'}** gains 1 free attack before the hostile finishes exiting. ${meta?.dcName || 'Figure'} becomes Stunned.` };
   }
 

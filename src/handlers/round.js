@@ -5,7 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { getDcEffects, getMapSpaces, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
-import { reduceHp, healHp, healHpDistributed } from '../game/index.js';
+import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition } from '../game/index.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -89,8 +89,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
     for (const fk of Object.keys(game.figureConditions)) {
       const before = game.figureConditions[fk];
       const toRemove = before.filter((c) => c === 'Stun' || c === 'Weaken');
-      game.figureConditions[fk] = before.filter((c) => c !== 'Stun' && c !== 'Weaken');
-      if (game.figureConditions[fk].length === 0) delete game.figureConditions[fk];
+      filterCondition(game, fk, 'Stun');
+      filterCondition(game, fk, 'Weaken');
       if (toRemove.length > 0) clearedConditions.push({ figureKey: fk, cleared: toRemove });
     }
   }
@@ -115,8 +115,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     // Discard Bleed (Stun/Weaken already cleared above)
     for (const fk of Object.keys(game.figureConditions || {})) {
       if (!fk.startsWith(meta.dcName + '-')) continue;
-      game.figureConditions[fk] = (game.figureConditions[fk] || []).filter(c => c !== 'Bleed');
-      if (game.figureConditions[fk].length === 0) delete game.figureConditions[fk];
+      filterCondition(game, fk, 'Bleed');
     }
   }
   // Hardy (Trandoshan Hunter Elite): discard all HARMFUL conditions at end of round
@@ -130,8 +129,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     for (const fk of Object.keys(game.figureConditions || {})) {
       if (!fk.startsWith(meta.dcName + '-')) continue;
       const before = game.figureConditions[fk]?.length || 0;
-      game.figureConditions[fk] = (game.figureConditions[fk] || []).filter(c => !HARMFUL.includes(c));
-      if (game.figureConditions[fk].length === 0) delete game.figureConditions[fk];
+      for (const h of HARMFUL) filterCondition(game, fk, h);
       if ((game.figureConditions[fk]?.length || 0) < before) cleared = true;
     }
     if (cleared) {
@@ -471,16 +469,12 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
         }
         // Stealthy (Davith Elso): become Hidden at start of mission
         if (passives.includes('Stealthy')) {
-          game.figureConditions = game.figureConditions || {};
-          game.figureConditions[fk] = game.figureConditions[fk] || [];
-          if (!game.figureConditions[fk].includes('Hide')) game.figureConditions[fk].push('Hide');
+          applyCondition(game, fk, 'Hide');
           await logGameAction(game, client, `🥷 **Stealthy** — **${dcName}** becomes **Hidden** at start of mission.`, { phase: 'ROUND', icon: 'deployed' });
         }
         // Ambush (Ewok Warrior Elite): become Hidden after deployment
         if (passives.includes('Ambush')) {
-          game.figureConditions = game.figureConditions || {};
-          game.figureConditions[fk] = game.figureConditions[fk] || [];
-          if (!game.figureConditions[fk].includes('Hide')) game.figureConditions[fk].push('Hide');
+          applyCondition(game, fk, 'Hide');
           await logGameAction(game, client, `🥷 **Ambush** — **${dcName}** becomes **Hidden** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
         }
         // Security Detail (Death Trooper Regular): a friendly LEADER gains 1 Block Token
@@ -675,16 +669,12 @@ export async function handleEndStartOfRound(interaction, ctx) {
         }
         // Stealthy (Davith Elso): become Hidden at start of mission
         if (passives.includes('Stealthy')) {
-          game.figureConditions = game.figureConditions || {};
-          game.figureConditions[fk] = game.figureConditions[fk] || [];
-          if (!game.figureConditions[fk].includes('Hide')) game.figureConditions[fk].push('Hide');
+          applyCondition(game, fk, 'Hide');
           await logGameAction(game, client, `🥷 **Stealthy** — **${dcName}** becomes **Hidden** at start of mission.`, { phase: 'ROUND', icon: 'deployed' });
         }
         // Ambush (Ewok Warrior Elite): become Hidden after deployment
         if (passives.includes('Ambush')) {
-          game.figureConditions = game.figureConditions || {};
-          game.figureConditions[fk] = game.figureConditions[fk] || [];
-          if (!game.figureConditions[fk].includes('Hide')) game.figureConditions[fk].push('Hide');
+          applyCondition(game, fk, 'Hide');
           await logGameAction(game, client, `🥷 **Ambush** — **${dcName}** becomes **Hidden** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
         }
         // Security Detail (Death Trooper Regular): a friendly LEADER gains 1 Block Token

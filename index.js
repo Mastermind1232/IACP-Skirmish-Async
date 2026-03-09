@@ -250,6 +250,7 @@ import {
   filterCondition as _filterCondition,
   isConditionImmune as _isConditionImmune,
   HARMFUL_CONDITIONS as _HARMFUL_CONDITIONS,
+  applyCondition as _applyCondition,
   isFigurelessDc as _isFigurelessDc,
   hasDepleteEffect as _hasDepleteEffect,
   getCompanionDescriptionForDc as _getCompanionDescriptionForDc,
@@ -3664,17 +3665,10 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           await logGameAction(game, client, `**Condition Immunity** — **${combat.target.label}** is immune to ${blocked.join(', ')}.`, { phase: 'ROUND', icon: 'card' });
         }
       }
-      if (allConditions.length) {
-        game.figureConditions = game.figureConditions || {};
-        const existing = game.figureConditions[combat.target.figureKey] || [];
-        game.figureConditions[combat.target.figureKey] = [...new Set([...existing, ...allConditions])];
-      }
+      for (const _ac of allConditions) _applyCondition(game, combat.target.figureKey, _ac);
       // Furious Charge: if defender's player played this CC, and suffered >= threshold damage, grant Focus
       if (game.conditionalFocusIfDamagedGte?.playerNum === defenderPlayerNum && damage >= game.conditionalFocusIfDamagedGte.threshold) {
-        game.figureConditions = game.figureConditions || {};
-        game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
-        if (!game.figureConditions[combat.target.figureKey].includes('Focus')) {
-          game.figureConditions[combat.target.figureKey].push('Focus');
+        if (_applyCondition(game, combat.target.figureKey, 'Focus')) {
           await logGameAction(game, client, `**Furious Charge** — **${combat.target.label}** is now **Focused** (suffered ${damage} Damage).`, { phase: 'ROUND', icon: 'card' });
         }
         game.conditionalFocusIfDamagedGte = null;
@@ -3703,10 +3697,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const _spDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
         const _spEff = getDcEffects()?.[_spDcName];
         if ((_spEff?.passives || []).includes('Self-Preservation')) {
-          game.figureConditions = game.figureConditions || {};
-          game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
-          if (!game.figureConditions[combat.target.figureKey].includes('Focus')) {
-            game.figureConditions[combat.target.figureKey].push('Focus');
+          if (_applyCondition(game, combat.target.figureKey, 'Focus')) {
             await logGameAction(game, client, `🛡️ **Self-Preservation** — **${_spDcName}** became **Focused** (suffered damage).`, { phase: 'ROUND', icon: 'attack' });
           }
         }
@@ -3719,10 +3710,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const _fokTargetName = (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
           const _fokTargetKws = (getDcKeywords()[_fokTargetName] || []).map(k => String(k).toUpperCase());
           if (_fokTargetKws.includes('WOOKIEE')) {
-            game.figureConditions = game.figureConditions || {};
-            game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
-            if (!game.figureConditions[combat.target.figureKey].includes('Focus')) {
-              game.figureConditions[combat.target.figureKey].push('Focus');
+            if (_applyCondition(game, combat.target.figureKey, 'Focus')) {
               await logGameAction(game, client, `**Fury of Kashyyyk** — **${_fokTargetName}** became **Focused** (suffered ${damage} Damage).`, { phase: 'ROUND', icon: 'card' });
             }
           }
@@ -3732,10 +3720,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       if (newCur <= 0) {
         const _guerAttEff = getDcEffects()?.[combat.attackerDcName];
         if ((_guerAttEff?.abilityText || '').includes('Guerilla') || (_guerAttEff?.abilityText || '').includes('guerilla')) {
-          game.figureConditions = game.figureConditions || {};
-          game.figureConditions[combat.attackerFigureKey] = game.figureConditions[combat.attackerFigureKey] || [];
-          if (!game.figureConditions[combat.attackerFigureKey].includes('Hide')) {
-            game.figureConditions[combat.attackerFigureKey].push('Hide');
+          if (_applyCondition(game, combat.attackerFigureKey, 'Hide')) {
             await logGameAction(game, client, `🥷 **Guerilla** — **${combat.attackerDcName}** became **Hidden** (defender defeated).`, { phase: 'ROUND', icon: 'attack' });
           }
         }
@@ -4117,10 +4102,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const _lsAlive = Object.keys(game.figurePositions?.[defenderPlayerNum] || {}).filter(k => k.startsWith(_lsPrefix) && k !== combat.target.figureKey);
           if (_lsAlive.length > 0) {
             const _lsTarget = _lsAlive[0];
-            game.figureConditions = game.figureConditions || {};
-            game.figureConditions[_lsTarget] = game.figureConditions[_lsTarget] || [];
-            if (!game.figureConditions[_lsTarget].includes('Focus')) {
-              game.figureConditions[_lsTarget].push('Focus');
+            if (_applyCondition(game, _lsTarget, 'Focus')) {
               const _lsName = _lsTarget.replace(/-\d+-\d+$/, '');
               await logGameAction(game, client, `⚡ **Last Stand** — **${_lsName}** becomes **Focused** (another figure in the group was defeated).`, { phase: 'ROUND', icon: 'card' });
             }
@@ -4145,10 +4127,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const _obiAlive = Object.keys(game.figurePositions?.[defenderPlayerNum] || {}).filter(k => !k.startsWith('Obi-Wan Kenobi-'));
           if (_obiAlive.length > 0) {
             const _obiTarget = _obiAlive[0];
-            game.figureConditions = game.figureConditions || {};
-            game.figureConditions[_obiTarget] = game.figureConditions[_obiTarget] || [];
-            if (!game.figureConditions[_obiTarget].includes('Focus')) {
-              game.figureConditions[_obiTarget].push('Focus');
+            if (_applyCondition(game, _obiTarget, 'Focus')) {
               const _obiName = _obiTarget.replace(/-\d+-\d+$/, '');
               await logGameAction(game, client, `✨ **Into the Force** — **${_obiName}** becomes **Focused** (Obi-Wan was defeated).`, { phase: 'ROUND', icon: 'card' });
             }
@@ -4169,10 +4148,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
                 if (!_defAdj.includes(String(rgPos).toLowerCase())) continue;
                 const rgDcName = rgFk.replace(/-\d+-\d+$/, '');
                 if (rgDcName !== 'Royal Guard (Regular)' && rgDcName !== 'Royal Guard (Elite)') continue;
-                game.figureConditions = game.figureConditions || {};
-                game.figureConditions[rgFk] = game.figureConditions[rgFk] || [];
-                if (!game.figureConditions[rgFk].includes('Focus')) {
-                  game.figureConditions[rgFk].push('Focus');
+                if (_applyCondition(game, rgFk, 'Focus')) {
                   const vLabel = rgDcName === 'Royal Guard (Elite)' ? 'Forward Vengeance' : 'Vengeance';
                   await logGameAction(game, client, `⚔️ **${vLabel}** — **${rgDcName}** becomes **Focused** (adjacent friendly defeated).`, { phase: 'ROUND', icon: 'card' });
                 }
@@ -4221,10 +4197,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
                 const dist = getRange(_btDefPos, pos);
                 if (dist <= 3) {
                   if (isConditionImmune(game, fk)) continue; // Condition Immunity: skip Weaken
-                  game.figureConditions = game.figureConditions || {};
-                  game.figureConditions[fk] = game.figureConditions[fk] || [];
-                  if (!game.figureConditions[fk].includes('Weaken')) {
-                    game.figureConditions[fk].push('Weaken');
+                  if (_applyCondition(game, fk, 'Weaken')) {
                     _btWeakened++;
                   }
                 }
@@ -4405,10 +4378,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             if (!_bfAdj.includes(_bfPos)) continue;
             if (_bfFk === combat.target.figureKey) continue;
             if (isConditionImmune(game, _bfFk)) continue; // Condition Immunity: skip Stun
-            game.figureConditions = game.figureConditions || {};
-            game.figureConditions[_bfFk] = game.figureConditions[_bfFk] || [];
-            if (!game.figureConditions[_bfFk].includes('Stun')) {
-              game.figureConditions[_bfFk].push('Stun');
+            if (_applyCondition(game, _bfFk, 'Stun')) {
               const _bfDcName = _bfFk.replace(/-\d+-\d+$/, '');
               await logGameAction(game, client, `\uD83D\uDCA5 **Burst Fire** \u2014 **${_bfDcName}** (adjacent) is now **Stunned**.`, { phase: 'ROUND', icon: 'attack' });
             }
@@ -4422,10 +4392,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     delete game.cripplingBlowPending[combat.attackerMsgId];
     if (hit && combat.target?.figureKey) {
       if (!isConditionImmune(game, combat.target.figureKey)) {
-        game.figureConditions = game.figureConditions || {};
-        game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
-        if (!game.figureConditions[combat.target.figureKey].includes('Stun')) {
-          game.figureConditions[combat.target.figureKey].push('Stun');
+        if (_applyCondition(game, combat.target.figureKey, 'Stun')) {
           await logGameAction(game, client, `⚡ **Crippling Blow** — **${combat.target.label || combat.target.figureKey.replace(/-\d+-\d+$/, '')}** is now **Stunned**.`, { phase: 'ROUND', icon: 'attack' });
         }
       } else {
@@ -4558,11 +4525,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     // Apply Weaken to the target
     const _sfTargetFk = combat.target?.figureKey;
     if (_sfTargetFk && !isConditionImmune(game, _sfTargetFk)) {
-      game.figureConditions = game.figureConditions || {};
-      game.figureConditions[_sfTargetFk] = game.figureConditions[_sfTargetFk] || [];
-      if (!game.figureConditions[_sfTargetFk].includes('Weaken')) {
-        game.figureConditions[_sfTargetFk].push('Weaken');
-      }
+      _applyCondition(game, _sfTargetFk, 'Weaken');
     }
     const _sfTargetName = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '') || combat.defenderDcName;
     await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. You may choose a SMALL friendly figure within 3 spaces to gain 2 MP. *(Honor system for MP grant.)*`).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -4616,10 +4579,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     delete game.applySelfStunAfterAttackPlayerNum[attackerPlayerNum];
     const _cfaFigKey = combat.attackerFigureKey;
     if (_cfaFigKey && !isConditionImmune(game, _cfaFigKey)) {
-      game.figureConditions = game.figureConditions || {};
-      game.figureConditions[_cfaFigKey] = game.figureConditions[_cfaFigKey] || [];
-      if (!game.figureConditions[_cfaFigKey].includes('Stun')) {
-        game.figureConditions[_cfaFigKey].push('Stun');
+      if (_applyCondition(game, _cfaFigKey, 'Stun')) {
         const _cfaDcName = _cfaFigKey.replace(/-\d+-\d+$/, '');
         await logGameAction(game, client, `**Concentrated Fire** — **${_cfaDcName}** is now **Stunned**.`, { phase: 'ROUND', icon: 'card' });
         embedRefreshMsgIds.add(combat.attackerMsgId);
@@ -4636,12 +4596,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         _ppaConditions = _ppaConditions.filter((c) => !HARMFUL_CONDITIONS.includes(c));
       }
       if (_ppaConditions.length > 0) {
-        game.figureConditions = game.figureConditions || {};
-        game.figureConditions[combat.attackerFigureKey] = game.figureConditions[combat.attackerFigureKey] || [];
         for (const _ppaC of _ppaConditions) {
-          if (!game.figureConditions[combat.attackerFigureKey].includes(_ppaC)) {
-            game.figureConditions[combat.attackerFigureKey].push(_ppaC);
-          }
+          _applyCondition(game, combat.attackerFigureKey, _ppaC);
         }
         const _ppaDcName = combat.attackerFigureKey.replace(/-\d+-\d+$/, '');
         await logGameAction(game, client, `**Wild Fury** — **${_ppaDcName}** is now **${_ppaConditions.join(' + ')}**.`, { phase: 'ROUND', icon: 'card' });
@@ -4726,10 +4682,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       const sqEff = getDcEffects()?.[sqDcName] || getDcEffects()?.[sqDcName?.replace(/\s*\[.*\]\s*$/, '')];
       const sqKws = (sqEff?.keywords || []).map((k) => String(k).toUpperCase());
       if (!sqKws.includes('TROOPER')) continue;
-      game.figureConditions = game.figureConditions || {};
-      const sqExisting = game.figureConditions[sqFk] || [];
-      if (!sqExisting.includes('Focus')) {
-        game.figureConditions[sqFk] = [...sqExisting, 'Focus'];
+      if (_applyCondition(game, sqFk, 'Focus')) {
         const sqMsgId = findDcMessageIdForFigure(game.gameId, sqPn, sqFk);
         if (sqMsgId) embedRefreshMsgIds.add(sqMsgId);
         await logGameAction(game, client, `**Squad Command** — **${sqDcName}** is now **Focused**`, { phase: 'ROUND', icon: 'card' });
@@ -5030,9 +4983,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
     const fsKey = `${combat.attackerFigureKey}_fell_swoop`;
     if (!game.roundFigureAbilityUsed[fsKey]) {
       game.roundFigureAbilityUsed[fsKey] = true;
-      game.figureConditions = game.figureConditions || {};
-      const existing = game.figureConditions[combat.attackerFigureKey] || [];
-      if (!existing.includes('Hide')) game.figureConditions[combat.attackerFigureKey] = [...existing, 'Hide'];
+      _applyCondition(game, combat.attackerFigureKey, 'Hide');
       if (game.movementBank?.[combat.attackerMsgId]) {
         game.movementBank[combat.attackerMsgId].remaining += 2;
         game.movementBank[combat.attackerMsgId].total += 2;
@@ -5688,9 +5639,7 @@ async function handleSpreadThePainFigPick(interaction) {
   if (HARMFUL_CONDITIONS.includes(cond) && isConditionImmune(game, figureKey)) {
     await logGameAction(game, client, `**Condition Immunity** — **${dcName}** is immune to **${cond}** (Spread the Pain).`, { phase: 'ROUND', icon: 'card' });
   } else {
-    game.figureConditions = game.figureConditions || {};
-    const existing = game.figureConditions[figureKey] || [];
-    if (!existing.includes(cond)) game.figureConditions[figureKey] = [...existing, cond];
+    _applyCondition(game, figureKey, cond);
     await logGameAction(game, client, `**Spread the Pain** — **${dcName}** gains **${cond}**`, { phase: 'ROUND', icon: 'attack' });
   }
   pending.conditionIdx++;

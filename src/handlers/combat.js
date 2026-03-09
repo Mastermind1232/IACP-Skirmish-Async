@@ -6,7 +6,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
-import { reduceHp, healHp, awardKillVp, awardObjectiveVp } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition } from '../game/index.js';
 
 /**
  * Check a player's hand for CC cards that match a timing trigger.
@@ -393,10 +393,7 @@ export async function handleAttackTarget(interaction, ctx) {
   const _atkEff = getDcEffects()?.[meta.dcName];
   let _mysticHunterFired = false;
   if ((_atkEff?.passives || []).includes('Mystic Hunter')) {
-    game.figureConditions = game.figureConditions || {};
-    game.figureConditions[attackerFigureKey] = game.figureConditions[attackerFigureKey] || [];
-    if (!game.figureConditions[attackerFigureKey].includes('Focus')) {
-      game.figureConditions[attackerFigureKey].push('Focus');
+    if (applyCondition(game, attackerFigureKey, 'Focus')) {
       attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'green'] };
       _mysticHunterFired = true;
     }
@@ -595,10 +592,7 @@ export async function handleAttackTarget(interaction, ctx) {
       _pc.bonusSurgeAbilities.push('pierce 1');
       // Pre-attack Focus: apply Focus if not already Focused
       if (!attackerConds.includes('Focus')) {
-        game.figureConditions = game.figureConditions || {};
-        game.figureConditions[attackerFigureKey] = game.figureConditions[attackerFigureKey] || [];
-        if (!game.figureConditions[attackerFigureKey].includes('Focus')) {
-          game.figureConditions[attackerFigureKey].push('Focus');
+        if (applyCondition(game, attackerFigureKey, 'Focus')) {
           _pc.attackInfo = { ..._pc.attackInfo, dice: [...(_pc.attackInfo.dice || []), 'green'] };
           await thread.send('**Focused on the Kill** — IG-88 becomes Focused before attacking.').catch((err) => { console.error('[discord]', err?.message ?? err); });
         }
@@ -607,10 +601,7 @@ export async function handleAttackTarget(interaction, ctx) {
     // Heir to the Jedi: Saber Strike pre-attack Focus (when using Saber Strike override)
     if (_atkUpgrades.includes('Heir to the Jedi') && overrideDiceSource === 'saber_strike') {
       if (!attackerConds.includes('Focus')) {
-        game.figureConditions = game.figureConditions || {};
-        game.figureConditions[attackerFigureKey] = game.figureConditions[attackerFigureKey] || [];
-        if (!game.figureConditions[attackerFigureKey].includes('Focus')) {
-          game.figureConditions[attackerFigureKey].push('Focus');
+        if (applyCondition(game, attackerFigureKey, 'Focus')) {
           _pc.attackInfo = { ..._pc.attackInfo, dice: [...(_pc.attackInfo.dice || []), 'green'] };
           await thread.send('**Heir to the Jedi** — Luke becomes Focused before Saber Strike.').catch((err) => { console.error('[discord]', err?.message ?? err); });
         }
@@ -673,10 +664,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (_atkUpgrades.includes('Z-6 Trooper')) {
     const _z6Pc = game.pendingCombat;
     if (!attackerConds.includes('Focus')) {
-      game.figureConditions = game.figureConditions || {};
-      game.figureConditions[attackerFigureKey] = game.figureConditions[attackerFigureKey] || [];
-      if (!game.figureConditions[attackerFigureKey].includes('Focus')) {
-        game.figureConditions[attackerFigureKey].push('Focus');
+      if (applyCondition(game, attackerFigureKey, 'Focus')) {
         _z6Pc.attackInfo = { ..._z6Pc.attackInfo, dice: [...(_z6Pc.attackInfo.dice || []), 'green'] };
         await thread.send('**Rotary Cannon** — Z-6 Trooper becomes Focused before attacking.').catch((err) => { console.error('[discord]', err?.message ?? err); });
       }
@@ -789,8 +777,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (atkSpecialIds.includes('battle_meditation') && !game.pendingCombat.attackerConds.includes('Focus') &&
       !(game.figureConditions?.[attackerFigureKey] || []).includes('Focus')) {
     game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
-    if (!game.figureConditions) game.figureConditions = {};
-    game.figureConditions[attackerFigureKey] = [...(game.figureConditions[attackerFigureKey] || []).filter(c => c !== 'Focus'), 'Focus'];
+    resetCondition(game, attackerFigureKey, 'Focus');
     const bm_label = meta.dcName === 'BT-1' ? 'Assassin' : 'Battle Meditation';
     await thread.send(`**${bm_label}** — **${meta.dcName}** is **Focused** before attacking (+1 green die).`);
   }
@@ -799,8 +786,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (atkSpecialIds.includes('full_of_rage') && !game.pendingCombat.attackerConds.includes('Focus') &&
       !(game.figureConditions?.[attackerFigureKey] || []).includes('Focus') && atkDamageSuffered >= 3) {
     game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
-    if (!game.figureConditions) game.figureConditions = {};
-    game.figureConditions[attackerFigureKey] = [...(game.figureConditions[attackerFigureKey] || []).filter(c => c !== 'Focus'), 'Focus'];
+    resetCondition(game, attackerFigureKey, 'Focus');
     await thread.send(`**Full of Rage** — Krrsantan is **Focused** before attacking (${atkDamageSuffered} damage suffered, +1 green die).`);
   }
 
@@ -869,8 +855,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (atkSpecialIds.includes('adv_targeting_computer_dark_trooper')) {
     if (!attackerConds.includes('Focus') && !(game.figureConditions?.[attackerFigureKey] || []).includes('Focus')) {
       game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
-      if (!game.figureConditions) game.figureConditions = {};
-      game.figureConditions[attackerFigureKey] = [...(game.figureConditions[attackerFigureKey] || []).filter(c => c !== 'Focus'), 'Focus'];
+      resetCondition(game, attackerFigureKey, 'Focus');
       await thread.send('**Advanced Targeting Computer** — Dark Trooper Mk III is **Focused** before attacking (+1 green die).');
     }
     // Focus already applied — still grant the green die from Focus condition (handled above at line ~286)
@@ -880,8 +865,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (atkSpecialIds.includes('flawless_execution')) {
     if (!attackerConds.includes('Focus')) {
       game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
-      if (!game.figureConditions) game.figureConditions = {};
-      game.figureConditions[attackerFigureKey] = [...(game.figureConditions[attackerFigureKey] || []).filter(c => c !== 'Focus'), 'Focus'];
+      resetCondition(game, attackerFigureKey, 'Focus');
       await thread.send('**Flawless Execution** — Cad Bane is **Focused** before attacking (+1 green die).');
     } else {
       game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'yellow'] };
@@ -956,8 +940,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (atkSpecialIds.includes('sharpshooter') && distanceToTarget >= 5) {
     if (!attackerConds.includes('Focus') && !(game.figureConditions?.[attackerFigureKey] || []).includes('Focus')) {
       game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
-      if (!game.figureConditions) game.figureConditions = {};
-      game.figureConditions[attackerFigureKey] = [...(game.figureConditions[attackerFigureKey] || []).filter(c => c !== 'Focus'), 'Focus'];
+      resetCondition(game, attackerFigureKey, 'Focus');
       await thread.send(`**Sharpshooter** — **${meta.dcName}** is **Focused** (target ${distanceToTarget} spaces away, +1 green die).`);
     }
   }
@@ -1315,13 +1298,8 @@ export async function handleAttackTarget(interaction, ctx) {
   // Loku Recon Token: Mon Cala SF — Loku becomes Focused when attacking recon-tokened figure
   if (game.reconToken?.figureKey === targetFigureKey && game.reconToken?.playerNum === attackerPlayerNum) {
     if (atkSpecialIds.includes('mon_cala_sf_loku')) {
-      game.figureConditions = game.figureConditions || {};
-      const _atkConds = game.figureConditions[attackerFigureKey] || [];
-      if (!_atkConds.includes('Focus')) {
-        _atkConds.push('Focus');
-        game.figureConditions[attackerFigureKey] = _atkConds;
-        await thread.send('**Mon Cala Special Forces** — Loku gains Focus for attacking Recon-tokened figure.');
-      }
+      applyCondition(game, attackerFigureKey, 'Focus');
+      await thread.send('**Mon Cala Special Forces** — Loku gains Focus for attacking Recon-tokened figure.');
     }
   }
 
@@ -3220,14 +3198,10 @@ export async function handleCombatSurge(interaction, ctx) {
       }
       // Self-condition surges: apply condition to attacker's own figure
       if (mod.surgeSelfFocus && combat.attackerFigureKey) {
-        game.figureConditions = game.figureConditions || {};
-        const existing = game.figureConditions[combat.attackerFigureKey] || [];
-        if (!existing.includes('Focus')) game.figureConditions[combat.attackerFigureKey] = [...existing, 'Focus'];
+        applyCondition(game, combat.attackerFigureKey, 'Focus');
       }
       if (mod.surgeSelfHide && combat.attackerFigureKey) {
-        game.figureConditions = game.figureConditions || {};
-        const existing = game.figureConditions[combat.attackerFigureKey] || [];
-        if (!existing.includes('Hide')) game.figureConditions[combat.attackerFigureKey] = [...existing, 'Hide'];
+        applyCondition(game, combat.attackerFigureKey, 'Hide');
       }
       // Power token grants to attacker's figurePowerTokens
       if ((mod.surgeGrantHitToken || 0) > 0 && combat.attackerFigureKey) {

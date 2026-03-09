@@ -84,6 +84,6 @@ export { reduceHp, healHp, healHpDistributed } from './damage-helpers.js';
 
 export { awardKillVp, awardObjectiveVp, deductVp } from './vp-helpers.js';
 
-export { filterCondition, isConditionImmune, HARMFUL_CONDITIONS } from './conditions.js';
+export { filterCondition, isConditionImmune, HARMFUL_CONDITIONS, applyCondition, resetCondition } from './conditions.js';
 
 export { isFigurelessDc, hasDepleteEffect, getCompanionDescriptionForDc } from './dc-helpers.js';

@@ -31,3 +31,30 @@ export function isConditionImmune(game, figureKey) {
   const sIds = dcEff?.specialAbilityIds || [];
   return sIds.includes('immune_onar') || sIds.includes('immune_snowtrooper_elite');
 }
+
+/**
+ * Apply a condition to a figure (with dedup). Initialises figureConditions if needed.
+ * @param {object} game
+ * @param {string} figureKey
+ * @param {string} cond - condition name (e.g. 'Focus', 'Stun', 'Hide')
+ * @returns {boolean} true if the condition was newly applied, false if already present
+ */
+export function applyCondition(game, figureKey, cond) {
+  game.figureConditions = game.figureConditions || {};
+  game.figureConditions[figureKey] = game.figureConditions[figureKey] || [];
+  if (game.figureConditions[figureKey].includes(cond)) return false;
+  game.figureConditions[figureKey].push(cond);
+  return true;
+}
+
+/**
+ * Ensure a condition is set on a figure, replacing any existing instance.
+ * Useful when a condition must be present exactly once regardless of prior state.
+ * @param {object} game
+ * @param {string} figureKey
+ * @param {string} cond
+ */
+export function resetCondition(game, figureKey, cond) {
+  game.figureConditions = game.figureConditions || {};
+  game.figureConditions[figureKey] = [...(game.figureConditions[figureKey] || []).filter(c => c !== cond), cond];
+}

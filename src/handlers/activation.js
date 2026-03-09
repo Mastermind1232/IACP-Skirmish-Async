@@ -5,6 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapSpaces } from '../data-loader.js';
 import { cleanupActivation } from '../game/activation-state.js';
+import { applyCondition, filterCondition } from '../game/index.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -259,9 +260,7 @@ export async function handleEndTurn(interaction, ctx) {
     const prefix = `${meta.dcName}-${dgIndex}-`;
     const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(k => k.startsWith(prefix));
     for (const fk of figureKeys) {
-      game.figureConditions = game.figureConditions || {};
-      game.figureConditions[fk] = game.figureConditions[fk] || [];
-      if (!game.figureConditions[fk].includes('Hide')) game.figureConditions[fk].push('Hide');
+      applyCondition(game, fk, 'Hide');
     }
     if (figureKeys.length > 0) {
       await logGameAction(game, client, `🥷 **In The Shadows** — **ISB Infiltrator (Elite)** figures became **Hidden** at end of activation.`, { phase: 'ROUND', icon: 'activate' });
@@ -287,10 +286,7 @@ export async function handleEndTurn(interaction, ctx) {
         const _unnEff = getDcEffects()?.[eFk.replace(/-\d+-\d+$/, '')] || getDcEffects()?.[eFk.replace(/-\d+-\d+$/, '')?.replace(/\s*\[.*\]\s*$/, '')];
         const _unnImm = (_unnEff?.specialAbilityIds || []).includes('immune_onar') || (_unnEff?.specialAbilityIds || []).includes('immune_snowtrooper_elite');
         if (_unnImm) continue;
-        game.figureConditions = game.figureConditions || {};
-        game.figureConditions[eFk] = game.figureConditions[eFk] || [];
-        if (!game.figureConditions[eFk].includes('Weaken')) {
-          game.figureConditions[eFk].push('Weaken');
+        if (applyCondition(game, eFk, 'Weaken')) {
           weakened.push(eFk.replace(/-\d+-\d+$/, ''));
         }
       }
@@ -476,7 +472,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     const figures = ctx.getDcStats(meta.dcName).figures ?? 1;
     for (let f = 0; f < figures; f++) {
       const fk = `${meta.dcName}-${dgIndex}-${f}`;
-      if (game.figureConditions[fk]) game.figureConditions[fk] = game.figureConditions[fk].filter((c) => c !== 'Stun');
+      filterCondition(game, fk, 'Stun');
     }
   }
 
@@ -754,9 +750,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(fk => fk.startsWith('Taron Malicos-'));
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       for (const fk of figureKeys) {
-        game.figureConditions = game.figureConditions || {};
-        game.figureConditions[fk] = game.figureConditions[fk] || [];
-        if (!game.figureConditions[fk].includes('Focus')) game.figureConditions[fk].push('Focus');
+        applyCondition(game, fk, 'Focus');
         // Apply 1 Strain (= 1 HP damage)
         const fkMsgId = msgId;
         const fkIdx = parseInt(fk.split('-').pop(), 10) || 0;
