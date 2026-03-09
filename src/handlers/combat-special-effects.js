@@ -9,10 +9,10 @@ import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, remo
 import { discordCatch } from '../error-handling.js';
 import { requirePlayer } from '../utils/guards.js';
 
-// ── Internal helpers (not exported as handlers) ─────────────────────────────
+// ── Internal helpers ─────────────────────────────
 
 /** Apply Indiscriminate Fire splash damage/strain to all figures within 2 of target. */
-async function applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThreadId, die, splashTargets, thread, ctx) {
+export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThreadId, die, splashTargets, thread, ctx) {
   const {
     client, saveGames, dcMessageMeta, dcHealthState, dcExhaustedState,
     findDcMessageIdForFigure, buildDcEmbedAndFiles, getConditionsForDcMessage,

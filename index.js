@@ -59,6 +59,7 @@ import { rotateImage90 } from './src/dc-image-utils.js';
 import { renderMap } from './src/map-renderer.js';
 import { getHandlerKey } from './src/router.js';
 import { getHandler, getHandlerGroup } from './src/handlers/index.js';
+import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
 import { buildContext } from './src/context-factory.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
 import { getCommandCardImagePath, getDcImagePath, getConditionCardPath, getFigureImagePath, resolveAssetPath, resolveDcImagePath, resolveMissionCardImagePath, UPGRADE_IMAGE_OVERRIDES } from './src/asset-paths.js';
@@ -4401,7 +4402,11 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
         }
       }
       if (nonRedDice.length === 1) {
-        await applyIndiscriminateFireSplash(game, combat.attackerPlayerNum, combat.combatThreadId, nonRedDice[0], splashTargets, thread, client);
+        await applyIndiscriminateFireSplash(game, combat.attackerPlayerNum, combat.combatThreadId, nonRedDice[0], splashTargets, thread, {
+          client, saveGames, dcMessageMeta, dcHealthState, dcExhaustedState,
+          findDcMessageIdForFigure, buildDcEmbedAndFiles, getConditionsForDcMessage,
+          getDcUpgradeAttachments, getDcEffects, logGameAction,
+        });
       } else {
         game.pendingIndiscriminateFire = { attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: splashTargets, availableDice: nonRedDice };
         const ifBtns = nonRedDice.slice(0, 5).map((d, i) =>
@@ -6567,6 +6572,11 @@ client.on('interactionCreate', async (interaction) => {
       getMissionTokenLabel, countActiveGamesForPlayer, sendDeckIllegalAlert,
       runDraftRandom, getRange, hasLineOfSight,
       getDeploymentZones,
+      // Combat special effects deps
+      calculateKillVp, decrementActivationIfGroupDefeated,
+      getDcUpgradeAttachments, getFigureLabel,
+      filterCondition, isConditionImmune,
+      applyCondition: _applyCondition, HARMFUL_CONDITIONS,
 
       // Lobby
       lobbies: getLobbiesMap(),
