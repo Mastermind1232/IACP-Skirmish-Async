@@ -2861,9 +2861,29 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
   return null;
 }
 
+/** Calculate VP awarded for defeating a figure of the given DC. */
+function calculateKillVp(dcName) {
+  const stats = getDcStats(dcName);
+  const effects = getDcEffects()?.[dcName];
+  const figures = stats?.figures ?? 1;
+  return (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
+}
+
+/**
+ * If a deployment group is fully defeated and hasn't activated yet,
+ * decrement the owner's remaining activations.
+ */
+async function decrementActivationIfGroupDefeated(game, playerNum, dcIdx, client) {
+  if (dcIdx < 0 || !isGroupDefeated(game, playerNum, dcIdx)) return;
+  const activatedIndices = getActivatedDcIndices(game, playerNum) || [];
+  if (activatedIndices.includes(dcIdx)) return;
+  setActivationsRemaining(game, playerNum, Math.max(0, (getActivationsRemaining(game, playerNum) ?? 0) - 1));
+  await updateActivationsMessage(game, playerNum, client);
+}
+
 /** Get a figure's effective size, preferring stored orientation over base size. */
 function getEffectiveFigureSize(game, figureKey, dcName) {
-  return getEffectiveFigureSize(game, figureKey, dcName);
+  return game.figureOrientations?.[figureKey] || getFigureSize(dcName);
 }
 
 /**
@@ -2925,10 +2945,7 @@ async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, source
       if (wasDefeated) {
         removeFigurePosition(game, playerNum, figureKey);
         const opponentPlayerNum = playerNum === 1 ? 2 : 1;
-        const stats = getDcStats(dcName);
-        const effects = getDcEffects()?.[dcName];
-        const figures = stats?.figures ?? 1;
-        const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
+        const vp = calculateKillVp(dcName);
         awardKillVp(game, opponentPlayerNum, vp);
         await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** was defeated! +${vp} VP to Player ${opponentPlayerNum}.`, { phase: 'ROUND', icon: 'attack' });
       } else {
@@ -2966,10 +2983,7 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
     removeFigurePosition(game, playerNum, figKey);
     // VP goes to the opponent (the one dealing the damage)
     const opponentPlayerNum = playerNum === 1 ? 2 : 1;
-    const stats = getDcStats(dcList[idx]?.dcName);
-    const effects = getDcEffects()?.[dcList[idx]?.dcName];
-    const figures = stats?.figures ?? 1;
-    const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
+    const vp = calculateKillVp(dcList[idx]?.dcName);
     awardKillVp(game, opponentPlayerNum, vp);
     if (thread) await thread.send(`**${sourceName}** — ${figName} was **defeated**! +${vp} VP.`).catch(discordCatch);
     await checkWinConditions(game, client);
@@ -3032,18 +3046,11 @@ async function handleBleedResolve(interaction) {
         if (wasDefeated) {
           removeFigurePosition(game, playerNum, figureKey);
           const opponentPlayerNum = playerNum === 1 ? 2 : 1;
-          const stats = getDcStats(dcName);
-          const effects = getDcEffects()?.[dcName];
-          const figures = stats?.figures ?? 1;
-          const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
+          const vp = calculateKillVp(dcName);
           awardKillVp(game, opponentPlayerNum, vp);
           await logGameAction(game, interaction.client, `🩸 **Bleeding** — **${dcName}** was defeated! +${vp} VP to P${opponentPlayerNum}`, { phase: 'ROUND', icon: 'attack' });
-          if (idx >= 0 && isGroupDefeated(game, playerNum, idx)) {
-            const activatedIndices = getActivatedDcIndices(game, playerNum) || [];
-            if (!activatedIndices.includes(idx)) {
-              setActivationsRemaining(game, playerNum, Math.max(0, (getActivationsRemaining(game, playerNum) ?? 0) - 1));
-              await updateActivationsMessage(game, playerNum, interaction.client);
-            }
+          if (idx >= 0) {
+            await decrementActivationIfGroupDefeated(game, playerNum, idx, interaction.client);
           }
           await checkWinConditions(game, interaction.client);
         }
@@ -3633,8 +3640,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         // F7: Keep healthState, figurePositions, and DC embed in sync when one figure in a group dies.
         removeFigurePosition(game, defenderPlayerNum, combat.target.figureKey);
         if (game.figureConditions?.[combat.target.figureKey]) delete game.figureConditions[combat.target.figureKey];
-        const { cost, subCost, figures } = combat.targetStats;
-        const vp = (figures > 1 && subCost != null) ? subCost : (cost ?? 5);
+        const vp = calculateKillVp(targetDcName);
         const _vpK = vpKey(attackerPlayerNum);
         awardKillVp(game, attackerPlayerNum, vp);
         // Achievement: activation kill streak (Double Kill / Triple Kill / PENTAKILL)
@@ -3845,12 +3851,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         }
         resultText += ` — **${combat.target.label} defeated!** +${vp} VP`;
         await logGameAction(game, client, `<@${ownerId}> defeated **${combat.target.label}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
-        if (idx >= 0 && isGroupDefeated(game, defenderPlayerNum, idx)) {
-          const activatedIndices = getActivatedDcIndices(game, defenderPlayerNum) || [];
-          if (!activatedIndices.includes(idx)) {
-            setActivationsRemaining(game, defenderPlayerNum, Math.max(0, (getActivationsRemaining(game, defenderPlayerNum) ?? 0) - 1));
-            await updateActivationsMessage(game, defenderPlayerNum, client);
-          }
+        if (idx >= 0) {
+          await decrementActivationIfGroupDefeated(game, defenderPlayerNum, idx, client);
           const ccAttachKey = ccAttachmentsKey(defenderPlayerNum);
           if (game[ccAttachKey]?.[targetMsgId]?.length) {
             delete game[ccAttachKey][targetMsgId];
@@ -3927,11 +3929,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if (blastDefeated) {
           removeFigurePosition(game, blastPlayerNum, blastFigureKey);
           if (game.figureConditions?.[blastFigureKey]) delete game.figureConditions[blastFigureKey];
-          const blastStats = getDcStats(blastDcList[blastIdx]?.dcName);
-          const cost = blastStats?.cost ?? 5;
-          const figures = blastStats?.figures ?? 1;
-          const subCost = getDcEffects()[blastDcList[blastIdx]?.dcName]?.subCost;
-          const vp = (figures > 1 && subCost != null) ? subCost : cost;
+          const vp = calculateKillVp(blastDcList[blastIdx]?.dcName);
           awardKillVp(game, attackerPlayerNum, vp);
           // Achievement: count blast kills for activation streak
           if (combat.attackerMsgId) {
@@ -3946,12 +3944,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           }
           const blastLabel = blastDcList[blastIdx]?.displayName || blastFigureKey;
           await logGameAction(game, client, `Blast: <@${ownerId}> defeated **${blastLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
-          if (blastIdx >= 0 && isGroupDefeated(game, blastPlayerNum, blastIdx)) {
-            const activatedIndices = getActivatedDcIndices(game, blastPlayerNum) || [];
-            if (!activatedIndices.includes(blastIdx)) {
-              setActivationsRemaining(game, blastPlayerNum, Math.max(0, (getActivationsRemaining(game, blastPlayerNum) ?? 0) - 1));
-              await updateActivationsMessage(game, blastPlayerNum, client);
-            }
+          if (blastIdx >= 0) {
+            await decrementActivationIfGroupDefeated(game, blastPlayerNum, blastIdx, client);
             const blastCcAttachKey = ccAttachmentsKey(blastPlayerNum);
             if (game[blastCcAttachKey]?.[blastMsgId]?.length) {
               delete game[blastCcAttachKey][blastMsgId];
@@ -5080,20 +5074,13 @@ async function handleFightingKnifeTarget(interaction) {
     if (fkDefeated) {
       removeFigurePosition(game, target.playerNum, target.figureKey);
       const dcName = dcNameFromFigureKey(target.figureKey);
-      const stats = getDcStats(dcName);
-      const effects = getDcEffects()?.[dcName];
-      const figures = stats?.figures ?? 1;
-      const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
+      const vp = calculateKillVp(dcName);
       awardKillVp(game, pending.attackerPlayerNum, vp);
       await logGameAction(game, client, `**Fighting Knife** — **${target.label}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
       const dcIds = getDcMessageIds(game, target.playerNum);
       const idx = (dcIds || []).indexOf(target.msgId);
-      if (idx >= 0 && isGroupDefeated(game, target.playerNum, idx)) {
-        const activatedIndices = getActivatedDcIndices(game, target.playerNum) || [];
-        if (!activatedIndices.includes(idx)) {
-          setActivationsRemaining(game, target.playerNum, Math.max(0, (getActivationsRemaining(game, target.playerNum) ?? 0) - 1));
-          await updateActivationsMessage(game, target.playerNum, client);
-        }
+      if (idx >= 0) {
+        await decrementActivationIfGroupDefeated(game, target.playerNum, idx, client);
       }
       await checkWinConditions(game, client);
     }
