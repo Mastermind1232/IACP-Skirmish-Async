@@ -108,6 +108,7 @@ import {
   rotateSizeString,
   shiftCoord,
   filterMapSpacesByBounds,
+  getBoundedMapSpaces,
   isWithinGridBounds,
   getBoardStateForMovement,
   getMovementProfile,
@@ -157,6 +158,7 @@ import {
   isConditionImmune as _isConditionImmune,
   HARMFUL_CONDITIONS as _HARMFUL_CONDITIONS,
   applyCondition as _applyCondition,
+  dcNameFromFigureKey,
   isFigurelessDc as _isFigurelessDc,
   hasDepleteEffect as _hasDepleteEffect,
   getCompanionDescriptionForDc as _getCompanionDescriptionForDc,
@@ -371,7 +373,7 @@ function getPlayerOccupiedCells(game, playerNum) {
   const cells = new Set();
   const poses = game.figurePositions?.[playerNum] || {};
   for (const [k, coord] of Object.entries(poses)) {
-    const dcName = k.replace(/-\d+-\d+$/, '');
+    const dcName = dcNameFromFigureKey(k);
     const size = game.figureOrientations?.[k] || getFigureSize(dcName);
     for (const c of getFootprintCells(coord, size)) {
       cells.add(normalizeCoord(c));
@@ -397,15 +399,13 @@ function isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, mapId, mis
   const mapData = getMapTokensData()[mapId];
   const coords = getMissionTokenCoords(mapData?.[missionSide]);
   if (!coords.length) return false;
-  const rawMapSpaces = getMapSpaces(mapId);
-  if (!rawMapSpaces?.adjacency) return false;
-  const mapDef = getMapRegistry().find((m) => m.id === mapId);
-  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+  const mapSpaces = getBoundedMapSpaces(mapId);
+  if (!mapSpaces?.adjacency) return false;
   const adjacency = mapSpaces.adjacency || {};
   const tokenSet = toLowerSet(coords);
   const pos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!pos) return false;
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const dcName = dcNameFromFigureKey(figureKey);
   const footprint = getFootprintCells(pos, game.figureOrientations?.[figureKey] || getFigureSize(dcName));
   for (const c of footprint) {
     const n = normalizeCoord(c);
@@ -442,7 +442,7 @@ function isFigureInDeploymentZone(game, playerNum, figureKey, mapId) {
   const zoneSpaces = toLowerSet(zoneData[zone] || []);
   const pos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!pos) return false;
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const dcName = dcNameFromFigureKey(figureKey);
   const footprint = getFootprintCells(pos, game.figureOrientations?.[figureKey] || getFigureSize(dcName));
   return footprint.some((c) => zoneSpaces.has(normalizeCoord(c)));
 }
@@ -455,14 +455,12 @@ function isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, coordSet) {
 /** Returns coords from coordSet that the figure is on or adjacent to. */
 function getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, coordSet) {
   if (!coordSet?.size) return [];
-  const rawMapSpaces = getMapSpaces(mapId);
-  if (!rawMapSpaces?.adjacency) return [];
-  const mapDef = getMapRegistry().find((m) => m.id === mapId);
-  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+  const mapSpaces = getBoundedMapSpaces(mapId);
+  if (!mapSpaces?.adjacency) return [];
   const adjacency = mapSpaces.adjacency || {};
   const pos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!pos) return [];
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const dcName = dcNameFromFigureKey(figureKey);
   const footprint = getFootprintCells(pos, game.figureOrientations?.[figureKey] || getFigureSize(dcName));
   const result = new Set();
   for (const c of footprint) {
@@ -499,12 +497,12 @@ function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
   const oppPositions = game.figurePositions?.[oppNum] || {};
   const figPos = game.figurePositions?.[playerNum]?.[figureKey];
   if (figPos) {
-    const dcName = figureKey.replace(/-\d+-\d+$/, '');
+    const dcName = dcNameFromFigureKey(figureKey);
     const figDcEff = getDcEffects()?.[dcName];
     const figCost = figDcEff?.cost ?? 99;
     if (figCost <= 9) {
       for (const [oppFk, oppCoord] of Object.entries(oppPositions)) {
-        const oppDcName = oppFk.replace(/-\d+-\d+$/, '');
+        const oppDcName = dcNameFromFigureKey(oppFk);
         const oppEff = getDcEffects()?.[oppDcName];
         if ((oppEff?.specialAbilityIds || []).includes('alter_mind_obiwan')) {
           if (getRange(figPos, oppCoord) <= 3) return options; // blocked — return empty
@@ -561,10 +559,8 @@ function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
 
 /** Returns 1, 2, or null for who controls this space (only they have figure on/adjacent). Same logic as terminals. */
 function getSpaceController(game, mapId, coord) {
-  const rawMapSpaces = getMapSpaces(mapId);
-  if (!rawMapSpaces?.adjacency) return null;
-  const mapDef = getMapRegistry().find((m) => m.id === mapId);
-  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+  const mapSpaces = getBoundedMapSpaces(mapId);
+  if (!mapSpaces?.adjacency) return null;
   const adjacency = mapSpaces.adjacency || {};
   const t = normalizeCoord(coord);
   const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
@@ -588,14 +584,14 @@ function _getAlterMindExcludedCells(game) {
     // Check if opponent has Alter Mind active
     for (const [fk, pos] of Object.entries(game.figurePositions?.[oppPn] || {})) {
       if (!pos) continue;
-      const dcName = fk.replace(/-\d+-\d+$/, '');
+      const dcName = dcNameFromFigureKey(fk);
       const eff = allEff[dcName];
       if (!(eff?.specialAbilityIds || []).includes('alter_mind_obiwan')) continue;
       // This player's figures with cost ≤9 within 3 spaces of Obi-Wan don't count for control
       if (!excluded[pn]) excluded[pn] = new Set();
       for (const [tFk, tPos] of Object.entries(game.figurePositions?.[pn] || {})) {
         if (!tPos) continue;
-        const tDcName = tFk.replace(/-\d+-\d+$/, '');
+        const tDcName = dcNameFromFigureKey(tFk);
         const tEff = allEff[tDcName];
         if ((tEff?.cost ?? 99) > 9) continue;
         if (getRange(pos, tPos) > 3) continue;
@@ -609,10 +605,8 @@ function _getAlterMindExcludedCells(game) {
 
 /** Returns array of figure keys for playerNum whose positions are on or adjacent to coord. */
 function getFiguresOnOrAdjacentToSpace(game, playerNum, coord, mapId) {
-  const rawMapSpaces = getMapSpaces(mapId);
-  if (!rawMapSpaces?.adjacency) return [];
-  const mapDef = getMapRegistry().find((m) => m.id === mapId);
-  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+  const mapSpaces = getBoundedMapSpaces(mapId);
+  if (!mapSpaces?.adjacency) return [];
   const adjacency = mapSpaces?.adjacency || {};
   const t = normalizeCoord(coord);
   const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
@@ -628,10 +622,8 @@ function getFiguresOnOrAdjacentToSpace(game, playerNum, coord, mapId) {
 function countTerminalsControlledByPlayer(game, playerNum, mapId) {
   const mapData = getMapTokensData()[mapId];
   if (!mapData?.terminals?.length) return 0;
-  const rawMapSpaces = getMapSpaces(mapId);
-  if (!rawMapSpaces?.adjacency) return 0;
-  const mapDef = getMapRegistry().find((m) => m.id === mapId);
-  const mapSpaces = filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+  const mapSpaces = getBoundedMapSpaces(mapId);
+  if (!mapSpaces?.adjacency) return 0;
   const adjacency = mapSpaces.adjacency || {};
 
   const alterMindExcluded = _getAlterMindExcludedCells(game);
@@ -1749,7 +1741,7 @@ function getFiguresForRender(game) {
       if (n && !isFigurelessDc(n)) totals[n] = (totals[n] || 0) + 1;
     }
     for (const [figureKey, space] of Object.entries(poses)) {
-      const dcName = figureKey.replace(/-\d+-\d+$/, '');
+      const dcName = dcNameFromFigureKey(figureKey);
       const m = figureKey.match(/-(\d+)-(\d+)$/);
       const dgIndex = m ? parseInt(m[1], 10) : 1;
       const figureIndex = m ? parseInt(m[2], 10) : 0;
@@ -1900,7 +1892,7 @@ async function getMovementMinimapAttachment(game, msgId, figureKey, spacesAtCost
   const playerNum = meta.playerNum;
   const pos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!pos) return null;
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const dcName = dcNameFromFigureKey(figureKey);
   const speed = getEffectiveSpeed(dcName, figureKey, game, playerNum);
   const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName);
   const { col: tlCol, row: tlRow } = parseCoord(pos);
@@ -2730,7 +2722,7 @@ async function runDraftRandom(game, client, options = {}) {
       const occupied = [];
       for (const p of [1, 2]) {
         for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
-          const dcName = k.replace(/-\d+-\d+$/, '');
+          const dcName = dcNameFromFigureKey(k);
           const size = game.figureOrientations?.[k] || getFigureSize(dcName);
           occupied.push(...getFootprintCells(s, size));
         }
@@ -2882,7 +2874,7 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
  * @param {Map} dcMessageMeta
  */
 async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, sourceLabel, logGameAction, client, dcHealthState, dcMessageMeta) {
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const dcName = dcNameFromFigureKey(figureKey);
   const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
   const figureIndex = figMatch ? parseInt(figMatch[2], 10) : 0;
   const dgIndex = figMatch ? figMatch[1] : '1';
@@ -2933,7 +2925,7 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
   const figMatch = figKey.match(/-\d+-(\d+)$/);
   const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
   const { newHp, wasDefeated } = reduceHp(dcHealthState, game, msgId, figIdx, damage, playerNum);
-  const figName = figKey.replace(/-\d+-\d+$/, '');
+  const figName = dcNameFromFigureKey(figKey);
   if (thread) await thread.send(`**${sourceName}** — ${figName} suffers **${damage} Damage**.`).catch(discordCatch);
   const dcIds = getDcMessageIds(game, playerNum);
   const dcList = getDcList(game, playerNum);
@@ -2996,7 +2988,7 @@ async function handleBleedResolve(interaction) {
   const msgId = findDcMessageIdForFigure(gameId, playerNum, figureKey);
   const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
   const figureIndex = figMatch ? parseInt(figMatch[2], 10) : 0;
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const dcName = dcNameFromFigureKey(figureKey);
 
   if (action === 'accept') {
     if (msgId) {
@@ -3074,7 +3066,7 @@ function findFigureheadFigure(game, defenderPlayerNum, targetFigureKey) {
     const figures = game.figurePositions?.[defenderPlayerNum] || {};
     for (const [fk, pos] of Object.entries(figures)) {
       if (fk === targetFigureKey) continue;
-      if (fk.replace(/-\d+-\d+$/, '') !== dcName) continue;
+      if (dcNameFromFigureKey(fk) !== dcName) continue;
       if (!isWithinN(pos, targetPos, 4, game.selectedMap.id)) continue;
       const msgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, fk);
       const fm = fk.match(/-(\d+)-(\d+)$/);
@@ -3143,7 +3135,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
     if (targetCoord) {
       const board = getBoardStateForMovement(game, null);
       if (board?.adjacency) {
-        const targetDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+        const targetDcName = dcNameFromFigureKey(combat.target.figureKey);
         const targetSize = game.figureOrientations?.[combat.target.figureKey] || getFigureSize(targetDcName);
         const targetCells = getFootprintCells(targetCoord, targetSize || '1x1').map((c) => normalizeCoord(c));
         const rubbleSet = new Set(targetCells);
@@ -3308,7 +3300,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
       // Self-Preservation (Hired Gun Elite): when you suffer damage, become Focused
       if (newCur > 0) {
-        const _spDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _spDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _spEff = getDcEffects()?.[_spDcName];
         if ((_spEff?.passives || []).includes('Self-Preservation')) {
           if (_applyCondition(game, combat.target.figureKey, 'Focus')) {
@@ -3321,7 +3313,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const _fokDefDcList = getDcList(game, defenderPlayerNum) || [];
         const _fokHasFury = _fokDefDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]');
         if (_fokHasFury) {
-          const _fokTargetName = (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+          const _fokTargetName = dcNameFromFigureKey(combat.target.figureKey);
           const _fokTargetKws = (getDcKeywords()[_fokTargetName] || []).map(k => String(k).toUpperCase());
           if (_fokTargetKws.includes('WOOKIEE')) {
             if (_applyCondition(game, combat.target.figureKey, 'Focus')) {
@@ -3422,7 +3414,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
       // Nimble (Asajj Ventress): after attack resolves, defender gains 2 MP per Block result
       {
-        const _nimDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _nimDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _nimEff = getDcEffects()?.[_nimDcName];
         if ((_nimEff?.specialAbilityIds || []).includes('nimble_asajj') && combat.defenseRoll) {
           const _nimTotalBlock = combat.defenseRoll.block || 0;
@@ -3441,7 +3433,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
       // Slippery (Alliance Smuggler E/R): after attack resolves, defender gains 2 MP
       {
-        const _slipDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _slipDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _slipEff = getDcEffects()?.[_slipDcName];
         if ((_slipEff?.specialAbilityIds || []).some(id => id === 'slippery_smuggler_elite' || id === 'slippery_smuggler_reg')) {
           const _slipMsgId = targetMsgId;
@@ -3456,7 +3448,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
       // Leg Hydraulics (Tress Hacnua): after resolving an attack, attacker gains 1 MP
       {
-        const _lhAtkDcName = combat.attackerDcName || (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+        const _lhAtkDcName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey);
         const _lhEff = getDcEffects()?.[_lhAtkDcName];
         if ((_lhEff?.specialAbilityIds || []).includes('leg_hydraulics_tress') && combat.attackerMsgId) {
           game.movementBank = game.movementBank || {};
@@ -3468,17 +3460,17 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
       // Loku Recon Token: Set Your Sights — after Loku's attack resolves, place recon token on target
       {
-        const _lkAtkDcName = combat.attackerDcName || (combat.attackerFigureKey || '').replace(/-\d+-\d+$/, '');
+        const _lkAtkDcName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey);
         const _lkAtkEff = getDcEffects()?.[_lkAtkDcName];
         if ((_lkAtkEff?.specialAbilityIds || []).includes('set_your_sights_loku') && combat.target?.figureKey) {
           game.reconToken = { figureKey: combat.target.figureKey, playerNum: combat.attackerPlayerNum };
-          await logGameAction(game, client, `🎯 **Set Your Sights** — Recon token placed on **${(combat.target.figureKey || '').replace(/-\d+-\d+$/, '')}**.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+          await logGameActiondcNameFromFigureKey(game, client, `🎯 **Set Your Sights** — Recon token placed on **${(combat.target.figureKey)}**.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
         }
       }
       // Force Deflection (Yoda): after attack targeting Yoda or adjacent friendly REBEL resolves,
       // attacker suffers Damage = number of attack dice rolled. Limit once per round.
       {
-        const _fdDefDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _fdDefDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _fdDefEff = getDcEffects()?.[_fdDefDcName];
         const _fdDefIsTarget = (_fdDefEff?.specialAbilityIds || []).includes('force_deflection_yoda');
         let _fdYodaFigKey = null;
@@ -3494,7 +3486,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             if (_fdTargetCoord) {
               for (const [fk, fCoord] of Object.entries(_fdFriendlyFigs)) {
                 if (fk === combat.target.figureKey) continue;
-                const fDcName = fk.replace(/-\d+-\d+$/, '');
+                const fDcName = dcNameFromFigureKey(fk);
                 const fEff = getDcEffects()?.[fDcName];
                 if (!(fEff?.specialAbilityIds || []).includes('force_deflection_yoda')) continue;
                 // Check adjacency (within 1 space)
@@ -3517,7 +3509,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
               const { newHp: _fdAtkNew, prevHp: _fdAtkPrev, wasDefeated: _fdAtkDefeated } = reduceHp(dcHealthState, game, combat.attackerMsgId, _fdAtkFigIdx, _fdDiceCount, attackerPlayerNum);
               if (_fdAtkPrev > 0) {
                 _fdNeedsEmbedRefresh = true;
-                const _fdYodaDcName = _fdYodaFigKey.replace(/-\d+-\d+$/, '');
+                const _fdYodaDcName = dcNameFromFigureKey(_fdYodaFigKey);
                 await logGameAction(game, client, `🔵 **Force Deflection** — **${_fdYodaDcName}** deflects! **${combat.attackerDcName}** suffers **${_fdDiceCount} Damage** (${_fdDiceCount} attack dice rolled). HP: ${_fdAtkPrev} → ${_fdAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
                 // Check if attacker was defeated by Force Deflection
                 if (_fdAtkDefeated) {
@@ -3537,7 +3529,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
       // You Will Not Deny Me: prevent Fifth Brother from being defeated (restore HP to 1)
       if (newCur <= 0 && game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum) {
-        const _ywndmDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _ywndmDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         if (_ywndmDcName?.toLowerCase().includes('fifth')) {
           const { newHp: _ywndmNew } = healHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
           newCur = _ywndmNew;
@@ -3548,7 +3540,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       // Sustained by Rage (Maul): cannot be defeated if has not activated this round — set HP to 1
       let _sbrImmune = false;
       if (newCur <= 0) {
-        const _sbrDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _sbrDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _sbrEff = getDcEffects()?.[_sbrDcName];
         if ((_sbrEff?.specialAbilityIds || []).includes('sustained_by_rage')) {
           const _sbrActivatedIndices = getActivatedDcIndices(game, defenderPlayerNum) || [];
@@ -3562,7 +3554,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
       // Self-Destruct Protocol: pre-defeat interrupt — prompt owner to use ability before defeat
       if (newCur <= 0 && !game.selfDestructProtocolTriggered?.[targetMsgId]) {
-        const _sdpDcName2 = idx >= 0 ? dcList?.[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _sdpDcName2 = idx >= 0 ? dcList?.[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _sdpEff2 = getDcEffects()?.[_sdpDcName2];
         if ((_sdpEff2?.specialAbilityIds || []).includes('self_destruct_protocol')) {
           game.selfDestructProtocolTriggered = game.selfDestructProtocolTriggered || {};
@@ -3580,7 +3572,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
       // Parting Shot (Greedo, Hired Gun): pre-defeat interrupt — may perform an attack before being defeated
       if (newCur <= 0 && !_sbrImmune && !game.partingShotTriggered?.[targetMsgId]) {
-        const _psDcName = idx >= 0 ? dcList?.[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _psDcName = idx >= 0 ? dcList?.[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _psEff = getDcEffects()?.[_psDcName];
         const _psSIds = _psEff?.specialAbilityIds || [];
         const _psHas = _psSIds.some(id => id.startsWith('parting_shot_'));
@@ -3608,7 +3600,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           return;
         }
       }
-      if (newCur <= 0 && !_sbrImmune && !(game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum && ((idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, ''))?.toLowerCase().includes('fifth')))) {
+      if (newCur <= 0 && !_sbrImmune && !(game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum && ((idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey))?.toLowerCase().includes('fifth')))) {
         // F7: Keep healthState, figurePositions, and DC embed in sync when one figure in a group dies.
         if (game.figurePositions?.[defenderPlayerNum]) delete game.figurePositions[defenderPlayerNum][combat.target.figureKey];
         if (game.figureConditions?.[combat.target.figureKey]) delete game.figureConditions[combat.target.figureKey];
@@ -3676,7 +3668,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         // You Will Not Deny Me: prevent Fifth Brother defeat; on any hostile defeat recover 2 HP
         if (game.youWillNotDenyMeActive) {
           const _ywndmData = game.youWillNotDenyMeActive;
-          const _fifthKey = Object.keys(game.figurePositions?.[_ywndmData.playerNum] || {}).find(k => k.replace(/-\d+-\d+$/, '').toLowerCase() === 'fifth brother' || k.replace(/-\d+-\d+$/, '') === 'fifth-brother');
+          const _fifthKey = Object.keys(game.figurePositions?.[_ywndmData.playerNum] || {}).find(k => dcNameFromFigureKey(k).toLowerCase() === 'fifth brother' || dcNameFromFigureKey(k) === 'fifth-brother');
           if (_fifthKey) {
             const _fifthMsgId = (() => { for (const [mid, mm] of dcMessageMeta) { if (mm.playerNum === _ywndmData.playerNum && mm.dcName?.toLowerCase().includes('fifth')) return mid; } return null; })();
             if (_fifthMsgId) {
@@ -3707,7 +3699,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           delete game.recoverOnHostileDefeat[attackerPlayerNum];
         }
         // Last Stand (Stormtrooper Elite): when defeated, another figure in the group becomes Focused
-        const _lsDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
+        const _lsDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _lsEff = getDcEffects()?.[_lsDcName];
         if ((_lsEff?.passives || []).includes('Last Stand')) {
           const _lsDgMatch = (combat.target.figureKey || '').match(/-(\d+)-\d+$/);
@@ -3717,7 +3709,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           if (_lsAlive.length > 0) {
             const _lsTarget = _lsAlive[0];
             if (_applyCondition(game, _lsTarget, 'Focus')) {
-              const _lsName = _lsTarget.replace(/-\d+-\d+$/, '');
+              const _lsName = dcNameFromFigureKey(_lsTarget);
               await logGameAction(game, client, `⚡ **Last Stand** — **${_lsName}** becomes **Focused** (another figure in the group was defeated).`, { phase: 'ROUND', icon: 'card' });
             }
           }
@@ -3742,7 +3734,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           if (_obiAlive.length > 0) {
             const _obiTarget = _obiAlive[0];
             if (_applyCondition(game, _obiTarget, 'Focus')) {
-              const _obiName = _obiTarget.replace(/-\d+-\d+$/, '');
+              const _obiName = dcNameFromFigureKey(_obiTarget);
               await logGameAction(game, client, `✨ **Into the Force** — **${_obiName}** becomes **Focused** (Obi-Wan was defeated).`, { phase: 'ROUND', icon: 'card' });
             }
           }
@@ -3760,7 +3752,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
               for (const [rgFk, rgPos] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
                 if (!rgPos || rgFk === combat.target.figureKey) continue;
                 if (!_defAdj.includes(String(rgPos).toLowerCase())) continue;
-                const rgDcName = rgFk.replace(/-\d+-\d+$/, '');
+                const rgDcName = dcNameFromFigureKey(rgFk);
                 if (rgDcName !== 'Royal Guard (Regular)' && rgDcName !== 'Royal Guard (Elite)') continue;
                 if (_applyCondition(game, rgFk, 'Focus')) {
                   const vLabel = rgDcName === 'Royal Guard (Elite)' ? 'Forward Vengeance' : 'Vengeance';
@@ -3797,7 +3789,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const _btPlayerNum = attackerPlayerNum; // attacker's side has Saw
           const _btAllFigs = Object.keys(game.figurePositions?.[_btPlayerNum] || {});
           const _btHasSaw = _btAllFigs.some(fk => {
-            const dcN = fk.replace(/-\d+-\d+$/, '');
+            const dcN = dcNameFromFigureKey(fk);
             return (getDcEffects()?.[dcN]?.passives || []).includes('Brutal Tactics');
           });
           if (_btHasSaw) {
@@ -3990,7 +3982,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             if (_bfFk === combat.target.figureKey) continue;
             if (isConditionImmune(game, _bfFk)) continue; // Condition Immunity: skip Stun
             if (_applyCondition(game, _bfFk, 'Stun')) {
-              const _bfDcName = _bfFk.replace(/-\d+-\d+$/, '');
+              const _bfDcName = dcNameFromFigureKey(_bfFk);
               await logGameAction(game, client, `\uD83D\uDCA5 **Burst Fire** \u2014 **${_bfDcName}** (adjacent) is now **Stunned**.`, { phase: 'ROUND', icon: 'attack' });
             }
           }
@@ -4004,10 +3996,10 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     if (hit && combat.target?.figureKey) {
       if (!isConditionImmune(game, combat.target.figureKey)) {
         if (_applyCondition(game, combat.target.figureKey, 'Stun')) {
-          await logGameAction(game, client, `⚡ **Crippling Blow** — **${combat.target.label || combat.target.figureKey.replace(/-\d+-\d+$/, '')}** is now **Stunned**.`, { phase: 'ROUND', icon: 'attack' });
+          await logGameAction(game, client, `⚡ **Crippling Blow** — **${combat.target.label || dcNameFromFigureKey(combat.target.figureKey)}** is now **Stunned**.`, { phase: 'ROUND', icon: 'attack' });
         }
       } else {
-        await logGameAction(game, client, `**Crippling Blow** — **${combat.target.label || combat.target.figureKey.replace(/-\d+-\d+$/, '')}** is immune to Stun.`, { phase: 'ROUND', icon: 'attack' });
+        await logGameAction(game, client, `**Crippling Blow** — **${combat.target.label || dcNameFromFigureKey(combat.target.figureKey)}** is immune to Stun.`, { phase: 'ROUND', icon: 'attack' });
       }
     }
   }
@@ -4045,7 +4037,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           for (const [fk, pos] of Object.entries(poses)) {
             if (fk === combat.target.figureKey) continue;
             if (getRange(pos, _epTargetPos) !== 1) continue;
-            const _epFkDcName = fk.replace(/-\d+-\d+$/, '');
+            const _epFkDcName = dcNameFromFigureKey(fk);
             const _epMid = getDcMessageIds(game, pNum) || [];
             const _epDcL = getDcList(game, pNum);
             const _epFm = fk.match(/-(\d+)-(\d+)$/);
@@ -4107,7 +4099,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           if (_abAdjacentHostiles.length === 1 && _abHits > 0) {
             // Auto-apply to the only adjacent hostile
             const { fk: _abFk2 } = _abAdjacentHostiles[0];
-            const _abDcName = _abFk2.replace(/-\d+-\d+$/, '');
+            const _abDcName = dcNameFromFigureKey(_abFk2);
             for (const [_abMsgId, _abMeta] of dcMessageMeta) {
               if (_abMeta.gameId !== game.gameId || _abMeta.playerNum !== defenderPlayerNum || _abMeta.dcName !== _abDcName) continue;
               const _abFigIdx = parseInt(_abFk2.split('-').pop(), 10) || 0;
@@ -4118,7 +4110,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             await logGameAction(game, client, `🗡️ **Assassin's Blade** — **${_abDcName}** suffers **${_abHits} Damage**.`, { phase: 'ROUND', icon: 'attack' });
           } else if (_abHits > 0) {
             // Multiple adjacent hostiles — honor system for the choice
-            const _abNames = _abAdjacentHostiles.map(({ fk }) => fk.replace(/-\d+-\d+$/, '')).join(', ');
+            const _abNames = _abAdjacentHostiles.map(({ fk }) => dcNameFromFigureKey(fk)).join(', ');
             await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}** (${_abHits} Damage). Choose an adjacent hostile figure to apply damage: ${_abNames}. *(Honor system.)*`).catch(discordCatch);
           } else {
             await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}**. No hits.`).catch(discordCatch);
@@ -4138,7 +4130,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     if (_sfTargetFk && !isConditionImmune(game, _sfTargetFk)) {
       _applyCondition(game, _sfTargetFk, 'Weaken');
     }
-    const _sfTargetName = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '') || combat.defenderDcName;
+    const _sfTargetName = dcNameFromFigureKey(combat.target?.figureKey) || combat.defenderDcName;
     await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. You may choose a SMALL friendly figure within 3 spaces to gain 2 MP. *(Honor system for MP grant.)*`).catch(discordCatch);
     await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened after Ranged attack.`, { phase: 'ROUND', icon: 'card' });
   }
@@ -4191,7 +4183,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     const _cfaFigKey = combat.attackerFigureKey;
     if (_cfaFigKey && !isConditionImmune(game, _cfaFigKey)) {
       if (_applyCondition(game, _cfaFigKey, 'Stun')) {
-        const _cfaDcName = _cfaFigKey.replace(/-\d+-\d+$/, '');
+        const _cfaDcName = dcNameFromFigureKey(_cfaFigKey);
         await logGameAction(game, client, `**Concentrated Fire** — **${_cfaDcName}** is now **Stunned**.`, { phase: 'ROUND', icon: 'card' });
         embedRefreshMsgIds.add(combat.attackerMsgId);
       }
@@ -4210,7 +4202,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         for (const _ppaC of _ppaConditions) {
           _applyCondition(game, combat.attackerFigureKey, _ppaC);
         }
-        const _ppaDcName = combat.attackerFigureKey.replace(/-\d+-\d+$/, '');
+        const _ppaDcName = dcNameFromFigureKey(combat.attackerFigureKey);
         await logGameAction(game, client, `**Wild Fury** — **${_ppaDcName}** is now **${_ppaConditions.join(' + ')}**.`, { phase: 'ROUND', icon: 'card' });
         embedRefreshMsgIds.add(combat.attackerMsgId);
       }
@@ -4232,7 +4224,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const _sdaIdx = (_sdaDcIds || []).indexOf(_sdaMsgId);
         if (game.figurePositions?.[attackerPlayerNum]) delete game.figurePositions[attackerPlayerNum][_sdaFigKey];
         if (game.figureConditions?.[_sdaFigKey]) delete game.figureConditions[_sdaFigKey];
-        const _sdaName = _sdaDcList?.[_sdaIdx]?.displayName || _sdaFigKey.replace(/-\d+-\d+$/, '');
+        const _sdaName = _sdaDcList?.[_sdaIdx]?.displayName || dcNameFromFigureKey(_sdaFigKey);
         const _sdaStats = _sdaIdx >= 0 ? getDcStats(_sdaDcList[_sdaIdx]?.dcName) : null;
         const _sdaVp = _sdaStats?.cost ?? 5;
         awardKillVp(game, defenderPlayerNum, _sdaVp);
@@ -4289,7 +4281,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     const sqAdj = getFiguresAdjacentToTarget(game, combat.attackerFigureKey, game.selectedMap.id);
     for (const { figureKey: sqFk, playerNum: sqPn } of sqAdj) {
       if (sqPn !== attackerPlayerNum) continue;
-      const sqDcName = sqFk.replace(/-\d+-\d+$/, '');
+      const sqDcName = dcNameFromFigureKey(sqFk);
       const sqEff = getDcEffects()?.[sqDcName] || getDcEffects()?.[sqDcName?.replace(/\s*\[.*\]\s*$/, '')];
       const sqKws = (sqEff?.keywords || []).map((k) => String(k).toUpperCase());
       if (!sqKws.includes('TROOPER')) continue;
@@ -4416,7 +4408,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
         const dcList = getDcList(game, c.playerNum);
         const dcIds = getDcMessageIds(game, c.playerNum);
         const idx = (dcIds || []).indexOf(mid);
-        const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : c.figureKey.replace(/-\d+-\d+$/, '');
+        const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : dcNameFromFigureKey(c.figureKey);
         return { figureKey: c.figureKey, playerNum: c.playerNum, label: String(label).slice(0, 80), msgId: mid };
       });
       game.pendingFightingKnife = {
@@ -4440,7 +4432,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
   }
   // Concussive Bolt (4-LOM): after non-miss on SMALL target, push target 1 space (attacker picks direction)
   if (hit && combat.surgeConcussiveBolt && combat.target?.figureKey && game.selectedMap?.id) {
-    const targetDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const targetDcName = dcNameFromFigureKey(combat.target.figureKey);
     const targetSize = getFigureSize(targetDcName);
     if (targetSize === '1x1') {
       const targetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
@@ -4495,7 +4487,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
             const dcList = getDcList(game, p);
             const dcIds = getDcMessageIds(game, p);
             const idx = (dcIds || []).indexOf(mid);
-            const dcName = figKey.replace(/-\d+-\d+$/, '');
+            const dcName = dcNameFromFigureKey(figKey);
             const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : dcName;
             figuresAtSpaces.push({ figureKey: figKey, playerNum: p, label: String(label).slice(0, 70), msgId: mid });
           }
@@ -4583,7 +4575,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
   }
   // Agitate (Cam Droid): on hit, defender's group must activate next, if able
   if (hit && combat.surgeAgitate && combat.target?.figureKey) {
-    const defenderDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
+    const defenderDcName = dcNameFromFigureKey(combat.target.figureKey);
     game.agitateNextActivation = { playerNum: defenderPlayerNum, dcName: defenderDcName };
     const defLabel = combat.target.label || defenderDcName;
     await thread.send(`**Agitate** — **${defLabel}**'s group must be the next to activate this round, if able.`).catch(discordCatch);
@@ -4602,7 +4594,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
       }
       game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
       game.fellSwoopFreeAttack[combat.attackerMsgId] = true;
-      const attName = combat.attackerDisplayName || combat.attackerFigureKey.replace(/-\d+-\d+$/, '');
+      const attName = combat.attackerDisplayName || dcNameFromFigureKey(combat.attackerFigureKey);
       await thread.send(`**Fell Swoop** — **${attName}** becomes **Hidden** and gains **2 Movement Points**. Use Move in the DC thread, then click Attack for a free Fell Swoop attack (costs no action).`).catch(discordCatch);
     }
   }
@@ -4711,7 +4703,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
       const blDcIds = getDcMessageIds(game, blDefPlayerNum);
       const blDcList = getDcList(game, blDefPlayerNum);
       const blIdx = (blDcIds || []).indexOf(blMsgId);
-      const blLabel = (blIdx >= 0 && blDcList?.[blIdx]?.displayName) ? blDcList[blIdx].displayName : fk.replace(/-\d+-\d+$/, '');
+      const blLabel = (blIdx >= 0 && blDcList?.[blIdx]?.displayName) ? blDcList[blIdx].displayName : dcNameFromFigureKey(fk);
       boltslingerTargets.push({ figureKey: fk, playerNum: blDefPlayerNum, label: String(blLabel).slice(0, 80) });
     }
     if (boltslingerTargets.length > 0) {
@@ -4745,7 +4737,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
           const dcIds = getDcMessageIds(game, pn);
           const dcList = getDcList(game, pn);
           const idx2 = (dcIds || []).indexOf(mid);
-          const lbl = (idx2 >= 0 && dcList?.[idx2]?.displayName) ? dcList[idx2].displayName : fk.replace(/-\d+-\d+$/, '');
+          const lbl = (idx2 >= 0 && dcList?.[idx2]?.displayName) ? dcList[idx2].displayName : dcNameFromFigureKey(fk);
           splashTargets.push({ figureKey: fk, playerNum: pn, label: String(lbl).slice(0, 80) });
         }
       }
@@ -5007,7 +4999,7 @@ async function applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThre
     if (newHp <= 0) {
       if (game.figurePositions?.[t.playerNum]) delete game.figurePositions[t.playerNum][t.figureKey];
       if (game.figureConditions?.[t.figureKey]) delete game.figureConditions[t.figureKey];
-      const splashDcEff = getDcEffects()?.[t.figureKey.replace(/-\d+-\d+$/, '')];
+      const splashDcEff = getDcEffects()?.[dcNameFromFigureKey(t.figureKey)];
       const splashVP = splashDcEff?.cost ?? 1;
       awardKillVp(game, attackerPlayerNum, splashVP);
       lines.push(`  → **${t.label} defeated!** +${splashVP} VP`);
@@ -5091,7 +5083,7 @@ async function handleFightingKnifeTarget(interaction) {
     embedRefreshMsgIds.add(target.msgId);
     if (fkDefeated) {
       if (game.figurePositions?.[target.playerNum]) delete game.figurePositions[target.playerNum][target.figureKey];
-      const dcName = target.figureKey.replace(/-\d+-\d+$/, '');
+      const dcName = dcNameFromFigureKey(target.figureKey);
       const stats = getDcStats(dcName);
       const effects = getDcEffects()?.[dcName];
       const figures = stats?.figures ?? 1;
@@ -5201,7 +5193,7 @@ async function advanceSpreadThePain(game, pending) {
           const dcList = getDcList(game, p);
           const dcIds = getDcMessageIds(game, p);
           const idx = (dcIds || []).indexOf(mid);
-          const dcName = figKey.replace(/-\d+-\d+$/, '');
+          const dcName = dcNameFromFigureKey(figKey);
           const label = idx >= 0 && dcList?.[idx]?.displayName ? dcList[idx].displayName : dcName;
           figuresAtSpaces.push({ figureKey: figKey, playerNum: p, label: String(label).slice(0, 70) });
         }
@@ -5245,7 +5237,7 @@ async function handleSpreadThePainFigPick(interaction) {
   await interaction.message.edit({ components: [] }).catch(() => {});
   const cond = pending.conditions[pending.conditionIdx];
   // Apply condition to figureKey
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const dcName = dcNameFromFigureKey(figureKey);
   if (HARMFUL_CONDITIONS.includes(cond) && isConditionImmune(game, figureKey)) {
     await logGameAction(game, client, `**Condition Immunity** — **${dcName}** is immune to **${cond}** (Spread the Pain).`, { phase: 'ROUND', icon: 'card' });
   } else {

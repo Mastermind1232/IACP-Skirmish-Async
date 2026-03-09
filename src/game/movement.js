@@ -63,6 +63,18 @@ export function filterMapSpacesByBounds(rawMapSpaces, gridBounds) {
   };
 }
 
+/**
+ * Get map spaces filtered by the map's gridBounds (convenience wrapper).
+ * @param {string} mapId
+ * @returns {object} Filtered map spaces with adjacency, terrain, etc.
+ */
+export function getBoundedMapSpaces(mapId) {
+  const rawMapSpaces = getMapSpaces(mapId);
+  if (!rawMapSpaces) return rawMapSpaces;
+  const mapDef = getMapRegistry().find((m) => m.id === mapId);
+  return filterMapSpacesByBounds(rawMapSpaces, mapDef?.gridBounds);
+}
+
 export function getOccupiedSpacesForMovement(game, excludeFigureKey = null) {
   const occupied = [];
   const poses = game.figurePositions || { 1: {}, 2: {} };

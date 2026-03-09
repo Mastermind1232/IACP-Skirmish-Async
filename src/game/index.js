@@ -28,6 +28,7 @@ export {
 export {
   isWithinGridBounds,
   filterMapSpacesByBounds,
+  getBoundedMapSpaces,
   getOccupiedSpacesForMovement,
   getHostileOccupiedSpacesForMovement,
   getMovementKeywords,
@@ -89,4 +90,4 @@ export { awardKillVp, awardObjectiveVp, deductVp } from './vp-helpers.js';
 
 export { filterCondition, isConditionImmune, HARMFUL_CONDITIONS, applyCondition, resetCondition } from './conditions.js';
 
-export { isFigurelessDc, hasDepleteEffect, getCompanionDescriptionForDc } from './dc-helpers.js';
+export { dcNameFromFigureKey, isFigurelessDc, hasDepleteEffect, getCompanionDescriptionForDc } from './dc-helpers.js';

@@ -5,6 +5,15 @@
 import { getDcEffects, getDcImages } from '../data-loader.js';
 
 /**
+ * Extract the base DC name from a figure key like "Darth Vader-1-0" → "Darth Vader".
+ * @param {string} figureKey
+ * @returns {string}
+ */
+export function dcNameFromFigureKey(figureKey) {
+  return (figureKey || '').replace(/-\d+-\d+$/, '');
+}
+
+/**
  * True if this DC is a "figureless" card (Skirmish Upgrade, attachment, etc.) — no physical figure on the map.
  * @param {string} dcName
  * @returns {boolean}
