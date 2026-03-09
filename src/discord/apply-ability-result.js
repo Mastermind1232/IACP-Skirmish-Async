@@ -1,4 +1,5 @@
 import { getPlayAreaId } from '../game/player-helpers.js';
+import { enforceContentLimit } from './limits.js';
 
 /**
  * Unified handler for resolveAbility() result fields.
@@ -171,7 +172,7 @@ export async function applyAbilityResult(result, opts) {
       if (!data?.threadId) continue;
       try {
         const thread = await client.channels.fetch(data.threadId);
-        await thread.send({ content: `💡 ${result.logMessage}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await thread.send({ content: enforceContentLimit(`💡 ${result.logMessage}`) }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       } catch (err) {
         console.error('Failed to send CC effect to DC thread:', err);
       }

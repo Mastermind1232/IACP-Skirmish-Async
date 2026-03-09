@@ -1,5 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 import { getPlayerId, getCcDeck, getDcList, getSquad } from '../game/player-helpers.js';
+import { enforceContentLimit, DISCORD_EMBED_FIELD_LIMIT } from './limits.js';
 
 /**
  * Initiative zone label for scorecard (e.g. "[RED] P1 has the initiative!").
@@ -93,7 +94,7 @@ export function formatHealthSection(dgIndex, healthState, conditionsByFigure, to
       .filter(Boolean);
     if (tokenLines.length) out += '\n' + tokenLines.join('\n');
   }
-  return out;
+  return enforceContentLimit(out, DISCORD_EMBED_FIELD_LIMIT);
 }
 
 /** Card-back character for hand/discard visual. */

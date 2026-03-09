@@ -3,6 +3,7 @@
  */
 import { EmbedBuilder, ChannelType, ThreadAutoArchiveDuration } from 'discord.js';
 import { getActivationsMessageId, getActivationsRemaining, getActivationsTotal, getPlayAreaId } from '../game/player-helpers.js';
+import { enforceContentLimit, DISCORD_CONTENT_LIMIT } from './limits.js';
 
 /** Orange sidebar color for phase embeds */
 export const PHASE_COLOR = 0xf39c12;
@@ -70,7 +71,7 @@ export async function logGameAction(game, client, content, options = {}) {
       await logPhaseHeader(game, client, GAME_PHASES[phase], options.roundNum);
     }
     const timestamp = `<t:${Math.floor(Date.now() / 1000)}:t>`;
-    const msgContent = `${icon}${timestamp} — ${content}`;
+    const msgContent = enforceContentLimit(`${icon}${timestamp} — ${content}`);
     const payload = { content: msgContent, allowedMentions: options.allowedMentions };
     if (options.files?.length) payload.files = options.files;
     const sentMsg = await ch.send(payload);
