@@ -97,17 +97,19 @@ function syncHealthStateToGames() {
   }
 }
 
-/** Persist all games to DB or file. */
-export function saveGames() {
+/** Persist all games to DB or file. Returns a Promise so callers can optionally await. */
+export async function saveGames() {
   if (!gamesLoadedOk) {
     console.warn('[Games] saveGames() called before load completed — skipping to protect DB.');
     return;
   }
   syncHealthStateToGames();
   if (isDbConfigured()) {
-    saveGamesToDb(games).catch((err) => {
+    try {
+      await saveGamesToDb(games);
+    } catch (err) {
       console.error('[Games] saveGamesToDb promise rejected:', err);
-    });
+    }
     return;
   }
   try {
