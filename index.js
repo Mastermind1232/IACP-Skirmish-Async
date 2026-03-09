@@ -253,6 +253,8 @@ import {
   isFigurelessDc as _isFigurelessDc,
   hasDepleteEffect as _hasDepleteEffect,
   getCompanionDescriptionForDc as _getCompanionDescriptionForDc,
+  reduceHp,
+  healHp,
 } from './src/game/index.js';
 import {
   buildScorecardEmbed,
@@ -3275,18 +3277,9 @@ async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, source
   }
 
   if (msgId) {
-    const healthState = dcHealthState.get(msgId) || [];
-    const entry = healthState[figureIndex];
-    if (entry) {
-      const [cur, max] = entry;
-      const newCur = Math.max(0, cur - damage);
-      healthState[figureIndex] = [newCur, max];
-      dcHealthState.set(msgId, healthState);
-      const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
-      const idx = (dcIds || []).indexOf(msgId);
-      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-      if (newCur <= 0) {
+    const { newHp, maxHp, wasDefeated } = reduceHp(dcHealthState, game, msgId, figureIndex, damage, playerNum);
+    if (dcHealthState.get(msgId)?.[figureIndex]) {
+      if (wasDefeated) {
         if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figureKey];
         const opponentPlayerNum = playerNum === 1 ? 2 : 1;
         const stats = getDcStats(dcName);
@@ -3299,7 +3292,7 @@ async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, source
         game[vpKey].total += vp;
         await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** was defeated! +${vp} VP to Player ${opponentPlayerNum}.`, { phase: 'ROUND', icon: 'attack' });
       } else {
-        await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** suffered **${damage} damage** (${newCur}/${max} HP remaining).`, { phase: 'ROUND', icon: 'attack' });
+        await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** suffered **${damage} damage** (${newHp}/${maxHp} HP remaining).`, { phase: 'ROUND', icon: 'attack' });
       }
     }
   } else {
@@ -3323,20 +3316,13 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
   if (!msgId) return;
   const figMatch = figKey.match(/-\d+-(\d+)$/);
   const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
-  const hs = dcHealthState.get(msgId) || [];
-  const entry = hs[figIdx];
-  if (!entry) return;
-  const [cur, max] = entry;
-  const newCur = Math.max(0, (cur ?? max) - damage);
-  hs[figIdx] = [newCur, max];
-  dcHealthState.set(msgId, hs);
-  const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
-  const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-  const idx = (dcIds || []).indexOf(msgId);
-  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+  const { newHp, wasDefeated } = reduceHp(dcHealthState, game, msgId, figIdx, damage, playerNum);
   const figName = figKey.replace(/-\d+-\d+$/, '');
   if (thread) await thread.send(`**${sourceName}** — ${figName} suffers **${damage} Damage**.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
-  if (newCur <= 0 && idx >= 0) {
+  const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+  const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+  const idx = (dcIds || []).indexOf(msgId);
+  if (wasDefeated && idx >= 0) {
     if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figKey];
     // VP goes to the opponent (the one dealing the damage)
     const opponentPlayerNum = playerNum === 1 ? 2 : 1;
@@ -3401,19 +3387,13 @@ async function handleBleedResolve(interaction) {
 
   if (action === 'accept') {
     if (msgId) {
-      const healthState = dcHealthState.get(msgId) || [];
-      const entry = healthState[figureIndex];
-      if (entry) {
-        const [cur, max] = entry;
-        const newCur = Math.max(0, (cur ?? max) - 1);
-        healthState[figureIndex] = [newCur, max ?? newCur];
-        dcHealthState.set(msgId, healthState);
+      const { newHp, wasDefeated } = reduceHp(dcHealthState, game, msgId, figureIndex, 1, playerNum);
+      if (dcHealthState.get(msgId)?.[figureIndex]) {
+        await logGameAction(game, interaction.client, `🩸 **Bleeding** — **${dcName}** suffered 1 damage.`, { phase: 'ROUND', icon: 'attack' });
         const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
         const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
         const idx = (dcIds || []).indexOf(msgId);
-        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-        await logGameAction(game, interaction.client, `🩸 **Bleeding** — **${dcName}** suffered 1 damage.`, { phase: 'ROUND', icon: 'attack' });
-        if (newCur <= 0) {
+        if (wasDefeated) {
           if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figureKey];
           const opponentPlayerNum = playerNum === 1 ? 2 : 1;
           const stats = getDcStats(dcName);
@@ -3672,13 +3652,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
 
   let _fdNeedsEmbedRefresh = false;
   if (damage > 0 && targetMsgId) {
-    const healthState = dcHealthState.get(targetMsgId) || [];
-    const entry = healthState[targetFigIndex];
-    if (entry) {
-      const [cur, max] = entry;
-      let newCur = Math.max(0, (cur ?? max) - damage);
-      healthState[targetFigIndex] = [newCur, max ?? newCur];
-      dcHealthState.set(targetMsgId, healthState);
+    let { newHp: newCur } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, damage, defenderPlayerNum);
+    if (dcHealthState.get(targetMsgId)?.[targetFigIndex]) {
       // Achievement: Devastator (10+ damage in a single attack)
       if (damage >= 10 && isDbConfigured() && achievementsChannelId) {
         const _devUserId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
@@ -3689,7 +3664,6 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       const dcMessageIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
       const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
       const idx = (dcMessageIds || []).indexOf(targetMsgId);
-      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
       let allConditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
       // Condition Immunity: filter out harmful conditions for immune figures
       if (allConditions.length && isConditionImmune(game, combat.target.figureKey)) {
@@ -3727,15 +3701,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           game.figureConditions = game.figureConditions || {};
           game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
           // Strain = 1 direct HP damage (apply via health reduction)
-          const _sbHs = dcHealthState.get(targetMsgId);
-          if (_sbHs?.[targetFigIndex]) {
-            const [_sbCur, _sbMax] = _sbHs[targetFigIndex];
-            const _sbNew = Math.max(0, (_sbCur ?? _sbMax) - 1);
-            _sbHs[targetFigIndex] = [_sbNew, _sbMax ?? _sbCur];
-            dcHealthState.set(targetMsgId, _sbHs);
-            if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [..._sbHs];
-            newCur = _sbNew;
-          }
+          const _sbResult = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
+          newCur = _sbResult.newHp;
           await logGameAction(game, client, `⚡ **Stun Batons** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`, { phase: 'ROUND', icon: 'attack' });
           }
         }
@@ -3956,23 +3923,14 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             game.roundFigureAbilityUsed[_fdKey] = true;
             const _fdDiceCount = combat.attackDiceResults?.length || 0;
             if (_fdDiceCount > 0 && combat.attackerMsgId) {
-              const _fdAtkHs = dcHealthState.get(combat.attackerMsgId) || [];
               const _fdAtkFigIdx = combat.attackerFigureIndex ?? 0;
-              const _fdAtkEntry = _fdAtkHs[_fdAtkFigIdx];
-              if (_fdAtkEntry) {
-                const [_fdAtkCur, _fdAtkMax] = _fdAtkEntry;
-                const _fdAtkNew = Math.max(0, (_fdAtkCur ?? _fdAtkMax) - _fdDiceCount);
-                _fdAtkHs[_fdAtkFigIdx] = [_fdAtkNew, _fdAtkMax];
-                dcHealthState.set(combat.attackerMsgId, _fdAtkHs);
-                const _fdAtkDcIds = attackerPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-                const _fdAtkDcList = attackerPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-                const _fdAtkIdx = (_fdAtkDcIds || []).indexOf(combat.attackerMsgId);
-                if (_fdAtkIdx >= 0 && _fdAtkDcList?.[_fdAtkIdx]) _fdAtkDcList[_fdAtkIdx].healthState = [..._fdAtkHs];
+              const { newHp: _fdAtkNew, prevHp: _fdAtkPrev, wasDefeated: _fdAtkDefeated } = reduceHp(dcHealthState, game, combat.attackerMsgId, _fdAtkFigIdx, _fdDiceCount, attackerPlayerNum);
+              if (_fdAtkPrev > 0) {
                 _fdNeedsEmbedRefresh = true;
                 const _fdYodaDcName = _fdYodaFigKey.replace(/-\d+-\d+$/, '');
-                await logGameAction(game, client, `🔵 **Force Deflection** — **${_fdYodaDcName}** deflects! **${combat.attackerDcName}** suffers **${_fdDiceCount} Damage** (${_fdDiceCount} attack dice rolled). HP: ${_fdAtkCur ?? _fdAtkMax} → ${_fdAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+                await logGameAction(game, client, `🔵 **Force Deflection** — **${_fdYodaDcName}** deflects! **${combat.attackerDcName}** suffers **${_fdDiceCount} Damage** (${_fdDiceCount} attack dice rolled). HP: ${_fdAtkPrev} → ${_fdAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
                 // Check if attacker was defeated by Force Deflection
-                if (_fdAtkNew <= 0) {
+                if (_fdAtkDefeated) {
                   if (game.figurePositions?.[attackerPlayerNum]) delete game.figurePositions[attackerPlayerNum][combat.attackerFigureKey];
                   if (game.figureConditions?.[combat.attackerFigureKey]) delete game.figureConditions[combat.attackerFigureKey];
                   const _fdAtkStats = getDcStats(combat.attackerDcName);
@@ -3994,9 +3952,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       if (newCur <= 0 && game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum) {
         const _ywndmDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
         if (_ywndmDcName?.toLowerCase().includes('fifth')) {
-          healthState[targetFigIndex] = [1, max ?? 1];
-          dcHealthState.set(targetMsgId, healthState);
-          if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+          const { newHp: _ywndmNew } = healHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
+          newCur = _ywndmNew;
           game.youWillNotDenyMeActive = null;
           await logGameAction(game, client, `**You Will Not Deny Me** — Fifth Brother cannot be defeated! HP restored to 1.`, { phase: 'ROUND', icon: 'card' });
         }
@@ -4010,9 +3967,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const _sbrActivatedIndices = defenderPlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
           if (idx >= 0 && !_sbrActivatedIndices.includes(idx)) {
             _sbrImmune = true;
-            healthState[targetFigIndex] = [1, max ?? 1];
-            dcHealthState.set(targetMsgId, healthState);
-            if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+            const { newHp: _sbrNew } = healHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
+            newCur = _sbrNew;
             await logGameAction(game, client, `**Sustained by Rage** — **${_sbrDcName}** cannot be defeated (has not activated this round)! HP set to 1.`, { phase: 'ROUND', icon: 'card' });
           }
         }
@@ -4142,17 +4098,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           if (_fifthKey) {
             const _fifthMsgId = (() => { for (const [mid, mm] of dcMessageMeta) { if (mm.playerNum === _ywndmData.playerNum && mm.dcName?.toLowerCase().includes('fifth')) return mid; } return null; })();
             if (_fifthMsgId) {
-              const _fifthHS = dcHealthState.get(_fifthMsgId);
-              const _fifthFigIdx = 0;
-              if (_fifthHS?.[_fifthFigIdx]) {
-                const [_fc, _fm] = _fifthHS[_fifthFigIdx];
-                const _fNew = Math.min((_fc ?? _fm) + 2, _fm ?? _fc);
-                _fifthHS[_fifthFigIdx] = [_fNew, _fm ?? _fc];
-                dcHealthState.set(_fifthMsgId, _fifthHS);
-                const _fifthDcIds = _ywndmData.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-                const _fifthDcList = _ywndmData.playerNum === 1 ? game.p1DcList : game.p2DcList;
-                const _fifthIdx = (_fifthDcIds || []).indexOf(_fifthMsgId);
-                if (_fifthIdx >= 0 && _fifthDcList?.[_fifthIdx]) _fifthDcList[_fifthIdx].healthState = [..._fifthHS];
+              const { healed: _fifthHealed } = healHp(dcHealthState, game, _fifthMsgId, 0, 2, _ywndmData.playerNum);
+              if (_fifthHealed > 0) {
                 await logGameAction(game, client, `**You Will Not Deny Me** — Fifth Brother recovered 2 HP after hostile defeat.`, { phase: 'ROUND', icon: 'card' });
               }
               game.youWillNotDenyMeActive = null;
@@ -4168,17 +4115,9 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             const _apMsgId = _apData.msgId ?? combat.attackerMsgId;
             const _apAmt = _apData.amount ?? 2;
             if (_apMsgId) {
-              const _apHS = dcHealthState.get(_apMsgId);
               const _apFigIdx = combat.attackerFigureIndex ?? 0;
-              if (_apHS?.[_apFigIdx]) {
-                const [_apCur, _apMax] = _apHS[_apFigIdx];
-                const _apNew = Math.min((_apCur ?? _apMax) + _apAmt, _apMax ?? _apCur);
-                _apHS[_apFigIdx] = [_apNew, _apMax ?? _apCur];
-                dcHealthState.set(_apMsgId, _apHS);
-                const _apDcList = attackerPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-                const _apDcIds = attackerPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-                const _apIdx = (_apDcIds || []).indexOf(_apMsgId);
-                if (_apIdx >= 0 && _apDcList?.[_apIdx]) _apDcList[_apIdx].healthState = [..._apHS];
+              const { healed: _apHealed } = healHp(dcHealthState, game, _apMsgId, _apFigIdx, _apAmt, attackerPlayerNum);
+              if (_apHealed > 0) {
                 await logGameAction(game, client, `**Apex Predator** — Recovered ${_apAmt} HP after defeating hostile within ${_apRange}.`, { phase: 'ROUND', icon: 'card' });
               }
             }
@@ -4373,41 +4312,10 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     // Sustained by Rage: block recovery for figures with this passive
     const _sbrBlockRecover = getDcEffects()?.[combat.attackerDcName]?.specialAbilityIds?.includes('sustained_by_rage');
     if (combat.surgeRecover > 0 && combat.attackerMsgId != null && !_sbrBlockRecover) {
-      const attMsgId = combat.attackerMsgId;
-      const attIdx = combat.attackerFigureIndex ?? 0;
-      const attHS = dcHealthState.get(attMsgId) || [];
-      const attEntry = attHS[attIdx];
-      if (attEntry) {
-        const [c, m] = attEntry;
-        const maxVal = m ?? c ?? 99;
-        const newCur = Math.min((c ?? maxVal) + (combat.surgeRecover || 0), maxVal);
-        attHS[attIdx] = [newCur, maxVal];
-        dcHealthState.set(attMsgId, attHS);
-        const attP = combat.attackerPlayerNum;
-        const dcIds = attP === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcL = attP === 1 ? game.p1DcList : game.p2DcList;
-        const i = (dcIds || []).indexOf(attMsgId);
-        if (i >= 0 && dcL?.[i]) dcL[i].healthState = [...attHS];
-      }
+      healHp(dcHealthState, game, combat.attackerMsgId, combat.attackerFigureIndex ?? 0, combat.surgeRecover || 0, combat.attackerPlayerNum);
     }
     if (combat.superchargeStrainAfterAttackCount > 0 && combat.attackerMsgId != null) {
-      const attMsgId = combat.attackerMsgId;
-      const attIdx = combat.attackerFigureIndex ?? 0;
-      const attHS = dcHealthState.get(attMsgId) || [];
-      const attEntry = attHS[attIdx];
-      if (attEntry) {
-        const [c, m] = attEntry;
-        const maxVal = m ?? c ?? 99;
-        const strain = combat.superchargeStrainAfterAttackCount || 0;
-        const newCur = Math.max(0, (c ?? maxVal) - strain);
-        attHS[attIdx] = [newCur, maxVal];
-        dcHealthState.set(attMsgId, attHS);
-        const attP = combat.attackerPlayerNum;
-        const dcIds = attP === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcL = attP === 1 ? game.p1DcList : game.p2DcList;
-        const i = (dcIds || []).indexOf(attMsgId);
-        if (i >= 0 && dcL?.[i]) dcL[i].healthState = [...attHS];
-      }
+      reduceHp(dcHealthState, game, combat.attackerMsgId, combat.attackerFigureIndex ?? 0, combat.superchargeStrainAfterAttackCount || 0, combat.attackerPlayerNum);
     }
     // The Darksaber: convert Blast X → Cleave X during Darksaber Strike attack (before blast applies)
     let effectiveBlast = totalBlast;
@@ -4428,19 +4336,11 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if (!blastMsgId) continue;
         const blastM = blastFigureKey.match(/-(\d+)-(\d+)$/);
         const blastFigIndex = blastM ? parseInt(blastM[2], 10) : 0;
-        const blastHS = dcHealthState.get(blastMsgId) || [];
-        const blastEntry = blastHS[blastFigIndex];
-        if (!blastEntry) continue;
-        const [bCur, bMax] = blastEntry;
-        const blastDmg = effectiveBlast;
-        const newBCur = Math.max(0, (bCur ?? bMax) - blastDmg);
-        blastHS[blastFigIndex] = [newBCur, bMax ?? newBCur];
-        dcHealthState.set(blastMsgId, blastHS);
+        const { newHp: newBCur, wasDefeated: blastDefeated } = reduceHp(dcHealthState, game, blastMsgId, blastFigIndex, effectiveBlast, blastPlayerNum);
         const blastDcIds = blastPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
         const blastDcList = blastPlayerNum === 1 ? game.p1DcList : game.p2DcList;
         const blastIdx = (blastDcIds || []).indexOf(blastMsgId);
-        if (blastIdx >= 0 && blastDcList?.[blastIdx]) blastDcList[blastIdx].healthState = [...blastHS];
-        if (newBCur <= 0) {
+        if (blastDefeated) {
           if (game.figurePositions?.[blastPlayerNum]) delete game.figurePositions[blastPlayerNum][blastFigureKey];
           if (game.figureConditions?.[blastFigureKey]) delete game.figureConditions[blastFigureKey];
           const blastStats = getDcStats(blastDcList[blastIdx]?.dcName);
@@ -4563,12 +4463,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       if (_drEntry) {
         const [_drCur] = _drEntry;
         if (_drCur === 1) {
-          _drHS[targetFigIndex] = [0, _drEntry[1]];
-          dcHealthState.set(targetMsgId, _drHS);
-          const _drDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const _drDcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-          const _drIdx = (_drDcIds || []).indexOf(targetMsgId);
-          if (_drIdx >= 0 && _drDcList?.[_drIdx]) _drDcList[_drIdx].healthState = [..._drHS];
+          reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
           await logGameAction(game, client, `💀 **Disruptor Rifle** — **${combat.target?.label || ''}** had 1 HP remaining — suffers 1 additional Damage and is **defeated**.`, { phase: 'ROUND', icon: 'attack' });
         }
       }
@@ -4601,15 +4496,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             const _epFigIdx = _epFm ? parseInt(_epFm[2], 10) : 0;
             const _epMsgId = _epMid.find((mid, idx) => _epDcL?.[idx]?.dcName === _epFkDcName && _epDcL?.[idx]?.dgIndex === _epDgIdx);
             if (_epMsgId) {
-              const _epHS = dcHealthState.get(_epMsgId) || [];
-              const _epEntry = _epHS[_epFigIdx];
-              if (_epEntry) {
-                const [_epC, _epM] = _epEntry;
-                _epHS[_epFigIdx] = [Math.max(0, (_epC ?? _epM) - 1), _epM ?? _epC];
-                dcHealthState.set(_epMsgId, _epHS);
-                const _epDcIdx = _epMid.indexOf(_epMsgId);
-                if (_epDcIdx >= 0 && _epDcL?.[_epDcIdx]) _epDcL[_epDcIdx].healthState = [..._epHS];
-              }
+              reduceHp(dcHealthState, game, _epMsgId, _epFigIdx, 1, pNum);
             }
             _epLines.push(`**${_epFkDcName}** suffers 1 Damage`);
           }
@@ -4623,18 +4510,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     if (_lpa === 'quick_strike' && hit && combat.target?.figureKey && targetMsgId) {
       const _qsModified = combat.defenderRerolledOrModified;
       if (_qsModified) {
-        const _qsHS = dcHealthState.get(targetMsgId) || [];
-        const _qsEntry = _qsHS[targetFigIndex];
-        if (_qsEntry) {
-          const [_qsC, _qsM] = _qsEntry;
-          _qsHS[targetFigIndex] = [Math.max(0, (_qsC ?? _qsM) - 1), _qsM ?? _qsC];
-          dcHealthState.set(targetMsgId, _qsHS);
-          const _qsDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const _qsDcL = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-          const _qsIdx = (_qsDcIds || []).indexOf(targetMsgId);
-          if (_qsIdx >= 0 && _qsDcL?.[_qsIdx]) _qsDcL[_qsIdx].healthState = [..._qsHS];
-          await logGameAction(game, client, `⚡ **Quick Strike** — Defender modified dice/results: **${combat.target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
-        }
+        reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
+        await logGameAction(game, client, `⚡ **Quick Strike** — Defender modified dice/results: **${combat.target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
       }
     }
     // Flurry of Blows (Electrobatons): free melee attack with 1 green die + +1 Hit, limit once per activation
@@ -4676,17 +4553,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             const _abDcName = _abFk2.replace(/-\d+-\d+$/, '');
             for (const [_abMsgId, _abMeta] of dcMessageMeta) {
               if (_abMeta.gameId !== game.gameId || _abMeta.playerNum !== defenderPlayerNum || _abMeta.dcName !== _abDcName) continue;
-              const _abHS = dcHealthState.get(_abMsgId) || [];
               const _abFigIdx = parseInt(_abFk2.split('-').pop(), 10) || 0;
-              if (_abHS[_abFigIdx]) {
-                const [_abCur, _abMax] = _abHS[_abFigIdx];
-                _abHS[_abFigIdx] = [Math.max(0, (_abCur ?? _abMax ?? 0) - _abHits), _abMax ?? _abCur];
-                dcHealthState.set(_abMsgId, _abHS);
-                const _abDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-                const _abDcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-                const _abIdx = (_abDcIds || []).indexOf(_abMsgId);
-                if (_abIdx >= 0 && _abDcList?.[_abIdx]) _abDcList[_abIdx].healthState = [..._abHS];
-              }
+              reduceHp(dcHealthState, game, _abMsgId, _abFigIdx, _abHits, defenderPlayerNum);
               break;
             }
             await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}**. **${_abDcName}** suffers **${_abHits} Damage**.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -4731,22 +4599,13 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       if (_ftTargetUpgrades.includes('Flame Trooper')) {
         await thread.send('**Incinerate** — Target is **Fireproof**, immune to Strain.').catch((err) => { console.error('[discord]', err?.message ?? err); });
       } else {
-        const _ftHs = dcHealthState.get(targetMsgId);
-        if (_ftHs?.[targetFigIndex]) {
-          const [_ftCur, _ftMax] = _ftHs[targetFigIndex];
-          if (_ftCur > 0) {
-            const _ftNew = Math.max(0, _ftCur - 1);
-            _ftHs[targetFigIndex] = [_ftNew, _ftMax];
-            dcHealthState.set(targetMsgId, _ftHs);
-            const _ftDcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-            const _ftDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-            const _ftIdx = (_ftDcIds || []).indexOf(targetMsgId);
-            if (_ftIdx >= 0 && _ftDcList?.[_ftIdx]) _ftDcList[_ftIdx].healthState = [..._ftHs];
+        const _ftHsBefore = dcHealthState.get(targetMsgId);
+        if (_ftHsBefore?.[targetFigIndex]?.[0] > 0) {
+            const { newHp: _ftNew } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
             await thread.send(`**Incinerate** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
             if (_ftNew <= 0) {
               await thread.send(`⚠️ **${combat.target.label}** may be defeated from Incinerate Strain. *(Apply defeat manually.)*`).catch(() => {});
             }
-          }
         }
       }
     }
@@ -4818,15 +4677,13 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     const _sdaFigKey = combat.attackerFigureKey;
     const _sdaFigIdx = combat.attackerFigureIndex ?? 0;
     if (_sdaFigKey) {
-      const _sdaHS = dcHealthState.get(_sdaMsgId) || [];
-      if (_sdaHS[_sdaFigIdx]) {
-        const [_sdaC, _sdaM] = _sdaHS[_sdaFigIdx];
-        _sdaHS[_sdaFigIdx] = [0, _sdaM ?? _sdaC];
-        dcHealthState.set(_sdaMsgId, _sdaHS);
+      const _sdaPrevHs = dcHealthState.get(_sdaMsgId);
+      if (_sdaPrevHs?.[_sdaFigIdx]) {
+        const _sdaMaxHp = _sdaPrevHs[_sdaFigIdx][1] ?? _sdaPrevHs[_sdaFigIdx][0] ?? 99;
+        reduceHp(dcHealthState, game, _sdaMsgId, _sdaFigIdx, _sdaMaxHp, attackerPlayerNum);
         const _sdaDcIds = attackerPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
         const _sdaDcList = attackerPlayerNum === 1 ? game.p1DcList : game.p2DcList;
         const _sdaIdx = (_sdaDcIds || []).indexOf(_sdaMsgId);
-        if (_sdaIdx >= 0 && _sdaDcList?.[_sdaIdx]) _sdaDcList[_sdaIdx].healthState = [..._sdaHS];
         if (game.figurePositions?.[attackerPlayerNum]) delete game.figurePositions[attackerPlayerNum][_sdaFigKey];
         if (game.figureConditions?.[_sdaFigKey]) delete game.figureConditions[_sdaFigKey];
         const _sdaName = _sdaDcList?.[_sdaIdx]?.displayName || _sdaFigKey.replace(/-\d+-\d+$/, '');
@@ -4847,60 +4704,27 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
   if (hit && targetMsgId) {
     // Harass: defender suffers N Strain after a non-miss
     if ((combat.surgeHarass || 0) > 0) {
-      const hHS = dcHealthState.get(targetMsgId) || [];
-      const hEntry = hHS[targetFigIndex];
-      if (hEntry) {
-        const [hC, hM] = hEntry;
-        const hNew = Math.max(0, (hC ?? hM) - combat.surgeHarass);
-        hHS[targetFigIndex] = [hNew, hM ?? hNew];
-        dcHealthState.set(targetMsgId, hHS);
-        const hDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const hDcL = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-        const hIdx = (hDcIds || []).indexOf(targetMsgId);
-        if (hIdx >= 0 && hDcL?.[hIdx]) hDcL[hIdx].healthState = [...hHS];
-        embedRefreshMsgIds.add(targetMsgId);
-        await logGameAction(game, client, `**Harass** — **${combat.target.label}** suffers **${combat.surgeHarass}** Strain`, { phase: 'ROUND', icon: 'attack' });
-      }
+      reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, combat.surgeHarass, defenderPlayerNum);
+      embedRefreshMsgIds.add(targetMsgId);
+      await logGameAction(game, client, `**Harass** — **${combat.target.label}** suffers **${combat.surgeHarass}** Strain`, { phase: 'ROUND', icon: 'attack' });
     }
     // Suppression: target suffers Strain = min(block + evade + [1 if dodge], 2)
     if (combat.surgeSuppressionStrain) {
       const supRoll = combat.defenseRoll || {};
       const supAmt = Math.min((supRoll.block || 0) + (supRoll.evade || 0) + (supRoll.dodge ? 1 : 0), 2);
       if (supAmt > 0) {
-        const sHS = dcHealthState.get(targetMsgId) || [];
-        const sEntry = sHS[targetFigIndex];
-        if (sEntry) {
-          const [sC, sM] = sEntry;
-          const sNew = Math.max(0, (sC ?? sM) - supAmt);
-          sHS[targetFigIndex] = [sNew, sM ?? sNew];
-          dcHealthState.set(targetMsgId, sHS);
-          const sDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const sDcL = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-          const sIdx = (sDcIds || []).indexOf(targetMsgId);
-          if (sIdx >= 0 && sDcL?.[sIdx]) sDcL[sIdx].healthState = [...sHS];
-          embedRefreshMsgIds.add(targetMsgId);
-          await logGameAction(game, client, `**Suppression** — **${combat.target.label}** suffers **${supAmt}** Strain (${supRoll.block || 0} block, ${supRoll.evade || 0} evade${supRoll.dodge ? ', 1 dodge' : ''})`, { phase: 'ROUND', icon: 'attack' });
-        }
+        reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, supAmt, defenderPlayerNum);
+        embedRefreshMsgIds.add(targetMsgId);
+        await logGameAction(game, client, `**Suppression** — **${combat.target.label}** suffers **${supAmt}** Strain (${supRoll.block || 0} block, ${supRoll.evade || 0} evade${supRoll.dodge ? ', 1 dodge' : ''})`, { phase: 'ROUND', icon: 'attack' });
       }
     }
   }
   // Mandalorian Steel: if defender spent a Block Token this attack, recover 1 Damage on the defending figure
   if (combat.defenderSpentBlock && game.mandaAsteelPlayerNum === defenderPlayerNum && targetMsgId) {
-    const msHS = dcHealthState.get(targetMsgId) || [];
-    const msEntry = msHS[targetFigIndex];
-    if (msEntry) {
-      const [msC, msM] = msEntry;
-      const msNew = Math.min(msM ?? msC ?? 99, (msC ?? msM ?? 0) + 1);
-      if (msNew > (msC ?? msM ?? 0)) {
-        msHS[targetFigIndex] = [msNew, msM ?? msNew];
-        dcHealthState.set(targetMsgId, msHS);
-        const msDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const msDcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-        const msIdx = (msDcIds || []).indexOf(targetMsgId);
-        if (msIdx >= 0 && msDcList?.[msIdx]) msDcList[msIdx].healthState = [...msHS];
-        embedRefreshMsgIds.add(targetMsgId);
-        await logGameAction(game, client, `**Mandalorian Steel** — **${combat.target.label}** spent a Block Token; recovered 1 Damage`, { phase: 'ROUND', icon: 'card' });
-      }
+    const { healed } = healHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
+    if (healed > 0) {
+      embedRefreshMsgIds.add(targetMsgId);
+      await logGameAction(game, client, `**Mandalorian Steel** — **${combat.target.label}** spent a Block Token; recovered 1 Damage`, { phase: 'ROUND', icon: 'card' });
     }
   }
 
@@ -4950,17 +4774,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     const attMsgId = combat.attackerMsgId;
     const attFigIdx = combat.attackerFigureIndex ?? 0;
     if (attMsgId) {
-      const attHS = dcHealthState.get(attMsgId) || [];
-      const attEntry = attHS[attFigIdx];
-      if (attEntry) {
-        const [aC, aM] = attEntry;
-        const aNew = Math.max(0, (aC ?? aM) - deflectDmg);
-        attHS[attFigIdx] = [aNew, aM ?? aNew];
-        dcHealthState.set(attMsgId, attHS);
-        const attDcIds = attackerPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const attDcList = attackerPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-        const attDcIdx = (attDcIds || []).indexOf(attMsgId);
-        if (attDcIdx >= 0 && attDcList?.[attDcIdx]) attDcList[attDcIdx].healthState = [...attHS];
+      const { maxHp: deflectMax } = reduceHp(dcHealthState, game, attMsgId, attFigIdx, deflectDmg, attackerPlayerNum);
+      if (deflectMax > 0) {
         embedRefreshMsgIds.add(attMsgId);
         const defOwnerId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
         await logGameAction(game, client, `<@${defOwnerId}> **Deflection** — Attacker suffers **${deflectDmg} Damage** (you took no damage).`, { allowedMentions: { users: [defOwnerId] }, phase: 'ROUND', icon: 'card' });
@@ -5547,19 +5362,7 @@ async function handleSidewinderApply(interaction) {
   }
   await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
   // Apply 1 Strain
-  const attHS = dcHealthState.get(attackerMsgId) || [];
-  const attEntry = attHS[figureIndex];
-  if (attEntry) {
-    const [aC, aM] = attEntry;
-    const aMVal = aM ?? aC ?? 99;
-    const aNew = Math.max(0, (aC ?? aMVal) - 1);
-    attHS[figureIndex] = [aNew, aMVal];
-    dcHealthState.set(attackerMsgId, attHS);
-    const dcIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    const dcList = meta.playerNum === 1 ? game.p1DcList : game.p2DcList;
-    const idx = (dcIds || []).indexOf(attackerMsgId);
-    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...attHS];
-  }
+  reduceHp(dcHealthState, game, attackerMsgId, figureIndex, 1, meta.playerNum);
   // Grant 2 MP
   game.movementBank = game.movementBank || {};
   const bank = game.movementBank[attackerMsgId] || { total: 0, remaining: 0 };
@@ -5607,28 +5410,16 @@ async function handleBoltslingerTarget(interaction) {
   if (targetMsgId) {
     const figMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
     const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
-    const hs = dcHealthState.get(targetMsgId) || [];
-    const entry = hs[figIdx];
-    if (entry) {
-      const [c, mVal] = entry;
-      const maxHp = mVal ?? c ?? 99;
-      const nNew = Math.max(0, (c ?? maxHp) - 1);
-      hs[figIdx] = [nNew, maxHp];
-      dcHealthState.set(targetMsgId, hs);
-      const dcIds = target.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcList = target.playerNum === 1 ? game.p1DcList : game.p2DcList;
-      const idx = (dcIds || []).indexOf(targetMsgId);
-      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
-      try {
-        const tMeta = dcMessageMeta.get(targetMsgId);
-        if (tMeta) {
-          const ch = await client.channels.fetch(tMeta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
-          const msg = await ch.messages.fetch(targetMsgId);
-          const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId));
-          await msg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
-        }
-      } catch (e) { console.error('Failed to refresh Boltslinger target embed:', e); }
-    }
+    const { newHp: bsNewHp } = reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
+    try {
+      const tMeta = dcMessageMeta.get(targetMsgId);
+      if (tMeta) {
+        const ch = await client.channels.fetch(tMeta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
+        const msg = await ch.messages.fetch(targetMsgId);
+        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId));
+        await msg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }
+    } catch (e) { console.error('Failed to refresh Boltslinger target embed:', e); }
   }
   const blThread = await client.channels.fetch(combatThreadId).catch(() => null);
   if (blThread) await blThread.send(`**Boltslinger** — **${target.label}** suffers 1 Damage.`);
@@ -5669,17 +5460,8 @@ async function applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThre
     if (!mid) continue;
     const figM = t.figureKey.match(/-(\d+)-(\d+)$/);
     const figIdx = figM ? parseInt(figM[2], 10) : 0;
-    const hs = dcHealthState.get(mid) || [];
-    const entry = hs[figIdx];
-    if (!entry) continue;
-    const [cur, maxHp] = entry;
-    const newHp = Math.max(0, (cur ?? maxHp) - totalEffect);
-    hs[figIdx] = [newHp, maxHp ?? newHp];
-    dcHealthState.set(mid, hs);
-    const dcIds = t.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    const dcList = t.playerNum === 1 ? game.p1DcList : game.p2DcList;
-    const idx = (dcIds || []).indexOf(mid);
-    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+    const { newHp, maxHp: splashMaxHp } = reduceHp(dcHealthState, game, mid, figIdx, totalEffect, t.playerNum);
+    if (splashMaxHp === 0) continue; // no valid health entry
     const parts = [];
     if (totalDmg > 0) parts.push(`${totalDmg} Damage`);
     if (totalStrain > 0) parts.push(`${totalStrain} Strain`);
@@ -5769,40 +5551,31 @@ async function handleFightingKnifeTarget(interaction) {
   if (hits > 0 && target.msgId) {
     const fkMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
     const figIndex = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-    const healthState = dcHealthState.get(target.msgId) || [];
-    const entry = healthState[figIndex];
-    if (entry) {
-      const [cur, max] = entry;
-      const newCur = Math.max(0, (cur ?? max) - hits);
-      healthState[figIndex] = [newCur, max ?? newCur];
-      dcHealthState.set(target.msgId, healthState);
+    const { newHp: newCur, wasDefeated: fkDefeated } = reduceHp(dcHealthState, game, target.msgId, figIndex, hits, target.playerNum);
+    embedRefreshMsgIds.add(target.msgId);
+    if (fkDefeated) {
+      if (game.figurePositions?.[target.playerNum]) delete game.figurePositions[target.playerNum][target.figureKey];
+      const dcName = target.figureKey.replace(/-\d+-\d+$/, '');
+      const stats = getDcStats(dcName);
+      const effects = getDcEffects()?.[dcName];
+      const figures = stats?.figures ?? 1;
+      const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
+      const vpKey = pending.attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+      game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
+      game[vpKey].kills += vp;
+      game[vpKey].total += vp;
+      await logGameAction(game, client, `**Fighting Knife** — **${target.label}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
       const dcIds = target.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcList = target.playerNum === 1 ? game.p1DcList : game.p2DcList;
       const idx = (dcIds || []).indexOf(target.msgId);
-      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-      embedRefreshMsgIds.add(target.msgId);
-      if (newCur <= 0) {
-        if (game.figurePositions?.[target.playerNum]) delete game.figurePositions[target.playerNum][target.figureKey];
-        const dcName = target.figureKey.replace(/-\d+-\d+$/, '');
-        const stats = getDcStats(dcName);
-        const effects = getDcEffects()?.[dcName];
-        const figures = stats?.figures ?? 1;
-        const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
-        const vpKey = pending.attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-        game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-        game[vpKey].kills += vp;
-        game[vpKey].total += vp;
-        await logGameAction(game, client, `**Fighting Knife** — **${target.label}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
-        if (idx >= 0 && isGroupDefeated(game, target.playerNum, idx)) {
-          const activatedIndices = target.playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
-          if (!activatedIndices.includes(idx)) {
-            if (target.playerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
-            else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
-            await updateActivationsMessage(game, target.playerNum, client);
-          }
+      if (idx >= 0 && isGroupDefeated(game, target.playerNum, idx)) {
+        const activatedIndices = target.playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+        if (!activatedIndices.includes(idx)) {
+          if (target.playerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
+          else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+          await updateActivationsMessage(game, target.playerNum, client);
         }
-        await checkWinConditions(game, client);
       }
+      await checkWinConditions(game, client);
     }
   }
   const dieDesc = `${die.dmg}dmg${die.surge ? `/${die.surge}↯` : ''}`;
@@ -9003,18 +8776,11 @@ client.on('interactionCreate', async (interaction) => {
     }
     const _odActionsData = _odGame.dcActionsData?.[_odMsgId];
     if (!_odActionsData) { await interaction.followUp({ content: 'No active activation found.', ephemeral: true }).catch(() => {}); return; }
+    const { prevHp: _odPrevHp, newHp: _odNewHp, maxHp: _odMaxHp } = reduceHp(dcHealthState, _odGame, _odMsgId, 0, 1, _odMeta.playerNum);
     const _odHS = dcHealthState.get(_odMsgId) || [];
     let _odHpNote = '';
-    if (_odHS[0]) {
-      const [_oc, _om] = _odHS[0];
-      const _onc = Math.max(0, (_oc ?? _om) - 1);
-      _odHS[0] = [_onc, _om ?? _oc];
-      dcHealthState.set(_odMsgId, _odHS);
-      const _odDcIds = _odMeta.playerNum === 1 ? _odGame.p1DcMessageIds : _odGame.p2DcMessageIds;
-      const _odDcList = _odMeta.playerNum === 1 ? _odGame.p1DcList : _odGame.p2DcList;
-      const _odIdx = (_odDcIds || []).indexOf(_odMsgId);
-      if (_odIdx >= 0 && _odDcList?.[_odIdx]) _odDcList[_odIdx].healthState = [..._odHS];
-      _odHpNote = ` (HP: ${_oc ?? _om}→${_onc})`;
+    if (_odMaxHp > 0) {
+      _odHpNote = ` (HP: ${_odPrevHp}→${_odNewHp})`;
     }
     _odActionsData.remaining = Math.min((_odActionsData.total ?? DC_ACTIONS_PER_ACTIVATION) + 1, (_odActionsData.remaining || 0) + 1);
     const _odDgIdx = (_odMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
@@ -9071,17 +8837,8 @@ client.on('interactionCreate', async (interaction) => {
         const _sdpFkMatch = _sdpFk.match(/^(.+)-(\d+)-(\d+)$/);
         if (!_sdpFkMatch) continue;
         const _sdpHFigIdx = parseInt(_sdpFkMatch[3], 10);
-        const _sdpHHS = dcHealthState.get(_sdpHMsgId) || [];
-        if (!_sdpHHS[_sdpHFigIdx]) continue;
-        const [_hc, _hm] = _sdpHHS[_sdpHFigIdx];
-        if (_hc === null || _hc <= 0) continue;
-        const _hnc = Math.max(0, _hc - _sdpHits);
-        _sdpHHS[_sdpHFigIdx] = [_hnc, _hm ?? _hc];
-        dcHealthState.set(_sdpHMsgId, _sdpHHS);
-        const _sdpHDcIds = _sdpHostileNum === 1 ? _sdpGame.p1DcMessageIds : _sdpGame.p2DcMessageIds;
-        const _sdpHDcList = _sdpHostileNum === 1 ? _sdpGame.p1DcList : _sdpGame.p2DcList;
-        const _sdpHIdx = (_sdpHDcIds || []).indexOf(_sdpHMsgId);
-        if (_sdpHIdx >= 0 && _sdpHDcList?.[_sdpHIdx]) _sdpHDcList[_sdpHIdx].healthState = [..._sdpHHS];
+        const { prevHp: _hc, newHp: _hnc, maxHp: _sdpMaxHp } = reduceHp(dcHealthState, _sdpGame, _sdpHMsgId, _sdpHFigIdx, _sdpHits, _sdpHostileNum);
+        if (_sdpMaxHp === 0 || _hc === null || _hc <= 0) continue;
         _sdpDamaged.push(`${_sdpHM?.displayName || _sdpFkMatch[1]} (HP: ${_hc}→${_hnc})`);
       }
       _sdpResultLog += _sdpDamaged.length ? _sdpDamaged.join(', ') : 'No adjacent hostiles.';
@@ -9089,13 +8846,7 @@ client.on('interactionCreate', async (interaction) => {
       _sdpResultLog += 'No hits.';
     }
     // Defeat the probe
-    const _sdpDcIds2 = _sdpMeta.playerNum === 1 ? _sdpGame.p1DcMessageIds : _sdpGame.p2DcMessageIds;
-    const _sdpDcList2 = _sdpMeta.playerNum === 1 ? _sdpGame.p1DcList : _sdpGame.p2DcList;
-    const _sdpDcIdx = (_sdpDcIds2 || []).indexOf(_sdpMsgId);
-    if (_sdpDcIdx >= 0 && _sdpDcList2?.[_sdpDcIdx]) {
-      _sdpDcList2[_sdpDcIdx].healthState = [[0, _sdpDcList2[_sdpDcIdx].healthState?.[0]?.[1] ?? 0]];
-      dcHealthState.set(_sdpMsgId, _sdpDcList2[_sdpDcIdx].healthState);
-    }
+    const { maxHp: _sdpProbeMax } = reduceHp(dcHealthState, _sdpGame, _sdpMsgId, 0, 9999, _sdpMeta.playerNum);
     if (_sdpGame.figurePositions?.[_sdpMeta.playerNum]) delete _sdpGame.figurePositions[_sdpMeta.playerNum][`${_sdpMeta.dcName}-1-0`];
     await logGameAction(_sdpGame, client, `**Self-Destruct** — ${_sdpMeta.displayName || _sdpMeta.dcName}: ${_sdpResultLog} Probe defeated.`, { phase: 'ROUND', icon: 'attack' });
     saveGames(); return;
@@ -9142,17 +8893,8 @@ client.on('interactionCreate', async (interaction) => {
           const _sfkFigMatch = _sfk.match(/^(.+)-(\d+)-(\d+)$/);
           if (!_sfkFigMatch) continue;
           const _sfkFigIdx = parseInt(_sfkFigMatch[3], 10);
-          const _sfkHS = dcHealthState.get(_sfkMsgId) || [];
-          if (!_sfkHS[_sfkFigIdx]) continue;
-          const [_shc, _shm] = _sfkHS[_sfkFigIdx];
-          if (_shc === null || _shc <= 0) continue;
-          const _shnc = Math.max(0, _shc - _sdcpHits);
-          _sfkHS[_sfkFigIdx] = [_shnc, _shm ?? _shc];
-          dcHealthState.set(_sfkMsgId, _sfkHS);
-          const _sfkDcIds = _sdcpHostileNum === 1 ? _sdcpGame.p1DcMessageIds : _sdcpGame.p2DcMessageIds;
-          const _sfkDcList = _sdcpHostileNum === 1 ? _sdcpGame.p1DcList : _sdcpGame.p2DcList;
-          const _sfkIdx = (_sfkDcIds || []).indexOf(_sfkMsgId);
-          if (_sfkIdx >= 0 && _sfkDcList?.[_sfkIdx]) _sfkDcList[_sfkIdx].healthState = [..._sfkHS];
+          const { prevHp: _shc, newHp: _shnc, maxHp: _sfkMaxHp } = reduceHp(dcHealthState, _sdcpGame, _sfkMsgId, _sfkFigIdx, _sdcpHits, _sdcpHostileNum);
+          if (_sfkMaxHp === 0 || _shc === null || _shc <= 0) continue;
           _sdcpDamaged.push(`${dcMessageMeta.get(_sfkMsgId)?.displayName || _sfkFigMatch[1]} (HP: ${_shc}→${_shnc})`);
         }
         _sdcpResultLog += _sdcpDamaged.length ? _sdcpDamaged.join(', ') : 'No adjacent hostiles.';
@@ -9220,17 +8962,8 @@ client.on('interactionCreate', async (interaction) => {
             const _lfkMatch = _lfk.match(/^(.+)-(\d+)-(\d+)$/);
             if (!_lfkMatch) continue;
             const _lfkFigIdx = parseInt(_lfkMatch[3], 10);
-            const _lfkHS = dcHealthState.get(_lfkMsgId) || [];
-            if (!_lfkHS[_lfkFigIdx]) continue;
-            const [_lhc, _lhm] = _lfkHS[_lfkFigIdx];
-            if (_lhc === null || _lhc <= 0) continue;
-            const _lhnc = Math.max(0, _lhc - _lrHits);
-            _lfkHS[_lfkFigIdx] = [_lhnc, _lhm ?? _lhc];
-            dcHealthState.set(_lfkMsgId, _lfkHS);
-            const _lfkDcIds = pn === 1 ? _lrGame.p1DcMessageIds : _lrGame.p2DcMessageIds;
-            const _lfkDcList = pn === 1 ? _lrGame.p1DcList : _lrGame.p2DcList;
-            const _lfkIdx = (_lfkDcIds || []).indexOf(_lfkMsgId);
-            if (_lfkIdx >= 0 && _lfkDcList?.[_lfkIdx]) _lfkDcList[_lfkIdx].healthState = [..._lfkHS];
+            const { prevHp: _lhc, newHp: _lhnc, maxHp: _lfkMaxHp } = reduceHp(dcHealthState, _lrGame, _lfkMsgId, _lfkFigIdx, _lrHits, pn);
+            if (_lfkMaxHp === 0 || _lhc === null || _lhc <= 0) continue;
             _lrDamaged.push(`${dcMessageMeta.get(_lfkMsgId)?.displayName || _lfkMatch[1]} (HP: ${_lhc}→${_lhnc})`);
           }
         }

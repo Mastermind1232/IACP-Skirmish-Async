@@ -5,6 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { getDcEffects, getMapSpaces, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
+import { reduceHp, healHp, healHpDistributed } from '../game/index.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -107,24 +108,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
     if (isDepletedRemovedFromGame(game, msgId)) continue;
     const eff = dcEffects[meta.dcName] || dcEffects[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
     if (!(eff?.specialAbilityIds || []).includes('regenerate_bossk')) continue;
-    const healthState = dcHealthState.get(msgId);
-    if (!healthState) continue;
-    let healed = false;
-    for (let i = 0; i < healthState.length; i++) {
-      const entry = healthState[i];
-      if (!Array.isArray(entry)) continue;
-      const [cur, max] = entry;
-      if (cur == null || max == null || cur >= max) continue;
-      healthState[i] = [Math.min(cur + 2, max), max];
-      healed = true;
-    }
-    if (healed) {
-      dcHealthState.set(msgId, healthState);
-      const dcIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcList = meta.playerNum === 1 ? game.p1DcList : game.p2DcList;
-      const idx = (dcIds || []).indexOf(msgId);
-      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-      await logGameAction(game, client, `♻️ **Regenerate** — **${meta.dcName}** recovered 2 HP.`, { phase: 'ROUND', icon: 'round' });
+    const { totalRecovered } = healHpDistributed(dcHealthState, game, msgId, 2, meta.playerNum);
+    if (totalRecovered > 0) {
+      await logGameAction(game, client, `♻️ **Regenerate** — **${meta.dcName}** recovered ${totalRecovered} HP.`, { phase: 'ROUND', icon: 'round' });
     }
     // Discard Bleed (Stun/Weaken already cleared above)
     for (const fk of Object.keys(game.figureConditions || {})) {
@@ -208,20 +194,10 @@ export async function handleEndEndOfRound(interaction, ctx) {
       if (!entry || typeof entry.damage !== 'number') continue;
       const msgId = entry.msgId;
       if (!msgId || !dcMessageMeta.get(msgId)) continue;
-      const healthState = dcHealthState.get(msgId);
-      if (healthState && Array.isArray(healthState[0])) {
-        const [cur, max] = healthState[0];
-        const newCur = Math.max(0, (cur ?? max ?? 0) - entry.damage);
-        healthState[0] = [newCur, max ?? cur];
-        dcHealthState.set(msgId, healthState);
-        const meta = dcMessageMeta.get(msgId);
-        const dcMessageIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
-        const idx = (dcMessageIds || []).indexOf(msgId);
-        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-        const displayName = meta?.displayName || meta?.dcName || 'Figure';
-        await logGameAction(game, client, `**End of round:** ${displayName} suffered ${entry.damage} Damage (e.g. Blaze of Glory).`, { phase: 'ROUND', icon: 'round' });
-      }
+      reduceHp(dcHealthState, game, msgId, 0, entry.damage, playerNum);
+      const meta = dcMessageMeta.get(msgId);
+      const displayName = meta?.displayName || meta?.dcName || 'Figure';
+      await logGameAction(game, client, `**End of round:** ${displayName} suffered ${entry.damage} Damage (e.g. Blaze of Glory).`, { phase: 'ROUND', icon: 'round' });
     }
     game.endOfRoundSelfDamage = {};
   }
@@ -266,17 +242,10 @@ export async function handleEndEndOfRound(interaction, ctx) {
           if (!fk.startsWith(`${_svDc.dcName}-${_svDgIdx}-`)) continue;
           if (!_svExterior.has(String(pos).toLowerCase())) continue;
           // Recover 1 HP for this figure
-          const _svHs = dcHealthState.get(_svMid);
           const _svFi = parseInt(fk.split('-').pop(), 10);
-          if (_svHs?.[_svFi]) {
-            const [_svCur, _svMax] = _svHs[_svFi];
-            if (_svCur < _svMax) {
-              _svHs[_svFi] = [Math.min(_svMax, _svCur + 1), _svMax];
-              dcHealthState.set(_svMid, _svHs);
-              const _svIdx = _svMsgIds.indexOf(_svMid);
-              if (_svIdx >= 0 && _svDcList[_svIdx]) _svDcList[_svIdx].healthState = [..._svHs];
-              await logGameAction(game, client, `**Survivalist** — **${_svDc.displayName || _svDc.dcName}** recovers 1 Damage (exterior space).`, { phase: 'ROUND', icon: 'round' });
-            }
+          const { healed: _svHealed } = healHp(dcHealthState, game, _svMid, _svFi, 1, pn);
+          if (_svHealed > 0) {
+            await logGameAction(game, client, `**Survivalist** — **${_svDc.displayName || _svDc.dcName}** recovers 1 Damage (exterior space).`, { phase: 'ROUND', icon: 'round' });
           }
         }
       }

@@ -5,6 +5,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getDcEffects, getMapSpaces } from '../data-loader.js';
 import { bottomLeftCoord, getFootprintCells } from '../game/coords.js';
+import { reduceHp } from '../game/index.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
@@ -543,15 +544,8 @@ export async function handleMovePick(interaction, ctx) {
       }
       if (!hostileMsgId) continue;
       const hFigIndex = parseInt(hostileFigIndexStr, 10);
-      const hHealthState = _dcHealthState.get(hostileMsgId);
-      if (!hHealthState?.[hFigIndex]) continue;
-      const [curHp, maxHp] = hHealthState[hFigIndex];
-      if (curHp === null || curHp <= 0) continue;
-      const newHp = Math.max(0, curHp - 2);
-      hHealthState[hFigIndex] = [newHp, maxHp];
-      _dcHealthState.set(hostileMsgId, hHealthState);
-      const hDcListIdx = hostileMsgIds.indexOf(hostileMsgId);
-      if (hDcListIdx >= 0 && hostileDcList[hDcListIdx]) hostileDcList[hDcListIdx].healthState = [...hHealthState];
+      const { prevHp: curHp, newHp, maxHp: _orMaxHp } = reduceHp(_dcHealthState, game, hostileMsgId, hFigIndex, 2, hostilePlayerNum);
+      if (_orMaxHp === 0 || curHp === null || curHp <= 0) continue;
       const hDisplayName = dcMessageMeta.get(hostileMsgId)?.displayName || hostileDcName;
       const defeatNote = newHp <= 0 ? ' **(may be defeated — check manually)**' : '';
       await logGameAction(game, client, `**Overrun** — **${displayName}** entered **${hDisplayName}**'s space: 2 Damage${defeatNote} (HP: ${curHp}→${newHp}).`, { phase: 'ROUND', icon: 'attack' });
@@ -591,15 +585,8 @@ export async function handleMovePick(interaction, ctx) {
         }
         if (!hMsgId) continue;
         const hFigIdx = parseInt(hFigIdxStr, 10);
-        const hHs = _dcHs.get(hMsgId);
-        if (!hHs?.[hFigIdx]) continue;
-        const [hCur, hMax] = hHs[hFigIdx];
-        if (hCur === null || hCur <= 0) continue;
-        const hNewHp = Math.max(0, hCur - 1);
-        hHs[hFigIdx] = [hNewHp, hMax];
-        _dcHs.set(hMsgId, hHs);
-        const hListIdx = hostileMsgIds.indexOf(hMsgId);
-        if (hListIdx >= 0 && hostileDcList[hListIdx]) hostileDcList[hListIdx].healthState = [...hHs];
+        const { prevHp: hCur, newHp: hNewHp, maxHp: _carMaxHp } = reduceHp(_dcHs, game, hMsgId, hFigIdx, 1, hostilePlayerNum);
+        if (_carMaxHp === 0 || hCur === null || hCur <= 0) continue;
         const hDispName = dcMessageMeta.get(hMsgId)?.displayName || hDcName;
         const defeatNote = hNewHp <= 0 ? ' **(may be defeated)**' : '';
         await logGameAction(game, client, `⚔️ **Cut and Run** — **${displayName}** exits **${hDispName}**'s space: 1 Damage${defeatNote} (HP: ${hCur}→${hNewHp}).`, { phase: 'ROUND', icon: 'attack' });

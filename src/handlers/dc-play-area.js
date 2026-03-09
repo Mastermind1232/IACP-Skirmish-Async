@@ -8,6 +8,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards } from '../data-loader.js';
+import { reduceHp } from '../game/index.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
@@ -2484,22 +2485,11 @@ function _applyHpDamage(game, dcHealthState, dcMessageMeta, figureKey, damage) {
     if (String(dgIdx) === String(dgIndex)) { targetMsgId = mId; break; }
   }
   if (!targetMsgId) return { newHp: null, wasDefeated: false };
-  const healthState = dcHealthState.get(targetMsgId) || [];
-  if (!healthState[figIndex]) return { newHp: null, wasDefeated: false };
-  const [curHp, maxHp] = healthState[figIndex];
-  if (curHp === null || curHp <= 0) return { newHp: curHp, wasDefeated: false };
-  const newHp = Math.max(0, curHp - damage);
-  healthState[figIndex] = [newHp, maxHp];
-  dcHealthState.set(targetMsgId, healthState);
-  // Sync dcList
   const meta = dcMessageMeta.get(targetMsgId);
-  if (meta) {
-    const dcIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    const dcList = meta.playerNum === 1 ? game.p1DcList : game.p2DcList;
-    const idx = dcIds ? dcIds.indexOf(targetMsgId) : -1;
-    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
-  }
-  return { newHp, wasDefeated: newHp <= 0, targetMsgId };
+  const playerNum = meta?.playerNum ?? 1;
+  const { newHp, prevHp, wasDefeated } = reduceHp(dcHealthState, game, targetMsgId, figIndex, damage, playerNum);
+  if (prevHp === 0 && newHp === 0) return { newHp: prevHp, wasDefeated: false }; // already dead or no entry
+  return { newHp, wasDefeated, targetMsgId };
 }
 
 /**

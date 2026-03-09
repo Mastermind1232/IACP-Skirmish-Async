@@ -6,6 +6,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
+import { reduceHp, healHp } from '../game/index.js';
 
 /**
  * Check a player's hand for CC cards that match a timing trigger.
@@ -125,17 +126,11 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     // Headhunter fully prevented strain + opponent had CCs to discard
     return;
   }
-  const newCur = Math.max(0, (cur ?? max) - totalHpLoss);
-  healthState[figureIndex] = [newCur, max ?? newCur];
-  dcHealthState.set(msgId, healthState);
-  const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-  const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
-  const idx = (dcIds || []).indexOf(msgId);
-  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+  const { newHp: newCur, prevHp: _strainPrev } = reduceHp(dcHealthState, game, msgId, figureIndex, totalHpLoss, playerNum);
   if (!headhunterTriggered) {
-    await thread.send(`**${abilityLabel}** (${sourceLabel}) — **${dcName}** suffers 1 Strain (${cur ?? max} → ${newCur} HP).`);
+    await thread.send(`**${abilityLabel}** (${sourceLabel}) — **${dcName}** suffers 1 Strain (${_strainPrev} → ${newCur} HP).`);
   } else {
-    await thread.send(`**${abilityLabel}** — **${dcName}** suffers 1 Damage from Headhunter (${cur ?? max} → ${newCur} HP).`);
+    await thread.send(`**${abilityLabel}** — **${dcName}** suffers 1 Damage from Headhunter (${_strainPrev} → ${newCur} HP).`);
   }
   if (logGameAction) {
     await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** suffered 1 Strain.`, { phase: 'ROUND', icon: 'attack' });
@@ -154,6 +149,8 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     if (logGameAction) {
       await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
     }
+    const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const idx = (dcIds || []).indexOf(msgId);
     if (idx >= 0 && isGroupDefeated?.(game, playerNum, idx)) {
       const activatedIndices = playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
       if (!activatedIndices.includes(idx)) {
@@ -429,19 +426,9 @@ export async function handleAttackTarget(interaction, ctx) {
       const _merDefPn2 = attackerPlayerNum === 1 ? 2 : 1;
       const _merTargetMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, _merDefPn2, target.figureKey) : null;
       if (_merTargetMsgId && dcHealthState) {
-        const _merHs = dcHealthState.get(_merTargetMsgId) || [];
         const _merFkMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
         const _merFigIdx = _merFkMatch ? parseInt(_merFkMatch[2], 10) : 0;
-        if (_merHs[_merFigIdx]) {
-          const [_merCur, _merMax] = _merHs[_merFigIdx];
-          const _merNew = Math.max(0, (_merCur ?? _merMax) - 1);
-          _merHs[_merFigIdx] = [_merNew, _merMax ?? _merCur];
-          dcHealthState.set(_merTargetMsgId, _merHs);
-          const _merDcList = _merDefPn2 === 1 ? game.p1DcList : game.p2DcList;
-          const _merDcIds = _merDefPn2 === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const _merIdx = (_merDcIds || []).indexOf(_merTargetMsgId);
-          if (_merIdx >= 0 && _merDcList?.[_merIdx]) _merDcList[_merIdx].healthState = [..._merHs];
-        }
+        reduceHp(dcHealthState, game, _merTargetMsgId, _merFigIdx, 1, _merDefPn2);
       }
       await logGameAction(game, client, `⚡ **Merciless** — **${target.label}** suffers 1 Damage (has harmful condition).`, { phase: 'ROUND', icon: 'attack' });
     }
@@ -2884,16 +2871,12 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       if (_luckyFkMatch) {
         const targetMsgId = combat.target.msgId;
         if (targetMsgId) {
-          const _luckyHs = ctx.dcHealthState.get(targetMsgId);
           const _luckyFi = parseInt(_luckyFkMatch[3], 10);
-          if (_luckyHs?.[_luckyFi]) {
-            const [_lCur, _lMax] = _luckyHs[_luckyFi];
-            if (_lCur < _lMax) {
-              const _lNew = Math.min(_lMax, (_lCur ?? _lMax) + 2);
-              _luckyHs[_luckyFi] = [_lNew, _lMax];
-              ctx.dcHealthState.set(targetMsgId, _luckyHs);
-              await thread.send(`🍀 **Lucky** — R2-D2 rolled a Dodge! Recovered 2 damage (HP: ${_lCur}→${_lNew}).`);
-            }
+          const _luckyDefPn = combat.target.playerNum ?? (combat.attackerPlayerNum === 1 ? 2 : 1);
+          const { healed: _luckyHealed, newHp: _lNew } = healHp(ctx.dcHealthState, game, targetMsgId, _luckyFi, 2, _luckyDefPn);
+          if (_luckyHealed > 0) {
+            const _lPrev = _lNew - _luckyHealed;
+            await thread.send(`🍀 **Lucky** — R2-D2 rolled a Dodge! Recovered 2 damage (HP: ${_lPrev}→${_lNew}).`);
           }
         }
       }
@@ -3564,18 +3547,12 @@ export async function handleCleaveTarget(interaction, ctx) {
   if (cleaveMsgId) {
     const cleaveM = cleaveFigureKey.match(/-(\d+)-(\d+)$/);
     const cleaveFigIndex = cleaveM ? parseInt(cleaveM[2], 10) : 0;
-    const cleaveHS = dcHealthState.get(cleaveMsgId) || [];
-    const cleaveEntry = cleaveHS[cleaveFigIndex];
-    if (cleaveEntry) {
-      const [cCur, cMax] = cleaveEntry;
-      const cleaveDmg = pending.surgeCleave || 0;
-      const newCCur = Math.max(0, (cCur ?? cMax) - cleaveDmg);
-      cleaveHS[cleaveFigIndex] = [newCCur, cMax ?? newCCur];
-      dcHealthState.set(cleaveMsgId, cleaveHS);
+    const cleaveDmg = pending.surgeCleave || 0;
+    const { newHp: newCCur, wasDefeated: cleaveDefeated } = reduceHp(dcHealthState, game, cleaveMsgId, cleaveFigIndex, cleaveDmg, cleavePlayerNum);
+    {
       const cleaveDcIds = cleavePlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
       const cleaveDcList = cleavePlayerNum === 1 ? game.p1DcList : game.p2DcList;
       const cleaveIdx = (cleaveDcIds || []).indexOf(cleaveMsgId);
-      if (cleaveIdx >= 0 && cleaveDcList?.[cleaveIdx]) cleaveDcList[cleaveIdx].healthState = [...cleaveHS];
       const cleaveLabel = target.label || cleaveDcList?.[cleaveIdx]?.displayName || cleaveFigureKey;
       await logGameAction(game, client, `Cleave: <@${ownerId}> dealt **${pending.surgeCleave}** damage to **${cleaveLabel}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
       if (newCCur <= 0) {
@@ -3781,19 +3758,10 @@ export async function handleFigureheadDecision(interaction, ctx) {
   if (isUse) {
     const fhDamage = Math.max(0, damage - 1);
     let fhResultText = '';
-    if (fhMsgId && fhFigKey) {
-      const fhHS = (dcHealthState && dcHealthState.get(fhMsgId)) || [];
-      const fhEntry = fhHS[fhFigIndex];
-      if (fhEntry) {
-        const [fhCur, fhMax] = fhEntry;
-        const fhNew = Math.max(0, (fhCur ?? fhMax) - fhDamage);
-        fhHS[fhFigIndex] = [fhNew, fhMax ?? fhNew];
-        if (dcHealthState) dcHealthState.set(fhMsgId, fhHS);
-        const fhDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const fhDcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
-        const fhIdx = (fhDcIds || []).indexOf(fhMsgId);
-        if (fhIdx >= 0 && fhDcList?.[fhIdx]) fhDcList[fhIdx].healthState = [...fhHS];
-        fhResultText = `**Figurehead** — ${fhLabel || 'Murne Rin'} suffers **${fhDamage} damage** (${fhCur ?? fhMax} — ${fhNew} HP); ${combat.target.label} suffers 0.`;
+    if (fhMsgId && fhFigKey && dcHealthState) {
+      const { newHp: fhNew, prevHp: fhPrev, maxHp: fhMaxHp } = reduceHp(dcHealthState, game, fhMsgId, fhFigIndex, fhDamage, defenderPlayerNum);
+      if (fhMaxHp > 0) {
+        fhResultText = `**Figurehead** — ${fhLabel || 'Murne Rin'} suffers **${fhDamage} damage** (${fhPrev} — ${fhNew} HP); ${combat.target.label} suffers 0.`;
         if (fhNew <= 0) {
           // Murne Rin defeated
           if (game.figurePositions?.[defenderPlayerNum]) delete game.figurePositions[defenderPlayerNum][fhFigKey];
@@ -3809,6 +3777,8 @@ export async function handleFigureheadDecision(interaction, ctx) {
           game[fhVpKey].total += fhVp;
           fhResultText += ` — **${fhLabel || 'Murne Rin'} defeated!** +${fhVp} VP`;
           if (logGameAction) await logGameAction(game, client, `**Figurehead** — ${fhLabel || 'Murne Rin'} was defeated! +${fhVp} VP`, { phase: 'ROUND', icon: 'attack' });
+          const fhDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const fhIdx = (fhDcIds || []).indexOf(fhMsgId);
           if (fhIdx >= 0 && isGroupDefeated?.(game, defenderPlayerNum, fhIdx)) {
             const fhActivated = defenderPlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
             if (!fhActivated.includes(fhIdx)) {
