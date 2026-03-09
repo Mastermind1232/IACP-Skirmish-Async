@@ -20,6 +20,7 @@ import {
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
+import { requireGame } from '../utils/guards.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
@@ -58,11 +59,8 @@ export async function handleDcActivate(interaction, ctx) {
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
   const dcIndex = parseInt(parts[2], 10);
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
     await interaction.followUp({ content: 'Only the owner of this Play Area can activate their DCs.', ephemeral: true }).catch(discordCatch);
@@ -272,11 +270,8 @@ export async function handleDcUnactivate(interaction, ctx) {
     await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const game = getGame(meta.gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
     await interaction.followUp({ content: 'Only the owner can un-activate.', ephemeral: true }).catch(discordCatch);
     return;
@@ -377,11 +372,8 @@ export async function handleDcToggle(interaction, ctx) {
     await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const game = getGame(meta.gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
     await interaction.followUp({ content: 'Only the owner of this Play Area can toggle their DCs.', ephemeral: true }).catch(discordCatch);
     return;
@@ -521,11 +513,8 @@ export async function handleDcDeplete(interaction, ctx) {
     await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const game = getGame(meta.gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
     await interaction.followUp({ content: 'Only the owner of this Play Area can Deplete their upgrade.', ephemeral: true }).catch(discordCatch);
     return;
@@ -640,11 +629,8 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
     await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const game = getGame(meta.gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
     await interaction.followUp({ content: 'Only the owner of this activation can play a CC here.', ephemeral: true }).catch(discordCatch);
@@ -1142,11 +1128,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const game = getGame(meta.gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
     await interaction.followUp({ content: 'Only the owner of this Play Area can use these actions.', ephemeral: true }).catch(discordCatch);
@@ -1937,11 +1920,8 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   const specialIdx = parseInt(specialIdxStr, 10);
   const choiceIndex = parseInt(choiceIndexStr, 10);
   const { getGame, dcMessageMeta, dcHealthState, resolveAbility, updateDcActionsMessage, saveGames, client, getSpaceChoiceRows, getMapAttachmentForSpaces, getBoardStateForMovement } = ctx;
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const pending = game.pendingDcAbilityChoice?.[`${msgId}_${specialIdx}`];
   if (!pending || pending.gameId !== gameId) {
     await interaction.followUp({ content: 'No pending ability choice.', ephemeral: true }).catch(discordCatch);
@@ -2089,11 +2069,8 @@ export async function handlePounceSpacePick(interaction, ctx) {
   const [, gameId, msgId, figureIndexStr, space] = match;
   const chosenSpace = String(space).toLowerCase();
   const { getGame, dcMessageMeta, resolveAbility, logGameAction, updateDcActionsMessage, buildBoardMapPayload, client, saveGames } = ctx;
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const pending = game.pendingPounceSpaceChoice?.[msgId];
   if (!pending || pending.gameId !== gameId) {
     await interaction.followUp({ content: 'No pending pounce space choice.', ephemeral: true }).catch(discordCatch);
@@ -2166,8 +2143,8 @@ export async function handleArsenalPick(interaction, ctx) {
   const { getGame, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames, replyIfGameEnded } = ctx;
   const meta = dcMessageMeta.get(msgId);
   if (!meta) { await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(() => {}); return; }
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
 
   const chosenDice = interaction.values[0].split(',');
@@ -2218,7 +2195,7 @@ export async function handleEe3DiePick(interaction, ctx) {
 
   const meta = dcMessageMeta.get(msgId);
   if (!meta) return;
-  const game = getGame(gameId);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
 
@@ -2282,8 +2259,8 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     getSpaceChoiceRows, getMapAttachmentForSpaces,
     saveGames, FIGURE_LETTERS,
   } = ctx;
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const fo = game.pendingFalseOrders;
   if (!fo || fo.murneRinMsgId !== msgId) {
@@ -2416,8 +2393,8 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
   const [, gameId, msgId, space] = m;
   const chosenSpace = String(space).toLowerCase();
   const { getGame, replyIfGameEnded, logGameAction, buildBoardMapPayload, saveGames, client } = ctx;
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const fo = game.pendingFalseOrders;
   if (!fo || fo.murneRinMsgId !== msgId) {
@@ -2488,8 +2465,8 @@ export async function handleRushPushFig(interaction, ctx) {
   const choiceIndex = parseInt(choiceIdxStr, 10);
   const { getGame, dcMessageMeta, dcHealthState, getMapSpaces, logGameAction, buildBoardMapPayload,
     updateDcActionsMessage, getSpaceChoiceRows, getMapAttachmentForSpaces, saveGames, client } = ctx;
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const pending = game.pendingRushPush;
   if (!pending || pending.msgId !== msgId) {
     await interaction.followUp({ content: 'No pending Rush push.', ephemeral: true }).catch(() => {});
@@ -2564,8 +2541,8 @@ export async function handleRushPushSpace(interaction, ctx) {
   const chosenSpace = String(space).toLowerCase();
   const { getGame, dcMessageMeta, dcHealthState, logGameAction, buildBoardMapPayload,
     updateDcActionsMessage, saveGames, client } = ctx;
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const pending = game.pendingRushPush;
   if (!pending || pending.msgId !== msgId) {
     await interaction.followUp({ content: 'No pending Rush push.', ephemeral: true }).catch(() => {});
@@ -2612,8 +2589,8 @@ export async function handleRushPushSkip(interaction, ctx) {
   if (!m) return;
   const [, gameId, msgId] = m;
   const { getGame, saveGames } = ctx;
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   delete game.pendingRushPush;
   await interaction.message.edit({ content: '**Rush** — Push skipped.', components: [] }).catch(() => {});
   saveGames();
@@ -2625,8 +2602,8 @@ export async function handleOverwatchSpacePick(interaction, ctx) {
   if (!m) return;
   const [, gameId, msgId, space] = m;
   const { getGame, saveGames, logGameAction, dcMessageMeta } = ctx;
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const chosenSpace = String(space).toLowerCase();
   game.overwatchTokenPosition = game.overwatchTokenPosition || {};
   game.overwatchTokenPosition[msgId] = chosenSpace;
@@ -2644,8 +2621,8 @@ export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
   if (!m) return;
   const [, gameId, msgId] = m;
   const { getGame, saveGames, logGameAction, dcMessageMeta, getMapSpaces, getSpaceChoiceRows } = ctx;
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const tokenCount = game.orbitalBombardmentTokens?.[msgId] || 0;
   if (tokenCount <= 0) {
     await interaction.followUp({ content: '**Orbital Bombardment** — No tokens on this card.', ephemeral: true }).catch(() => {});
@@ -2696,7 +2673,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
   if (!m) return;
   const [, gameId, msgId, space] = m;
   const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapSpaces, getSpaceChoiceRows, findDcMessageIdForFigure } = ctx;
-  const game = getGame(gameId);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game?.pendingOrbitalBombardment) return;
   const pending = game.pendingOrbitalBombardment;
   const chosenSpace = String(space).toLowerCase();

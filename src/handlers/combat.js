@@ -16,6 +16,7 @@ import {
   opponentPlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
+import { requireGame } from '../utils/guards.js';
 
 /**
  * Check a player's hand for CC cards that match a timing trigger.
@@ -1375,11 +1376,8 @@ export async function handleAttackTarget(interaction, ctx) {
 export async function handleCombatReady(interaction, ctx) {
   const { getGame, replyIfGameEnded, saveGames } = ctx;
   const gameId = interaction.customId.replace('combat_ready_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) {
@@ -1445,11 +1443,8 @@ export async function handleCombatRoll(interaction, ctx) {
   } = ctx;
   const getInnateRerolls = ctx.getInnateRerolls || (() => ({ attackReroll: 0, defenseReroll: 0 }));
   const gameId = interaction.customId.replace('combat_roll_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) {
@@ -2036,8 +2031,8 @@ export async function handleCombatReroll(interaction, ctx) {
   const match = interaction.customId.match(/^combat_reroll_([^_]+)_(atk|def)_(done|\d+)$/);
   if (!match) return;
   const [, gameId, side, choice] = match;
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId || !combat.rerollPhase) {
@@ -2287,8 +2282,8 @@ export async function handlePreReroll(interaction, ctx) {
   const match = interaction.customId.match(/^pre_reroll_([^_]+)_(.+)$/);
   if (!match) return;
   const [, gameId, choice] = match;
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) {
@@ -2532,7 +2527,7 @@ export async function handleCombatPassive(interaction, ctx) {
   const m = interaction.customId.match(/^combat_passive_([^_]+)_(.+)$/);
   if (!m) return;
   const [, gameId, rest] = m;
-  const game = getGame(gameId);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
@@ -3051,11 +3046,8 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
 export async function handleCombatResolveReady(interaction, ctx) {
   const { getGame, replyIfGameEnded, resolveCombatAfterRolls, saveGames, client } = ctx;
   const gameId = interaction.customId.replace('combat_resolve_ready_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) {
@@ -3092,11 +3084,8 @@ export async function handleCombatSurge(interaction, ctx) {
   const match = interaction.customId.match(/^combat_surge_([^_]+)_(done|\d+|bleed_prevention)$/);
   if (!match) return;
   const [, gameId, choice] = match;
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId || !combat.surgeRemaining) {
@@ -3373,7 +3362,7 @@ export async function handleCombatToken(interaction, ctx) {
   const m = interaction.customId.match(/^combat_token_([^_]+)_(att|def|wild)_(.+)$/);
   if (!m) return;
   const [, gameId, role, choice] = m;
-  const game = getGame(gameId);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
@@ -3493,11 +3482,8 @@ export async function handleCleaveTarget(interaction, ctx) {
   const match = interaction.customId.match(/^cleave_target_([^_]+)_(\d+)$/);
   if (!match) return;
   const [, gameId, indexStr] = match;
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const pending = game.pendingCleave;
   if (!pending || pending.gameId !== gameId) {
@@ -3584,8 +3570,9 @@ export async function handlePowerTokenChoice(interaction, ctx) {
   if (!match) { await interaction.followUp({ content: 'Invalid token choice.', ephemeral: true }).catch(() => {}); return; }
   const [, gameId, typeRaw] = match;
   const type = typeRaw[0].toUpperCase() + typeRaw.slice(1); // 'Hit', 'Surge', 'Block', 'Evade'
-  const game = getGame(gameId);
-  if (!game?.pendingPowerTokenGrant?.grants?.length) { await interaction.followUp({ content: 'No pending token grant found.', ephemeral: true }).catch(() => {}); return; }
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (!game.pendingPowerTokenGrant?.grants?.length) { await interaction.followUp({ content: 'No pending token grant found.', ephemeral: true }).catch(() => {}); return; }
   const { grants, channelId, playerNum } = game.pendingPowerTokenGrant;
   if (playerNum && !canActAsPlayer(game, interaction.user.id, playerNum)) { await interaction.followUp({ content: 'Not your token choice.', ephemeral: true }).catch(() => {}); return; }
   game.figurePowerTokens = game.figurePowerTokens || {};
@@ -3644,8 +3631,9 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
   const m = interaction.customId.match(/^spread_pain_cond_([^_]+)_(stun|weaken|bleed|skip)$/);
   if (!m) { await interaction.followUp({ content: 'Invalid condition choice.', ephemeral: true }).catch(() => {}); return; }
   const [, gameId, condRaw] = m;
-  const game = getGame(gameId);
-  if (!game?.pendingSpreadThePainCondPick) { await interaction.followUp({ content: 'No pending condition pick.', ephemeral: true }).catch(() => {}); return; }
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (!game.pendingSpreadThePainCondPick) { await interaction.followUp({ content: 'No pending condition pick.', ephemeral: true }).catch(() => {}); return; }
   const { attackerPlayerNum, combatThreadId } = game.pendingSpreadThePainCondPick;
   if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) { await interaction.followUp({ content: 'Not your choice.', ephemeral: true }).catch(() => {}); return; }
   await interaction.message.edit({ components: [] }).catch(() => {});
@@ -3706,11 +3694,8 @@ export async function handleFigureheadDecision(interaction, ctx) {
   const { getGame, client, saveGames, applyDamageAndFinishCombat, isDcUnique, getCelebrationButtons, dcHealthState, findDcMessageIdForFigure, logGameAction, isGroupDefeated, checkWinConditions, updateActivationsMessage, updateAttachmentMessageForDc, getDcStats, getDcEffects } = ctx;
   const isUse = interaction.customId.startsWith('figurehead_use_');
   const gameId = interaction.customId.replace(/^figurehead_(?:use|skip)_/, '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {});
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   await interaction.deferUpdate().catch(() => {});
   const pending = game.pendingFigurehead;
   if (!pending) {
@@ -3842,8 +3827,8 @@ export async function handleLasatDiePick(interaction, ctx) {
   const [, gameId, idxStr] = m;
   const dieIdx = parseInt(idxStr, 10);
   const { getGame, replyIfGameEnded, saveGames } = ctx;
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId || !combat.lasatHonorGuardPhase) {
@@ -3877,8 +3862,8 @@ export async function handleLasatFacePick(interaction, ctx) {
   const dieIdx = parseInt(dieIdxStr, 10);
   const faceIdx = parseInt(faceIdxStr, 10);
   const { getGame, replyIfGameEnded, saveGames } = ctx;
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId || !combat.lasatHonorGuardPhase) {
@@ -3922,8 +3907,8 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const [, gameId, msgId, targetIdxStr] = m;
   const targetIdx = parseInt(targetIdxStr, 10);
   const { getGame, replyIfGameEnded, getDcStats, getDcEffects, dcHealthState, logGameAction, ACTION_ICONS, ThreadAutoArchiveDuration, saveGames, client } = ctx;
-  const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const fo = game.pendingFalseOrders;
   if (!fo || fo.murneRinMsgId !== msgId) {

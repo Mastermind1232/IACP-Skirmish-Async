@@ -29,16 +29,14 @@ import {
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
+import { requireGame } from '../utils/guards.js';
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
 export async function handleSquadModal(interaction, ctx) {
   const { getGame, validateDeckLegal, sendDeckIllegalAlert, applySquadSubmission } = ctx;
   const [, , gameId, playerNum] = interaction.customId.split('_');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.reply({ content: 'This game no longer exists.', ephemeral: true });
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (!game.mapSelected) {
     await interaction.reply({ content: 'Map selection must be completed before you can submit your squad.', ephemeral: true });
     return;
@@ -77,11 +75,8 @@ export async function handleDeployModal(interaction, ctx) {
   const gameId = parts[2];
   const playerNum = parseInt(parts[3], 10);
   const flatIndex = parseInt(parts[4], 10);
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
     await interaction.reply({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch(discordCatch);
     return;
@@ -185,11 +180,8 @@ export async function handleCcAttachTo(interaction, ctx) {
 export async function handleCcPlaySelect(interaction, ctx) {
   const { getGame, getCommandCardImagePath, saveGames } = ctx;
   const gameId = interaction.customId.replace('cc_play_select_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   if (!isP1Hand && channelId !== game.p2HandId) {
@@ -233,11 +225,8 @@ export async function handleCcPlaySelect(interaction, ctx) {
 export async function handleCcConfirmPlay(interaction, ctx) {
   const { getGame, getCcEffect, isCcAttachment, isCcPlayableNow, isCcPlayLegalByRestriction, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames, getIllegalCcPlayButtons, client } = ctx;
   const gameId = interaction.customId.replace('cc_confirm_play_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (!game.pendingCcConfirmation) {
     await interaction.followUp({ content: 'No card pending. Try playing again.', ephemeral: true }).catch(discordCatch);
     return;
@@ -592,11 +581,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
 export async function handleCcCancelPlay(interaction, ctx) {
   const { getGame, saveGames } = ctx;
   const gameId = interaction.customId.replace('cc_cancel_play_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   // 5H: Verify the interacting user owns this pending confirmation
   if (game.pendingCcConfirmation?.playerNum) {
     if (!canActAsPlayer(game, interaction.user.id, game.pendingCcConfirmation.playerNum)) {
@@ -664,11 +650,8 @@ export async function handleCcSpacePick(interaction, ctx) {
   const [, gameId, space] = match;
   const chosenSpace = String(space).toLowerCase();
   const { getGame, resolveAbility, dcMessageMeta, dcHealthState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildBoardMapPayload, client, saveGames } = ctx;
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const pending = game.pendingCcSpaceChoice;
   if (!pending || pending.gameId !== gameId) {
     await interaction.followUp({ content: 'No pending space choice for this game.', ephemeral: true }).catch(discordCatch);
@@ -712,11 +695,8 @@ export async function handleCcChoice(interaction, ctx) {
   const [, gameId, choiceIndexStr] = match;
   const choiceIndex = parseInt(choiceIndexStr, 10);
   const { getGame, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateHandVisualMessage, updateDiscardPileMessage, updateDcActionsMessage, buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents, getBoardStateForMovement, getSpaceChoiceRows, getMapAttachmentForSpaces, client, saveGames } = ctx;
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const pending = game.pendingCcChoice;
   if (!pending || pending.gameId !== gameId) {
     await interaction.followUp({ content: 'No pending choice for this game.', ephemeral: true }).catch(discordCatch);
@@ -987,11 +967,8 @@ export async function handleIllegalCcUnplay(interaction, ctx) {
 export async function handleCcDiscardSelect(interaction, ctx) {
   const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames } = ctx;
   const gameId = interaction.customId.replace('cc_discard_select_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
@@ -1041,11 +1018,8 @@ export async function handleDeckIllegalPlay(interaction, ctx) {
   const parts = interaction.customId.replace('deck_illegal_play_', '').split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const isP1 = playerNum === 1;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
     await interaction.followUp({ content: 'Only the owner of this hand can choose Play It Anyway.', ephemeral: true }).catch(discordCatch);
@@ -1069,11 +1043,8 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
   const parts = interaction.customId.replace('deck_illegal_redo_', '').split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const isP1 = playerNum === 1;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
     await interaction.followUp({ content: 'Only the owner of this hand can choose Redo.', ephemeral: true }).catch(discordCatch);
@@ -1103,11 +1074,8 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
 export async function handleCcShuffleDraw(interaction, ctx) {
   const { getGame, shuffleArray, buildHandDisplayPayload, updateHandVisualMessage, updatePlayAreaDcButtons, sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, logGameAction, saveGames, client } = ctx;
   const gameId = interaction.customId.replace('cc_shuffle_draw_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
@@ -1162,11 +1130,8 @@ export async function handleCcShuffleDraw(interaction, ctx) {
 export async function handleCcPlay(interaction, ctx) {
   const { getGame, getPlayableCcFromHand } = ctx;
   const gameId = interaction.customId.replace('cc_play_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
@@ -1203,11 +1168,8 @@ export async function handleCcPlay(interaction, ctx) {
 export async function handleCcDraw(interaction, ctx) {
   const { getGame, buildHandDisplayPayload, updateHandVisualMessage, logGameAction, saveGames, client } = ctx;
   const gameId = interaction.customId.replace('cc_draw_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
@@ -1248,11 +1210,8 @@ export async function handleCcSearchDiscard(interaction, ctx) {
   if (!match) return;
   const [, gameId, playerNumStr] = match;
   const playerNum = parseInt(playerNumStr, 10);
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const channelId = interaction.channel?.id;
   const isP1Area = channelId === game.p1PlayAreaId;
   const isP2Area = channelId === game.p2PlayAreaId;
@@ -1318,11 +1277,8 @@ export async function handleCcCloseDiscard(interaction, ctx) {
   if (!match) return;
   const [, gameId, playerNumStr] = match;
   const playerNum = parseInt(playerNumStr, 10);
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const threadId = getDiscardThreadId(game, playerNum);
   if (!threadId) {
     await interaction.followUp({ content: 'No discard pile thread is open.', ephemeral: true }).catch(discordCatch);
@@ -1348,11 +1304,8 @@ export async function handleCcCloseDiscard(interaction, ctx) {
 export async function handleCcDiscard(interaction, ctx) {
   const { getGame } = ctx;
   const gameId = interaction.customId.replace('cc_discard_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const channelId = interaction.channel?.id;
   const isP1Hand = channelId === game.p1HandId;
   const isP2Hand = channelId === game.p2HandId;
@@ -1381,11 +1334,8 @@ export async function handleCcDiscard(interaction, ctx) {
 export async function handleSquadSelect(interaction, ctx) {
   const { getGame } = ctx;
   const [, , gameId, playerNum] = interaction.customId.split('_');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'This game no longer exists.', ephemeral: true });
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (!game.mapSelected) {
     await interaction.followUp({ content: 'Map selection must be completed before you can select your squad.', ephemeral: true });
     return;
