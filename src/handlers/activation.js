@@ -19,6 +19,7 @@ import {
   setActivatedDcIndices,
   ccDeckKey,
   ccHandKey,
+  opponentPlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -143,7 +144,7 @@ export async function handlePassActivationTurn(interaction, ctx) {
     return;
   }
   const myRem = getActivationsRemaining(game, turnPlayerNum) ?? 0;
-  const otherPlayerNum = turnPlayerNum === 1 ? 2 : 1;
+  const otherPlayerNum = opponentPlayerNum(turnPlayerNum);
   const otherRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
   if (otherRem <= myRem) {
     await interaction.followUp({ content: `You have **${myRem}** activation${myRem !== 1 ? 's' : ''} remaining; opponent has **${otherRem}**. You can only pass when they have more.`, ephemeral: true }).catch(discordCatch);
@@ -235,7 +236,7 @@ export async function handleEndTurn(interaction, ctx) {
     await interaction.followUp({ content: 'This turn was already ended.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const otherPlayerNum = meta.playerNum === 1 ? 2 : 1;
+  const otherPlayerNum = opponentPlayerNum(meta.playerNum);
   const otherPlayerId = getPlayerId(game, otherPlayerNum);
   game.dcFinishedPinged = game.dcFinishedPinged || {};
   game.dcFinishedPinged[dcMsgId] = true;
@@ -286,7 +287,7 @@ export async function handleEndTurn(interaction, ctx) {
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const prefix = `${meta.dcName}-${dgIndex}-`;
     const figureKeys000 = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(k => k.startsWith(prefix));
-    const enemyNum = meta.playerNum === 1 ? 2 : 1;
+    const enemyNum = opponentPlayerNum(meta.playerNum);
     const ms = getMapSpaces(game.selectedMap?.id);
     const weakened = [];
     for (const fk of figureKeys000) {
@@ -319,7 +320,7 @@ export async function handleEndTurn(interaction, ctx) {
     const _htlPos = game.figurePositions?.[meta.playerNum]?.[_htlFk];
     let _htlBlockCount = 0;
     if (_htlPos && _htlHasLos && _htlMapSpaces) {
-      const _htlEnemyNum = meta.playerNum === 1 ? 2 : 1;
+      const _htlEnemyNum = opponentPlayerNum(meta.playerNum);
       const _htlAllFigCoords = [];
       for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _htlAllFigCoords.push(String(fp).toLowerCase());
       for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _htlAllFigCoords.push(String(fp).toLowerCase());
@@ -457,7 +458,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     await interaction.followUp({ content: 'Only the owner can end this activation.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const otherPlayerNum = meta.playerNum === 1 ? 2 : 1;
+  const otherPlayerNum = opponentPlayerNum(meta.playerNum);
   const otherPlayerId = getPlayerId(game, otherPlayerNum);
   const displayName = meta.displayName || meta.dcName;
   const gameId = game.gameId;
@@ -812,7 +813,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       const figureKey = `${dcName}-${dgIndex}-0`;
       const pos = game.figurePositions?.[meta.playerNum]?.[figureKey];
       if (!pos || !_getRange) return false;
-      const enemyNum = meta.playerNum === 1 ? 2 : 1;
+      const enemyNum = opponentPlayerNum(meta.playerNum);
       const hostilePos = Object.values(game.figurePositions?.[enemyNum] || {});
       const anyHostileInRange = hostilePos.some(hp => hp && _getRange(pos, hp) <= range);
       return !anyHostileInRange;
@@ -877,7 +878,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
     let surgeCount = 0;
     if (selfPos && _hasLos && _mapSpaces) {
-      const enemyNum = meta.playerNum === 1 ? 2 : 1;
+      const enemyNum = opponentPlayerNum(meta.playerNum);
       const allFigCoords = [];
       for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) allFigCoords.push(String(fp).toLowerCase());
       for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) allFigCoords.push(String(fp).toLowerCase());
@@ -922,7 +923,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Comms Jammer (ISB Infiltrator Elite): opponent can't play CCs during your activation
   if (_mountedIds.includes('comms_jammer_isb')) {
-    const oppNum = meta.playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(meta.playerNum);
     game.commsJammerActivePlayerNum = meta.playerNum;
     await thread.send({ content: `📡 **Comms Jammer** — Opponent (P${oppNum}) cannot play Command Cards during this activation.` }).catch(() => {});
   }
@@ -959,7 +960,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Consider It My Payment (Asajj): opponent reveals a CC from hand
   if (_mountedIds.includes('consider_it_my_payment_asajj')) {
-    const oppNum = meta.playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(meta.playerNum);
     const oppOwnerId = game[`player${oppNum}Id`];
     await thread.send({ content: `💳 **Consider It My Payment** — <@${oppOwnerId}>, reveal a Command Card from your hand. *(Honor system.)*`, allowedMentions: { users: [oppOwnerId] } }).catch(() => {});
   }
@@ -991,7 +992,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Force Vision (Kanan): force opponent to activate a specific group next
   if (_mountedIds.includes('force_vision_kanan')) {
-    const oppNum = meta.playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(meta.playerNum);
     const oppOwnerId = game[`player${oppNum}Id`];
     await thread.send({ content: `👁️ **Force Vision** — You may choose which group <@${oppOwnerId}> must activate next. *(Honor system.)*`, allowedMentions: { users: [oppOwnerId] } }).catch(() => {});
   }

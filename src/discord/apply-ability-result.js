@@ -1,4 +1,4 @@
-import { getPlayAreaId } from '../game/player-helpers.js';
+import { getPlayAreaId, opponentPlayerNum } from '../game/player-helpers.js';
 import { enforceContentLimit } from './limits.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
 
@@ -105,7 +105,7 @@ export async function applyAbilityResult(result, opts) {
 
   // --- Refresh opponent discard ---
   if (result.applied && result.refreshOpponentDiscard && updateDiscardPileMessage) {
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     await updateDiscardPileMessage(game, oppNum, client);
   }
 

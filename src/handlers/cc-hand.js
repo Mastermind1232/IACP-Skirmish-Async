@@ -24,6 +24,7 @@ import {
   getPlayerId, getHandChannelId, getSquad, getCcDiscard, getCcDeck,
   getDiscardThreadId,
   ccHandKey, ccDiscardKey, ccDeckKey, ccDrawnKey, ccAttachmentsKey, vpKey as vpKeyFn,
+  opponentPlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -545,7 +546,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc4}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   if (cost === 0 && ctx.getNegationResponseButtons) {
     game.pendingNegation = { playedBy: playerNum, card, fromDc: false, handChannelId: handChannel.id };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const oppHandId = getHandChannelId(game, oppNum);
     const oppHandChannel = await interaction.client.channels.fetch(oppHandId).catch(() => null);
     if (oppHandChannel) {
@@ -817,7 +818,7 @@ export async function handleNegationPlay(interaction, ctx) {
     return;
   }
   const { playedBy, card, waitingMsgId, handChannelId } = game.pendingNegation;
-  const oppNum = playedBy === 1 ? 2 : 1;
+  const oppNum = opponentPlayerNum(playedBy);
   if (!canActAsPlayer(game, interaction.user.id, oppNum)) {
     await interaction.followUp({ content: 'Only the opponent can play Negation.', ephemeral: true }).catch(discordCatch);
     return;
@@ -862,7 +863,7 @@ export async function handleNegationLetResolve(interaction, ctx) {
     return;
   }
   const { playedBy, card, fromDc, msgId, wasAttachment, waitingMsgId, handChannelId } = game.pendingNegation;
-  const oppNum = playedBy === 1 ? 2 : 1;
+  const oppNum = opponentPlayerNum(playedBy);
   if (!canActAsPlayer(game, interaction.user.id, oppNum)) {
     await interaction.followUp({ content: 'Only the opponent can choose to let it resolve.', ephemeral: true }).catch(discordCatch);
     return;

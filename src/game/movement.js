@@ -20,7 +20,7 @@ import {
   getDcKeywords,
   getFigureSize,
 } from '../data-loader.js';
-import { getDcList, getDcMessageIds, getDcAttachments } from './player-helpers.js';
+import { getDcList, getDcMessageIds, getDcAttachments, opponentPlayerNum } from './player-helpers.js';
 
 export function isWithinGridBounds(coord, gridBounds) {
   if (!gridBounds || (gridBounds.maxCol == null && gridBounds.maxRow == null)) return true;
@@ -96,7 +96,7 @@ export function getHostileOccupiedSpacesForMovement(game, excludeFigureKey = nul
     ? (poses[1]?.[excludeFigureKey] != null ? 1 : 2)
     : null;
   if (movingPlayerNum == null) return hostile;
-  const other = movingPlayerNum === 1 ? 2 : 1;
+  const other = opponentPlayerNum(movingPlayerNum);
   for (const [k, coord] of Object.entries(poses[other] || {})) {
     const dcName = k.replace(/-\d+-\d+$/, '');
     const size = game.figureOrientations?.[k] || getFigureSize(dcName);

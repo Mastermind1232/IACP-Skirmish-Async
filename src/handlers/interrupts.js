@@ -3,7 +3,7 @@
  * self_destruct_protocol, last_resort, scavenged_walker, on_diplomatic, bel_reorder
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
-import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId } from '../game/player-helpers.js';
+import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum } from '../game/player-helpers.js';
 import { reduceHp, awardObjectiveVp } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -202,7 +202,7 @@ export async function handleSelfDestructProbe(interaction, ctx) {
     const _sdpMs = getMapSpaces ? getMapSpaces(_sdpGame.selectedMap?.id) : null;
     const _sdpAdj = _sdpMs?.adjacency?.[String(_sdpPos).toLowerCase()] || [];
     const _sdpAllAdjSpaces = new Set([String(_sdpPos).toLowerCase(), ..._sdpAdj.map(s => String(s).toLowerCase())]);
-    const _sdpHostileNum = _sdpMeta.playerNum === 1 ? 2 : 1;
+    const _sdpHostileNum = opponentPlayerNum(_sdpMeta.playerNum);
     const _sdpDamaged = [];
     for (const [_sdpFk, _sdpFkPos] of Object.entries(_sdpGame.figurePositions?.[_sdpHostileNum] || {})) {
       if (!_sdpFkPos || !_sdpAllAdjSpaces.has(String(_sdpFkPos).toLowerCase())) continue;
@@ -261,7 +261,7 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
       const _sdcpMs = getMapSpaces ? getMapSpaces(_sdcpGame.selectedMap.id) : null;
       const _sdcpAdj = _sdcpMs?.adjacency?.[String(_sdcpPos).toLowerCase()] || [];
       const _sdcpAllAdj = new Set([String(_sdcpPos).toLowerCase(), ..._sdcpAdj.map(s => String(s).toLowerCase())]);
-      const _sdcpHostileNum = _sdcpPending.defenderPlayerNum === 1 ? 2 : 1;
+      const _sdcpHostileNum = opponentPlayerNum(_sdcpPending.defenderPlayerNum);
       const _sdcpDamaged = [];
       for (const [_sfk, _sfkPos] of Object.entries(_sdcpGame.figurePositions?.[_sdcpHostileNum] || {})) {
         if (!_sfkPos || !_sdcpAllAdj.has(String(_sfkPos).toLowerCase())) continue;

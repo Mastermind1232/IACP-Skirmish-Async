@@ -1,3 +1,7 @@
+// ── Opponent helper ─────────────────────────────────────────────────────────
+
+export function opponentPlayerNum(pn) { return pn === 1 ? 2 : 1; }
+
 // Player-number property accessors — eliminates `pn === 1 ? game.p1X : game.p2X` ternaries.
 
 // ── Getters (read-only access) ──────────────────────────────────────────────

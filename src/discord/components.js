@@ -1,6 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
 import { normalizeCoord, bottomLeftCoord } from '../game/coords.js';
-import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining } from '../game/player-helpers.js';
+import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining, opponentPlayerNum } from '../game/player-helpers.js';
 
 const MAX_BUTTONS_PER_ROW = 5;
 const MAX_ROWS_PER_MESSAGE = 5;
@@ -1007,7 +1007,7 @@ export function getActivateDcButtons(game, playerNum, helpers = {}) {
   }
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const playerId = getPlayerId(game, playerNum);
-  const oppNum = playerNum === 1 ? 2 : 1;
+  const oppNum = opponentPlayerNum(playerNum);
   const myRemaining = getActivationsRemaining(game, playerNum) ?? 0;
   const otherRemaining = getActivationsRemaining(game, oppNum) ?? 0;
   if (turnPlayerId === playerId && otherRemaining > myRemaining && myRemaining > 0 && rows.length < MAX_ROWS_PER_MESSAGE) {

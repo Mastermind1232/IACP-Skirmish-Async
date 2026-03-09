@@ -6,7 +6,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getDcEffects, getMapSpaces } from '../data-loader.js';
 import { bottomLeftCoord, getFootprintCells } from '../game/coords.js';
 import { reduceHp } from '../game/index.js';
-import { getDcList, getDcMessageIds, getPlayerId } from '../game/player-helpers.js';
+import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 
 const BTM_PER_MSG = 5;
@@ -513,7 +513,7 @@ export async function handleMovePick(interaction, ctx) {
   game.figureMoved[figureKey] = true;
   // Overrun: when entering a hostile's space, deal 2 damage (once per hostile per move session)
   if (game.overrunThisActivation?.[msgId]) {
-    const hostilePlayerNum = playerNum === 1 ? 2 : 1;
+    const hostilePlayerNum = opponentPlayerNum(playerNum);
     const hostilePositions = game.figurePositions?.[hostilePlayerNum] || {};
     game.overrunDamagedThisMove = game.overrunDamagedThisMove || {};
     if (!game.overrunDamagedThisMove[msgId]) game.overrunDamagedThisMove[msgId] = [];
@@ -557,7 +557,7 @@ export async function handleMovePick(interaction, ctx) {
   {
     const _carEff = getDcEffects()?.[meta.dcName];
     if ((_carEff?.specialAbilityIds || []).includes('cut_and_run_davith') && startCoord && newTopLeft !== startCoord) {
-      const hostilePlayerNum = playerNum === 1 ? 2 : 1;
+      const hostilePlayerNum = opponentPlayerNum(playerNum);
       const hostilePositions = game.figurePositions?.[hostilePlayerNum] || {};
       const _movingSize = getFigureSize(meta.dcName);
       const _oldFootprint = new Set(getNormalizedFootprint(startCoord, _movingSize));
@@ -753,7 +753,7 @@ export async function handleMovePick(interaction, ctx) {
     const rushMapId = game.selectedMap?.id;
     const rushAdjSpaces = rushMapId ? (getMapSpaces(rushMapId)?.adjacency?.[newTopLeft] || []) : [];
     const rushEffects = getDcEffects();
-    const rushOppNum = playerNum === 1 ? 2 : 1;
+    const rushOppNum = opponentPlayerNum(playerNum);
     const rushOppPos = game.figurePositions?.[rushOppNum] || {};
     const rushAdjSet = new Set(rushAdjSpaces);
     const rushTargets = [];

@@ -15,6 +15,7 @@ import {
   setActivationsRemaining, setActivatedDcIndices,
   getCcHand, getCcDeck, getSquad,
   ccHandKey, ccDiscardKey, ccAttachmentsKey, dcAttachmentsKey, vpKey as vpKeyFn,
+  opponentPlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -80,7 +81,7 @@ export async function handleDcActivate(interaction, ctx) {
   }
   // Sit Tight: cannot activate when you have fewer or equal ready DCs than opponent
   if (game.sitTightPlayerNum === playerNum) {
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const oppRem = getActivationsRemaining(game, oppNum) ?? 0;
     if (remaining <= oppRem) {
       await interaction.followUp({ content: '**Sit Tight** — you cannot activate until you have more ready Deployment cards than your opponent.', ephemeral: true }).catch(discordCatch);
@@ -223,7 +224,7 @@ export async function handleDcActivate(interaction, ctx) {
     try {
       const { getCcEffectsData } = await import('../data-loader.js');
       const ccCards = getCcEffectsData?.()?.cards || {};
-      const oppNum = playerNum === 1 ? 2 : 1;
+      const oppNum = opponentPlayerNum(playerNum);
       const oppHand = getCcHand(game, oppNum) || [];
       const activationTimings = new Set(['whenEnemyFigureActivates', 'atStartOfHostileFigureActivation', 'atStartOfActivationOfHostileFigureInYourLineOfSight']);
       const reactCards = [...new Set(oppHand)].filter(c => ccCards[c]?.timing && activationTimings.has(ccCards[c].timing));
@@ -725,7 +726,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   }
   if (enteringNegation) {
     game.pendingNegation = { playedBy: meta.playerNum, card, fromDc: true, msgId, wasAttachment: isCcAttachment(card), handChannelId };
-    const oppNum = meta.playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(meta.playerNum);
     const oppHandId = getHandChannelId(game, oppNum);
     const oppHandChannel = await interaction.client.channels.fetch(oppHandId).catch(() => null);
     if (oppHandChannel) {
@@ -1367,7 +1368,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
       return;
     }
-    const enemyPlayerNum = playerNum === 1 ? 2 : 1;
+    const enemyPlayerNum = opponentPlayerNum(playerNum);
     // "No Cheating": debuffed player can only make melee attacks this activation
     const noCheatingDebuff = game.roundDebuffNextHostileActivation;
     if (noCheatingDebuff && (3 - noCheatingDebuff.playerNum) === playerNum && noCheatingDebuff.melee) {
@@ -2185,7 +2186,7 @@ export async function handleArsenalPick(interaction, ctx) {
     return;
   }
   const playerNum = meta.playerNum;
-  const enemyPlayerNum = playerNum === 1 ? 2 : 1;
+  const enemyPlayerNum = opponentPlayerNum(playerNum);
   const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
   const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
@@ -2249,7 +2250,7 @@ export async function handleEe3DiePick(interaction, ctx) {
     return;
   }
   const playerNum = meta.playerNum;
-  const enemyPlayerNum = playerNum === 1 ? 2 : 1;
+  const enemyPlayerNum = opponentPlayerNum(playerNum);
   const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
   const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
@@ -2499,7 +2500,7 @@ export async function handleRushPushFig(interaction, ctx) {
   const targetFk = pending.targets?.[choiceIndex];
   if (!targetFk) { await interaction.followUp({ content: 'Invalid target.', ephemeral: true }).catch(() => {}); return; }
   pending.chosenTarget = targetFk;
-  const oppNum = pending.playerNum === 1 ? 2 : 1;
+  const oppNum = opponentPlayerNum(pending.playerNum);
   const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
   if (!targetPos) {
     delete game.pendingRushPush;
@@ -2573,7 +2574,7 @@ export async function handleRushPushSpace(interaction, ctx) {
     return;
   }
   const targetFk = pending.chosenTarget;
-  const oppNum = pending.playerNum === 1 ? 2 : 1;
+  const oppNum = opponentPlayerNum(pending.playerNum);
   const prevPos = game.figurePositions?.[oppNum]?.[targetFk];
   const targetName = targetFk.replace(/-\d+-\d+$/, '');
   // Move target to chosen space

@@ -170,6 +170,7 @@ import {
   awardKillVp,
   awardObjectiveVp,
   deductVp,
+  opponentPlayerNum,
 } from './src/game/index.js';
 import {
   buildScorecardEmbed,
@@ -485,7 +486,7 @@ function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
   if (!mapData) return options;
 
   // Alter Mind (Obi-Wan Kenobi - Jedi Master): hostile figures with cost ≤ 9 within 3 spaces cannot interact
-  const oppNum = playerNum === 1 ? 2 : 1;
+  const oppNum = opponentPlayerNum(playerNum);
   const oppPositions = game.figurePositions?.[oppNum] || {};
   const figPos = game.figurePositions?.[playerNum]?.[figureKey];
   if (figPos) {
@@ -2739,7 +2740,7 @@ async function runDraftRandom(game, client, options = {}) {
   };
 
   const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-  const nonInitiativePlayerNum = initiativePlayerNum === 1 ? 2 : 1;
+  const nonInitiativePlayerNum = opponentPlayerNum(initiativePlayerNum);
   const zone = game.deploymentZoneChosen;
   const otherZone = zone === 'red' ? 'blue' : 'red';
   deployForPlayer(initiativePlayerNum, zone, otherZone);
@@ -2934,10 +2935,10 @@ async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, source
     if (dcHealthState.get(msgId)?.[figureIndex]) {
       if (wasDefeated) {
         removeFigurePosition(game, playerNum, figureKey);
-        const opponentPlayerNum = playerNum === 1 ? 2 : 1;
+        const oppPN = opponentPlayerNum(playerNum);
         const vp = calculateKillVp(dcName);
-        awardKillVp(game, opponentPlayerNum, vp);
-        await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** was defeated! +${vp} VP to Player ${opponentPlayerNum}.`, { phase: 'ROUND', icon: 'attack' });
+        awardKillVp(game, oppPN, vp);
+        await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** was defeated! +${vp} VP to Player ${oppPN}.`, { phase: 'ROUND', icon: 'attack' });
       } else {
         await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** suffered **${damage} damage** (${newHp}/${maxHp} HP remaining).`, { phase: 'ROUND', icon: 'attack' });
       }
@@ -2972,9 +2973,9 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
   if (wasDefeated && idx >= 0) {
     removeFigurePosition(game, playerNum, figKey);
     // VP goes to the opponent (the one dealing the damage)
-    const opponentPlayerNum = playerNum === 1 ? 2 : 1;
+    const oppPN = opponentPlayerNum(playerNum);
     const vp = calculateKillVp(dcList[idx]?.dcName);
-    awardKillVp(game, opponentPlayerNum, vp);
+    awardKillVp(game, oppPN, vp);
     if (thread) await thread.send(`**${sourceName}** — ${figName} was **defeated**! +${vp} VP.`).catch(discordCatch);
     await checkWinConditions(game, client);
   }
@@ -3035,10 +3036,10 @@ async function handleBleedResolve(interaction) {
         const idx = (dcIds || []).indexOf(msgId);
         if (wasDefeated) {
           removeFigurePosition(game, playerNum, figureKey);
-          const opponentPlayerNum = playerNum === 1 ? 2 : 1;
+          const oppPN = opponentPlayerNum(playerNum);
           const vp = calculateKillVp(dcName);
-          awardKillVp(game, opponentPlayerNum, vp);
-          await logGameAction(game, interaction.client, `🩸 **Bleeding** — **${dcName}** was defeated! +${vp} VP to P${opponentPlayerNum}`, { phase: 'ROUND', icon: 'attack' });
+          awardKillVp(game, oppPN, vp);
+          await logGameAction(game, interaction.client, `🩸 **Bleeding** — **${dcName}** was defeated! +${vp} VP to P${oppPN}`, { phase: 'ROUND', icon: 'attack' });
           if (idx >= 0) {
             await decrementActivationIfGroupDefeated(game, playerNum, idx, interaction.client);
           }
@@ -3121,7 +3122,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
     condPending.count -= 1;
     if (condPending.count <= 0) delete game.nextAttacksBonusConditions[combat.attackerPlayerNum];
   }
-  const defenderPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+  const defenderPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
   const roundBlock = game.roundDefenseBonusBlock?.[defenderPlayerNum] || 0;
   const roundEvade = game.roundDefenseBonusEvade?.[defenderPlayerNum] || 0;
   if (roundBlock) combat.bonusBlock = (combat.bonusBlock || 0) + roundBlock;
@@ -4683,7 +4684,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
   }
   // Boltslinger (Vinto Hreeda): deal 1 Dmg to another hostile within 3 after attack
   if (pcAttIds.includes('boltslinger') && game.selectedMap?.id && combat.attackerFigureKey) {
-    const blDefPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+    const blDefPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
     const atkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
     const defFigs = game.figurePositions?.[blDefPlayerNum] || {};
     const boltslingerTargets = [];
@@ -4709,7 +4710,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
   // Indiscriminate Fire (Bossk): after attack, if not a miss, choose 1 non-red attack die;
   // each figure within 2 spaces of target (other than the defender) suffers Damage = Hits and Strain = Surges on that die.
   if (pcAttIds.includes('indiscriminate_fire') && !resultText.includes('**Miss**') && game.selectedMap?.id && combat.target?.figureKey) {
-    const ifDefPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+    const ifDefPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
     const targetPos = game.figurePositions?.[ifDefPlayerNum]?.[combat.target.figureKey];
     const rolledDice = combat.attackRoll?.dice || [];
     const nonRedDice = rolledDice.filter((d) => (d.color || '').toLowerCase() !== 'red');
@@ -4774,7 +4775,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
       'afterYouResolveAttackTargetingFigure',
     ]);
     // Defender: cards triggered by being attacked
-    const _defPostPn = combat.defenderPlayerNum ?? (combat.attackerPlayerNum === 1 ? 2 : 1);
+    const _defPostPn = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
     const _defPostId = getPlayerId(game, _defPostPn);
     const _defPostHand = getCcHand(game, _defPostPn) || [];
     const _defPostCards = [...new Set(_defPostHand)].filter(c => _ccCardsAll[c]?.timing && _postAtkTimings.has(_ccCardsAll[c].timing));

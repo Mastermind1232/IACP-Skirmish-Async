@@ -12,6 +12,7 @@ import {
   setActivationsRemaining, setActivatedDcIndices,
   getActivationsTotal,
   ccHandKey, ccDiscardKey,
+  opponentPlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -159,7 +160,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
         const mid = msgIds[i];
         if (!mid) continue;
         const ownerId = getPlayerId(game, pn);
-        const oppNum = pn === 1 ? 2 : 1;
+        const oppNum = opponentPlayerNum(pn);
         await logGameAction(game, client, `💰 **What's Yours is Mine** — <@${ownerId}>, if **${dc.displayName || dc.dcName}** is in the opponent's deployment zone, steal 2 VP from Player ${oppNum}. *(Honor system.)*`, {
           phase: 'ROUND', icon: 'round',
           allowedMentions: { users: [ownerId] },
@@ -306,7 +307,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   if (game.dataTheftStolenCard) {
     const dt = game.dataTheftStolenCard;
     const dtHandKey = ccHandKey(dt.playerNum);
-    const dtOppNum = dt.playerNum === 1 ? 2 : 1;
+    const dtOppNum = opponentPlayerNum(dt.playerNum);
     const dtOppDiscardKey = ccDiscardKey(dtOppNum);
     const dtHand = game[dtHandKey] || [];
     const dtIdx = dtHand.indexOf(dt.cardName);
@@ -435,7 +436,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     const activeKrykna = (game.npcKrykna || []).filter((k) => !k.defeated);
     if (activeKrykna.length > 0) {
       const initNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-      const otherNum = initNum === 1 ? 2 : 1;
+      const otherNum = opponentPlayerNum(initNum);
       const queue = [];
       for (let i = 0; i < activeKrykna.length; i++) queue.push(i % 2 === 0 ? initNum : otherNum);
       game.pendingKryknaPushQueue = queue;

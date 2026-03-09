@@ -91,3 +91,5 @@ export { awardKillVp, awardObjectiveVp, deductVp } from './vp-helpers.js';
 export { filterCondition, isConditionImmune, HARMFUL_CONDITIONS, applyCondition, resetCondition } from './conditions.js';
 
 export { dcNameFromFigureKey, parseFigureKey, getDcEffect, isFigurelessDc, hasDepleteEffect, getCompanionDescriptionForDc } from './dc-helpers.js';
+
+export { opponentPlayerNum } from './player-helpers.js';

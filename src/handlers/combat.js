@@ -12,6 +12,7 @@ import {
   getCcHand, getActivatedDcIndices,
   getActivationsRemaining, setActivationsRemaining,
   ccDiscardKey, ccAttachmentsKey, vpKey,
+  opponentPlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -143,7 +144,7 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** suffered 1 Strain.`, { phase: 'ROUND', icon: 'attack' });
   }
   if (newCur <= 0) {
-    const attackerPlayerNum = playerNum === 1 ? 2 : 1;
+    const attackerPlayerNum = opponentPlayerNum(playerNum);
     if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figureKey];
     const stats = getDcStats?.(dcName);
     const effects = getDcEffects?.()?.[dcName];
@@ -336,7 +337,7 @@ export async function handleAttackTarget(interaction, ctx) {
       if (cqAttackerPos) {
         const cqMapSpaces = getMapSpaces(cqMapId);
         const cqAdjSpaces = new Set(cqMapSpaces?.adjacency?.[cqAttackerPos] || []);
-        const cqOppNum = meta.playerNum === 1 ? 2 : 1;
+        const cqOppNum = opponentPlayerNum(meta.playerNum);
         const cqOppPositions = game.figurePositions?.[cqOppNum] || {};
         let cqHostileName = null;
         for (const [fk, pos] of Object.entries(cqOppPositions)) {
@@ -423,7 +424,7 @@ export async function handleAttackTarget(interaction, ctx) {
     const _merDefConds = game.figureConditions?.[target.figureKey] || [];
     const _merHarmful = ['Bleed', 'Stun', 'Weaken'].some(c => _merDefConds.includes(c));
     if (_merHarmful) {
-      const _merDefPn2 = attackerPlayerNum === 1 ? 2 : 1;
+      const _merDefPn2 = opponentPlayerNum(attackerPlayerNum);
       const _merTargetMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, _merDefPn2, target.figureKey) : null;
       if (_merTargetMsgId && dcHealthState) {
         const _merFkMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
@@ -433,7 +434,7 @@ export async function handleAttackTarget(interaction, ctx) {
       await logGameAction(game, client, `⚡ **Merciless** — **${target.label}** suffers 1 Damage (has harmful condition).`, { phase: 'ROUND', icon: 'attack' });
     }
   }
-  const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
+  const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const combatDeclare = `**P${attackerPlayerNum}:** "${attackerDisplayName}" is attacking **P${defenderPlayerNum}:** "${target.label}"!`;
 
   const generalChannel = await client.channels.fetch(game.generalId);
@@ -466,7 +467,7 @@ export async function handleAttackTarget(interaction, ctx) {
   game.pendingCombat = {
     gameId: game.gameId,
     attackerPlayerNum,
-    defenderPlayerNum: attackerPlayerNum === 1 ? 2 : 1,
+    defenderPlayerNum: opponentPlayerNum(attackerPlayerNum),
     attackerMsgId: msgId,
     attackerDcName: meta.dcName,
     defenderDcName: targetDcName,
@@ -1459,7 +1460,7 @@ export async function handleCombatRoll(interaction, ctx) {
     return;
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
-  const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
+  const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
   const effectiveAttackerPlayerNum = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
 
@@ -2043,7 +2044,7 @@ export async function handleCombatReroll(interaction, ctx) {
     return;
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
-  const defenderPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
+  const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const effectiveAtk = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
   // Phase validation: accept 'forced' for both atk and def sides
   if (combat.rerollPhase === 'forced') {
@@ -2653,7 +2654,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       const atkSIds = (getDcEff[combat.attackerDcName] || getDcEff[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')])?.specialAbilityIds || [];
       const defDcN = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '');
       const defSIds = (getDcEff[defDcN] || getDcEff[(defDcN || '').replace(/\s*\[.*\]\s*$/, '')])?.specialAbilityIds || [];
-      const landoPN = atkSIds.includes('shrewd_scoundrel_lando') ? combat.attackerPlayerNum : (defSIds.includes('shrewd_scoundrel_lando') ? (combat.attackerPlayerNum === 1 ? 2 : 1) : null);
+      const landoPN = atkSIds.includes('shrewd_scoundrel_lando') ? combat.attackerPlayerNum : (defSIds.includes('shrewd_scoundrel_lando') ? opponentPlayerNum(combat.attackerPlayerNum) : null);
       if (landoPN) {
         if (landoPN === 1) game.p1VictoryPoints = (game.p1VictoryPoints || 0) + 2;
         else game.p2VictoryPoints = (game.p2VictoryPoints || 0) + 2;
@@ -2713,7 +2714,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     const _gdDefKws = (_gdDefEff?.keywords || []).map(k => String(k).toUpperCase());
     const _gdIsSmall = !_gdDefKws.includes('LARGE') && !_gdDefKws.includes('MASSIVE');
     if (_gdIsSmall) {
-      const defPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+      const defPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
       const friendlyFigs = game.figurePositions?.[defPlayerNum] || {};
       const defCoord = friendlyFigs[combat.target.figureKey];
       const mapSp = getMapSpaces(game.selectedMap?.id);
@@ -2833,7 +2834,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     const defEff = getDcEff[defDcName] || getDcEff[defDcName?.replace(/\s*\[.*\]\s*$/, '')];
     const allKws = [...(defEff?.keywords || []), ...(defEff?.traits || [])].map((k) => String(k).toUpperCase());
     const isFORCE_USER = allKws.includes('FORCE USER');
-    const kananPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+    const kananPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
     const strainNote = isFORCE_USER ? '' : ' Kanan suffers 1 Strain.';
     await thread.send(`**Soresu Form** — Dodge converted to +2 Block, +1 Evade.${strainNote}`);
     if (!isFORCE_USER) {
@@ -2853,7 +2854,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
         const targetMsgId = combat.target.msgId;
         if (targetMsgId) {
           const _luckyFi = parseInt(_luckyFkMatch[3], 10);
-          const _luckyDefPn = combat.target.playerNum ?? (combat.attackerPlayerNum === 1 ? 2 : 1);
+          const _luckyDefPn = combat.target.playerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
           const { healed: _luckyHealed, newHp: _lNew } = healHp(ctx.dcHealthState, game, targetMsgId, _luckyFi, 2, _luckyDefPn);
           if (_luckyHealed > 0) {
             const _lPrev = _lNew - _luckyHealed;
@@ -2909,7 +2910,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   // Armorer's player may force reroll 1 attack die. Once per round.
   if (!combat.survivalResolved && combat.defenderSpentBlock && combat.target?.figureKey && combat.attackDiceResults?.length > 0) {
     const _sisDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const defPlayerNum = combat.attackerPlayerNum === 1 ? 2 : 1;
+    const defPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
     const friendlyFigs = game.figurePositions?.[defPlayerNum] || {};
     const defCoord = friendlyFigs[combat.target.figureKey];
     const mapSp = getMapSpaces(game.selectedMap?.id);
@@ -2963,7 +2964,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   const roll = combat.attackRoll;
   const defenseDiceCount = combat.defenseDiceCount ?? 1;
   const attackerPlayerNum = combat.attackerPlayerNum;
-  const defPlayerNum = attackerPlayerNum === 1 ? 2 : 1;
+  const defPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const perDefDieSurge = (combat.bonusSurgePerDefenseDie || 0) * defenseDiceCount;
   // Hidden on attacker: +1 surge
   const hiddenSurgeBonus = combat.attackerConds?.includes('Hide') ? 1 : 0;
@@ -3414,7 +3415,7 @@ export async function handleCombatToken(interaction, ctx) {
   const expectedPhase = isAttacker ? 'attacker' : 'defender';
   if (combat.tokenPhase !== expectedPhase) return;
   const atkPlayerNum = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
-  const playerNum = isAttacker ? atkPlayerNum : (combat.attackerPlayerNum === 1 ? 2 : 1);
+  const playerNum = isAttacker ? atkPlayerNum : opponentPlayerNum(combat.attackerPlayerNum);
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
     await interaction.followUp({ content: 'Only the correct player may spend their token.', ephemeral: true }).catch(discordCatch);
     return;
@@ -3560,7 +3561,7 @@ export async function handleCleaveTarget(interaction, ctx) {
   delete game.pendingCleave;
   const { checkPostCombatSurges } = ctx;
   if (checkPostCombatSurges) {
-    const defPN = pending.attackerPlayerNum === 1 ? 2 : 1;
+    const defPN = opponentPlayerNum(pending.attackerPlayerNum);
     const cThread = await client.channels.fetch(pending.combat.combatThreadId).catch(() => null);
     if (cThread) {
       const triggered = await checkPostCombatSurges(game, pending.combat, pending.resultText, embedRefreshMsgIds, cThread, pending.ownerId, defPN);
@@ -3947,7 +3948,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const targetDcName = target.figureKey.replace(/-\d+-\d+$/, '');
   const targetStats = getDcStats(targetDcName);
   const targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
-  const defenderPlayerNum = controlledPlayerNum === 1 ? 2 : 1;
+  const defenderPlayerNum = opponentPlayerNum(controlledPlayerNum);
   const combatDeclare = `**False Orders** — P${controllerPlayerNum} controls "${controlledName}" attacking "${target.label}"!`;
   const generalChannel = await client.channels.fetch(game.generalId);
   const declareMsg = await generalChannel.send({

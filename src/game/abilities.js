@@ -18,7 +18,7 @@ function getStatsForDc(dcName) {
 import { applyCondition, resetCondition, filterCondition } from './conditions.js';
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces } from './movement.js';
-import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey } from './player-helpers.js';
+import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum } from './player-helpers.js';
 
 /** Get ability metadata by id. Returns { type, surgeCost?, label?, ... } or null. */
 export function getAbility(id) {
@@ -171,7 +171,7 @@ export function resolveAbility(abilityId, context) {
     const { mustAdjacentToActivator = false, maxDistanceFromTarget } = entry.pushLandingEffect || {};
     const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSight: losCheck, getRange: getRng, getMapSpaces: getMs, targetFigureKey, chosenSpace } = context;
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
-    const enemyNum = playerNum === 1 ? 2 : 1;
+    const enemyNum = opponentPlayerNum(playerNum);
     const label = entry.label || 'Push';
 
     // Phase 3: apply push to chosen space
@@ -306,7 +306,7 @@ export function resolveAbility(abilityId, context) {
     const { damage = 0, strain = 0, applyCondition: condToApply, requiresLos = false, range: maxRange = 999, splashDamageNote, splashDamage = 0, splashConditions = [] } = entry.targetHostileFigure;
     const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, hasLineOfSight: losCheck, getRange: getRng, getMapSpaces: getMs, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.logMessage || `Resolve ${entry.label} manually.` };
-    const enemyPlayerNum = playerNum === 1 ? 2 : 1;
+    const enemyPlayerNum = opponentPlayerNum(playerNum);
     const enemyPositions = game.figurePositions?.[enemyPlayerNum] || {};
     // Second call: apply effect to the chosen figure
     if (choiceIndex != null && targetFigureKey) {
@@ -633,7 +633,7 @@ export function resolveAbility(abilityId, context) {
   if (abilityId === 'tempt') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Tempt** manually.' };
-    const enemyNum = playerNum === 1 ? 2 : 1;
+    const enemyNum = opponentPlayerNum(playerNum);
     if (choiceIndex != null && targetFigureKey) {
       // Apply 1 damage to target (direct damage — reduce HP)
       const chosenName = targetFigureKey.replace(/-\d+-\d+$/, '');
@@ -908,7 +908,7 @@ export function resolveAbility(abilityId, context) {
     }
     // Enumerate all elite figures on the board (both players)
     const dcEffects = typeof getEff === 'function' ? getEff() : null;
-    const enemyNum = playerNum === 1 ? 2 : 1;
+    const enemyNum = opponentPlayerNum(playerNum);
     const validTargets = [];
     for (const pn of [playerNum, enemyNum]) {
       for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
@@ -1090,7 +1090,7 @@ export function resolveAbility(abilityId, context) {
   if (abilityId === 'false_orders') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **False Orders** manually.' };
-    const enemyNum = playerNum === 1 ? 2 : 1;
+    const enemyNum = opponentPlayerNum(playerNum);
     // Phase 2: figure chosen — set pending state and return marker for Move/Attack choice
     if (choiceIndex != null && targetFigureKey) {
       game.pendingFalseOrders = {
@@ -1446,7 +1446,7 @@ export function resolveAbility(abilityId, context) {
     if (entry.rollOneDieTarget === 'adjacentHostile') {
       // Phase 3: push space chosen (Smash/Slam/Ram) → move target figure to chosen space
       if (context.chosenSpace && targetFigureKey && entry.rollOneDiePushSmall) {
-        const oppNum = (playerNum || 1) === 1 ? 2 : 1;
+        const oppNum = opponentPlayerNum(playerNum || 1);
         const _pushDcName = targetFigureKey.replace(/-\d+-\d+$/, '');
         const _pushStats = getStatsForDc(_pushDcName);
         if ((_pushStats?.specialAbilityIds || []).includes('spiked_boots_snowtrooper')) {
@@ -1477,7 +1477,7 @@ export function resolveAbility(abilityId, context) {
           if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
           if (surges) dieParts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
           const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
-          const enemyPN = (playerNum || 1) === 1 ? 2 : 1;
+          const enemyPN = opponentPlayerNum(playerNum || 1);
           const parts = [];
           for (const tFk of targets) {
             const tName = tFk.replace(/-\d+-\d+$/, '');
@@ -1538,7 +1538,7 @@ export function resolveAbility(abilityId, context) {
         const dgIndex = dgMatch ? dgMatch[1] : '1';
         const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
         const adjacentAll = getFiguresAdjacentToTarget(game, activatingFigureKey, mapId);
-        const enemyPlayerNum = (playerNum || 1) === 1 ? 2 : 1;
+        const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
         const validTargetFks = adjacentAll.filter(f => f.playerNum === enemyPlayerNum).map(f => f.figureKey);
         if (validTargetFks.length === 0) return { applied: false, manualMessage: `No adjacent hostile figures for **${entry.label}**.` };
         if (validTargetFks.length <= maxTgts) {
@@ -1564,7 +1564,7 @@ export function resolveAbility(abilityId, context) {
         if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
         if (surges) dieParts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
         const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
-        const enemyPlayerNum = (playerNum || 1) === 1 ? 2 : 1;
+        const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
         const resultParts = [];
         if (hits > 0) {
           const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
@@ -1644,7 +1644,7 @@ export function resolveAbility(abilityId, context) {
       const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
       if (!mapId) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (map not loaded).` };
       const adjacentAll = getFiguresAdjacentToTarget(game, activatingFigureKey, mapId);
-      const enemyPlayerNum = (playerNum || 1) === 1 ? 2 : 1;
+      const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
       const validTargets = adjacentAll.filter((f) => f.playerNum === enemyPlayerNum);
       if (validTargets.length === 0) return { applied: false, manualMessage: `No adjacent hostile figures. Resolve **${entry.label}** manually.` };
       return {
@@ -1680,7 +1680,7 @@ export function resolveAbility(abilityId, context) {
         if (surges) dieParts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
         const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
         const totalDmg = hits; // only Hits count as damage
-        const enemyPlayerNum = (playerNum || 1) === 1 ? 2 : 1;
+        const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
         const resultParts = [];
         if (totalDmg > 0) {
           const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
@@ -1732,7 +1732,7 @@ export function resolveAbility(abilityId, context) {
       const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
       const activatingPos = game.figurePositions?.[playerNum]?.[activatingFigureKey];
       if (!mapId || !activatingPos) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (position unknown).` };
-      const enemyPlayerNum = (playerNum || 1) === 1 ? 2 : 1;
+      const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
       const enemyPositions = game.figurePositions?.[enemyPlayerNum] || {};
       const { hasLineOfSight: losCheck, getRange: getRng } = context;
       const validTargets = [];
@@ -2053,7 +2053,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.opponentCannotPlayCCsThisRound) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.shadowOpsBlockedPlayer = playerNum === 1 ? 2 : 1;
+    game.shadowOpsBlockedPlayer = opponentPlayerNum(playerNum);
     return {
       applied: true,
       logMessage: 'Shadow Ops active — opponent cannot play Command cards this round.',
@@ -2196,7 +2196,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.clearOpponentDiscard) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const discardKey = ccDiscardKey(oppNum);
     const cleared = (game[discardKey] || []).length;
     game[discardKey] = [];
@@ -2753,7 +2753,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.focusGainToUpToNFigures === 'number' && entry.vpCondition?.opponentHasAtLeastMore != null) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const playerVP = (game[vpKey(playerNum)])?.total ?? 0;
     const oppVP = (game[vpKey(oppNum)])?.total ?? 0;
     const diff = entry.vpCondition.opponentHasAtLeastMore;
@@ -2992,7 +2992,7 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, combat, dcMessageMeta, dcHealthState } = context;
     const cbt = combat || game?.pendingCombat || game?.combat;
     if (!game || !cbt?.target?.figureKey) return { applied: false, manualMessage: 'Resolve manually: play after an attack (defender must be the target).' };
-    const defenderPlayerNum = cbt.defenderPlayerNum ?? (cbt.attackerPlayerNum === 1 ? 2 : 1);
+    const defenderPlayerNum = cbt.defenderPlayerNum ?? opponentPlayerNum(cbt.attackerPlayerNum);
     const targetFk = cbt.target.figureKey;
     if (!dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
     const targetMsgId = findMsgIdForFigureKey(game, defenderPlayerNum, targetFk, dcMessageMeta);
@@ -3039,7 +3039,7 @@ export function resolveAbility(abilityId, context) {
     }
     // Primary Target: validate target is the highest-cost hostile figure on the map
     if (entry.requireHighestCostTarget && dcMessageMeta) {
-      const defPn = cbt.defenderPlayerNum ?? (playerNum === 1 ? 2 : 1);
+      const defPn = cbt.defenderPlayerNum ?? opponentPlayerNum(playerNum);
       const targetDcName = (cbt.target?.figureKey || '').replace(/-\d+-\d+$/, '');
       const allEffects = getDcEffects() || {};
       const targetCost = allEffects[targetDcName]?.cost ?? 0;
@@ -3663,7 +3663,7 @@ export function resolveAbility(abilityId, context) {
     const aNew = Math.max(0, (aC ?? aM) - entry.applyDamageToAttacker);
     attHS[attFigIdx] = [aNew, aM ?? aNew];
     dcHealthState.set(attMsgId, attHS);
-    const attP = game.lastAttackAttackerPlayerNum ?? (playerNum === 1 ? 2 : 1);
+    const attP = game.lastAttackAttackerPlayerNum ?? opponentPlayerNum(playerNum);
     const attDcIds = getDcMessageIds(game, attP);
     const attDcList = getDcList(game, attP);
     const attIdx = (attDcIds || []).indexOf(attMsgId);
@@ -3702,7 +3702,7 @@ export function resolveAbility(abilityId, context) {
       return { applied: true, logMessage: `**Collateral Damage** — **${cftName}** suffers **${flatDmg} Damage** (HP: ${cC ?? cM} → ${cNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [cftMsgId] };
     }
     // Phase 1: find all figures (hostile to attacker) within N spaces of last attack target
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const lastTargetPos = game.figurePositions?.[oppNum]?.[lastTargetFk];
     if (!lastTargetPos) return { applied: false, manualMessage: `Resolve manually: choose a figure within ${range} spaces of the attack target; it suffers ${flatDmg} Damage.` };
     const boardState = getBoardStateForMovement(game, null);
@@ -3992,7 +3992,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.defenseBonusDice === 'number' && entry.defenseBonusDice > 0 && entry.defenseBonusDiceColor) {
     const { game, playerNum, combat } = context;
     const cbt = combat || game?.pendingCombat || game?.combat;
-    const defenderPlayerNum = cbt?.attackerPlayerNum ? (cbt.attackerPlayerNum === 1 ? 2 : 1) : null;
+    const defenderPlayerNum = cbt?.attackerPlayerNum ? opponentPlayerNum(cbt.attackerPlayerNum) : null;
     if (!game || !playerNum || !cbt || defenderPlayerNum !== playerNum) {
       return { applied: false, manualMessage: 'Resolve manually: play while defending (as the defender).' };
     }
@@ -4010,7 +4010,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && ((typeof entry.applyDefenseBonusBlock === 'number' && entry.applyDefenseBonusBlock > 0) || (typeof entry.applyDefenseBonusEvade === 'number' && entry.applyDefenseBonusEvade > 0))) {
     const { game, playerNum, combat } = context;
     const cbt = combat || game?.pendingCombat || game?.combat;
-    const defenderPlayerNum = cbt?.attackerPlayerNum ? (cbt.attackerPlayerNum === 1 ? 2 : 1) : null;
+    const defenderPlayerNum = cbt?.attackerPlayerNum ? opponentPlayerNum(cbt.attackerPlayerNum) : null;
     if (!game || !playerNum || !cbt || defenderPlayerNum !== playerNum) {
       return { applied: false, manualMessage: "Resolve manually: play when an attack targeting you is declared (as the defender)." };
     }
@@ -4037,7 +4037,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.applyHideWhenDefending) {
     const { game, playerNum, combat } = context;
     const cbt = combat || game?.pendingCombat || game?.combat;
-    const defenderPlayerNum = cbt?.attackerPlayerNum ? (cbt.attackerPlayerNum === 1 ? 2 : 1) : null;
+    const defenderPlayerNum = cbt?.attackerPlayerNum ? opponentPlayerNum(cbt.attackerPlayerNum) : null;
     if (!game || !playerNum || !cbt?.target?.figureKey || defenderPlayerNum !== playerNum) {
       return { applied: false, manualMessage: 'Resolve manually: play when an attack targeting you is declared (as the defender).' };
     }
@@ -4141,7 +4141,7 @@ export function resolveAbility(abilityId, context) {
     const cah = entry.chooseAdjacentHostileThen;
     const { damage = 0, strain = 0 } = cah;
     const totalDamage = damage + strain;
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     // Second call: apply damage/conditions to chosen target (MP was already granted)
     if (chosenFigureKey) {
       if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
@@ -4247,7 +4247,7 @@ export function resolveAbility(abilityId, context) {
       ...(cah.bleed ? ['Bleed'] : []),
     ];
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     // Shared: apply damage/strain/conditions to target; optionally apply selfStrain to activating figure
     const applyToFigureKey = (targetFk) => {
       if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
@@ -4531,7 +4531,7 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const handKey = ccHandKey(playerNum);
     const discardKey = ccDiscardKey(playerNum);
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const oppHandKey = ccHandKey(oppNum);
     const oppDiscardKey = ccDiscardKey(oppNum);
     const hand = (game[handKey] || []).slice();
@@ -4567,7 +4567,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.opponentDiscardFromHandChoice && entry.selfStrainFromDiscardedCost) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const oppHandKey = ccHandKey(oppNum);
     const oppDiscardKey = ccDiscardKey(oppNum);
     const oppHand = (game[oppHandKey] || []).slice();
@@ -4736,7 +4736,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.opponentDiscardDeckTop === 'number' && entry.opponentDiscardDeckTop > 0) {
     const { game, playerNum, defenderDefeated } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const deckKey = ccDeckKey(oppNum);
     const discardKey = ccDiscardKey(oppNum);
     const deck = (game[deckKey] || []).slice();
@@ -4971,7 +4971,7 @@ export function resolveAbility(abilityId, context) {
         return { applied: false, manualMessage: `Roar: you must have suffered ${entry.onlyIfSufferedDamageGte}+ Damage (you have suffered ${totalDamage}).` };
       }
     }
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     if (!chosenFigureKey) {
       // Build choice list from opponent DCs (honor: player picks an adjacent hostile DC)
       const choiceOptions = [];
@@ -5027,7 +5027,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.opponentHandRandomToDeckTop === 'number' && entry.opponentHandRandomToDeckTop > 0) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const handKey = ccHandKey(oppNum);
     const deckKey = ccDeckKey(oppNum);
     const hand = (game[handKey] || []).slice();
@@ -5082,7 +5082,7 @@ export function resolveAbility(abilityId, context) {
         manualMessage: 'Roll 1 green die; enter the Accuracy result (0–3). Opponent loses that many VP and you gain that many VP.',
       };
     }
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const yourVpKey = vpKey(playerNum);
     const oppVpKey = vpKey(oppNum);
     game[yourVpKey] = game[yourVpKey] || { total: 0, kills: 0, objectives: 0 };
@@ -5515,7 +5515,7 @@ export function resolveAbility(abilityId, context) {
       return { applied: true, logMessage: '**Static Pulse** — Dio is not in play. Deploy Dio to your space then apply the effect manually.' };
     }
     const dioFk = dioCandidates[0];
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const adjAll = mapId ? getFiguresAdjacentToTarget(game, dioFk, mapId) : [];
     const hostiles = adjAll.filter(({ playerNum: p }) => p !== playerNum).map((a) => a.figureKey);
     if (hostiles.length === 0) {
@@ -5672,7 +5672,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.foreseeEffect) {
     const { game, playerNum, choiceIndex } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const oppDeckKey = ccDeckKey(oppNum);
     const oppDiscardKey = ccDiscardKey(oppNum);
     const ownDeckKey = ccDeckKey(playerNum);
@@ -5831,7 +5831,7 @@ export function resolveAbility(abilityId, context) {
     // Phase 2: grant free attack to chosen figure's DC
     if (chosenFigureKey) {
       const creatureMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta) ||
-        findMsgIdForFigureKey(game, playerNum === 1 ? 2 : 1, chosenFigureKey, dcMessageMeta);
+        findMsgIdForFigureKey(game, opponentPlayerNum(playerNum), chosenFigureKey, dcMessageMeta);
       if (!creatureMsgId) return { applied: false, manualMessage: 'Resolve manually: could not locate creature figure.' };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[creatureMsgId] = true;
@@ -6155,7 +6155,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.faceMeEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     // Phase 3: push hostile to chosen space, grant free melee attack
@@ -6308,7 +6308,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.darkEnergyEffect) {
     const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey, chosenSpace } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const mapId = game.selectedMap?.id;
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
@@ -6400,7 +6400,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.powerTokenGain && entry.lookingForAFightChoice) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     const meta = dcMessageMeta.get(msgId);
@@ -6585,7 +6585,7 @@ export function resolveAbility(abilityId, context) {
     const dcEffects = getDcEffects();
     // Phase 2: apply damage to chosen hostile = # friendly DROIDs in play
     if (chosenFigureKey) {
-      const oppNum = playerNum === 1 ? 2 : 1;
+      const oppNum = opponentPlayerNum(playerNum);
       const droidCount = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => {
         const dcN = fk.replace(/-\d+-\d+$/, '');
         const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
@@ -6614,7 +6614,7 @@ export function resolveAbility(abilityId, context) {
       return { applied: true, logMessage: `**Triangulate** — **${dcName}**: ${dmgNote}. (Max = ${droidCount} DROIDs in play — verify LOS manually for each.)`, refreshDcEmbed: !!figMsgId };
     }
     // Phase 1: hostile figure picker (move DROIDs first manually)
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const hostileKeys = [];
     const hostileLabels = [];
     for (const [fk] of Object.entries(game.figurePositions?.[oppNum] || {})) {
@@ -6629,7 +6629,7 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const dcEffects = getDcEffects();
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     // Phase 2: count CREATUREs adjacent to chosen hostile, apply damage
     if (chosenFigureKey) {
       const targetPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
@@ -6864,7 +6864,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.letsMakeADealEffect) {
     const { game, playerNum, dcMessageMeta, choiceIndex, combat } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || "Resolve manually — pay VP to opponent to reduce hits, then become Focused." };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const ownVpKey = vpKey(playerNum);
     const oppVpKey = vpKey(oppNum);
     const ownVp = game[ownVpKey]?.total ?? 0;
@@ -6940,7 +6940,7 @@ export function resolveAbility(abilityId, context) {
     if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
     // Phase 3: Force Choke chosen figure (deal 2 Dmg + 2 Strain)
     if (chosenFigureKey) {
-      const oppNum = playerNum === 1 ? 2 : 1;
+      const oppNum = opponentPlayerNum(playerNum);
       const figMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
       let dmgNote = 'apply 2 Dmg + 2 Strain manually';
       if (figMsgId && dcHealthState) {
@@ -6982,7 +6982,7 @@ export function resolveAbility(abilityId, context) {
       const boardState = getBoardStateForMovement(game, null);
       const adjRaw = actPos ? (boardState?.mapSpaces?.adjacency?.[String(actPos).toLowerCase()] || []) : [];
       const adjSet = new Set(adjRaw.map((s) => String(s).toLowerCase()));
-      const oppNum = playerNum === 1 ? 2 : 1;
+      const oppNum = opponentPlayerNum(playerNum);
       const validKeys = [];
       const validLabels = [];
       for (const [fk, pos] of Object.entries(game.figurePositions?.[oppNum] || {})) {
@@ -7005,7 +7005,7 @@ export function resolveAbility(abilityId, context) {
     const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
     // Determine attacker info from combat
     const attackerFk = combat?.attackerFigureKey || null;
-    const attackerPn = combat?.attackerPlayerNum || (playerNum === 1 ? 2 : 1);
+    const attackerPn = combat?.attackerPlayerNum || opponentPlayerNum(playerNum);
     // Check adjacency (for 3 dmg vs 1 dmg)
     let isAdjacent = false;
     if (actPos && attackerFk) {
@@ -7058,7 +7058,7 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta, dcHealthState, combat, choiceIndex } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const attackerFk = combat?.attackerFigureKey || null;
-    const attackerPn = combat?.attackerPlayerNum || (playerNum === 1 ? 2 : 1);
+    const attackerPn = combat?.attackerPlayerNum || opponentPlayerNum(playerNum);
     if (choiceIndex !== undefined && choiceIndex !== null) {
       const dmg = choiceIndex === 0 ? 1 : 3; // 0 = "1 dmg", 1 = "spent Block Token → 3 dmg"
       let dmgNote = `Apply ${dmg} Dmg to attacker manually`;
@@ -7249,7 +7249,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.findsmanMeditationEffect) {
     const { game, playerNum, choiceIndex, chosenOption } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     if (choiceIndex !== undefined && choiceIndex !== null) {
       const chosenDcName = String(chosenOption ?? '').replace(/^Watch:\s*/, '');
       game.findsmanMeditationTarget = game.findsmanMeditationTarget || {};
@@ -7287,7 +7287,7 @@ export function resolveAbility(abilityId, context) {
       const fName = friendlyFk.replace(/-\d+-\d+$/, '');
       return { applied: true, logMessage: `**Etiquette and Protocol** — **${hName}** and **${fName}** cannot declare attacks targeting each other until end of round.` };
     }
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const hostileFks = Object.keys(game.figurePositions?.[oppNum] || {}).filter((fk) => game.figurePositions[oppNum][fk]);
     const friendlyFks = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => game.figurePositions[playerNum][fk]);
     const opts = [];
@@ -7373,7 +7373,7 @@ export function resolveAbility(abilityId, context) {
       const kws = (dcEffects[dc.dcName]?.keywords || []).map((k) => String(k).toUpperCase());
       return kws.includes('SPY');
     }).length;
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const oppDiscard = getCcDiscard(game, oppNum) || [];
     const lastCard = oppDiscard[oppDiscard.length - 1] || null;
     const cancelNote = lastCard ? `Opponent's most recent card: **${lastCard}**` : 'No recent opponent card found — identify the card manually.';
@@ -7390,7 +7390,7 @@ export function resolveAbility(abilityId, context) {
       return { applied: true, logMessage: `**Set a Trap** — Trap placed at space **${chosenSpace}**. At end of round, if a friendly figure is on that space, they interrupt to attack a hostile on it (announce the interrupt at round end).` };
     }
     // Space picker: all currently occupied spaces (friendly + hostile) as candidates
-    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppNum = opponentPlayerNum(playerNum);
     const occupied = new Set();
     for (const [, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) { if (pos) occupied.add(String(pos).toLowerCase()); }
     for (const [, pos] of Object.entries(game.figurePositions?.[oppNum] || {})) { if (pos) occupied.add(String(pos).toLowerCase()); }

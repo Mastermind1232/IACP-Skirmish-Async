@@ -1,4 +1,5 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
+import { opponentPlayerNum } from '../game/player-helpers.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -18,7 +19,7 @@ export async function handleToughLuck(interaction, ctx) {
   const _tlData = _tlGame.pendingToughLuck;
   const _tlCombat = _tlGame.pendingCombat;
   const _tlAtk = _tlCombat?.attackerPlayerNum;
-  const _tlDef = _tlAtk === 1 ? 2 : 1;
+  const _tlDef = opponentPlayerNum(_tlAtk);
   // TL player is the one who set toughLuckPlayerNum
   const _tlResponder = _tlGame.toughLuckPlayerNum;
   if (!canActAsPlayer(_tlGame, interaction.user.id, _tlResponder)) {
@@ -78,7 +79,7 @@ export async function handleThereIsNoTry(interaction, ctx) {
   const _tintGame = getGame(_tintGameId);
   if (!_tintGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
   const _tintCombat = _tintGame.pendingCombat;
-  const _tintDefNum = _tintCombat?.defenderPlayerNum ?? (_tintCombat?.attackerPlayerNum === 1 ? 2 : 1);
+  const _tintDefNum = _tintCombat?.defenderPlayerNum ?? opponentPlayerNum(_tintCombat?.attackerPlayerNum);
   if (!canActAsPlayer(_tintGame, interaction.user.id, _tintDefNum)) {
     await interaction.followUp({ content: 'Only the defender may respond.', ephemeral: true }).catch(() => {}); return;
   }
@@ -164,7 +165,7 @@ export async function handleVetInstincts(interaction, ctx) {
   const _viCombat = _viGame.pendingCombat;
   if (!_viCombat) { await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(() => {}); return; }
   const _viAtk = _viCombat.attackerPlayerNum;
-  const _viDef = _viAtk === 1 ? 2 : 1;
+  const _viDef = opponentPlayerNum(_viAtk);
   // Determine phase: block/evade = defense; hit/surge = attack; skip depends on which phase is pending
   const _viIsDefPhase = _viChoice === 'block' || _viChoice === 'evade' || (_viChoice === 'skip' && _viCombat.vetInstinctsAttackApplied);
   const _viExpectedPlayer = _viIsDefPhase ? _viDef : _viAtk;
