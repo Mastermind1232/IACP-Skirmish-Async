@@ -14,7 +14,6 @@ import {
   getActivationsRemaining,
   getActivatedDcIndices,
   getCcHand,
-  getCcDeck,
   getDcAttachments,
   setActivationsRemaining,
   setActivatedDcIndices,

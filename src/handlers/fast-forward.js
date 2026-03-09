@@ -458,7 +458,7 @@ export async function handleDefenderCcPlay(interaction, ctx) {
     resolveAbility(abilityId, { game, playerNum, cardName: card, msgId, isDefending: true });
   }
 
-  await logGameAction(game, client, `🛡️ <@${playerNum === 1 ? game.player1Id : game.player2Id}> played defender CC **${card}**.`, { icon: 'card' });
+  await logGameAction(game, client, `🛡️ <@${getPlayerId(game, playerNum)}> played defender CC **${card}**.`, { icon: 'card' });
   await updateHandVisualMessage(game, playerNum, client);
   await updateDiscardPileMessage(game, playerNum, client);
 

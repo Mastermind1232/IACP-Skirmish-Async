@@ -1,6 +1,8 @@
 /**
  * Interact handlers: interact_cancel_, interact_choice_
  */
+import { getPlayerId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
+
 const FIGURE_LETTERS = 'abcdefghij';
 
 /**
@@ -16,7 +18,7 @@ export async function handleInteractCancel(interaction, ctx) {
   if (!game) return;
   const meta = dcMessageMeta.get(msgId);
   if (!meta || meta.gameId !== gameId) return;
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) return;
   await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
 }
@@ -50,7 +52,7 @@ export async function handleInteractChoice(interaction, ctx) {
     await interaction.followUp({ content: 'Invalid.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the owner can perform this action.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
@@ -161,8 +163,8 @@ export async function handleInteractChoice(interaction, ctx) {
         const _curNew = Math.max(0, (_curCur || 0) - 1);
         _curHS[figureIndex] = [_curNew, _curMax || _curCur];
         ctx.dcHealthState?.set(_curMsgId, _curHS);
-        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
-        const dcIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+        const dcList = getDcList(game, playerNum);
+        const dcIds = getDcMessageIds(game, playerNum) || [];
         const _curIdx = dcIds.indexOf(_curMsgId);
         if (_curIdx >= 0 && dcList?.[_curIdx]) dcList[_curIdx].healthState = [..._curHS];
         await logGameAction(game, interaction.client, `😿 **Curious** — **${shortName}** suffers 1 Strain after interacting.`, { phase: 'ROUND', icon: 'activate' });

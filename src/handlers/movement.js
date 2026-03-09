@@ -6,6 +6,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getDcEffects, getMapSpaces } from '../data-loader.js';
 import { bottomLeftCoord, getFootprintCells } from '../game/coords.js';
 import { reduceHp } from '../game/index.js';
+import { getDcList, getDcMessageIds, getPlayerId } from '../game/player-helpers.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
@@ -515,8 +516,8 @@ export async function handleMovePick(interaction, ctx) {
     const hostilePositions = game.figurePositions?.[hostilePlayerNum] || {};
     game.overrunDamagedThisMove = game.overrunDamagedThisMove || {};
     if (!game.overrunDamagedThisMove[msgId]) game.overrunDamagedThisMove[msgId] = [];
-    const hostileDcList = hostilePlayerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-    const hostileMsgIds = hostilePlayerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const hostileDcList = getDcList(game, hostilePlayerNum) || [];
+    const hostileMsgIds = getDcMessageIds(game, hostilePlayerNum) || [];
     const _dcHealthState = ctx.dcHealthState;
     // Compute the moving figure's footprint tentatively for overlap detection
     const _movingSize = targetInfo.size || getFigureSize(meta.dcName);
@@ -560,8 +561,8 @@ export async function handleMovePick(interaction, ctx) {
       const _movingSize = getFigureSize(meta.dcName);
       const _oldFootprint = new Set(getNormalizedFootprint(startCoord, _movingSize));
       game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-      const hostileDcList = hostilePlayerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-      const hostileMsgIds = hostilePlayerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const hostileDcList = getDcList(game, hostilePlayerNum) || [];
+      const hostileMsgIds = getDcMessageIds(game, hostilePlayerNum) || [];
       const _dcHs = ctx.dcHealthState;
       for (const [hFk, hPos] of Object.entries(hostilePositions)) {
         if (!hPos) continue;
@@ -615,7 +616,7 @@ export async function handleMovePick(interaction, ctx) {
   const destDisplay = bottomLeftCoord(newTopLeft, newSize).toUpperCase();
   const shortName = (displayName || meta.displayName || '').replace(/\s*\[(?:DG|Group) \d+\]$/, '') || displayName;
   const pLabel = `P${playerNum}`;
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, playerNum);
   const path = getMovementPath(cache, startCoord, newTopLeft, newSize, profile);
   const startDisplay = bottomLeftCoord(startCoord, profile.size).toUpperCase();
   const pathStr = path.length > 1

@@ -2734,8 +2734,8 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
         const newCur = Math.max(0, (cur ?? max) - 2);
         hs[figIdx] = [newCur, max ?? newCur];
         dcHealthState?.set(fkMsgId, hs);
-        const dcIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+        const dcIds = getDcMessageIds(game, pn);
+        const dcList = getDcList(game, pn);
         const idx = (dcIds || []).indexOf(fkMsgId);
         if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
         const dcName = fk.replace(/-\d+-\d+$/, '');
