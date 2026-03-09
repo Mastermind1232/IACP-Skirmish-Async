@@ -13,6 +13,7 @@ import {
   getActivationsRemaining, setActivationsRemaining,
   ccDiscardKey, ccAttachmentsKey, vpKey,
 } from '../game/player-helpers.js';
+import { discordCatch } from '../error-handling.js';
 
 /**
  * Check a player's hand for CC cards that match a timing trigger.
@@ -196,7 +197,7 @@ export async function handleAttackTarget(interaction, ctx) {
   } = ctx;
   const m = interaction.customId.match(/^attack_target_(.+)_(\d+)_(\d+)$/);
   if (!m) {
-    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const [, msgId, figureIndexStr, targetIndexStr] = m;
@@ -204,29 +205,29 @@ export async function handleAttackTarget(interaction, ctx) {
   const targetIndex = parseInt(targetIndexStr, 10);
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const targets = game.attackTargets?.[`${msgId}_${figureIndex}`];
   const target = targets?.[targetIndex];
   if (!target) {
-    await interaction.followUp({ content: 'Target no longer valid.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Target no longer valid.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const attackerPlayerNum = meta.playerNum;
   const { getRange, hasLineOfSight } = ctx;
   if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the owner can attack.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner can attack.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (target.hasLOS === false) {
-    await interaction.followUp({ content: '🚫 No line of sight to that target. You cannot attack through blocking terrain or solid walls.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: '🚫 No line of sight to that target. You cannot attack through blocking terrain or solid walls.', ephemeral: true }).catch(discordCatch);
     return;
   }
   // Etiquette and Protocol: block attacks between paired figures this round
@@ -237,7 +238,7 @@ export async function handleAttackTarget(interaction, ctx) {
     const tgtFkCheck = target.figureKey;
     const blocked = etiqPairs.some(([a, b]) => (a === atkFkCheck && b === tgtFkCheck) || (b === atkFkCheck && a === tgtFkCheck));
     if (blocked) {
-      await interaction.followUp({ content: '🚫 **Etiquette and Protocol**: these two figures cannot attack each other this round.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: '🚫 **Etiquette and Protocol**: these two figures cannot attack each other this round.', ephemeral: true }).catch(discordCatch);
       return;
     }
   }
@@ -245,7 +246,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (game.fellSwoopFreeAttack?.[msgId] && game.stillFasterExcludeMsgId && target.figureKey && !target.isNpc) {
     const excMeta = dcMessageMeta?.get(game.stillFasterExcludeMsgId);
     if (excMeta && target.figureKey.startsWith(`${excMeta.dcName}-`)) {
-      await interaction.followUp({ content: '🚫 **Still Faster Than You** — must target a **different** hostile figure than the one that just activated.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: '🚫 **Still Faster Than You** — must target a **different** hostile figure than the one that just activated.', ephemeral: true }).catch(discordCatch);
       return;
     }
   }
@@ -253,7 +254,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (game.forcedAttackTarget?.[msgId] && target.figureKey) {
     if (target.figureKey !== game.forcedAttackTarget[msgId]) {
       const forcedName = game.forcedAttackTarget[msgId].replace(/-\d+-\d+$/, '');
-      await interaction.followUp({ content: `**Mandalorian Whip** — You must target the pushed figure (**${forcedName.replace(/_/g, ' ')}**).`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: `**Mandalorian Whip** — You must target the pushed figure (**${forcedName.replace(/_/g, ' ')}**).`, ephemeral: true }).catch(discordCatch);
       return;
     }
     delete game.forcedAttackTarget[msgId];
@@ -527,7 +528,7 @@ export async function handleAttackTarget(interaction, ctx) {
       }
       if (replaced) {
         game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice };
-        await thread.send(`🎯 **Rifleman** — Replaced 1 attack die with 1 blue die.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await thread.send(`🎯 **Rifleman** — Replaced 1 attack die with 1 blue die.`).catch(discordCatch);
       }
     }
   }
@@ -599,7 +600,7 @@ export async function handleAttackTarget(interaction, ctx) {
       if (!attackerConds.includes('Focus')) {
         if (applyCondition(game, attackerFigureKey, 'Focus')) {
           _pc.attackInfo = { ..._pc.attackInfo, dice: [...(_pc.attackInfo.dice || []), 'green'] };
-          await thread.send('**Focused on the Kill** — IG-88 becomes Focused before attacking.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await thread.send('**Focused on the Kill** — IG-88 becomes Focused before attacking.').catch(discordCatch);
         }
       }
     }
@@ -608,7 +609,7 @@ export async function handleAttackTarget(interaction, ctx) {
       if (!attackerConds.includes('Focus')) {
         if (applyCondition(game, attackerFigureKey, 'Focus')) {
           _pc.attackInfo = { ..._pc.attackInfo, dice: [...(_pc.attackInfo.dice || []), 'green'] };
-          await thread.send('**Heir to the Jedi** — Luke becomes Focused before Saber Strike.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await thread.send('**Heir to the Jedi** — Luke becomes Focused before Saber Strike.').catch(discordCatch);
         }
       }
     }
@@ -636,21 +637,21 @@ export async function handleAttackTarget(interaction, ctx) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
       game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
       game.exhaustedSkirmishUpgrades[msgId] = [..._exh, 'Scavenged Weaponry'];
-      await thread.send('**Scavenged Weaponry** — Exhausted: +1 Hit applied to this attack.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send('**Scavenged Weaponry** — Exhausted: +1 Hit applied to this attack.').catch(discordCatch);
     }
     // Explosive Armaments: exhaust while attacking → Blast 1
     if (_atkUpgrades.includes('Explosive Armaments') && !_exh.includes('Explosive Armaments')) {
       _pc.bonusBlast = (_pc.bonusBlast || 0) + 1;
       game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
       game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'Explosive Armaments'];
-      await thread.send('**Explosive Armaments** — Exhausted: Blast 1 applied to this attack.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send('**Explosive Armaments** — Exhausted: Blast 1 applied to this attack.').catch(discordCatch);
     }
     // The Darksaber: exhaust while attacking → reroll 1 attack die
     if (_atkUpgrades.includes('The Darksaber') && !_exh.includes('The Darksaber')) {
       _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
       game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
       game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'The Darksaber'];
-      await thread.send('**The Darksaber** — Exhausted: +1 attack reroll.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send('**The Darksaber** — Exhausted: +1 attack reroll.').catch(discordCatch);
     }
     // Feeding Frenzy: exhaust while attacking a damaged figure → +1 Hit
     if (_atkUpgrades.includes('Feeding Frenzy') && !_exh.includes('Feeding Frenzy')) {
@@ -661,7 +662,7 @@ export async function handleAttackTarget(interaction, ctx) {
         _pc.bonusHits = (_pc.bonusHits || 0) + 1;
         game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
         game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'Feeding Frenzy'];
-        await thread.send('**Feeding Frenzy** — Exhausted: target has suffered damage, +1 Hit applied.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await thread.send('**Feeding Frenzy** — Exhausted: target has suffered damage, +1 Hit applied.').catch(discordCatch);
       }
     }
   }
@@ -671,7 +672,7 @@ export async function handleAttackTarget(interaction, ctx) {
     if (!attackerConds.includes('Focus')) {
       if (applyCondition(game, attackerFigureKey, 'Focus')) {
         _z6Pc.attackInfo = { ..._z6Pc.attackInfo, dice: [...(_z6Pc.attackInfo.dice || []), 'green'] };
-        await thread.send('**Rotary Cannon** — Z-6 Trooper becomes Focused before attacking.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await thread.send('**Rotary Cannon** — Z-6 Trooper becomes Focused before attacking.').catch(discordCatch);
       }
     }
   }
@@ -681,14 +682,14 @@ export async function handleAttackTarget(interaction, ctx) {
     if (!_tgrActionsData?.threadId) {
       // Not in this group's activation — non-activation attack
       game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
-      await thread.send("**The General's Ranks** — +1 Hit (non-activation attack).").catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send("**The General's Ranks** — +1 Hit (non-activation attack).").catch(discordCatch);
     }
   }
   // Scavenged Walker: -1 Hit penalty on end-of-round interrupt attack
   if (game.scavengedWalkerAttackPenalty?.[msgId]) {
     game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) - 1;
     delete game.scavengedWalkerAttackPenalty[msgId];
-    await thread.send('**Scavenged Walker** — -1 Hit applied to this interrupt attack.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await thread.send('**Scavenged Walker** — -1 Hit applied to this interrupt attack.').catch(discordCatch);
   }
   // Flame Trooper Fireproof: this figure cannot suffer Strain (mark on combat object for handlers)
   if (_atkUpgrades.includes('Flame Trooper')) {
@@ -730,7 +731,7 @@ export async function handleAttackTarget(interaction, ctx) {
           });
           if (hasFriendlyWookiee) {
             game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 1;
-            await thread.send('**Fury of Kashyyyk** — Another friendly WOOKIEE within 2 spaces of defender: Pierce 1 applied.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+            await thread.send('**Fury of Kashyyyk** — Another friendly WOOKIEE within 2 spaces of defender: Pierce 1 applied.').catch(discordCatch);
           }
         }
       }
@@ -742,7 +743,7 @@ export async function handleAttackTarget(interaction, ctx) {
   if (paybackBonus) {
     game.pendingCombat.surgeBonus = (game.pendingCombat.surgeBonus || 0) + paybackBonus;
     delete game.paybackBonusSurge[msgId];
-    await thread.send(`**Payback** — +${paybackBonus} Surge applied to this counter-attack.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await thread.send(`**Payback** — +${paybackBonus} Surge applied to this counter-attack.`).catch(discordCatch);
   }
 
   // Vanish: clear immunity when the protected figure starts attacking
@@ -764,7 +765,7 @@ export async function handleAttackTarget(interaction, ctx) {
     }
     game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice };
     delete game.roundDebuffNextHostileActivation;
-    await thread.send('⚠️ **No Cheating** is active — 1 attack die removed.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await thread.send('⚠️ **No Cheating** is active — 1 attack die removed.').catch(discordCatch);
   }
 
   // --- Passive-auto ability wiring ---
@@ -1236,16 +1237,16 @@ export async function handleAttackTarget(interaction, ctx) {
   if (overrideDice?.bonusHits) {
     game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + overrideDice.bonusHits;
     if (overrideDice.bonusHits < 0) {
-      await thread.send(`**Overheated** — −${Math.abs(overrideDice.bonusHits)} Hit applied automatically.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send(`**Overheated** — −${Math.abs(overrideDice.bonusHits)} Hit applied automatically.`).catch(discordCatch);
     } else if (overrideDice.bonusHits > 0) {
-      await thread.send(`**+${overrideDice.bonusHits} Hit** applied to attack results.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send(`**+${overrideDice.bonusHits} Hit** applied to attack results.`).catch(discordCatch);
     }
   }
   // Optimal Bombardment: apply +Blast bonus if this figure was granted one
   if (game.optimalBombardmentBlastBonus?.[msgId]) {
     const _obBlast = game.optimalBombardmentBlastBonus[msgId];
     game.pendingCombat.bonusBlast = (game.pendingCombat.bonusBlast || 0) + _obBlast;
-    await thread.send(`**Optimal Bombardment** — +${_obBlast} Blast added to this attack.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await thread.send(`**Optimal Bombardment** — +${_obBlast} Blast added to this attack.`).catch(discordCatch);
     delete game.optimalBombardmentBlastBonus[msgId];
   }
 
@@ -1330,7 +1331,7 @@ export async function handleAttackTarget(interaction, ctx) {
   await interaction.message.edit({
     content: `**Combat declared** — See thread in Game Log.`,
     components: [],
-  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }).catch(discordCatch);
 
   // Auto-prompt defender for playable reaction cards (whenAttackDeclaredOnYou, etc.)
   try {
@@ -1374,19 +1375,19 @@ export async function handleCombatReady(interaction, ctx) {
   const gameId = interaction.customId.replace('combat_ready_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) {
-    await interaction.followUp({ content: 'No pending combat.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No pending combat.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const clickerIsP1 = interaction.user.id === game.player1Id;
   const clickerIsP2 = interaction.user.id === game.player2Id;
   if (!clickerIsP1 && !clickerIsP2) {
-    await interaction.followUp({ content: 'Only players in this game can indicate ready.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only players in this game can indicate ready.', ephemeral: true }).catch(discordCatch);
     return;
   }
   // In test games, human (P1) can click for both sides; first click = P1, second = P2
@@ -1420,7 +1421,7 @@ export async function handleCombatReady(interaction, ctx) {
   combat.rollMessageId = rollMsgSent.id;
   try {
     const preMsg = await thread.messages.fetch(combat.combatPreMsgId);
-    await preMsg.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await preMsg.edit({ components: [] }).catch(discordCatch);
   } catch {}
   saveGames();
 }
@@ -1444,17 +1445,17 @@ export async function handleCombatRoll(interaction, ctx) {
   const gameId = interaction.customId.replace('combat_roll_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) {
-    await interaction.followUp({ content: 'No pending combat.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No pending combat.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
-    await interaction.followUp({ content: 'Only players in this game can roll.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only players in this game can roll.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
@@ -1464,7 +1465,7 @@ export async function handleCombatRoll(interaction, ctx) {
 
   if (!combat.attackRoll) {
     if (!canActAsPlayer(game, interaction.user.id, effectiveAttackerPlayerNum)) {
-      await interaction.followUp({ content: `Only the attacker (P${effectiveAttackerPlayerNum}) may roll attack dice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: `Only the attacker (P${effectiveAttackerPlayerNum}) may roll attack dice.`, ephemeral: true }).catch(discordCatch);
       return;
     }
     const baseDice = combat.attackInfo?.dice || [];
@@ -1495,7 +1496,7 @@ export async function handleCombatRoll(interaction, ctx) {
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_surge`).setLabel('+1 Surge').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
-      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${attackerPlayerNum}Id`] ?? ''}> add +1 Hit or +1 Surge to the attack roll?`, components: [_viRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${attackerPlayerNum}Id`] ?? ''}> add +1 Hit or +1 Surge to the attack roll?`, components: [_viRow] }).catch(discordCatch);
       saveGames();
       return;
     }
@@ -1505,7 +1506,7 @@ export async function handleCombatRoll(interaction, ctx) {
 
   if (!combat.defenseRoll) {
     if (!canActAsPlayer(game, interaction.user.id, defenderPlayerNum)) {
-      await interaction.followUp({ content: `Only the defender (P${defenderPlayerNum}) may roll defense dice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: `Only the defender (P${defenderPlayerNum}) may roll defense dice.`, ephemeral: true }).catch(discordCatch);
       return;
     }
     const baseColor = combat.targetStats.defense || 'white';
@@ -1557,7 +1558,7 @@ export async function handleCombatRoll(interaction, ctx) {
         _tintBtns.push(new ButtonBuilder().setCustomId(`there_is_no_try_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         const _tintRows = [];
         for (let i = 0; i < _tintBtns.length; i += 5) _tintRows.push(new ActionRowBuilder().addComponents(_tintBtns.slice(i, i + 5)));
-        await thread.send({ content: `**There Is No Try** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> choose a defense die to set to any face:`, components: _tintRows.slice(0, 5) }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await thread.send({ content: `**There Is No Try** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> choose a defense die to set to any face:`, components: _tintRows.slice(0, 5) }).catch(discordCatch);
         saveGames();
         return; // Wait for TINT response before entering reroll window
       }
@@ -1783,7 +1784,7 @@ export async function handleCombatRoll(interaction, ctx) {
             game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
             game.exhaustedSkirmishUpgrades[_taMid] = [...(game.exhaustedSkirmishUpgrades[_taMid] || []), 'Trusted Ally'];
             atkSpecialReroll += 1;
-            await thread.send(`**Trusted Ally** (${fn}) — Exhausted: friendly within 3 spaces, +1 attack reroll granted.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            await thread.send(`**Trusted Ally** (${fn}) — Exhausted: friendly within 3 spaces, +1 attack reroll granted.`).catch(discordCatch);
             break;
           }
           if (atkSpecialReroll > 0) break; // only one Trusted Ally bonus per attack
@@ -1801,7 +1802,7 @@ export async function handleCombatRoll(interaction, ctx) {
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_evade`).setLabel('+1 Evade').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
-      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> add +1 Block or +1 Evade to the defense roll?`, components: [_viRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> add +1 Block or +1 Evade to the defense roll?`, components: [_viRow] }).catch(discordCatch);
       saveGames();
       return;
     }
@@ -2034,11 +2035,11 @@ export async function handleCombatReroll(interaction, ctx) {
   if (!match) return;
   const [, gameId, side, choice] = match;
   const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId || !combat.rerollPhase) {
-    await interaction.followUp({ content: 'No reroll phase active.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No reroll phase active.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
@@ -2050,7 +2051,7 @@ export async function handleCombatReroll(interaction, ctx) {
   } else {
     const expectedPhase = side === 'atk' ? 'attacker' : 'defender';
     if (combat.rerollPhase !== expectedPhase) {
-      await interaction.followUp({ content: `It's the ${combat.rerollPhase}'s turn to reroll.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: `It's the ${combat.rerollPhase}'s turn to reroll.`, ephemeral: true }).catch(discordCatch);
       return;
     }
   }
@@ -2062,7 +2063,7 @@ export async function handleCombatReroll(interaction, ctx) {
     expectedPlayer = side === 'atk' ? effectiveAtk : defenderPlayerNum;
   }
   if (!expectedPlayer || !canActAsPlayer(game, interaction.user.id, expectedPlayer)) {
-    await interaction.followUp({ content: `Only P${expectedPlayer} can reroll ${combat.rerollPhase === 'forced' ? 'forced' : (side === 'atk' ? 'attack' : 'defense')} dice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `Only P${expectedPlayer} can reroll ${combat.rerollPhase === 'forced' ? 'forced' : (side === 'atk' ? 'attack' : 'defense')} dice.`, ephemeral: true }).catch(discordCatch);
     return;
   }
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
@@ -2187,7 +2188,7 @@ export async function handleCombatReroll(interaction, ctx) {
             new ButtonBuilder().setCustomId(`tough_luck_remove_${gameId}_${idx}`).setLabel(`Remove rerolled ${newDie.color} die`).setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId(`tough_luck_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
           );
-          await thread.send({ content: `**Tough Luck** — <@${_tlOwner}> may remove the rerolled attack die.`, components: [_tlRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await thread.send({ content: `**Tough Luck** — <@${_tlOwner}> may remove the rerolled attack die.`, components: [_tlRow] }).catch(discordCatch);
           _tlTriggered = true;
         }
       }
@@ -2228,7 +2229,7 @@ export async function handleCombatReroll(interaction, ctx) {
             new ButtonBuilder().setCustomId(`tough_luck_remove_${gameId}_${idx}`).setLabel(`Remove rerolled ${newDie.color} die`).setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId(`tough_luck_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
           );
-          await thread.send({ content: `**Tough Luck** — <@${_tlOwner}> may remove the rerolled defense die.`, components: [_tlRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await thread.send({ content: `**Tough Luck** — <@${_tlOwner}> may remove the rerolled defense die.`, components: [_tlRow] }).catch(discordCatch);
           _tlTriggered = true;
         }
       }
@@ -2285,17 +2286,17 @@ export async function handlePreReroll(interaction, ctx) {
   if (!match) return;
   const [, gameId, choice] = match;
   const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) {
-    await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const pr = (combat.pendingPreRerolls || [])[0];
-  if (!pr) { await interaction.followUp({ content: 'No pending pre-reroll.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!pr) { await interaction.followUp({ content: 'No pending pre-reroll.', ephemeral: true }).catch(discordCatch); return; }
   if (!canActAsPlayer(game, interaction.user.id, pr.playerNum)) {
-    await interaction.followUp({ content: `Only P${pr.playerNum} can make this choice.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `Only P${pr.playerNum} can make this choice.`, ephemeral: true }).catch(discordCatch);
     return;
   }
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
@@ -2496,7 +2497,7 @@ async function sendPowerTokenChoicePrompt(thread, gameId, grants) {
   await thread.send({
     content: `**Choose power token type** for **${figNames}** (${countLabel}):`,
     components: [new ActionRowBuilder().addComponents(btns)],
-  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }).catch(discordCatch);
 }
 
 /** Remove token from game.figurePowerTokens by index */
@@ -3050,17 +3051,17 @@ export async function handleCombatResolveReady(interaction, ctx) {
   const gameId = interaction.customId.replace('combat_resolve_ready_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) {
-    await interaction.followUp({ content: 'No pending combat to resolve.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No pending combat to resolve.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
-    await interaction.followUp({ content: 'Only players in this game can confirm.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only players in this game can confirm.', ephemeral: true }).catch(discordCatch);
     return;
   }
   await resolveCombatAfterRolls(game, combat, client);
@@ -3091,19 +3092,19 @@ export async function handleCombatSurge(interaction, ctx) {
   const [, gameId, choice] = match;
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId || !combat.surgeRemaining) {
-    await interaction.followUp({ content: 'No surge step or already resolved.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No surge step or already resolved.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
   const effectiveAttackerForSurge = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
   if (!canActAsPlayer(game, interaction.user.id, effectiveAttackerForSurge)) {
-    await interaction.followUp({ content: 'Only the attacker may spend surge.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the attacker may spend surge.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
@@ -3114,11 +3115,11 @@ export async function handleCombatSurge(interaction, ctx) {
   if (choice === 'bleed_prevention') {
     combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);
     combat.surgePreventBleed = true;
-    await thread.send('Spent 1 surge — Bleeding will be prevented this activation.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await thread.send('Spent 1 surge — Bleeding will be prevented this activation.').catch(discordCatch);
   } else if (choice !== 'done') {
     // Disable: disabled figures cannot use Surge abilities
     if (game.disabledFigures?.includes(combat.attackerDisplayName)) {
-      await thread.send(`**${combat.attackerDisplayName}** is Disabled — cannot use Surge abilities this round.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send(`**${combat.attackerDisplayName}** is Disabled — cannot use Surge abilities this round.`).catch(discordCatch);
       await interaction.deferUpdate().catch(() => {});
       return;
     }
@@ -3171,14 +3172,14 @@ export async function handleCombatSurge(interaction, ctx) {
         awardObjectiveVp(game, attackerPlayerNum, 1);
         combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);
         const _utinniVpKey = vpKey(attackerPlayerNum);
-        await thread.send(`**Utinni!** — +1 VP earned (${game[_utinniVpKey].total} total).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await thread.send(`**Utinni!** — +1 VP earned (${game[_utinniVpKey].total} total).`).catch(discordCatch);
         if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Utinni!** — Jawa Scavenger earned +1 VP.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
       }
       // Gain VP (Senator/Streetrat form surge): spending this surge earns N VP
       if (mod.surgeVpGain && mod.surgeVpGain > 0) {
         awardObjectiveVp(game, attackerPlayerNum, mod.surgeVpGain);
         const _gvpKey = vpKey(attackerPlayerNum);
-        await thread.send(`**+${mod.surgeVpGain} VP** earned (${game[_gvpKey].total} total).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await thread.send(`**+${mod.surgeVpGain} VP** earned (${game[_gvpKey].total} total).`).catch(discordCatch);
         if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Surge: +${mod.surgeVpGain} VP** (${game[_gvpKey].total} total).`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
       }
       // Bargain (Jawa Scavenger Elite): inline VP exchange during surge phase
@@ -3195,10 +3196,10 @@ export async function handleCombatSurge(interaction, ctx) {
           const gained = bargainDie.dmg || 0;
           if (gained > 0) { vp.total += gained; vp.objectives += gained; }
           const net = gained - 1;
-          await thread.send(`**Bargain** — Spent 1 VP, rolled green die (${bargainDie.dmg ?? 0}dmg): gained **${gained} VP** (net ${net >= 0 ? '+' : ''}${net}).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await thread.send(`**Bargain** — Spent 1 VP, rolled green die (${bargainDie.dmg ?? 0}dmg): gained **${gained} VP** (net ${net >= 0 ? '+' : ''}${net}).`).catch(discordCatch);
           if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Bargain** — Spent 1 VP, gained ${gained} VP (net ${net >= 0 ? '+' : ''}${net})`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
         } else {
-          await thread.send('**Bargain** — No VP available to spend; ability has no effect.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await thread.send('**Bargain** — No VP available to spend; ability has no effect.').catch(discordCatch);
         }
       }
       // Self-condition surges: apply condition to attacker's own figure
@@ -3247,14 +3248,14 @@ export async function handleCombatSurge(interaction, ctx) {
           const _kdfX = combat.attackRoll?.surge ?? 0;
           if (mod.surgeComplex === 'cleave x') {
             combat.surgeCleave = (combat.surgeCleave || 0) + _kdfX;
-            await thread.send(`**Krayt Dragon Fury** — Cleave ${_kdfX} (${_kdfX} Surge rolled).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            await thread.send(`**Krayt Dragon Fury** — Cleave ${_kdfX} (${_kdfX} Surge rolled).`).catch(discordCatch);
           } else if (mod.surgeComplex === 'recover x') {
             combat.surgeRecover = (combat.surgeRecover || 0) + _kdfX;
-            await thread.send(`**Krayt Dragon Fury** — Recover ${_kdfX} (${_kdfX} Surge rolled).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            await thread.send(`**Krayt Dragon Fury** — Recover ${_kdfX} (${_kdfX} Surge rolled).`).catch(discordCatch);
           }
         } else {
           const cThread = await interaction.client.channels.fetch(combat.combatThreadId);
-          await cThread.send(`⚠️ **${getSurgeLabel(key)}** — resolve manually (see ability text).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await cThread.send(`⚠️ **${getSurgeLabel(key)}** — resolve manually (see ability text).`).catch(discordCatch);
         }
       }
       combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - cost);
@@ -3262,7 +3263,7 @@ export async function handleCombatSurge(interaction, ctx) {
       if (!combat.surgeSpentCount) combat.surgeSpentCount = {};
       combat.surgeSpentCount[idx] = (combat.surgeSpentCount[idx] || 0) + 1;
       const label = getSurgeLabel(key);
-      await thread.send(`**Surge spent (${cost}):** ${label}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send(`**Surge spent (${cost}):** ${label}`).catch(discordCatch);
       // Hunter Protocol: offer to trigger the same surge ability once more
       if (game.surgeDoublingActive?.[attackerPlayerNum] && key && !combat.surgeDoubledAbility && !key.startsWith('double:') && key !== 'utinni_vp_1') {
         if ((combat.surgeRemaining || 0) >= cost) {
@@ -3272,7 +3273,7 @@ export async function handleCombatSurge(interaction, ctx) {
             new ButtonBuilder().setCustomId(`hunter_protocol_trigger_${gameId}`).setLabel(`Trigger again: ${label}`.slice(0, 80)).setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`hunter_protocol_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
           );
-          await thread.send({ content: `**Hunter Protocol** — Trigger **${label}** once more?`, components: [_hpRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await thread.send({ content: `**Hunter Protocol** — Trigger **${label}** once more?`, components: [_hpRow] }).catch(discordCatch);
           saveGames();
           return;
         }
@@ -3299,7 +3300,7 @@ export async function handleCombatSurge(interaction, ctx) {
         await thread.send({
           content: `**Spread the Pain** — Choose a HARMFUL condition (not already chosen this attack):`,
           components: [new ActionRowBuilder().addComponents(btns.slice(0, 5))],
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
         saveGames();
         return; // wait for player to choose condition before continuing surge
       }
@@ -3415,7 +3416,7 @@ export async function handleCombatToken(interaction, ctx) {
   const atkPlayerNum = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
   const playerNum = isAttacker ? atkPlayerNum : (combat.attackerPlayerNum === 1 ? 2 : 1);
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the correct player may spend their token.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the correct player may spend their token.', ephemeral: true }).catch(discordCatch);
     return;
   }
 
@@ -3492,23 +3493,23 @@ export async function handleCleaveTarget(interaction, ctx) {
   const [, gameId, indexStr] = match;
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const pending = game.pendingCleave;
   if (!pending || pending.gameId !== gameId) {
-    await interaction.followUp({ content: 'No cleave target selection in progress.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No cleave target selection in progress.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (interaction.user.id !== pending.ownerId) {
-    await interaction.followUp({ content: 'Only the attacker may choose the cleave target.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the attacker may choose the cleave target.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const targetIndex = parseInt(indexStr, 10);
   const target = pending.targets[targetIndex];
   if (!target) {
-    await interaction.followUp({ content: 'Invalid target.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid target.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const { figureKey: cleaveFigureKey, playerNum: cleavePlayerNum } = target;
@@ -3552,7 +3553,7 @@ export async function handleCleaveTarget(interaction, ctx) {
     }
   }
   try {
-    await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
   } catch {}
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   if (cleaveMsgId) embedRefreshMsgIds.add(cleaveMsgId);
@@ -3595,7 +3596,7 @@ export async function handlePowerTokenChoice(interaction, ctx) {
   game.pendingPowerTokenGrant = null;
   if (channelId) {
     const ch = await interaction.client.channels.fetch(channelId).catch(() => null);
-    if (ch) await ch.send(`**Power Token(s) granted:** ${lines.join(', ')}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    if (ch) await ch.send(`**Power Token(s) granted:** ${lines.join(', ')}`).catch(discordCatch);
   }
   // If we're mid-surge and there are still surges remaining, continue the surge flow
   const combat = game.pendingCombat;
@@ -3625,7 +3626,7 @@ export async function handlePowerTokenChoice(interaction, ctx) {
       }
       surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
       const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
-      await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch(discordCatch);
     }
   }
   saveGames();
@@ -3764,7 +3765,7 @@ export async function handleFigureheadDecision(interaction, ctx) {
               content: `<@${fhAtkerOwnerId}> — You defeated a unique figure (Figurehead). Play **Celebration** to gain 4 VP?`,
               components: [getCelebrationButtons(game.gameId)],
               allowedMentions: { users: [fhAtkerOwnerId] },
-            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            }).catch(discordCatch);
           }
         }
       }
@@ -3840,20 +3841,20 @@ export async function handleLasatDiePick(interaction, ctx) {
   const dieIdx = parseInt(idxStr, 10);
   const { getGame, replyIfGameEnded, saveGames } = ctx;
   const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId || !combat.lasatHonorGuardPhase) {
-    await interaction.followUp({ content: 'No Lasat die choice active.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No Lasat die choice active.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const effectiveAttacker = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
   if (!canActAsPlayer(game, interaction.user.id, effectiveAttacker)) {
-    await interaction.followUp({ content: 'Only the attacker may choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the attacker may choose.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (!(combat.lasatEligibleDiceIndices || []).includes(dieIdx)) {
-    await interaction.followUp({ content: 'That die is not eligible.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'That die is not eligible.', ephemeral: true }).catch(discordCatch);
     return;
   }
   await interaction.deferUpdate().catch(() => {});
@@ -3875,25 +3876,25 @@ export async function handleLasatFacePick(interaction, ctx) {
   const faceIdx = parseInt(faceIdxStr, 10);
   const { getGame, replyIfGameEnded, saveGames } = ctx;
   const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId || !combat.lasatHonorGuardPhase) {
-    await interaction.followUp({ content: 'No Lasat face choice active.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No Lasat face choice active.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const effectiveAttacker = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
   if (!canActAsPlayer(game, interaction.user.id, effectiveAttacker)) {
-    await interaction.followUp({ content: 'Only the attacker may choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the attacker may choose.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const getDiceData = ctx.getDiceData;
-  if (!getDiceData) { await interaction.followUp({ content: 'Dice data unavailable.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!getDiceData) { await interaction.followUp({ content: 'Dice data unavailable.', ephemeral: true }).catch(discordCatch); return; }
   const die = combat.attackDiceResults?.[dieIdx];
-  if (!die) { await interaction.followUp({ content: 'Die not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!die) { await interaction.followUp({ content: 'Die not found.', ephemeral: true }).catch(discordCatch); return; }
   const faces = getDiceData().attack?.[die.color] || [];
   const newFace = faces[faceIdx];
-  if (!newFace) { await interaction.followUp({ content: 'Invalid face selection.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!newFace) { await interaction.followUp({ content: 'Invalid face selection.', ephemeral: true }).catch(discordCatch); return; }
   // Subtract old face contribution, add new face values
   combat.attackRoll.acc = Math.max(0, (combat.attackRoll.acc || 0) - (die.acc || 0)) + (newFace.acc || 0);
   combat.attackRoll.dmg = Math.max(0, (combat.attackRoll.dmg || 0) - (die.dmg || 0)) + (newFace.dmg || 0);
@@ -3920,22 +3921,22 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const targetIdx = parseInt(targetIdxStr, 10);
   const { getGame, replyIfGameEnded, getDcStats, getDcEffects, dcHealthState, logGameAction, ACTION_ICONS, ThreadAutoArchiveDuration, saveGames, client } = ctx;
   const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
   if (await replyIfGameEnded(game, interaction)) return;
   const fo = game.pendingFalseOrders;
   if (!fo || fo.murneRinMsgId !== msgId) {
-    await interaction.followUp({ content: 'No pending False Orders.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No pending False Orders.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const { controllerPlayerNum, controlledFigureKey, controlledPlayerNum } = fo;
   if (!canActAsPlayer(game, interaction.user.id, controllerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the controller may choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the controller may choose.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const targets = game.falseOrdersAttackTargets?.[msgId];
   const target = targets?.[targetIdx];
   if (!target) {
-    await interaction.followUp({ content: 'Target no longer valid.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Target no longer valid.', ephemeral: true }).catch(discordCatch);
     return;
   }
   delete game.falseOrdersAttackTargets?.[msgId];
@@ -4002,7 +4003,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const controlledEff = getDcEffects()[controlledName] || getDcEffects()[controlledName?.replace(/\s*\[.*\]\s*$/, '')];
   const defEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
   applyDcPassivesToCombat(game.pendingCombat, controlledStats?.passives || [], targetStats?.passives || []);
-  await interaction.message.edit({ content: '**False Orders — Attack declared**. See thread in Game Log.', components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ content: '**False Orders — Attack declared**. See thread in Game Log.', components: [] }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, `⚔️ **False Orders** — P${controllerPlayerNum} controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
   saveGames();
 }

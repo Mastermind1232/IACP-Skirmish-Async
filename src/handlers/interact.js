@@ -2,6 +2,7 @@
  * Interact handlers: interact_cancel_, interact_choice_
  */
 import { getPlayerId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
+import { discordCatch } from '../error-handling.js';
 
 const FIGURE_LETTERS = 'abcdefghij';
 
@@ -20,7 +21,7 @@ export async function handleInteractCancel(interaction, ctx) {
   if (!meta || meta.gameId !== gameId) return;
   const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) return;
-  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 }
 
 /**
@@ -44,23 +45,23 @@ export async function handleInteractChoice(interaction, ctx) {
   const figureIndex = parseInt(figureIdxStr, 10);
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const meta = dcMessageMeta.get(msgId);
   if (!meta || meta.gameId !== gameId) {
-    await interaction.followUp({ content: 'Invalid.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) {
-    await interaction.followUp({ content: 'Only the owner can perform this action.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner can perform this action.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const actionsData = game.dcActionsData?.[msgId];
   const previousRemaining = actionsData?.remaining ?? 2;
   if (previousRemaining <= 0) {
-    await interaction.followUp({ content: 'No actions remaining this activation.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No actions remaining this activation.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
@@ -70,7 +71,7 @@ export async function handleInteractChoice(interaction, ctx) {
   const options = mapId ? getLegalInteractOptions(game, playerNum, figureKey, mapId) : [];
   const opt = options.find((o) => o.id === optionId);
   if (!opt) {
-    await interaction.followUp({ content: 'That interact is no longer valid.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'That interact is no longer valid.', ephemeral: true }).catch(discordCatch);
     return;
   }
   // F14: Snapshot state before mutate for undo
@@ -89,7 +90,7 @@ export async function handleInteractChoice(interaction, ctx) {
     previousOpenedDoors = game.openedDoors ? game.openedDoors.slice() : [];
   }
 
-  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   actionsData.remaining = Math.max(0, previousRemaining - 1);
   await updateDcActionsMessage(game, msgId, interaction.client);

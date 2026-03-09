@@ -4,6 +4,7 @@
 import { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { getPlayerId } from '../game/player-helpers.js';
 import { edgeKey } from '../game/coords.js';
+import { discordCatch } from '../error-handling.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -22,18 +23,18 @@ export async function handleDevaronDoorOpen(interaction, ctx) {
     const edgeA = beforePipe.substring(lastUnderscore + 1);
     const openedEdgeKey = edgeKey(edgeA, afterPipe);
     const game = getGame(gameId);
-    if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
     const pending = game.pendingDoorSelections?.[0];
-    if (!pending) { await interaction.followUp({ content: 'No pending door selections.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
-    if (!canActAsPlayer(game, interaction.user.id, pending.playerNum)) { await interaction.followUp({ content: 'Only the controlling player can select a door.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
-    await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+    if (!pending) { await interaction.followUp({ content: 'No pending door selections.', ephemeral: true }).catch(discordCatch); return; }
+    if (!canActAsPlayer(game, interaction.user.id, pending.playerNum)) { await interaction.followUp({ content: 'Only the controlling player can select a door.', ephemeral: true }).catch(discordCatch); return; }
+    await interaction.deferUpdate().catch(discordCatch);
     game.openedDoors = game.openedDoors || [];
     if (!game.openedDoors.includes(openedEdgeKey)) game.openedDoors.push(openedEdgeKey);
     const pid = getPlayerId(game, pending.playerNum);
     await logGameAction(game, client, `🚪 <@${pid}> opened door **${edgeA.toUpperCase()}↔${afterPipe.toUpperCase()}** (Crate Rush — terminal effect).`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
     pending.doorsRemaining--;
     if (pending.doorsRemaining <= 0) game.pendingDoorSelections.shift();
-    await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
     const allDoors = getMapTokensData()['devaron-garrison']?.doors || [];
     const generalCh = await client.channels.fetch(game.generalId);
     if (game.pendingDoorSelections.length > 0) {
@@ -57,11 +58,11 @@ export async function handleDevaronCratePush(interaction, ctx) {
     const gameId = rest.substring(0, lastUnderscore);
     const origCoord = rest.substring(lastUnderscore + 1);
     const game = getGame(gameId);
-    if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
     const curCoord = String(game.cratePositions?.[origCoord] || origCoord).toLowerCase();
     const controller = getSpaceController(game, 'devaron-garrison', curCoord);
-    if (!controller) { await interaction.followUp({ content: 'No one controls this crate currently.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
-    if (!canActAsPlayer(game, interaction.user.id, controller)) { await interaction.followUp({ content: 'Only the controlling player can push this crate.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    if (!controller) { await interaction.followUp({ content: 'No one controls this crate currently.', ephemeral: true }).catch(discordCatch); return; }
+    if (!canActAsPlayer(game, interaction.user.id, controller)) { await interaction.followUp({ content: 'Only the controlling player can push this crate.', ephemeral: true }).catch(discordCatch); return; }
     const modal = new ModalBuilder()
       .setCustomId(`devaron_crate_modal_${gameId}_${origCoord}`)
       .setTitle(`Push crate (at ${curCoord.toUpperCase()})`);
@@ -75,7 +76,7 @@ export async function handleDevaronCratePush(interaction, ctx) {
           .setRequired(true)
       )
     );
-    await interaction.showModal(modal).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.showModal(modal).catch(discordCatch);
     return;
 }
 
@@ -92,16 +93,16 @@ export async function handleKryknaPush(interaction, ctx) {
     const gameId = rest.substring(0, kryknaIdx - 1);
     const kryknaId = rest.substring(kryknaIdx);
     const game = getGame(gameId);
-    if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
     if (!game.pendingKryknaPushQueue || game.pendingKryknaPushQueue.length === 0) {
-      await interaction.followUp({ content: 'No Krykna push pending.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return;
+      await interaction.followUp({ content: 'No Krykna push pending.', ephemeral: true }).catch(discordCatch); return;
     }
     const expectedPlayerNum = game.pendingKryknaPushQueue[0];
     if (!canActAsPlayer(game, interaction.user.id, expectedPlayerNum)) {
-      await interaction.followUp({ content: `It's Player ${expectedPlayerNum}'s turn to push a Krykna.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return;
+      await interaction.followUp({ content: `It's Player ${expectedPlayerNum}'s turn to push a Krykna.`, ephemeral: true }).catch(discordCatch); return;
     }
     const krykna = (game.npcKrykna || []).find((k) => k.id === kryknaId);
-    if (!krykna || krykna.defeated) { await interaction.followUp({ content: 'Krykna not found or already defeated.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+    if (!krykna || krykna.defeated) { await interaction.followUp({ content: 'Krykna not found or already defeated.', ephemeral: true }).catch(discordCatch); return; }
     const modal = new ModalBuilder()
       .setCustomId(`krykna_push_modal_${gameId}_${kryknaId}`)
       .setTitle(`Push ${kryknaId} (at ${String(krykna.coord).toUpperCase()})`);
@@ -115,6 +116,6 @@ export async function handleKryknaPush(interaction, ctx) {
           .setRequired(true)
       )
     );
-    await interaction.showModal(modal).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.showModal(modal).catch(discordCatch);
     return;
 }

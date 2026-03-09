@@ -4,7 +4,7 @@
 import { EmbedBuilder, ChannelType, ThreadAutoArchiveDuration } from 'discord.js';
 import { getActivationsMessageId, getActivationsRemaining, getActivationsTotal, getPlayAreaId } from '../game/player-helpers.js';
 import { enforceContentLimit, DISCORD_CONTENT_LIMIT } from './limits.js';
-import { withDiscordRetry } from '../error-handling.js';
+import { withDiscordRetry, discordCatch } from '../error-handling.js';
 
 /** Orange sidebar color for phase embeds */
 export const PHASE_COLOR = 0xf39c12;
@@ -106,8 +106,8 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
       console.error('logGameErrorToBotLogs: no guild (interaction may be in DMs)');
       return;
     }
-    await guild.channels.fetch().catch((err) => { console.error('[discord]', err?.message ?? err); });
-    await guild.roles.fetch().catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await guild.channels.fetch().catch(discordCatch);
+    await guild.roles.fetch().catch(discordCatch);
     const ch = guild.channels.cache.find((c) => {
       if (c.type !== ChannelType.GuildText) return false;
       const name = (c.name || '').toLowerCase().trim();

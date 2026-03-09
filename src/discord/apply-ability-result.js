@@ -1,6 +1,6 @@
 import { getPlayAreaId } from '../game/player-helpers.js';
 import { enforceContentLimit } from './limits.js';
-import { withDiscordRetry } from '../error-handling.js';
+import { withDiscordRetry, discordCatch } from '../error-handling.js';
 
 /**
  * Unified handler for resolveAbility() result fields.
@@ -61,7 +61,7 @@ export async function applyAbilityResult(result, opts) {
             meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta)
           );
           const components = getDcPlayAreaComponents(id, false, game, meta.dcName);
-          await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch(discordCatch);
         } catch (err) {
           console.error('Failed to update DC embed after ready:', err);
         }
@@ -118,7 +118,7 @@ export async function applyAbilityResult(result, opts) {
     for (const id of idsToRefresh) {
       if (seen.has(id)) continue;
       seen.add(id);
-      await updateDcActionsMessage(game, id, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await updateDcActionsMessage(game, id, client).catch(discordCatch);
     }
     // Also rebuild the DC play area embed for each refreshed ID so conditions/health show up there too.
     // readyDcMsgIds already rebuilds with exhausted=false; here we rebuild with the current exhausted state.
@@ -137,7 +137,7 @@ export async function applyAbilityResult(result, opts) {
           meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta)
         );
         const components = getDcPlayAreaComponents(id, exhausted, game, meta.dcName);
-        await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await withDiscordRetry(() => msg.edit({ embeds: [embed], files, components })).catch(discordCatch);
       } catch (err) {
         console.error('Failed to refresh DC play area embed:', err);
       }
@@ -147,10 +147,10 @@ export async function applyAbilityResult(result, opts) {
   // --- Refresh movement bank ---
   if (result.applied && result.refreshMovementBank && result.activeMsgId) {
     if (ensureMovementBankMessage) {
-      await ensureMovementBankMessage(game, result.activeMsgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await ensureMovementBankMessage(game, result.activeMsgId, client).catch(discordCatch);
     }
     if (updateMovementBankMessage) {
-      await updateMovementBankMessage(game, result.activeMsgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await updateMovementBankMessage(game, result.activeMsgId, client).catch(discordCatch);
     }
   }
 
@@ -173,7 +173,7 @@ export async function applyAbilityResult(result, opts) {
       if (!data?.threadId) continue;
       try {
         const thread = await client.channels.fetch(data.threadId);
-        await withDiscordRetry(() => thread.send({ content: enforceContentLimit(`💡 ${result.logMessage}`) })).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await withDiscordRetry(() => thread.send({ content: enforceContentLimit(`💡 ${result.logMessage}`) })).catch(discordCatch);
       } catch (err) {
         console.error('Failed to send CC effect to DC thread:', err);
       }
@@ -188,7 +188,7 @@ export async function applyAbilityResult(result, opts) {
       seen.add(cond);
       const imgPath = getConditionCardPath(cond);
       if (imgPath) {
-        await logGameAction(game, client, `📋 **${cond}** condition card:`, { phase: 'ACTION', icon: 'card', files: [imgPath] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await logGameAction(game, client, `📋 **${cond}** condition card:`, { phase: 'ACTION', icon: 'card', files: [imgPath] }).catch(discordCatch);
       }
     }
   }

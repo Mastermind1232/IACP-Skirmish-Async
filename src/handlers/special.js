@@ -1,3 +1,4 @@
+import { discordCatch } from '../error-handling.js';
 /**
  * Special action handler: special_done_
  */
@@ -7,6 +8,6 @@ export async function handleSpecialDone(interaction) {
     await interaction.message.edit({
       content: (interaction.message.content || '').replace('Click **Done** when finished.', '✓ Resolved.'),
       components: [],
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
   }
 }

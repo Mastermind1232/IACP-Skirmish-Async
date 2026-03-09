@@ -16,6 +16,7 @@ import {
   getCcHand, getCcDeck, getSquad,
   ccHandKey, ccDiscardKey, ccAttachmentsKey, dcAttachmentsKey, vpKey as vpKeyFn,
 } from '../game/player-helpers.js';
+import { discordCatch } from '../error-handling.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
@@ -56,25 +57,25 @@ export async function handleDcActivate(interaction, ctx) {
   const dcIndex = parseInt(parts[2], 10);
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this Play Area can activate their DCs.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner of this Play Area can activate their DCs.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const ownerId = getPlayerId(game, playerNum);
   const dcList = getDcList(game, playerNum) || [];
   const dc = dcList[dcIndex];
   if (!dc) {
-    await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const { dcName, displayName, healthState } = dc;
   const remaining = getActivationsRemaining(game, playerNum);
   if (remaining <= 0) {
-    await interaction.followUp({ content: 'No activations remaining this round.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No activations remaining this round.', ephemeral: true }).catch(discordCatch);
     return;
   }
   // Sit Tight: cannot activate when you have fewer or equal ready DCs than opponent
@@ -82,14 +83,14 @@ export async function handleDcActivate(interaction, ctx) {
     const oppNum = playerNum === 1 ? 2 : 1;
     const oppRem = getActivationsRemaining(game, oppNum) ?? 0;
     if (remaining <= oppRem) {
-      await interaction.followUp({ content: '**Sit Tight** — you cannot activate until you have more ready Deployment cards than your opponent.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: '**Sit Tight** — you cannot activate until you have more ready Deployment cards than your opponent.', ephemeral: true }).catch(discordCatch);
       return;
     }
   }
   const dcMessageIds = getDcMessageIds(game, playerNum) || [];
   const msgId = dcMessageIds[dcIndex];
   if (!msgId) {
-    await interaction.followUp({ content: 'DC message not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'DC message not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   // Agitate: if the opponent's surge forced this player's group to activate next
@@ -99,7 +100,7 @@ export async function handleDcActivate(interaction, ctx) {
       const activatedKey = `p${playerNum}ActivatedDcIndices`;
       const forcedIdx = dcList.findIndex((d) => d.dcName === forcedDcName);
       if (forcedIdx >= 0 && !(game[activatedKey] || []).includes(forcedIdx)) {
-        await interaction.followUp({ content: `**Agitate** — **${forcedDcName}** must be the next group to activate, if able.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.followUp({ content: `**Agitate** — **${forcedDcName}** must be the next group to activate, if able.`, ephemeral: true }).catch(discordCatch);
         return;
       }
       game.agitateNextActivation = null;
@@ -215,7 +216,7 @@ export async function handleDcActivate(interaction, ctx) {
         content: `<@${sftOwnerId}> — **Still Faster Than You**: interrupt now (move 2 + attack a different hostile) or skip?`,
         components: [sftRow],
         allowedMentions: { users: [sftOwnerId] },
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
       game.pendingStillFaster = { gameId, activatingMsgId: msgId, activatingPlayerNum: playerNum, sftPlayerNum };
     }
     // Auto-prompt opponent for hostile-activation reaction cards (Overcharged Weapons, etc.)
@@ -237,11 +238,11 @@ export async function handleDcActivate(interaction, ctx) {
       console.error('Activation reaction prompt error:', _actReactErr?.message ?? _actReactErr);
     }
     const activateRows = getActivateDcButtons(game, playerNum);
-    await interaction.editReply({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.editReply({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch(discordCatch);
   } catch (err) {
     console.error('dc_activate_ error:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, extractGameIdFromInteraction(interaction), err, 'dc_activate');
-    await interaction.followUp({ content: `Activation failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `Activation failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch(discordCatch);
   }
 }
 
@@ -265,22 +266,22 @@ export async function handleDcUnactivate(interaction, ctx) {
   const msgId = interaction.customId.replace('dc_unactivate_', '');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.followUp({ content: 'Only the owner can un-activate.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner can un-activate.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const ownerId = getPlayerId(game, meta.playerNum);
   const wasExhausted = dcExhaustedState.get(msgId) ?? false;
   if (!wasExhausted) {
-    await interaction.followUp({ content: 'DC is not activated.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'DC is not activated.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const displayName = meta.displayName || meta.dcName;
@@ -330,7 +331,7 @@ export async function handleDcUnactivate(interaction, ctx) {
     try {
       const logCh = await client.channels.fetch(game.generalId);
       const logMsg = await logCh.messages.fetch(game.dcActivationLogMessageIds[msgId]);
-      await logMsg.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await logMsg.delete().catch(discordCatch);
     } catch {}
     delete game.dcActivationLogMessageIds[msgId];
   }
@@ -370,16 +371,16 @@ export async function handleDcToggle(interaction, ctx) {
   const msgId = interaction.customId.replace('dc_toggle_', '');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this Play Area can toggle their DCs.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner of this Play Area can toggle their DCs.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const ownerId = getPlayerId(game, meta.playerNum);
@@ -477,7 +478,7 @@ export async function handleDcToggle(interaction, ctx) {
       try {
         const logCh = await client.channels.fetch(game.generalId);
         const logMsg = await logCh.messages.fetch(game.dcActivationLogMessageIds[msgId]);
-        await logMsg.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await logMsg.delete().catch(discordCatch);
       } catch {}
       delete game.dcActivationLogMessageIds[msgId];
     }
@@ -514,21 +515,21 @@ export async function handleDcDeplete(interaction, ctx) {
   const msgId = interaction.customId.replace('dc_deplete_', '');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this Play Area can Deplete their upgrade.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner of this Play Area can Deplete their upgrade.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const ownerId = getPlayerId(game, meta.playerNum);
   if (isDepletedRemovedFromGame(game, msgId)) {
-    await interaction.followUp({ content: 'This upgrade was already depleted and removed from the game.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'This upgrade was already depleted and removed from the game.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (meta.playerNum === 1) {
@@ -633,17 +634,17 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   const idx = parseInt(rest.slice(lastUnderscore + 1), 10);
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this activation can play a CC here.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner of this activation can play a CC here.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const ownerId = getPlayerId(game, meta.playerNum);
@@ -653,7 +654,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   const discardKey = ccDiscardKey(meta.playerNum);
   const hand = game[handKey] || [];
   if (!card || hand.indexOf(card) < 0) {
-    await interaction.followUp({ content: "That card isn't in your hand or isn't playable for this figure.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: "That card isn't in your hand or isn't playable for this figure.", ephemeral: true }).catch(discordCatch);
     return;
   }
   // F14: Snapshot for undo before mutating
@@ -690,7 +691,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       embeds: handPayload.embeds || [],
       files: handPayload.files || [],
       components: handPayload.components || [],
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
   }
   await updateHandVisualMessage(game, meta.playerNum, interaction.client);
   await updateDiscardPileMessage(game, meta.playerNum, interaction.client);
@@ -715,7 +716,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
           const _fn = `cc-log-${(card || '').replace(/[^a-zA-Z0-9]/g, '')}.${_ext}`;
           const _embed = new _EB().setTitle(card).setColor(0x2f3136).setImage(`attachment://${_fn}`);
           const _logCh = await interaction.client.channels.fetch(game.generalId).catch(() => null);
-          if (_logCh) await _logCh.send({ embeds: [_embed], files: [new _AB(_imgPath, { name: _fn })] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          if (_logCh) await _logCh.send({ embeds: [_embed], files: [new _AB(_imgPath, { name: _fn })] }).catch(discordCatch);
         }
       } catch (err) {
         console.error('[cc-image-log]', err?.message ?? err);
@@ -733,7 +734,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
         content: `<@${oppId}> Your opponent played **${card}** (cost 0). You may play **Negation** to cancel it.`,
         components: [ctx.getNegationResponseButtons(game.gameId)],
         allowedMentions: { users: [oppId] },
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
     }
     const waitingMsg = await handChannel.send({
       content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
@@ -772,7 +773,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
         );
       }
       const handCh = await interaction.client.channels.fetch(handChannelId);
-      await handCh.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await handCh.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(discordCatch);
     } else {
       await applyAbilityResult(result, { game, playerNum: meta.playerNum, msgId, client: interaction.client, ctx });
       if (result.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
@@ -790,7 +791,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
             await ptThread.send({
               content: `**Choose power token type** for **${figNames}** (${totalCount > 1 ? `${totalCount} tokens` : '1 token'}):`,
               components: [new ActionRowBuilder().addComponents(btns)],
-            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            }).catch(discordCatch);
           }
         }
       }
@@ -1042,7 +1043,7 @@ async function buildAndSendAttackTargets(
     delete game.autofireChainTargetSpace[msgId];
   }
   if (targets.length === 0) {
-    await interaction.followUp({ content: 'No valid targets in range.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No valid targets in range.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const displayName = meta.displayName || meta.dcName;
@@ -1070,7 +1071,7 @@ async function buildAndSendAttackTargets(
     content: `**Attack** — Choose target for **${figLabel}**:`,
     components: targetRows.slice(0, 5),
     ephemeral: false,
-  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }).catch(discordCatch);
 }
 
 export async function handleDcAction(interaction, ctx, buttonKey) {
@@ -1135,17 +1136,17 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
 
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this Play Area can use these actions.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner of this Play Area can use these actions.', ephemeral: true }).catch(discordCatch);
     return;
   }
   // Resolve attachment-injected special action names and costs
@@ -1165,7 +1166,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   const hasFellSwoopFreeAttack = action === 'Attack' && !!game.fellSwoopFreeAttack?.[msgId];
   const hasPummelFreeAttack = action === 'Attack' && !!(game.pummelTwoAttacksThisActivation?.[msgId]);
   if (actionsRemaining <= 0 && !hasFellSwoopFreeAttack && !hasPummelFreeAttack) {
-    await interaction.followUp({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (buttonKey === 'dc_special_') {
@@ -1173,17 +1174,17 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const specialIdx = parseInt(parts[0], 10);
     const specialsUsed = actionsData?.specialsUsed ?? [];
     if (specialsUsed.includes(specialIdx)) {
-      await interaction.followUp({ content: "That special has already been used this activation (each special once per activation unless a card says otherwise).", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: "That special has already been used this activation (each special once per activation unless a card says otherwise).", ephemeral: true }).catch(discordCatch);
       return;
     }
     // Disable: cannot use Special Actions this round
     const dispNameForDisable = meta.displayName || meta.dcName;
     if (game.disabledFigures?.includes(dispNameForDisable)) {
-      await interaction.followUp({ content: `**${dispNameForDisable}** is Disabled — cannot use Special Actions this round.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: `**${dispNameForDisable}** is Disabled — cannot use Special Actions this round.`, ephemeral: true }).catch(discordCatch);
       return;
     }
     if (actionsRemaining < _effectiveActionCost) {
-      await interaction.followUp({ content: `**${action}** costs ${_effectiveActionCost > 1 ? 'both actions' : '1 action'} — you only have ${actionsRemaining} action(s) remaining this activation.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: `**${action}** costs ${_effectiveActionCost > 1 ? 'both actions' : '1 action'} — you only have ${actionsRemaining} action(s) remaining this activation.`, ephemeral: true }).catch(discordCatch);
       return;
     }
     // Snapshot state before any DC special changes (undo restores from this)
@@ -1199,13 +1200,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       // Stunned figures cannot Move
       const moveFigureConds = game.figureConditions?.[figureKey] || [];
       if (moveFigureConds.includes('Stun')) {
-        await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** is **Stunned** and cannot Move or Attack this activation.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** is **Stunned** and cannot Move or Attack this activation.`, ephemeral: true }).catch(discordCatch);
         return;
       }
       const playerNum = meta.playerNum;
       const pos = game.figurePositions?.[playerNum]?.[figureKey];
       if (!pos) {
-        await interaction.followUp({ content: 'This figure has no position yet (deploy first).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.followUp({ content: 'This figure has no position yet (deploy first).', ephemeral: true }).catch(discordCatch);
         return;
       }
       const stats = getDcStats(meta.dcName);
@@ -1244,13 +1245,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await ensureMovementBankMessage(game, msgId, client);
       const boardState = getBoardStateForMovement(game, figureKey);
       if (!boardState) {
-        await interaction.followUp({ content: 'Map spaces data not found for this map. Run: npm run generate-map-spaces', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.followUp({ content: 'Map spaces data not found for this map. Run: npm run generate-map-spaces', ephemeral: true }).catch(discordCatch);
         return;
       }
       const profile = getMovementProfile(meta.dcName, figureKey, game);
       const cache = computeMovementCache(pos, mpRemaining, boardState, profile);
       if (cache.cells.size === 0) {
-        await interaction.followUp({ content: 'No valid movement spaces.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.followUp({ content: 'No valid movement spaces.', ephemeral: true }).catch(discordCatch);
         return;
       }
       const actData = game.dcActionsData?.[msgId];
@@ -1309,7 +1310,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     } catch (err) {
       console.error('Move button error:', err);
       await logGameErrorToBotLogs(interaction.client, interaction.guild, extractGameIdFromInteraction(interaction), err, 'dc_move');
-      await interaction.followUp({ content: `Move failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: `Move failed: ${err.message}. Check bot console for details.`, ephemeral: true }).catch(discordCatch);
       return;
     }
   }
@@ -1318,7 +1319,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // Non-Combatant (C-3PO): cannot attack
     const ncEff = getDcEffects()?.[meta?.dcName];
     if ((ncEff?.specialAbilityIds || []).includes('non_combatant_c3po')) {
-      await interaction.followUp({ content: '**Non-Combatant** — This figure cannot attack.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: '**Non-Combatant** — This figure cannot attack.', ephemeral: true }).catch(discordCatch);
       return;
     }
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
@@ -1326,7 +1327,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // Stunned figures cannot Attack
     const attackFigureConds = game.figureConditions?.[figureKey] || [];
     if (attackFigureConds.includes('Stun')) {
-      await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** is **Stunned** and cannot Move or Attack this activation.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** is **Stunned** and cannot Move or Attack this activation.`, ephemeral: true }).catch(discordCatch);
       return;
     }
     // Assault rule: non-Assault DCs can only perform 1 attack per activation (free attacks exempt)
@@ -1340,7 +1341,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         const _asFigKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
         if (hasAssault && (getConfig(game, _asFigKey)?.attachments || []).includes('Scavenged Walker')) hasAssault = false;
         if (!hasAssault) {
-          await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** has already attacked this activation and does not have **Assault** (only 1 attack per activation without Assault).`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** has already attacked this activation and does not have **Assault** (only 1 attack per activation without Assault).`, ephemeral: true }).catch(discordCatch);
           return;
         }
       }
@@ -1348,7 +1349,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const playerNum = meta.playerNum;
     const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
     if (!attackerPos) {
-      await interaction.followUp({ content: 'This figure has no position yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'This figure has no position yet.', ephemeral: true }).catch(discordCatch);
       return;
     }
     const stats = getDcStats(meta.dcName);
@@ -1363,7 +1364,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
     const ms = getMapSpaces(game.selectedMap?.id);
     if (!ms) {
-      await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
       return;
     }
     const enemyPlayerNum = playerNum === 1 ? 2 : 1;
@@ -1371,7 +1372,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const noCheatingDebuff = game.roundDebuffNextHostileActivation;
     if (noCheatingDebuff && (3 - noCheatingDebuff.playerNum) === playerNum && noCheatingDebuff.melee) {
       if (stats.attack?.type === 'range') {
-        await interaction.followUp({ content: '⚠️ **No Cheating** is active — this figure can only make melee attacks this activation.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.followUp({ content: '⚠️ **No Cheating** is active — this figure can only make melee attacks this activation.', ephemeral: true }).catch(discordCatch);
         return;
       }
     }
@@ -1394,7 +1395,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         content: `**${displayName_} — ${abilityName}**: Choose your ${diceCount} attack dice:`,
         components: [selectRow],
         ephemeral: false,
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
       return;
     }
     // EE-3 Carbine (Boba Fett): spend 2 MP to change one attack die to red (limit once per attack)
@@ -1423,7 +1424,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
             content: `**EE-3 Carbine** — Spend **2 MP** (${mpRemaining} remaining) to change one attack die to red:`,
             components: [new ActionRowBuilder().addComponents(dieBtns)],
             ephemeral: false,
-          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }).catch(discordCatch);
           saveGames();
           return;
         }
@@ -1450,12 +1451,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const mapId = game.selectedMap?.id;
     const pos = game.figurePositions?.[playerNum]?.[figureKey];
     if (!pos) {
-      await interaction.followUp({ content: 'This figure has no position yet (deploy first).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'This figure has no position yet (deploy first).', ephemeral: true }).catch(discordCatch);
       return;
     }
     const options = mapId ? getLegalInteractOptions(game, playerNum, figureKey, mapId) : [];
     if (options.length === 0) {
-      await interaction.followUp({ content: 'No valid interact options (must be on or adjacent to a terminal, door, or mission token).', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'No valid interact options (must be on or adjacent to a terminal, door, or mission token).', ephemeral: true }).catch(discordCatch);
       return;
     }
     const missionOpts = options.filter((o) => o.missionSpecific);
@@ -1489,7 +1490,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       content: `**Interact** — Choose action for **${figLabel}**:`,
       components: rows.slice(0, 5),
       ephemeral: false,
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
     return;
   }
 
@@ -1806,7 +1807,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     if (resolveResult.refreshDcEmbed && ctx.updateAttachmentMessageForDc) {
       await ctx.updateAttachmentMessageForDc(game, meta?.playerNum, msgId, client).catch(() => {});
     }
-    await interaction.followUp({ content: `**${action}** — Choose one:`, components: rows.slice(0, 5), ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `**${action}** — Choose one:`, components: rows.slice(0, 5), ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -1825,7 +1826,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         : rows.slice(0, 5);
       const payload = { content: spacePickLabel, components: pounceComponents, ephemeral: false, fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
-      await interaction.followUp(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp(payload).catch(discordCatch);
       saveGames();
       return;
     }
@@ -1844,9 +1845,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const salvoThread = threadId ? await client.channels.fetch(threadId).catch(() => null) : null;
       const salvoMsg = `<@${ownerId}> **Missile Salvo** — Choose a die for your next ranged attack (+3 Accuracy, different targets). ${ms.diceAvailable.length} shot${ms.diceAvailable.length !== 1 ? 's' : ''} remaining.`;
       if (salvoThread) {
-        await salvoThread.send({ content: salvoMsg, components: [new AR().addComponents(btns)], allowedMentions: { users: [ownerId] } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await salvoThread.send({ content: salvoMsg, components: [new AR().addComponents(btns)], allowedMentions: { users: [ownerId] } }).catch(discordCatch);
       } else {
-        await interaction.followUp({ content: salvoMsg, components: [new AR().addComponents(btns)], allowedMentions: { users: [ownerId] }, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.followUp({ content: salvoMsg, components: [new AR().addComponents(btns)], allowedMentions: { users: [ownerId] }, ephemeral: false }).catch(discordCatch);
       }
       saveGames();
       return;
@@ -1874,7 +1875,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         await ptThread.send({
           content: `**Choose power token type** for **${figNames}** (${totalCount > 1 ? `${totalCount} tokens` : '1 token'}):`,
           components: [new ActionRowBuilder().addComponents(btns)],
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
       }
     }
   }
@@ -1892,7 +1893,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
       await updateDcActionsMessage(game, msgId, client);
       const thread = interaction.channel;
-      await thread.send(`**Expertise** — ${displayName} gains 1 extra action this activation.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send(`**Expertise** — ${displayName} gains 1 extra action this activation.`).catch(discordCatch);
     }
   }
   const manualMsg = resolveResult.manualMessage || 'Resolve manually (see rules).';
@@ -1906,7 +1907,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     content: `**${action}** — ${resolveResult.applied ? 'Resolved.' : manualMsg} Click **Done** when finished.`,
     components: [doneRow],
     ephemeral: false,
-  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }).catch(discordCatch);
   // Bleeding: trigger after DC Special action resolves
   if (buttonKey === 'dc_special_' && ctx.sendBleedingPrompt) {
     const selectedFigure = actionsData?.selectedFigure ?? 0;
@@ -1926,7 +1927,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
 export async function handleDcAbilityChoice(interaction, ctx) {
   const match = interaction.customId.match(/^dc_ability_choice_([^_]+)_([^_]+)_(\d+)_(\d+)$/);
   if (!match) {
-    await interaction.followUp({ content: 'Invalid choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid choice.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const [, gameId, msgId, specialIdxStr, choiceIndexStr] = match;
@@ -1935,17 +1936,17 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   const { getGame, dcMessageMeta, dcHealthState, resolveAbility, updateDcActionsMessage, saveGames, client, getSpaceChoiceRows, getMapAttachmentForSpaces, getBoardStateForMovement } = ctx;
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const pending = game.pendingDcAbilityChoice?.[`${msgId}_${specialIdx}`];
   if (!pending || pending.gameId !== gameId) {
-    await interaction.followUp({ content: 'No pending ability choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No pending ability choice.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const { playerNum, abilityId, figureIndex, targetFigureKeys } = pending;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the ability owner can choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the ability owner can choose.', ephemeral: true }).catch(discordCatch);
     return;
   }
   delete game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`];
@@ -1960,7 +1961,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     const logParts = [r0.logMessage, r1.logMessage].filter(Boolean);
     const wvLog = `**Wreak Vengeance** — Both Dual-Bladed Fury effects applied:\n${logParts.join('\n')}`;
     await interaction.deferUpdate().catch(() => {});
-    await interaction.followUp({ content: wvLog, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: wvLog, ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -1976,7 +1977,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   if (!resolveResult.applied && resolveResult.falseOrdersActionPick) {
     const fo = game.pendingFalseOrders;
     if (!fo) {
-      await interaction.followUp({ content: 'False Orders state lost.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'False Orders state lost.', ephemeral: true }).catch(discordCatch);
       saveGames();
       return;
     }
@@ -1993,7 +1994,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
       content: `**False Orders** — Choose action for **${controlledName}**:`,
       components: [new ActionRowBuilder().addComponents(moveBtn, atkBtn)],
       ephemeral: false,
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -2013,12 +2014,12 @@ export async function handleDcAbilityChoice(interaction, ctx) {
         : rows.slice(0, 5);
       const payload = { content: spacePickLabel, components: pounce2Components, ephemeral: false };
       if (mapAttachment) payload.files = [mapAttachment];
-      await interaction.followUp(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp(payload).catch(discordCatch);
       saveGames();
       return;
     }
     // Fallback if space choice helpers not available
-    await interaction.followUp({ content: `${resolveResult.spaceChoiceLabel || 'Pick a landing space'} (resolve manually — space picker unavailable).`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `${resolveResult.spaceChoiceLabel || 'Pick a landing space'} (resolve manually — space picker unavailable).`, ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -2041,7 +2042,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
       rows.push(new ActionRowBuilder().addComponents(choiceButtons.slice(i, i + 5)));
     }
     const prompt = resolveResult.choicePrompt || `**${abilityId}** — Choose:`;
-    await interaction.followUp({ content: prompt, components: rows.slice(0, 5), ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: prompt, components: rows.slice(0, 5), ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -2066,7 +2067,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     content: `**Choice resolved** — ${resolveResult.logMessage || (resolveResult.applied ? 'Applied.' : resolveResult.manualMessage || 'Resolve manually.')} Click Done when finished.`,
     components: [doneRow],
     ephemeral: false,
-  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }).catch(discordCatch);
   saveGames();
 }
 
@@ -2079,7 +2080,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
   // pounce_space_{gameId}_{msgId}_{figureIndex}_{space}
   const match = interaction.customId.match(/^pounce_space_([^_]+)_([^_]+)_(\d+)_(.+)$/);
   if (!match) {
-    await interaction.followUp({ content: 'Invalid pounce space choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid pounce space choice.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const [, gameId, msgId, figureIndexStr, space] = match;
@@ -2087,22 +2088,22 @@ export async function handlePounceSpacePick(interaction, ctx) {
   const { getGame, dcMessageMeta, resolveAbility, logGameAction, updateDcActionsMessage, buildBoardMapPayload, client, saveGames } = ctx;
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const pending = game.pendingPounceSpaceChoice?.[msgId];
   if (!pending || pending.gameId !== gameId) {
-    await interaction.followUp({ content: 'No pending pounce space choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No pending pounce space choice.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const { playerNum, abilityId, validSpaces, targetFigureKey } = pending;
   if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the activating player can choose the destination.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the activating player can choose the destination.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const validLower = (validSpaces || []).map((s) => String(s).toLowerCase());
   if (!validLower.includes(chosenSpace)) {
-    await interaction.followUp({ content: 'That space is not a valid destination.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'That space is not a valid destination.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const meta = dcMessageMeta.get(msgId);
@@ -2110,7 +2111,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
   delete game.pendingPounceSpaceChoice[msgId];
   if (result.applied) {
     if (result.logMessage) {
-      await logGameAction(game, client, result.logMessage, { phase: 'ROUND', icon: 'move' }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await logGameAction(game, client, result.logMessage, { phase: 'ROUND', icon: 'move' }).catch(discordCatch);
     }
     if (result.refreshBoard && game.boardId && game.selectedMap && buildBoardMapPayload) {
       try {
@@ -2121,7 +2122,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
         console.error('Pounce board refresh failed:', err);
       }
     }
-    await updateDcActionsMessage(game, msgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
     const doneRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`special_done_${gameId}_${msgId}`)
@@ -2137,9 +2138,9 @@ export async function handlePounceSpacePick(interaction, ctx) {
     await interaction.message.edit({
       content: editContent,
       components: [doneRow],
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
   } else {
-    await interaction.message.edit({ content: `${abilityId === 'pounce' ? 'Pounce' : 'Ability'} failed: ${result.manualMessage}`, components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.message.edit({ content: `${abilityId === 'pounce' ? 'Pounce' : 'Ability'} failed: ${result.manualMessage}`, components: [] }).catch(discordCatch);
   }
   saveGames();
 }
@@ -2157,7 +2158,7 @@ export async function handleArsenalPick(interaction, ctx) {
   const figureIndex = parseInt(parts[parts.length - 1], 10);
   const msgId = parts.slice(1, -1).join('_');
 
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
 
   const { getGame, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames, replyIfGameEnded } = ctx;
   const meta = dcMessageMeta.get(msgId);
@@ -2180,7 +2181,7 @@ export async function handleArsenalPick(interaction, ctx) {
   const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
   const ms = getMapSpaces(game.selectedMap?.id);
   if (!ms) {
-    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const playerNum = meta.playerNum;
@@ -2189,7 +2190,7 @@ export async function handleArsenalPick(interaction, ctx) {
   const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
   const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!attackerPos) {
-    await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch(discordCatch);
     return;
   }
 
@@ -2244,7 +2245,7 @@ export async function handleEe3DiePick(interaction, ctx) {
   const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
   const ms = getMapSpaces(game.selectedMap?.id);
   if (!ms) {
-    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const playerNum = meta.playerNum;
@@ -2253,7 +2254,7 @@ export async function handleEe3DiePick(interaction, ctx) {
   const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
   const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!attackerPos) {
-    await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch(discordCatch);
     return;
   }
 
@@ -2279,16 +2280,16 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     saveGames, FIGURE_LETTERS,
   } = ctx;
   const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
   if (await replyIfGameEnded(game, interaction)) return;
   const fo = game.pendingFalseOrders;
   if (!fo || fo.murneRinMsgId !== msgId) {
-    await interaction.followUp({ content: 'No pending False Orders.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No pending False Orders.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const { controlledFigureKey, controlledPlayerNum, controllerPlayerNum } = fo;
   if (!canActAsPlayer(game, interaction.user.id, controllerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the controller may choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the controller may choose.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const controlledName = controlledFigureKey.replace(/-\d+-\d+$/, '');
@@ -2297,12 +2298,12 @@ export async function handleFalseOrdersAction(interaction, ctx) {
 
   if (choice === 'move') {
     if (!controlledPos) {
-      await interaction.followUp({ content: `${controlledName} has no position — resolve manually.`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: `${controlledName} has no position — resolve manually.`, ephemeral: false }).catch(discordCatch);
       return;
     }
     const boardState = getBoardStateForMovement(game, controlledFigureKey);
     if (!boardState) {
-      await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
       return;
     }
     const moveSpeed = controlledStats?.move ?? 3;
@@ -2310,7 +2311,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     const cache = computeMovementCache(controlledPos, moveSpeed, boardState, profile);
     const reachableSpaces = [...cache.cells.keys()];
     if (reachableSpaces.length === 0) {
-      await interaction.followUp({ content: `${controlledName} cannot move (no valid spaces).`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: `${controlledName} cannot move (no valid spaces).`, ephemeral: false }).catch(discordCatch);
       return;
     }
     const prefix = `false_orders_space_${gameId}_${msgId}_`;
@@ -2331,14 +2332,14 @@ export async function handleFalseOrdersAction(interaction, ctx) {
       ephemeral: false,
     };
     if (mapAttachment) payload.files = [mapAttachment];
-    await interaction.followUp(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp(payload).catch(discordCatch);
     saveGames();
     return;
   }
 
   // Attack case
   if (!controlledPos) {
-    await interaction.followUp({ content: `${controlledName} has no position — resolve manually.`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `${controlledName} has no position — resolve manually.`, ephemeral: false }).catch(discordCatch);
     return;
   }
   const controlledAttackInfo = controlledStats?.attack || { dice: ['red'], range: [1, 3] };
@@ -2349,7 +2350,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   const foEffectiveMaxRange = foHasReach && foMaxRange < 2 ? 2 : foMaxRange;
   const ms = getMapSpaces(game.selectedMap?.id);
   if (!ms) {
-    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   // Collect all other figures as potential targets
@@ -2374,7 +2375,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     foTargets.push({ figureKey: figKey, label, coord: targetPos, dist, hasLOS: los });
   }
   if (foTargets.length === 0) {
-    await interaction.followUp({ content: `No valid targets for **${controlledName}** in range.`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `No valid targets for **${controlledName}** in range.`, ephemeral: false }).catch(discordCatch);
     return;
   }
   game.falseOrdersAttackTargets = game.falseOrdersAttackTargets || {};
@@ -2398,7 +2399,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     content: `**False Orders** — Choose attack target for **${controlledName}**:`,
     components: targetRows.slice(0, 5),
     ephemeral: false,
-  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }).catch(discordCatch);
   saveGames();
 }
 
@@ -2413,16 +2414,16 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
   const chosenSpace = String(space).toLowerCase();
   const { getGame, replyIfGameEnded, logGameAction, buildBoardMapPayload, saveGames, client } = ctx;
   const game = getGame(gameId);
-  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
   if (await replyIfGameEnded(game, interaction)) return;
   const fo = game.pendingFalseOrders;
   if (!fo || fo.murneRinMsgId !== msgId) {
-    await interaction.followUp({ content: 'No pending False Orders move.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No pending False Orders move.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const { controlledFigureKey, controlledPlayerNum, controllerPlayerNum } = fo;
   if (!canActAsPlayer(game, interaction.user.id, controllerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the controller may choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the controller may choose.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const controlledName = controlledFigureKey.replace(/-\d+-\d+$/, '');
@@ -2445,7 +2446,7 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
     ephemeral: false,
   };
   if (boardPayload?.files) replyPayload.files = boardPayload.files;
-  await interaction.followUp(replyPayload).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.followUp(replyPayload).catch(discordCatch);
   saveGames();
 }
 

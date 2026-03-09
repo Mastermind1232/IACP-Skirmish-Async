@@ -13,6 +13,7 @@ import {
   getActivationsTotal,
   ccHandKey, ccDiscardKey,
 } from '../game/player-helpers.js';
+import { discordCatch } from '../error-handling.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -61,16 +62,16 @@ export async function handleEndEndOfRound(interaction, ctx) {
   const gameId = interaction.customId.replace('end_end_of_round_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   if (!game.endOfRoundWhoseTurn) {
-    await interaction.followUp({ content: 'Not in End of Round window.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Not in End of Round window.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (interaction.user.id !== game.endOfRoundWhoseTurn) {
-    await interaction.followUp({ content: "It's not your turn in the End of Round window.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: "It's not your turn in the End of Round window.", ephemeral: true }).catch(discordCatch);
     return;
   }
   const initiativeId = game.initiativePlayerId;
@@ -270,7 +271,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
       const healthState = dcHealthState.get(msgId) || [];
       const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
       const components = getDcPlayAreaComponents(msgId, false, game, meta.dcName);
-      await msg.edit({ embeds: [embed], files, components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await msg.edit({ embeds: [embed], files, components }).catch(discordCatch);
     } catch (err) {
       console.error('Failed to ready DC embed:', err);
     }
@@ -341,7 +342,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     const ruleCtx = { logGameAction, checkWinConditions, getMapTokensData, getSpaceController, isFigureInDeploymentZone, getFiguresOnOrAdjacentToSpace, client };
     const { gameEnded } = await runEndOfRoundRules(game, mapId, variant, endOfRoundRules, ruleCtx);
     if (gameEnded) {
-      await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.message.edit({ components: [] }).catch(discordCatch);
       saveGames();
       return;
     }
@@ -359,7 +360,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     if (damageEvents.length > 0) {
       await checkWinConditions(game, client);
       if (game.ended) {
-        await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.message.edit({ components: [] }).catch(discordCatch);
         saveGames();
         return;
       }
@@ -392,7 +393,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
       const handMsg = msgs.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
       if (handMsg) {
         const payload = buildHandDisplayPayload(hand, deck, game.gameId, game, pn);
-        await handMsg.edit({ content: payload.content, embeds: payload.embeds, files: payload.files || [], components: payload.components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await handMsg.edit({ content: payload.content, embeds: payload.embeds, files: payload.files || [], components: payload.components }).catch(discordCatch);
       }
     } catch (err) {
       console.error('Failed to update hand message:', err);
@@ -443,7 +444,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     }
   }
 
-  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }
 
@@ -632,16 +633,16 @@ export async function handleEndStartOfRound(interaction, ctx) {
   const gameId = interaction.customId.replace('end_start_of_round_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   if (!game.startOfRoundWhoseTurn) {
-    await interaction.followUp({ content: 'Not in Start of Round window.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Not in Start of Round window.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (interaction.user.id !== game.startOfRoundWhoseTurn) {
-    await interaction.followUp({ content: "It's not your turn in the Start of Round window.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: "It's not your turn in the Start of Round window.", ephemeral: true }).catch(discordCatch);
     return;
   }
   const initiativeId = game.initiativePlayerId;
@@ -853,6 +854,6 @@ export async function handleEndStartOfRound(interaction, ctx) {
   game.roundActivationButtonShown = showBtn;
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
   await updateHandChannelMessages(game, client);
-  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }

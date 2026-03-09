@@ -10,6 +10,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getMapSpaces, getCcEffect } from '../data-loader.js';
 import { ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
+import { discordCatch } from '../error-handling.js';
 
 /**
  * bleed_accept_ / bleed_prevent_ — delegates to the existing handleBleedResolve
@@ -34,9 +35,9 @@ export async function handleReactionSkip(interaction, ctx) {
   const { getGame, client, saveGames, checkPostCombatSurges, finishCombatResolution } = ctx;
   const gameId = interaction.customId.replace('reaction_skip_', '');
   const game = getGame(gameId);
-  if (!game?.pendingReaction) { await interaction.followUp({ content: 'No pending reaction.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!game?.pendingReaction) { await interaction.followUp({ content: 'No pending reaction.', ephemeral: true }).catch(discordCatch); return; }
   const { ownerId, cardName } = game.pendingReaction;
-  if (interaction.user.id !== ownerId) { await interaction.followUp({ content: 'Only the reaction player can skip.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (interaction.user.id !== ownerId) { await interaction.followUp({ content: 'Only the reaction player can skip.', ephemeral: true }).catch(discordCatch); return; }
   await interaction.deferUpdate().catch(() => {});
   const pending = game.pendingReaction;
   delete game.pendingReaction;
@@ -65,9 +66,9 @@ export async function handleReactionUse(interaction, ctx) {
   const { getGame, client, saveGames, checkPostCombatSurges, finishCombatResolution, findDcMessageIdForFigure, applyDirectDamageToFigure } = ctx;
   const gameId = interaction.customId.replace('reaction_use_', '');
   const game = getGame(gameId);
-  if (!game?.pendingReaction) { await interaction.followUp({ content: 'No pending reaction.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!game?.pendingReaction) { await interaction.followUp({ content: 'No pending reaction.', ephemeral: true }).catch(discordCatch); return; }
   const { ownerId, cardName, targetFigKey, attackerFigKey, attackerMsgId, defenderPlayerNum } = game.pendingReaction;
-  if (interaction.user.id !== ownerId) { await interaction.followUp({ content: 'Only the reaction player can use this.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (interaction.user.id !== ownerId) { await interaction.followUp({ content: 'Only the reaction player can use this.', ephemeral: true }).catch(discordCatch); return; }
   await interaction.deferUpdate().catch(() => {});
   await interaction.message.edit({ components: [] }).catch(() => {});
   const pending = game.pendingReaction;
@@ -89,7 +90,7 @@ export async function handleReactionUse(interaction, ctx) {
       game.paybackBonusSurge[dengarMsgId] = (game.paybackBonusSurge[dengarMsgId] || 0) + 2;
     }
     const attackerName = attackerFigKey.replace(/-\d+-\d+$/, '');
-    if (thread) await thread.send(`**Payback** — Dengar may now counter-attack **${attackerName}**. Use the Attack button on Dengar's DC card. **+2 Surge** will be applied automatically to that attack.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    if (thread) await thread.send(`**Payback** — Dengar may now counter-attack **${attackerName}**. Use the Attack button on Dengar's DC card. **+2 Surge** will be applied automatically to that attack.`).catch(discordCatch);
   } else if (cardName === 'Dangerous Prey') {
     // Dangerous Prey: attacker suffers 1 Damage (3 if adjacent to Bossk)
     const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigKey];
@@ -100,7 +101,7 @@ export async function handleReactionUse(interaction, ctx) {
     const dmg = isAdj ? 3 : 1;
     const atkMsgId = attackerMsgId || findDcMessageIdForFigure(game.gameId, attackerPlayerNum, attackerFigKey);
     const attackerName = attackerFigKey.replace(/-\d+-\d+$/, '');
-    if (thread) await thread.send(`**Dangerous Prey** — ${attackerName} suffers **${dmg} Damage**${isAdj ? ' (adjacent to Bossk)' : ''}. Bossk gains **2 MP**.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    if (thread) await thread.send(`**Dangerous Prey** — ${attackerName} suffers **${dmg} Damage**${isAdj ? ' (adjacent to Bossk)' : ''}. Bossk gains **2 MP**.`).catch(discordCatch);
     await applyDirectDamageToFigure(game, attackerPlayerNum, attackerFigKey, atkMsgId, dmg, client, null, 'Dangerous Prey');
     // Add 2 MP to Bossk's movement bank
     const bosskMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, targetFigKey);
@@ -135,7 +136,7 @@ export async function handleReactionUse(interaction, ctx) {
         content: `<@${ownerId}> **Right Back At Ya!** — Spend your Block Token for 3 Damage, or deal 1 Damage without spending it:`,
         allowedMentions: { users: [ownerId] },
         components: [new ActionRowBuilder().addComponents(btn3, btn1)],
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
       saveGames();
       return;
     }
@@ -165,9 +166,9 @@ export async function handleRightBack(interaction, ctx) {
   const isBlockVariant = buttonKey === 'right_back_block_';
   const gameId = interaction.customId.replace(buttonKey, '');
   const game = getGame(gameId);
-  if (!game?.pendingRightBackAtYa) { await interaction.followUp({ content: 'No pending Right Back At Ya! choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!game?.pendingRightBackAtYa) { await interaction.followUp({ content: 'No pending Right Back At Ya! choice.', ephemeral: true }).catch(discordCatch); return; }
   const { ownerId, attackerPlayerNum, defenderPlayerNum, attackerFigKey, attackerMsgId, bobaFigKey } = game.pendingRightBackAtYa;
-  if (interaction.user.id !== ownerId) { await interaction.followUp({ content: 'Only the reaction player can choose.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (interaction.user.id !== ownerId) { await interaction.followUp({ content: 'Only the reaction player can choose.', ephemeral: true }).catch(discordCatch); return; }
   await interaction.deferUpdate().catch(() => {});
   await interaction.message.edit({ components: [] }).catch(() => {});
   const rbPending = game.pendingRightBackAtYa;
@@ -207,7 +208,7 @@ export async function handleMasteryPick(interaction, ctx) {
   const mastGameId = isMasterySkip ? interaction.customId.replace('mastery_skip_', '') : interaction.customId.match(/^mastery_pick_([^_]+)_\d+$/)?.[1];
   if (!mastGameId) { await interaction.followUp({ content: 'Invalid mastery interaction.', ephemeral: true }).catch(() => {}); return; }
   const mastGame = getGame(mastGameId);
-  if (!mastGame?.pendingMastery) { await interaction.followUp({ content: 'No pending Mastery choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!mastGame?.pendingMastery) { await interaction.followUp({ content: 'No pending Mastery choice.', ephemeral: true }).catch(discordCatch); return; }
   const { attackerPlayerNum: mastAPN, discardKey: mastDK, eligible: mastEl, resultText: mastRT, combat: mastCombat, initialEmbedRefreshMsgIds: mastEmbed, defenderPlayerNum: mastDPN } = mastGame.pendingMastery;
   const mastOwnerId = mastAPN === 1 ? mastGame.player1Id : mastGame.player2Id;
   if (interaction.user.id !== mastOwnerId) { await interaction.followUp({ content: 'Only the attacker can resolve Mastery.', ephemeral: true }).catch(() => {}); return; }
@@ -226,7 +227,7 @@ export async function handleMasteryPick(interaction, ctx) {
       mastGame[mastHandKey] = mastGame[mastHandKey] || [];
       mastGame[mastHandKey].push(mastCard);
       const mastThread = await client.channels.fetch(mastCombat.combatThreadId).catch(() => null);
-      if (mastThread) await mastThread.send(`**Mastery** — **${mastCard}** returned from discard to hand.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      if (mastThread) await mastThread.send(`**Mastery** — **${mastCard}** returned from discard to hand.`).catch(discordCatch);
       await updateHandChannelMessages(mastGame, client).catch(() => {});
     }
   }
@@ -253,7 +254,7 @@ export async function handleInterrogatePick(interaction, ctx) {
   const intGameId = interaction.customId.match(/^interrogate_(?:pick|discard|skip)_([^_]+)/)?.[1];
   if (!intGameId) { await interaction.followUp({ content: 'Invalid interrogate interaction.', ephemeral: true }).catch(() => {}); return; }
   const intGame = getGame(intGameId);
-  if (!intGame?.pendingInterrogate) { await interaction.followUp({ content: 'No pending Interrogate choice.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+  if (!intGame?.pendingInterrogate) { await interaction.followUp({ content: 'No pending Interrogate choice.', ephemeral: true }).catch(discordCatch); return; }
   const { attackerPlayerNum: intAPN, opponentPlayerNum: intOPN, opponentHandSnapshot: intOHS, chosenCardName: intChosen, ownEligibleSnapshot: intOES, resultText: intRT, combat: intCombat, initialEmbedRefreshMsgIds: intEmbed, defenderPlayerNum: intDPN } = intGame.pendingInterrogate;
   const intOwnerId = intAPN === 1 ? intGame.player1Id : intGame.player2Id;
   if (interaction.user.id !== intOwnerId) { await interaction.followUp({ content: 'Only the attacker can resolve Interrogate.', ephemeral: true }).catch(() => {}); return; }
@@ -273,7 +274,7 @@ export async function handleInterrogatePick(interaction, ctx) {
     const intEligible = intOwnHand.filter((c) => (getCcEffect(c)?.cost ?? 0) >= intChosenCost);
     if (intEligible.length === 0) {
       // Can't afford to discard — just log and finish
-      if (intThread) await intThread.send(`**Interrogate** — You chose **${intChosenCard}** (cost ${intChosenCost}). No cards in your hand with equal or greater cost to force the discard.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      if (intThread) await intThread.send(`**Interrogate** — You chose **${intChosenCard}** (cost ${intChosenCost}). No cards in your hand with equal or greater cost to force the discard.`).catch(discordCatch);
       delete intGame.pendingInterrogate;
       const triggered = intThread ? await checkPostCombatSurges(intGame, intCombat, intRT, new Set(intEmbed), intThread, intOwnerId, intDPN) : false;
       if (triggered) { saveGames(); return; }
@@ -290,7 +291,7 @@ export async function handleInterrogatePick(interaction, ctx) {
       content: `<@${intOwnerId}> **Interrogate** — You chose **${intChosenCard}** (cost ${intChosenCost}). Discard a card (cost ≥ ${intChosenCost}) from your hand to force-discard it?`,
       allowedMentions: { users: [intOwnerId] },
       components: [new ActionRowBuilder().addComponents(intStep2Btns)],
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -317,13 +318,13 @@ export async function handleInterrogatePick(interaction, ctx) {
       const intOppDiscardKey = ccDiscardKey(intOPN);
       intGame[intOppDiscardKey] = intGame[intOppDiscardKey] || [];
       intGame[intOppDiscardKey].push(intChosen);
-      if (intThread) await intThread.send(`**Interrogate** — Discarded **${intOwnCard}** from your hand; **${intChosen}** removed from opponent's hand.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      if (intThread) await intThread.send(`**Interrogate** — Discarded **${intOwnCard}** from your hand; **${intChosen}** removed from opponent's hand.`).catch(discordCatch);
       await updateHandChannelMessages(intGame, intAPN, client).catch(() => {});
       await updateHandChannelMessages(intGame, intOPN, client).catch(() => {});
     }
   } else {
     // Skip — just log
-    if (intThread) await intThread.send(`**Interrogate** — Chose to see **${intChosen}** from opponent's hand; no discard.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    if (intThread) await intThread.send(`**Interrogate** — Chose to see **${intChosen}** from opponent's hand; no discard.`).catch(discordCatch);
   }
   delete intGame.pendingInterrogate;
   const intTriggered = intThread ? await checkPostCombatSurges(intGame, intCombat, intRT, new Set(intEmbed), intThread, intOwnerId, intDPN) : false;

@@ -20,6 +20,7 @@ import {
   ccDeckKey,
   ccHandKey,
 } from '../game/player-helpers.js';
+import { discordCatch } from '../error-handling.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -41,12 +42,12 @@ export async function handleStatusPhase(interaction, ctx) {
   const gameId = interaction.customId.replace('status_phase_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
-    await interaction.followUp({ content: 'Only players in this game can end the activation phase.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only players in this game can end the activation phase.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const r1 = game.p1ActivationsRemaining ?? 0;
@@ -59,7 +60,7 @@ export async function handleStatusPhase(interaction, ctx) {
     await interaction.followUp({
       content: `Both players must use all activations and actions first. (${parts.join('; ')})`,
       ephemeral: true,
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
     return;
   }
   const round = game.currentRound || 1;
@@ -81,7 +82,7 @@ export async function handleStatusPhase(interaction, ctx) {
     await interaction.followUp({
       content: `${clickerIsP1 ? 'P1' : 'P2'} has ended activation. Waiting for **${waiting}** to click **End R${round} Activation Phase**.`,
       ephemeral: true,
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
     const generalChannel = await client.channels.fetch(game.generalId);
     const roundEmbed = new EmbedBuilder()
       .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round} - Activation Phase`)
@@ -96,7 +97,7 @@ export async function handleStatusPhase(interaction, ctx) {
       content: `**Round ${round}** — End Activation Phase: ${game.p1ActivationPhaseEnded ? 'P1 ✅' : 'P1 ⏳'} | ${game.p2ActivationPhaseEnded ? 'P2 ✅' : 'P2 ⏳'}\nBoth players must click the button when done with activations and any end-of-activation effects.`,
       embeds: [roundEmbed],
       components: [endBtn],
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -117,7 +118,7 @@ export async function handleStatusPhase(interaction, ctx) {
     embeds: [roundEmbed],
     allowedMentions: { users: [game.initiativePlayerId] },
   });
-  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   await updateHandChannelMessages(game, client);
   saveGames();
 }
@@ -131,21 +132,21 @@ export async function handlePassActivationTurn(interaction, ctx) {
   const gameId = interaction.customId.replace('pass_activation_turn_', '');
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const turnPlayerNum = turnPlayerId === game.player1Id ? 1 : 2;
   if (!canActAsPlayer(game, interaction.user.id, turnPlayerNum)) {
-    await interaction.followUp({ content: "It's not your turn to pass.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: "It's not your turn to pass.", ephemeral: true }).catch(discordCatch);
     return;
   }
   const myRem = getActivationsRemaining(game, turnPlayerNum) ?? 0;
   const otherPlayerNum = turnPlayerNum === 1 ? 2 : 1;
   const otherRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
   if (otherRem <= myRem) {
-    await interaction.followUp({ content: `You have **${myRem}** activation${myRem !== 1 ? 's' : ''} remaining; opponent has **${otherRem}**. You can only pass when they have more.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: `You have **${myRem}** activation${myRem !== 1 ? 's' : ''} remaining; opponent has **${otherRem}**. You can only pass when they have more.`, ephemeral: true }).catch(discordCatch);
     return;
   }
   const otherPlayerId = getPlayerId(game, otherPlayerNum);
@@ -184,7 +185,7 @@ export async function handlePassActivationTurn(interaction, ctx) {
         content: `<@${otherPlayerId}> (${otherZone}**Player ${initNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back if the other player has more activations.' : ''}`,
         components: passRows,
         allowedMentions: { users: [otherPlayerId] },
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
     } catch (err) {
       console.error('Failed to update round message for pass:', err);
     }
@@ -216,22 +217,22 @@ export async function handleEndTurn(interaction, ctx) {
   const dcMsgId = match[2];
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const meta = dcMessageMeta.get(dcMsgId);
   if (!meta || meta.gameId !== gameId) {
-    await interaction.followUp({ content: 'Invalid End Turn.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid End Turn.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) {
-    await interaction.followUp({ content: 'Only the player who finished that activation can end the turn.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the player who finished that activation can end the turn.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const pending = game.pendingEndTurn?.[dcMsgId];
   if (!pending) {
-    await interaction.followUp({ content: 'This turn was already ended.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'This turn was already ended.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const otherPlayerNum = meta.playerNum === 1 ? 2 : 1;
@@ -245,7 +246,7 @@ export async function handleEndTurn(interaction, ctx) {
     try {
       const ch = await client.channels.fetch(game.generalId);
       const endTurnMsg = await ch.messages.fetch(pending.messageId);
-      await endTurnMsg.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await endTurnMsg.edit({ components: [] }).catch(discordCatch);
     } catch {}
   }
   // Shield (Riot Trooper E/R): at end of activation, if no Block tokens, gain 1 Block token
@@ -361,7 +362,7 @@ export async function handleEndTurn(interaction, ctx) {
       embeds: [embed],
       files,
       components,
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
   } catch (err) {
     console.error('Failed to update DC card after End Turn:', err);
   }
@@ -410,7 +411,7 @@ export async function handleEndTurn(interaction, ctx) {
         content: `<@${otherPlayerId}> (**Player ${otherPlayerNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back (opponent has more activations).' : ''}`,
         components: passRows,
         allowedMentions: { users: [otherPlayerId] },
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
     } catch (err) {
       console.error('Failed to update round message after end turn:', err);
     }
@@ -442,18 +443,18 @@ export async function handleDcEndActivation(interaction, ctx) {
   const msgId = interaction.customId.replace('dc_end_activation_', '');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const game = getGame(meta.gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
   const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) {
-    await interaction.followUp({ content: 'Only the owner can end this activation.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the owner can end this activation.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const otherPlayerNum = meta.playerNum === 1 ? 2 : 1;
@@ -501,7 +502,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     const dcMsg = await playChannel.messages.fetch(msgId);
     const healthState = dcHealthState.get(msgId) ?? [[null, null]];
     const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
-    await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, meta.dcName) }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, meta.dcName) }).catch(discordCatch);
   } catch (err) {
     console.error('Failed to update DC card after End Activation:', err);
   }
@@ -534,7 +535,7 @@ export async function handleDcEndActivation(interaction, ctx) {
         content: `<@${otherPlayerId}> (**Player ${otherPlayerNum}**) **Round ${round}** — Your turn to activate!${passRows.length ? ' You may pass back (opponent has more activations).' : ''}`,
         components: passRows,
         allowedMentions: { users: [otherPlayerId] },
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
     } catch (err) {
       console.error('Failed to update round message after End Activation:', err);
     }
@@ -675,10 +676,10 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (interaction.user.id !== ownerId) return;
   const remaining = getActivationsRemaining(game, meta.playerNum);
   if (remaining <= 0) {
-    await interaction.followUp({ content: 'No activations remaining.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'No activations remaining.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   dcExhaustedState.set(msgId, true);
   setActivationsRemaining(game, meta.playerNum, (getActivationsRemaining(game, meta.playerNum) || 0) - 1);
   {
@@ -1180,7 +1181,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     try {
       const activateCardMsg = await logCh.messages.fetch(activateCardMsgId);
       const activateRows = getActivateDcButtons(game, meta.playerNum);
-      await activateCardMsg.edit({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await activateCardMsg.edit({ content: '**Activate a Deployment Card**', components: activateRows.length > 0 ? activateRows : [] }).catch(discordCatch);
     } catch {}
   }
   saveGames();
@@ -1195,7 +1196,7 @@ export async function handleCancelActivate(interaction, _ctx) {
   if (!match) return;
   const [, gameId, ownerId] = match;
   if (interaction.user.id !== ownerId) return;
-  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 }
 
 /**

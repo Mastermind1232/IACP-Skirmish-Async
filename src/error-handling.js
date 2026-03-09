@@ -80,3 +80,14 @@ export async function replyOrFollowUpWithRetry(interaction, payload, options = {
     }
   }
 }
+
+/**
+ * Standard catch handler for Discord API calls.
+ * Logs the error with a consistent format instead of silently swallowing.
+ * Use as: `.catch(discordCatch)` instead of `.catch(() => {})` or `.catch((err) => { console.error('[discord]', err?.message ?? err); })`
+ * @param {Error} err
+ */
+export function discordCatch(err) {
+  if (!err) return;
+  console.error('[discord]', err?.message ?? err);
+}

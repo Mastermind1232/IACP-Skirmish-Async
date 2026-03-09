@@ -269,6 +269,7 @@ import {
   ccHandKey, ccDiscardKey, ccDeckKey, ccDrawnKey, ccAttachmentsKey, dcAttachmentsKey,
   dcAttachmentMessageIdsKey, vpKey, deployMetadataKey, deployLabelsKey, armyCostModifierKey,
 } from './src/game/player-helpers.js';
+import { discordCatch } from './src/error-handling.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname);
@@ -343,7 +344,7 @@ async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, client) {
     }
     if (!hasContent) {
       const msg = await channel.messages.fetch(attachMsgId);
-      await msg.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await msg.delete().catch(discordCatch);
       attachMsgIds[idx] = null;
       return;
     }
@@ -920,7 +921,7 @@ async function updateMovementBankMessage(game, msgId, client) {
     if (remaining <= 0 && messageId) {
       const thread = await client.channels.fetch(threadId);
       const msg = await thread.messages.fetch(messageId).catch(() => null);
-      if (msg) await msg.delete().catch((err) => { console.error('[discord]', err?.message ?? err); });
+      if (msg) await msg.delete().catch(discordCatch);
       bank.messageId = null;
       return;
     }
@@ -1349,14 +1350,14 @@ async function createHandThreads(client, game) {
     type: ChannelType.PrivateThread,
     invitable: false,
   });
-  await p1Thread.members.add(game.player1Id).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await p1Thread.members.add(game.player1Id).catch(discordCatch);
   const p2Thread = await p2PlayArea.threads.create({
     name: 'Your Hand',
     autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
     type: ChannelType.PrivateThread,
     invitable: false,
   });
-  await p2Thread.members.add(game.player2Id).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await p2Thread.members.add(game.player2Id).catch(discordCatch);
   game.p1HandId = p1Thread.id;
   game.p2HandId = p2Thread.id;
   return { p1HandThread: p1Thread, p2HandThread: p2Thread };
@@ -1566,18 +1567,18 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
       const testPrompt = scenarioPrimaryCard
         ? `🧪 <@${userId}> — **Testing: ${scenarioPrimaryCard}** (scenario: \`${scenarioId}\`)\n${cardDetails ? `*${cardDetails}*\n` : ''}> *${effectText}*\n\n**How to test:** ${howToTest}${opponentNote}\nThe card is in P1's **Your Hand** thread (inside Play Area).`
         : `🧪 <@${userId}> — **Testing scenario: \`${scenarioId}\`**`;
-      await generalChannel.send({ content: testPrompt, allowedMentions: { users: [userId] } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
-      await generalChannel.send({ content: `Done testing? Kill the game here:`, components: [killRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await generalChannel.send({ content: testPrompt, allowedMentions: { users: [userId] } }).catch(discordCatch);
+      await generalChannel.send({ content: `Done testing? Kill the game here:`, components: [killRow] }).catch(discordCatch);
       const scenarioDoneText = scenarioPrimaryCard
         ? `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. P1's **Your Hand** thread (inside Play Area) has **${scenarioPrimaryCard}**. **How to test:** ${howToTest}`
         : `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. Scenario: **${scenarioId}**.`;
       if (options.editMessageInstead) {
-        await options.editMessageInstead.edit({ content: scenarioDoneText, allowedMentions: { users: mentionUsers } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await options.editMessageInstead.edit({ content: scenarioDoneText, allowedMentions: { users: mentionUsers } }).catch(discordCatch);
       } else {
         await feedbackChannel.send({
           content: scenarioDoneText,
           allowedMentions: { users: mentionUsers },
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
       }
     } else {
       const setupDesc = p2IsBot
@@ -1595,17 +1596,17 @@ async function createTestGame(client, guild, userId, scenarioId, feedbackChannel
         components: [getGeneralSetupButtons(game)],
       });
       game.generalSetupMessageId = setupMsg.id;
-      await generalChannel.send({ content: `🧪 **Test Game #${gameId}** — done? Kill it here:`, components: [killRow] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await generalChannel.send({ content: `🧪 **Test Game #${gameId}** — done? Kill it here:`, components: [killRow] }).catch(discordCatch);
       const doneText = scenarioId && !scenarioImplemented
         ? `Scenario **${scenarioId}** is not yet implemented. Test game **IA Game #${gameId}** created with standard setup — select the map in Game Log.`
         : `Test game **IA Game #${gameId}** is ready (P1 <@${userId}> vs P2 ${p2Label})! Select the map in Game Log — Play Areas (with **Your Hand** threads) will appear after map selection.`;
       if (options.editMessageInstead) {
-        await options.editMessageInstead.edit({ content: doneText, allowedMentions: { users: mentionUsers } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await options.editMessageInstead.edit({ content: doneText, allowedMentions: { users: mentionUsers } }).catch(discordCatch);
       } else {
         await feedbackChannel.send({
           content: doneText,
           allowedMentions: { users: mentionUsers },
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
       }
     }
     saveGames();
@@ -1773,7 +1774,7 @@ async function postPinnedMissionCardFromGameState(game, client) {
       if (missionData?.endOfRound) parts.push(`**End of Round:** ${missionData.endOfRound}`);
       sentMsg = await ch.send({ content: parts.join('\n') });
     }
-    await sentMsg.pin().catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await sentMsg.pin().catch(discordCatch);
     await logGameAction(game, client, `Mission selected: **${fullName}** (pinned above).`, { phase: 'SETUP', icon: 'map' });
   } catch (err) {
     console.error('Mission card post error:', err);
@@ -2145,7 +2146,7 @@ async function postDevaronDoorButtons(game, allDoors, channel, gameId) {
   });
   if (available.length === 0) {
     game.pendingDoorSelections.shift();
-    await channel.send({ content: `<@${pid}> — All doors are already open (no more selections needed).`, allowedMentions: { users: [pid] } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await channel.send({ content: `<@${pid}> — All doors are already open (no more selections needed).`, allowedMentions: { users: [pid] } }).catch(discordCatch);
     return;
   }
   const rows = [];
@@ -2163,7 +2164,7 @@ async function postDevaronDoorButtons(game, allDoors, channel, gameId) {
     content: `<@${pid}> — **Crate Rush (EoR)**: You control ${doorsRemaining} terminal${doorsRemaining !== 1 ? 's' : ''}. Choose a door to open (${doorsRemaining} remaining):`,
     components: rows,
     allowedMentions: { users: [pid] },
-  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }).catch(discordCatch);
 }
 
 /**
@@ -2200,7 +2201,7 @@ async function postDevaronCratePushPrompts(game, channel, gameId) {
       content: `<@${pid}> — **Crate Rush (EoR)**: Push each controlled crate up to 3 spaces. Select a crate:`,
       components: rows,
       allowedMentions: { users: [pid] },
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
   }
 }
 
@@ -2230,7 +2231,7 @@ async function postKryknaPushButtons(game, channel, gameId) {
     content: `🕷️ **Krykna Push Phase** (${remaining} push${remaining !== 1 ? 'es' : ''} remaining) — <@${pid}>, choose a Krykna to push up to 3 spaces (end adjacent to most figures if possible):`,
     components: rows,
     allowedMentions: { users: [pid] },
-  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }).catch(discordCatch);
 }
 
 /** Check win conditions. Returns { ended, winnerId?, reason? }. Posts game-over and sets game.ended if ended. */
@@ -2377,7 +2378,7 @@ async function postGameOver(game, client, winnerId, reason) {
 /** Returns true if game ended (and replied to user). Call after getGame() in handlers to block further actions. */
 async function replyIfGameEnded(game, interaction) {
   if (game?.ended) {
-    await interaction.followUp({ content: 'This game has ended.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'This game has ended.', ephemeral: true }).catch(discordCatch);
     return true;
   }
   return false;
@@ -3160,7 +3161,7 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
   const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
   const { newHp, wasDefeated } = reduceHp(dcHealthState, game, msgId, figIdx, damage, playerNum);
   const figName = figKey.replace(/-\d+-\d+$/, '');
-  if (thread) await thread.send(`**${sourceName}** — ${figName} suffers **${damage} Damage**.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  if (thread) await thread.send(`**${sourceName}** — ${figName} suffers **${damage} Damage**.`).catch(discordCatch);
   const dcIds = getDcMessageIds(game, playerNum);
   const dcList = getDcList(game, playerNum);
   const idx = (dcIds || []).indexOf(msgId);
@@ -3173,7 +3174,7 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
     const figures = stats?.figures ?? 1;
     const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
     awardKillVp(game, opponentPlayerNum, vp);
-    if (thread) await thread.send(`**${sourceName}** — ${figName} was **defeated**! +${vp} VP.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    if (thread) await thread.send(`**${sourceName}** — ${figName} was **defeated**! +${vp} VP.`).catch(discordCatch);
     await checkWinConditions(game, client);
   }
 }
@@ -3200,7 +3201,7 @@ async function sendBleedingPrompt(game, channel, figureKey, playerNum, displayNa
   await channel.send({
     content: `🩸 **Bleeding** — **${displayName}** suffers 1 damage after resolving their action. Take damage or discard top CC to prevent?`,
     components: [row],
-  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }).catch(discordCatch);
 }
 
 /** Handle bleed_accept_ / bleed_prevent_ button clicks. */
@@ -3211,12 +3212,12 @@ async function handleBleedResolve(interaction) {
   const playerNum = parseInt(playerNumStr, 10);
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const playerId = getPlayerId(game, playerNum);
   if (interaction.user.id !== playerId && !game.isTestGame) {
-    await interaction.followUp({ content: 'Only the figure owner can resolve Bleeding.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the figure owner can resolve Bleeding.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const msgId = findDcMessageIdForFigure(gameId, playerNum, figureKey);
@@ -3260,7 +3261,7 @@ async function handleBleedResolve(interaction) {
             const exhausted = dcExhaustedState.get(msgId) ?? false;
             const health = dcHealthState.get(msgId) || [];
             const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, health, getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, msgId));
-            await dcMsg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            await dcMsg.edit({ embeds: [embed], files }).catch(discordCatch);
           }
         } catch (err) {
           console.error('Failed to update DC embed after Bleeding:', err);
@@ -3272,7 +3273,7 @@ async function handleBleedResolve(interaction) {
     const deckKey = ccDeckKey(playerNum);
     const deck = game[deckKey] || [];
     if (deck.length === 0) {
-      await interaction.followUp({ content: 'No CCs in deck to discard!', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.followUp({ content: 'No CCs in deck to discard!', ephemeral: true }).catch(discordCatch);
       return;
     }
     const discardedCard = deck.splice(0, 1)[0];
@@ -3280,7 +3281,7 @@ async function handleBleedResolve(interaction) {
     await logGameAction(game, interaction.client, `🩸 **Bleeding** — **${dcName}** prevented 1 damage (discarded **${discardedCard}** from deck top).`, { phase: 'ROUND', icon: 'card' });
   }
   filterCondition(game, figureKey, 'Bleed');  // Bleed resolved — discard condition
-  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }
 
@@ -3621,7 +3622,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
               await thread.send({
                 content: `🔫 **Locked and Loaded** — **${combat.attackerDcName}** gains ${_llGain} Power Token${_llGain > 1 ? 's' : ''} (${_llCurrent} → ${_llCurrent + _llGain}, max 3). Choose type:`,
                 components: [new ActionRowBuilder().addComponents(_llBtns)],
-              }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+              }).catch(discordCatch);
             } else {
               await logGameAction(game, client, `🔫 **Locked and Loaded** — **${combat.attackerDcName}** already at max 3 Power Tokens; no tokens gained.`, { phase: 'ROUND', icon: 'attack' });
             }
@@ -3642,7 +3643,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             await thread.send({
               content: `🧠 **Open-Minded** — **${combat.attackerDcName}**: Choose one:`,
               components: [new ActionRowBuilder().addComponents(_omBtns)],
-            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            }).catch(discordCatch);
           }
         }
       }
@@ -4071,7 +4072,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             content: `<@${ownerId}> — You defeated a unique figure. Play **Celebration** to gain 4 VP?`,
             components: [getCelebrationButtons(game.gameId)],
             allowedMentions: { users: [ownerId] },
-          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }).catch(discordCatch);
         }
         // Auto-prompt for defeat-triggered reaction cards
         try {
@@ -4174,7 +4175,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
               content: `<@${ownerId}> — You defeated a unique figure (Blast). Play **Celebration** to gain 4 VP?`,
               components: [getCelebrationButtons(game.gameId)],
               allowedMentions: { users: [ownerId] },
-            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            }).catch(discordCatch);
           }
         }
       }
@@ -4322,7 +4323,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if (getRange(_abAttackerPos, _abPos) === 1) _abAdjacentHostiles.push({ fk: _abFk, pos: _abPos });
       }
       if (_abAdjacentHostiles.length === 0) {
-        await thread.send(`🗡️ **Assassin's Blade** — No adjacent hostile figures.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await thread.send(`🗡️ **Assassin's Blade** — No adjacent hostile figures.`).catch(discordCatch);
       } else {
         const _abDiceData = getDiceData();
         const _abRedFaces = _abDiceData?.attack?.red || [];
@@ -4340,14 +4341,14 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
               reduceHp(dcHealthState, game, _abMsgId, _abFigIdx, _abHits, defenderPlayerNum);
               break;
             }
-            await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}**. **${_abDcName}** suffers **${_abHits} Damage**.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}**. **${_abDcName}** suffers **${_abHits} Damage**.`).catch(discordCatch);
             await logGameAction(game, client, `🗡️ **Assassin's Blade** — **${_abDcName}** suffers **${_abHits} Damage**.`, { phase: 'ROUND', icon: 'attack' });
           } else if (_abHits > 0) {
             // Multiple adjacent hostiles — honor system for the choice
             const _abNames = _abAdjacentHostiles.map(({ fk }) => fk.replace(/-\d+-\d+$/, '')).join(', ');
-            await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}** (${_abHits} Damage). Choose an adjacent hostile figure to apply damage: ${_abNames}. *(Honor system.)*`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}** (${_abHits} Damage). Choose an adjacent hostile figure to apply damage: ${_abNames}. *(Honor system.)*`).catch(discordCatch);
           } else {
-            await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}**. No hits.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}**. No hits.`).catch(discordCatch);
           }
         }
       }
@@ -4365,7 +4366,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       _applyCondition(game, _sfTargetFk, 'Weaken');
     }
     const _sfTargetName = (combat.target?.figureKey || '').replace(/-\d+-\d+$/, '') || combat.defenderDcName;
-    await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. You may choose a SMALL friendly figure within 3 spaces to gain 2 MP. *(Honor system for MP grant.)*`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. You may choose a SMALL friendly figure within 3 spaces to gain 2 MP. *(Honor system for MP grant.)*`).catch(discordCatch);
     await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened after Ranged attack.`, { phase: 'ROUND', icon: 'card' });
   }
   // Flame Trooper Incinerate: after attacking, each figure that suffered damage suffers 1 Strain (HP loss). Place Rubble in target space.
@@ -4376,12 +4377,12 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       // Fireproof: target immune to Strain if it also has Flame Trooper attachment
       const _ftTargetUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
       if (_ftTargetUpgrades.includes('Flame Trooper')) {
-        await thread.send('**Incinerate** — Target is **Fireproof**, immune to Strain.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await thread.send('**Incinerate** — Target is **Fireproof**, immune to Strain.').catch(discordCatch);
       } else {
         const _ftHsBefore = dcHealthState.get(targetMsgId);
         if (_ftHsBefore?.[targetFigIndex]?.[0] > 0) {
             const { newHp: _ftNew } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
-            await thread.send(`**Incinerate** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            await thread.send(`**Incinerate** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`).catch(discordCatch);
             if (_ftNew <= 0) {
               await thread.send(`⚠️ **${combat.target.label}** may be defeated from Incinerate Strain. *(Apply defeat manually.)*`).catch(() => {});
             }
@@ -4660,7 +4661,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
         content: `<@${ownerId}> **Fighting Knife** — Choose an adjacent hostile figure to roll 1 red die:`,
         allowedMentions: { users: [ownerId] },
         components: rows,
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
       return true;
     }
   }
@@ -4700,7 +4701,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
           content: `<@${ownerId}> **Concussive Bolt** — Push **${targetLabel}** 1 space. Choose a destination:`,
           allowedMentions: { users: [ownerId] },
           components: [new ActionRowBuilder().addComponents(btns)],
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
         return true;
       }
     }
@@ -4752,7 +4753,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
           content: `<@${ownerId}> **Spread the Pain** — Apply **${firstCond}** to a figure at or adjacent to target (${String(targetPos).toUpperCase()}):`,
           allowedMentions: { users: [ownerId] },
           components: [new ActionRowBuilder().addComponents(btns)],
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
         return true;
       }
     }
@@ -4804,7 +4805,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
       content: `<@${defOwnerId}> — You have **${name}** in hand! React to this attack?`,
       allowedMentions: { users: [defOwnerId] },
       components: [new ActionRowBuilder().addComponents(btnUse, btnSkip)],
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
     return true;
   }
   // Agitate (Cam Droid): on hit, defender's group must activate next, if able
@@ -4812,7 +4813,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
     const defenderDcName = combat.target.figureKey.replace(/-\d+-\d+$/, '');
     game.agitateNextActivation = { playerNum: defenderPlayerNum, dcName: defenderDcName };
     const defLabel = combat.target.label || defenderDcName;
-    await thread.send(`**Agitate** — **${defLabel}**'s group must be the next to activate this round, if able.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await thread.send(`**Agitate** — **${defLabel}**'s group must be the next to activate this round, if able.`).catch(discordCatch);
   }
   // Fell Swoop (Davith Elso): after attack, become Hidden, gain 2 MP, free attack. Limit once per round.
   if (combat.surgeFellSwoop && combat.attackerFigureKey) {
@@ -4829,7 +4830,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
       game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
       game.fellSwoopFreeAttack[combat.attackerMsgId] = true;
       const attName = combat.attackerDisplayName || combat.attackerFigureKey.replace(/-\d+-\d+$/, '');
-      await thread.send(`**Fell Swoop** — **${attName}** becomes **Hidden** and gains **2 Movement Points**. Use Move in the DC thread, then click Attack for a free Fell Swoop attack (costs no action).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send(`**Fell Swoop** — **${attName}** becomes **Hidden** and gains **2 Movement Points**. Use Move in the DC thread, then click Attack for a free Fell Swoop attack (costs no action).`).catch(discordCatch);
     }
   }
   // Mastery (Second Sister): redraw a FORCE USER CC of cost ≤ 1 from discard. Limit once per round.
@@ -4846,7 +4847,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
         return entry && (entry.cost ?? 99) <= 1 && String(entry.playableBy || '').toUpperCase().includes('FORCE USER');
       });
       if (mastEligible.length === 0) {
-        await thread.send(`**Mastery** — No eligible FORCE USER Command cards (cost ≤ 1) in your discard pile.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await thread.send(`**Mastery** — No eligible FORCE USER Command cards (cost ≤ 1) in your discard pile.`).catch(discordCatch);
       } else {
         game.pendingMastery = { gameId: game.gameId, attackerPlayerNum: mastPlayerNum, discardKey: mastDiscardKey, eligible: mastEligible, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum };
         const mastOwnerId = getPlayerId(game, mastPlayerNum);
@@ -4858,7 +4859,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
           content: `<@${mastOwnerId}> **Mastery** — Choose a FORCE USER CC (cost ≤ 1) from your discard pile to return to hand:`,
           allowedMentions: { users: [mastOwnerId] },
           components: [new ActionRowBuilder().addComponents(mastBtns)],
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
         return true;
       }
     }
@@ -4870,7 +4871,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
     const intOpponentHandKey = ccHandKey(intOpponentPlayerNum);
     const intOpponentHand = game[intOpponentHandKey] || [];
     if (intOpponentHand.length === 0) {
-      await thread.send(`**Interrogate** — Opponent's hand is empty; no card to choose.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send(`**Interrogate** — Opponent's hand is empty; no card to choose.`).catch(discordCatch);
     } else {
       game.pendingInterrogate = { gameId: game.gameId, attackerPlayerNum: intAttackerPlayerNum, opponentPlayerNum: intOpponentPlayerNum, opponentHandSnapshot: [...intOpponentHand], chosenCardName: null, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum };
       const intOwnerId = getPlayerId(game, intAttackerPlayerNum);
@@ -4881,7 +4882,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
         content: `<@${intOwnerId}> **Interrogate** — ⚠️ *Opponent: look away!* Pick the card you want to target:`,
         allowedMentions: { users: [intOwnerId] },
         components: [new ActionRowBuilder().addComponents(intBtns)],
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
       return true;
     }
   }
@@ -4921,7 +4922,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
           new ButtonBuilder().setCustomId(`sidewinder_apply_${game.gameId}_${combat.attackerMsgId}_${combat.attackerFigureIndex ?? 0}`).setLabel('Suffer 1 Strain → +2 MP').setStyle(ButtonStyle.Secondary),
           new ButtonBuilder().setCustomId(`sidewinder_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary),
         )],
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
     }
   }
   // Boltslinger (Vinto Hreeda): deal 1 Dmg to another hostile within 3 after attack
@@ -4950,7 +4951,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
         content: `<@${pcOwnerId}> **Boltslinger** — Choose a hostile within 3 spaces to deal 1 Damage (verify LOS):`,
         allowedMentions: { users: [pcOwnerId] },
         components: [new ActionRowBuilder().addComponents(btns)],
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
     }
   }
   // Indiscriminate Fire (Bossk): after attack, if not a miss, choose 1 non-red attack die;
@@ -4987,7 +4988,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
           content: `<@${pcOwnerId}> **Indiscriminate Fire** — Choose 1 non-red attack die for splash:`,
           allowedMentions: { users: [pcOwnerId] },
           components: [new ActionRowBuilder().addComponents(ifBtns)],
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
       }
     }
   }
@@ -5007,10 +5008,10 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
         content: `<@${salvoOwnerId}> **Missile Salvo** — ${ms.diceAvailable.length} shot${ms.diceAvailable.length !== 1 ? 's' : ''} remaining. Choose a die for your next attack (different target):`,
         components: [new ActionRowBuilder().addComponents(salvoBtns)],
         allowedMentions: { users: [salvoOwnerId] },
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
     } else {
       delete game.pendingMissileSalvo[combat.attackerMsgId];
-      await thread.send('**Missile Salvo** — All shots fired. Salvo complete.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await thread.send('**Missile Salvo** — All shots fired. Salvo complete.').catch(discordCatch);
     }
   }
 
@@ -5049,7 +5050,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
   if (combat.rollMessageId) {
     try {
       const rollMsg = await thread.messages.fetch(combat.rollMessageId);
-      await rollMsg.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await rollMsg.edit({ components: [] }).catch(discordCatch);
     } catch {}
   }
   // Autofire chain attack: grant free attack restricted to within 3 of target
@@ -5082,7 +5083,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
         const exhausted = dcExhaustedState.get(msgId) ?? false;
         const healthState = dcHealthState.get(msgId) || [];
         const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, msgId));
-        await dcMsg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await dcMsg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch (err) {
       console.error('Failed to update DC embed:', err);
@@ -5099,7 +5100,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
   }
   // Refresh activation thread minimap after combat (conditions/actions may have changed)
   if (combat.attackerMsgId) {
-    await updateDcActionsMessage(game, combat.attackerMsgId, client).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await updateDcActionsMessage(game, combat.attackerMsgId, client).catch(discordCatch);
   }
 }
 
@@ -5114,17 +5115,17 @@ async function handleSidewinderApply(interaction) {
   const meta = dcMessageMeta.get(attackerMsgId);
   if (!meta) return;
   if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.followUp({ content: 'Only the attacker can use Sidewinder.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the attacker can use Sidewinder.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
   const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
   const swKey = figureKey + '_sidewinder';
   if (game.roundFigureAbilityUsed?.[swKey]) {
-    await interaction.followUp({ content: 'Sidewinder already used this round.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Sidewinder already used this round.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   // Apply 1 Strain
   reduceHp(dcHealthState, game, attackerMsgId, figureIndex, 1, meta.playerNum);
   // Grant 2 MP
@@ -5136,7 +5137,7 @@ async function handleSidewinderApply(interaction) {
   // Mark used this round
   game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
   game.roundFigureAbilityUsed[swKey] = true;
-  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   await interaction.message.channel.send('**Sidewinder** — Jyn Odan suffered 1 Strain and gained +2 MP.');
   await logGameAction(game, client, `**Sidewinder** — Jyn Odan suffered 1 Strain and gained +2 MP.`, { phase: 'ROUND', icon: 'card' });
   await ensureMovementBankMessage(game, attackerMsgId, client);
@@ -5144,14 +5145,14 @@ async function handleSidewinderApply(interaction) {
     const ch = await client.channels.fetch(getPlayAreaId(game, meta.playerNum));
     const msg = await ch.messages.fetch(attackerMsgId);
     const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, dcExhaustedState.get(attackerMsgId) ?? false, meta.displayName, dcHealthState.get(attackerMsgId) || [], getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, attackerMsgId));
-    await msg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await msg.edit({ embeds: [embed], files }).catch(discordCatch);
   } catch (e) { console.error('Failed to refresh Sidewinder DC embed:', e); }
   saveGames();
 }
 
 async function handleSidewinderSkip(interaction) {
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
-  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }
 
@@ -5164,12 +5165,12 @@ async function handleBoltslingerTarget(interaction) {
   if (!game?.pendingBoltslinger) return;
   const { attackerPlayerNum, combatThreadId, targets } = game.pendingBoltslinger;
   if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the attacker can use Boltslinger.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Only the attacker can use Boltslinger.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const target = targets[parseInt(idxStr, 10)];
   if (!target) return;
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   const targetMsgId = findDcMessageIdForFigure(gameId, target.playerNum, target.figureKey);
   if (targetMsgId) {
     const figMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
@@ -5181,25 +5182,25 @@ async function handleBoltslingerTarget(interaction) {
         const ch = await client.channels.fetch(getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(targetMsgId);
         const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(targetMsgId) ?? false, tMeta.displayName, dcHealthState.get(targetMsgId) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, targetMsgId));
-        await msg.edit({ embeds: [embed], files }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch (e) { console.error('Failed to refresh Boltslinger target embed:', e); }
   }
   const blThread = await client.channels.fetch(combatThreadId).catch(() => null);
   if (blThread) await blThread.send(`**Boltslinger** — **${target.label}** suffers 1 Damage.`);
-  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Boltslinger** — **${target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
   delete game.pendingBoltslinger;
   saveGames();
 }
 
 async function handleBoltslingerSkip(interaction) {
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   const m = interaction.customId.match(/^boltslinger_skip_([^_]+)$/);
   if (!m) return;
   const game = getGame(m[1]);
   if (game) delete game.pendingBoltslinger;
-  await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }
 
@@ -5268,7 +5269,7 @@ async function handleIndiscriminateFireDie(interaction) {
   }
   const die = availableDice[parseInt(idxStr, 10)];
   if (!die) return;
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   delete game.pendingIndiscriminateFire;
   await interaction.message.edit({ components: [] }).catch(() => {});
   const thread = await client.channels.fetch(combatThreadId).catch(() => null);
@@ -5281,7 +5282,7 @@ async function handleIndiscriminateFireSkip(interaction) {
   const m = interaction.customId.match(/^indiscriminate_skip_([^_]+)$/);
   if (!m) return;
   const game = getGame(m[1]);
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   if (game) delete game.pendingIndiscriminateFire;
   await interaction.message.edit({ components: [] }).catch(() => {});
   saveGames();
@@ -5301,7 +5302,7 @@ async function handleFightingKnifeTarget(interaction) {
   }
   const target = pending.targets[parseInt(idxStr, 10)];
   if (!target) return;
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(() => {});
   delete game.pendingFightingKnife;
   // Roll 1 red die
@@ -5338,7 +5339,7 @@ async function handleFightingKnifeTarget(interaction) {
   }
   const dieDesc = `${die.dmg}dmg${die.surge ? `/${die.surge}↯` : ''}`;
   await logGameAction(game, client, `**Fighting Knife** — ${target.label}: rolled 1 red die (${dieDesc}), dealt **${hits}** damage`, { phase: 'ROUND', icon: 'attack' });
-  await thread.send(`**Fighting Knife** — Rolled 1 red die on **${target.label}**: ${dieDesc} → **${hits} Damage**.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await thread.send(`**Fighting Knife** — Rolled 1 red die on **${target.label}**: ${dieDesc} → **${hits} Damage**.`).catch(discordCatch);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
   saveGames();
 }
@@ -5350,7 +5351,7 @@ async function handleFightingKnifeSkip(interaction) {
   const game = getGame(m[1]);
   if (!game?.pendingFightingKnife) return;
   const pending = game.pendingFightingKnife;
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(() => {});
   delete game.pendingFightingKnife;
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
@@ -5360,7 +5361,7 @@ async function handleFightingKnifeSkip(interaction) {
 
 /** Concussive Bolt push target: concussive_bolt_push_{gameId}_{space} */
 async function handleConcussiveBoltPush(interaction) {
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   const m = interaction.customId.match(/^concussive_bolt_push_([^_]+)_([a-z0-9]+)$/);
   if (!m) return;
   const [, gameId, space] = m;
@@ -5389,7 +5390,7 @@ async function handleConcussiveBoltPush(interaction) {
 
 /** Concussive Bolt skip: concussive_bolt_skip_{gameId} */
 async function handleConcussiveBoltSkip(interaction) {
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   const m = interaction.customId.match(/^concussive_bolt_skip_([^_]+)$/);
   if (!m) return;
   const game = getGame(m[1]);
@@ -5451,7 +5452,7 @@ async function advanceSpreadThePain(game, pending) {
     content: `<@${pending.ownerId}> **Spread the Pain** — Apply **${nextCond}** to a figure at or adjacent to target (${String(targetPos).toUpperCase()}):`,
     allowedMentions: { users: [pending.ownerId] },
     components: [new ActionRowBuilder().addComponents(btns)],
-  }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  }).catch(discordCatch);
   saveGames();
 }
 
@@ -5467,7 +5468,7 @@ async function handleSpreadThePainFigPick(interaction) {
     await interaction.followUp({ content: 'Only the attacker can choose the Spread the Pain target.', ephemeral: true }).catch(() => {});
     return;
   }
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(() => {});
   const cond = pending.conditions[pending.conditionIdx];
   // Apply condition to figureKey
@@ -5489,7 +5490,7 @@ async function handleSpreadThePainSkip(interaction) {
   const game = getGame(m[1]);
   if (!game?.pendingSpreadThePain) return;
   const pending = game.pendingSpreadThePain;
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(() => {});
   pending.conditionIdx++;
   await advanceSpreadThePain(game, pending);
@@ -5497,7 +5498,7 @@ async function handleSpreadThePainSkip(interaction) {
 
 /** Missile Salvo die choice: missile_salvo_die_{color}_{gameId}_{msgId} */
 async function handleMissileSalvoDie(interaction) {
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   const m = interaction.customId.match(/^missile_salvo_die_([a-z]+)_([^_]+)_(.+)$/);
   if (!m) return;
   const [, color, gameId, msgId] = m;
@@ -5525,13 +5526,13 @@ async function handleMissileSalvoDie(interaction) {
   const ownerId = getPlayerId(game, playerNum);
   const colorLabel = color.charAt(0).toUpperCase() + color.slice(1);
   const msg = `<@${ownerId}> **Missile Salvo** — **${colorLabel} die** selected (+3 Accuracy). Click **Attack** to target a different hostile figure. This attack costs no action.`;
-  if (salvoThread) await salvoThread.send({ content: msg, allowedMentions: { users: [ownerId] } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+  if (salvoThread) await salvoThread.send({ content: msg, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
   saveGames();
 }
 
 /** Missile Salvo done: missile_salvo_done_{gameId}_{msgId} */
 async function handleMissileSalvoDone(interaction) {
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
   const m = interaction.customId.match(/^missile_salvo_done_([^_]+)_(.+)$/);
   if (!m) return;
   const [, gameId, msgId] = m;
@@ -5677,7 +5678,7 @@ async function maybeShowEndActivationPhaseButton(game, client) {
       embeds: [roundEmbed],
       components: [endBtn],
       allowedMentions: { users: [game.initiativePlayerId] },
-    }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    }).catch(discordCatch);
     game.roundActivationButtonShown = true;
     saveGames();
   } catch (err) {
@@ -5706,7 +5707,7 @@ async function updateDcActionsMessage(game, msgId, client) {
         editPayload.files = [actMinimap];
         editPayload.attachments = []; // replace old minimap image rather than accumulating
       }
-      await msg.edit(editPayload).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await msg.edit(editPayload).catch(discordCatch);
     } catch (err) {
       console.error('Failed to update DC actions message:', err);
     }
@@ -5727,7 +5728,7 @@ async function updateDcActionsMessage(game, msgId, client) {
         getNicknamesForDcMessage(game, meta),
       );
       const _comps = getDcPlayAreaComponents(msgId, true, game, meta.dcName);
-      await _dcMsg.edit({ embeds: [_emb], files: _files, components: _comps }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await _dcMsg.edit({ embeds: [_emb], files: _files, components: _comps }).catch(discordCatch);
     } catch (_err) {
       console.error('Failed to update DC embed with action count/tokens:', _err);
     }
@@ -5974,7 +5975,7 @@ async function updateHandChannelMessages(game, client) {
       const handMsg = msgs.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
       if (handMsg) {
         const payload = buildHandDisplayPayload(hand, deck, game.gameId, game, pn);
-        await handMsg.edit({ content: payload.content, embeds: payload.embeds, files: payload.files || [], components: payload.components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await handMsg.edit({ content: payload.content, embeds: payload.embeds, files: payload.files || [], components: payload.components }).catch(discordCatch);
       }
     } catch (err) {
       console.error('Failed to update hand channel message:', err);
@@ -6034,7 +6035,7 @@ async function updatePlayAreaDcButtons(game, client) {
         const exhausted = dcExhaustedState.get(msgId) ?? false;
         const components = getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
         const msg = await channel.messages.fetch(msgId);
-        await msg.edit({ components }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await msg.edit({ components }).catch(discordCatch);
       }
     } catch (err) {
       console.error('Failed to update Play Area DC buttons:', err);
@@ -6206,7 +6207,7 @@ async function applySquadSubmission(game, isP1, squad, client) {
           game.boardId = boardChannel.id;
           if (game.selectedMap) {
             const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-            await boardChannel.send(payload).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            await boardChannel.send(payload).catch(discordCatch);
           }
         } catch (err) {
           console.error('Failed to create Map Updates channel:', err);
@@ -6557,7 +6558,7 @@ client.on('messageCreate', async (message) => {
   const channelNameLc = message.channel?.name?.toLowerCase();
   if (content.startsWith('testready') && channelNameLc === 'lfg') {
     if (!message.guild) {
-      await message.reply('This command must be used in a server channel.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await message.reply('This command must be used in a server channel.').catch(discordCatch);
       return;
     }
     const userId = message.author.id;
@@ -6567,7 +6568,7 @@ client.on('messageCreate', async (message) => {
     const scenarioId = getRandomTestreadyScenario(p2IsBot);
     if (!scenarioId) {
       const hint = p2IsBot ? ' Some scenarios require a real P2 — try `testready @player2`.' : '';
-      await message.reply(`No testready scenarios available.${hint}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await message.reply(`No testready scenarios available.${hint}`).catch(discordCatch);
       return;
     }
     const msgId = message.id;
@@ -6581,7 +6582,7 @@ client.on('messageCreate', async (message) => {
     } catch (err) {
       console.error('Test game creation error:', err);
       await logGameErrorToBotLogs(message.client, message.guild, null, err, 'test_game_create');
-      await creatingMsg.edit(`Failed to create test game: ${err.message}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await creatingMsg.edit(`Failed to create test game: ${err.message}`).catch(discordCatch);
     }
     return;
   }
@@ -6589,7 +6590,7 @@ client.on('messageCreate', async (message) => {
   const isTestGameCmd = content.startsWith('testgame') && channelNameLc === 'lfg';
   if (isTestGameCmd) {
     if (!message.guild) {
-      await message.reply('This command must be used in a server channel.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await message.reply('This command must be used in a server channel.').catch(discordCatch);
       return;
     }
     const parts = message.content.trim().split(/\s+/);
@@ -6611,7 +6612,7 @@ client.on('messageCreate', async (message) => {
     } catch (err) {
       console.error('Test game creation error:', err);
       await logGameErrorToBotLogs(message.client, message.guild, null, err, 'test_game_create');
-      await creatingMsg.edit(`Failed to create test game: ${err.message}`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await creatingMsg.edit(`Failed to create test game: ${err.message}`).catch(discordCatch);
     }
     return;
   }
@@ -6692,14 +6693,14 @@ client.on('messageCreate', async (message) => {
     for (const [gameId, game] of getGamesMap()) {
       if (game.generalId !== chId && game.chatId !== chId) continue;
       if (game.ended) {
-        await message.reply('This game has ended. VP cannot be changed.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await message.reply('This game has ended. VP cannot be changed.').catch(discordCatch);
         return;
       }
       const authorId = message.author.id;
       const isP1 = authorId === game.player1Id;
       const isP2 = authorId === game.player2Id;
       if (!isP1 && !isP2) {
-        await message.reply('Only players in this game can use /editvp.').catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await message.reply('Only players in this game can use /editvp.').catch(discordCatch);
         return;
       }
       const raw = editVpMatch[1];
@@ -6714,7 +6715,7 @@ client.on('messageCreate', async (message) => {
       saveGames();
       const newTotal = vp.total;
       const side = isP1 ? 'Player 1' : 'Player 2';
-      await message.reply(`✓ **${side}** VP adjusted ${actualDelta >= 0 ? '+' : ''}${actualDelta}. Total is now **${newTotal}** VP.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await message.reply(`✓ **${side}** VP adjusted ${actualDelta >= 0 ? '+' : ''}${actualDelta}. Total is now **${newTotal}** VP.`).catch(discordCatch);
       // Update scorecard embed in Map Updates channel if present
       if (game.boardId && game.selectedMap) {
         try {
@@ -6723,7 +6724,7 @@ client.on('messageCreate', async (message) => {
           const withScorecard = messages.find((m) => m.embeds?.[0]?.title === 'Scorecard');
           if (withScorecard) {
             const embed = buildScorecardEmbed(game, getMissionVpBonus(game));
-            await withScorecard.edit({ embeds: [embed] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            await withScorecard.edit({ embeds: [embed] }).catch(discordCatch);
           }
         } catch (err) {
           // ignore
@@ -6915,14 +6916,14 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: 'Use /botmenu in the **Game Log** channel of the game you want to manage.',
           ephemeral: true,
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
         return;
       }
       await interaction.reply({
         content: '**Bot Stuff** — Choose an action:',
         components: [getBotmenuButtons(gameByChannel.gameId)],
         ephemeral: false,
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
       return;
     }
     if (cmd === 'power-token') {
@@ -6938,7 +6939,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: 'Use /power-token in the **Game Log** or **Board** channel of an active game.',
           ephemeral: true,
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
         return;
       }
       if (await replyIfGameEnded(game, interaction)) return;
@@ -6952,7 +6953,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: `**Power Tokens**\n${lines}`,
           ephemeral: true,
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
         return;
       }
       const figureKey = interaction.options.getString('figure');
@@ -6964,7 +6965,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: `Figure **${figureKey}** not found. Valid keys: ${allFigureKeys.slice(0, 8).join(', ')}${allFigureKeys.length > 8 ? '...' : ''}`,
           ephemeral: true,
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
         return;
       }
       game.figurePowerTokens = game.figurePowerTokens || {};
@@ -6975,7 +6976,7 @@ client.on('interactionCreate', async (interaction) => {
           await interaction.reply({
             content: `${fk} already has 2 Power Tokens (max). Remove one first.`,
             ephemeral: true,
-          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }).catch(discordCatch);
           return;
         }
         game.figurePowerTokens[fk] = [...game.figurePowerTokens[fk], type];
@@ -6983,7 +6984,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: `Added **${type}** Power Token to **${fk}**.`,
           ephemeral: false,
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
       } else {
         const idx = interaction.options.getInteger('index');
         const arr = game.figurePowerTokens[fk];
@@ -6991,7 +6992,7 @@ client.on('interactionCreate', async (interaction) => {
           await interaction.reply({
             content: `${fk} does not have a token at index ${idx}. Current: ${(arr || []).join(', ') || 'none'}`,
             ephemeral: true,
-          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }).catch(discordCatch);
           return;
         }
         const removed = arr[idx - 1];
@@ -7001,7 +7002,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: `Removed **${removed}** Power Token from **${fk}**.`,
           ephemeral: false,
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
       }
       if (game.boardId && game.selectedMap) {
         try {
@@ -7021,7 +7022,7 @@ client.on('interactionCreate', async (interaction) => {
         if (g.generalId === channelId || g.boardId === channelId || g.chatId === channelId) { game = g; break; }
       }
       if (!game) {
-        await interaction.reply({ content: 'Use /move-figure in the **Game Log** or **Board** channel of an active game.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.reply({ content: 'Use /move-figure in the **Game Log** or **Board** channel of an active game.', ephemeral: true }).catch(discordCatch);
         return;
       }
       if (await replyIfGameEnded(game, interaction)) return;
@@ -7037,7 +7038,7 @@ client.on('interactionCreate', async (interaction) => {
       }
       if (!fk) {
         const allKeys = [...Object.keys(poses[1] || {}), ...Object.keys(poses[2] || {})];
-        await interaction.reply({ content: `Figure **${figureKey}** not found on map. On-map keys: ${allKeys.slice(0, 10).join(', ')}${allKeys.length > 10 ? '...' : ''}`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.reply({ content: `Figure **${figureKey}** not found on map. On-map keys: ${allKeys.slice(0, 10).join(', ')}${allKeys.length > 10 ? '...' : ''}`, ephemeral: true }).catch(discordCatch);
         return;
       }
       const prevCoord = poses[playerNum][fk];
@@ -7051,7 +7052,7 @@ client.on('interactionCreate', async (interaction) => {
           await boardChannel.send(payload);
         } catch (e) { console.error('move-figure: refresh map failed', e); }
       }
-      await interaction.reply({ content: `Moved **${fk}** to **${coordRaw.toUpperCase()}**.`, ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.reply({ content: `Moved **${fk}** to **${coordRaw.toUpperCase()}**.`, ephemeral: false }).catch(discordCatch);
       return;
     }
     // Stats commands: only in #statistics channel; require DB
@@ -7062,17 +7063,17 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({
           content: 'Use this command in the **#statistics** channel.',
           ephemeral: true,
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
         return;
       }
       if (!isDbConfigured()) {
         await interaction.reply({
           content: 'Stats require a database (DATABASE_URL). No data available.',
           ephemeral: true,
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
         return;
       }
-      await interaction.deferReply({ ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.deferReply({ ephemeral: false }).catch(discordCatch);
       try {
         if (cmd === 'statcheck') {
           const targetUser = interaction.options.getUser('player');
@@ -7080,37 +7081,37 @@ client.on('interactionCreate', async (interaction) => {
             const s = await getStatsSummaryForPlayer(targetUser.id);
             await interaction.editReply({
               content: `**Stats for ${targetUser.username}**\nGames: **${s.games}** | Wins: **${s.wins}** | Losses: **${s.losses}** | Win rate: **${s.winRate}%**`,
-            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            }).catch(discordCatch);
           } else {
             const { totalGames } = await getStatsSummary();
             await interaction.editReply({
               content: `**Completed games:** ${totalGames}`,
-            }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+            }).catch(discordCatch);
           }
         } else if (cmd === 'affiliationwinrateglobal') {
           const rows = await getAffiliationWinRates();
           const lines = rows.length
             ? rows.map((r) => `${r.affiliation}: **${r.wins}** / **${r.games}** (${r.winRate}% win rate)`).join('\n')
             : 'No completed games with affiliation data yet.';
-          await interaction.editReply({ content: `**Win rate by affiliation (global)**\n${lines}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await interaction.editReply({ content: `**Win rate by affiliation (global)**\n${lines}` }).catch(discordCatch);
         } else if (cmd === 'affiliationwinratepersonal') {
           const rows = await getAffiliationWinRatesPersonal(interaction.user.id);
           const lines = rows.length
             ? rows.map((r) => `${r.affiliation}: **${r.wins}** / **${r.games}** (${r.winRate}% win rate)`).join('\n')
             : 'No completed games with affiliation data for you yet.';
-          await interaction.editReply({ content: `**Your win rate by affiliation**\n${lines}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await interaction.editReply({ content: `**Your win rate by affiliation**\n${lines}` }).catch(discordCatch);
         } else if (cmd === 'affiliationpickrateglobal') {
           const rows = await getAffiliationPickRates();
           const lines = rows.length
             ? rows.map((r) => `${r.affiliation}: **${r.picks}** picks / **${r.totalArmies}** armies (${r.pickRate}%)`).join('\n')
             : 'No completed games with affiliation data yet.';
-          await interaction.editReply({ content: `**Pick rate by affiliation (global)**\n${lines}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await interaction.editReply({ content: `**Pick rate by affiliation (global)**\n${lines}` }).catch(discordCatch);
         } else if (cmd === 'affiliationpickratepersonal') {
           const rows = await getAffiliationPickRatesPersonal(interaction.user.id);
           const lines = rows.length
             ? rows.map((r) => `${r.affiliation}: **${r.picks}** picks / **${r.totalArmies}** armies (${r.pickRate}%)`).join('\n')
             : 'No completed games with affiliation data for you yet.';
-          await interaction.editReply({ content: `**Your pick rate by affiliation**\n${lines}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          await interaction.editReply({ content: `**Your pick rate by affiliation**\n${lines}` }).catch(discordCatch);
         } else if (cmd === 'dcwinrateglobaltopten') {
           const limit = interaction.options.getInteger('limit') ?? 20;
           const rows = await getDcWinRates(limit);
@@ -7119,7 +7120,7 @@ client.on('interactionCreate', async (interaction) => {
             : 'No completed games with army data yet.';
           await interaction.editReply({
             content: `**Win rate by Deployment Card** (top ${limit} by games played, global)\n${lines}`,
-          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }).catch(discordCatch);
         } else if (cmd === 'dcwinratepersonaltopten') {
           const limit = interaction.options.getInteger('limit') ?? 20;
           const rows = await getDcWinRatesPersonal(interaction.user.id, limit);
@@ -7128,7 +7129,7 @@ client.on('interactionCreate', async (interaction) => {
             : 'No completed games with army data for you yet.';
           await interaction.editReply({
             content: `**Your win rate by Deployment Card** (top ${limit} by games played)\n${lines}`,
-          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }).catch(discordCatch);
         } else if (cmd === 'leaderboard') {
           const limit = interaction.options.getInteger('limit') ?? 5;
           const rows = await getLeaderboard(limit);
@@ -7138,22 +7139,22 @@ client.on('interactionCreate', async (interaction) => {
           await interaction.editReply({
             content: `**Leaderboard** (top ${limit} by win rate, min. 5 games)\n${lines}`,
             allowedMentions: { users: [] },
-          }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+          }).catch(discordCatch);
         }
       } catch (err) {
         console.error(`Stats command /${cmd} failed:`, err);
         await interaction.editReply({
           content: `Something went wrong: ${err.message}`,
-        }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        }).catch(discordCatch);
       }
       return;
     }
     if (cmd === 'achievements') {
       if (!isDbConfigured()) {
-        await interaction.reply({ content: 'Achievements require a database (DATABASE_URL). No data available.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.reply({ content: 'Achievements require a database (DATABASE_URL). No data available.', ephemeral: true }).catch(discordCatch);
         return;
       }
-      await interaction.deferReply({ ephemeral: false }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.deferReply({ ephemeral: false }).catch(discordCatch);
       try {
         const targetUser = interaction.options.getUser('player') || interaction.user;
         const earned = await getEarnedAchievements(targetUser.id);
@@ -7165,10 +7166,10 @@ client.on('interactionCreate', async (interaction) => {
               ? earned.map((a) => `${a.icon || '🏆'} **${a.name}** — ${a.description} *(${new Date(a.earned_at).toLocaleDateString()})*`).join('\n')
               : 'No achievements yet — play some games!'
           );
-        await interaction.editReply({ embeds: [embed], allowedMentions: { users: [] } }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.editReply({ embeds: [embed], allowedMentions: { users: [] } }).catch(discordCatch);
       } catch (err) {
         console.error('[Achievements] /achievements command failed:', err.message);
-        await interaction.editReply({ content: `Something went wrong: ${err.message}` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+        await interaction.editReply({ content: `Something went wrong: ${err.message}` }).catch(discordCatch);
       }
       return;
     }
@@ -7211,19 +7212,19 @@ client.on('interactionCreate', async (interaction) => {
       const gameId2 = rest2.substring(0, lu);
       const origCoord2 = rest2.substring(lu + 1);
       const game2 = getGame(gameId2);
-      if (!game2) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      if (!game2) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
       const targetRaw = interaction.fields.getTextInputValue('target_coord').trim().toLowerCase();
       const curCoord2 = String(game2.cratePositions?.[origCoord2] || origCoord2).toLowerCase();
       const dist = getRange(curCoord2, targetRaw);
-      if (dist === 0) { await interaction.reply({ content: `Crate stays at ${curCoord2.toUpperCase()} — no change.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
-      if (dist > 3) { await interaction.reply({ content: `❌ ${targetRaw.toUpperCase()} is ${dist} spaces from ${curCoord2.toUpperCase()} (max 3). Try again.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
-      await interaction.deferReply({ ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      if (dist === 0) { await interaction.reply({ content: `Crate stays at ${curCoord2.toUpperCase()} — no change.`, ephemeral: true }).catch(discordCatch); return; }
+      if (dist > 3) { await interaction.reply({ content: `❌ ${targetRaw.toUpperCase()} is ${dist} spaces from ${curCoord2.toUpperCase()} (max 3). Try again.`, ephemeral: true }).catch(discordCatch); return; }
+      await interaction.deferReply({ ephemeral: true }).catch(discordCatch);
       game2.cratePositions = game2.cratePositions || {};
       game2.cratePositions[origCoord2] = targetRaw;
       const ctrl = getSpaceController(game2, 'devaron-garrison', curCoord2);
       const pid2 = ctrl ? (ctrl === 1 ? game2.player1Id : game2.player2Id) : interaction.user.id;
       await logGameAction(game2, client, `📦 <@${pid2}> pushed crate from **${curCoord2.toUpperCase()}** → **${targetRaw.toUpperCase()}** (${dist} space${dist !== 1 ? 's' : ''}).`, { allowedMentions: { users: [pid2] }, phase: 'ROUND', icon: 'round' });
-      await interaction.editReply({ content: `Crate pushed: ${curCoord2.toUpperCase()} → ${targetRaw.toUpperCase()} ✓` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.editReply({ content: `Crate pushed: ${curCoord2.toUpperCase()} → ${targetRaw.toUpperCase()} ✓` }).catch(discordCatch);
       saveGames();
     } else if (modalKey === 'krykna_push_modal_') {
       // customId: krykna_push_modal_{gameId}_krykna-{N}
@@ -7233,14 +7234,14 @@ client.on('interactionCreate', async (interaction) => {
       const gameId2 = rest2.substring(0, kryknaIdx2 - 1);
       const kryknaId2 = rest2.substring(kryknaIdx2);
       const game2 = getGame(gameId2);
-      if (!game2) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      if (!game2) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
       const krykna2 = (game2.npcKrykna || []).find((k) => k.id === kryknaId2);
-      if (!krykna2) { await interaction.reply({ content: 'Krykna not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      if (!krykna2) { await interaction.reply({ content: 'Krykna not found.', ephemeral: true }).catch(discordCatch); return; }
       const targetRaw2 = interaction.fields.getTextInputValue('target_coord').trim().toLowerCase();
       const dist2 = getRange(String(krykna2.coord).toLowerCase(), targetRaw2);
-      if (dist2 === 0) { await interaction.reply({ content: `Krykna stays at ${String(krykna2.coord).toUpperCase()} — no change.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
-      if (dist2 === null || dist2 > 3) { await interaction.reply({ content: `❌ ${targetRaw2.toUpperCase()} is ${dist2 ?? '?'} spaces away (max 3). Try again.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
-      await interaction.deferReply({ ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      if (dist2 === 0) { await interaction.reply({ content: `Krykna stays at ${String(krykna2.coord).toUpperCase()} — no change.`, ephemeral: true }).catch(discordCatch); return; }
+      if (dist2 === null || dist2 > 3) { await interaction.reply({ content: `❌ ${targetRaw2.toUpperCase()} is ${dist2 ?? '?'} spaces away (max 3). Try again.`, ephemeral: true }).catch(discordCatch); return; }
+      await interaction.deferReply({ ephemeral: true }).catch(discordCatch);
       const oldCoord2 = String(krykna2.coord).toUpperCase();
       krykna2.coord = targetRaw2;
       game2.kryknaPushedIds = game2.kryknaPushedIds || [];
@@ -7248,7 +7249,7 @@ client.on('interactionCreate', async (interaction) => {
       game2.pendingKryknaPushQueue.shift();
       const pnActor2 = game2.player1Id === interaction.user.id ? 1 : 2;
       await logGameAction(game2, client, `🕷️ **Krykna Push:** P${pnActor2} pushed ${kryknaId2} from **${oldCoord2}** → **${targetRaw2.toUpperCase()}** (${dist2} space${dist2 !== 1 ? 's' : ''}).`, { phase: 'ROUND', icon: 'move' });
-      await interaction.editReply({ content: `${kryknaId2} pushed: ${oldCoord2} → ${targetRaw2.toUpperCase()} ✓` }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.editReply({ content: `${kryknaId2} pushed: ${oldCoord2} → ${targetRaw2.toUpperCase()} ✓` }).catch(discordCatch);
       const generalCh2 = await client.channels.fetch(game2.generalId).catch(() => null);
       if (game2.pendingKryknaPushQueue.length > 0) {
         // More pushes needed — post next player's buttons
@@ -7321,11 +7322,11 @@ client.on('interactionCreate', async (interaction) => {
       const msgId = interaction.customId.replace('dc_fig_select_', '');
       const selectedFigure = parseInt(interaction.values[0], 10);
       const meta = dcMessageMeta.get(msgId);
-      if (!meta) { await interaction.reply({ content: 'DC not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
+      if (!meta) { await interaction.reply({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
       const game = getGame(meta.gameId);
-      if (!game) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
-      if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) { await interaction.reply({ content: 'Only the owner can pick a figure.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); }); return; }
-      await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+      if (!game) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
+      if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) { await interaction.reply({ content: 'Only the owner can pick a figure.', ephemeral: true }).catch(discordCatch); return; }
+      await interaction.deferUpdate().catch(discordCatch);
       game.dcActionsData = game.dcActionsData || {};
       game.dcActionsData[msgId] = game.dcActionsData[msgId] || {};
       game.dcActionsData[msgId].selectedFigure = selectedFigure;
@@ -7424,7 +7425,7 @@ client.on('interactionCreate', async (interaction) => {
       const suffix = interaction.customId.slice(selectKey.length);
       // Reconstruct button-style customId: buttonPrefix + suffix + _ + space
       interaction.customId = `${SPACE_SEL_MAP[selectKey]}${suffix}_${space}`;
-      await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+      await interaction.deferUpdate().catch(discordCatch);
       // Re-dispatch as button
       const fakeButtonKey = SPACE_SEL_MAP[selectKey];
       if (fakeButtonKey === 'overwatch_space_' || fakeButtonKey === 'pounce_space_' || fakeButtonKey === 'false_orders_space_' || fakeButtonKey === 'rush_push_space_') {
@@ -7485,7 +7486,7 @@ client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return;
   const buttonKey = getHandlerKey(interaction.customId, 'button');
   if (!buttonKey) return;
-  await interaction.deferUpdate().catch((err) => { console.error('[discord]', err?.message ?? err); });
+  await interaction.deferUpdate().catch(discordCatch);
 
   const _buttonLockId = resolveGameIdForLock(interaction);
   await withGameLock(_buttonLockId, async () => {
@@ -7624,7 +7625,7 @@ client.on('interactionCreate', async (interaction) => {
         content: 'Go to **#new-games** and click **Create Post** to start a lobby. The bot will add the Join Game button.',
         components: [getMainMenu()],
         ephemeral: true,
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
       return;
     }
     if (buttonKey === 'join_game') {
@@ -7632,7 +7633,7 @@ client.on('interactionCreate', async (interaction) => {
         content: 'Browse **#new-games** and click **Join Game** on a lobby post that needs an opponent.',
         components: [getMainMenu()],
         ephemeral: true,
-      }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+      }).catch(discordCatch);
       return;
     }
 

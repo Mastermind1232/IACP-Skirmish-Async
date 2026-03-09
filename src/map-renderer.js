@@ -260,37 +260,95 @@ export async function renderMap(mapId, options = {}) {
     }
   };
 
+  // Pre-load all token images in parallel, then draw sequentially (canvas ctx is not thread-safe).
+  const tokenDrawQueue = [];
   for (const coord of tokens.terminals || []) {
-    await drawTokenAt(coord, tc.terminals, 'rgba(79,195,247,0.8)', 'square');
+    tokenDrawQueue.push({ coord, image: tc.terminals, fallback: 'rgba(79,195,247,0.8)', shape: 'square' });
   }
   for (const token of tokens.missionA || []) {
     const coord = typeof token === 'string' ? token : token.coord;
     const label = typeof token === 'string' ? 'Token' : (token.label || 'Token');
     const image = (typeof token === 'object' && token.image) || tc.missionA;
-    await drawTokenAt(coord, image, 'rgba(120,120,120,0.9)', 'circle', label, CRATE_LABEL_SIZE_SCALE);
+    tokenDrawQueue.push({ coord, image, fallback: 'rgba(120,120,120,0.9)', shape: 'circle', label, sizeScale: CRATE_LABEL_SIZE_SCALE });
   }
   for (const token of tokens.missionB || []) {
     const coord = typeof token === 'string' ? token : token.coord;
     const label = typeof token === 'string' ? 'Token' : (token.label || 'Token');
     const image = (typeof token === 'object' && token.image) || tc.missionB;
-    await drawTokenAt(coord, image, 'rgba(255,183,77,0.8)', 'square', label, CRATE_LABEL_SIZE_SCALE);
+    tokenDrawQueue.push({ coord, image, fallback: 'rgba(255,183,77,0.8)', shape: 'square', label, sizeScale: CRATE_LABEL_SIZE_SCALE });
   }
-
   const anc = tc.ancillary || {};
   for (const coord of tokens.smoke || []) {
-    await drawTokenAt(coord, anc.smoke, 'rgba(150,150,150,0.7)', 'circle');
+    tokenDrawQueue.push({ coord, image: anc.smoke, fallback: 'rgba(150,150,150,0.7)', shape: 'circle' });
   }
   for (const coord of tokens.rubble || []) {
-    await drawTokenAt(coord, anc.rubble, 'rgba(100,80,60,0.9)', 'square');
+    tokenDrawQueue.push({ coord, image: anc.rubble, fallback: 'rgba(100,80,60,0.9)', shape: 'square' });
   }
   for (const coord of tokens.energyShield || []) {
-    await drawTokenAt(coord, anc.energyShield, 'rgba(100,200,255,0.7)', 'circle');
+    tokenDrawQueue.push({ coord, image: anc.energyShield, fallback: 'rgba(100,200,255,0.7)', shape: 'circle' });
   }
   for (const coord of tokens.device || []) {
-    await drawTokenAt(coord, anc.device, 'rgba(80,120,180,0.9)', 'square');
+    tokenDrawQueue.push({ coord, image: anc.device, fallback: 'rgba(80,120,180,0.9)', shape: 'square' });
   }
   for (const coord of tokens.napalm || []) {
-    await drawTokenAt(coord, anc.napalm, 'rgba(200,80,40,0.9)', 'circle');
+    tokenDrawQueue.push({ coord, image: anc.napalm, fallback: 'rgba(200,80,40,0.9)', shape: 'circle' });
+  }
+  // Load all images in parallel
+  const preloadedTokenImages = await Promise.all(tokenDrawQueue.map(async (t) => {
+    const resolved = t.image ? resolveImagePath(join('vassal_extracted', 'images', t.image), 'tokens') : null;
+    const imgPath = resolved ? join(rootDir, resolved) : null;
+    let img = null;
+    if (imgPath && existsSync(imgPath)) {
+      try { img = await loadImage(imgPath); } catch { /* use fallback */ }
+    }
+    return { ...t, loadedImg: img };
+  }));
+  // Draw sequentially with pre-loaded images
+  for (const t of preloadedTokenImages) {
+    const { col, row } = parseCoord(t.coord);
+    if (col < 0 || row < 0 || col >= numCols || row >= numRows) continue;
+    const cx = sx0 + col * sdx + sdx / 2;
+    const cy = sy0 + row * sdy + sdy / 2;
+    const size = tokenSize * (t.sizeScale || 1);
+    if (t.loadedImg) {
+      const tw = t.loadedImg.width;
+      const th = t.loadedImg.height;
+      const tScale = Math.min(size / tw, size / th);
+      const dw = Math.round(tw * tScale);
+      const dh = Math.round(th * tScale);
+      ctx.drawImage(t.loadedImg, cx - dw / 2, cy - dh / 2, dw, dh);
+    } else {
+      ctx.fillStyle = t.fallback;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.lineWidth = 1;
+      if (t.shape === 'circle') {
+        ctx.beginPath();
+        ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.fillRect(cx - size / 2, cy - size / 2, size, size);
+        ctx.strokeRect(cx - size / 2, cy - size / 2, size, size);
+      }
+    }
+    if (t.label) {
+      const fontSize = Math.max(9, Math.round(11 * scale * (t.sizeScale || 1)));
+      ctx.font = `bold ${fontSize}px "${FONT_FAMILY}"`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const paddingH = Math.max(4, Math.round(6 * scale * (t.sizeScale || 1)));
+      const paddingV = Math.max(2, Math.round(3 * scale * (t.sizeScale || 1)));
+      const metrics = ctx.measureText(t.label);
+      const boxW = metrics.width + paddingH * 2;
+      const boxH = fontSize + paddingV * 2;
+      const labelY = cy + size / 2 - boxH / 2;
+      const boxX = cx - boxW / 2;
+      const boxY = labelY - boxH / 2;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+      ctx.fillStyle = '#FFEB3B';
+      ctx.fillText(t.label, cx, labelY);
+    }
   }
 
   const doorEdges = tokens.doors || [];
@@ -479,55 +537,56 @@ export async function renderMap(mapId, options = {}) {
     const ptConfig = getTokenImagesConfig().powerTokens || {};
     const figX0 = cx - clipRadius;
     const figY0 = cy - clipRadius;
+    // Pre-load power token images in parallel
+    const ptLoadPromises = [];
     for (let i = 0; i < 2; i++) {
       const ptType = powerTokenTypes[i];
-      const px = figX0 + i * (ptSize * 0.9);
-      const py = figY0;
       if (ptType) {
         const filename = ptConfig[ptType] || ptConfig.Surge;
         if (filename) {
           const resolved = resolveImagePath(join('vassal_extracted', 'images', filename), 'tokens');
           const imgPath = join(rootDir, resolved);
           if (existsSync(imgPath)) {
-            try {
-              const ptImg = await loadImage(imgPath);
-              const tw = ptImg.width;
-              const th = ptImg.height;
-              const tScale = Math.min(ptSize / tw, ptSize / th);
-              const dw = Math.round(tw * tScale);
-              const dh = Math.round(th * tScale);
-              ctx.drawImage(ptImg, px, py, dw, dh);
-            } catch (err) {
-              console.error('Power token image load failed:', filename, err);
-            }
-          }
+            ptLoadPromises.push(loadImage(imgPath).then((img) => ({ i, img })).catch(() => null));
+          } else { ptLoadPromises.push(Promise.resolve(null)); }
         }
       }
     }
-    // Condition icons: rendered at top-right of figure, stacking left, using pre-sized slot images
+    const ptResults = await Promise.all(ptLoadPromises);
+    for (const result of ptResults) {
+      if (!result) continue;
+      const px = figX0 + result.i * (ptSize * 0.9);
+      const py = figY0;
+      const tw = result.img.width;
+      const th = result.img.height;
+      const tScale = Math.min(ptSize / tw, ptSize / th);
+      const dw = Math.round(tw * tScale);
+      const dh = Math.round(th * tScale);
+      ctx.drawImage(result.img, px, py, dw, dh);
+    }
+    // Pre-load condition icon images in parallel, then draw sequentially (stacking leftward)
     const conditionIcons = (fig.conditions || []).slice(0, 5);
     if (conditionIcons.length > 0) {
-      // Slot assignment per condition (matches file naming: Icon-{slot}-{Condition} {size}.png)
       const COND_SLOT = { Bleeding: 1, Stunned: 2, Weakened: 3, Focused: 4, Hidden: 5 };
       const condSizeStr = (fig.figureSize || '1x1');
       const iconSize = Math.max(12, clipRadius * 0.5);
-      // Start from top-right corner, stack icons leftward
-      let ciX = cx + clipRadius;
-      const ciY = cy - clipRadius;
-      for (const cond of conditionIcons) {
+      const condImgPromises = conditionIcons.map((cond) => {
         const slot = COND_SLOT[cond] || 1;
         const condIconFile = `Icon-${slot}-${cond} ${condSizeStr}.png`;
         const condIconPath = join(rootDir, 'vassal_extracted', 'images', 'conditions', condIconFile);
         if (existsSync(condIconPath)) {
-          try {
-            const condImg = await loadImage(condIconPath);
-            ciX -= iconSize;
-            ctx.drawImage(condImg, ciX, ciY, iconSize, iconSize);
-            ciX -= iconSize * 0.05; // small gap between icons
-          } catch (err) {
-            console.error('Condition icon load failed:', condIconFile, err);
-          }
+          return loadImage(condIconPath).catch(() => null);
         }
+        return Promise.resolve(null);
+      });
+      const condImgs = await Promise.all(condImgPromises);
+      let ciX = cx + clipRadius;
+      const ciY = cy - clipRadius;
+      for (const condImg of condImgs) {
+        if (!condImg) continue;
+        ciX -= iconSize;
+        ctx.drawImage(condImg, ciX, ciY, iconSize, iconSize);
+        ciX -= iconSize * 0.05;
       }
     }
   }

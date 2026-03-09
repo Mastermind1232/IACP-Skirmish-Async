@@ -12,6 +12,7 @@ import {
   setActivationsRemaining, setActivatedDcIndices, getActivationsRemaining, getActivatedDcIndices as getActivatedIndices,
   ccHandKey, ccDiscardKey,
 } from '../game/player-helpers.js';
+import { discordCatch } from '../error-handling.js';
 
 /**
  * Infer the timing category for fast-forward based on the primary CC's ability entry.
@@ -331,11 +332,11 @@ export async function handleFastForward(interaction, ctx) {
 
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (!game.isTestGame || game.ended) {
-    await interaction.followUp({ content: 'Fast Forward is only available for active test games.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Fast Forward is only available for active test games.', ephemeral: true }).catch(discordCatch);
     return;
   }
 
@@ -397,7 +398,7 @@ export async function handleDefenderCcPlay(interaction, ctx) {
   const idWithoutPrefix = interaction.customId.replace('dc_cc_defender_', '');
   const parts = idWithoutPrefix.split('_');
   if (parts.length < 3) {
-    await interaction.followUp({ content: 'Invalid defender CC button.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Invalid defender CC button.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const gameId = parts[0];
@@ -417,20 +418,20 @@ export async function handleDefenderCcPlay(interaction, ctx) {
 
   const game = getGame(gameId);
   if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
 
   const defenderData = game.defenderThreadData?.[msgId];
   if (!defenderData) {
-    await interaction.followUp({ content: 'Defender thread context not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Defender thread context not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
 
   const playerNum = defenderData.playerNum;
   const defenderCards = defenderData.defenderCards;
   if (!defenderCards || isNaN(idx) || idx < 0 || idx >= defenderCards.length) {
-    await interaction.followUp({ content: 'Defender CC not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: 'Defender CC not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
 
@@ -440,7 +441,7 @@ export async function handleDefenderCcPlay(interaction, ctx) {
   const hand = game[handKey] || [];
 
   if (!hand.includes(card)) {
-    await interaction.followUp({ content: "That card is no longer in your hand.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await interaction.followUp({ content: "That card is no longer in your hand.", ephemeral: true }).catch(discordCatch);
     return;
   }
 
