@@ -86,6 +86,8 @@ import { replyOrFollowUpWithRetry } from './src/error-handling.js';
 import { getCommandCardImagePath, getDcImagePath, getConditionCardPath, getFigureImagePath, resolveAssetPath, resolveDcImagePath, resolveMissionCardImagePath, UPGRADE_IMAGE_OVERRIDES } from './src/asset-paths.js';
 import { canActAsPlayer } from './src/utils/can-act-as-player.js';
 import { requirePlayer } from './src/utils/guards.js';
+import { findGameByChannel, findGameByCommonChannel } from './src/discord/game-channel-lookup.js';
+import { checkAndPostAchievements } from './src/discord/achievement-helpers.js';
 import { MAX_ACTIVE_GAMES_PER_PLAYER, PENDING_ILLEGAL_TTL_MS, MAX_UNDO_DEPTH } from './src/constants.js';
 import { withGameLock, cleanupGameLock } from './src/game/action-queue.js';
 import {
@@ -208,6 +210,9 @@ import {
   getSpaceController,
   getFiguresOnOrAdjacentToSpace,
   countTerminalsControlledByPlayer,
+  grantMovementBank,
+  grantPowerTokens,
+  getPlayerDeploymentZones,
 } from './src/game/index.js';
 import {
   buildScorecardEmbed,
@@ -1083,16 +1088,8 @@ function resolveGameIdForLock(interaction) {
   if (existing) return existing;
 
   // Strategy 4: resolve by channel (covers thread-based interactions)
-  const channelId = interaction.channelId;
-  if (channelId) {
-    for (const [gameId, g] of getGamesMap()) {
-      if (g.generalId === channelId || g.chatId === channelId || g.boardId === channelId ||
-          g.p1HandId === channelId || g.p2HandId === channelId ||
-          g.p1PlayAreaId === channelId || g.p2PlayAreaId === channelId) {
-        return gameId;
-      }
-    }
-  }
+  const _chMatch = findGameByChannel(getGamesMap(), interaction.channelId);
+  if (_chMatch) return _chMatch.gameId;
 
   return null;
 }
@@ -1100,12 +1097,8 @@ function resolveGameIdForLock(interaction) {
 function extractGameIdFromMessage(message) {
   const chId = message.channel?.id;
   if (!chId) return null;
-  for (const [gameId, g] of getGamesMap()) {
-    if (g.generalId === chId || g.chatId === chId || g.boardId === chId ||
-        g.p1HandId === chId || g.p2HandId === chId || g.p1PlayAreaId === chId || g.p2PlayAreaId === chId) {
-      return gameId;
-    }
-  }
+  const _msgMatch = findGameByChannel(getGamesMap(), chId);
+  if (_msgMatch) return _msgMatch.gameId;
   if (message.channel?.isThread?.()) {
     const parent = message.channel.parent;
     if (parent?.name === 'new-games') return null;
@@ -1190,7 +1183,8 @@ async function updateDeployPromptMessages(game, playerNum, client) {
   const msgIds = game[idsKey];
   if (!msgIds?.length) return;
   const handId = getHandChannelId(game, playerNum);
-  const zone = isInitiative ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+  const { p1Zone: _dp1z, p2Zone: _dp2z } = getPlayerDeploymentZones(game, getInitiativePlayerNum(game));
+  const zone = playerNum === 1 ? _dp1z : _dp2z;
   const squad = getSquad(game, playerNum);
   const dcList = squad?.dcList || [];
   try {
@@ -1273,8 +1267,7 @@ function getCrateDeploymentVpBonus(game) {
   const cratePositions = allCrateCoords.map((c) => normalizeCoord(game.cratePositions?.[normalizeCoord(c)] || c));
   const initPlayerNum = getInitiativePlayerNum(game);
   const zones = getDeploymentZones()['devaron-garrison'] || {};
-  const p1Zone = initPlayerNum === 1 ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
-  const p2Zone = p1Zone === 'red' ? 'blue' : 'red';
+  const { p1Zone, p2Zone } = getPlayerDeploymentZones(game, initPlayerNum);
   const p1ZoneSet = new Set((zones[p1Zone] || []).map((c) => normalizeCoord(c)));
   const p2ZoneSet = new Set((zones[p2Zone] || []).map((c) => normalizeCoord(c)));
   let p1 = 0;
@@ -1493,23 +1486,19 @@ async function postGameOver(game, client, winnerId, reason) {
             getStatsSummaryForPlayer(game.player1Id),
             getStatsSummaryForPlayer(game.player2Id),
           ]);
-          const [granted1, granted2] = await Promise.all([
-            checkAndGrantAchievements(game.player1Id, 'game_complete', stats1.games),
-            checkAndGrantAchievements(game.player2Id, 'game_complete', stats2.games),
+          await Promise.all([
+            checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, game.player1Id, 'game_complete', stats1.games),
+            checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, game.player2Id, 'game_complete', stats2.games),
           ]);
-          for (const def of granted1) await postAchievementNotification(client, achievementsChannelId, game.player1Id, def);
-          for (const def of granted2) await postAchievementNotification(client, achievementsChannelId, game.player2Id, def);
           const wId = game.winnerId;
           if (wId) {
             const winnerStats = wId === game.player1Id ? stats1 : stats2;
-            const grantedWin = await checkAndGrantAchievements(wId, 'game_win', winnerStats.wins);
-            for (const def of grantedWin) await postAchievementNotification(client, achievementsChannelId, wId, def);
+            await checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, wId, 'game_win', winnerStats.wins);
             // Shutout: opponent scored 0 VP
             const loserId = wId === game.player1Id ? game.player2Id : game.player1Id;
             const loserVP = wId === game.player1Id ? game.player2VP : game.player1VP;
             if ((loserVP?.total ?? 0) === 0) {
-              const grantedShutout = await checkAndGrantAchievements(wId, 'shutout_win', 1);
-              for (const def of grantedShutout) await postAchievementNotification(client, achievementsChannelId, wId, def);
+              await checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, wId, 'shutout_win', 1);
             }
             // Survivor: winner lost no figures (all health entries have HP > 0)
             const winnerDcList = wId === game.player1Id ? game.p1DcList : game.p2DcList;
@@ -1518,13 +1507,11 @@ async function postGameOver(game, client, winnerId, reason) {
               return dc.healthState.every((entry) => !entry || entry[0] > 0);
             });
             if (allSurvived && winnerDcList?.length > 0) {
-              const grantedSurvivor = await checkAndGrantAchievements(wId, 'no_losses_win', 1);
-              for (const def of grantedSurvivor) await postAchievementNotification(client, achievementsChannelId, wId, def);
+              await checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, wId, 'no_losses_win', 1);
             }
             // Brutalist: win by eliminating all opponent figures
             if (reason && reason.toLowerCase().includes('eliminat')) {
-              const grantedBrutalist = await checkAndGrantAchievements(wId, 'full_wipe_win', 1);
-              for (const def of grantedBrutalist) await postAchievementNotification(client, achievementsChannelId, wId, def);
+              await checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, wId, 'full_wipe_win', 1);
             }
           }
         } catch (err) {
@@ -1901,8 +1888,9 @@ async function runDraftRandom(game, client, options = {}) {
     const otherZone = zone === 'red' ? 'blue' : 'red';
     game.deploymentZoneChosen = zone;
     const initiativePlayerNum = getInitiativePlayerNum(game);
-    game.player1DeploymentZone = initiativePlayerNum === 1 ? zone : otherZone;
-    game.player2DeploymentZone = initiativePlayerNum === 2 ? zone : otherZone;
+    const { p1Zone: _p1z, p2Zone: _p2z } = getPlayerDeploymentZones(game, initiativePlayerNum);
+    game.player1DeploymentZone = _p1z;
+    game.player2DeploymentZone = _p2z;
     const zoneLabel = `[${zone.toUpperCase()}] `;
     await logGameAction(
       game,
@@ -2424,9 +2412,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       // Achievement: Devastator (10+ damage in a single attack)
       if (damage >= 10 && isDbConfigured() && achievementsChannelId) {
         const _devUserId = getPlayerId(game, attackerPlayerNum);
-        checkAndGrantAchievements(_devUserId, 'single_attack_damage', damage).then((granted) => {
-          for (const def of granted) postAchievementNotification(client, achievementsChannelId, _devUserId, def);
-        }).catch((err) => console.error('[Achievements] Devastator check failed:', err.message));
+        checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, _devUserId, 'single_attack_damage', damage)
+          .catch((err) => console.error('[Achievements] Devastator check failed:', err.message));
       }
       const dcMessageIds = getDcMessageIds(game, defenderPlayerNum);
       const dcList = getDcList(game, defenderPlayerNum);
@@ -2515,10 +2502,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if ((_fbAtkEff?.passives || []).includes('Fly-By') && combat.distanceToTarget != null && combat.distanceToTarget <= 2) {
           const _fbMsgId = combat.attackerMsgId;
           if (_fbMsgId) {
-            game.movementBank = game.movementBank || {};
-            game.movementBank[_fbMsgId] = game.movementBank[_fbMsgId] || { total: 0, remaining: 0 };
-            game.movementBank[_fbMsgId].total = (game.movementBank[_fbMsgId].total || 0) + 2;
-            game.movementBank[_fbMsgId].remaining = (game.movementBank[_fbMsgId].remaining || 0) + 2;
+            grantMovementBank(game, _fbMsgId, 2);
             await logGameAction(game, client, `🚀 **Fly-By** — **${combat.attackerDcName}** gains 2 MP (target within 2 spaces).`, { phase: 'ROUND', icon: 'attack' });
           }
         }
@@ -2529,10 +2513,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if ((_jtAtkEff?.passives || []).includes('Jets') && combat.distanceToTarget != null && combat.distanceToTarget <= 2) {
           const _jtMsgId = combat.attackerMsgId;
           if (_jtMsgId) {
-            game.movementBank = game.movementBank || {};
-            game.movementBank[_jtMsgId] = game.movementBank[_jtMsgId] || { total: 0, remaining: 0 };
-            game.movementBank[_jtMsgId].total = (game.movementBank[_jtMsgId].total || 0) + 1;
-            game.movementBank[_jtMsgId].remaining = (game.movementBank[_jtMsgId].remaining || 0) + 1;
+            grantMovementBank(game, _jtMsgId, 1);
             await logGameAction(game, client, `🚀 **Jets** — **${combat.attackerDcName}** gains 1 MP (target within 2 spaces).`, { phase: 'ROUND', icon: 'attack' });
           }
         }
@@ -2591,10 +2572,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             const _nimMp = _nimTotalBlock * 2;
             const _nimMsgId = targetMsgId;
             if (_nimMsgId) {
-              game.movementBank = game.movementBank || {};
-              game.movementBank[_nimMsgId] = game.movementBank[_nimMsgId] || { total: 0, remaining: 0 };
-              game.movementBank[_nimMsgId].remaining = (game.movementBank[_nimMsgId].remaining || 0) + _nimMp;
-              game.movementBank[_nimMsgId].total = (game.movementBank[_nimMsgId].total || 0) + _nimMp;
+              grantMovementBank(game, _nimMsgId, _nimMp);
             }
             await logGameAction(game, client, `🦎 **Nimble** — **${_nimDcName}** gained ${_nimMp} MP (${_nimTotalBlock} Block result${_nimTotalBlock !== 1 ? 's' : ''} × 2).`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
           }
@@ -2607,10 +2585,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if ((_slipEff?.specialAbilityIds || []).some(id => id === 'slippery_smuggler_elite' || id === 'slippery_smuggler_reg')) {
           const _slipMsgId = targetMsgId;
           if (_slipMsgId) {
-            game.movementBank = game.movementBank || {};
-            game.movementBank[_slipMsgId] = game.movementBank[_slipMsgId] || { total: 0, remaining: 0 };
-            game.movementBank[_slipMsgId].remaining = (game.movementBank[_slipMsgId].remaining || 0) + 2;
-            game.movementBank[_slipMsgId].total = (game.movementBank[_slipMsgId].total || 0) + 2;
+            grantMovementBank(game, _slipMsgId, 2);
           }
           await logGameAction(game, client, `🏃 **Slippery** — **${_slipDcName}** gains 2 MP after being attacked.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
         }
@@ -2620,10 +2595,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const _lhAtkDcName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey);
         const _lhEff = getDcEffects()?.[_lhAtkDcName];
         if ((_lhEff?.specialAbilityIds || []).includes('leg_hydraulics_tress') && combat.attackerMsgId) {
-          game.movementBank = game.movementBank || {};
-          game.movementBank[combat.attackerMsgId] = game.movementBank[combat.attackerMsgId] || { total: 0, remaining: 0 };
-          game.movementBank[combat.attackerMsgId].remaining = (game.movementBank[combat.attackerMsgId].remaining || 0) + 1;
-          game.movementBank[combat.attackerMsgId].total = (game.movementBank[combat.attackerMsgId].total || 0) + 1;
+          grantMovementBank(game, combat.attackerMsgId, 1);
           await logGameAction(game, client, `🦿 **Leg Hydraulics** — **${_lhAtkDcName}** gains 1 MP after attacking.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
         }
       }
@@ -2633,7 +2605,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const _lkAtkEff = getDcEffects()?.[_lkAtkDcName];
         if ((_lkAtkEff?.specialAbilityIds || []).includes('set_your_sights_loku') && combat.target?.figureKey) {
           game.reconToken = { figureKey: combat.target.figureKey, playerNum: combat.attackerPlayerNum };
-          await logGameActiondcNameFromFigureKey(game, client, `🎯 **Set Your Sights** — Recon token placed on **${(combat.target.figureKey)}**.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+          await logGameAction(game, client, `🎯 **Set Your Sights** — Recon token placed on **${dcNameFromFigureKey(combat.target.figureKey)}**.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
         }
       }
       // Force Deflection (Yoda): after attack targeting Yoda or adjacent friendly REBEL resolves,
@@ -2782,9 +2754,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           game.activationKills[combat.attackerMsgId] = (game.activationKills[combat.attackerMsgId] || 0) + 1;
           if (isDbConfigured() && achievementsChannelId) {
             const _akUserId = getPlayerId(game, attackerPlayerNum);
-            checkAndGrantAchievements(_akUserId, 'activation_kills', game.activationKills[combat.attackerMsgId]).then((granted) => {
-              for (const def of granted) postAchievementNotification(client, achievementsChannelId, _akUserId, def);
-            }).catch((err) => console.error('[Achievements] activation_kills check failed:', err.message));
+            checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, _akUserId, 'activation_kills', game.activationKills[combat.attackerMsgId])
+              .catch((err) => console.error('[Achievements] activation_kills check failed:', err.message));
           }
         }
         // Of No Importance: reduce VP gained when CC owner's own non-unique figure is defeated
@@ -2818,9 +2789,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           if (_beskarDist <= _beskarRange) {
             const _beskarTokens = _beskarData.tokens ?? 1;
             const _beskarFigKey = combat.attackerFigureKey;
-            game.figurePowerTokens = game.figurePowerTokens || {};
-            game.figurePowerTokens[_beskarFigKey] = game.figurePowerTokens[_beskarFigKey] || [];
-            for (let _bt = 0; _bt < _beskarTokens; _bt++) game.figurePowerTokens[_beskarFigKey].push('Block');
+            grantPowerTokens(game, _beskarFigKey, 'Block', _beskarTokens);
             await logGameAction(game, client, `**Paid in Beskar** — +${_beskarTokens} Block Token${_beskarTokens !== 1 ? 's' : ''} granted to ${combat.attackerDisplayName}.`, { phase: 'ROUND', icon: 'card' });
           }
           game.whenDefeatHostileWithin3GainBlockTokens = null;
@@ -2934,10 +2903,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         {
           const _armorerOnBoard = Object.keys(game.figurePositions?.[attackerPlayerNum] || {}).some(fk => fk.startsWith('The Armorer-'));
           if (_armorerOnBoard) {
-            game.figurePowerTokens = game.figurePowerTokens || {};
-            game.figurePowerTokens[combat.attackerFigureKey] = game.figurePowerTokens[combat.attackerFigureKey] || [];
-            if (game.figurePowerTokens[combat.attackerFigureKey].length < 2) {
-              game.figurePowerTokens[combat.attackerFigureKey].push('Block');
+            const _armorerGranted = grantPowerTokens(game, combat.attackerFigureKey, 'Block', 1, 2);
+            if (_armorerGranted > 0) {
               await logGameAction(game, client, `🛡️ **This is the Way** — **${combat.attackerDcName}** gains 1 **Block Token** (defeated hostile).`, { phase: 'ROUND', icon: 'card' });
             }
           }
@@ -3070,9 +3037,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             game.activationKills[combat.attackerMsgId] = (game.activationKills[combat.attackerMsgId] || 0) + 1;
             if (isDbConfigured() && achievementsChannelId) {
               const _akUserId2 = getPlayerId(game, attackerPlayerNum);
-              checkAndGrantAchievements(_akUserId2, 'activation_kills', game.activationKills[combat.attackerMsgId]).then((granted) => {
-                for (const def of granted) postAchievementNotification(client, achievementsChannelId, _akUserId2, def);
-              }).catch((err) => console.error('[Achievements] blast activation_kills check failed:', err.message));
+              checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, _akUserId2, 'activation_kills', game.activationKills[combat.attackerMsgId])
+                .catch((err) => console.error('[Achievements] blast activation_kills check failed:', err.message));
             }
           }
           const blastLabel = blastDcList[blastIdx]?.displayName || blastFigureKey;
@@ -5024,11 +4990,9 @@ client.on('messageCreate', async (message) => {
   // .vsav file upload in Player Hand channel
   const vsavAttach = message.attachments?.find((a) => a.name?.toLowerCase().endsWith('.vsav'));
   if (vsavAttach) {
-    const channelId = message.channel.id;
-    for (const [gameId, game] of getGamesMap()) {
-      const isP1 = game.p1HandId === channelId;
-      const isP2 = game.p2HandId === channelId;
-      if (!isP1 && !isP2) continue;
+    const _vsavMatch = findGameByChannel(getGamesMap(), message.channel.id);
+    if (_vsavMatch && (_vsavMatch.isP1 || _vsavMatch.isP2)) {
+      const { game, isP1, isP2 } = _vsavMatch;
       const userId = isP1 ? game.player1Id : game.player2Id;
       if (message.author.id !== userId) {
         await message.reply('Only the owner of this hand can submit a squad.');
@@ -5075,33 +5039,31 @@ client.on('messageCreate', async (message) => {
   }
 
   // Pasted IACP list (from Share button) in Player Hand channel
-  const channelId = message.channel.id;
-  for (const [gameId, game] of getGamesMap()) {
-    const isP1 = game.p1HandId === channelId;
-    const isP2 = game.p2HandId === channelId;
-    if (!isP1 && !isP2) continue;
+  const _pasteMatch = findGameByChannel(getGamesMap(), message.channel.id);
+  if (_pasteMatch && (_pasteMatch.isP1 || _pasteMatch.isP2)) {
+    const { game, isP1 } = _pasteMatch;
     const userId = isP1 ? game.player1Id : game.player2Id;
-    if (message.author.id !== userId) continue;
-    if (!game.mapSelected) continue;
-    const parsed = parseIacpListPaste(message.content || '');
-    if (parsed && (parsed.dcList.length > 0 || parsed.ccList.length > 0)) {
-      const squad = {
-        name: parsed.name || 'From pasted list',
-        dcList: parsed.dcList,
-        ccList: parsed.ccList,
-        dcCount: parsed.dcList.length,
-        ccCount: parsed.ccList.length,
-      };
-      normalizeSquadInput(squad);
-      const validation = validateDeckLegal(squad);
-      await applySquadSubmission(game, isP1, squad, message.client);
-      if (!validation.legal) {
-        const errorList = validation.errors.map((e) => `• ${e}`).join('\n');
-        await message.reply(`✓ Squad **${squad.name}** submitted from pasted list (${squad.dcCount} DCs, ${squad.ccCount} CCs)\n\n⚠️ **Heads up** — the bot detected possible issues with this list:\n${errorList}\n\nIf the bot is wrong here, ignore this message!`);
-      } else {
-        await message.reply(`✓ Squad **${squad.name}** submitted from pasted list (${squad.dcCount} DCs, ${squad.ccCount} CCs)`);
+    if (message.author.id === userId && game.mapSelected) {
+      const parsed = parseIacpListPaste(message.content || '');
+      if (parsed && (parsed.dcList.length > 0 || parsed.ccList.length > 0)) {
+        const squad = {
+          name: parsed.name || 'From pasted list',
+          dcList: parsed.dcList,
+          ccList: parsed.ccList,
+          dcCount: parsed.dcList.length,
+          ccCount: parsed.ccList.length,
+        };
+        normalizeSquadInput(squad);
+        const validation = validateDeckLegal(squad);
+        await applySquadSubmission(game, isP1, squad, message.client);
+        if (!validation.legal) {
+          const errorList = validation.errors.map((e) => `• ${e}`).join('\n');
+          await message.reply(`✓ Squad **${squad.name}** submitted from pasted list (${squad.dcCount} DCs, ${squad.ccCount} CCs)\n\n⚠️ **Heads up** — the bot detected possible issues with this list:\n${errorList}\n\nIf the bot is wrong here, ignore this message!`);
+        } else {
+          await message.reply(`✓ Squad **${squad.name}** submitted from pasted list (${squad.dcCount} DCs, ${squad.ccCount} CCs)`);
+        }
+        return;
       }
-      return;
     }
   }
   } catch (err) {
@@ -5208,14 +5170,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
     if (cmd === 'power-token') {
-      const channelId = interaction.channelId;
-      let game = null;
-      for (const [, g] of getGamesMap()) {
-        if (g.generalId === channelId || g.boardId === channelId || g.chatId === channelId) {
-          game = g;
-          break;
-        }
-      }
+      const game = findGameByCommonChannel(getGamesMap(), interaction.channelId);
       if (!game) {
         await interaction.reply({
           content: 'Use /power-token in the **Game Log** or **Board** channel of an active game.',
@@ -5297,11 +5252,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
     if (cmd === 'move-figure') {
-      const channelId = interaction.channelId;
-      let game = null;
-      for (const [, g] of getGamesMap()) {
-        if (g.generalId === channelId || g.boardId === channelId || g.chatId === channelId) { game = g; break; }
-      }
+      const game = findGameByCommonChannel(getGamesMap(), interaction.channelId);
       if (!game) {
         await interaction.reply({ content: 'Use /move-figure in the **Game Log** or **Board** channel of an active game.', ephemeral: true }).catch(discordCatch);
         return;
