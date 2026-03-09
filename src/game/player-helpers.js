@@ -25,6 +25,13 @@ export function setActivationsRemaining(game, pn, v) { if (pn === 1) game.p1Acti
 export function setActivationsTotal(game, pn, v)     { if (pn === 1) game.p1ActivationsTotal = v; else game.p2ActivationsTotal = v; }
 export function setActivatedDcIndices(game, pn, v)   { if (pn === 1) game.p1ActivatedDcIndices = v; else game.p2ActivatedDcIndices = v; }
 
+// ── Mutations ────────────────────────────────────────────────────────────────
+
+/** Remove a figure's position from the game state. */
+export function removeFigurePosition(game, pn, figureKey) {
+  if (game.figurePositions?.[pn]) delete game.figurePositions[pn][figureKey];
+}
+
 // ── Key helpers (for code that needs both read + write via game[key]) ───────
 
 export function ccHandKey(pn)       { return pn === 1 ? 'player1CcHand' : 'player2CcHand'; }

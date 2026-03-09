@@ -159,6 +159,7 @@ import {
   HARMFUL_CONDITIONS as _HARMFUL_CONDITIONS,
   applyCondition as _applyCondition,
   dcNameFromFigureKey,
+  parseFigureKey,
   isFigurelessDc as _isFigurelessDc,
   hasDepleteEffect as _hasDepleteEffect,
   getCompanionDescriptionForDc as _getCompanionDescriptionForDc,
@@ -280,6 +281,7 @@ import {
   setActivationsRemaining, setActivationsTotal, setActivatedDcIndices,
   ccHandKey, ccDiscardKey, ccDeckKey, ccDrawnKey, ccAttachmentsKey, dcAttachmentsKey,
   dcAttachmentMessageIdsKey, vpKey, deployMetadataKey, deployLabelsKey, armyCostModifierKey,
+  removeFigurePosition,
 } from './src/game/player-helpers.js';
 import { discordCatch } from './src/error-handling.js';
 
@@ -1742,9 +1744,7 @@ function getFiguresForRender(game) {
     }
     for (const [figureKey, space] of Object.entries(poses)) {
       const dcName = dcNameFromFigureKey(figureKey);
-      const m = figureKey.match(/-(\d+)-(\d+)$/);
-      const dgIndex = m ? parseInt(m[1], 10) : 1;
-      const figureIndex = m ? parseInt(m[2], 10) : 0;
+      const { dgIndex, figureIndex } = parseFigureKey(figureKey);
       let figureCount = getDcStats(dcName).figures ?? 1;
       if (figureCount <= 1 && dcName) {
         const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
@@ -2875,9 +2875,7 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
  */
 async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, sourceLabel, logGameAction, client, dcHealthState, dcMessageMeta) {
   const dcName = dcNameFromFigureKey(figureKey);
-  const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
-  const figureIndex = figMatch ? parseInt(figMatch[2], 10) : 0;
-  const dgIndex = figMatch ? figMatch[1] : '1';
+  const { dgIndex, figureIndex } = parseFigureKey(figureKey);
 
   // Locate the DC message for this figure
   let msgId = null;
@@ -2891,7 +2889,7 @@ async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, source
     const { newHp, maxHp, wasDefeated } = reduceHp(dcHealthState, game, msgId, figureIndex, damage, playerNum);
     if (dcHealthState.get(msgId)?.[figureIndex]) {
       if (wasDefeated) {
-        if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figureKey];
+        removeFigurePosition(game, playerNum, figureKey);
         const opponentPlayerNum = playerNum === 1 ? 2 : 1;
         const stats = getDcStats(dcName);
         const effects = getDcEffects()?.[dcName];
@@ -2931,7 +2929,7 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
   const dcList = getDcList(game, playerNum);
   const idx = (dcIds || []).indexOf(msgId);
   if (wasDefeated && idx >= 0) {
-    if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figKey];
+    removeFigurePosition(game, playerNum, figKey);
     // VP goes to the opponent (the one dealing the damage)
     const opponentPlayerNum = playerNum === 1 ? 2 : 1;
     const stats = getDcStats(dcList[idx]?.dcName);
@@ -2986,8 +2984,7 @@ async function handleBleedResolve(interaction) {
     return;
   }
   const msgId = findDcMessageIdForFigure(gameId, playerNum, figureKey);
-  const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
-  const figureIndex = figMatch ? parseInt(figMatch[2], 10) : 0;
+  const { figureIndex } = parseFigureKey(figureKey);
   const dcName = dcNameFromFigureKey(figureKey);
 
   if (action === 'accept') {
@@ -2999,7 +2996,7 @@ async function handleBleedResolve(interaction) {
         const dcList = getDcList(game, playerNum);
         const idx = (dcIds || []).indexOf(msgId);
         if (wasDefeated) {
-          if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figureKey];
+          removeFigurePosition(game, playerNum, figureKey);
           const opponentPlayerNum = playerNum === 1 ? 2 : 1;
           const stats = getDcStats(dcName);
           const effects = getDcEffects()?.[dcName];
@@ -3069,8 +3066,7 @@ function findFigureheadFigure(game, defenderPlayerNum, targetFigureKey) {
       if (dcNameFromFigureKey(fk) !== dcName) continue;
       if (!isWithinN(pos, targetPos, 4, game.selectedMap.id)) continue;
       const msgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, fk);
-      const fm = fk.match(/-(\d+)-(\d+)$/);
-      const figIndex = fm ? parseInt(fm[2], 10) : 0;
+      const { figureIndex: figIndex } = parseFigureKey(fk);
       return { figureKey: fk, msgId, figIndex, label: dc.displayName || dcName };
     }
   }
@@ -3149,8 +3145,7 @@ async function resolveCombatAfterRolls(game, combat, client) {
   }
   const ownerId = getPlayerId(game, attackerPlayerNum);
   const targetMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, combat.target.figureKey);
-  const tm = combat.target.figureKey.match(/-(\d+)-(\d+)$/);
-  const targetFigIndex = tm ? parseInt(tm[2], 10) : 0;
+  const { figureIndex: targetFigIndex } = parseFigureKey(combat.target.figureKey);
 
   // Figurehead (Murne Rin): before friendly figure suffers damage, may redirect to self (prevent 1)
   if (damage > 0 && hit) {
@@ -3513,7 +3508,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
                 await logGameAction(game, client, `🔵 **Force Deflection** — **${_fdYodaDcName}** deflects! **${combat.attackerDcName}** suffers **${_fdDiceCount} Damage** (${_fdDiceCount} attack dice rolled). HP: ${_fdAtkPrev} → ${_fdAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
                 // Check if attacker was defeated by Force Deflection
                 if (_fdAtkDefeated) {
-                  if (game.figurePositions?.[attackerPlayerNum]) delete game.figurePositions[attackerPlayerNum][combat.attackerFigureKey];
+                  removeFigurePosition(game, attackerPlayerNum, combat.attackerFigureKey);
                   if (game.figureConditions?.[combat.attackerFigureKey]) delete game.figureConditions[combat.attackerFigureKey];
                   const _fdAtkStats = getDcStats(combat.attackerDcName);
                   const _fdAtkEffects = getDcEffects()?.[combat.attackerDcName];
@@ -3602,7 +3597,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
       if (newCur <= 0 && !_sbrImmune && !(game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum && ((idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey))?.toLowerCase().includes('fifth')))) {
         // F7: Keep healthState, figurePositions, and DC embed in sync when one figure in a group dies.
-        if (game.figurePositions?.[defenderPlayerNum]) delete game.figurePositions[defenderPlayerNum][combat.target.figureKey];
+        removeFigurePosition(game, defenderPlayerNum, combat.target.figureKey);
         if (game.figureConditions?.[combat.target.figureKey]) delete game.figureConditions[combat.target.figureKey];
         const { cost, subCost, figures } = combat.targetStats;
         const vp = (figures > 1 && subCost != null) ? subCost : (cost ?? 5);
@@ -3892,14 +3887,13 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if (blastPlayerNum === attackerPlayerNum && _ftAtkUpgrades.includes('Flame Trooper')) continue;
         const blastMsgId = findDcMessageIdForFigure(game.gameId, blastPlayerNum, blastFigureKey);
         if (!blastMsgId) continue;
-        const blastM = blastFigureKey.match(/-(\d+)-(\d+)$/);
-        const blastFigIndex = blastM ? parseInt(blastM[2], 10) : 0;
+        const { figureIndex: blastFigIndex } = parseFigureKey(blastFigureKey);
         const { newHp: newBCur, wasDefeated: blastDefeated } = reduceHp(dcHealthState, game, blastMsgId, blastFigIndex, effectiveBlast, blastPlayerNum);
         const blastDcIds = getDcMessageIds(game, blastPlayerNum);
         const blastDcList = getDcList(game, blastPlayerNum);
         const blastIdx = (blastDcIds || []).indexOf(blastMsgId);
         if (blastDefeated) {
-          if (game.figurePositions?.[blastPlayerNum]) delete game.figurePositions[blastPlayerNum][blastFigureKey];
+          removeFigurePosition(game, blastPlayerNum, blastFigureKey);
           if (game.figureConditions?.[blastFigureKey]) delete game.figureConditions[blastFigureKey];
           const blastStats = getDcStats(blastDcList[blastIdx]?.dcName);
           const cost = blastStats?.cost ?? 5;
@@ -4040,9 +4034,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             const _epFkDcName = dcNameFromFigureKey(fk);
             const _epMid = getDcMessageIds(game, pNum) || [];
             const _epDcL = getDcList(game, pNum);
-            const _epFm = fk.match(/-(\d+)-(\d+)$/);
-            const _epDgIdx = _epFm ? parseInt(_epFm[1], 10) : 1;
-            const _epFigIdx = _epFm ? parseInt(_epFm[2], 10) : 0;
+            const { dgIndex: _epDgIdx, figureIndex: _epFigIdx } = parseFigureKey(fk);
             const _epMsgId = _epMid.find((mid, idx) => _epDcL?.[idx]?.dcName === _epFkDcName && _epDcL?.[idx]?.dgIndex === _epDgIdx);
             if (_epMsgId) {
               reduceHp(dcHealthState, game, _epMsgId, _epFigIdx, 1, pNum);
@@ -4222,7 +4214,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const _sdaDcIds = getDcMessageIds(game, attackerPlayerNum);
         const _sdaDcList = getDcList(game, attackerPlayerNum);
         const _sdaIdx = (_sdaDcIds || []).indexOf(_sdaMsgId);
-        if (game.figurePositions?.[attackerPlayerNum]) delete game.figurePositions[attackerPlayerNum][_sdaFigKey];
+        removeFigurePosition(game, attackerPlayerNum, _sdaFigKey);
         if (game.figureConditions?.[_sdaFigKey]) delete game.figureConditions[_sdaFigKey];
         const _sdaName = _sdaDcList?.[_sdaIdx]?.displayName || dcNameFromFigureKey(_sdaFigKey);
         const _sdaStats = _sdaIdx >= 0 ? getDcStats(_sdaDcList[_sdaIdx]?.dcName) : null;
@@ -4938,8 +4930,7 @@ async function handleBoltslingerTarget(interaction) {
   await interaction.deferUpdate().catch(discordCatch);
   const targetMsgId = findDcMessageIdForFigure(gameId, target.playerNum, target.figureKey);
   if (targetMsgId) {
-    const figMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
-    const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
+    const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
     const { newHp: bsNewHp } = reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
     try {
       const tMeta = dcMessageMeta.get(targetMsgId);
@@ -4988,8 +4979,7 @@ async function applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThre
   for (const t of splashTargets) {
     const mid = findDcMessageIdForFigure(game.gameId, t.playerNum, t.figureKey);
     if (!mid) continue;
-    const figM = t.figureKey.match(/-(\d+)-(\d+)$/);
-    const figIdx = figM ? parseInt(figM[2], 10) : 0;
+    const { figureIndex: figIdx } = parseFigureKey(t.figureKey);
     const { newHp, maxHp: splashMaxHp } = reduceHp(dcHealthState, game, mid, figIdx, totalEffect, t.playerNum);
     if (splashMaxHp === 0) continue; // no valid health entry
     const parts = [];
@@ -4997,7 +4987,7 @@ async function applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThre
     if (totalStrain > 0) parts.push(`${totalStrain} Strain`);
     lines.push(`• **${t.label}** suffers ${parts.join(' + ')}`);
     if (newHp <= 0) {
-      if (game.figurePositions?.[t.playerNum]) delete game.figurePositions[t.playerNum][t.figureKey];
+      removeFigurePosition(game, t.playerNum, t.figureKey);
       if (game.figureConditions?.[t.figureKey]) delete game.figureConditions[t.figureKey];
       const splashDcEff = getDcEffects()?.[dcNameFromFigureKey(t.figureKey)];
       const splashVP = splashDcEff?.cost ?? 1;
@@ -5077,12 +5067,11 @@ async function handleFightingKnifeTarget(interaction) {
   if (!thread) { saveGames(); return; }
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   if (hits > 0 && target.msgId) {
-    const fkMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
-    const figIndex = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+    const { figureIndex: figIndex } = parseFigureKey(target.figureKey);
     const { newHp: newCur, wasDefeated: fkDefeated } = reduceHp(dcHealthState, game, target.msgId, figIndex, hits, target.playerNum);
     embedRefreshMsgIds.add(target.msgId);
     if (fkDefeated) {
-      if (game.figurePositions?.[target.playerNum]) delete game.figurePositions[target.playerNum][target.figureKey];
+      removeFigurePosition(game, target.playerNum, target.figureKey);
       const dcName = dcNameFromFigureKey(target.figureKey);
       const stats = getDcStats(dcName);
       const effects = getDcEffects()?.[dcName];

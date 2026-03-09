@@ -14,6 +14,19 @@ export function dcNameFromFigureKey(figureKey) {
 }
 
 /**
+ * Parse a figure key like "Darth Vader-1-0" into its components.
+ * @param {string} figureKey
+ * @returns {{ dgIndex: number, figureIndex: number }}
+ */
+export function parseFigureKey(figureKey) {
+  const m = (figureKey || '').match(/-(\d+)-(\d+)$/);
+  return {
+    dgIndex: m ? parseInt(m[1], 10) : 1,
+    figureIndex: m ? parseInt(m[2], 10) : 0,
+  };
+}
+
+/**
  * True if this DC is a "figureless" card (Skirmish Upgrade, attachment, etc.) — no physical figure on the map.
  * @param {string} dcName
  * @returns {boolean}
