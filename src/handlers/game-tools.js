@@ -5,6 +5,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { deleteGameChannelsAndGame } from './botmenu.js';
 import { discordCatch } from '../error-handling.js';
+import { requireGame } from '../utils/guards.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -13,11 +14,8 @@ import { discordCatch } from '../error-handling.js';
 export async function handleRefreshMap(interaction, ctx) {
   const { getGame, buildBoardMapPayload, logGameErrorToBotLogs, client } = ctx;
   const gameId = interaction.customId.replace('refresh_map_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
     await interaction.followUp({ content: 'Only players in this game can refresh the map.', ephemeral: true }).catch(discordCatch);
     return;
@@ -44,11 +42,8 @@ export async function handleRefreshMap(interaction, ctx) {
 export async function handleRefreshAll(interaction, ctx) {
   const { getGame, refreshAllGameComponents, logGameErrorToBotLogs, client } = ctx;
   const gameId = interaction.customId.replace('refresh_all_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
     await interaction.followUp({ content: 'Only players in this game can refresh.', ephemeral: true }).catch(discordCatch);
     return;
@@ -81,11 +76,8 @@ export async function handleUndo(interaction, ctx) {
     client,
   } = ctx;
   const gameId = interaction.customId.replace('undo_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (game.ended) {
     await interaction.followUp({ content: 'Undo is disabled once the game has ended.', ephemeral: true }).catch(discordCatch);
     return;
@@ -246,11 +238,8 @@ export async function handleUndo(interaction, ctx) {
 export async function handleKillGame(interaction, ctx) {
   const { getGame, logGameErrorToBotLogs } = ctx;
   const gameId = interaction.customId.replace('kill_game_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found or already deleted.', ephemeral: true });
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
     await interaction.followUp({ content: 'Only players in this game can kill it.', ephemeral: true });
     return;
@@ -287,11 +276,8 @@ export async function handleDefaultDeck(interaction, ctx) {
   const gameId = parts[2];
   const playerNum = parts[3];
   const faction = parts[4];
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (!game.mapSelected) {
     await interaction.followUp({ content: 'Map selection must be completed before you can load a squad.', ephemeral: true }).catch(discordCatch);
     return;

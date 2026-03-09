@@ -16,6 +16,7 @@ import {
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
+import { requireGame } from '../utils/guards.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -62,11 +63,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
     client,
   } = ctx;
   const gameId = interaction.customId.replace('end_end_of_round_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   if (!game.endOfRoundWhoseTurn) {
     await interaction.followUp({ content: 'Not in End of Round window.', ephemeral: true }).catch(discordCatch);
@@ -633,11 +631,8 @@ export async function handleEndStartOfRound(interaction, ctx) {
     client,
   } = ctx;
   const gameId = interaction.customId.replace('end_start_of_round_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   if (!game.startOfRoundWhoseTurn) {
     await interaction.followUp({ content: 'Not in Start of Round window.', ephemeral: true }).catch(discordCatch);

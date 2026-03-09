@@ -13,6 +13,7 @@ import {
   ccHandKey, ccDiscardKey,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
+import { requireGame } from '../utils/guards.js';
 
 /**
  * Infer the timing category for fast-forward based on the primary CC's ability entry.
@@ -330,11 +331,8 @@ export async function handleFastForward(interaction, ctx) {
   const gameId = interaction.customId.replace('fast_forward_', '');
   const { getGame, saveGames, logGameAction, client } = ctx;
 
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (!game.isTestGame || game.ended) {
     await interaction.followUp({ content: 'Fast Forward is only available for active test games.', ephemeral: true }).catch(discordCatch);
     return;
@@ -416,11 +414,8 @@ export async function handleDefenderCcPlay(interaction, ctx) {
     client,
   } = ctx;
 
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
 
   const defenderData = game.defenderThreadData?.[msgId];
   if (!defenderData) {

@@ -8,6 +8,7 @@ import { bottomLeftCoord, getFootprintCells } from '../game/coords.js';
 import { reduceHp } from '../game/index.js';
 import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
+import { requireGame } from '../utils/guards.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
@@ -42,11 +43,8 @@ export async function handleMoveMp(interaction, ctx) {
     await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const game = getGame(meta.gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
   const moveKey = `${msgId}_${figureIndex}`;
   const moveState = game.moveInProgress?.[moveKey];
   if (!moveState) {
@@ -162,11 +160,8 @@ export async function handleMoveAdjustMp(interaction, ctx) {
     await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const game = getGame(meta.gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
   const moveKey = `${msgId}_${figureIndex}`;
   const moveState = game.moveInProgress?.[moveKey];
   if (!moveState) {
@@ -224,11 +219,8 @@ export async function handleMoveLetter(interaction, ctx) {
     await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const game = getGame(meta.gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
   const moveKey = `${msgId}_${figureIndex}`;
   const moveState = game.moveInProgress?.[moveKey];
   if (!moveState) {
@@ -306,11 +298,8 @@ export async function handleMoveLetterBack(interaction, ctx) {
     await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const game = getGame(meta.gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
   const moveKey = `${msgId}_${figureIndex}`;
   const moveState = game.moveInProgress?.[moveKey];
   if (!moveState) {
@@ -395,11 +384,8 @@ export async function handleMovePick(interaction, ctx) {
     await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const game = getGame(meta.gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
   const moveKey = `${msgId}_${figureIndex}`;
   const moveState = game.moveInProgress?.[moveKey];
   if (!moveState) {

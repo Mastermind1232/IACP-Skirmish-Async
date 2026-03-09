@@ -5,6 +5,7 @@ import { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } from
 import { getPlayerId } from '../game/player-helpers.js';
 import { edgeKey } from '../game/coords.js';
 import { discordCatch } from '../error-handling.js';
+import { requireGame } from '../utils/guards.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -22,8 +23,8 @@ export async function handleDevaronDoorOpen(interaction, ctx) {
     const gameId = beforePipe.substring(0, lastUnderscore);
     const edgeA = beforePipe.substring(lastUnderscore + 1);
     const openedEdgeKey = edgeKey(edgeA, afterPipe);
-    const game = getGame(gameId);
-    if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
+    const game = await requireGame(interaction, getGame, gameId);
+    if (!game) return;
     const pending = game.pendingDoorSelections?.[0];
     if (!pending) { await interaction.followUp({ content: 'No pending door selections.', ephemeral: true }).catch(discordCatch); return; }
     if (!canActAsPlayer(game, interaction.user.id, pending.playerNum)) { await interaction.followUp({ content: 'Only the controlling player can select a door.', ephemeral: true }).catch(discordCatch); return; }
@@ -57,8 +58,8 @@ export async function handleDevaronCratePush(interaction, ctx) {
     const lastUnderscore = rest.lastIndexOf('_');
     const gameId = rest.substring(0, lastUnderscore);
     const origCoord = rest.substring(lastUnderscore + 1);
-    const game = getGame(gameId);
-    if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
+    const game = await requireGame(interaction, getGame, gameId);
+    if (!game) return;
     const curCoord = String(game.cratePositions?.[origCoord] || origCoord).toLowerCase();
     const controller = getSpaceController(game, 'devaron-garrison', curCoord);
     if (!controller) { await interaction.followUp({ content: 'No one controls this crate currently.', ephemeral: true }).catch(discordCatch); return; }
@@ -92,8 +93,8 @@ export async function handleKryknaPush(interaction, ctx) {
     if (kryknaIdx < 0) return;
     const gameId = rest.substring(0, kryknaIdx - 1);
     const kryknaId = rest.substring(kryknaIdx);
-    const game = getGame(gameId);
-    if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
+    const game = await requireGame(interaction, getGame, gameId);
+    if (!game) return;
     if (!game.pendingKryknaPushQueue || game.pendingKryknaPushQueue.length === 0) {
       await interaction.followUp({ content: 'No Krykna push pending.', ephemeral: true }).catch(discordCatch); return;
     }

@@ -23,6 +23,7 @@ import {
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
+import { requireGame } from '../utils/guards.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -42,11 +43,8 @@ export async function handleStatusPhase(interaction, ctx) {
     client,
   } = ctx;
   const gameId = interaction.customId.replace('status_phase_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
     await interaction.followUp({ content: 'Only players in this game can end the activation phase.', ephemeral: true }).catch(discordCatch);
@@ -132,11 +130,8 @@ export async function handleStatusPhase(interaction, ctx) {
 export async function handlePassActivationTurn(interaction, ctx) {
   const { getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, pushUndo, client, saveGames } = ctx;
   const gameId = interaction.customId.replace('pass_activation_turn_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const turnPlayerNum = turnPlayerId === game.player1Id ? 1 : 2;
@@ -217,11 +212,8 @@ export async function handleEndTurn(interaction, ctx) {
   if (!match) return;
   const gameId = match[1];
   const dcMsgId = match[2];
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const meta = dcMessageMeta.get(dcMsgId);
   if (!meta || meta.gameId !== gameId) {
     await interaction.followUp({ content: 'Invalid End Turn.', ephemeral: true }).catch(discordCatch);
@@ -448,11 +440,8 @@ export async function handleDcEndActivation(interaction, ctx) {
     await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const game = getGame(meta.gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) {
@@ -670,7 +659,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (!match) return;
   const [, gameId, msgId, activateCardMsgIdStr] = match;
   const activateCardMsgId = activateCardMsgIdStr === '0' ? null : activateCardMsgIdStr;
-  const game = getGame(gameId);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   const meta = dcMessageMeta.get(msgId);
   if (!meta || meta.gameId !== gameId) return;
@@ -1215,7 +1204,7 @@ export async function handleActPassive(interaction, ctx) {
   const msgId = parts[1];
   const ability = parts[2];
   const choice = parts.slice(3).join('_');
-  const game = getGame(gameId);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   const meta = dcMessageMeta?.get(msgId);
   if (!meta) return;

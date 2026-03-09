@@ -211,11 +211,8 @@ export async function handleAttackTarget(interaction, ctx) {
     await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const game = getGame(meta.gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const targets = game.attackTargets?.[`${msgId}_${figureIndex}`];
   const target = targets?.[targetIndex];

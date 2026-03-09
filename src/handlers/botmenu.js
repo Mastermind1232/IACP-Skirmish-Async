@@ -10,6 +10,7 @@ import {
 } from '../discord/components.js';
 import { cleanupGameLock } from '../game/action-queue.js';
 import { discordCatch } from '../error-handling.js';
+import { requireGame } from '../utils/guards.js';
 
 const BOTMENU_ALLOWED_KILL_ROLES = ['Admin', 'Bothelpers'];
 
@@ -71,11 +72,8 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
 export async function handleBotmenuArchive(interaction, ctx) {
   const { getGame } = ctx;
   const gameId = interaction.customId.replace('botmenu_archive_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found or already deleted.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
     await interaction.followUp({ content: 'Only players in this game can archive it.', ephemeral: true }).catch(discordCatch);
     return;
@@ -91,11 +89,8 @@ export async function handleBotmenuArchive(interaction, ctx) {
 export async function handleBotmenuKill(interaction, ctx) {
   const { getGame } = ctx;
   const gameId = interaction.customId.replace('botmenu_kill_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found or already deleted.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (!canKillGame(interaction, game)) {
     await interaction.followUp({
       content: 'Only game participants or users with the **Admin** or **Bothelpers** role can kill the game.',
@@ -114,11 +109,8 @@ export async function handleBotmenuKill(interaction, ctx) {
 export async function handleBotmenuArchiveYes(interaction, ctx) {
   const { getGame, logGameErrorToBotLogs } = ctx;
   const gameId = interaction.customId.replace('botmenu_archive_yes_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found or already deleted.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   try {
     await deleteGameChannelsAndGame(game, gameId, ctx);
     await interaction.followUp({ content: `Game **IA Game #${gameId}** archived. Channels removed.`, ephemeral: true }).catch(() => {});
@@ -138,11 +130,8 @@ export async function handleBotmenuArchiveNo(interaction, ctx) {
 export async function handleBotmenuKillYes(interaction, ctx) {
   const { getGame, logGameErrorToBotLogs } = ctx;
   const gameId = interaction.customId.replace('botmenu_kill_yes_', '');
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found or already deleted.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   if (!canKillGame(interaction, game)) {
     await interaction.followUp({ content: 'You are not allowed to kill this game.', ephemeral: true }).catch(discordCatch);
     return;

@@ -3,6 +3,7 @@
  */
 import { getPlayerId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
+import { requireGame } from '../utils/guards.js';
 
 const FIGURE_LETTERS = 'abcdefghij';
 
@@ -15,7 +16,7 @@ export async function handleInteractCancel(interaction, ctx) {
   const match = interaction.customId.match(/^interact_cancel_([^_]+)_(.+)_(\d+)$/);
   if (!match) return;
   const [, gameId, msgId, figureIdxStr] = match;
-  const game = getGame(gameId);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   const meta = dcMessageMeta.get(msgId);
   if (!meta || meta.gameId !== gameId) return;
@@ -43,11 +44,8 @@ export async function handleInteractChoice(interaction, ctx) {
   if (!match) return;
   const [, gameId, msgId, figureIdxStr, optionId] = match;
   const figureIndex = parseInt(figureIdxStr, 10);
-  const game = getGame(gameId);
-  if (!game) {
-    await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
   const meta = dcMessageMeta.get(msgId);
   if (!meta || meta.gameId !== gameId) {
     await interaction.followUp({ content: 'Invalid.', ephemeral: true }).catch(discordCatch);

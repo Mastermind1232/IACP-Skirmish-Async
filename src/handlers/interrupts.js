@@ -6,6 +6,7 @@ import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum } from '../game/player-helpers.js';
 import { reduceHp, awardObjectiveVp } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
+import { requireGame } from '../utils/guards.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
 export async function handleStillFaster(interaction, ctx) {
@@ -32,8 +33,8 @@ export async function handleStillFaster(interaction, ctx) {
     sftGameId = remParts[0];
     sftActivatingMsgId = remParts.slice(1).join('_');
   }
-  const sftGame = getGame(sftGameId);
-  if (!sftGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
+  const sftGame = await requireGame(interaction, getGame, sftGameId);
+  if (!sftGame) return;
 
   if (buttonKey === 'still_faster_skip_') {
     const sftPlayerNum = sftGame.pendingStillFaster?.sftPlayerNum;
@@ -119,8 +120,8 @@ export async function handleSquadSwarm(interaction, ctx) {
   const _swParts = interaction.customId.split('_');
   // squad_swarm_yes_{gameId}_{msgId}_{targetMsgId} OR squad_swarm_no_{gameId}_{msgId}
   const _swGameId = _swParts[3]; const _swMsgId = _swParts[4]; const _swTargetMsgId = _swParts[5];
-  const _swGame = getGame(_swGameId);
-  if (!_swGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const _swGame = await requireGame(interaction, getGame, _swGameId);
+  if (!_swGame) return;
   const _swMeta = dcMessageMeta.get(_swMsgId);
   if (_swMeta && !canActAsPlayer(_swGame, interaction.user.id, _swMeta.playerNum)) {
     await interaction.followUp({ content: 'Only the Squad Swarm player may respond.', ephemeral: true }).catch(() => {}); return;
@@ -142,8 +143,8 @@ export async function handleOverdrive(interaction, ctx) {
   const _odMsgId = interaction.customId.replace('overdrive_use_', '');
   const _odMeta = dcMessageMeta.get(_odMsgId);
   if (!_odMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
-  const _odGame = getGame(_odMeta.gameId);
-  if (!_odGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const _odGame = await requireGame(interaction, getGame, _odMeta.gameId);
+  if (!_odGame) return;
   if (!canActAsPlayer(_odGame, interaction.user.id, _odMeta.playerNum)) {
     await interaction.followUp({ content: 'Only the DC owner can use Overdrive.', ephemeral: true }).catch(() => {}); return;
   }
@@ -179,8 +180,8 @@ export async function handleSelfDestructProbe(interaction, ctx) {
   const _sdpSuffix = interaction.customId.replace(buttonKey, '');
   const _sdpParts = _sdpSuffix.split('_');
   const _sdpGameId = _sdpParts[0]; const _sdpMsgId = _sdpParts.slice(1).join('_');
-  const _sdpGame = getGame(_sdpGameId);
-  if (!_sdpGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const _sdpGame = await requireGame(interaction, getGame, _sdpGameId);
+  if (!_sdpGame) return;
   const _sdpMeta = dcMessageMeta.get(_sdpMsgId);
   if (!_sdpMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
   if (!canActAsPlayer(_sdpGame, interaction.user.id, _sdpMeta.playerNum)) {

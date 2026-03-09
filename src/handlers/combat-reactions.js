@@ -1,5 +1,6 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { opponentPlayerNum } from '../game/player-helpers.js';
+import { requireGame } from '../utils/guards.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -76,8 +77,8 @@ export async function handleThereIsNoTry(interaction, ctx) {
   // Prefix pattern: there_is_no_try_{die|face|skip}_ → parts[0..4] are the prefix words
   const _tintType = _tintParts[4]; // 'die', 'face', or 'skip'
   const _tintGameId = _tintParts[5];
-  const _tintGame = getGame(_tintGameId);
-  if (!_tintGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const _tintGame = await requireGame(interaction, getGame, _tintGameId);
+  if (!_tintGame) return;
   const _tintCombat = _tintGame.pendingCombat;
   const _tintDefNum = _tintCombat?.defenderPlayerNum ?? opponentPlayerNum(_tintCombat?.attackerPlayerNum);
   if (!canActAsPlayer(_tintGame, interaction.user.id, _tintDefNum)) {
@@ -160,8 +161,8 @@ export async function handleVetInstincts(interaction, ctx) {
   const _viParts = interaction.customId.split('_');
   const _viGameId = _viParts[3];
   const _viChoice = _viParts[4]; // hit/surge/block/evade/skip
-  const _viGame = getGame(_viGameId);
-  if (!_viGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const _viGame = await requireGame(interaction, getGame, _viGameId);
+  if (!_viGame) return;
   const _viCombat = _viGame.pendingCombat;
   if (!_viCombat) { await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(() => {}); return; }
   const _viAtk = _viCombat.attackerPlayerNum;
@@ -238,8 +239,8 @@ export async function handleHunterProtocol(interaction, ctx) {
 
   // Hunter Protocol: re-trigger the same surge ability once
   const _hpGameId = interaction.customId.replace(/^hunter_protocol_(?:trigger|skip)_/, '');
-  const _hpGame = getGame(_hpGameId);
-  if (!_hpGame) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+  const _hpGame = await requireGame(interaction, getGame, _hpGameId);
+  if (!_hpGame) return;
   const _hpCombat = _hpGame.pendingCombat;
   if (!_hpCombat || !_hpGame.pendingHunterProtocol) { await interaction.followUp({ content: 'No pending Hunter Protocol.', ephemeral: true }).catch(() => {}); return; }
   const _hpAtk = _hpCombat.attackerPlayerNum;
