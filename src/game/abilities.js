@@ -18,6 +18,7 @@ function getStatsForDc(dcName) {
 import { applyCondition, resetCondition, filterCondition } from './conditions.js';
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces } from './movement.js';
+import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey } from './player-helpers.js';
 
 /** Get ability metadata by id. Returns { type, surgeCost?, label?, ... } or null. */
 export function getAbility(id) {
@@ -55,8 +56,8 @@ export function getSurgeAbilityLabel(abilityId) {
  * @returns {string[]} - Cards drawn (may be fewer if deck has fewer than n cards)
  */
 function drawCcCards(game, playerNum, n) {
-  const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+  const deckKey = ccDeckKey(playerNum);
+  const handKey = ccHandKey(playerNum);
   const deck = (game[deckKey] || []).slice();
   const hand = (game[handKey] || []).slice();
   const drew = [];
@@ -146,8 +147,8 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'dcSpecial' && entry.shuffleOneDiscardToDeck) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
-    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const discardKey = ccDiscardKey(playerNum);
+    const deckKey = ccDeckKey(playerNum);
     const discard = game[discardKey] || [];
     if (discard.length === 0) return { applied: true, logMessage: '**Military Efficiency** — No cards in discard to return.' };
     // Shuffle the most-recently-discarded card back (player chooses in practice — honour system for which card)
@@ -283,8 +284,8 @@ export function resolveAbility(abilityId, context) {
         const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
         healthState[selectedFig] = [newCur, max ?? newCur];
         dcHealthState.set(msgId, healthState);
-        const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const dcIds = getDcMessageIds(game, playerNum);
+        const dcList = getDcList(game, playerNum);
         const idx = dcIds ? dcIds.indexOf(msgId) : -1;
         if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
         strainApplied = true;
@@ -322,8 +323,8 @@ export function resolveAbility(abilityId, context) {
           const newCur = Math.max(0, (cur ?? max) - totalDmg);
           healthState[figIdx] = [newCur, max ?? newCur];
           dcHealthState.set(targetMsgId, healthState);
-          const dcIds = enemyPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const dcList = enemyPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+          const dcIds = getDcMessageIds(game, enemyPlayerNum);
+          const dcList = getDcList(game, enemyPlayerNum);
           const idx = (dcIds || []).indexOf(targetMsgId);
           if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
           const dmgStr = damage > 0 && strain > 0 ? `${damage} Damage + ${strain} Strain` : damage > 0 ? `${damage} Damage` : `${strain} Strain`;
@@ -360,8 +361,8 @@ export function resolveAbility(abilityId, context) {
                 const aNew = Math.max(0, (aCur ?? aMax) - splashDamage);
                 adjHs[adjFigIdx] = [aNew, aMax ?? aNew];
                 dcHealthState.set(adjMsgId, adjHs);
-                const adjDcIds = adjPnum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-                const adjDcList = adjPnum === 1 ? game.p1DcList : game.p2DcList;
+                const adjDcIds = getDcMessageIds(game, adjPnum);
+                const adjDcList = getDcList(game, adjPnum);
                 const adjIdx = (adjDcIds || []).indexOf(adjMsgId);
                 if (adjIdx >= 0 && adjDcList?.[adjIdx]) adjDcList[adjIdx].healthState = [...adjHs];
                 splashParts.push(`**${adjName}** ${splashDamage} Damage (${aCur ?? aMax}→${aNew})`);
@@ -488,8 +489,8 @@ export function resolveAbility(abilityId, context) {
             const [cur, max] = healthState[figIdx];
             const heal = Math.min(recoverTarget, (max ?? cur) - cur);
             if (heal > 0) { healthState[figIdx] = [cur + heal, max ?? cur]; dcHealthState.set(targetMsgId, healthState); }
-            const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-            const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+            const dcIds = getDcMessageIds(game, playerNum);
+            const dcList = getDcList(game, playerNum);
             const idx = (dcIds || []).indexOf(targetMsgId);
             if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
           }
@@ -1162,7 +1163,7 @@ export function resolveAbility(abilityId, context) {
     // Phase 1: enumerate valid friendly figures
     // VP cost check (Order Hit: requires 2 VP to use)
     if (entry.autoDeductVp > 0) {
-      const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+      const vpKey = vpKey(playerNum);
       const currentVp = game[vpKey]?.total || 0;
       if (currentVp < entry.autoDeductVp) {
         return { applied: false, manualMessage: `**${entry.label}** requires ${entry.autoDeductVp} VP but you only have ${currentVp}.` };
@@ -1221,8 +1222,8 @@ export function resolveAbility(abilityId, context) {
         const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
         healthState[selectedFig] = [newCur, max ?? newCur];
         dcHealthState.set(msgId, healthState);
-        const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const dcIds = getDcMessageIds(game, playerNum);
+        const dcList = getDcList(game, playerNum);
         const idx = dcIds ? dcIds.indexOf(msgId) : -1;
         if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
         strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${cur ?? max} \u2192 ${newCur} HP).`;
@@ -1273,8 +1274,8 @@ export function resolveAbility(abilityId, context) {
         const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
         healthState[selectedFig] = [newCur, max ?? newCur];
         dcHealthState.set(msgId, healthState);
-        const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const dcIds = getDcMessageIds(game, playerNum);
+        const dcList = getDcList(game, playerNum);
         const idx = dcIds ? dcIds.indexOf(msgId) : -1;
         if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
         strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${cur ?? max} → ${newCur} HP).`;
@@ -1487,8 +1488,8 @@ export function resolveAbility(abilityId, context) {
                   const newCur = Math.max(0, (cur ?? max) - hits);
                   hs[fIdx] = [newCur, max ?? newCur];
                   dcHealthState.set(tMsgId, hs);
-                  const dcIds = enemyPN === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-                  const dcList = enemyPN === 1 ? game.p1DcList : game.p2DcList;
+                  const dcIds = getDcMessageIds(game, enemyPN);
+                  const dcList = getDcList(game, enemyPN);
                   const idx = (dcIds || []).indexOf(tMsgId);
                   if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
                   subParts.push(`${hits} Dmg (HP: ${cur ?? max}→${newCur})`);
@@ -1571,8 +1572,8 @@ export function resolveAbility(abilityId, context) {
               const newCur = Math.max(0, (cur ?? max) - hits);
               healthState[figIdx] = [newCur, max ?? newCur];
               dcHealthState.set(targetMsgId, healthState);
-              const dcIds = enemyPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-              const dcList = enemyPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+              const dcIds = getDcMessageIds(game, enemyPlayerNum);
+              const dcList = getDcList(game, enemyPlayerNum);
               const idx = (dcIds || []).indexOf(targetMsgId);
               if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
               resultParts.push(`${hits} Damage (HP: ${cur ?? max} → ${newCur})`);
@@ -1687,8 +1688,8 @@ export function resolveAbility(abilityId, context) {
               const newCur = Math.max(0, (cur ?? max) - totalDmg);
               healthState[figIdx] = [newCur, max ?? newCur];
               dcHealthState.set(targetMsgId, healthState);
-              const dcIds = enemyPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-              const dcList = enemyPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+              const dcIds = getDcMessageIds(game, enemyPlayerNum);
+              const dcList = getDcList(game, enemyPlayerNum);
               const idx = (dcIds || []).indexOf(targetMsgId);
               if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
               resultParts.push(`${totalDmg} Damage (HP: ${cur ?? max} → ${newCur})`);
@@ -1781,8 +1782,8 @@ export function resolveAbility(abilityId, context) {
                   const newCur = Math.max(0, (cur ?? max) - hits);
                   healthState[figIdx] = [newCur, max ?? newCur];
                   dcHealthState.set(figMsgId, healthState);
-                  const dcIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-                  const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+                  const dcIds = getDcMessageIds(game, pn);
+                  const dcList = getDcList(game, pn);
                   const idx = (dcIds || []).indexOf(figMsgId);
                   if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
                   affected.push(`${fk.replace(/-\d+-\d+$/, '')} -${hits}HP (→${newCur})`);
@@ -1886,8 +1887,8 @@ export function resolveAbility(abilityId, context) {
                 const newCur = Math.max(0, (cur ?? max) - totalPerFig);
                 hs[figIdx] = [newCur, max ?? newCur];
                 dcHealthState.set(figMsgId, hs);
-                const dcIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-                const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+                const dcIds = getDcMessageIds(game, pn);
+                const dcList = getDcList(game, pn);
                 const idx = (dcIds || []).indexOf(figMsgId);
                 if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
                 const dmgLabel = [dmgAmt > 0 ? `${dmgAmt} Dmg` : null, strainAmt > 0 ? `${strainAmt} Strain` : null].filter(Boolean).join('+');
@@ -1928,8 +1929,8 @@ export function resolveAbility(abilityId, context) {
           const newCur = Math.max(0, (cur ?? max) - selfStrainAmt);
           selfHs[selfFigIdx] = [newCur, max ?? newCur];
           dcHealthState.set(msgId, selfHs);
-          const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+          const dcIds = getDcMessageIds(game, playerNum);
+          const dcList = getDcList(game, playerNum);
           const idx = (dcIds || []).indexOf(msgId);
           if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...selfHs];
           results.push(`**${meta?.dcName}** suffers ${selfStrainAmt} Strain (self)`);
@@ -2126,8 +2127,8 @@ export function resolveAbility(abilityId, context) {
     const newCur = Math.max(0, (cur ?? max ?? 0) - damage);
     healthState[0] = [newCur, max ?? cur];
     dcHealthState.set(msgId, healthState);
-    const dcMessageIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+    const dcMessageIds = getDcMessageIds(game, playerNum);
+    const dcList = getDcList(game, playerNum);
     const idx = (dcMessageIds || []).indexOf(msgId);
     if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
     if (mpBonus > 0) {
@@ -2157,8 +2158,8 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.returnDiscardToHand) {
     const { game, playerNum, cardName } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
-    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const discardKey = ccDiscardKey(playerNum);
+    const handKey = ccHandKey(playerNum);
     const discard = (game[discardKey] || []).slice();
     const hand = (game[handKey] || []).slice();
     if (discard.length < 2) return { applied: false, manualMessage: 'No other card in discard to return to hand.' };
@@ -2190,7 +2191,7 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const oppNum = playerNum === 1 ? 2 : 1;
-    const discardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const discardKey = ccDiscardKey(oppNum);
     const cleared = (game[discardKey] || []).length;
     game[discardKey] = [];
     let drew = [];
@@ -2224,8 +2225,8 @@ export function resolveAbility(abilityId, context) {
     const drew = drawCcCards(game, playerNum, entry.draw);
     if (drew.length === 0) return { applied: true, logMessage: 'No cards to draw.' };
     const toDiscard = drew[drew.length - 1];
-    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const handKey = ccHandKey(playerNum);
+    const discardKey = ccDiscardKey(playerNum);
     const hand = (game[handKey] || []).slice();
     const idx = hand.indexOf(toDiscard);
     if (idx >= 0) hand.splice(idx, 1);
@@ -2233,7 +2234,7 @@ export function resolveAbility(abilityId, context) {
     game[discardKey] = (game[discardKey] || []).concat(toDiscard);
     const eff = getCcEffect(toDiscard);
     const cost = typeof eff?.cost === 'number' ? eff.cost : 0;
-    const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    const vpKey = vpKey(playerNum);
     game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
     game[vpKey].total = (game[vpKey].total ?? 0) + cost;
     const kept = drew.slice(0, -1);
@@ -2262,8 +2263,8 @@ export function resolveAbility(abilityId, context) {
       return keywords.includes(String(entry.discardIfNotTrait).toUpperCase());
     })() : true;
     if (!hasTrait && entry.discardFromDrawn > 0) {
-      const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-      const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+      const handKey = ccHandKey(playerNum);
+      const discardKey = ccDiscardKey(playerNum);
       const hand = game[handKey] || [];
       const toDiscard = Math.min(entry.discardFromDrawn, drew.length);
       const discarded = [];
@@ -2390,8 +2391,8 @@ export function resolveAbility(abilityId, context) {
       }
       if (recovered > 0) {
         dcHealthState.set(msgId, healthState);
-        const dcMessageIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const dcMessageIds = getDcMessageIds(game, playerNum);
+        const dcList = getDcList(game, playerNum);
         const idx = (dcMessageIds || []).indexOf(msgId);
         if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
       }
@@ -2421,8 +2422,8 @@ export function resolveAbility(abilityId, context) {
         const [sCur, sMax] = selfHs[0];
         selfHs[0] = [Math.max(0, (sCur ?? sMax ?? 0) - 1), sMax];
         dcHealthState.set(msgId, selfHs);
-        const dcMids = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcLst = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const dcMids = getDcMessageIds(game, playerNum);
+        const dcLst = getDcList(game, playerNum);
         const siIdx = (dcMids || []).indexOf(msgId);
         if (siIdx >= 0 && dcLst?.[siIdx]) dcLst[siIdx].healthState = [...selfHs];
       }
@@ -2521,8 +2522,8 @@ export function resolveAbility(abilityId, context) {
     // Rank and File: each other friendly TROOPER also gains N MP immediately
     if (entry.trooperMpBonusRound) {
       const bonus = entry.trooperMpBonusRound;
-      const dcMsgIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+      const dcList = getDcList(game, playerNum) || [];
       let trooperCount = 0;
       for (let i = 0; i < dcMsgIds.length; i++) {
         const dMsgId = dcMsgIds[i];
@@ -2654,8 +2655,8 @@ export function resolveAbility(abilityId, context) {
     let n = typeof entry.powerTokenGain === 'number' ? entry.powerTokenGain : 1;
     const ifDamaged = entry.powerTokenGainIfDamagedGte;
     if (ifDamaged && typeof ifDamaged === 'object') {
-      const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const dcMessageIds = getDcMessageIds(game, playerNum) || [];
+      const dcList = getDcList(game, playerNum) || [];
       const idx = dcMessageIds.indexOf(msgId);
       const dc = idx >= 0 ? dcList[idx] : null;
       const healthState = dc?.healthState || [];
@@ -2747,8 +2748,8 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const oppNum = playerNum === 1 ? 2 : 1;
-    const playerVP = (playerNum === 1 ? game.player1VP : game.player2VP)?.total ?? 0;
-    const oppVP = (oppNum === 1 ? game.player1VP : game.player2VP)?.total ?? 0;
+    const playerVP = (game[vpKey(playerNum)])?.total ?? 0;
+    const oppVP = (game[vpKey(oppNum)])?.total ?? 0;
     const diff = entry.vpCondition.opponentHasAtLeastMore;
     if (oppVP - playerVP < diff) return { applied: true };
     const poses = game.figurePositions?.[playerNum] || {};
@@ -2766,8 +2767,8 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.vpGainSelf === 'number' && typeof entry.vpGainOpponent === 'number') {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const selfKey = playerNum === 1 ? 'player1VP' : 'player2VP';
-    const oppKey = playerNum === 1 ? 'player2VP' : 'player1VP';
+    const selfKey = vpKey(playerNum);
+    const oppKey = vpKey(3 - playerNum);
     const selfVP = (game[selfKey]?.total ?? 0);
     if (entry.vpCondition?.selfHasAtMost != null && selfVP > entry.vpCondition.selfHasAtMost) {
       return { applied: true, logMessage: `Condition not met — player has ${selfVP} VP (must have ${entry.vpCondition.selfHasAtMost} or fewer). No VP gained.` };
@@ -2807,8 +2808,8 @@ export function resolveAbility(abilityId, context) {
     }
     if (recovered > 0) {
       dcHealthState.set(actMsgId, healthState);
-      const dcMessageIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const dcMessageIds = getDcMessageIds(game, playerNum);
+      const dcList = getDcList(game, playerNum);
       const idx = (dcMessageIds || []).indexOf(actMsgId);
       if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
       return { applied: true, logMessage: `Recovered ${recovered} Damage (round ${n}).`, refreshDcEmbed: true };
@@ -2863,8 +2864,8 @@ export function resolveAbility(abilityId, context) {
     const heal = Math.min(n, damage);
     healthState[targetFigIndex] = [cur + heal, mx];
     dcHealthState.set(targetMsgId, healthState);
-    const dcMessageIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+    const dcMessageIds = getDcMessageIds(game, playerNum);
+    const dcList = getDcList(game, playerNum);
     const idx = (dcMessageIds || []).indexOf(targetMsgId);
     if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
     return { applied: true, logMessage: `Adjacent figure recovered ${heal} Damage.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [targetMsgId] };
@@ -2902,8 +2903,8 @@ export function resolveAbility(abilityId, context) {
     }
     if (recovered > 0) {
       dcHealthState.set(actMsgId, healthState);
-      const dcMessageIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const dcMessageIds = getDcMessageIds(game, playerNum);
+      const dcList = getDcList(game, playerNum);
       const idx = (dcMessageIds || []).indexOf(actMsgId);
       if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
       return { applied: true, logMessage: `Recovered ${recovered} Damage.`, refreshDcEmbed: true };
@@ -3001,7 +3002,7 @@ export function resolveAbility(abilityId, context) {
     let n = entry.defenderStrain;
     // Escalating Hostility: +1 Strain per other copy of this card in the discard pile
     if (entry.defenderStrainPlusDiscardCopies && context.cardName && playerNum) {
-      const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+      const discardKey = ccDiscardKey(playerNum);
       const discard = game[discardKey] || [];
       const copiesInDiscard = discard.filter(c => c === context.cardName).length;
       n += copiesInDiscard;
@@ -3010,8 +3011,8 @@ export function resolveAbility(abilityId, context) {
     const newCur = Math.max(0, (cur ?? max ?? 0) - n);
     healthState[targetIdx] = [newCur, max];
     dcHealthState.set(targetMsgId, healthState);
-    const dcMessageIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    const dcList = defenderPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+    const dcMessageIds = getDcMessageIds(game, defenderPlayerNum);
+    const dcList = getDcList(game, defenderPlayerNum);
     const idx = (dcMessageIds || []).indexOf(targetMsgId);
     if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
     const bonusNote = n > entry.defenderStrain ? ` (+${n - entry.defenderStrain} from copies in discard)` : '';
@@ -3037,8 +3038,8 @@ export function resolveAbility(abilityId, context) {
       const allEffects = getDcEffects() || {};
       const targetCost = allEffects[targetDcName]?.cost ?? 0;
       // Check all living hostile figures for any with higher cost
-      const defDcIds = defPn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-      const defDcList = defPn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const defDcIds = getDcMessageIds(game, defPn) || [];
+      const defDcList = getDcList(game, defPn) || [];
       let higherExists = false;
       for (let i = 0; i < defDcIds.length; i++) {
         const dc = defDcList[i];
@@ -3223,8 +3224,8 @@ export function resolveAbility(abilityId, context) {
         if (cur < max) {
           hs[figIdx] = [Math.min(max, cur + 1), max];
           dcHealthState.set(figMsgId, hs);
-          const dcIds = pNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const dcList = pNum === 1 ? game.p1DcList : game.p2DcList;
+          const dcIds = getDcMessageIds(game, pNum);
+          const dcList = getDcList(game, pNum);
           const idx = (dcIds || []).indexOf(figMsgId);
           if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
           return `**${dcName}** recovered 1 HP`;
@@ -3293,8 +3294,8 @@ export function resolveAbility(abilityId, context) {
       remaining -= healed;
     }
     dcHealthState.set(msgId, healthState);
-    const dcMessageIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    const dcList = meta.playerNum === 1 ? game.p1DcList : game.p2DcList;
+    const dcMessageIds = getDcMessageIds(game, meta.playerNum);
+    const dcList = getDcList(game, meta.playerNum);
     const idx = (dcMessageIds || []).indexOf(msgId);
     if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
     const freeMovePart = entry.freeMoveBonus > 0 ? ` Gained ${entry.freeMoveBonus} free movement point${entry.freeMoveBonus !== 1 ? 's' : ''} — use the Move button.` : '';
@@ -3334,8 +3335,8 @@ export function resolveAbility(abilityId, context) {
         remaining -= healed;
       }
       dcHealthState.set(healMsgId, hs);
-      const dcMids = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcLst = playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const dcMids = getDcMessageIds(game, playerNum);
+      const dcLst = getDcList(game, playerNum);
       const si = (dcMids || []).indexOf(healMsgId);
       if (si >= 0 && dcLst?.[si]) dcLst[si].healthState = [...hs];
       return totalHealed;
@@ -3419,8 +3420,8 @@ export function resolveAbility(abilityId, context) {
       }
       dcHealthState.set(adjMsgId, adjHealthState);
       const adjMeta2 = dcMessageMeta.get(adjMsgId);
-      const dcMsgIds = adjMeta2?.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcList = adjMeta2?.playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const dcMsgIds = getDcMessageIds(game, adjMeta2?.playerNum);
+      const dcList = getDcList(game, adjMeta2?.playerNum);
       const idx = (dcMsgIds || []).indexOf(adjMsgId);
       if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...adjHealthState];
       const msg = totalRecovered > 0 ? `**${label}** — ${adjLabel} recovered ${totalRecovered} Damage.` : `**${label}** — ${adjLabel} is already at full health.`;
@@ -3477,8 +3478,8 @@ export function resolveAbility(abilityId, context) {
             adjHealth[0] = [cur + 1, max];
             dcHealthState.set(adjMsgId, adjHealth);
             const adjMeta2 = dcMessageMeta.get(adjMsgId);
-            const dList = adjMeta2?.playerNum === 1 ? game.p1DcList : game.p2DcList;
-            const dIds = adjMeta2?.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+            const dList = getDcList(game, adjMeta2?.playerNum);
+            const dIds = getDcMessageIds(game, adjMeta2?.playerNum);
             const idx = (dIds || []).indexOf(adjMsgId);
             if (idx >= 0 && dList?.[idx]) dList[idx].healthState = [...adjHealth];
             parts.push('recovered 1 Damage');
@@ -3638,7 +3639,7 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     awardObjectiveVp(game, playerNum, entry.vpGain);
-    const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    const vpKey = vpKey(playerNum);
     return { applied: true, logMessage: `Gained **${entry.vpGain} VP** (total: ${game[vpKey].total}).` };
   }
 
@@ -3657,8 +3658,8 @@ export function resolveAbility(abilityId, context) {
     attHS[attFigIdx] = [aNew, aM ?? aNew];
     dcHealthState.set(attMsgId, attHS);
     const attP = game.lastAttackAttackerPlayerNum ?? (playerNum === 1 ? 2 : 1);
-    const attDcIds = attP === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    const attDcList = attP === 1 ? game.p1DcList : game.p2DcList;
+    const attDcIds = getDcMessageIds(game, attP);
+    const attDcList = getDcList(game, attP);
     const attIdx = (attDcIds || []).indexOf(attMsgId);
     if (attIdx >= 0 && attDcList?.[attIdx]) attDcList[attIdx].healthState = [...attHS];
     const attDcName = attDcList?.[attIdx]?.displayName || attMsgId;
@@ -3687,8 +3688,8 @@ export function resolveAbility(abilityId, context) {
       cftHS[cftIdx] = [cNew, cM ?? cNew];
       dcHealthState.set(cftMsgId, cftHS);
       const cftP = dcMessageMeta.get(cftMsgId)?.playerNum;
-      const cftDcIds = cftP === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const cftDcList = cftP === 1 ? game.p1DcList : game.p2DcList;
+      const cftDcIds = getDcMessageIds(game, cftP);
+      const cftDcList = getDcList(game, cftP);
       const cftIdx2 = (cftDcIds || []).indexOf(cftMsgId);
       if (cftIdx2 >= 0 && cftDcList?.[cftIdx2]) cftDcList[cftIdx2].healthState = [...cftHS];
       const cftName = chosenTargetFk.replace(/-\d+-\d+$/, '');
@@ -3722,7 +3723,7 @@ export function resolveAbility(abilityId, context) {
         if (sEntry) {
           const [sC, sM] = sEntry; const sNew = Math.max(0, (sC ?? sM) - flatDmg);
           sHS[sIdx] = [sNew, sM ?? sNew]; dcHealthState.set(soloMsgId, sHS);
-          const sDcIds = solo.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds; const sDcList = solo.playerNum === 1 ? game.p1DcList : game.p2DcList;
+          const sDcIds = getDcMessageIds(game, solo.playerNum); const sDcList = getDcList(game, solo.playerNum);
           const sIdx2 = (sDcIds || []).indexOf(soloMsgId); if (sIdx2 >= 0 && sDcList?.[sIdx2]) sDcList[sIdx2].healthState = [...sHS];
           return { applied: true, logMessage: `**Collateral Damage** — **${solo.label}** suffers **${flatDmg} Damage** (HP: ${sC ?? sM} → ${sNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [soloMsgId] };
         }
@@ -4151,8 +4152,8 @@ export function resolveAbility(abilityId, context) {
       const [cur, max] = hs;
       healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - totalDamage), max];
       dcHealthState.set(targetMsgId, healthState);
-      const dcMsgIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcListArr = oppNum === 1 ? game.p1DcList : game.p2DcList;
+      const dcMsgIds = getDcMessageIds(game, oppNum);
+      const dcListArr = getDcList(game, oppNum);
       const idx2 = (dcMsgIds || []).indexOf(targetMsgId);
       if (idx2 >= 0 && dcListArr?.[idx2]) dcListArr[idx2].healthState = [...healthState];
       const strainPart2 = strain > 0 ? ` and ${strain} Strain` : '';
@@ -4210,8 +4211,8 @@ export function resolveAbility(abilityId, context) {
     const [cur, max] = hs0;
     healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - totalDamage), max];
     dcHealthState.set(targetMsgId, healthState);
-    const dcMsgIds2 = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    const dcListArr2 = oppNum === 1 ? game.p1DcList : game.p2DcList;
+    const dcMsgIds2 = getDcMessageIds(game, oppNum);
+    const dcListArr2 = getDcList(game, oppNum);
     const idx2 = (dcMsgIds2 || []).indexOf(targetMsgId);
     if (idx2 >= 0 && dcListArr2?.[idx2]) dcListArr2[idx2].healthState = [...healthState];
     const strainPart = strain > 0 ? ` and ${strain} Strain` : '';
@@ -4257,8 +4258,8 @@ export function resolveAbility(abilityId, context) {
       const [cur, max] = hs;
       healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - totalDamage), max];
       dcHealthState.set(targetMsgId, healthState);
-      const dcMessageIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcList2 = oppNum === 1 ? game.p1DcList : game.p2DcList;
+      const dcMessageIds = getDcMessageIds(game, oppNum);
+      const dcList2 = getDcList(game, oppNum);
       const idx2 = (dcMessageIds || []).indexOf(targetMsgId);
       if (idx2 >= 0 && dcList2?.[idx2]) dcList2[idx2].healthState = [...healthState];
       // Apply conditions to target
@@ -4358,8 +4359,8 @@ export function resolveAbility(abilityId, context) {
                 const aNew = Math.max(0, (aCur ?? aMax) - splashDmg);
                 adjHs[adjFi] = [aNew, aMax ?? aNew];
                 dcHealthState.set(adjMsgId, adjHs);
-                const adjIds = adjPnum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-                const adjList = adjPnum === 1 ? game.p1DcList : game.p2DcList;
+                const adjIds = getDcMessageIds(game, adjPnum);
+                const adjList = getDcList(game, adjPnum);
                 const adjI = (adjIds || []).indexOf(adjMsgId);
                 if (adjI >= 0 && adjList?.[adjI]) adjList[adjI].healthState = [...adjHs];
                 splashParts.push(`**${adjName}** ${splashDmg} Damage (${aCur ?? aMax}→${aNew})`);
@@ -4499,7 +4500,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.claimInitiative && !entry.exhaustOneDeploymentCard) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.initiativePlayerId = playerNum === 1 ? game.player1Id : game.player2Id;
+    game.initiativePlayerId = getPlayerId(game, playerNum);
     if (entry.firstActivationFigureName) game.firstActivationFigureName = entry.firstActivationFigureName;
     return {
       applied: true,
@@ -4511,7 +4512,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.claimInitiative && entry.exhaustOneDeploymentCard) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.initiativePlayerId = playerNum === 1 ? game.player1Id : game.player2Id;
+    game.initiativePlayerId = getPlayerId(game, playerNum);
     return {
       applied: true,
       logMessage: 'Claimed the initiative token. Exhaust one of your Deployment cards (use the Exhaust button on your DC).',
@@ -4522,11 +4523,11 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.discardRandomFromHand === 'number' && typeof entry.opponentDiscardRandomFromHand === 'number') {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const handKey = ccHandKey(playerNum);
+    const discardKey = ccDiscardKey(playerNum);
     const oppNum = playerNum === 1 ? 2 : 1;
-    const oppHandKey = oppNum === 1 ? 'player1CcHand' : 'player2CcHand';
-    const oppDiscardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const oppHandKey = ccHandKey(oppNum);
+    const oppDiscardKey = ccDiscardKey(oppNum);
     const hand = (game[handKey] || []).slice();
     const oppHand = (game[oppHandKey] || []).slice();
     const n1 = Math.min(entry.discardRandomFromHand, hand.length);
@@ -4561,8 +4562,8 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const oppNum = playerNum === 1 ? 2 : 1;
-    const oppHandKey = oppNum === 1 ? 'player1CcHand' : 'player2CcHand';
-    const oppDiscardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const oppHandKey = ccHandKey(oppNum);
+    const oppDiscardKey = ccDiscardKey(oppNum);
     const oppHand = (game[oppHandKey] || []).slice();
     const choiceIndex = context.choiceIndex;
     if (oppHand.length === 0) return { applied: false, manualMessage: "Opponent's hand is empty." };
@@ -4598,7 +4599,7 @@ export function resolveAbility(abilityId, context) {
     const targetName = readyAdjacentFriendlyDcName || chosenOption;
     if (!targetName) {
       // Build choice list from friendly DCs (honor system: player picks an adjacent one)
-      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const dcList = getDcList(game, playerNum) || [];
       const opts = dcList
         .filter((dc) => dc && !dc.defeated)
         .map((dc) => (typeof dc === 'object' ? dc.displayName || dc.dcName : dc))
@@ -4606,7 +4607,7 @@ export function resolveAbility(abilityId, context) {
       if (opts.length === 0) return { applied: false, manualMessage: 'No friendly Deployment cards to ready. Resolve manually.' };
       return { applied: false, requiresChoice: true, choiceOptions: opts };
     }
-    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const dcList = getDcList(game, playerNum) || [];
     const nameLower = String(targetName).toLowerCase().trim();
     for (let i = 0; i < dcList.length; i++) {
       const dc = dcList[i];
@@ -4670,8 +4671,8 @@ export function resolveAbility(abilityId, context) {
       }
     }
     if (!targetMsgId) return { applied: false, manualMessage: `Could not find Deployment card matching "${chosenOption}".` };
-    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-    const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const dcList = getDcList(game, playerNum) || [];
+    const dcMessageIds = getDcMessageIds(game, playerNum) || [];
     const idx = dcMessageIds.indexOf(targetMsgId);
     if (idx >= 0 && dcList[idx]) {
       const dc = dcList[idx];
@@ -4695,8 +4696,8 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.shuffleOneFromDiscardIntoDeck) {
     const { game, playerNum, cardName } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
-    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const discardKey = ccDiscardKey(playerNum);
+    const deckKey = ccDeckKey(playerNum);
     const discard = (game[discardKey] || []).slice();
     const deck = (game[deckKey] || []).slice();
     const choiceIndex = context.choiceIndex;
@@ -4730,8 +4731,8 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, defenderDefeated } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const oppNum = playerNum === 1 ? 2 : 1;
-    const deckKey = oppNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-    const discardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const deckKey = ccDeckKey(oppNum);
+    const discardKey = ccDiscardKey(oppNum);
     const deck = (game[deckKey] || []).slice();
     if (entry.elseGainVp != null) {
       // Merciless: opponent may discard 2 from deck; if not (or deck has < 2), you gain 3 VP
@@ -4746,7 +4747,7 @@ export function resolveAbility(abilityId, context) {
           refreshOpponentDiscard: true,
         };
       }
-      const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+      const vpKey = vpKey(playerNum);
       game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
       game[vpKey].total = (game[vpKey].total ?? 0) + entry.elseGainVp;
       return {
@@ -4818,10 +4819,10 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, defenderDefeated } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     if (!defenderDefeated) return { applied: false, manualMessage: 'Field Promotion: defender was not defeated.' };
-    const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    const vpKey = vpKey(playerNum);
     game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
     game[vpKey].total = (game[vpKey].total ?? 0) + entry.celebrationVp;
-    const costKey = playerNum === 1 ? 'player1ArmyCostModifier' : 'player2ArmyCostModifier';
+    const costKey = armyCostModifierKey(playerNum);
     game[costKey] = (game[costKey] || 0) + entry.increaseArmyCostBy;
     return {
       applied: true,
@@ -4833,7 +4834,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.celebrationVp === 'number' && !entry.increaseArmyCostBy) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    const vpKey = vpKey(playerNum);
     game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
     game[vpKey].total = (game[vpKey].total ?? 0) + entry.celebrationVp;
     return {
@@ -5002,7 +5003,7 @@ export function resolveAbility(abilityId, context) {
     const targetName = repositionFriendlyDcName || chosenOption;
     if (!targetName) {
       // Build choice list from friendly DCs (honor: player picks a SMALL figure within 3 spaces)
-      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+      const dcList = getDcList(game, playerNum) || [];
       const opts = dcList
         .filter((dc) => dc && !dc.defeated)
         .map((dc) => (typeof dc === 'object' ? dc.displayName || dc.dcName : dc))
@@ -5021,8 +5022,8 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const oppNum = playerNum === 1 ? 2 : 1;
-    const handKey = oppNum === 1 ? 'player1CcHand' : 'player2CcHand';
-    const deckKey = oppNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const handKey = ccHandKey(oppNum);
+    const deckKey = ccDeckKey(oppNum);
     const hand = (game[handKey] || []).slice();
     const deck = (game[deckKey] || []).slice();
     const n = Math.min(entry.opponentHandRandomToDeckTop, hand.length);
@@ -5076,8 +5077,8 @@ export function resolveAbility(abilityId, context) {
       };
     }
     const oppNum = playerNum === 1 ? 2 : 1;
-    const yourVpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
-    const oppVpKey = oppNum === 1 ? 'player1VP' : 'player2VP';
+    const yourVpKey = vpKey(playerNum);
+    const oppVpKey = vpKey(oppNum);
     game[yourVpKey] = game[yourVpKey] || { total: 0, kills: 0, objectives: 0 };
     game[oppVpKey] = game[oppVpKey] || { total: 0, kills: 0, objectives: 0 };
     game[yourVpKey].total = (game[yourVpKey].total ?? 0) + accuracy;
@@ -5140,7 +5141,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.rebelGraffitiVp === 'number' && entry.rebelGraffitiVp > 0) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
+    const vpKey = vpKey(playerNum);
     game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
     game[vpKey].total = (game[vpKey].total ?? 0) + entry.rebelGraffitiVp;
     return { applied: true, logMessage: `Gained ${entry.rebelGraffitiVp} VP (end of activation; honor: no adjacent hostiles).` };
@@ -5160,8 +5161,8 @@ export function resolveAbility(abilityId, context) {
         manualMessage: 'Choose which player shuffles their hand into their deck, then draws 2.',
       };
     }
-    const deckKey = targetNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-    const handKey = targetNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const deckKey = ccDeckKey(targetNum);
+    const handKey = ccHandKey(targetNum);
     const hand = (game[handKey] || []).slice();
     const deck = (game[deckKey] || []).slice();
     const combined = [...hand, ...deck];
@@ -5486,7 +5487,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.protectOldWaysBonus) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const discardKey = ccDiscardKey(playerNum);
     const discard = game[discardKey] || [];
     const forceUserCount = discard.filter((cardName) => {
       const eff = getCcEffect(cardName);
@@ -5540,8 +5541,8 @@ export function resolveAbility(abilityId, context) {
             const newCur = Math.max(0, (cur ?? max) - 2);
             hs[figIdx] = [newCur, max ?? newCur];
             dcHealthState.set(figMsgId, hs);
-            const dcIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-            const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
+            const dcIds = getDcMessageIds(game, oppNum);
+            const dcList = getDcList(game, oppNum);
             const idx2 = (dcIds || []).indexOf(figMsgId);
             if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
             results.push(`**${dcName}** 2 Strain (${cur ?? max}→${newCur})`);
@@ -5593,8 +5594,8 @@ export function resolveAbility(abilityId, context) {
               const newCur = Math.max(0, (cur ?? max) - dmg);
               hs[figIdx] = [newCur, max ?? newCur];
               dcHealthState.set(figMsgId, hs);
-              const dcIds = p === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-              const dcList = p === 1 ? game.p1DcList : game.p2DcList;
+              const dcIds = getDcMessageIds(game, p);
+              const dcList = getDcList(game, p);
               const idx2 = (dcIds || []).indexOf(figMsgId);
               if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
               seenMsgIds.add(figMsgId);
@@ -5614,8 +5615,8 @@ export function resolveAbility(abilityId, context) {
       const [cur, max] = selfHs[selfFigIdx];
       selfHs[selfFigIdx] = [0, max ?? cur];
       dcHealthState.set(msgId, selfHs);
-      const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+      const dcIds = getDcMessageIds(game, playerNum);
+      const dcList = getDcList(game, playerNum);
       const idx2 = (dcIds || []).indexOf(msgId);
       if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...selfHs];
     }
@@ -5634,8 +5635,8 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const traits = ['Tusken Raider', 'Bantha Rider'];
     const dcEffects = getDcEffects();
-    const squadDcList = playerNum === 1 ? (game.player1Squad?.dcList || []) : (game.player2Squad?.dcList || []);
-    const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const squadDcList = getSquad(game, playerNum)?.dcList || [];
+    const dcIds = getDcMessageIds(game, playerNum);
     const matchingMsgIds = [];
     const matchingNames = [];
     for (let i = 0; i < squadDcList.length; i++) {
@@ -5666,10 +5667,10 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, choiceIndex } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const oppNum = playerNum === 1 ? 2 : 1;
-    const oppDeckKey = oppNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-    const oppDiscardKey = oppNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
-    const ownDeckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-    const ownHandKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const oppDeckKey = ccDeckKey(oppNum);
+    const oppDiscardKey = ccDiscardKey(oppNum);
+    const ownDeckKey = ccDeckKey(playerNum);
+    const ownHandKey = ccHandKey(playerNum);
     const oppDeck = [...(game[oppDeckKey] || [])];
     if (oppDeck.length === 0) return { applied: true, logMessage: "**Foresee** — Opponent's deck is empty." };
     const top2 = oppDeck.slice(-Math.min(2, oppDeck.length));
@@ -5717,8 +5718,8 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.builtOnHopeEffect) {
     const { game, playerNum, choiceIndex } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const deckKey = ccDeckKey(playerNum);
+    const handKey = ccHandKey(playerNum);
     const deck = [...(game[deckKey] || [])];
     if (deck.length === 0) return { applied: true, logMessage: '**Built on Hope** — Your deck is empty.' };
     const top3 = deck.slice(-Math.min(3, deck.length));
@@ -5761,8 +5762,8 @@ export function resolveAbility(abilityId, context) {
         const [cur, max] = hs[figIdx];
         hs[figIdx] = [0, max ?? cur];
         dcHealthState.set(targetMsgId, hs);
-        const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const dcIds = getDcMessageIds(game, playerNum);
+        const dcList = getDcList(game, playerNum);
         const idx2 = (dcIds || []).indexOf(targetMsgId);
         if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
       }
@@ -5905,8 +5906,8 @@ export function resolveAbility(abilityId, context) {
               const newCur = Math.max(0, (cur ?? max) - 2);
               hs[figIdx] = [newCur, max ?? newCur];
               dcHealthState.set(figMsgId, hs);
-              const dcIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-              const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+              const dcIds = getDcMessageIds(game, pn);
+              const dcList = getDcList(game, pn);
               const idx2 = (dcIds || []).indexOf(figMsgId);
               if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
               results.push(`**${dcName}**: 2 Dmg (HP: ${cur ?? max}→${newCur})`);
@@ -6065,8 +6066,8 @@ export function resolveAbility(abilityId, context) {
         const newCur = Math.max(0, (cur ?? max) - 4);
         hs[figIdx] = [newCur, max ?? newCur];
         dcHealthState.set(msgId, hs);
-        const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const dcIds = getDcMessageIds(game, playerNum);
+        const dcList = getDcList(game, playerNum);
         const idx2 = (dcIds || []).indexOf(msgId);
         if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
         strainNote = `4 Strain (HP: ${cur ?? max}→${newCur})`;
@@ -6113,8 +6114,8 @@ export function resolveAbility(abilityId, context) {
                 const newCur = Math.max(0, (cur ?? max) - hitsFromDie);
                 hs[fi] = [newCur, max ?? newCur];
                 dcHealthState.set(figMsgId, hs);
-                const dcIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-                const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+                const dcIds = getDcMessageIds(game, pn);
+                const dcList = getDcList(game, pn);
                 const idx2 = (dcIds || []).indexOf(figMsgId);
                 if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
                 results.push(`**${dcN}**: ${hitsFromDie} Dmg (HP: ${cur ?? max}→${newCur})`);
@@ -6239,8 +6240,8 @@ export function resolveAbility(abilityId, context) {
         const [cur, max] = targetHs[fi];
         targetHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
         dcHealthState.set(damageMsgId, targetHs);
-        const dcMids = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-        const dcLst = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        const dcMids = getDcMessageIds(game, playerNum);
+        const dcLst = getDcList(game, playerNum);
         const si = (dcMids || []).indexOf(damageMsgId);
         if (si >= 0 && dcLst?.[si]) dcLst[si].healthState = [...targetHs];
       }
@@ -6273,8 +6274,8 @@ export function resolveAbility(abilityId, context) {
           const [cur, max] = selfHs[fi];
           selfHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
           dcHealthState.set(msgId, selfHs);
-          const dcMids = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const dcLst = playerNum === 1 ? game.p1DcList : game.p2DcList;
+          const dcMids = getDcMessageIds(game, playerNum);
+          const dcLst = getDcList(game, playerNum);
           const si = (dcMids || []).indexOf(msgId);
           if (si >= 0 && dcLst?.[si]) dcLst[si].healthState = [...selfHs];
         }
@@ -6323,8 +6324,8 @@ export function resolveAbility(abilityId, context) {
           const [cur, max] = targetHs[fi];
           targetHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
           dcHealthState.set(targetMsgId, targetHs);
-          const dcMids = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const dcLst = oppNum === 1 ? game.p1DcList : game.p2DcList;
+          const dcMids = getDcMessageIds(game, oppNum);
+          const dcLst = getDcList(game, oppNum);
           const si = (dcMids || []).indexOf(targetMsgId);
           if (si >= 0 && dcLst?.[si]) dcLst[si].healthState = [...targetHs];
         }
@@ -6597,8 +6598,8 @@ export function resolveAbility(abilityId, context) {
           const newCur = Math.max(0, (cur ?? max) - droidCount);
           hs[fi] = [newCur, max ?? newCur];
           dcHealthState.set(figMsgId, hs);
-          const dcIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
+          const dcIds = getDcMessageIds(game, oppNum);
+          const dcList = getDcList(game, oppNum);
           const idx2 = (dcIds || []).indexOf(figMsgId);
           if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
           dmgNote = `${droidCount} Dmg (HP: ${cur ?? max}→${newCur})`;
@@ -6649,8 +6650,8 @@ export function resolveAbility(abilityId, context) {
           const newCur = Math.max(0, (cur ?? max) - dmg);
           hs[fi] = [newCur, max ?? newCur];
           dcHealthState.set(figMsgId, hs);
-          const dcIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
+          const dcIds = getDcMessageIds(game, oppNum);
+          const dcList = getDcList(game, oppNum);
           const idx2 = (dcIds || []).indexOf(figMsgId);
           if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
           dmgNote = `${dmg} Dmg (HP: ${cur ?? max}→${newCur})`;
@@ -6764,7 +6765,7 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     // Phase 2: log trait to search for + shuffle deck
     if (chosenFigureKey) {
-      const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
+      const deckKey = ccDeckKey(playerNum);
       const deck = [...(game[deckKey] || [])];
       // Shuffle deck (Fisher-Yates)
       for (let i = deck.length - 1; i > 0; i--) {
@@ -6858,8 +6859,8 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta, choiceIndex, combat } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || "Resolve manually — pay VP to opponent to reduce hits, then become Focused." };
     const oppNum = playerNum === 1 ? 2 : 1;
-    const ownVpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
-    const oppVpKey = oppNum === 1 ? 'player1VP' : 'player2VP';
+    const ownVpKey = vpKey(playerNum);
+    const oppVpKey = vpKey(oppNum);
     const ownVp = game[ownVpKey]?.total ?? 0;
     // Incoming hits = rolled dmg + bonus hits (before defense) — cap options to actual incoming hits
     const incomingHits = Math.max(0, (combat?.attackRoll?.dmg || 0) + (combat?.bonusHits || 0) + (combat?.surgeDamage || 0));
@@ -6945,8 +6946,8 @@ export function resolveAbility(abilityId, context) {
           const newCur = Math.max(0, (cur ?? max) - 4); // 2 dmg + 2 strain = 4 total
           hs[fi] = [newCur, max ?? newCur];
           dcHealthState.set(figMsgId, hs);
-          const dcIds = oppNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-          const dcList = oppNum === 1 ? game.p1DcList : game.p2DcList;
+          const dcIds = getDcMessageIds(game, oppNum);
+          const dcList = getDcList(game, oppNum);
           const idx2 = (dcIds || []).indexOf(figMsgId);
           if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
           dmgNote = `2 Dmg + 2 Strain (HP: ${cur ?? max}→${newCur})`;
@@ -7023,8 +7024,8 @@ export function resolveAbility(abilityId, context) {
             const newCur = Math.max(0, (cur ?? max) - dmg);
             hs[fi] = [newCur, max ?? newCur];
             dcHealthState.set(figMsgId, hs);
-            const dcIds = attackerPn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-            const dcList = attackerPn === 1 ? game.p1DcList : game.p2DcList;
+            const dcIds = getDcMessageIds(game, attackerPn);
+            const dcList = getDcList(game, attackerPn);
             const idx2 = (dcIds || []).indexOf(figMsgId);
             if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
             dmgNote = `${dmg} Dmg (HP: ${cur ?? max}→${newCur})`;
@@ -7066,8 +7067,8 @@ export function resolveAbility(abilityId, context) {
             const newCur = Math.max(0, (cur ?? max) - dmg);
             hs[fi] = [newCur, max ?? newCur];
             dcHealthState.set(figMsgId, hs);
-            const dcIds = attackerPn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-            const dcList = attackerPn === 1 ? game.p1DcList : game.p2DcList;
+            const dcIds = getDcMessageIds(game, attackerPn);
+            const dcList = getDcList(game, attackerPn);
             const idx2 = (dcIds || []).indexOf(figMsgId);
             if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
             dmgNote = `${dmg} Dmg (HP: ${cur ?? max}→${newCur})`;
@@ -7198,8 +7199,8 @@ export function resolveAbility(abilityId, context) {
           const newCur = Math.max(0, (cur ?? max) - 1);
           hs[0] = [newCur, max ?? newCur];
           dcHealthState.set(msgId, hs);
-          const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
-          const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const dcList = getDcList(game, playerNum);
+          const dcIds = getDcMessageIds(game, playerNum);
           const idx = (dcIds || []).indexOf(msgId);
           if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
           strainNote = `1 Strain (HP: ${cur ?? max}→${newCur})`;
@@ -7249,8 +7250,8 @@ export function resolveAbility(abilityId, context) {
       game.findsmanMeditationTarget[playerNum] = chosenDcName;
       return { applied: true, logMessage: `**Findsman Meditation** — Zuckuss will interrupt when **${chosenDcName}** activates this round. Before their first action, announce the interrupt: Zuckuss may move up to 2 spaces or perform an attack.` };
     }
-    const oppIds = oppNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-    const oppList = oppNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const oppIds = getDcMessageIds(game, oppNum) || [];
+    const oppList = getDcList(game, oppNum) || [];
     const oppNames = oppIds.map((id, i) => oppList[i]?.dcName).filter(Boolean);
     if (!oppNames.length) return { applied: false, manualMessage: 'No opponent deployment groups found. Resolve manually.' };
     return { requiresChoice: true, choiceOptions: oppNames.map((n) => `Watch: ${n}`) };
@@ -7312,8 +7313,8 @@ export function resolveAbility(abilityId, context) {
     }
     // Phase 1: enumerate valid (exhaust→ready) pairs that share at least one keyword/trait
     const dcEffects = getDcEffects();
-    const dcIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const dcIds = getDcMessageIds(game, playerNum) || [];
+    const dcList = getDcList(game, playerNum) || [];
     const playerDcs = dcIds.map((id, i) => ({ msgId: id, dcName: dcList[i]?.dcName })).filter((d) => d.dcName);
     const opts = [];
     const vals = [];
@@ -7361,13 +7362,13 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const dcEffects = getDcEffects();
-    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const dcList = getDcList(game, playerNum) || [];
     const spyCount = dcList.filter((dc) => {
       const kws = (dcEffects[dc.dcName]?.keywords || []).map((k) => String(k).toUpperCase());
       return kws.includes('SPY');
     }).length;
     const oppNum = playerNum === 1 ? 2 : 1;
-    const oppDiscard = oppNum === 1 ? (game.player1CcDiscard || []) : (game.player2CcDiscard || []);
+    const oppDiscard = getCcDiscard(game, oppNum) || [];
     const lastCard = oppDiscard[oppDiscard.length - 1] || null;
     const cancelNote = lastCard ? `Opponent's most recent card: **${lastCard}**` : 'No recent opponent card found — identify the card manually.';
     return { applied: true, logMessage: `**Comm Disruption** — You have **${spyCount}** friendly SPY group${spyCount !== 1 ? 's' : ''}: can cancel any opponent CC with cost ≤ ${spyCount}. ${cancelNote} Discard that card and cancel its effects (honor system if already applied).` };
@@ -7466,8 +7467,8 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
-    const activatedKey = playerNum === 1 ? 'p1ActivatedDcIndices' : 'p2ActivatedDcIndices';
-    const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const activatedKey = activatedDcIndicesKey(playerNum);
+    const dcMessageIds = getDcMessageIds(game, playerNum) || [];
     const idx = dcMessageIds.indexOf(msgId);
     if (idx >= 0 && Array.isArray(game[activatedKey])) {
       game[activatedKey] = game[activatedKey].filter((i) => i !== idx);
@@ -7573,7 +7574,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.disablesFigure) {
     const { game, playerNum, chosenOption } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const oppDcList = playerNum === 1 ? (game.p2DcList || []) : (game.p1DcList || []);
+    const oppDcList = getDcList(game, 3 - playerNum) || [];
     if (chosenOption == null) {
       const options = oppDcList.filter((dc) => dc && !dc.defeated).map((dc) => dc.displayName || dc.dcName).filter(Boolean);
       if (options.length === 0) return { applied: false, manualMessage: 'No active hostile figures to disable.' };
@@ -7613,7 +7614,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.setsBounty) {
     const { game, playerNum, chosenOption } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const oppDcList = playerNum === 1 ? (game.p2DcList || []) : (game.p1DcList || []);
+    const oppDcList = getDcList(game, 3 - playerNum) || [];
     if (chosenOption == null) {
       const options = oppDcList.filter((dc) => dc && !dc.defeated).map((dc) => dc.displayName || dc.dcName).filter(Boolean);
       if (options.length === 0) return { applied: false, manualMessage: 'No active hostile figures to place a bounty on.' };
@@ -7642,7 +7643,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.revealsOpponentHand) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const oppHandKey = playerNum === 1 ? 'player2CcHand' : 'player1CcHand';
+    const oppHandKey = ccHandKey(3 - playerNum);
     const oppHand = game[oppHandKey] || [];
     const handText = oppHand.length > 0 ? oppHand.map((c) => `**${c}**`).join(', ') : '*(empty)*';
     return {
@@ -7657,7 +7658,7 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const n = entry.revealsOpponentDeckTop;
-    const oppDeckKey = playerNum === 1 ? 'player2CcDeck' : 'player1CcDeck';
+    const oppDeckKey = ccDeckKey(3 - playerNum);
     const oppDeck = game[oppDeckKey] || [];
     const topCards = oppDeck.slice(0, n);
     const deckText = topCards.length > 0 ? topCards.map((c) => `**${c}**`).join(', ') : '*(empty)*';
@@ -7673,7 +7674,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.stealsFromOpponentDiscard) {
     const { game, playerNum, chosenOption } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const oppDiscardKey = playerNum === 1 ? 'player2CcDiscard' : 'player1CcDiscard';
+    const oppDiscardKey = ccDiscardKey(3 - playerNum);
     const oppDiscard = (game[oppDiscardKey] || []).slice();
     if (chosenOption == null) {
       if (oppDiscard.length === 0) return { applied: false, manualMessage: "Opponent's discard pile is empty." };
@@ -7683,7 +7684,7 @@ export function resolveAbility(abilityId, context) {
     if (stealIdx < 0) return { applied: false, manualMessage: `"${chosenOption}" not found in opponent's discard.` };
     oppDiscard.splice(stealIdx, 1);
     game[oppDiscardKey] = oppDiscard;
-    const ownHandKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const ownHandKey = ccHandKey(playerNum);
     game[ownHandKey] = [...(game[ownHandKey] || []), chosenOption];
     // Track stolen card for end-of-round return if unplayed
     game.dataTheftStolenCard = { playerNum, cardName: chosenOption };
@@ -7700,8 +7701,8 @@ export function resolveAbility(abilityId, context) {
   if (entry.searchDeckForCC && typeof entry.searchDeckForCC === 'object') {
     const { game, playerNum, chosenOption } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const deckKey = ccDeckKey(playerNum);
+    const handKey = ccHandKey(playerNum);
     const deck = game[deckKey] || [];
     const { playableBy, maxCost } = entry.searchDeckForCC;
     const ccEffects = getCcEffectsData() || {};
@@ -7755,7 +7756,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.cripplesFigure) {
     const { game, playerNum, chosenOption } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const oppDcList = playerNum === 1 ? (game.p2DcList || []) : (game.p1DcList || []);
+    const oppDcList = getDcList(game, 3 - playerNum) || [];
     if (chosenOption == null) {
       const options = oppDcList.filter((dc) => dc && !dc.defeated).map((dc) => dc.displayName || dc.dcName).filter(Boolean);
       if (options.length === 0) return { applied: false, manualMessage: 'No active hostile figures to cripple.' };
@@ -7778,7 +7779,7 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace } = context;
     const pdf = entry.placeDefeatedFigure;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const dcList = getDcList(game, playerNum) || [];
     const poses = game.figurePositions?.[playerNum] || {};
 
     // Helper: compute valid placement spaces for a chosen figure key
@@ -7858,8 +7859,8 @@ export function resolveAbility(abilityId, context) {
       const figLabel = getFigLabel(chosenFigureKey);
       let shuffleMsg = '';
       if (pdf.shuffleBackToDeck) {
-        const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-        const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+        const deckKey = ccDeckKey(playerNum);
+        const discardKey = ccDiscardKey(playerNum);
         const discard = (game[discardKey] || []).slice();
         const cardIdx = discard.lastIndexOf(abilityId);
         if (cardIdx >= 0) {
@@ -7975,7 +7976,7 @@ export function resolveAbility(abilityId, context) {
 
 /** Count defeated friendly figures for player (deployed but no longer on map). */
 function countDefeatedFriendlyFigures(game, playerNum) {
-  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  const dcList = getDcList(game, playerNum) || [];
   const poses = game.figurePositions?.[playerNum] || {};
   let defeated = 0;
   for (let i = 0; i < dcList.length; i++) {

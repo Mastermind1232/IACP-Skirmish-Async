@@ -2,6 +2,7 @@
  * Pure HP math helpers + dcHealthState/dcList sync.
  * No Discord dependency. Used by combat, abilities, handlers.
  */
+import { getDcMessageIds, getDcList } from './player-helpers.js';
 
 /**
  * Sync healthState from dcHealthState Map to the redundant copy in game.p1/p2DcList.
@@ -11,8 +12,8 @@
  * @param {Array} healthState - the full healthState array for this DC
  */
 function syncDcList(game, msgId, playerNum, healthState) {
-  const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-  const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+  const dcIds = getDcMessageIds(game, playerNum);
+  const dcList = getDcList(game, playerNum);
   const idx = (dcIds || []).indexOf(msgId);
   if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
 }

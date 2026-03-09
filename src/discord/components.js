@@ -1,5 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
 import { normalizeCoord, bottomLeftCoord } from '../game/coords.js';
+import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining } from '../game/player-helpers.js';
 
 const MAX_BUTTONS_PER_ROW = 5;
 const MAX_ROWS_PER_MESSAGE = 5;
@@ -981,8 +982,8 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
  */
 export function getActivateDcButtons(game, playerNum, helpers = {}) {
   const { resolveDcName = (dc) => (typeof dc === 'object' ? dc?.dcName || dc?.displayName : dc), isFigurelessDc = () => false, isGroupDefeated = () => true } = helpers;
-  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-  const activated = playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+  const dcList = getDcList(game, playerNum) || [];
+  const activated = getActivatedDcIndices(game, playerNum) || [];
   const activatedSet = new Set(activated);
   const gameId = game.gameId;
   const btns = [];
@@ -1005,9 +1006,10 @@ export function getActivateDcButtons(game, playerNum, helpers = {}) {
     rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
   }
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
-  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
-  const myRemaining = playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
-  const otherRemaining = playerNum === 1 ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
+  const playerId = getPlayerId(game, playerNum);
+  const oppNum = playerNum === 1 ? 2 : 1;
+  const myRemaining = getActivationsRemaining(game, playerNum) ?? 0;
+  const otherRemaining = getActivationsRemaining(game, oppNum) ?? 0;
   if (turnPlayerId === playerId && otherRemaining > myRemaining && myRemaining > 0 && rows.length < MAX_ROWS_PER_MESSAGE) {
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder()

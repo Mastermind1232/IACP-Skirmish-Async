@@ -1,3 +1,5 @@
+import { getPlayerId } from '../game/player-helpers.js';
+
 /**
  * Check if a user can perform actions as a given player.
  * In test games where P2 is the bot, P1 can act as both sides.
@@ -8,7 +10,7 @@
  * @returns {boolean}
  */
 export function canActAsPlayer(game, userId, playerNum) {
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, playerNum);
   if (userId === ownerId) return true;
   if (game.isTestGame && game.testP2IsBot && userId === game.player1Id) return true;
   return false;

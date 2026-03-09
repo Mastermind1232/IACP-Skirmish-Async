@@ -9,11 +9,18 @@ import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards } from '../data-loader.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition } from '../game/index.js';
+import {
+  getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
+  getActivationsRemaining, getActivationsTotal, getActivatedDcIndices,
+  setActivationsRemaining, setActivatedDcIndices,
+  getCcHand, getCcDeck, getSquad,
+  ccHandKey, ccDiscardKey, ccAttachmentsKey, dcAttachmentsKey, vpKey as vpKeyFn,
+} from '../game/player-helpers.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
   if (!dcKws?.some(k => k === 'WOOKIEE')) return false;
-  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  const dcList = getDcList(game, playerNum) || [];
   return dcList.some(dc => dc.dcName === '[Fury of Kashyyyk]');
 }
 
@@ -57,28 +64,29 @@ export async function handleDcActivate(interaction, ctx) {
     await interaction.followUp({ content: 'Only the owner of this Play Area can activate their DCs.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
-  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  const ownerId = getPlayerId(game, playerNum);
+  const dcList = getDcList(game, playerNum) || [];
   const dc = dcList[dcIndex];
   if (!dc) {
     await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   const { dcName, displayName, healthState } = dc;
-  const remaining = playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
+  const remaining = getActivationsRemaining(game, playerNum);
   if (remaining <= 0) {
     await interaction.followUp({ content: 'No activations remaining this round.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   // Sit Tight: cannot activate when you have fewer or equal ready DCs than opponent
   if (game.sitTightPlayerNum === playerNum) {
-    const oppRem = playerNum === 1 ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
+    const oppNum = playerNum === 1 ? 2 : 1;
+    const oppRem = getActivationsRemaining(game, oppNum) ?? 0;
     if (remaining <= oppRem) {
       await interaction.followUp({ content: '**Sit Tight** — you cannot activate until you have more ready Deployment cards than your opponent.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
       return;
     }
   }
-  const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+  const dcMessageIds = getDcMessageIds(game, playerNum) || [];
   const msgId = dcMessageIds[dcIndex];
   if (!msgId) {
     await interaction.followUp({ content: 'DC message not found.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -102,7 +110,7 @@ export async function handleDcActivate(interaction, ctx) {
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const isMyTurn = ownerId === turnPlayerId;
   if (!isMyTurn) {
-    const playAreaCh = await client.channels.fetch(playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
+    const playAreaCh = await client.channels.fetch(getPlayAreaId(game, playerNum));
     const promptRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`confirm_activate_${gameId}_${msgId}_${interaction.message.id}`).setLabel('Yes').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(`cancel_activate_${gameId}_${ownerId}`).setLabel('No').setStyle(ButtonStyle.Danger)
@@ -115,7 +123,7 @@ export async function handleDcActivate(interaction, ctx) {
     return;
   }
   try {
-    const channel = await client.channels.fetch(playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
+    const channel = await client.channels.fetch(getPlayAreaId(game, playerNum));
     const msg = await channel.messages.fetch(msgId);
     dcExhaustedState.set(msgId, true);
     const { embed, files } = await buildDcEmbedAndFiles(dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, { dcName, displayName }), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
@@ -138,8 +146,8 @@ export async function handleDcActivate(interaction, ctx) {
     if (actMinimap) actionsPayload.files = [actMinimap];
     const actionsMsg = await thread.send(actionsPayload);
     game.dcActionsData[msgId].messageId = actionsMsg.id;
-    if (playerNum === 1) { game.p1ActivationsRemaining--; game.p1ActivatedDcIndices.push(dcIndex); }
-    else { game.p2ActivationsRemaining--; game.p2ActivatedDcIndices.push(dcIndex); }
+    setActivationsRemaining(game, playerNum, getActivationsRemaining(game, playerNum) - 1);
+    getActivatedDcIndices(game, playerNum).push(dcIndex);
     await updateActivationsMessage(game, playerNum, client);
     // Meditation: if this player has a deferred free attack (from Meditation CC) and this DC is FORCE USER, grant it
     if (game.nextActivationFreeAttack?.[playerNum]) {
@@ -198,7 +206,7 @@ export async function handleDcActivate(interaction, ctx) {
     // Still Faster Than You: if the opponent has SFTY active, post an interrupt prompt in the thread
     if (game.stillFasterPlayerNum && game.stillFasterPlayerNum !== playerNum) {
       const sftPlayerNum = game.stillFasterPlayerNum;
-      const sftOwnerId = sftPlayerNum === 1 ? game.player1Id : game.player2Id;
+      const sftOwnerId = getPlayerId(game, sftPlayerNum);
       const sftRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`still_faster_use_${gameId}_${msgId}`).setLabel('Use Still Faster Than You').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`still_faster_skip_${gameId}_${msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
@@ -215,11 +223,11 @@ export async function handleDcActivate(interaction, ctx) {
       const { getCcEffectsData } = await import('../data-loader.js');
       const ccCards = getCcEffectsData?.()?.cards || {};
       const oppNum = playerNum === 1 ? 2 : 1;
-      const oppHand = oppNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+      const oppHand = getCcHand(game, oppNum) || [];
       const activationTimings = new Set(['whenEnemyFigureActivates', 'atStartOfHostileFigureActivation', 'atStartOfActivationOfHostileFigureInYourLineOfSight']);
       const reactCards = [...new Set(oppHand)].filter(c => ccCards[c]?.timing && activationTimings.has(ccCards[c].timing));
       if (reactCards.length) {
-        const oppId = oppNum === 1 ? game.player1Id : game.player2Id;
+        const oppId = getPlayerId(game, oppNum);
         await thread.send({
           content: `<@${oppId}> — Hostile activated! You have ${reactCards.length} reaction card(s) playable now. Check your Hand channel.`,
           allowedMentions: { users: [oppId] },
@@ -269,7 +277,7 @@ export async function handleDcUnactivate(interaction, ctx) {
     await interaction.followUp({ content: 'Only the owner can un-activate.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, meta.playerNum);
   const wasExhausted = dcExhaustedState.get(msgId) ?? false;
   if (!wasExhausted) {
     await interaction.followUp({ content: 'DC is not activated.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -277,17 +285,13 @@ export async function handleDcUnactivate(interaction, ctx) {
   }
   const displayName = meta.displayName || meta.dcName;
   dcExhaustedState.set(msgId, false);
-  const total = meta.playerNum === 1 ? game.p1ActivationsTotal : game.p2ActivationsTotal;
-  const remaining = meta.playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
+  const total = getActivationsTotal(game, meta.playerNum);
+  const remaining = getActivationsRemaining(game, meta.playerNum);
   if (remaining < total) {
-    if (meta.playerNum === 1) {
-      game.p1ActivationsRemaining++;
-      const dcIndex = (game.p1DcMessageIds || []).indexOf(msgId);
-      if (dcIndex !== -1 && game.p1ActivatedDcIndices) game.p1ActivatedDcIndices = game.p1ActivatedDcIndices.filter((i) => i !== dcIndex);
-    } else {
-      game.p2ActivationsRemaining++;
-      const dcIndex = (game.p2DcMessageIds || []).indexOf(msgId);
-      if (dcIndex !== -1 && game.p2ActivatedDcIndices) game.p2ActivatedDcIndices = game.p2ActivatedDcIndices.filter((i) => i !== dcIndex);
+    setActivationsRemaining(game, meta.playerNum, remaining + 1);
+    const dcIndex = (getDcMessageIds(game, meta.playerNum) || []).indexOf(msgId);
+    if (dcIndex !== -1 && getActivatedDcIndices(game, meta.playerNum)) {
+      setActivatedDcIndices(game, meta.playerNum, getActivatedDcIndices(game, meta.playerNum).filter((i) => i !== dcIndex));
     }
     await updateActivationsMessage(game, meta.playerNum, client);
   }
@@ -378,18 +382,18 @@ export async function handleDcToggle(interaction, ctx) {
     await interaction.followUp({ content: 'Only the owner of this Play Area can toggle their DCs.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, meta.playerNum);
   const wasExhausted = dcExhaustedState.get(msgId) ?? false;
   const nowExhausted = !wasExhausted;
   const healthState = dcHealthState.get(msgId) ?? [[null, null]];
   const displayName = meta.displayName || meta.dcName;
-  const playerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+  const playerId = getPlayerId(game, meta.playerNum);
 
   if (!wasExhausted && nowExhausted) {
     const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
     const isMyTurn = playerId === turnPlayerId;
     if (!isMyTurn) {
-      const playAreaCh = await client.channels.fetch(meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId);
+      const playAreaCh = await client.channels.fetch(getPlayAreaId(game, meta.playerNum));
       const promptRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`confirm_activate_${game.gameId}_${msgId}_0`).setLabel('Yes').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`cancel_activate_${game.gameId}_${playerId}`).setLabel('No').setStyle(ButtonStyle.Danger)
@@ -402,22 +406,14 @@ export async function handleDcToggle(interaction, ctx) {
       return;
     }
     dcExhaustedState.set(msgId, true);
-    const remaining = meta.playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
+    const remaining = getActivationsRemaining(game, meta.playerNum);
     if (remaining > 0) {
-      if (meta.playerNum === 1) {
-        game.p1ActivationsRemaining--;
-        const dcIndex = (game.p1DcMessageIds || []).indexOf(msgId);
-        if (dcIndex !== -1) {
-          game.p1ActivatedDcIndices = game.p1ActivatedDcIndices || [];
-          game.p1ActivatedDcIndices.push(dcIndex);
-        }
-      } else {
-        game.p2ActivationsRemaining--;
-        const dcIndex = (game.p2DcMessageIds || []).indexOf(msgId);
-        if (dcIndex !== -1) {
-          game.p2ActivatedDcIndices = game.p2ActivatedDcIndices || [];
-          game.p2ActivatedDcIndices.push(dcIndex);
-        }
+      setActivationsRemaining(game, meta.playerNum, remaining - 1);
+      const dcIndex = (getDcMessageIds(game, meta.playerNum) || []).indexOf(msgId);
+      if (dcIndex !== -1) {
+        const indices = getActivatedDcIndices(game, meta.playerNum) || [];
+        setActivatedDcIndices(game, meta.playerNum, indices);
+        indices.push(dcIndex);
       }
       await updateActivationsMessage(game, meta.playerNum, client);
       const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
@@ -428,12 +424,12 @@ export async function handleDcToggle(interaction, ctx) {
       game.movementBank[msgId] = { total: _pendingMp2, remaining: _pendingMp2, threadId: thread.id, messageId: null, displayName };
       game.dcActionsData = game.dcActionsData || {};
       game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
-      const pingContent = `<@${meta.playerNum === 1 ? game.player1Id : game.player2Id}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
+      const pingContent = `<@${getPlayerId(game, meta.playerNum)}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
       const actMinimap = await getActivationMinimapAttachment(game, msgId);
       const actionsPayload = {
         content: pingContent,
         components: getDcActionButtons(msgId, meta.dcName, displayName, game.dcActionsData[msgId], game),
-        allowedMentions: { users: [meta.playerNum === 1 ? game.player1Id : game.player2Id] },
+        allowedMentions: { users: [getPlayerId(game, meta.playerNum)] },
       };
       if (actMinimap) actionsPayload.files = [actMinimap];
       const actionsMsg = await thread.send(actionsPayload);
@@ -451,17 +447,13 @@ export async function handleDcToggle(interaction, ctx) {
   }
   if (wasExhausted && !nowExhausted) {
     dcExhaustedState.set(msgId, false);
-    const total = meta.playerNum === 1 ? game.p1ActivationsTotal : game.p2ActivationsTotal;
-    const remaining = meta.playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
+    const total = getActivationsTotal(game, meta.playerNum);
+    const remaining = getActivationsRemaining(game, meta.playerNum);
     if (remaining < total) {
-      if (meta.playerNum === 1) {
-        game.p1ActivationsRemaining++;
-        const dcIndex = (game.p1DcMessageIds || []).indexOf(msgId);
-        if (dcIndex !== -1 && game.p1ActivatedDcIndices) game.p1ActivatedDcIndices = game.p1ActivatedDcIndices.filter((i) => i !== dcIndex);
-      } else {
-        game.p2ActivationsRemaining++;
-        const dcIndex = (game.p2DcMessageIds || []).indexOf(msgId);
-        if (dcIndex !== -1 && game.p2ActivatedDcIndices) game.p2ActivatedDcIndices = game.p2ActivatedDcIndices.filter((i) => i !== dcIndex);
+      setActivationsRemaining(game, meta.playerNum, remaining + 1);
+      const dcIndex = (getDcMessageIds(game, meta.playerNum) || []).indexOf(msgId);
+      if (dcIndex !== -1 && getActivatedDcIndices(game, meta.playerNum)) {
+        setActivatedDcIndices(game, meta.playerNum, getActivatedDcIndices(game, meta.playerNum).filter((i) => i !== dcIndex));
       }
       await updateActivationsMessage(game, meta.playerNum, client);
     }
@@ -534,7 +526,7 @@ export async function handleDcDeplete(interaction, ctx) {
     await interaction.followUp({ content: 'Only the owner of this Play Area can Deplete their upgrade.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, meta.playerNum);
   if (isDepletedRemovedFromGame(game, msgId)) {
     await interaction.followUp({ content: 'This upgrade was already depleted and removed from the game.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
@@ -654,11 +646,11 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
     await interaction.followUp({ content: 'Only the owner of this activation can play a CC here.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, meta.playerNum);
   const playable = getCardList(game, meta.playerNum, meta.dcName, meta.displayName);
   const card = playable[idx];
-  const handKey = meta.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-  const discardKey = meta.playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const handKey = ccHandKey(meta.playerNum);
+  const discardKey = ccDiscardKey(meta.playerNum);
   const hand = game[handKey] || [];
   if (!card || hand.indexOf(card) < 0) {
     await interaction.followUp({ content: "That card isn't in your hand or isn't playable for this figure.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
@@ -667,7 +659,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   // F14: Snapshot for undo before mutating
   const previousHand = (game[handKey] || []).slice();
   const previousDiscard = (game[discardKey] || []).slice();
-  const attachKey = meta.playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+  const attachKey = ccAttachmentsKey(meta.playerNum);
   const previousAttachments = isCcAttachment(card) && game[attachKey]?.[msgId] ? game[attachKey][msgId].slice() : undefined;
 
   const effectData = getCcEffect(card);
@@ -684,11 +676,11 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
     game[discardKey] = game[discardKey] || [];
     game[discardKey].push(card);
   }
-  const handChannelId = meta.playerNum === 1 ? game.p1HandId : game.p2HandId;
+  const handChannelId = getHandChannelId(game, meta.playerNum);
   const handChannel = await interaction.client.channels.fetch(handChannelId);
   const handMessages = await handChannel.messages.fetch({ limit: 20 });
   const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
-  const deck = meta.playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
+  const deck = getCcDeck(game, meta.playerNum) || [];
   if (handMsg) {
     const handPayload = buildHandDisplayPayload(hand, deck, game.gameId, game, meta.playerNum);
     const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
@@ -733,10 +725,10 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   if (enteringNegation) {
     game.pendingNegation = { playedBy: meta.playerNum, card, fromDc: true, msgId, wasAttachment: isCcAttachment(card), handChannelId };
     const oppNum = meta.playerNum === 1 ? 2 : 1;
-    const oppHandId = oppNum === 1 ? game.p1HandId : game.p2HandId;
+    const oppHandId = getHandChannelId(game, oppNum);
     const oppHandChannel = await interaction.client.channels.fetch(oppHandId).catch(() => null);
     if (oppHandChannel) {
-      const oppId = oppNum === 1 ? game.player1Id : game.player2Id;
+      const oppId = getPlayerId(game, oppNum);
       await oppHandChannel.send({
         content: `<@${oppId}> Your opponent played **${card}** (cost 0). You may play **Negation** to cancel it.`,
         components: [ctx.getNegationResponseButtons(game.gameId)],
@@ -925,7 +917,7 @@ async function buildAndSendAttackTargets(
   }
   const targets = [];
   const poses = game.figurePositions?.[enemyPlayerNum] || {};
-  const dcList = enemyPlayerNum === 1 ? game.player1Squad?.dcList : game.player2Squad?.dcList || [];
+  const dcList = getSquad(game, enemyPlayerNum)?.dcList || [];
   const totals = {};
   for (const d of dcList) totals[d] = (totals[d] || 0) + 1;
   for (const [k, coord] of Object.entries(poses)) {
@@ -1167,7 +1159,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   } else if (buttonKey === 'dc_special_') {
     _effectiveActionCost = (getDcStats(meta.dcName).specialCosts || [])[specialIdx] ?? 1;
   }
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, meta.playerNum);
   const actionsData = game.dcActionsData?.[msgId];
   const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
   const hasFellSwoopFreeAttack = action === 'Attack' && !!game.fellSwoopFreeAttack?.[msgId];

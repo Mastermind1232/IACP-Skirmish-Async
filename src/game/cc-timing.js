@@ -3,6 +3,7 @@
  * Uses game state to derive play context and cc-effects timing field.
  */
 import { getCcEffect, getDcKeywords, getDcEffects } from '../data-loader.js';
+import { getPlayerId, getDcList } from './player-helpers.js';
 
 /**
  * Derive current CC play context from game state.
@@ -11,7 +12,7 @@ import { getCcEffect, getDcKeywords, getDcEffects } from '../data-loader.js';
  * @returns {{ startOfRound: boolean, duringActivation: boolean, endOfRound: boolean, duringAttack: boolean, isAttacker: boolean, isDefender: boolean }}
  */
 export function getCcPlayContext(game, playerNum) {
-  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const playerId = getPlayerId(game, playerNum);
   const startOfRound = !!(
     game.currentRound &&
     game.roundActivationMessageId &&
@@ -287,7 +288,7 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
   const playableBy = (effect?.playableBy || '').trim();
   if (!playableBy || playableBy.toLowerCase() === 'any figure') return { legal: true };
 
-  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  const dcList = getDcList(game, playerNum) || [];
   const allKeywords = getDcKeywords();
   const dcEffects = getDcEffects() || {};
   const p = playableBy.toLowerCase();

@@ -6,6 +6,21 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapSpaces } from '../data-loader.js';
 import { cleanupActivation } from '../game/activation-state.js';
 import { applyCondition, filterCondition } from '../game/index.js';
+import {
+  getPlayerId,
+  getDcList,
+  getDcMessageIds,
+  getPlayAreaId,
+  getActivationsRemaining,
+  getActivatedDcIndices,
+  getCcHand,
+  getCcDeck,
+  getDcAttachments,
+  setActivationsRemaining,
+  setActivatedDcIndices,
+  ccDeckKey,
+  ccHandKey,
+} from '../game/player-helpers.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -210,7 +225,7 @@ export async function handleEndTurn(interaction, ctx) {
     await interaction.followUp({ content: 'Invalid End Turn.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the player who finished that activation can end the turn.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
@@ -220,8 +235,8 @@ export async function handleEndTurn(interaction, ctx) {
     await interaction.followUp({ content: 'This turn was already ended.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const otherPlayerId = meta.playerNum === 1 ? game.player2Id : game.player1Id;
   const otherPlayerNum = meta.playerNum === 1 ? 2 : 1;
+  const otherPlayerId = getPlayerId(game, otherPlayerNum);
   game.dcFinishedPinged = game.dcFinishedPinged || {};
   game.dcFinishedPinged[dcMsgId] = true;
   game.lastActivationMsgIdByPlayer = game.lastActivationMsgIdByPlayer || {};
@@ -337,7 +352,7 @@ export async function handleEndTurn(interaction, ctx) {
     if (game.movementBank?.[dcMsgId]) delete game.movementBank[dcMsgId];
   }
   try {
-    const playAreaId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+    const playAreaId = getPlayAreaId(game, meta.playerNum);
     const playChannel = await client.channels.fetch(playAreaId);
     const dcMsg = await playChannel.messages.fetch(dcMsgId);
     const healthState = dcHealthState.get(dcMsgId) ?? [[null, null]];
@@ -358,11 +373,11 @@ export async function handleEndTurn(interaction, ctx) {
     const sosPlayerNum = sos.playerNum;
     // Don't re-ready if this IS Luke's activation ending (he just activated, should stay exhausted)
     if (sosDcMsgId !== dcMsgId) {
-      const sosActivatedKey = sosPlayerNum === 1 ? 'p1ActivatedDcIndices' : 'p2ActivatedDcIndices';
-      const sosDcIds = sosPlayerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const sosDcIds = getDcMessageIds(game, sosPlayerNum) || [];
       const sosIdx = sosDcIds.indexOf(sosDcMsgId);
-      if (sosIdx >= 0 && Array.isArray(game[sosActivatedKey]) && game[sosActivatedKey].includes(sosIdx)) {
-        game[sosActivatedKey] = game[sosActivatedKey].filter((i) => i !== sosIdx);
+      const sosActivated = getActivatedDcIndices(game, sosPlayerNum);
+      if (sosIdx >= 0 && Array.isArray(sosActivated) && sosActivated.includes(sosIdx)) {
+        setActivatedDcIndices(game, sosPlayerNum, sosActivated.filter((i) => i !== sosIdx));
         const sosMeta = dcMessageMeta.get(sosDcMsgId);
         const sosName = sosMeta?.displayName || sosMeta?.dcName || 'Luke Skywalker';
         await logGameAction(game, client, `⚡ **Son of Skywalker** — **${sosName}** is automatically **Readied**.`, { phase: 'ROUND', icon: 'activate' });
@@ -381,8 +396,8 @@ export async function handleEndTurn(interaction, ctx) {
       const ch = await client.channels.fetch(game.generalId);
       const msg = await ch.messages.fetch(game.roundActivationMessageId);
       const round = game.currentRound || 1;
-      const newCurrentRem = otherPlayerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
-      const justActedRem = meta.playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+      const newCurrentRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
+      const justActedRem = getActivationsRemaining(game, meta.playerNum) ?? 0;
       const passRows = [];
       if (justActedRem > newCurrentRem && newCurrentRem > 0) {
         passRows.push(new ActionRowBuilder().addComponents(
@@ -437,13 +452,13 @@ export async function handleDcEndActivation(interaction, ctx) {
     return;
   }
   if (await replyIfGameEnded(game, interaction)) return;
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the owner can end this activation.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const otherPlayerId = meta.playerNum === 1 ? game.player2Id : game.player1Id;
   const otherPlayerNum = meta.playerNum === 1 ? 2 : 1;
+  const otherPlayerId = getPlayerId(game, otherPlayerNum);
   const displayName = meta.displayName || meta.dcName;
   const gameId = game.gameId;
 
@@ -482,7 +497,7 @@ export async function handleDcEndActivation(interaction, ctx) {
 
   // Update DC card (stays exhausted)
   try {
-    const playAreaId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+    const playAreaId = getPlayAreaId(game, meta.playerNum);
     const playChannel = await client.channels.fetch(playAreaId);
     const dcMsg = await playChannel.messages.fetch(msgId);
     const healthState = dcHealthState.get(msgId) ?? [[null, null]];
@@ -505,8 +520,8 @@ export async function handleDcEndActivation(interaction, ctx) {
       const ch = await client.channels.fetch(game.generalId);
       const msg = await ch.messages.fetch(game.roundActivationMessageId);
       const round = game.currentRound || 1;
-      const newCurrentRem = otherPlayerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
-      const justActedRem = meta.playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+      const newCurrentRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
+      const justActedRem = getActivationsRemaining(game, meta.playerNum) ?? 0;
       const passRows = [];
       if (justActedRem > newCurrentRem && newCurrentRem > 0) {
         passRows.push(new ActionRowBuilder().addComponents(
@@ -549,8 +564,8 @@ export async function handleDcEndActivation(interaction, ctx) {
 
   // Squad Swarm: after ending activation, offer to activate another DC with the same name (combined cost ≤ 15)
   if (game.squadSwarmPlayerNum === meta.playerNum) {
-    const _sqDcList = meta.playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-    const _sqDcIds = meta.playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const _sqDcList = getDcList(game, meta.playerNum) || [];
+    const _sqDcIds = getDcMessageIds(game, meta.playerNum) || [];
     const sameNameIds = _sqDcIds.filter((id, i) => {
       if (!id || id === msgId) return false;
       const dc = _sqDcList[i];
@@ -560,7 +575,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     const activatedCost = ctx.getDcStats?.(meta.dcName)?.cost ?? 0;
     const eligibleIds = sameNameIds.filter(() => (activatedCost + (ctx.getDcStats?.(meta.dcName)?.cost ?? 0)) <= 15);
     if (eligibleIds.length > 0) {
-      const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+      const ownerId = getPlayerId(game, meta.playerNum);
       const btns = eligibleIds.slice(0, 4).map((id) =>
         new ButtonBuilder()
           .setCustomId(`squad_swarm_yes_${gameId}_${msgId}_${id}`)
@@ -578,9 +593,9 @@ export async function handleDcEndActivation(interaction, ctx) {
   // Lie in Ambush: after opponent activates, if you have 3+ exhausted/defeated groups and it's not round 1, may deploy set-aside group
   if ((game.currentRound || 1) > 1) {
     const _liaOppNum = otherPlayerNum;
-    const _liaOppAtts = _liaOppNum === 1 ? (game.p1DcAttachments || {}) : (game.p2DcAttachments || {});
-    const _liaOppIds = _liaOppNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-    const _liaOppList = _liaOppNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const _liaOppAtts = getDcAttachments(game, _liaOppNum) || {};
+    const _liaOppIds = getDcMessageIds(game, _liaOppNum) || [];
+    const _liaOppList = getDcList(game, _liaOppNum) || [];
     // Count opponent's exhausted or defeated groups
     const _liaExhOrDefeated = _liaOppIds.filter((id, i) => {
       return ctx.dcExhaustedState?.get(id) || _liaOppList[i]?.defeated;
@@ -608,7 +623,7 @@ export async function handleDcEndActivation(interaction, ctx) {
   try {
     const ccCards = getCcEffectsData?.()?.cards || {};
     const _endActTimings = new Set(['afterYouResolveGroupsActivation', 'afterActivationResolves', 'endOfActivation']);
-    const hand = meta.playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+    const hand = getCcHand(game, meta.playerNum) || [];
     const reactCards = [...new Set(hand)].filter(c => ccCards[c]?.timing && _endActTimings.has(ccCards[c].timing));
     if (reactCards.length) {
       await logGameAction(game, client, `<@${ownerId}> — Activation ended! You have ${reactCards.length} reaction card(s) playable now. Check your Hand channel.`, {
@@ -657,27 +672,26 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (!game) return;
   const meta = dcMessageMeta.get(msgId);
   if (!meta || meta.gameId !== gameId) return;
-  const ownerId = meta.playerNum === 1 ? game.player1Id : game.player2Id;
+  const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) return;
-  const remaining = meta.playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
+  const remaining = getActivationsRemaining(game, meta.playerNum);
   if (remaining <= 0) {
     await interaction.followUp({ content: 'No activations remaining.', ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
   await interaction.message.edit({ components: [] }).catch((err) => { console.error('[discord]', err?.message ?? err); });
   dcExhaustedState.set(msgId, true);
-  if (meta.playerNum === 1) {
-    game.p1ActivationsRemaining--;
-    const dcIndex = (game.p1DcMessageIds || []).indexOf(msgId);
-    if (dcIndex !== -1) { game.p1ActivatedDcIndices = game.p1ActivatedDcIndices || []; game.p1ActivatedDcIndices.push(dcIndex); }
-  } else {
-    game.p2ActivationsRemaining--;
-    const dcIndex = (game.p2DcMessageIds || []).indexOf(msgId);
-    if (dcIndex !== -1) { game.p2ActivatedDcIndices = game.p2ActivatedDcIndices || []; game.p2ActivatedDcIndices.push(dcIndex); }
+  setActivationsRemaining(game, meta.playerNum, (getActivationsRemaining(game, meta.playerNum) || 0) - 1);
+  {
+    const dcIndex = (getDcMessageIds(game, meta.playerNum) || []).indexOf(msgId);
+    if (dcIndex !== -1) {
+      const indices = getActivatedDcIndices(game, meta.playerNum) || [];
+      setActivatedDcIndices(game, meta.playerNum, [...indices, dcIndex]);
+    }
   }
   await updateActivationsMessage(game, meta.playerNum, client);
   const displayName = meta.displayName || meta.dcName;
-  const playAreaId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+  const playAreaId = getPlayAreaId(game, meta.playerNum);
   const playChannel = await client.channels.fetch(playAreaId);
   const dcMsg = await playChannel.messages.fetch(msgId);
   const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, dcHealthState.get(msgId) ?? [[null, null]], getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
@@ -745,7 +759,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Madness (Taron Malicos): if ≤2 CC cards in hand, suffer 1 Strain and become Focused
   if (meta.dcName === 'Taron Malicos') {
-    const hand = meta.playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+    const hand = getCcHand(game, meta.playerNum) || [];
     if (hand.length <= 2) {
       const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(fk => fk.startsWith('Taron Malicos-'));
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -776,8 +790,8 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (meta.dcName === 'Agent Kallus') {
     const _fParts = [];
     for (const pn of [1, 2]) {
-      const deckKey = pn === 1 ? 'player1CcDeck' : 'player2CcDeck';
-      const handKey = pn === 1 ? 'player1CcHand' : 'player2CcHand';
+      const deckKey = ccDeckKey(pn);
+      const handKey = ccHandKey(pn);
       const deck = game[deckKey] || [];
       if (deck.length > 0) {
         const card = deck.shift();
@@ -964,8 +978,8 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Wisdom (Yoda): draw 1 CC, return 1 to bottom of deck
   if (_mountedIds.includes('wisdom_yoda')) {
-    const deckKey = meta.playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
-    const handKey = meta.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const deckKey = ccDeckKey(meta.playerNum);
+    const handKey = ccHandKey(meta.playerNum);
     const deck = game[deckKey] || [];
     if (deck.length > 0) {
       const card = deck.shift();
@@ -1091,8 +1105,8 @@ export async function handleConfirmActivate(interaction, ctx) {
   // I Make the Rules Now (Cad Bane): when another figure activates, HUNTER within 4 of Cad Bane gains 1 MP
   // Scan all DCs on BOTH teams for this ability
   for (const pn of [1, 2]) {
-    const dcList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-    const dcMsgIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+    const dcList = getDcList(game, pn) || [];
+    const dcMsgIds = getDcMessageIds(game, pn) || [];
     for (let di = 0; di < dcList.length; di++) {
       const dc = dcList[di];
       if (!dc?.dcName) continue;
@@ -1129,7 +1143,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   // Calming Presence (Yoda): when a friendly REBEL activates, remove 1 harmful condition
   // Check if any Yoda figure on the activating player's team has this ability
   if (meta.playerNum) {
-    const dcList = meta.playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const dcList = getDcList(game, meta.playerNum) || [];
     for (const dc of dcList) {
       if (!dc?.dcName) continue;
       const eff = getDcEffects()?.[dc.dcName];

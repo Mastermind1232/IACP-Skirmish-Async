@@ -38,3 +38,4 @@ export function vpKey(pn)           { return pn === 1 ? 'player1VP' : 'player2VP
 export function deployMetadataKey(pn) { return pn === 1 ? 'player1DeployMetadata' : 'player2DeployMetadata'; }
 export function deployLabelsKey(pn)   { return pn === 1 ? 'player1DeployLabels' : 'player2DeployLabels'; }
 export function armyCostModifierKey(pn) { return pn === 1 ? 'player1ArmyCostModifier' : 'player2ArmyCostModifier'; }
+export function activatedDcIndicesKey(pn) { return pn === 1 ? 'p1ActivatedDcIndices' : 'p2ActivatedDcIndices'; }

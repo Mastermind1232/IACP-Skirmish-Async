@@ -1,4 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
+import { getPlayerId, getCcDeck, getDcList, getSquad } from '../game/player-helpers.js';
 
 /**
  * Initiative zone label for scorecard (e.g. "[RED] P1 has the initiative!").
@@ -100,9 +101,9 @@ export const CARD_BACK_CHAR = '▮';
 
 /** Tooltip embed at top of Play Area: player, CC count, DC list. */
 export function getPlayAreaTooltipEmbed(game, playerNum) {
-  const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
-  const deckCount = (playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || [])).length;
-  const dcList = playerNum === 1 ? (game.p1DcList || game.player1Squad?.dcList || []) : (game.p2DcList || game.player2Squad?.dcList || []);
+  const playerId = getPlayerId(game, playerNum);
+  const deckCount = (getCcDeck(game, playerNum) || []).length;
+  const dcList = getDcList(game, playerNum) || getSquad(game, playerNum)?.dcList || [];
   const dcNames = Array.isArray(dcList) ? dcList.map((d) => (typeof d === 'object' ? d.dcName || d.displayName : d)).filter(Boolean) : [];
   const dcText = dcNames.length > 0 ? dcNames.join(', ') : '—';
   return new EmbedBuilder()

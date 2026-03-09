@@ -3,6 +3,7 @@
  * Each effect type is implemented here; mission-cards.json supplies parameters (e.g. vp: 15).
  */
 import { awardObjectiveVp } from './vp-helpers.js';
+import { getPlayerId, getCcHand } from './player-helpers.js';
 
 function normalizeCoord(c) {
   if (c == null || typeof c !== 'string') return '';
@@ -72,7 +73,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
       const controller = getNamedAreaController(game, mapId, areaName, getMapTokensData);
       if (controller) {
         const vpVal = vp;
-        const pid = controller === 1 ? game.player1Id : game.player2Id;
+        const pid = getPlayerId(game, controller);
         awardObjectiveVp(game, controller, vpVal);
         await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** for controlling **${areaName}**.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
         await checkWinConditions(game, client);
@@ -101,7 +102,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
           scored++;
         }
         if (scored > 0) {
-          const pid = pn === 1 ? game.player1Id : game.player2Id;
+          const pid = getPlayerId(game, pn);
           const msg = vpMessage
             ? vpMessage.replace('{vp}', String(vpPerFigure * scored)).replace('{count}', String(scored))
             : `${scored} figure(s) scoring ${vpPerFigure} VP each (mission objective)`;
@@ -156,7 +157,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
       const count = typeof game[tokenCountKey] === 'number' ? game[tokenCountKey] : 0;
       if (controller && count > 0) {
         const vpVal = vpPerToken * count;
-        const pid = controller === 1 ? game.player1Id : game.player2Id;
+        const pid = getPlayerId(game, controller);
         awardObjectiveVp(game, controller, vpVal);
         game[tokenCountKey] = 0;
         const ctrlMsg = tokenVpMsg
@@ -188,7 +189,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
         if (vpByPlayer[pn] > 0) {
           const vpVal = vpByPlayer[pn];
           const count = vpByPlayer[pn] / vp;
-          const pid = pn === 1 ? game.player1Id : game.player2Id;
+          const pid = getPlayerId(game, pn);
           awardObjectiveVp(game, pn, vpVal);
           const msg = vpMessage
             ? vpMessage.replace('{vp}', String(vpVal)).replace('{count}', String(count))
@@ -241,7 +242,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
         if (vpByPlayer[pn] > 0) {
           const vpVal = vpByPlayer[pn];
           const count = vpByPlayer[pn] / vp;
-          const pid = pn === 1 ? game.player1Id : game.player2Id;
+          const pid = getPlayerId(game, pn);
           awardObjectiveVp(game, pn, vpVal);
           const msg = vpMessage
             ? vpMessage.replace('{vp}', String(vpVal)).replace('{count}', String(count))
@@ -277,7 +278,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
         if (vpByPlayer[pn] > 0) {
           const vpVal = vpByPlayer[pn];
           const removed = strainRemovedByPlayer[pn];
-          const pid = pn === 1 ? game.player1Id : game.player2Id;
+          const pid = getPlayerId(game, pn);
           awardObjectiveVp(game, pn, vpVal);
           const msg = vpMessage
             ? vpMessage.replace('{vp}', String(vpVal)).replace('{count}', String(removed))
@@ -325,7 +326,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
         if (vpByPlayer[pn] > 0) {
           const vpVal = vpByPlayer[pn];
           const count = vpByPlayer[pn] / vpPerCrate;
-          const pid = pn === 1 ? game.player1Id : game.player2Id;
+          const pid = getPlayerId(game, pn);
           awardObjectiveVp(game, pn, vpVal);
           await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** — ${count} crate${count !== 1 ? 's' : ''} controlled (${vpPerCrate} VP each).`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
           await checkWinConditions(game, client);

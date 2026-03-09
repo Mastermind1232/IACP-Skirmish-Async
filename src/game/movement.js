@@ -20,6 +20,7 @@ import {
   getDcKeywords,
   getFigureSize,
 } from '../data-loader.js';
+import { getDcList, getDcMessageIds, getDcAttachments } from './player-helpers.js';
 
 export function isWithinGridBounds(coord, gridBounds) {
   if (!gridBounds || (gridBounds.maxCol == null && gridBounds.maxRow == null)) return true;
@@ -204,11 +205,11 @@ export function getMovementProfile(dcName, figureKey, game) {
     const _svDcName = figureKey.replace(/-\d+-\d+$/, '');
     for (const pn of [1, 2]) {
       if (!(figureKey in (game.figurePositions?.[pn] || {}))) continue;
-      const _svList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-      const _svIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const _svList = getDcList(game, pn) || [];
+      const _svIds = getDcMessageIds(game, pn) || [];
       for (let i = 0; i < _svList.length; i++) {
         if (_svList[i]?.dcName !== _svDcName) continue;
-        const _svAtt = pn === 1 ? game.p1DcAttachments?.[_svIds[i]] : game.p2DcAttachments?.[_svIds[i]];
+        const _svAtt = getDcAttachments(game, pn)?.[_svIds[i]];
         if (_svAtt?.includes('Survivalist')) hasSurvivalist = true;
         break;
       }
@@ -221,11 +222,11 @@ export function getMovementProfile(dcName, figureKey, game) {
     const _mhDcName = figureKey.replace(/-\d+-\d+$/, '');
     for (const pn of [1, 2]) {
       if (!(figureKey in (game.figurePositions?.[pn] || {}))) continue;
-      const _mhList = pn === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-      const _mhIds = pn === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+      const _mhList = getDcList(game, pn) || [];
+      const _mhIds = getDcMessageIds(game, pn) || [];
       for (let i = 0; i < _mhList.length; i++) {
         if (_mhList[i]?.dcName !== _mhDcName) continue;
-        const _mhAtt = pn === 1 ? game.p1DcAttachments?.[_mhIds[i]] : game.p2DcAttachments?.[_mhIds[i]];
+        const _mhAtt = getDcAttachments(game, pn)?.[_mhIds[i]];
         if (_mhAtt?.includes('Mortar Trooper')) hasMortarHaul = true;
         break;
       }

@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { isDbConfigured, initDb, loadGamesFromDb, saveGamesToDb, savePromise } from './db.js';
+import { getDcList, getDcMessageIds, getActivatedDcIndices } from './game/player-helpers.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
@@ -87,8 +88,8 @@ function syncHealthStateToGames() {
     if (!meta) continue;
     const game = games.get(meta.gameId);
     if (!game || game.ended) continue;
-    const dcMessageIds = meta.playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-    const dcList = meta.playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const dcMessageIds = getDcMessageIds(game, meta.playerNum) || [];
+    const dcList = getDcList(game, meta.playerNum) || [];
     const idx = dcMessageIds.indexOf(msgId);
     if (idx >= 0 && dcList[idx]) {
       dcList[idx].healthState = [...healthState];
@@ -165,9 +166,9 @@ export async function loadGames() {
 function repopulateDcMapsFromGames() {
   for (const [gameId, game] of games) {
     for (const playerNum of [1, 2]) {
-      const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-      const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-      const activatedIndices = new Set(playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []));
+      const dcList = getDcList(game, playerNum) || [];
+      const dcMessageIds = getDcMessageIds(game, playerNum) || [];
+      const activatedIndices = new Set(getActivatedDcIndices(game, playerNum) || []);
       for (let i = 0; i < dcMessageIds.length && i < dcList.length; i++) {
         const msgId = dcMessageIds[i];
         const dc = dcList[i];

@@ -7,6 +7,12 @@ import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, get
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition } from '../game/index.js';
+import {
+  getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
+  getCcHand, getActivatedDcIndices,
+  getActivationsRemaining, setActivationsRemaining,
+  ccDiscardKey, ccAttachmentsKey, vpKey,
+} from '../game/player-helpers.js';
 
 /**
  * Check a player's hand for CC cards that match a timing trigger.
@@ -17,7 +23,7 @@ import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetC
  * @returns {{ cardName: string, timing: string, playableBy: string, cost: number }[]}
  */
 function getPlayableReactionCards(game, playerNum, timingTriggers) {
-  const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+  const hand = getCcHand(game, playerNum) || [];
   if (!hand.length) return [];
   const ccData = getCcEffectsData()?.cards || {};
   const triggerSet = new Set(timingTriggers);
@@ -89,8 +95,8 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
   let headhunterTriggered = false;
   let headhunterDmg = 0;
   const _hhOwnerNum = 3 - playerNum;
-  const _hhOwnerMsgIds = _hhOwnerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-  const _hhOwnerAtts = _hhOwnerNum === 1 ? (game.p1DcAttachments || {}) : (game.p2DcAttachments || {});
+  const _hhOwnerMsgIds = getDcMessageIds(game, _hhOwnerNum) || [];
+  const _hhOwnerAtts = getDcAttachments(game, _hhOwnerNum) || {};
   const _hhInActivation = _hhOwnerMsgIds.some(mid => game.dcActionsData?.[mid]?.threadId);
   if (_hhInActivation) {
     for (const _hhMid of _hhOwnerMsgIds) {
@@ -102,11 +108,11 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
         game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
         game.exhaustedSkirmishUpgrades[_hhMid] = [..._hhExh, 'Headhunter'];
         // Opponent discards random CC or figure suffers 1 Damage
-        const oppHand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+        const oppHand = getCcHand(game, playerNum) || [];
         if (oppHand.length > 0) {
           const randIdx = Math.floor(Math.random() * oppHand.length);
           const discarded = oppHand.splice(randIdx, 1)[0];
-          const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+          const discardKey = ccDiscardKey(playerNum);
           game[discardKey] = game[discardKey] || [];
           game[discardKey].push(discarded);
           await thread.send(`**Headhunter** — Strain reduced by 1. P${playerNum} discards **${discarded}** from hand.`).catch(() => {});
@@ -146,16 +152,15 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     if (logGameAction) {
       await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
     }
-    const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const dcIds = getDcMessageIds(game, playerNum);
     const idx = (dcIds || []).indexOf(msgId);
     if (idx >= 0 && isGroupDefeated?.(game, playerNum, idx)) {
-      const activatedIndices = playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+      const activatedIndices = getActivatedDcIndices(game, playerNum) || [];
       if (!activatedIndices.includes(idx)) {
-        if (playerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
-        else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+        setActivationsRemaining(game, playerNum, Math.max(0, (getActivationsRemaining(game, playerNum) ?? 0) - 1));
         if (updateActivationsMessage) await updateActivationsMessage(game, playerNum, client);
       }
-      const ccAttachKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+      const ccAttachKey = ccAttachmentsKey(playerNum);
       if (game[ccAttachKey]?.[msgId]?.length) {
         delete game[ccAttachKey][msgId];
         if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, playerNum, msgId, client);
@@ -708,7 +713,7 @@ export async function handleAttackTarget(interaction, ctx) {
 
   // Fury of Kashyyyk: elite WOOKIEE attacking within 2 + another friendly WOOKIEE within 2 of defender → Pierce 1
   {
-    const _fokAtkDcList = attackerPlayerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const _fokAtkDcList = getDcList(game, attackerPlayerNum) || [];
     if (_fokAtkDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]')) {
       const _fokAtkKws = (getDcKeywordsGlobal()[meta.dcName] || []).map(k => String(k).toUpperCase());
       const _fokAtkEff = getDcEffectsGlobal()[meta.dcName];
@@ -1262,8 +1267,8 @@ export async function handleAttackTarget(interaction, ctx) {
       const _tfiwmMatch = _tfiwmTarget.match(/^(.+)-(\d+)-(\d+)$/);
       if (_tfiwmMatch) {
         const [, _tfDcN, _tfDgI, _tfFiStr] = _tfiwmMatch;
-        const _tfMsgIds = attackerPlayerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-        const _tfDcList = attackerPlayerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+        const _tfMsgIds = getDcMessageIds(game, attackerPlayerNum) || [];
+        const _tfDcList = getDcList(game, attackerPlayerNum) || [];
         const _tfDcHs = ctx.dcHealthState;
         if (_tfDcHs) {
           let _tfMsgId = null;
@@ -1311,7 +1316,7 @@ export async function handleAttackTarget(interaction, ctx) {
 
   // Slow on the Draw (Greedo): when Greedo declares an attack, defender may interrupt to attack Greedo first
   if (atkSpecialIds.includes('slow_on_the_draw_greedo')) {
-    const defOwnerId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
+    const defOwnerId = getPlayerId(game, defenderPlayerNum);
     await thread.send({ content: `⚠️ **Slow on the Draw** — <@${defOwnerId}>, you may interrupt to perform an attack targeting **Greedo** before this attack resolves. This is an honor-system choice — use your DC's attack action to target Greedo if desired.`, allowedMentions: { users: [defOwnerId] } });
   }
 
@@ -1337,7 +1342,7 @@ export async function handleAttackTarget(interaction, ctx) {
       'whileDefending',
       'whileAdjacentFriendlyFigureDefending',
     ]);
-    const defOwnerId = defenderPlayerNum === 1 ? game.player1Id : game.player2Id;
+    const defOwnerId = getPlayerId(game, defenderPlayerNum);
     if (defReactions.length) {
       await thread.send({ content: `<@${defOwnerId}> — You have ${defReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defOwnerId] } }).catch(() => {});
     }
@@ -1349,7 +1354,7 @@ export async function handleAttackTarget(interaction, ctx) {
       'duringAttack',
       'whenAnotherFriendlyTrooperDeclaresAttackTargetingInYourLineOfSight',
     ]);
-    const atkOwnerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+    const atkOwnerId = getPlayerId(game, attackerPlayerNum);
     if (atkReactions.length) {
       await thread.send({ content: `<@${atkOwnerId}> — You have ${atkReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [atkOwnerId] } }).catch(() => {});
     }
@@ -1766,8 +1771,8 @@ export async function handleCombatRoll(interaction, ctx) {
           const fn = fk.replace(/-\d+-\d+$/, '');
           if (!isWithinSpaces(_taMapSp, String(pos).toLowerCase(), String(_taAtkPos).toLowerCase(), 3)) continue;
           // Check if this figure's DC has Trusted Ally attachment and it's not exhausted
-          const _taMsgIds = attackerPlayerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-          const _taDcList = attackerPlayerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+          const _taMsgIds = getDcMessageIds(game, attackerPlayerNum) || [];
+          const _taDcList = getDcList(game, attackerPlayerNum) || [];
           for (let i = 0; i < _taDcList.length; i++) {
             if (_taDcList[i]?.dcName !== fn) continue;
             const _taMid = _taMsgIds[i];
@@ -3165,22 +3170,22 @@ export async function handleCombatSurge(interaction, ctx) {
       if (key === 'utinni_vp_1') {
         awardObjectiveVp(game, attackerPlayerNum, 1);
         combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);
-        const _utinniVpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+        const _utinniVpKey = vpKey(attackerPlayerNum);
         await thread.send(`**Utinni!** — +1 VP earned (${game[_utinniVpKey].total} total).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
         if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Utinni!** — Jawa Scavenger earned +1 VP.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
       }
       // Gain VP (Senator/Streetrat form surge): spending this surge earns N VP
       if (mod.surgeVpGain && mod.surgeVpGain > 0) {
         awardObjectiveVp(game, attackerPlayerNum, mod.surgeVpGain);
-        const _gvpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
+        const _gvpKey = vpKey(attackerPlayerNum);
         await thread.send(`**+${mod.surgeVpGain} VP** earned (${game[_gvpKey].total} total).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
         if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Surge: +${mod.surgeVpGain} VP** (${game[_gvpKey].total} total).`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
       }
       // Bargain (Jawa Scavenger Elite): inline VP exchange during surge phase
       if (mod.surgeBargain) {
-        const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-        game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-        const vp = game[vpKey];
+        const _bargainVpKey = vpKey(attackerPlayerNum);
+        game[_bargainVpKey] = game[_bargainVpKey] || { total: 0, kills: 0, objectives: 0 };
+        const vp = game[_bargainVpKey];
         if ((vp.total || 0) >= 1) {
           vp.total -= 1;
           if ((vp.objectives || 0) > 0) vp.objectives -= 1;
@@ -3516,8 +3521,8 @@ export async function handleCleaveTarget(interaction, ctx) {
     const cleaveDmg = pending.surgeCleave || 0;
     const { newHp: newCCur, wasDefeated: cleaveDefeated } = reduceHp(dcHealthState, game, cleaveMsgId, cleaveFigIndex, cleaveDmg, cleavePlayerNum);
     {
-      const cleaveDcIds = cleavePlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const cleaveDcList = cleavePlayerNum === 1 ? game.p1DcList : game.p2DcList;
+      const cleaveDcIds = getDcMessageIds(game, cleavePlayerNum);
+      const cleaveDcList = getDcList(game, cleavePlayerNum);
       const cleaveIdx = (cleaveDcIds || []).indexOf(cleaveMsgId);
       const cleaveLabel = target.label || cleaveDcList?.[cleaveIdx]?.displayName || cleaveFigureKey;
       await logGameAction(game, client, `Cleave: <@${ownerId}> dealt **${pending.surgeCleave}** damage to **${cleaveLabel}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
@@ -3531,13 +3536,12 @@ export async function handleCleaveTarget(interaction, ctx) {
         awardKillVp(game, attackerPlayerNum, vp);
         await logGameAction(game, client, `Cleave: <@${ownerId}> defeated **${cleaveLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
         if (cleaveIdx >= 0 && isGroupDefeated(game, cleavePlayerNum, cleaveIdx)) {
-          const activatedIndices = cleavePlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+          const activatedIndices = getActivatedDcIndices(game, cleavePlayerNum) || [];
           if (!activatedIndices.includes(cleaveIdx)) {
-            if (cleavePlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
-            else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+            setActivationsRemaining(game, cleavePlayerNum, Math.max(0, (getActivationsRemaining(game, cleavePlayerNum) ?? 0) - 1));
             await updateActivationsMessage(game, cleavePlayerNum, client);
           }
-          const cleaveCcAttachKey = cleavePlayerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+          const cleaveCcAttachKey = ccAttachmentsKey(cleavePlayerNum);
           if (game[cleaveCcAttachKey]?.[cleaveMsgId]?.length) {
             delete game[cleaveCcAttachKey][cleaveMsgId];
             if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, cleavePlayerNum, cleaveMsgId, client);
@@ -3738,23 +3742,22 @@ export async function handleFigureheadDecision(interaction, ctx) {
           awardKillVp(game, attackerPlayerNum, fhVp);
           fhResultText += ` — **${fhLabel || 'Murne Rin'} defeated!** +${fhVp} VP`;
           if (logGameAction) await logGameAction(game, client, `**Figurehead** — ${fhLabel || 'Murne Rin'} was defeated! +${fhVp} VP`, { phase: 'ROUND', icon: 'attack' });
-          const fhDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+          const fhDcIds = getDcMessageIds(game, defenderPlayerNum);
           const fhIdx = (fhDcIds || []).indexOf(fhMsgId);
           if (fhIdx >= 0 && isGroupDefeated?.(game, defenderPlayerNum, fhIdx)) {
-            const fhActivated = defenderPlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+            const fhActivated = getActivatedDcIndices(game, defenderPlayerNum) || [];
             if (!fhActivated.includes(fhIdx)) {
-              if (defenderPlayerNum === 1) game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining ?? 0) - 1);
-              else game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining ?? 0) - 1);
+              setActivationsRemaining(game, defenderPlayerNum, Math.max(0, (getActivationsRemaining(game, defenderPlayerNum) ?? 0) - 1));
               if (updateActivationsMessage) await updateActivationsMessage(game, defenderPlayerNum, client);
             }
-            const fhCcAttachKey = defenderPlayerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+            const fhCcAttachKey = ccAttachmentsKey(defenderPlayerNum);
             if (game[fhCcAttachKey]?.[fhMsgId]?.length) {
               delete game[fhCcAttachKey][fhMsgId];
               if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, defenderPlayerNum, fhMsgId, client);
             }
           }
           await checkWinConditions?.(game, client);
-          const fhAtkerOwnerId = attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+          const fhAtkerOwnerId = getPlayerId(game, attackerPlayerNum);
           if (!game.pendingCelebration && isDcUnique?.(fhDcName)) {
             game.pendingCelebration = { attackerPlayerNum, combatThreadId: combat.combatThreadId };
             await thread.send({

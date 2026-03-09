@@ -1,3 +1,5 @@
+import { getPlayAreaId } from '../game/player-helpers.js';
+
 /**
  * Unified handler for resolveAbility() result fields.
  * Ensures ALL CC play paths (hand, DC thread, negation, space-pick, choice) handle
@@ -49,7 +51,7 @@ export async function applyAbilityResult(result, opts) {
       const meta = dcMessageMeta?.get(id);
       if (meta && buildDcEmbedAndFiles && getDcPlayAreaComponents) {
         try {
-          const chId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+          const chId = getPlayAreaId(game, meta.playerNum);
           const ch = await client.channels.fetch(chId);
           const msg = await ch.messages.fetch(id);
           const healthState = dcHealthState?.get(id) || [];
@@ -124,7 +126,7 @@ export async function applyAbilityResult(result, opts) {
       const meta = dcMessageMeta?.get(id);
       if (!meta || !buildDcEmbedAndFiles || !getDcPlayAreaComponents) continue;
       try {
-        const chId = meta.playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+        const chId = getPlayAreaId(game, meta.playerNum);
         const ch = await client.channels.fetch(chId);
         const msg = await ch.messages.fetch(id);
         const healthState = dcHealthState?.get(id) || [];

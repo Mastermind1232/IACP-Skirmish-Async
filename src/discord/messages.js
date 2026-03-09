@@ -2,6 +2,7 @@
  * Game phases, action icons, and game-log / error-log helpers.
  */
 import { EmbedBuilder, ChannelType, ThreadAutoArchiveDuration } from 'discord.js';
+import { getActivationsMessageId, getActivationsRemaining, getActivationsTotal, getPlayAreaId } from '../game/player-helpers.js';
 
 /** Orange sidebar color for phase embeds */
 export const PHASE_COLOR = 0xf39c12;
@@ -208,12 +209,12 @@ export function getActionsCounterContent(remaining, total = DC_ACTIONS_PER_ACTIV
 
 /** Call after changing game.p1ActivationsRemaining or game.p2ActivationsRemaining to refresh the Play Area header. */
 export async function updateActivationsMessage(game, playerNum, client) {
-  const msgId = playerNum === 1 ? game.p1ActivationsMessageId : game.p2ActivationsMessageId;
-  const remaining = playerNum === 1 ? game.p1ActivationsRemaining : game.p2ActivationsRemaining;
-  const total = playerNum === 1 ? game.p1ActivationsTotal : game.p2ActivationsTotal;
+  const msgId = getActivationsMessageId(game, playerNum);
+  const remaining = getActivationsRemaining(game, playerNum);
+  const total = getActivationsTotal(game, playerNum);
   if (msgId == null || total === 0) return;
   try {
-    const channelId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+    const channelId = getPlayAreaId(game, playerNum);
     const channel = await client.channels.fetch(channelId);
     const msg = await channel.messages.fetch(msgId);
     await msg.edit(getActivationsLine(remaining, total));
