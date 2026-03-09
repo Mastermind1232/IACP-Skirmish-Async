@@ -4944,7 +4944,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
     combat.promptedReactions.add(name);
     const defOwnerId = getPlayerId(game, defenderPlayerNum);
     // Tentatively remove from hand to prevent double-prompt; restored on skip
-    const handKey = defenderPlayerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const handKey = ccHandKey(defenderPlayerNum);
     const cardIdx = (game[handKey] || []).indexOf(name);
     if (cardIdx >= 0) game[handKey].splice(cardIdx, 1);
     game.pendingReaction = {
@@ -5009,7 +5009,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
     if (!game.roundFigureAbilityUsed[mastKey]) {
       game.roundFigureAbilityUsed[mastKey] = true;
       const mastPlayerNum = combat.attackerPlayerNum;
-      const mastDiscardKey = mastPlayerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+      const mastDiscardKey = ccDiscardKey(mastPlayerNum);
       const mastDiscard = game[mastDiscardKey] || [];
       const mastEligible = mastDiscard.filter((cardName) => {
         const entry = getCcEffect(cardName);
@@ -5019,7 +5019,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
         await thread.send(`**Mastery** — No eligible FORCE USER Command cards (cost ≤ 1) in your discard pile.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
       } else {
         game.pendingMastery = { gameId: game.gameId, attackerPlayerNum: mastPlayerNum, discardKey: mastDiscardKey, eligible: mastEligible, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum };
-        const mastOwnerId = mastPlayerNum === 1 ? game.player1Id : game.player2Id;
+        const mastOwnerId = getPlayerId(game, mastPlayerNum);
         const mastBtns = mastEligible.slice(0, 4).map((cardName, i) =>
           new ButtonBuilder().setCustomId(`mastery_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Primary)
         );
@@ -5037,7 +5037,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
   if (combat.surgeInterrogate) {
     const intAttackerPlayerNum = combat.attackerPlayerNum;
     const intOpponentPlayerNum = defenderPlayerNum;
-    const intOpponentHandKey = intOpponentPlayerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const intOpponentHandKey = ccHandKey(intOpponentPlayerNum);
     const intOpponentHand = game[intOpponentHandKey] || [];
     if (intOpponentHand.length === 0) {
       await thread.send(`**Interrogate** — Opponent's hand is empty; no card to choose.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
