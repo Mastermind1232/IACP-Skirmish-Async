@@ -6,6 +6,12 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration
 import { getAbilityLibrary, getDcEffects, getCcEffect as _getCcEffect } from '../data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../game/movement.js';
 import { parseCoord, normalizeCoord } from '../game/coords.js';
+import {
+  getDcList, getDcMessageIds, getPlayAreaId, getPlayerId,
+  getActivatedDcIndices, getCcHand,
+  setActivationsRemaining, setActivatedDcIndices, getActivationsRemaining, getActivatedDcIndices as getActivatedIndices,
+  ccHandKey, ccDiscardKey,
+} from '../game/player-helpers.js';
 
 /**
  * Infer the timing category for fast-forward based on the primary CC's ability entry.
@@ -76,8 +82,8 @@ function getFirstPositionedFigure(game, playerNum) {
  * "Defeated" means no figure of that DC has a position.
  */
 function findFirstActiveDcIndex(game, playerNum) {
-  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-  const activated = new Set((playerNum === 1 ? game.p1ActivatedDcIndices : game.p2ActivatedDcIndices) || []);
+  const dcList = getDcList(game, playerNum) || [];
+  const activated = new Set(getActivatedDcIndices(game, playerNum) || []);
   const poses = game.figurePositions?.[playerNum] || {};
 
   for (let i = 0; i < dcList.length; i++) {
@@ -205,10 +211,10 @@ export async function startActivationThreadForFastForward(game, playerNum, dcInd
     DC_ACTIONS_PER_ACTIVATION,
   } = ctx;
 
-  const dcList = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-  const dcMessageIds = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-  const playAreaId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  const dcList = getDcList(game, playerNum) || [];
+  const dcMessageIds = getDcMessageIds(game, playerNum) || [];
+  const playAreaId = getPlayAreaId(game, playerNum);
+  const ownerId = getPlayerId(game, playerNum);
 
   const dc = dcList[dcIndex];
   if (!dc) throw new Error(`DC not found at index ${dcIndex} for player ${playerNum}`);
@@ -246,15 +252,10 @@ export async function startActivationThreadForFastForward(game, playerNum, dcInd
   const actionsMsg = await thread.send(actionsPayload);
   game.dcActionsData[msgId].messageId = actionsMsg.id;
 
-  if (playerNum === 1) {
-    game.p1ActivationsRemaining = Math.max(0, (game.p1ActivationsRemaining || 0) - 1);
-    game.p1ActivatedDcIndices = game.p1ActivatedDcIndices || [];
-    game.p1ActivatedDcIndices.push(dcIndex);
-  } else {
-    game.p2ActivationsRemaining = Math.max(0, (game.p2ActivationsRemaining || 0) - 1);
-    game.p2ActivatedDcIndices = game.p2ActivatedDcIndices || [];
-    game.p2ActivatedDcIndices.push(dcIndex);
-  }
+  setActivationsRemaining(game, playerNum, Math.max(0, (getActivationsRemaining(game, playerNum) || 0) - 1));
+  const currentActivated = getActivatedIndices(game, playerNum) || [];
+  currentActivated.push(dcIndex);
+  setActivatedDcIndices(game, playerNum, currentActivated);
   await updateActivationsMessage(game, playerNum, client);
 
   return { thread, msgId, displayName };
@@ -267,9 +268,9 @@ export async function startActivationThreadForFastForward(game, playerNum, dcInd
 export async function startDefenderThreadForFastForward(game, defenderPlayerNum, defenderDcIndex, gameId, client, ctx) {
   const { getCcEffect } = ctx;
 
-  const dcList = defenderPlayerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-  const dcMessageIds = defenderPlayerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-  const playAreaId = defenderPlayerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+  const dcList = getDcList(game, defenderPlayerNum) || [];
+  const dcMessageIds = getDcMessageIds(game, defenderPlayerNum) || [];
+  const playAreaId = getPlayAreaId(game, defenderPlayerNum);
 
   const dc = dcList[defenderDcIndex];
   if (!dc) return null;
@@ -292,7 +293,7 @@ export async function startDefenderThreadForFastForward(game, defenderPlayerNum,
   };
 
   // Filter CC hand for defender-relevant cards
-  const hand = defenderPlayerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
+  const hand = getCcHand(game, defenderPlayerNum) || [];
   const defenderCards = hand.filter((cardName) => {
     const effect = getCcEffect(cardName);
     if (!effect) return false;
@@ -434,8 +435,8 @@ export async function handleDefenderCcPlay(interaction, ctx) {
   }
 
   const card = defenderCards[idx];
-  const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-  const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  const handKey = ccHandKey(playerNum);
+  const discardKey = ccDiscardKey(playerNum);
   const hand = game[handKey] || [];
 
   if (!hand.includes(card)) {

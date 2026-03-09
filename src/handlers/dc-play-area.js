@@ -1591,14 +1591,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         return;
       }
       // Deplete: remove card from attachments
-      const attKey = meta.playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+      const attKey = dcAttachmentsKey(meta.playerNum);
       if (game[attKey]?.[msgId]) {
         game[attKey][msgId] = game[attKey][msgId].filter(c => c !== "Smuggler's Run");
       }
       // Award 5 VP
       awardObjectiveVp(game, meta.playerNum, 5);
-      const vpKey = meta.playerNum === 1 ? 'player1VP' : 'player2VP';
-      await thread.send(`**Smuggler's Run** — Depleted! **+5 VP** (${game[vpKey].total} total).`).catch(() => {});
+      const vpK = vpKeyFn(meta.playerNum);
+      await thread.send(`**Smuggler's Run** — Depleted! **+5 VP** (${game[vpK].total} total).`).catch(() => {});
       await logGameAction(game, client, `**Smuggler's Run** — **${displayName}** depleted in opponent's deployment zone. +5 VP.`, { phase: 'ROUND', icon: 'card' });
       if (ctx.updateAttachmentMessageForDc) await ctx.updateAttachmentMessageForDc(game, meta.playerNum, msgId, client).catch(() => {});
       if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
@@ -2650,7 +2650,7 @@ export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
   // Deplete: remove card from attachments
   const meta = dcMessageMeta?.get(msgId);
   const playerNum = meta?.playerNum || 1;
-  const attKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+  const attKey = dcAttachmentsKey(playerNum);
   if (game[attKey]?.[msgId]) {
     game[attKey][msgId] = game[attKey][msgId].filter(c => c !== 'Orbital Bombardment');
   }

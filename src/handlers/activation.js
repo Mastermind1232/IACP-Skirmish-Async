@@ -142,16 +142,16 @@ export async function handlePassActivationTurn(interaction, ctx) {
     await interaction.followUp({ content: "It's not your turn to pass.", ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const myRem = turnPlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
-  const otherRem = turnPlayerId === game.player1Id ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
+  const myRem = getActivationsRemaining(game, turnPlayerNum) ?? 0;
+  const otherPlayerNum = turnPlayerNum === 1 ? 2 : 1;
+  const otherRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
   if (otherRem <= myRem) {
     await interaction.followUp({ content: `You have **${myRem}** activation${myRem !== 1 ? 's' : ''} remaining; opponent has **${otherRem}**. You can only pass when they have more.`, ephemeral: true }).catch((err) => { console.error('[discord]', err?.message ?? err); });
     return;
   }
-  const otherPlayerId = turnPlayerId === game.player1Id ? game.player2Id : game.player1Id;
-  const otherPlayerNum = otherPlayerId === game.player1Id ? 1 : 2;
+  const otherPlayerId = getPlayerId(game, otherPlayerNum);
   const round = game.currentRound || 1;
-  const turnNum = turnPlayerId === game.player1Id ? 1 : 2;
+  const turnNum = turnPlayerNum;
   const turnZone = getPlayerZoneLabel(game, turnPlayerId);
   const roundContentBefore = `<@${turnPlayerId}> (${turnZone}**Player ${turnNum}**) **Round ${round}** — Your turn to activate! You may pass back if the other player has more activations.`;
   game.currentActivationTurnPlayerId = otherPlayerId;
@@ -168,9 +168,9 @@ export async function handlePassActivationTurn(interaction, ctx) {
     try {
       const ch = await client.channels.fetch(game.generalId);
       const msg = await ch.messages.fetch(game.roundActivationMessageId);
-      const initNum = otherPlayerId === game.player1Id ? 1 : 2;
-      const newCurrentRem = otherPlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
-      const justPassedRem = turnPlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+      const initNum = otherPlayerNum;
+      const newCurrentRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
+      const justPassedRem = getActivationsRemaining(game, turnPlayerNum) ?? 0;
       const passRows = [];
       if (justPassedRem > newCurrentRem && newCurrentRem > 0) {
         passRows.push(new ActionRowBuilder().addComponents(
