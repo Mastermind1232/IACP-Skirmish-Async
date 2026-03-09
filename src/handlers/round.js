@@ -13,6 +13,7 @@ import {
   getActivationsTotal,
   ccHandKey, ccDiscardKey,
   opponentPlayerNum,
+  getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -405,7 +406,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     ? 'No Command card draw this round (Cut Lines).'
     : `P1 drew ${p1DrawCount} card${p1DrawCount !== 1 ? 's' : ''} (${p1Terminals} terminal${p1Terminals !== 1 ? 's' : ''} controlled). P2 drew ${p2DrawCount} card${p2DrawCount !== 1 ? 's' : ''} (${p2Terminals} terminal${p2Terminals !== 1 ? 's' : ''} controlled). ✓`;
   const initZone = getInitiativePlayerZoneLabel(game);
-  const initNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initNum = getInitiativePlayerNum(game);
   await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
   await sendRoundActivationPhaseMessage(game, client);
 
@@ -435,7 +436,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   if (mapId === 'chopper-base-atollon' && variant === 'a' && postKryknaPushButtons) {
     const activeKrykna = (game.npcKrykna || []).filter((k) => !k.defeated);
     if (activeKrykna.length > 0) {
-      const initNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+      const initNum = getInitiativePlayerNum(game);
       const otherNum = opponentPlayerNum(initNum);
       const queue = [];
       for (let i = 0; i < activeKrykna.length; i++) queue.push(i % 2 === 0 ? initNum : otherNum);
@@ -830,8 +831,8 @@ export async function handleEndStartOfRound(interaction, ctx) {
         .setStyle(ButtonStyle.Secondary)
     ));
   }
-  const initRem = game.initiativePlayerId === game.player1Id ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
-  const otherRem = game.initiativePlayerId === game.player1Id ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
+  const initRem = getInitiativePlayerNum(game) === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+  const otherRem = getInitiativePlayerNum(game) === 1 ? (game.p2ActivationsRemaining ?? 0) : (game.p1ActivationsRemaining ?? 0);
   if (otherRem > initRem && initRem > 0) {
     components.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -840,7 +841,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
         .setStyle(ButtonStyle.Secondary)
     ));
   }
-  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initPlayerNum = getInitiativePlayerNum(game);
   const passHint = otherRem > initRem && initRem > 0 ? ' You may pass back (opponent has more activations).' : '';
   const content = showBtn
     ? `<@${game.initiativePlayerId}> (**Player ${initPlayerNum}**) **Round ${game.currentRound}** — Your turn! All deployment groups readied. Both players: click **End R${game.currentRound} Activation Phase** when you've used all activations and any end-of-activation effects.${passHint}`

@@ -1,5 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import { getPlayerId, getCcDeck, getDcList, getSquad } from '../game/player-helpers.js';
+import { getPlayerId, getCcDeck, getDcList, getSquad, getInitiativePlayerNum } from '../game/player-helpers.js';
 import { enforceContentLimit, DISCORD_EMBED_FIELD_LIMIT } from './limits.js';
 
 /**
@@ -29,7 +29,7 @@ export function buildScorecardEmbed(game, missionBonus) {
   const bonus2 = missionBonus?.p2 || 0;
   const total1 = vp1.total + bonus1;
   const total2 = vp2.total + bonus2;
-  const p1HasInitiative = game.initiativeDetermined && game.initiativePlayerId === game.player1Id;
+  const p1HasInitiative = game.initiativeDetermined && getInitiativePlayerNum(game) === 1;
 
   // Single-line-per-stat layout: works on both desktop and mobile (no inline columns)
   const totalLabel = (bonus1 || bonus2)

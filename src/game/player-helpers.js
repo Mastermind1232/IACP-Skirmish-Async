@@ -2,6 +2,12 @@
 
 export function opponentPlayerNum(pn) { return pn === 1 ? 2 : 1; }
 
+// ── Initiative helper ───────────────────────────────────────────────────────
+
+export function getInitiativePlayerNum(game) {
+  return game.initiativePlayerId === game.player1Id ? 1 : 2;
+}
+
 // Player-number property accessors — eliminates `pn === 1 ? game.p1X : game.p2X` ternaries.
 
 // ── Getters (read-only access) ──────────────────────────────────────────────

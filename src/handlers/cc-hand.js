@@ -25,6 +25,7 @@ import {
   getDiscardThreadId,
   ccHandKey, ccDiscardKey, ccDeckKey, ccDrawnKey, ccAttachmentsKey, vpKey as vpKeyFn,
   opponentPlayerNum,
+  getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -100,7 +101,7 @@ export async function handleDeployModal(interaction, ctx) {
   const mapId = game.selectedMap?.id;
   const zones = mapId ? getDeploymentZones()[mapId] : null;
   if (zones) {
-    const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    const initiativePlayerNum = getInitiativePlayerNum(game);
     const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
     const validSpaces = (zones[playerZone] || []).map((s) => String(s).toLowerCase());
     if (validSpaces.length > 0 && !validSpaces.includes(space)) {

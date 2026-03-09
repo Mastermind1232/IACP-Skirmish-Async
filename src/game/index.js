@@ -92,4 +92,4 @@ export { filterCondition, isConditionImmune, HARMFUL_CONDITIONS, applyCondition,
 
 export { dcNameFromFigureKey, parseFigureKey, getDcEffect, isFigurelessDc, hasDepleteEffect, getCompanionDescriptionForDc } from './dc-helpers.js';
 
-export { opponentPlayerNum } from './player-helpers.js';
+export { opponentPlayerNum, getInitiativePlayerNum } from './player-helpers.js';

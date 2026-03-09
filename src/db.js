@@ -4,6 +4,7 @@
  * Falls back to file-based storage when not set (local dev).
  */
 import pg from 'pg';
+import { getPlayerId, getInitiativePlayerNum } from './game/player-helpers.js';
 
 const { Pool } = pg;
 
@@ -88,7 +89,7 @@ export async function insertCompletedGame(game) {
     const p2Squad = game.player2Squad || {};
     const mapId = game.selectedMap?.id ?? null;
     const missionId = game.selectedMission ? `${game.selectedMap?.id || ''}:${game.selectedMission.variant || 'a'}` : null;
-    const deploymentZoneWinner = game.deploymentZoneChosen ? (game.initiativePlayerId === game.player1Id ? game.player1Id : game.player2Id) : null;
+    const deploymentZoneWinner = game.deploymentZoneChosen ? getPlayerId(game, getInitiativePlayerNum(game)) : null;
     const roundCount = game.currentRound ?? null;
     await pool.query(
       `INSERT INTO completed_games (winner_id, player1_id, player2_id, player1_affiliation, player2_affiliation, player1_army_json, player2_army_json, map_id, mission_id, deployment_zone_winner, round_count)

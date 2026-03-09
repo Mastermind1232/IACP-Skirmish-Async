@@ -9,6 +9,7 @@ import {
   getPlayerId, getSquad, getDcList, getDcMessageIds, getHandChannelId,
   dcAttachmentsKey, ccDeckKey, ccHandKey,
   deployLabelsKey as _deployLabelsKey, deployMetadataKey as _deployMetadataKey,
+  getInitiativePlayerNum, opponentPlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -671,7 +672,7 @@ export async function handleDeploymentZone(interaction, ctx) {
   const zone = isRed ? 'red' : 'blue';
   const otherZone = zone === 'red' ? 'blue' : 'red';
   game.deploymentZoneChosen = zone;
-  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initiativePlayerNum = getInitiativePlayerNum(game);
   game.player1DeploymentZone = initiativePlayerNum === 1 ? zone : otherZone;
   game.player2DeploymentZone = initiativePlayerNum === 2 ? zone : otherZone;
   const zoneLabel = `[${zone.toUpperCase()}] `;
@@ -773,7 +774,7 @@ export async function handleDeploymentFig(interaction, ctx) {
   }
   const mapId = game.selectedMap?.id;
   const zones = mapId ? getDeploymentZones()[mapId] : null;
-  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initiativePlayerNum = getInitiativePlayerNum(game);
   const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
   const deployMeta = game[_deployMetadataKey(playerNum)];
   const figMeta = deployMeta?.[flatIndex];
@@ -923,7 +924,7 @@ export async function handleDeploymentOrient(interaction, ctx) {
   game.pendingDeployOrientation[`${playerNum}_${flatIndex}`] = orientation;
   const mapId = game.selectedMap?.id;
   const zones = mapId ? getDeploymentZones()[mapId] : null;
-  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initiativePlayerNum = getInitiativePlayerNum(game);
   const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
   const occupied = [];
   if (game.figurePositions) {
@@ -1012,7 +1013,7 @@ export async function handleDeployRow(interaction, ctx) {
   }
   const mapId = game.selectedMap?.id;
   const zones = mapId ? getDeploymentZones()[mapId] : null;
-  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initiativePlayerNum = getInitiativePlayerNum(game);
   const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
   const deployMeta = game[_deployMetadataKey(playerNum)];
   const figMeta = deployMeta?.[flatIndex];
@@ -1108,7 +1109,7 @@ export async function handleDeployRowBack(interaction, ctx) {
   }
   const mapId = game.selectedMap?.id;
   const zones = mapId ? getDeploymentZones()[mapId] : null;
-  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initiativePlayerNum = getInitiativePlayerNum(game);
   const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
   const deployMeta = game[_deployMetadataKey(playerNum)];
   const figMeta = deployMeta?.[flatIndex];
@@ -1207,7 +1208,7 @@ export async function handleDeployPick(interaction, ctx) {
       delete game.deploySpaceGridMessageIds[gridKey];
     }
   }
-  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initiativePlayerNum = getInitiativePlayerNum(game);
   const isInitiative = playerNum === initiativePlayerNum;
   const confirmIdsKey = isInitiative ? 'initiativeDeployedConfirmIds' : 'nonInitiativeDeployedConfirmIds';
   if (clickedMsgId) {
@@ -1418,7 +1419,7 @@ export async function handleDeploymentDone(interaction, ctx) {
     await interaction.followUp({ content: 'Use the Deployment Completed button in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initiativePlayerNum = getInitiativePlayerNum(game);
   const isInitiativeSide = (isP1Hand && initiativePlayerNum === 1) || (isP2Hand && initiativePlayerNum === 2);
   const otherZone = game.deploymentZoneChosen === 'red' ? 'blue' : 'red';
 
@@ -1452,7 +1453,7 @@ export async function handleDeploymentDone(interaction, ctx) {
       }
     }
     const nonInitiativeHandId = game.initiativePlayerId === game.player1Id ? game.p2HandId : game.p1HandId;
-    const nonInitiativePlayerNum = game.initiativePlayerId === game.player1Id ? 2 : 1;
+    const nonInitiativePlayerNum = opponentPlayerNum(getInitiativePlayerNum(game));
     const nonInitiativeSquad = getSquad(game, nonInitiativePlayerNum);
     const nonInitiativeDcList = nonInitiativeSquad?.dcList || [];
     const { labels: nonInitiativeLabels, metadata: nonInitiativeMetadata } = getDeployFigureLabels(nonInitiativeDcList);
@@ -1583,7 +1584,7 @@ export async function handleDeploymentDone(interaction, ctx) {
 
   game.currentRound = 1;
   const generalChannel = await client.channels.fetch(game.generalId);
-  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initPlayerNum = getInitiativePlayerNum(game);
   const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
   await generalChannel.send({
     content: deployContent,
@@ -1648,7 +1649,7 @@ export async function handleAutoDeploy(interaction, ctx) {
     await interaction.followUp({ content: 'Deployment zones not found.', ephemeral: true }).catch(() => {});
     return;
   }
-  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initiativePlayerNum = getInitiativePlayerNum(game);
   const playerZone = playerNum === initiativePlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
   const opponentZone = playerZone === 'red' ? 'blue' : 'red';
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };

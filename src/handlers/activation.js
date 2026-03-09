@@ -20,6 +20,7 @@ import {
   ccDeckKey,
   ccHandKey,
   opponentPlayerNum,
+  getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -105,7 +106,7 @@ export async function handleStatusPhase(interaction, ctx) {
   game.p1ActivationPhaseEnded = false;
   game.p2ActivationPhaseEnded = false;
   game.endOfRoundWhoseTurn = game.initiativePlayerId;
-  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initPlayerNum = getInitiativePlayerNum(game);
   const otherPlayerId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
   const initZone = getInitiativePlayerZoneLabel(game);
   await logGameAction(game, client, `**End of Round** — 1. Mission Rules/Effects (resolve as needed). 2. <@${game.initiativePlayerId}> (${initZone}Initiative). 3. <@${otherPlayerId}>. 4. Next phase. Initiative player: play any end-of-round effects or CCs, then click **End 'End of Round' window** in your Hand.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId, otherPlayerId] } });

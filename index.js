@@ -171,6 +171,7 @@ import {
   awardObjectiveVp,
   deductVp,
   opponentPlayerNum,
+  getInitiativePlayerNum,
 } from './src/game/index.js';
 import {
   buildScorecardEmbed,
@@ -430,7 +431,7 @@ function getEffectiveSpeed(dcName, figureKey, game, playerNum) {
 function isFigureInDeploymentZone(game, playerNum, figureKey, mapId) {
   const zoneData = getDeploymentZones()[mapId];
   if (!zoneData) return false;
-  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initPlayerNum = getInitiativePlayerNum(game);
   const zone = playerNum === initPlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
   const zoneSpaces = toLowerSet(zoneData[zone] || []);
   const pos = game.figurePositions?.[playerNum]?.[figureKey];
@@ -1667,7 +1668,7 @@ function getDeployButtonRows(gameId, playerNum, dcList, zone, figurePositions) {
 
 /** Rebuilds deploy prompt messages for a player, removing buttons for already-deployed figures. */
 async function updateDeployPromptMessages(game, playerNum, client) {
-  const isInitiative = playerNum === (game.initiativePlayerId === game.player1Id ? 1 : 2);
+  const isInitiative = playerNum === getInitiativePlayerNum(game);
   const idsKey = isInitiative ? 'initiativeDeployMessageIds' : 'nonInitiativeDeployMessageIds';
   const msgIds = game[idsKey];
   if (!msgIds?.length) return;
@@ -1719,7 +1720,7 @@ function getFiguresForRender(game) {
   if (!pos || (!pos[1] && !pos[2])) return [];
   const figures = [];
   const zoneColors = { red: '#e74c3c', blue: '#3498db' };
-  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initiativePlayerNum = getInitiativePlayerNum(game);
   const chosen = game.deploymentZoneChosen;
   if (!chosen) return figures;
   const otherZone = chosen === 'red' ? 'blue' : 'red';
@@ -1982,7 +1983,7 @@ function getCrateDeploymentVpBonus(game) {
   const allCrateCoords = Object.values(mapData?.missionB?.positions || {}).flat().filter(Boolean);
   // Apply any pushed positions tracked in game.cratePositions
   const cratePositions = allCrateCoords.map((c) => normalizeCoord(game.cratePositions?.[normalizeCoord(c)] || c));
-  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initPlayerNum = getInitiativePlayerNum(game);
   const zones = getDeploymentZones()['devaron-garrison'] || {};
   const p1Zone = initPlayerNum === 1 ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
   const p2Zone = p1Zone === 'red' ? 'blue' : 'red';
@@ -2567,7 +2568,7 @@ async function finishSetupAttachments(game, client) {
   }
   game.currentRound = 1;
   const generalChannel = await client.channels.fetch(game.generalId);
-  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initPlayerNum = getInitiativePlayerNum(game);
   const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
   await generalChannel.send({
     content: deployContent,
@@ -2680,7 +2681,7 @@ async function runDraftRandom(game, client, options = {}) {
     const zone = Math.random() < 0.5 ? 'red' : 'blue';
     const otherZone = zone === 'red' ? 'blue' : 'red';
     game.deploymentZoneChosen = zone;
-    const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    const initiativePlayerNum = getInitiativePlayerNum(game);
     game.player1DeploymentZone = initiativePlayerNum === 1 ? zone : otherZone;
     game.player2DeploymentZone = initiativePlayerNum === 2 ? zone : otherZone;
     const zoneLabel = `[${zone.toUpperCase()}] `;
@@ -2739,7 +2740,7 @@ async function runDraftRandom(game, client, options = {}) {
     }
   };
 
-  const initiativePlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initiativePlayerNum = getInitiativePlayerNum(game);
   const nonInitiativePlayerNum = opponentPlayerNum(initiativePlayerNum);
   const zone = game.deploymentZoneChosen;
   const otherZone = zone === 'red' ? 'blue' : 'red';
@@ -5367,7 +5368,7 @@ async function sendRoundActivationPhaseMessage(game, client) {
         .setStyle(ButtonStyle.Secondary)
     ));
   }
-  const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  const initPlayerNum = getInitiativePlayerNum(game);
   const initZone = getInitiativePlayerZoneLabel(game);
   const passHint = otherRem > initRem && initRem > 0 ? ' You may pass back (opponent has more activations).' : '';
   const content = showBtn
@@ -5405,7 +5406,7 @@ async function maybeShowEndActivationPhaseButton(game, client) {
         .setLabel(`End R${round} Activation Phase`)
         .setStyle(ButtonStyle.Secondary)
     );
-    const initPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+    const initPlayerNum = getInitiativePlayerNum(game);
     const initZone = getInitiativePlayerZoneLabel(game);
     await msg.edit({
       content: `<@${game.initiativePlayerId}> (${initZone}**Player ${initPlayerNum}**) **Round ${round}** — Both players have used all activations and actions. Both players: click **End R${round} Activation Phase** when done with any end-of-activation effects.`,

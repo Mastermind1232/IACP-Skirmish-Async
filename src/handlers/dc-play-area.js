@@ -16,6 +16,7 @@ import {
   getCcHand, getCcDeck, getSquad,
   ccHandKey, ccDiscardKey, ccAttachmentsKey, dcAttachmentsKey, vpKey as vpKeyFn,
   opponentPlayerNum,
+  getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -1566,7 +1567,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const zoneData = getDeploymentZones ? getDeploymentZones()[mapId] : null;
       let inOppZone = false;
       if (zoneData && pos) {
-        const initPNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+        const initPNum = getInitiativePlayerNum(game);
         const oppZoneColor = meta.playerNum === initPNum
           ? (game.deploymentZoneChosen === 'red' ? 'blue' : 'red')
           : game.deploymentZoneChosen;
