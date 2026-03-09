@@ -2,6 +2,7 @@
  * Mission rules engine: runs data-driven end-of-round (and future) effects from mission-cards.json "rules".
  * Each effect type is implemented here; mission-cards.json supplies parameters (e.g. vp: 15).
  */
+import { awardObjectiveVp } from './vp-helpers.js';
 
 function normalizeCoord(c) {
   if (c == null || typeof c !== 'string') return '';
@@ -72,10 +73,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
       if (controller) {
         const vpVal = vp;
         const pid = controller === 1 ? game.player1Id : game.player2Id;
-        const vpState = game[`player${controller}VP`] || { total: 0, kills: 0, objectives: 0 };
-        vpState.total = (vpState.total || 0) + vpVal;
-        vpState.objectives = (vpState.objectives || 0) + vpVal;
-        game[`player${controller}VP`] = vpState;
+        awardObjectiveVp(game, controller, vpVal);
         await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** for controlling **${areaName}**.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
         await checkWinConditions(game, client);
         if (game.ended) return { gameEnded: true };
@@ -135,18 +133,14 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
         else p2Vp += vp;
       }
       if (p1Vp > 0) {
-        game.player1VP = game.player1VP || { total: 0, kills: 0, objectives: 0 };
-        game.player1VP.total += p1Vp;
-        game.player1VP.objectives += p1Vp;
+        awardObjectiveVp(game, 1, p1Vp);
         const msg = vpMessage ? vpMessage.replace('{vp}', String(p1Vp)) : `mission objective`;
         await logGameAction(game, client, `<@${game.player1Id}> gained **${p1Vp} VP** — ${msg}.`, { allowedMentions: { users: [game.player1Id] }, phase: 'ROUND', icon: 'round' });
         await checkWinConditions(game, client);
         if (game.ended) return { gameEnded: true };
       }
       if (p2Vp > 0) {
-        game.player2VP = game.player2VP || { total: 0, kills: 0, objectives: 0 };
-        game.player2VP.total += p2Vp;
-        game.player2VP.objectives += p2Vp;
+        awardObjectiveVp(game, 2, p2Vp);
         const msg = vpMessage ? vpMessage.replace('{vp}', String(p2Vp)) : `mission objective`;
         await logGameAction(game, client, `<@${game.player2Id}> gained **${p2Vp} VP** — ${msg}.`, { allowedMentions: { users: [game.player2Id] }, phase: 'ROUND', icon: 'round' });
         await checkWinConditions(game, client);
@@ -163,10 +157,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
       if (controller && count > 0) {
         const vpVal = vpPerToken * count;
         const pid = controller === 1 ? game.player1Id : game.player2Id;
-        const vpState = game[`player${controller}VP`] || { total: 0, kills: 0, objectives: 0 };
-        vpState.total = (vpState.total || 0) + vpVal;
-        vpState.objectives = (vpState.objectives || 0) + vpVal;
-        game[`player${controller}VP`] = vpState;
+        awardObjectiveVp(game, controller, vpVal);
         game[tokenCountKey] = 0;
         const ctrlMsg = tokenVpMsg
           ? tokenVpMsg.replace('{vp}', String(vpVal)).replace('{count}', String(count))
@@ -198,9 +189,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
           const vpVal = vpByPlayer[pn];
           const count = vpByPlayer[pn] / vp;
           const pid = pn === 1 ? game.player1Id : game.player2Id;
-          game[`player${pn}VP`] = game[`player${pn}VP`] || { total: 0, kills: 0, objectives: 0 };
-          game[`player${pn}VP`].total += vpVal;
-          game[`player${pn}VP`].objectives += vpVal;
+          awardObjectiveVp(game, pn, vpVal);
           const msg = vpMessage
             ? vpMessage.replace('{vp}', String(vpVal)).replace('{count}', String(count))
             : `mission objective (${count} position${count !== 1 ? 's' : ''} × ${vp} VP)`;
@@ -253,9 +242,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
           const vpVal = vpByPlayer[pn];
           const count = vpByPlayer[pn] / vp;
           const pid = pn === 1 ? game.player1Id : game.player2Id;
-          game[`player${pn}VP`] = game[`player${pn}VP`] || { total: 0, kills: 0, objectives: 0 };
-          game[`player${pn}VP`].total += vpVal;
-          game[`player${pn}VP`].objectives += vpVal;
+          awardObjectiveVp(game, pn, vpVal);
           const msg = vpMessage
             ? vpMessage.replace('{vp}', String(vpVal)).replace('{count}', String(count))
             : `mission objective (${count} fluctuation${count !== 1 ? 's' : ''} controlled)`;
@@ -291,9 +278,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
           const vpVal = vpByPlayer[pn];
           const removed = strainRemovedByPlayer[pn];
           const pid = pn === 1 ? game.player1Id : game.player2Id;
-          game[`player${pn}VP`] = game[`player${pn}VP`] || { total: 0, kills: 0, objectives: 0 };
-          game[`player${pn}VP`].total += vpVal;
-          game[`player${pn}VP`].objectives += vpVal;
+          awardObjectiveVp(game, pn, vpVal);
           const msg = vpMessage
             ? vpMessage.replace('{vp}', String(vpVal)).replace('{count}', String(removed))
             : `signal markers controlled (${removed} strain removed × ${vpPerStrain} VP)`;
@@ -341,9 +326,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
           const vpVal = vpByPlayer[pn];
           const count = vpByPlayer[pn] / vpPerCrate;
           const pid = pn === 1 ? game.player1Id : game.player2Id;
-          game[`player${pn}VP`] = game[`player${pn}VP`] || { total: 0, kills: 0, objectives: 0 };
-          game[`player${pn}VP`].total += vpVal;
-          game[`player${pn}VP`].objectives += vpVal;
+          awardObjectiveVp(game, pn, vpVal);
           await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** — ${count} crate${count !== 1 ? 's' : ''} controlled (${vpPerCrate} VP each).`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
           await checkWinConditions(game, client);
           if (game.ended) return { gameEnded: true };

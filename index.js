@@ -255,6 +255,9 @@ import {
   getCompanionDescriptionForDc as _getCompanionDescriptionForDc,
   reduceHp,
   healHp,
+  awardKillVp,
+  awardObjectiveVp,
+  deductVp,
 } from './src/game/index.js';
 import {
   buildScorecardEmbed,
@@ -3286,10 +3289,7 @@ async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, source
         const effects = getDcEffects()?.[dcName];
         const figures = stats?.figures ?? 1;
         const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
-        const vpKey = `player${opponentPlayerNum}VP`;
-        game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-        game[vpKey].kills += vp;
-        game[vpKey].total += vp;
+        awardKillVp(game, opponentPlayerNum, vp);
         await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** was defeated! +${vp} VP to Player ${opponentPlayerNum}.`, { phase: 'ROUND', icon: 'attack' });
       } else {
         await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** suffered **${damage} damage** (${newHp}/${maxHp} HP remaining).`, { phase: 'ROUND', icon: 'attack' });
@@ -3326,14 +3326,11 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
     if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figKey];
     // VP goes to the opponent (the one dealing the damage)
     const opponentPlayerNum = playerNum === 1 ? 2 : 1;
-    const vpKey = `player${opponentPlayerNum}VP`;
     const stats = getDcStats(dcList[idx]?.dcName);
     const effects = getDcEffects()?.[dcList[idx]?.dcName];
     const figures = stats?.figures ?? 1;
     const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
-    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-    game[vpKey].kills += vp;
-    game[vpKey].total += vp;
+    awardKillVp(game, opponentPlayerNum, vp);
     if (thread) await thread.send(`**${sourceName}** — ${figName} was **defeated**! +${vp} VP.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
     await checkWinConditions(game, client);
   }
@@ -3400,10 +3397,7 @@ async function handleBleedResolve(interaction) {
           const effects = getDcEffects()?.[dcName];
           const figures = stats?.figures ?? 1;
           const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
-          const vpKey = opponentPlayerNum === 1 ? 'player1VP' : 'player2VP';
-          game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-          game[vpKey].kills += vp;
-          game[vpKey].total += vp;
+          awardKillVp(game, opponentPlayerNum, vp);
           await logGameAction(game, interaction.client, `🩸 **Bleeding** — **${dcName}** was defeated! +${vp} VP to P${opponentPlayerNum}`, { phase: 'ROUND', icon: 'attack' });
           if (idx >= 0 && isGroupDefeated(game, playerNum, idx)) {
             const activatedIndices = playerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
@@ -3630,10 +3624,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         resultText += ` — ${combat.target.label}: ${npc.hp}/${npc.maxHp} HP remaining.`;
         if (npc.hp <= 0) {
           npc.defeated = true;
-          const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-          game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-          game[vpKey].kills += 2;
-          game[vpKey].total += 2;
+          awardKillVp(game, attackerPlayerNum, 2);
           resultText += ` **${combat.target.label} defeated! +2 VP**`;
           // Krykna claim: track on game state for end-of-round deploy option
           if (combat.target.npcType === 'krykna') {
@@ -3937,10 +3928,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
                   const _fdAtkEffects = getDcEffects()?.[combat.attackerDcName];
                   const _fdAtkFigures = _fdAtkStats?.figures ?? 1;
                   const _fdAtkVp = (_fdAtkFigures > 1 && _fdAtkEffects?.subCost != null) ? _fdAtkEffects.subCost : (_fdAtkStats?.cost ?? 5);
-                  const _fdDefVpKey = defenderPlayerNum === 1 ? 'player1VP' : 'player2VP';
-                  game[_fdDefVpKey] = game[_fdDefVpKey] || { total: 0, kills: 0, objectives: 0 };
-                  game[_fdDefVpKey].kills += _fdAtkVp;
-                  game[_fdDefVpKey].total += _fdAtkVp;
+                  awardKillVp(game, defenderPlayerNum, _fdAtkVp);
                   await logGameAction(game, client, `**Force Deflection** — **${combat.attackerDcName}** was defeated! +${_fdAtkVp} VP to Player ${defenderPlayerNum}.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
                 }
               }
@@ -4028,9 +4016,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const { cost, subCost, figures } = combat.targetStats;
         const vp = (figures > 1 && subCost != null) ? subCost : (cost ?? 5);
         const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-        game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-        game[vpKey].kills += vp;
-        game[vpKey].total += vp;
+        awardKillVp(game, attackerPlayerNum, vp);
         // Achievement: activation kill streak (Double Kill / Triple Kill / PENTAKILL)
         if (combat.attackerMsgId) {
           game.activationKills = game.activationKills || {};
@@ -4060,11 +4046,9 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if (_priceBounty) {
           const _bountyAmt = typeof _priceBounty === 'object' ? _priceBounty.amount : _priceBounty;
           const _bountySetterNum = typeof _priceBounty === 'object' ? _priceBounty.playerNum : attackerPlayerNum;
-          const _bountyVpKey = _bountySetterNum === 1 ? 'player1VP' : 'player2VP';
-          game[_bountyVpKey] = game[_bountyVpKey] || { total: 0, kills: 0, objectives: 0 };
-          game[_bountyVpKey].total += _bountyAmt;
-          game[_bountyVpKey].objectives += _bountyAmt;
+          awardObjectiveVp(game, _bountySetterNum, _bountyAmt);
           delete game.priceBounties[combat.target.label];
+          const _bountyVpKey = _bountySetterNum === 1 ? 'player1VP' : 'player2VP';
           await logGameAction(game, client, `**Price on Their Heads** — +${_bountyAmt} VP bounty awarded to P${_bountySetterNum} (${game[_bountyVpKey].total} total).`, { phase: 'ROUND', icon: 'card' });
         }
         // Paid in Beskar: grant Block tokens when hostile is defeated within range
@@ -4086,8 +4070,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if (game.nextHostileDefeatVpBonus?.[attackerPlayerNum]) {
           const _wecData = game.nextHostileDefeatVpBonus[attackerPlayerNum];
           const _wecAmt = typeof _wecData === 'object' ? (_wecData.amount ?? 2) : _wecData;
-          game[vpKey].total += _wecAmt;
-          game[vpKey].objectives += _wecAmt;
+          awardObjectiveVp(game, attackerPlayerNum, _wecAmt);
           delete game.nextHostileDefeatVpBonus[attackerPlayerNum];
           await logGameAction(game, client, `**Worth Every Credit** — +${_wecAmt} bonus VP (${game[vpKey].total} total).`, { phase: 'ROUND', icon: 'card' });
         }
@@ -4214,10 +4197,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const _bountyDcName = _lsDcName;
           const _bountyEff = getDcEffects()?.[_bountyDcName];
           if ((_bountyEff?.passives || []).includes('Bounty')) {
+            awardObjectiveVp(game, attackerPlayerNum, 2);
             const _bountyVpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-            game[_bountyVpKey] = game[_bountyVpKey] || { total: 0, kills: 0, objectives: 0 };
-            game[_bountyVpKey].total += 2;
-            game[_bountyVpKey].objectives += 2;
             await logGameAction(game, client, `💰 **Bounty** — **${_bountyDcName}** was defeated. Opponent (P${attackerPlayerNum}) gains **2 VP** (${game[_bountyVpKey].total} total).`, { phase: 'ROUND', icon: 'card' });
           }
         }
@@ -4348,9 +4329,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const figures = blastStats?.figures ?? 1;
           const subCost = getDcEffects()[blastDcList[blastIdx]?.dcName]?.subCost;
           const vp = (figures > 1 && subCost != null) ? subCost : cost;
-          game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-          game[vpKey].kills += vp;
-          game[vpKey].total += vp;
+          awardKillVp(game, attackerPlayerNum, vp);
           // Achievement: count blast kills for activation streak
           if (combat.attackerMsgId) {
             game.activationKills = game.activationKills || {};
@@ -4687,12 +4666,9 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if (game.figurePositions?.[attackerPlayerNum]) delete game.figurePositions[attackerPlayerNum][_sdaFigKey];
         if (game.figureConditions?.[_sdaFigKey]) delete game.figureConditions[_sdaFigKey];
         const _sdaName = _sdaDcList?.[_sdaIdx]?.displayName || _sdaFigKey.replace(/-\d+-\d+$/, '');
-        const _sdaVpKey = defenderPlayerNum === 1 ? 'player1VP' : 'player2VP';
-        game[_sdaVpKey] = game[_sdaVpKey] || { total: 0, kills: 0, objectives: 0 };
         const _sdaStats = _sdaIdx >= 0 ? getDcStats(_sdaDcList[_sdaIdx]?.dcName) : null;
         const _sdaVp = _sdaStats?.cost ?? 5;
-        game[_sdaVpKey].kills += _sdaVp;
-        game[_sdaVpKey].total += _sdaVp;
+        awardKillVp(game, defenderPlayerNum, _sdaVp);
         embedRefreshMsgIds.add(_sdaMsgId);
         await logGameAction(game, client, `**${_sdaName}** defeated itself (self-sacrifice). Opponent gains **${_sdaVp} VP**.`, { phase: 'ROUND', icon: 'attack' });
         await checkWinConditions(game, client);
@@ -5471,9 +5447,7 @@ async function applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThre
       if (game.figureConditions?.[t.figureKey]) delete game.figureConditions[t.figureKey];
       const splashDcEff = getDcEffects()?.[t.figureKey.replace(/-\d+-\d+$/, '')];
       const splashVP = splashDcEff?.cost ?? 1;
-      const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-      game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-      game[vpKey].kills += splashVP; game[vpKey].total += splashVP;
+      awardKillVp(game, attackerPlayerNum, splashVP);
       lines.push(`  → **${t.label} defeated!** +${splashVP} VP`);
     }
     try {
@@ -5560,10 +5534,7 @@ async function handleFightingKnifeTarget(interaction) {
       const effects = getDcEffects()?.[dcName];
       const figures = stats?.figures ?? 1;
       const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
-      const vpKey = pending.attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-      game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-      game[vpKey].kills += vp;
-      game[vpKey].total += vp;
+      awardKillVp(game, pending.attackerPlayerNum, vp);
       await logGameAction(game, client, `**Fighting Knife** — **${target.label}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
       const dcIds = target.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
       const idx = (dcIds || []).indexOf(target.msgId);
@@ -9042,10 +9013,7 @@ client.on('interactionCreate', async (interaction) => {
         _odmGame.diplomaticMissionEvade[_odmMsgId] = true;
         await logGameAction(_odmGame, client, `**On a Diplomatic Mission** — **${_odmMeta.displayName || _odmMeta.dcName}** gains +1 Evade on defense for the rest of the round.`, { phase: 'ROUND', icon: 'card' });
       } else if (_odmChoice === 'vp') {
-        const _odmVpKey = _odmMeta.playerNum === 1 ? 'player1VP' : 'player2VP';
-        _odmGame[_odmVpKey] = _odmGame[_odmVpKey] || { total: 0, kills: 0, objectives: 0 };
-        _odmGame[_odmVpKey].total += 1;
-        _odmGame[_odmVpKey].objectives += 1;
+        awardObjectiveVp(_odmGame, _odmMeta.playerNum, 1);
         await logGameAction(_odmGame, client, `**On a Diplomatic Mission** — **${_odmMeta.displayName || _odmMeta.dcName}** gains 1 VP.`, { phase: 'ROUND', icon: 'card' });
         await checkWinConditions(_odmGame, client);
       }

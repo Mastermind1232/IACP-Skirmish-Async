@@ -8,7 +8,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards } from '../data-loader.js';
-import { reduceHp } from '../game/index.js';
+import { reduceHp, awardObjectiveVp } from '../game/index.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
@@ -1608,10 +1608,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         game[attKey][msgId] = game[attKey][msgId].filter(c => c !== "Smuggler's Run");
       }
       // Award 5 VP
+      awardObjectiveVp(game, meta.playerNum, 5);
       const vpKey = meta.playerNum === 1 ? 'player1VP' : 'player2VP';
-      game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-      game[vpKey].total += 5;
-      game[vpKey].objectives += 5;
       await thread.send(`**Smuggler's Run** — Depleted! **+5 VP** (${game[vpKey].total} total).`).catch(() => {});
       await logGameAction(game, client, `**Smuggler's Run** — **${displayName}** depleted in opponent's deployment zone. +5 VP.`, { phase: 'ROUND', icon: 'card' });
       if (ctx.updateAttachmentMessageForDc) await ctx.updateAttachmentMessageForDc(game, meta.playerNum, msgId, client).catch(() => {});

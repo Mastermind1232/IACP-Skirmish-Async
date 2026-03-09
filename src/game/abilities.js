@@ -4,6 +4,7 @@
  */
 import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapSpaces, getMapTokensData } from '../data-loader.js';
 import { parseCoord } from './coords.js';
+import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 
 /** Look up DC stats by name (handles display variants). */
 function getStatsForDc(dcName) {
@@ -1161,10 +1162,7 @@ export function resolveAbility(abilityId, context) {
       const dcName = targetFigureKey.replace(/-\d+-\d+$/, '');
       // autoDeductVp (Order Hit): deduct VP from player's total
       if (entry.autoDeductVp > 0) {
-        const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
-        game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-        game[vpKey].total = Math.max(0, game[vpKey].total - entry.autoDeductVp);
-        game[vpKey].objectives = Math.max(0, (game[vpKey].objectives || 0) - entry.autoDeductVp);
+        deductVp(game, playerNum, entry.autoDeductVp);
       }
       // grantFreeAttackToTarget (Order Hit): grant free attack + MP to chosen figure
       if (entry.grantFreeAttackToTarget) {
@@ -3701,10 +3699,8 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.vpGain === 'number' && entry.vpGain > 0) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    awardObjectiveVp(game, playerNum, entry.vpGain);
     const vpKey = playerNum === 1 ? 'player1VP' : 'player2VP';
-    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-    game[vpKey].total = (game[vpKey].total ?? 0) + entry.vpGain;
-    game[vpKey].objectives = (game[vpKey].objectives ?? 0) + entry.vpGain;
     return { applied: true, logMessage: `Gained **${entry.vpGain} VP** (total: ${game[vpKey].total}).` };
   }
 

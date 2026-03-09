@@ -19,6 +19,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects } from '../data-loader.js';
+import { awardObjectiveVp } from '../game/index.js';
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
 export async function handleSquadModal(interaction, ctx) {
@@ -920,10 +921,7 @@ export async function handleCelebrationPlay(interaction, ctx) {
   game[handKey] = hand;
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push('Celebration');
-  const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-  game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-  game[vpKey].total += 4;
-  game[vpKey].objectives = (game[vpKey].objectives || 0) + 4;
+  awardObjectiveVp(game, attackerPlayerNum, 4);
   delete game.pendingCelebration;
   await updateHandVisualMessage(game, attackerPlayerNum, client);
   await updateDiscardPileMessage(game, attackerPlayerNum, client);

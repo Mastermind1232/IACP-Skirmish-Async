@@ -6,7 +6,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
-import { reduceHp, healHp } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp } from '../game/index.js';
 
 /**
  * Check a player's hand for CC cards that match a timing trigger.
@@ -142,10 +142,7 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     const effects = getDcEffects?.()?.[dcName];
     const figures = stats?.figures ?? 1;
     const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
-    const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-    game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-    game[vpKey].kills += vp;
-    game[vpKey].total += vp;
+    awardKillVp(game, attackerPlayerNum, vp);
     if (logGameAction) {
       await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
     }
@@ -3188,20 +3185,16 @@ export async function handleCombatSurge(interaction, ctx) {
       }
       // Utinni! (Jawa Scavenger): spending this surge earns 1 VP
       if (key === 'utinni_vp_1') {
-        const _utinniVpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-        game[_utinniVpKey] = game[_utinniVpKey] || { total: 0, kills: 0, objectives: 0 };
-        game[_utinniVpKey].total += 1;
-        game[_utinniVpKey].objectives += 1;
+        awardObjectiveVp(game, attackerPlayerNum, 1);
         combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);
+        const _utinniVpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
         await thread.send(`**Utinni!** — +1 VP earned (${game[_utinniVpKey].total} total).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
         if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Utinni!** — Jawa Scavenger earned +1 VP.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
       }
       // Gain VP (Senator/Streetrat form surge): spending this surge earns N VP
       if (mod.surgeVpGain && mod.surgeVpGain > 0) {
+        awardObjectiveVp(game, attackerPlayerNum, mod.surgeVpGain);
         const _gvpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-        game[_gvpKey] = game[_gvpKey] || { total: 0, kills: 0, objectives: 0 };
-        game[_gvpKey].total += mod.surgeVpGain;
-        game[_gvpKey].objectives += mod.surgeVpGain;
         await thread.send(`**+${mod.surgeVpGain} VP** earned (${game[_gvpKey].total} total).`).catch((err) => { console.error('[discord]', err?.message ?? err); });
         if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Surge: +${mod.surgeVpGain} VP** (${game[_gvpKey].total} total).`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
       }
@@ -3542,7 +3535,6 @@ export async function handleCleaveTarget(interaction, ctx) {
   const { figureKey: cleaveFigureKey, playerNum: cleavePlayerNum } = target;
   const attackerPlayerNum = pending.attackerPlayerNum;
   const ownerId = pending.ownerId;
-  const vpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
   const cleaveMsgId = findDcMessageIdForFigure(game.gameId, cleavePlayerNum, cleaveFigureKey);
   if (cleaveMsgId) {
     const cleaveM = cleaveFigureKey.match(/-(\d+)-(\d+)$/);
@@ -3562,9 +3554,7 @@ export async function handleCleaveTarget(interaction, ctx) {
         const figures = cleaveStats?.figures ?? 1;
         const subCost = getDcEffects()[cleaveDcList[cleaveIdx]?.dcName]?.subCost;
         const vp = (figures > 1 && subCost != null) ? subCost : cost;
-        game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-        game[vpKey].kills += vp;
-        game[vpKey].total += vp;
+        awardKillVp(game, attackerPlayerNum, vp);
         await logGameAction(game, client, `Cleave: <@${ownerId}> defeated **${cleaveLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
         if (cleaveIdx >= 0 && isGroupDefeated(game, cleavePlayerNum, cleaveIdx)) {
           const activatedIndices = cleavePlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
@@ -3771,10 +3761,7 @@ export async function handleFigureheadDecision(interaction, ctx) {
           const fhEff = getDcEffects?.()?.[fhDcName];
           const fhFigures = fhStats?.figures ?? 1;
           const fhVp = (fhFigures > 1 && fhEff?.subCost != null) ? fhEff.subCost : (fhStats?.cost ?? 4);
-          const fhVpKey = attackerPlayerNum === 1 ? 'player1VP' : 'player2VP';
-          game[fhVpKey] = game[fhVpKey] || { total: 0, kills: 0, objectives: 0 };
-          game[fhVpKey].kills += fhVp;
-          game[fhVpKey].total += fhVp;
+          awardKillVp(game, attackerPlayerNum, fhVp);
           fhResultText += ` — **${fhLabel || 'Murne Rin'} defeated!** +${fhVp} VP`;
           if (logGameAction) await logGameAction(game, client, `**Figurehead** — ${fhLabel || 'Murne Rin'} was defeated! +${fhVp} VP`, { phase: 'ROUND', icon: 'attack' });
           const fhDcIds = defenderPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
