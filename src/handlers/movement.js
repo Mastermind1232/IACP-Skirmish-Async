@@ -602,7 +602,7 @@ export async function handleMovePick(interaction, ctx) {
   }
   const footprintSet = new Set(getNormalizedFootprint(newTopLeft, newSize));
   const updatedProfile = getMovementProfile(meta.dcName, figureKey, game);
-  await resolveMassivePush(game, updatedProfile, figureKey, playerNum, footprintSet, client);
+  await resolveMassivePush(game, updatedProfile, figureKey, playerNum, footprintSet, client, logGameAction);
   const newMp = mpRemaining - cost;
   moveState.mpRemaining = newMp;
   moveState.startCoord = targetInfo.topLeft;

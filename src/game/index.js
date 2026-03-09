@@ -44,6 +44,9 @@ export {
   getReachableSpaces,
   getPathCost,
   getFiguresAdjacentToTarget,
+  collectOverlappingFigures,
+  pushFigureToNearestValid,
+  resolveMassivePush,
 } from './movement.js';
 
 export {

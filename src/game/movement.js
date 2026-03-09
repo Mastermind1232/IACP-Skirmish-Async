@@ -567,3 +567,88 @@ export function getPathCost(startCoord, destCoord, mapSpaces, occupiedSet) {
   const target = cache.cells.get(normalizeCoord(destCoord));
   return target ? target.cost : Infinity;
 }
+
+/**
+ * Find figures whose footprint overlaps with the given footprint set.
+ * Returns friendly overlaps first, then enemy.
+ */
+export function collectOverlappingFigures(game, movingPlayerNum, movingFigureKey, footprint) {
+  const overlapsFriendly = [];
+  const overlapsEnemy = [];
+  for (const p of [1, 2]) {
+    const poses = game.figurePositions?.[p] || {};
+    for (const [key, coord] of Object.entries(poses)) {
+      if (key === movingFigureKey) continue;
+      const dcName = key.replace(/-\d+-\d+$/, '');
+      const size = game.figureOrientations?.[key] || getFigureSize(dcName);
+      const cells = getNormalizedFootprint(coord, size);
+      const intersects = cells.some((cell) => footprint.has(cell));
+      if (!intersects) continue;
+      const entry = { playerNum: p, figureKey: key, dcName };
+      if (p === movingPlayerNum) overlapsFriendly.push(entry);
+      else overlapsEnemy.push(entry);
+    }
+  }
+  return [...overlapsFriendly, ...overlapsEnemy];
+}
+
+/**
+ * BFS to push a figure to the nearest valid (unoccupied, non-blocked) space.
+ */
+export function pushFigureToNearestValid(game, playerNum, figureKey, forbiddenSet) {
+  const coord = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!coord) return false;
+  const dcName = figureKey.replace(/-\d+-\d+$/, '');
+  const board = getBoardStateForMovement(game, figureKey);
+  if (!board) return false;
+  const profile = getMovementProfile(dcName, figureKey, game);
+  const startTopLeft = normalizeCoord(coord);
+  const queue = [startTopLeft];
+  const visited = new Set([movementStateKey(startTopLeft, profile.size)]);
+  while (queue.length > 0) {
+    const topLeft = queue.shift();
+    const footprint = new Set(getNormalizedFootprint(topLeft, profile.size));
+    const overlapForbidden = [...footprint].some((cell) => forbiddenSet.has(cell));
+    const overlapOther = [...footprint].some((cell) => board.occupiedSet.has(cell));
+    const blocked = !profile.ignoreBlocking && [...footprint].some((cell) => board.blockingSet.has(cell));
+    if (!overlapForbidden && !overlapOther && !blocked) {
+      game.figurePositions[playerNum][figureKey] = topLeft;
+      return true;
+    }
+    const moveVectors = [
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 },
+      { dx: 0, dy: 1 },
+      { dx: 0, dy: -1 },
+    ];
+    for (const vec of moveVectors) {
+      const nextTopLeft = shiftCoord(topLeft, vec.dx, vec.dy);
+      if (!board.spacesSet.has(nextTopLeft)) continue;
+      if (board.movementBlockingSet && board.movementBlockingSet.has(edgeKey(topLeft, nextTopLeft))) continue;
+      const stateKey = movementStateKey(nextTopLeft, profile.size);
+      if (visited.has(stateKey)) continue;
+      visited.add(stateKey);
+      queue.push(nextTopLeft);
+    }
+  }
+  return false;
+}
+
+/**
+ * Handle collision resolution for massive figures that can end on occupied spaces.
+ * @param {Function} logGameAction - Discord logging function passed from caller
+ */
+export async function resolveMassivePush(game, profile, figureKey, playerNum, newFootprint, client, logGameAction) {
+  if (!profile.canEndOnOccupied) return;
+  const footprintSet = new Set(newFootprint);
+  const overlaps = collectOverlappingFigures(game, playerNum, figureKey, footprintSet);
+  for (const entry of overlaps) {
+    const success = pushFigureToNearestValid(game, entry.playerNum, entry.figureKey, footprintSet);
+    if (!success) {
+      console.warn(`Failed to push ${entry.figureKey} away from massive figure ${figureKey}`);
+    }
+  }
+  if (overlaps.length > 0) {
+    await logGameAction(game, client, `Massive figure pushed ${overlaps.length} figure(s) aside.`, { icon: 'move', phase: 'ROUND' });
+  }
+}

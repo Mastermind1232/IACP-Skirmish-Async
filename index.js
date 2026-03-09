@@ -124,6 +124,9 @@ import {
   getReachableSpaces,
   getPathCost,
   getFiguresAdjacentToTarget,
+  collectOverlappingFigures,
+  pushFigureToNearestValid,
+  resolveMassivePush,
   rollAttackDice,
   rollDefenseDice,
   rollSingleAttackDie,
@@ -253,6 +256,7 @@ import {
   getMissionRules,
   getAbilityLibrary,
   getLoadoutCards,
+  getDcStats,
 } from './src/data-loader.js';
 import { getConfig as getLoadoutConfig } from './src/game/figure-config.js';
 import { runEndOfRoundRules, runStartOfRoundRules, runNpcThugActivation, runNpcKryknaActivation } from './src/game/mission-rules.js';
@@ -739,80 +743,6 @@ async function editDistanceMessage(moveState, channel, content, components) {
   }
 }
 
-function collectOverlappingFigures(game, movingPlayerNum, movingFigureKey, footprint) {
-  const overlapsFriendly = [];
-  const overlapsEnemy = [];
-  for (const p of [1, 2]) {
-    const poses = game.figurePositions?.[p] || {};
-    for (const [key, coord] of Object.entries(poses)) {
-      if (key === movingFigureKey) continue;
-      const dcName = key.replace(/-\d+-\d+$/, '');
-      const size = game.figureOrientations?.[key] || getFigureSize(dcName);
-      const cells = getNormalizedFootprint(coord, size);
-      const intersects = cells.some((cell) => footprint.has(cell));
-      if (!intersects) continue;
-      const entry = { playerNum: p, figureKey: key, dcName };
-      if (p === movingPlayerNum) overlapsFriendly.push(entry);
-      else overlapsEnemy.push(entry);
-    }
-  }
-  return [...overlapsFriendly, ...overlapsEnemy];
-}
-
-function pushFigureToNearestValid(game, playerNum, figureKey, forbiddenSet) {
-  const coord = game.figurePositions?.[playerNum]?.[figureKey];
-  if (!coord) return false;
-  const dcName = figureKey.replace(/-\d+-\d+$/, '');
-  const board = getBoardStateForMovement(game, figureKey);
-  if (!board) return false;
-  const profile = getMovementProfile(dcName, figureKey, game);
-  const startTopLeft = normalizeCoord(coord);
-  const queue = [startTopLeft];
-  const visited = new Set([movementStateKey(startTopLeft, profile.size)]);
-  while (queue.length > 0) {
-    const topLeft = queue.shift();
-    const footprint = new Set(getNormalizedFootprint(topLeft, profile.size));
-    const overlapForbidden = [...footprint].some((cell) => forbiddenSet.has(cell));
-    const overlapOther = [...footprint].some((cell) => board.occupiedSet.has(cell));
-    const blocked = !profile.ignoreBlocking && [...footprint].some((cell) => board.blockingSet.has(cell));
-    if (!overlapForbidden && !overlapOther && !blocked) {
-      game.figurePositions[playerNum][figureKey] = topLeft;
-      return true;
-    }
-    const moveVectors = [
-      { dx: 1, dy: 0 },
-      { dx: -1, dy: 0 },
-      { dx: 0, dy: 1 },
-      { dx: 0, dy: -1 },
-    ];
-    for (const vec of moveVectors) {
-      const nextTopLeft = shiftCoord(topLeft, vec.dx, vec.dy);
-      if (!board.spacesSet.has(nextTopLeft)) continue;
-      // Check movement-blocking edges (walls, closed doors) between topLeft and nextTopLeft
-      if (board.movementBlockingSet && board.movementBlockingSet.has(edgeKey(topLeft, nextTopLeft))) continue;
-      const stateKey = movementStateKey(nextTopLeft, profile.size);
-      if (visited.has(stateKey)) continue;
-      visited.add(stateKey);
-      queue.push(nextTopLeft);
-    }
-  }
-  return false;
-}
-
-async function resolveMassivePush(game, profile, figureKey, playerNum, newFootprint, client) {
-  if (!profile.canEndOnOccupied) return;
-  const footprintSet = new Set(newFootprint);
-  const overlaps = collectOverlappingFigures(game, playerNum, figureKey, footprintSet);
-  for (const entry of overlaps) {
-    const success = pushFigureToNearestValid(game, entry.playerNum, entry.figureKey, footprintSet);
-    if (!success) {
-      console.warn(`Failed to push ${entry.figureKey} away from massive figure ${figureKey}`);
-    }
-  }
-  if (overlaps.length > 0) {
-    await logGameAction(game, client, `Massive figure pushed ${overlaps.length} figure(s) aside.`, { icon: 'move', phase: 'ROUND' });
-  }
-}
 /** Build 5x5 grid for movement tests. */
 function buildTestGrid5x5(overrides = {}) {
   const { blocked = [], difficult = [], movementBlockingEdges = [] } = overrides;
@@ -5621,48 +5551,6 @@ async function handleMissileSalvoDone(interaction) {
 const isFigurelessDc = _isFigurelessDc;
 const hasDepleteEffect = _hasDepleteEffect;
 const getCompanionDescriptionForDc = _getCompanionDescriptionForDc;
-
-function getDcStats(dcName) {
-  const effects = getDcEffects();
-  const lower = dcName?.toLowerCase?.() || '';
-  const ciKey = Object.keys(effects).find((k) => k.toLowerCase() === lower);
-  const eff =
-    effects[dcName] ||
-    (ciKey ? effects[ciKey] : null) ||
-    (typeof dcName === 'string' && !dcName.startsWith('[') ? effects[`[${dcName}]`] : null);
-  if (eff) {
-    // Auto-generate specials labels from specialAbilityIds when specials array is absent.
-    // Skip passive-auto/passive-reactive categories and IDs that need no player-facing button.
-    const PASSIVE_ONLY_IDS = new Set(['battle_meditation','cunning_han','cunning_jyn','cunning_nexu_elite','cunning_nexu_reg',
-      'distracting_han','distracting_c3po','hunker_down','full_of_rage','fury_wookiee_elite','fury_wookiee_reg',
-      'relentless_trandoshan_elite','relentless_trandoshan_reg','relentless_ig88','fifth_brother_relentless',
-      'lasat_honor_guard','shock_and_awe','flawless_execution','expertise','regenerate_bossk',
-      'sidestep_nexu_elite','sidestep_nexu_reg','ee3_carbine']);
-    let specials = eff.specials;
-    if (!specials && eff.specialAbilityIds?.length) {
-      const lib = getAbilityLibrary() || {};
-      specials = eff.specialAbilityIds
-        .filter((id) => !PASSIVE_ONLY_IDS.has(id))
-        .map((id) => {
-          const entry = lib.abilities?.[id];
-          return entry?.label || id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-        });
-    }
-    return {
-      health: eff.health ?? null,
-      figures: isFigurelessDc(dcName) ? 0 : (eff.figures ?? 1),
-      speed: eff.speed ?? null,
-      cost: eff.cost ?? null,
-      attack: eff.attack ?? null,
-      defense: eff.defense ?? null,
-      specials: specials || [],
-      specialCosts: eff.specialCosts || [],
-      passives: eff.passives || [],
-      abilityText: eff.abilityText || '',
-    };
-  }
-  return { health: null, figures: isFigurelessDc(dcName) ? 0 : 1, specials: [], specialCosts: [], passives: [], abilityText: '' };
-}
 
 function getDeckIllegalPlayCustomId(gameId, playerNum) {
   return `deck_illegal_play_${gameId}_${playerNum}`;

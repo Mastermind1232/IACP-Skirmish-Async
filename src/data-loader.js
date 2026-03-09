@@ -293,3 +293,65 @@ export function getFormCards() {
 export function getRootDir() {
   return rootDir;
 }
+
+/** Local figureless check using getDcImages (avoids circular dep with dc-helpers). */
+function _isFigurelessDc(dcName) {
+  if (!dcName || typeof dcName !== 'string') return false;
+  const n = dcName.trim();
+  if (!n) return false;
+  const images = getDcImages();
+  const path = images[n] || images[`[${n}]`] || (() => {
+    const k = Object.keys(images).find((key) => key === n || (key.startsWith('[') && key.slice(1, -1) === n));
+    return k ? images[k] : '';
+  })();
+  if (path && path.includes('dc-figures')) return false;
+  if (path && path.includes('DC Skirmish Upgrades')) return true;
+  if (/^\[.+\]$/.test(n)) return true;
+  if (images[`[${n}]`]) return true;
+  return Object.keys(images).some((k) => /^\[.+\]$/.test(k) && (k.slice(1, -1) === n || k === n));
+}
+
+/**
+ * Get normalized stats for a deployment card by name.
+ * @param {string} dcName
+ * @returns {{ health, figures, speed, cost, attack, defense, specials, specialCosts, passives, abilityText }}
+ */
+export function getDcStats(dcName) {
+  const effects = getDcEffects();
+  const lower = dcName?.toLowerCase?.() || '';
+  const ciKey = Object.keys(effects).find((k) => k.toLowerCase() === lower);
+  const eff =
+    effects[dcName] ||
+    (ciKey ? effects[ciKey] : null) ||
+    (typeof dcName === 'string' && !dcName.startsWith('[') ? effects[`[${dcName}]`] : null);
+  if (eff) {
+    const PASSIVE_ONLY_IDS = new Set(['battle_meditation','cunning_han','cunning_jyn','cunning_nexu_elite','cunning_nexu_reg',
+      'distracting_han','distracting_c3po','hunker_down','full_of_rage','fury_wookiee_elite','fury_wookiee_reg',
+      'relentless_trandoshan_elite','relentless_trandoshan_reg','relentless_ig88','fifth_brother_relentless',
+      'lasat_honor_guard','shock_and_awe','flawless_execution','expertise','regenerate_bossk',
+      'sidestep_nexu_elite','sidestep_nexu_reg','ee3_carbine']);
+    let specials = eff.specials;
+    if (!specials && eff.specialAbilityIds?.length) {
+      const lib = getAbilityLibrary() || {};
+      specials = eff.specialAbilityIds
+        .filter((id) => !PASSIVE_ONLY_IDS.has(id))
+        .map((id) => {
+          const entry = lib.abilities?.[id];
+          return entry?.label || id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        });
+    }
+    return {
+      health: eff.health ?? null,
+      figures: _isFigurelessDc(dcName) ? 0 : (eff.figures ?? 1),
+      speed: eff.speed ?? null,
+      cost: eff.cost ?? null,
+      attack: eff.attack ?? null,
+      defense: eff.defense ?? null,
+      specials: specials || [],
+      specialCosts: eff.specialCosts || [],
+      passives: eff.passives || [],
+      abilityText: eff.abilityText || '',
+    };
+  }
+  return { health: null, figures: _isFigurelessDc(dcName) ? 0 : 1, specials: [], specialCosts: [], passives: [], abilityText: '' };
+}
