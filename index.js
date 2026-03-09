@@ -55,8 +55,29 @@ import {
   pendingIllegalSquad,
   cleanupGameMaps,
 } from './src/game-state.js';
+import {
+  createPlayAreaChannels as _createPlayAreaChannels,
+  createHandThreads as _createHandThreads,
+  createGameChannels as _createGameChannels,
+  createBoardChannel as _createBoardChannel,
+  createTestGame as _createTestGame,
+  applySquadSubmission as _applySquadSubmission,
+  setupServer as _setupServer,
+} from './src/game-creation.js';
 import { rotateImage90 } from './src/dc-image-utils.js';
 import { renderMap } from './src/map-renderer.js';
+import {
+  buildBoardMapPayload as _buildBoardMapPayload,
+  buildDcEmbedAndFiles,
+  buildDiscardPileDisplayPayload,
+  buildHandDisplayPayload as _buildHandDisplayPayload,
+  getFiguresForRender,
+  buildMissionTokens,
+  getMapTokensForRender,
+  getActivationMinimapAttachment,
+  getMovementMinimapAttachment,
+  getDeploymentMapAttachment,
+} from './src/rendering.js';
 import { getHandlerKey } from './src/router.js';
 import { getHandler, getHandlerGroup } from './src/handlers/index.js';
 import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
@@ -880,189 +901,30 @@ function getHandWindowButtonRow(game, playerNum, gameId) {
   );
 }
 
-/** Build hand channel message payload: vertical list of embeds, one per CC, same thumbnail size as DC embeds in Play Area. */
+/** Build hand channel message payload (delegates to src/rendering.js, injecting local getHandWindowButtonRow). */
 function buildHandDisplayPayload(hand, deck, gameId, game = null, playerNum = 1) {
-  const files = [];
-  const embeds = [];
-
-  // Header embed
-  embeds.push(new EmbedBuilder()
-    .setTitle('Command Cards in Hand')
-    .setDescription(`**${hand.length}** cards in hand • **${deck.length}** in deck`)
-    .setColor(COLORS.DARK_EMBED));
-
-  // One embed per card (thumbnail = same size as DC embeds in Play Area)
-  for (let i = 0; i < hand.length; i++) {
-    const card = hand[i];
-    const path = getCommandCardImagePath(card);
-    const ext = path ? (path.toLowerCase().endsWith('.png') ? 'png' : 'jpg') : 'jpg';
-    const fileName = `cc-${i}-${(card || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
-    const embed = new EmbedBuilder()
-      .setTitle(card || `Card ${i + 1}`)
-      .setColor(COLORS.DARK_EMBED);
-    if (path && existsSync(path)) {
-      files.push(new AttachmentBuilder(path, { name: fileName }));
-      embed.setThumbnail(`attachment://${fileName}`);
-    }
-    embeds.push(embed);
-  }
-
-  const content = hand.length > 0
-    ? `**Hand:** ${hand.join(', ')}\n**Deck:** ${deck.length} cards remaining.`
-    : `**Hand:** (empty)\n**Deck:** ${deck.length} cards remaining.`;
-  const hasHandOrDeck = hand.length > 0 || deck.length > 0;
-  const rows = hasHandOrDeck ? [getCcActionButtons(gameId, hand, deck)] : [];
-  const windowRow = getHandWindowButtonRow(game, playerNum, gameId);
-  if (windowRow) rows.push(windowRow);
-  return {
-    content,
-    embeds,
-    files: files.length > 0 ? files : undefined,
-    components: rows,
-  };
+  return _buildHandDisplayPayload(hand, deck, gameId, game, playerNum, { getHandWindowButtonRow });
 }
 
-/** Sanitize a display name for use in Discord channel names (lowercase, alphanumeric + hyphens, max 16 chars). */
-function channelSafeName(displayName) {
-  return (displayName || 'player')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 16) || 'player';
+// createPlayAreaChannels – delegated to src/game-creation.js
+const createPlayAreaChannels = _createPlayAreaChannels;
+
+// createHandThreads – delegated to src/game-creation.js
+function createHandThreads(client, game) {
+  return _createHandThreads(client, game, { discordCatch });
 }
 
-/** Get a short channel-safe display name for a user ID. */
-async function getPlayerChannelName(guild, userId) {
-  try {
-    const member = await guild.members.fetch(userId);
-    return channelSafeName(member.displayName);
-  } catch {
-    return channelSafeName(userId.slice(-6));
-  }
-}
-
-/** Create p1 and p2 Play Area channels. */
-async function createPlayAreaChannels(guild, gameCategory, prefix, player1Id, player2Id) {
-  const p1Name = await getPlayerChannelName(guild, player1Id);
-  const p2Name = await getPlayerChannelName(guild, player2Id);
-  const playAreaPerms = [
-    { id: guild.roles.everyone.id, deny: PermissionFlagsBits.ViewChannel },
-    { id: player1Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages },
-    { id: player2Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages },
-    { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.CreatePublicThreads | PermissionFlagsBits.CreatePrivateThreads | PermissionFlagsBits.ManageThreads | PermissionFlagsBits.SendMessagesInThreads },
-  ];
-  const p1 = await guild.channels.create({
-    name: `${prefix} ${p1Name}-play-area`,
-    type: ChannelType.GuildText,
-    parent: gameCategory.id,
-    permissionOverwrites: playAreaPerms,
-  });
-  const p2 = await guild.channels.create({
-    name: `${prefix} ${p2Name}-play-area`,
-    type: ChannelType.GuildText,
-    parent: gameCategory.id,
-    permissionOverwrites: playAreaPerms,
-  });
-  return { p1PlayAreaChannel: p1, p2PlayAreaChannel: p2 };
-}
-
-/** Create private hand threads inside each player's play area channel. */
-async function createHandThreads(client, game) {
-  const p1PlayArea = await client.channels.fetch(game.p1PlayAreaId);
-  const p2PlayArea = await client.channels.fetch(game.p2PlayAreaId);
-  const p1Thread = await p1PlayArea.threads.create({
-    name: 'Your Hand',
-    autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
-    type: ChannelType.PrivateThread,
-    invitable: false,
-  });
-  await p1Thread.members.add(game.player1Id).catch(discordCatch);
-  const p2Thread = await p2PlayArea.threads.create({
-    name: 'Your Hand',
-    autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
-    type: ChannelType.PrivateThread,
-    invitable: false,
-  });
-  await p2Thread.members.add(game.player2Id).catch(discordCatch);
-  game.p1HandId = p1Thread.id;
-  game.p2HandId = p2Thread.id;
-  return { p1HandThread: p1Thread, p2HandThread: p2Thread };
-}
-
-async function createGameChannels(guild, player1Id, player2Id) {
-  // Scan for existing IA Game #XXXXX categories (active, archived, completed) so we never reuse an ID
-  await guild.channels.fetch();
-  const gameCategories = guild.channels.cache.filter(
-    (c) => c.type === ChannelType.GuildCategory && /^IA Game #(\d+)$/.test(c.name)
-  );
-  const maxId = gameCategories.reduce((max, c) => {
-    const m = c.name.match(/^IA Game #(\d+)$/);
-    const n = m ? parseInt(m[1], 10) : 0;
-    return Math.max(max, n);
-  }, 0);
-  const nextId = maxId + 1;
-  gameIdCounter = nextId + 1; // keep in sync for any future use
-  const gameId = String(nextId).padStart(5, '0');
-  const prefix = `IA${gameId}`;
-  const everyoneRole = guild.roles.everyone;
-  const botId = guild.client.user.id;
-
-  const playerPerms = [
-    { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
-    { id: player1Id, allow: PermissionFlagsBits.ViewChannel },
-    { id: player2Id, allow: PermissionFlagsBits.ViewChannel },
-    { id: botId, allow: PermissionFlagsBits.ViewChannel },
-  ];
-
-  const gamesCategory = guild.channels.cache.find(
-    (c) => c.type === ChannelType.GuildCategory && c.name === CATEGORIES.games
-  );
-  const position = gamesCategory ? gamesCategory.position + 1 : 0;
-
-  const gameCategory = await guild.channels.create({
-    name: `IA Game #${gameId}`,
-    type: ChannelType.GuildCategory,
-    permissionOverwrites: playerPerms,
-    position,
-  });
-
-  const gameLogPerms = [
-    ...playerPerms.filter((p) => p.id !== botId),
-    { id: botId, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ManageMessages },
-  ];
-  const generalChannel = await guild.channels.create({
-    name: `${prefix} Game Log`,
-    type: ChannelType.GuildText,
-    parent: gameCategory.id,
-    permissionOverwrites: gameLogPerms,
-  });
-  const chatChannel = await guild.channels.create({
-    name: `${prefix} General Chat`,
-    type: ChannelType.GuildText,
-    parent: gameCategory.id,
-    permissionOverwrites: playerPerms,
-  });
-  return { gameCategory, gameId, generalChannel, chatChannel };
-}
-
-/** Create the Map Updates channel for a game. Call AFTER play area channels so it appears last. */
-async function createBoardChannel(guild, gameCategory, prefix, player1Id, player2Id) {
-  const everyoneRole = guild.roles.everyone;
-  const botId = guild.client.user.id;
-  const boardPerms = [
-    { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
-    { id: player1Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
-    { id: player2Id, allow: PermissionFlagsBits.ViewChannel, deny: PermissionFlagsBits.SendMessages },
-    { id: botId, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ManageMessages },
-  ];
-  return await guild.channels.create({
-    name: `${prefix} Map Updates`,
-    type: ChannelType.GuildText,
-    parent: gameCategory.id,
-    permissionOverwrites: boardPerms,
+// createGameChannels – delegated to src/game-creation.js
+function createGameChannels(guild, player1Id, player2Id) {
+  return _createGameChannels(guild, player1Id, player2Id, {
+    CATEGORIES,
+    getGameIdCounter: () => gameIdCounter,
+    setGameIdCounter: (v) => { gameIdCounter = v; },
   });
 }
+
+// createBoardChannel – delegated to src/game-creation.js
+const createBoardChannel = _createBoardChannel;
 
 /**
  * Create a test game (shared by #lfg message handler and HTTP POST /testgame).
@@ -1135,112 +997,14 @@ const IMPLEMENTED_SCENARIOS = [
   'celebration', 'flurry_of_blades', 'cut_lines', 'battle_scars', 'shoot_the_messenger',
 ];
 
-async function createTestGame(client, guild, userId, scenarioId, feedbackChannel, options = {}) {
-  if (testGameCreationInProgress.has(userId)) {
-    throw new Error('A test game is already being created. Please wait.');
-  }
-  if (countActiveGamesForPlayer(userId) >= MAX_ACTIVE_GAMES_PER_PLAYER) {
-    throw new Error(`You are already in **${MAX_ACTIVE_GAMES_PER_PLAYER}** active games. Finish or leave a game before creating another.`);
-  }
-  testGameCreationInProgress.add(userId);
-  try {
-    const botId = client.user.id;
-    const p2Id = options.player2Id || botId;
-    const p2IsBot = p2Id === botId;
-    const { gameId, generalChannel, chatChannel } =
-      await createGameChannels(guild, userId, p2Id);
-    const game = {
-      gameId,
-      version: CURRENT_GAME_VERSION,
-      gameCategoryId: generalChannel.parentId,
-      player1Id: userId,
-      player2Id: p2Id,
-      generalId: generalChannel.id,
-      chatId: chatChannel?.id || null,
-      boardId: null,
-      p1HandId: null,
-      p2HandId: null,
-      p1PlayAreaId: null,
-      p2PlayAreaId: null,
-      player1Squad: null,
-      player2Squad: null,
-      player1VP: { total: 0, kills: 0, objectives: 0 },
-      player2VP: { total: 0, kills: 0, objectives: 0 },
-      isTestGame: true,
-      testP2IsBot: p2IsBot,
-      testScenario: scenarioId || undefined,
-      testScenarioPrimaryCard: scenarioId ? getScenarioPrimaryCard(scenarioId) : undefined,
-      ended: false,
-    };
-    setGame(gameId, game);
-
-    const scenarioImplemented = scenarioId && IMPLEMENTED_SCENARIOS.includes(scenarioId);
-    const p2Label = p2IsBot ? 'the bot' : `<@${p2Id}>`;
-    const mentionUsers = p2IsBot ? [userId] : [userId, p2Id];
-    const killRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`kill_game_${gameId}`).setLabel('Kill Test Game').setStyle(ButtonStyle.Danger),
-    );
-    if (scenarioImplemented) {
-      await runDraftRandom(game, client, { scenarioId });
-      const scenarioPrimaryCard = getScenarioPrimaryCard(scenarioId);
-      const ccEffectData = scenarioPrimaryCard ? getCcEffect(scenarioPrimaryCard) : null;
-      const effectText = ccEffectData?.effect || '';
-      const timingText = ccEffectData?.timing || '';
-      const costText = ccEffectData?.cost != null ? `Cost: ${ccEffectData.cost}` : '';
-      const cardDetails = [costText, timingText].filter(Boolean).join(' · ');
-      const timingInfo = scenarioPrimaryCard ? getTimingTestInfo(scenarioPrimaryCard) : null;
-      const howToTest = timingInfo?.prompt || 'Activate a DC, then play the card.';
-      const opponentNote = timingInfo?.needsOpponent ? '\n⚠️ **This card requires P2 to act.** Switch to your P2 account when instructed.' : '';
-      const testPrompt = scenarioPrimaryCard
-        ? `🧪 <@${userId}> — **Testing: ${scenarioPrimaryCard}** (scenario: \`${scenarioId}\`)\n${cardDetails ? `*${cardDetails}*\n` : ''}> *${effectText}*\n\n**How to test:** ${howToTest}${opponentNote}\nThe card is in P1's **Your Hand** thread (inside Play Area).`
-        : `🧪 <@${userId}> — **Testing scenario: \`${scenarioId}\`**`;
-      await generalChannel.send({ content: testPrompt, allowedMentions: { users: [userId] } }).catch(discordCatch);
-      await generalChannel.send({ content: `Done testing? Kill the game here:`, components: [killRow] }).catch(discordCatch);
-      const scenarioDoneText = scenarioPrimaryCard
-        ? `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. P1's **Your Hand** thread (inside Play Area) has **${scenarioPrimaryCard}**. **How to test:** ${howToTest}`
-        : `Test game **IA Game #${gameId}** ready (P1 <@${userId}> vs P2 ${p2Label})! Go to **Game Log** for Round 1. Scenario: **${scenarioId}**.`;
-      if (options.editMessageInstead) {
-        await options.editMessageInstead.edit({ content: scenarioDoneText, allowedMentions: { users: mentionUsers } }).catch(discordCatch);
-      } else {
-        await feedbackChannel.send({
-          content: scenarioDoneText,
-          allowedMentions: { users: mentionUsers },
-        }).catch(discordCatch);
-      }
-    } else {
-      const setupDesc = p2IsBot
-        ? '**Test game** — You play as P1 vs the bot as P2. Select the map below. Play Areas with **Your Hand** threads will then appear; use them to pick decks (Select Squad or Default Rebels / Scum / Imperial) for each side.'
-        : `**Test game** — <@${userId}> is P1, <@${p2Id}> is P2. Select the map below. Play Areas with **Your Hand** threads will then appear; use them to pick decks.`;
-      const setupMsg = await generalChannel.send({
-        content: `<@${userId}> — **Test game** created. You are P1, P2 is ${p2Label}. Map Selection below — Play Areas (with **Your Hand** threads) will appear after map selection.`,
-        allowedMentions: { users: mentionUsers },
-        embeds: [
-          new EmbedBuilder()
-            .setTitle('Game Setup (Test)')
-            .setDescription(setupDesc)
-            .setColor(COLORS.DARK_EMBED),
-        ],
-        components: [getGeneralSetupButtons(game)],
-      });
-      game.generalSetupMessageId = setupMsg.id;
-      await generalChannel.send({ content: `🧪 **Test Game #${gameId}** — done? Kill it here:`, components: [killRow] }).catch(discordCatch);
-      const doneText = scenarioId && !scenarioImplemented
-        ? `Scenario **${scenarioId}** is not yet implemented. Test game **IA Game #${gameId}** created with standard setup — select the map in Game Log.`
-        : `Test game **IA Game #${gameId}** is ready (P1 <@${userId}> vs P2 ${p2Label})! Select the map in Game Log — Play Areas (with **Your Hand** threads) will appear after map selection.`;
-      if (options.editMessageInstead) {
-        await options.editMessageInstead.edit({ content: doneText, allowedMentions: { users: mentionUsers } }).catch(discordCatch);
-      } else {
-        await feedbackChannel.send({
-          content: doneText,
-          allowedMentions: { users: mentionUsers },
-        }).catch(discordCatch);
-      }
-    }
-    saveGames();
-    return { gameId };
-  } finally {
-    testGameCreationInProgress.delete(userId);
-  }
+// createTestGame – delegated to src/game-creation.js
+function createTestGame(client, guild, userId, scenarioId, feedbackChannel, options = {}) {
+  return _createTestGame(client, guild, userId, scenarioId, feedbackChannel, options, {
+    testGameCreationInProgress, countActiveGamesForPlayer, MAX_ACTIVE_GAMES_PER_PLAYER,
+    createGameChannelsFn: createGameChannels, CURRENT_GAME_VERSION, setGame, getScenarioPrimaryCard,
+    IMPLEMENTED_SCENARIOS, runDraftRandom, getCcEffect, getTimingTestInfo,
+    discordCatch, COLORS, getGeneralSetupButtons, saveGames,
+  });
 }
 
 function extractGameIdFromInteraction(interaction) {
@@ -1467,211 +1231,9 @@ async function updateDeployPromptMessages(game, playerNum, client) {
   }
 }
 
-/** Convert game.figurePositions to renderMap figures format. Uses circular figure images from figure-images.json. */
-function getFiguresForRender(game) {
-  const pos = game.figurePositions;
-  if (!pos || (!pos[1] && !pos[2])) return [];
-  const figures = [];
-  const zoneColors = { red: '#e74c3c', blue: '#3498db' };
-  const initiativePlayerNum = getInitiativePlayerNum(game);
-  const chosen = game.deploymentZoneChosen;
-  if (!chosen) return figures;
-  const otherZone = chosen === 'red' ? 'blue' : 'red';
-  for (const p of [1, 2]) {
-    const zone = p === initiativePlayerNum ? chosen : otherZone;
-    const color = zoneColors[zone] || '#888';
-    const poses = pos[p] || {};
-    const dcList = getSquad(game, p)?.dcList || [];
-    const totals = {};
-    for (const d of dcList) {
-      const n = resolveDcName(d);
-      if (n && !isFigurelessDc(n)) totals[n] = (totals[n] || 0) + 1;
-    }
-    for (const [figureKey, space] of Object.entries(poses)) {
-      const dcName = dcNameFromFigureKey(figureKey);
-      const { dgIndex, figureIndex } = parseFigureKey(figureKey);
-      let figureCount = getDcStats(dcName).figures ?? 1;
-      if (figureCount <= 1 && dcName) {
-        const base = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-        const allEffects = getDcEffects();
-        const key = Object.keys(allEffects).find(
-          (k) => k.toLowerCase().startsWith(base.toLowerCase() + ' ') || k.toLowerCase() === base.toLowerCase()
-        );
-        if (key) figureCount = allEffects[key]?.figures ?? figureCount;
-      }
-      const dcCopies = totals[dcName] ?? 1;
-      let label = null;
-      if (figureCount > 1 || figureIndex > 0) {
-        label = `${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}`;
-      } else if (dcCopies > 1) {
-        label = String(dgIndex);
-      }
-      const imagePath = getFigureImagePath(dcName);
-      const baseSize = getFigureSize(dcName);
-      const figureSize = game.figureOrientations?.[figureKey] || baseSize;
-      const powerTokens = game.figurePowerTokens?.[figureKey] || [];
-      const conditions = game.figureConditions?.[figureKey] || [];
-      figures.push({
-        coord: space,
-        color,
-        imagePath: imagePath || undefined,
-        dcName,
-        figureSize,
-        label,
-        figureKey,
-        powerTokens,
-        conditions,
-      });
-    }
-  }
-  return figures;
-}
+// getFiguresForRender, buildMissionTokens, getMapTokensForRender — imported from src/rendering.js
 
-/** Build rich token array from tokenTypes + positions. Returns [{coord, label, image}]. Falls back to flat coord array with fallbackLabel. */
-function buildMissionTokens(missionData, fallbackLabel) {
-  if (!missionData) return [];
-  const tokenTypes = missionData.tokenTypes;
-  const positions = missionData.positions;
-  if (Array.isArray(tokenTypes) && positions && typeof positions === 'object') {
-    const typeMap = {};
-    for (const t of tokenTypes) typeMap[t.id] = t;
-    const result = [];
-    for (const [typeId, coords] of Object.entries(positions)) {
-      const tDef = typeMap[typeId] || {};
-      for (const coord of Array.isArray(coords) ? coords : [coords]) {
-        result.push({ coord, label: tDef.label || fallbackLabel, image: tDef.image || null });
-      }
-    }
-    return result;
-  }
-  const flat = getMissionTokenCoords(missionData);
-  return flat.map((coord) => ({ coord, label: fallbackLabel, image: null }));
-}
-
-/** Get map tokens (terminals + mission-specific + closed doors + ancillary) for renderMap. */
-function getMapTokensForRender(mapId, missionVariant, openedDoors = [], ancillaryTokens = null, tokenLabel = 'Token') {
-  const mapData = getMapTokensData()[mapId];
-  if (!mapData) return { terminals: [], missionA: [], missionB: [], doors: [], smoke: [], rubble: [], energyShield: [], device: [], napalm: [] };
-  const terminals = mapData.terminals || [];
-  const missionA = buildMissionTokens(mapData.missionA, tokenLabel);
-  const missionB = buildMissionTokens(mapData.missionB, tokenLabel);
-  const doorEdges = mapData.doors || [];
-  const openedSet = new Set((openedDoors || []).map((k) => String(k).toLowerCase()));
-  const doors = doorEdges.filter((edge) => {
-    if (!edge || edge.length < 2) return false;
-    const ek = edgeKey(edge[0], edge[1]);
-    return !openedSet.has(ek);
-  });
-  const anc = ancillaryTokens || {};
-  return {
-    terminals,
-    missionA: missionVariant === 'a' ? missionA : [],
-    missionB: missionVariant === 'b' ? missionB : [],
-    doors,
-    smoke: anc.smoke || [],
-    rubble: anc.rubble || [],
-    energyShield: anc.energyShield || [],
-    device: anc.device || [],
-    napalm: anc.napalm || [],
-  };
-}
-
-/** Returns AttachmentBuilder for activation minimap (zoomed on figure, size = speed * 1.75 cells). msgId = DC message ID. */
-async function getActivationMinimapAttachment(game, msgId) {
-  const meta = dcMessageMeta.get(msgId);
-  const map = game?.selectedMap;
-  if (!meta || !map?.id) return null;
-  const playerNum = meta.playerNum;
-  const dcName = meta.dcName;
-  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-  const poses = game.figurePositions?.[playerNum] || {};
-  let figureKey = null;
-  let pos = null;
-  for (let fi = 0; fi < 10; fi++) {
-    const fk = `${dcName}-${dgIndex}-${fi}`;
-    if (fk in poses) {
-      figureKey = fk;
-      pos = poses[fk];
-      break;
-    }
-  }
-  if (!figureKey || !pos) return null;
-  const speed = getEffectiveSpeed(dcName, figureKey, game, playerNum);
-  const size = getEffectiveFigureSize(game, figureKey, dcName);
-  const { col: tlCol, row: tlRow } = parseCoord(pos);
-  const [cols = 1, rows = 1] = String(size || '1x1').split('x').map(Number);
-  const centerCol = Math.floor(tlCol + (cols - 1) / 2);
-  const centerRow = Math.floor(tlRow + (rows - 1) / 2);
-  const halfExtent = Math.max(1, Math.ceil((speed * 1.75) / 2));
-  const cropCoords = [];
-  for (let dr = -halfExtent; dr <= halfExtent; dr++) {
-    for (let dc = -halfExtent; dc <= halfExtent; dc++) {
-      const c = colRowToCoord(centerCol + dc, centerRow + dr);
-      if (c) cropCoords.push(c);
-    }
-  }
-  if (cropCoords.length === 0) return null;
-  try {
-    const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
-    const buffer = await renderMap(map.id, {
-      figures,
-      tokens,
-      showGrid: true,
-      maxWidth: 800,
-      cropToZone: cropCoords,
-      gridStyle: 'black',
-    });
-    return new AttachmentBuilder(buffer, { name: 'activation-minimap.png' });
-  } catch (err) {
-    console.error('Activation minimap render error:', err);
-    return null;
-  }
-}
-
-/** Returns AttachmentBuilder for movement minimap (zoomed on figure, coords only on spacesAtCost). */
-async function getMovementMinimapAttachment(game, msgId, figureKey, spacesAtCost) {
-  const meta = dcMessageMeta.get(msgId);
-  const map = game?.selectedMap;
-  if (!meta || !map?.id || !spacesAtCost?.length) return null;
-  const playerNum = meta.playerNum;
-  const pos = game.figurePositions?.[playerNum]?.[figureKey];
-  if (!pos) return null;
-  const dcName = dcNameFromFigureKey(figureKey);
-  const speed = getEffectiveSpeed(dcName, figureKey, game, playerNum);
-  const size = getEffectiveFigureSize(game, figureKey, dcName);
-  const { col: tlCol, row: tlRow } = parseCoord(pos);
-  const [cols = 1, rows = 1] = String(size || '1x1').split('x').map(Number);
-  const centerCol = Math.floor(tlCol + (cols - 1) / 2);
-  const centerRow = Math.floor(tlRow + (rows - 1) / 2);
-  const halfExtent = Math.max(1, Math.ceil((speed * 2.5) / 2));
-  const cropCoords = [];
-  for (let dr = -halfExtent; dr <= halfExtent; dr++) {
-    for (let dc = -halfExtent; dc <= halfExtent; dc++) {
-      const c = colRowToCoord(centerCol + dc, centerRow + dr);
-      if (c) cropCoords.push(c);
-    }
-  }
-  if (cropCoords.length === 0) return null;
-  const labelCoords = spacesAtCost.map((s) => String(s).toLowerCase());
-  try {
-    const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
-    const buffer = await renderMap(map.id, {
-      figures,
-      tokens,
-      showGrid: true,
-      maxWidth: 800,
-      cropToZone: cropCoords,
-      gridStyle: 'black',
-      showGridOnlyOnCoords: labelCoords,
-    });
-    return new AttachmentBuilder(buffer, { name: 'move-destinations.png' });
-  } catch (err) {
-    console.error('Movement minimap render error:', err);
-    return null;
-  }
-}
+// getActivationMinimapAttachment, getMovementMinimapAttachment — imported from src/rendering.js
 
 /** Returns AttachmentBuilder for CC/DC space choice (zoomed to validSpaces, labels on those coords). */
 async function getMapAttachmentForSpaces(game, validSpaces) {
@@ -1697,34 +1259,7 @@ async function getMapAttachmentForSpaces(game, validSpaces) {
   }
 }
 
-/** Returns AttachmentBuilder for deployment zone map (zoomed, black coords). zone = 'red' | 'blue'. */
-async function getDeploymentMapAttachment(game, zone) {
-  const map = game?.selectedMap;
-  if (!map?.id) return null;
-  try {
-    const figures = getFiguresForRender(game);
-    const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
-    const zoneSpaces = zone && getDeploymentZones()[map.id]?.[zone] ? getDeploymentZones()[map.id][zone] : null;
-    const occupiedSet = toLowerSet(getOccupiedSpacesForMovement(game) || []);
-    const validLabelCoords =
-      zoneSpaces && zoneSpaces.length > 0
-        ? zoneSpaces.filter((c) => !occupiedSet.has(String(c).toLowerCase()))
-        : null;
-    const buffer = await renderMap(map.id, {
-      figures,
-      tokens,
-      showGrid: true,
-      maxWidth: 900,
-      cropToZone: zoneSpaces && zoneSpaces.length > 0 ? zoneSpaces : null,
-      gridStyle: 'black',
-      showGridOnlyOnCoords: validLabelCoords && validLabelCoords.length > 0 ? validLabelCoords : null,
-    });
-    return new AttachmentBuilder(buffer, { name: 'deployment-zone.png' });
-  } catch (err) {
-    console.error('Deployment map render error:', err);
-    return null;
-  }
-}
+// getDeploymentMapAttachment — imported from src/rendering.js
 
 /**
  * Compute persistent VP bonus from crates in deployment zones (Devaron Garrison B).
@@ -2108,78 +1643,9 @@ async function refreshAllGameComponents(game, client) {
   }
 }
 
-/** Returns { content, files?, embeds?, components } for posting the game map. Includes Scorecard embed. */
+/** Returns { content, files?, embeds?, components } for posting the game map. Delegates to src/rendering.js with local deps injected. */
 async function buildBoardMapPayload(gameId, map, game) {
-  const components = getBoardButtons(gameId, { game });
-  const embeds = game ? [buildScorecardEmbed(game, getMissionVpBonus(game))] : [];
-  const figures = game ? getFiguresForRender(game) : [];
-  const tokens = getMapTokensForRender(map.id, game?.selectedMission?.variant, game?.openedDoors, game?.ancillaryTokens, game?.selectedMission?.tokenLabel || 'Token');
-  const hasFigures = figures.length > 0;
-  const hasAncillary = (tokens.smoke?.length || 0) + (tokens.rubble?.length || 0) + (tokens.energyShield?.length || 0) + (tokens.device?.length || 0) + (tokens.napalm?.length || 0) > 0;
-  const hasTokens = tokens.terminals?.length > 0 || tokens.missionA?.length > 0 || tokens.missionB?.length > 0 || tokens.doors?.length > 0 || hasAncillary;
-  const resolvedMapPath = map.imagePath ? resolveAssetPath(map.imagePath, 'maps') : null;
-  const imagePath = resolvedMapPath ? join(rootDir, resolvedMapPath) : null;
-  const pdfPath = join(rootDir, 'data', 'map-pdfs', `${map.id}.pdf`);
-
-  const allowedMentions = game ? { users: [...new Set([game.player1Id, game.player2Id])] } : undefined;
-  // Player labels: Discord names over each player's deployment zone
-  const playerLabels = [];
-  if (game?.deploymentZoneChosen && game?.player1Id && game?.player2Id) {
-    const zoneData = getDeploymentZones()[map.id] || {};
-    const initZone = game.deploymentZoneChosen;
-    const otherZone = initZone === 'red' ? 'blue' : 'red';
-    const p1IsInit = game.player1Id === game.initiativePlayerId;
-    const p1ZoneCells = zoneData[p1IsInit ? initZone : otherZone] || [];
-    const p2ZoneCells = zoneData[p1IsInit ? otherZone : initZone] || [];
-    const p1User = client.users.cache.get(game.player1Id);
-    const p2User = client.users.cache.get(game.player2Id);
-    const p1Name = p1User?.globalName || p1User?.username || 'P1';
-    const p2Name = p2User?.globalName || p2User?.username || 'P2';
-    if (p1ZoneCells.length > 0) playerLabels.push({ label: p1Name, zone: p1ZoneCells });
-    if (p2ZoneCells.length > 0) playerLabels.push({ label: p2Name, zone: p2ZoneCells });
-  }
-
-  if ((hasFigures || hasTokens) && imagePath && existsSync(imagePath)) {
-    try {
-      const buffer = await renderMap(map.id, { figures, tokens, showGrid: false, maxWidth: 1200, playerLabels });
-      return {
-        content: `**Game map: ${map.name}** — Refresh to update figure positions.`,
-        files: [new AttachmentBuilder(buffer, { name: 'map-with-figures.png' })],
-        embeds,
-        components,
-        allowedMentions,
-      };
-    } catch (err) {
-      console.error('Map render error:', err);
-    }
-  }
-  if (existsSync(pdfPath)) {
-    return {
-      content: `**Game map: ${map.name}** (high-res PDF)`,
-      files: [new AttachmentBuilder(pdfPath, { name: `${map.id}.pdf` })],
-      embeds,
-      components,
-      allowedMentions,
-    };
-  }
-  if (imagePath && existsSync(imagePath)) {
-    return {
-      content: `**Game map: ${map.name}** *(Add \`data/map-pdfs/${map.id}.pdf\` for high-res PDF)*`,
-      files: [
-        new AttachmentBuilder(imagePath, { name: `map.${(map.imagePath || '').split('.').pop() || 'gif'}` }),
-      ],
-      embeds,
-      components,
-      allowedMentions,
-    };
-  }
-  return {
-    content: `**Game map: ${map.name}** — Add high-res PDF at \`data/map-pdfs/${map.id}.pdf\` to display it here.`,
-    files: undefined,
-    embeds,
-    components,
-    allowedMentions,
-  };
+  return _buildBoardMapPayload(gameId, map, game, client, { getMissionVpBonus });
 }
 
 /** Delete setup messages from Game Log when Round 1 begins. */
@@ -4870,89 +4336,9 @@ function getNicknamesForDcMessage(game, meta) {
   return hasAny ? out : undefined;
 }
 
-async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, conditionsByFigure, dcAttachments = [], tokensByFigure = null, actionsData = null, nicknamesByFigure = null) {
-  const status = exhausted ? 'EXHAUSTED' : 'READIED';
-  const color = exhausted ? COLORS.RED : COLORS.GREEN; // red : green
-  const figureless = isFigurelessDc(dcName);
-  const dgIndex = displayName.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-  const stats = getDcStats(dcName);
-  const figures = stats.figures ?? 1;
-  const variant = dcName?.includes('(Elite)') ? 'Elite' : dcName?.includes('(Regular)') ? 'Regular' : null;
-  const healthSection = figureless ? null : formatHealthSection(Number(dgIndex), healthState, conditionsByFigure, tokensByFigure, nicknamesByFigure);
-  const actionsLine = (actionsData != null && exhausted) ? getActionsCounterContent(actionsData.remaining, actionsData.total) : null;
-  const lines = figureless
-    ? [actionsLine, variant ? `**Variant:** ${variant}` : null].filter(Boolean)
-    : [
-        actionsLine,
-        `**Figures:** ${figures}`,
-        variant ? `**Variant:** ${variant}` : null,
-        '',
-        healthSection,
-      ].filter(Boolean);
-  const embed = new EmbedBuilder()
-    .setTitle(`${status} — ${displayName}`)
-    .setDescription(lines.length ? lines.join('\n') : '\u200b')
-    .setColor(color);
+// buildDcEmbedAndFiles — imported from src/rendering.js
 
-  let files = [];
-  // Check if any attached skirmish upgrade overrides the card image
-  const baseDcForOverride = (dcName || '').replace(/\s*\[.*\]\s*$/, '').trim();
-  const upgradeMap = UPGRADE_IMAGE_OVERRIDES[baseDcForOverride];
-  let imagePath = getDcImagePath(dcName?.trim());
-  if (upgradeMap && dcAttachments?.length) {
-    for (const attachName of dcAttachments) {
-      if (upgradeMap[attachName]) { imagePath = upgradeMap[attachName]; break; }
-    }
-  }
-  if (imagePath) {
-    const fullPath = join(rootDir, imagePath);
-    if (existsSync(fullPath)) {
-      const ext = imagePath.split('.').pop() || 'png';
-      const attachName = `dc-card.${ext}`;
-      files.push(new AttachmentBuilder(fullPath, { name: attachName }));
-      embed.setImage(`attachment://${attachName}`);
-    }
-  }
-  return { embed, files };
-}
-
-/** Build discard pile display for thread (embeds with card images, like hand view). Returns array of { embeds, files } for chunked sends. */
-function buildDiscardPileDisplayPayload(discard) {
-  const cardData = [];
-  for (let i = 0; i < discard.length; i++) {
-    const card = discard[i];
-    const path = getCommandCardImagePath(card);
-    const ext = path ? (path.toLowerCase().endsWith('.png') ? 'png' : 'jpg') : 'jpg';
-    const fileName = `cc-discard-${i}-${(card || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
-    const embed = new EmbedBuilder()
-      .setTitle(card || `Card ${i + 1}`)
-      .setColor(COLORS.DARK_EMBED);
-    let file = null;
-    if (path && existsSync(path)) {
-      file = new AttachmentBuilder(path, { name: fileName });
-      embed.setThumbnail(`attachment://${fileName}`);
-    }
-    cardData.push({ embed, file });
-  }
-  const header = new EmbedBuilder()
-    .setTitle('Command Cards in Discard Pile')
-    .setDescription(`**${discard.length}** cards discarded`)
-    .setColor(COLORS.DARK_EMBED);
-  const chunks = [];
-  let embeds = [header];
-  let files = [];
-  for (let i = 0; i < cardData.length; i++) {
-    if (embeds.length >= EMBEDS_PER_MESSAGE) {
-      chunks.push({ embeds, files: files.length > 0 ? files : undefined });
-      embeds = [];
-      files = [];
-    }
-    embeds.push(cardData[i].embed);
-    if (cardData[i].file) files.push(cardData[i].file);
-  }
-  if (embeds.length > 0) chunks.push({ embeds, files: files.length > 0 ? files : undefined });
-  return chunks;
-}
+// buildDiscardPileDisplayPayload — imported from src/rendering.js
 
 /** Update both Hand channel messages (for window buttons). Call when entering/exiting Start or End of Round window. */
 async function updateHandChannelMessages(game, client) {
@@ -5158,115 +4544,18 @@ async function populatePlayAreas(game, client) {
 
 }
 
-async function applySquadSubmission(game, isP1, squad, client) {
-  if (isP1) game.player1Squad = squad;
-  else game.player2Squad = squad;
-  const playerId = isP1 ? game.player1Id : game.player2Id;
-  const playerNum = isP1 ? 1 : 2;
-  await logGameAction(game, client, `<@${playerId}> submitted squad **${squad.name || 'Unnamed'}** (${squad.dcCount ?? 0} DCs, ${squad.ccCount ?? 0} CCs)`, { allowedMentions: { users: [playerId] }, phase: 'SETUP', icon: 'squad' });
-  const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
-  const handChannel = await client.channels.fetch(handChannelId);
-  const handMessages = await handChannel.messages.fetch({ limit: 10 });
-  const botMsg = handMessages.find((m) => m.author.bot && m.components.length > 0);
-  if (botMsg) {
-    await botMsg.edit({
-      embeds: [getHandTooltipEmbed(game, isP1 ? 1 : 2, squad)],
-      components: [],
-    });
-  }
-  const generalChannel = await client.channels.fetch(game.generalId);
-  const bothReady = game.player1Squad && game.player2Squad && !game.bothReadyPosted;
-  if (bothReady) {
-    game.bothReadyPosted = true;
-    try {
-      if (!game.p1PlayAreaId || !game.p2PlayAreaId) {
-        const guild = generalChannel.guild;
-        const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
-        const prefix = `IA${game.gameId}`;
-        const { p1PlayAreaChannel, p2PlayAreaChannel } = await createPlayAreaChannels(
-          guild, gameCategory, prefix, game.player1Id, game.player2Id
-        );
-        game.p1PlayAreaId = p1PlayAreaChannel.id;
-        game.p2PlayAreaId = p2PlayAreaChannel.id;
-      }
-      // Map Updates channel created AFTER play areas so it appears last
-      if (!game.boardId) {
-        try {
-          const guild = generalChannel.guild;
-          const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
-          const prefix = `IA${game.gameId}`;
-          const boardChannel = await createBoardChannel(guild, gameCategory, prefix, game.player1Id, game.player2Id);
-          game.boardId = boardChannel.id;
-          if (game.selectedMap) {
-            const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
-            await boardChannel.send(payload).catch(discordCatch);
-          }
-        } catch (err) {
-          console.error('Failed to create Map Updates channel:', err);
-        }
-      }
-      await populatePlayAreas(game, client);
-    } catch (err) {
-      console.error('Failed to create/populate Play Areas:', err);
-    }
-    const bothReadyMsg = await generalChannel.send({
-      content: `<@${game.player1Id}> <@${game.player2Id}> — Both squads are ready! Determine initiative below.`,
-      allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
-      embeds: [
-        new EmbedBuilder()
-          .setTitle('Both Squads Ready')
-          .setDescription(
-            `**Player 1:** ${game.player1Squad.name || 'Unnamed'} (${game.player1Squad.dcCount} DCs, ${game.player1Squad.ccCount} CCs)\n` +
-              `**Player 2:** ${game.player2Squad.name || 'Unnamed'} (${game.player2Squad.dcCount} DCs, ${game.player2Squad.ccCount} CCs)\n\n` +
-              'Play Area channels have been populated with one thread per Deployment Card. Next: Determine Initiative.'
-          )
-          .setColor(COLORS.GREEN),
-      ],
-      components: [getDetermineInitiativeButtons(game)],
-    });
-    game.bothReadyMessageId = bothReadyMsg.id;
-  }
-  saveGames();
+// applySquadSubmission – delegated to src/game-creation.js
+function applySquadSubmission(game, isP1, squad, client) {
+  return _applySquadSubmission(game, isP1, squad, client, {
+    logGameAction, getHandTooltipEmbed, createPlayAreaChannelsFn: createPlayAreaChannels,
+    createBoardChannelFn: createBoardChannel, buildBoardMapPayload, discordCatch,
+    populatePlayAreas, COLORS, getDetermineInitiativeButtons, saveGames,
+  });
 }
 
-async function setupServer(guild) {
-  const categories = {};
-  for (const [key, name] of Object.entries(CATEGORIES)) {
-    const existing = guild.channels.cache.find(
-      (c) => c.type === ChannelType.GuildCategory && c.name === name
-    );
-    categories[key] =
-      existing ||
-      (await guild.channels.create({
-        name,
-        type: ChannelType.GuildCategory,
-      }));
-  }
-
-  let forumChannel = null;
-  for (const [key, config] of Object.entries(CHANNELS)) {
-    const parent = categories[config.parent];
-    const existing = guild.channels.cache.find(
-      (c) => c.parentId === parent.id && c.name === config.name
-    );
-    if (!existing) {
-      const created = await guild.channels.create({
-        name: config.name,
-        type: config.type,
-        parent: parent.id,
-        ...(config.type === ChannelType.GuildForum && config.name === 'new-games' && { availableTags: GAME_TAGS }),
-      });
-      if (config.type === ChannelType.GuildForum && config.name === 'new-games') forumChannel = created;
-    } else if (config.type === ChannelType.GuildForum && config.name === 'new-games') {
-      forumChannel = existing;
-    }
-  }
-
-  if (forumChannel) {
-    await forumChannel.setAvailableTags(GAME_TAGS);
-  }
-
-  return 'Server structure created: General, LFG (with #lfg chat + #new-games Forum with tags: Slow, Fast, Hyperspeed, Ranked), Games, Archived Games, Bot/Admin.';
+// setupServer – delegated to src/game-creation.js
+function setupServer(guild) {
+  return _setupServer(guild, { CATEGORIES, CHANNELS, GAME_TAGS });
 }
 
 client.once('ready', async () => {
