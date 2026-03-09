@@ -1,6 +1,6 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { opponentPlayerNum } from '../game/player-helpers.js';
-import { requireGame } from '../utils/guards.js';
+import { requireGame, requirePlayer } from '../utils/guards.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -15,17 +15,16 @@ export async function handleToughLuck(interaction, ctx) {
   // Tough Luck: remove a rerolled die or skip, then continue reroll flow
   const _tlParts = interaction.customId.split('_');
   const _tlGameId = _tlParts[3];
-  const _tlGame = getGame(_tlGameId);
-  if (!_tlGame?.pendingToughLuck) { await interaction.followUp({ content: 'No pending Tough Luck.', ephemeral: true }).catch(() => {}); return; }
+  const _tlGame = await requireGame(interaction, getGame, _tlGameId, { silent: true });
+  if (!_tlGame) return;
+  if (!_tlGame.pendingToughLuck) { await interaction.followUp({ content: 'No pending Tough Luck.', ephemeral: true }).catch(() => {}); return; }
   const _tlData = _tlGame.pendingToughLuck;
   const _tlCombat = _tlGame.pendingCombat;
   const _tlAtk = _tlCombat?.attackerPlayerNum;
   const _tlDef = opponentPlayerNum(_tlAtk);
   // TL player is the one who set toughLuckPlayerNum
   const _tlResponder = _tlGame.toughLuckPlayerNum;
-  if (!canActAsPlayer(_tlGame, interaction.user.id, _tlResponder)) {
-    await interaction.followUp({ content: 'Only the Tough Luck player may respond.', ephemeral: true }).catch(() => {}); return;
-  }
+  if (!await requirePlayer(interaction, _tlGame, interaction.user.id, _tlResponder, canActAsPlayer, 'Only the Tough Luck player may respond.')) return;
   if (buttonKey === 'tough_luck_remove_') {
     const _tlDieIdx = parseInt(_tlParts[4], 10);
     if (_tlData.side === 'atk' && _tlCombat?.attackDiceResults?.[_tlDieIdx]) {
@@ -81,9 +80,7 @@ export async function handleThereIsNoTry(interaction, ctx) {
   if (!_tintGame) return;
   const _tintCombat = _tintGame.pendingCombat;
   const _tintDefNum = _tintCombat?.defenderPlayerNum ?? opponentPlayerNum(_tintCombat?.attackerPlayerNum);
-  if (!canActAsPlayer(_tintGame, interaction.user.id, _tintDefNum)) {
-    await interaction.followUp({ content: 'Only the defender may respond.', ephemeral: true }).catch(() => {}); return;
-  }
+  if (!await requirePlayer(interaction, _tintGame, interaction.user.id, _tintDefNum, canActAsPlayer, 'Only the defender may respond.')) return;
   if (!_tintGame.pendingThereIsNoTry && _tintType !== 'skip') {
     await interaction.followUp({ content: 'No pending There Is No Try.', ephemeral: true }).catch(() => {}); return;
   }
@@ -170,9 +167,7 @@ export async function handleVetInstincts(interaction, ctx) {
   // Determine phase: block/evade = defense; hit/surge = attack; skip depends on which phase is pending
   const _viIsDefPhase = _viChoice === 'block' || _viChoice === 'evade' || (_viChoice === 'skip' && _viCombat.vetInstinctsAttackApplied);
   const _viExpectedPlayer = _viIsDefPhase ? _viDef : _viAtk;
-  if (!canActAsPlayer(_viGame, interaction.user.id, _viExpectedPlayer)) {
-    await interaction.followUp({ content: `Only P${_viExpectedPlayer} may respond to Veteran Instincts.`, ephemeral: true }).catch(() => {}); return;
-  }
+  if (!await requirePlayer(interaction, _viGame, interaction.user.id, _viExpectedPlayer, canActAsPlayer, `Only P${_viExpectedPlayer} may respond to Veteran Instincts.`)) return;
   const _viThread = await client.channels.fetch(_viCombat.combatThreadId).catch(() => null);
   if (_viChoice === 'hit') {
     _viCombat.attackRoll = { ..._viCombat.attackRoll, dmg: (_viCombat.attackRoll?.dmg || 0) + 1 };
@@ -244,9 +239,7 @@ export async function handleHunterProtocol(interaction, ctx) {
   const _hpCombat = _hpGame.pendingCombat;
   if (!_hpCombat || !_hpGame.pendingHunterProtocol) { await interaction.followUp({ content: 'No pending Hunter Protocol.', ephemeral: true }).catch(() => {}); return; }
   const _hpAtk = _hpCombat.attackerPlayerNum;
-  if (!canActAsPlayer(_hpGame, interaction.user.id, _hpAtk)) {
-    await interaction.followUp({ content: 'Only the attacker may respond to Hunter Protocol.', ephemeral: true }).catch(() => {}); return;
-  }
+  if (!await requirePlayer(interaction, _hpGame, interaction.user.id, _hpAtk, canActAsPlayer, 'Only the attacker may respond to Hunter Protocol.')) return;
   const _hpThread = await client.channels.fetch(_hpCombat.combatThreadId).catch(() => null);
   const { key: _hpKey, cost: _hpCost } = _hpGame.pendingHunterProtocol;
   _hpGame.pendingHunterProtocol = null;

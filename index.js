@@ -63,6 +63,7 @@ import { buildContext } from './src/context-factory.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
 import { getCommandCardImagePath, getDcImagePath, getConditionCardPath, getFigureImagePath, resolveAssetPath, resolveDcImagePath, resolveMissionCardImagePath, UPGRADE_IMAGE_OVERRIDES } from './src/asset-paths.js';
 import { canActAsPlayer } from './src/utils/can-act-as-player.js';
+import { requirePlayer } from './src/utils/guards.js';
 import { MAX_ACTIVE_GAMES_PER_PLAYER, PENDING_ILLEGAL_TTL_MS, MAX_UNDO_DEPTH } from './src/constants.js';
 import { withGameLock, cleanupGameLock } from './src/game/action-queue.js';
 import {
@@ -4865,10 +4866,7 @@ async function handleSidewinderApply(interaction) {
   const figureIndex = parseInt(figIndexStr, 10);
   const meta = dcMessageMeta.get(attackerMsgId);
   if (!meta) return;
-  if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.followUp({ content: 'Only the attacker can use Sidewinder.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the attacker can use Sidewinder.')) return;
   const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
   const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
   const swKey = figureKey + '_sidewinder';
@@ -4915,10 +4913,7 @@ async function handleBoltslingerTarget(interaction) {
   const game = getGame(gameId);
   if (!game?.pendingBoltslinger) return;
   const { attackerPlayerNum, combatThreadId, targets } = game.pendingBoltslinger;
-  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the attacker can use Boltslinger.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the attacker can use Boltslinger.')) return;
   const target = targets[parseInt(idxStr, 10)];
   if (!target) return;
   await interaction.deferUpdate().catch(discordCatch);
@@ -5012,10 +5007,7 @@ async function handleIndiscriminateFireDie(interaction) {
   const game = getGame(gameId);
   if (!game?.pendingIndiscriminateFire) return;
   const { attackerPlayerNum, combatThreadId, targets, availableDice } = game.pendingIndiscriminateFire;
-  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the attacker can choose the Indiscriminate Fire die.', ephemeral: true }).catch(() => {});
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the attacker can choose the Indiscriminate Fire die.')) return;
   const die = availableDice[parseInt(idxStr, 10)];
   if (!die) return;
   await interaction.deferUpdate().catch(discordCatch);
@@ -5045,10 +5037,7 @@ async function handleFightingKnifeTarget(interaction) {
   const game = getGame(gameId);
   if (!game?.pendingFightingKnife) return;
   const pending = game.pendingFightingKnife;
-  if (!canActAsPlayer(game, interaction.user.id, pending.attackerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the attacker can pick the Fighting Knife target.', ephemeral: true }).catch(() => {});
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only the attacker can pick the Fighting Knife target.')) return;
   const target = pending.targets[parseInt(idxStr, 10)];
   if (!target) return;
   await interaction.deferUpdate().catch(discordCatch);
@@ -5109,10 +5098,7 @@ async function handleConcussiveBoltPush(interaction) {
   const game = getGame(gameId);
   if (!game?.pendingConcussiveBolt) return;
   const pending = game.pendingConcussiveBolt;
-  if (!canActAsPlayer(game, interaction.user.id, pending.attackerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the attacker can choose the Concussive Bolt push direction.', ephemeral: true }).catch(() => {});
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only the attacker can choose the Concussive Bolt push direction.')) return;
   if (!pending.adjSpaces.includes(space)) {
     await interaction.followUp({ content: 'Invalid push destination.', ephemeral: true }).catch(() => {});
     return;
@@ -5200,10 +5186,7 @@ async function handleSpreadThePainFigPick(interaction) {
   const game = getGame(gameId);
   if (!game?.pendingSpreadThePain) return;
   const pending = game.pendingSpreadThePain;
-  if (!canActAsPlayer(game, interaction.user.id, pending.attackerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the attacker can choose the Spread the Pain target.', ephemeral: true }).catch(() => {});
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only the attacker can choose the Spread the Pain target.')) return;
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(() => {});
   const cond = pending.conditions[pending.conditionIdx];
@@ -5241,10 +5224,7 @@ async function handleMissileSalvoDie(interaction) {
   const game = getGame(gameId);
   if (!game?.pendingMissileSalvo?.[msgId]) return;
   const { playerNum, diceAvailable } = game.pendingMissileSalvo[msgId];
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the activating player can choose the Missile Salvo die.', ephemeral: true }).catch(() => {});
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the activating player can choose the Missile Salvo die.')) return;
   if (!diceAvailable.includes(color)) {
     await interaction.followUp({ content: `The ${color} die is no longer available for this salvo.`, ephemeral: true }).catch(() => {});
     return;
@@ -5275,10 +5255,7 @@ async function handleMissileSalvoDone(interaction) {
   const game = getGame(gameId);
   if (!game?.pendingMissileSalvo?.[msgId]) return;
   const { playerNum } = game.pendingMissileSalvo[msgId];
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the activating player can end the salvo.', ephemeral: true }).catch(() => {});
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the activating player can end the salvo.')) return;
   delete game.pendingMissileSalvo[msgId];
   await interaction.message.edit({ components: [] }).catch(() => {});
   saveGames();
@@ -7061,7 +7038,7 @@ client.on('interactionCreate', async (interaction) => {
       if (!meta) { await interaction.reply({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
       const game = getGame(meta.gameId);
       if (!game) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
-      if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) { await interaction.reply({ content: 'Only the owner can pick a figure.', ephemeral: true }).catch(discordCatch); return; }
+      if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner can pick a figure.', { useReply: true })) return;
       await interaction.deferUpdate().catch(discordCatch);
       game.dcActionsData = game.dcActionsData || {};
       game.dcActionsData[msgId] = game.dcActionsData[msgId] || {};

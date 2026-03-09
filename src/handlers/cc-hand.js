@@ -29,7 +29,7 @@ import {
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
-import { requireGame } from '../utils/guards.js';
+import { requireGame, requirePlayer } from '../utils/guards.js';
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
 export async function handleSquadModal(interaction, ctx) {
@@ -43,10 +43,7 @@ export async function handleSquadModal(interaction, ctx) {
   }
   const isP1 = playerNum === '1';
   const pn = isP1 ? 1 : 2;
-  if (!canActAsPlayer(game, interaction.user.id, pn)) {
-    await interaction.reply({ content: 'Only the player for this hand can submit.', ephemeral: true });
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pn, canActAsPlayer, 'Only the player for this hand can submit.', { useReply: true })) return;
   const name = interaction.fields.getTextInputValue('squad_name').trim() || 'Unnamed Squad';
   const dcText = interaction.fields.getTextInputValue('squad_dc').trim();
   const ccText = interaction.fields.getTextInputValue('squad_cc').trim();
@@ -77,10 +74,7 @@ export async function handleDeployModal(interaction, ctx) {
   const flatIndex = parseInt(parts[4], 10);
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.reply({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner of this deck can deploy.', { useReply: true })) return;
   const deployMeta = playerNum === 1 ? game.player1DeployMetadata : game.player2DeployMetadata;
   const deployLabels = playerNum === 1 ? game.player1DeployLabels : game.player2DeployLabels;
   const figMeta = deployMeta?.[flatIndex];
@@ -240,10 +234,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   const { playerNum, card } = game.pendingCcConfirmation;
   // 5H: Verify the interacting user is the player who initiated this CC play
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Not your card to confirm.', ephemeral: true }).catch(() => {});
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Not your card to confirm.')) return;
   delete game.pendingCcConfirmation;
 
   // Signal Jammer intercept: cancel this CC and discard both it and Signal Jammer
@@ -585,10 +576,7 @@ export async function handleCcCancelPlay(interaction, ctx) {
   if (!game) return;
   // 5H: Verify the interacting user owns this pending confirmation
   if (game.pendingCcConfirmation?.playerNum) {
-    if (!canActAsPlayer(game, interaction.user.id, game.pendingCcConfirmation.playerNum)) {
-      await interaction.followUp({ content: 'Not your card to cancel.', ephemeral: true }).catch(() => {});
-      return;
-    }
+    if (!await requirePlayer(interaction, game, interaction.user.id, game.pendingCcConfirmation.playerNum, canActAsPlayer, 'Not your card to cancel.')) return;
   }
   delete game.pendingCcConfirmation;
   await interaction.message.delete().catch(discordCatch);
@@ -658,10 +646,7 @@ export async function handleCcSpacePick(interaction, ctx) {
     return;
   }
   const playerNum = pending.playerNum;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the player who played the card can choose.')) return;
   const validLower = (pending.validSpaces || []).map((s) => String(s).toLowerCase());
   if (!validLower.includes(chosenSpace)) {
     await interaction.followUp({ content: 'That space is not a valid choice.', ephemeral: true }).catch(discordCatch);
@@ -703,10 +688,7 @@ export async function handleCcChoice(interaction, ctx) {
     return;
   }
   const playerNum = pending.playerNum;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the player who played the card can choose.')) return;
   if (choiceIndex < 0 || choiceIndex >= (pending.choiceOptions?.length ?? 0)) {
     await interaction.followUp({ content: 'Invalid option.', ephemeral: true }).catch(discordCatch);
     return;
@@ -775,10 +757,7 @@ export async function handleIllegalCcIgnore(interaction, ctx) {
     return;
   }
   const { playerNum, card, messageId } = game.pendingIllegalCcPlay;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the player who played the card can choose.')) return;
   await resolveCcPlay(game, playerNum, card, ctx);
   delete game.pendingIllegalCcPlay;
   if (messageId && interaction.channel?.id) {
@@ -801,10 +780,7 @@ export async function handleNegationPlay(interaction, ctx) {
   }
   const { playedBy, card, waitingMsgId, handChannelId } = game.pendingNegation;
   const oppNum = opponentPlayerNum(playedBy);
-  if (!canActAsPlayer(game, interaction.user.id, oppNum)) {
-    await interaction.followUp({ content: 'Only the opponent can play Negation.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, oppNum, canActAsPlayer, 'Only the opponent can play Negation.')) return;
   const handKey = ccHandKey(oppNum);
   const discardKey = ccDiscardKey(oppNum);
   const hand = game[handKey] || [];
@@ -846,10 +822,7 @@ export async function handleNegationLetResolve(interaction, ctx) {
   }
   const { playedBy, card, fromDc, msgId, wasAttachment, waitingMsgId, handChannelId } = game.pendingNegation;
   const oppNum = opponentPlayerNum(playedBy);
-  if (!canActAsPlayer(game, interaction.user.id, oppNum)) {
-    await interaction.followUp({ content: 'Only the opponent can choose to let it resolve.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, oppNum, canActAsPlayer, 'Only the opponent can choose to let it resolve.')) return;
   delete game.pendingNegation;
   await interaction.message.edit({ content: `**${card}** resolves.`, components: [] }).catch(discordCatch);
   if (fromDc && msgId && wasAttachment && updateAttachmentMessageForDc && isCcAttachment?.(card)) {
@@ -894,10 +867,7 @@ export async function handleCelebrationPlay(interaction, ctx) {
     return;
   }
   const { attackerPlayerNum } = game.pendingCelebration;
-  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the player who defeated the figure can play Celebration.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the player who defeated the figure can play Celebration.')) return;
   const handKey = ccHandKey(attackerPlayerNum);
   const discardKey = ccDiscardKey(attackerPlayerNum);
   const hand = game[handKey] || [];
@@ -930,10 +900,7 @@ export async function handleCelebrationPass(interaction, ctx) {
     return;
   }
   const { attackerPlayerNum } = game.pendingCelebration;
-  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the player who defeated the figure can pass.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the player who defeated the figure can pass.')) return;
   delete game.pendingCelebration;
   await interaction.message.edit({ content: 'Passed on Celebration.', components: [] }).catch(discordCatch);
   saveGames();
@@ -949,10 +916,7 @@ export async function handleIllegalCcUnplay(interaction, ctx) {
     return;
   }
   const { playerNum, messageId } = game.pendingIllegalCcPlay;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the player who played the card can choose.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the player who played the card can choose.')) return;
   delete game.pendingIllegalCcPlay;
   if (messageId && interaction.channel?.id) {
     try {
@@ -1021,10 +985,7 @@ export async function handleDeckIllegalPlay(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const isP1 = playerNum === 1;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this hand can choose Play It Anyway.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner of this hand can choose Play It Anyway.')) return;
   const key = `${gameId}_${playerNum}`;
   const pending = pendingIllegalSquad.get(key);
   if (!pending || (Date.now() - pending.timestamp > PENDING_ILLEGAL_TTL_MS)) {
@@ -1046,10 +1007,7 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const isP1 = playerNum === 1;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this hand can choose Redo.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner of this hand can choose Redo.')) return;
   const key = `${gameId}_${playerNum}`;
   pendingIllegalSquad.delete(key);
   if (isP1) game.player1Squad = null;
@@ -1219,10 +1177,7 @@ export async function handleCcSearchDiscard(interaction, ctx) {
     await interaction.followUp({ content: 'Use this in your Play Area.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this Play Area can search their discard pile.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner of this Play Area can search their discard pile.')) return;
   const existingThreadId = getDiscardThreadId(game, playerNum);
   if (existingThreadId) {
     try {
@@ -1284,10 +1239,7 @@ export async function handleCcCloseDiscard(interaction, ctx) {
     await interaction.followUp({ content: 'No discard pile thread is open.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the owner can close the discard pile thread.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner can close the discard pile thread.')) return;
   try {
     const thread = await client.channels.fetch(threadId);
     await thread.delete();
@@ -1342,10 +1294,7 @@ export async function handleSquadSelect(interaction, ctx) {
   }
   const isP1 = playerNum === '1';
   const pn = isP1 ? 1 : 2;
-  if (!canActAsPlayer(game, interaction.user.id, pn)) {
-    await interaction.followUp({ content: 'Only the owner of this hand can select a squad.', ephemeral: true });
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pn, canActAsPlayer, 'Only the owner of this hand can select a squad.')) return;
   const modal = new ModalBuilder()
     .setCustomId(`squad_modal_${gameId}_${playerNum}`)
     .setTitle('Submit Squad');

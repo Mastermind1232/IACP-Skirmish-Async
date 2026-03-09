@@ -8,7 +8,7 @@ import { bottomLeftCoord, getFootprintCells } from '../game/coords.js';
 import { reduceHp } from '../game/index.js';
 import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
-import { requireGame } from '../utils/guards.js';
+import { requireGame, requirePlayer } from '../utils/guards.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
@@ -52,10 +52,7 @@ export async function handleMoveMp(interaction, ctx) {
     return;
   }
   const { figureKey, playerNum, mpRemaining, displayName } = moveState;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the owner can move.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner can move.')) return;
   if (mp < 1 || mp > mpRemaining) {
     await interaction.followUp({ content: `Choose 1–${mpRemaining} MP.`, ephemeral: true }).catch(discordCatch);
     return;
@@ -169,10 +166,7 @@ export async function handleMoveAdjustMp(interaction, ctx) {
     return;
   }
   const { playerNum, mpRemaining } = moveState;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the owner can adjust.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner can adjust.')) return;
   // Remove the clicked message from gridIds before clearing so we can transform it in-place
   const currentMsgId = interaction.message.id;
   game.moveGridMessageIds = game.moveGridMessageIds || {};
@@ -227,10 +221,7 @@ export async function handleMoveLetter(interaction, ctx) {
     await interaction.followUp({ content: 'Move session expired.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (!canActAsPlayer(game, interaction.user.id, moveState.playerNum)) {
-    await interaction.followUp({ content: 'Only the owner can move.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, moveState.playerNum, canActAsPlayer, 'Only the owner can move.')) return;
   const { movementCache: cache, movementProfile: profile, boardState } = moveState;
   if (!cache) {
     await interaction.followUp({ content: 'Move cache expired.', ephemeral: true }).catch(discordCatch);
@@ -306,10 +297,7 @@ export async function handleMoveLetterBack(interaction, ctx) {
     await interaction.followUp({ content: 'Move session expired.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (!canActAsPlayer(game, interaction.user.id, moveState.playerNum)) {
-    await interaction.followUp({ content: 'Only the owner can move.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, moveState.playerNum, canActAsPlayer, 'Only the owner can move.')) return;
   const { movementCache: cache, movementProfile: profile, mpRemaining } = moveState;
   if (!cache) {
     await interaction.followUp({ content: 'Move cache expired.', ephemeral: true }).catch(discordCatch);
@@ -393,10 +381,7 @@ export async function handleMovePick(interaction, ctx) {
     return;
   }
   const { figureKey, playerNum, mpRemaining, displayName } = moveState;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the owner can move.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner can move.')) return;
   await clearMoveGridMessages(game, moveKey, interaction.channel);
   // Also delete the message the user clicked on (it may have been edited in-place
   // by handleMoveLetter and removed from moveGridMessageIds tracking)

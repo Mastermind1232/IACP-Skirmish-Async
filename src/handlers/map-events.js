@@ -5,7 +5,7 @@ import { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } from
 import { getPlayerId } from '../game/player-helpers.js';
 import { edgeKey } from '../game/coords.js';
 import { discordCatch } from '../error-handling.js';
-import { requireGame } from '../utils/guards.js';
+import { requireGame, requirePlayer } from '../utils/guards.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -27,7 +27,7 @@ export async function handleDevaronDoorOpen(interaction, ctx) {
     if (!game) return;
     const pending = game.pendingDoorSelections?.[0];
     if (!pending) { await interaction.followUp({ content: 'No pending door selections.', ephemeral: true }).catch(discordCatch); return; }
-    if (!canActAsPlayer(game, interaction.user.id, pending.playerNum)) { await interaction.followUp({ content: 'Only the controlling player can select a door.', ephemeral: true }).catch(discordCatch); return; }
+    if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the controlling player can select a door.')) return;
     await interaction.deferUpdate().catch(discordCatch);
     game.openedDoors = game.openedDoors || [];
     if (!game.openedDoors.includes(openedEdgeKey)) game.openedDoors.push(openedEdgeKey);
@@ -63,7 +63,7 @@ export async function handleDevaronCratePush(interaction, ctx) {
     const curCoord = String(game.cratePositions?.[origCoord] || origCoord).toLowerCase();
     const controller = getSpaceController(game, 'devaron-garrison', curCoord);
     if (!controller) { await interaction.followUp({ content: 'No one controls this crate currently.', ephemeral: true }).catch(discordCatch); return; }
-    if (!canActAsPlayer(game, interaction.user.id, controller)) { await interaction.followUp({ content: 'Only the controlling player can push this crate.', ephemeral: true }).catch(discordCatch); return; }
+    if (!await requirePlayer(interaction, game, interaction.user.id, controller, canActAsPlayer, 'Only the controlling player can push this crate.')) return;
     const modal = new ModalBuilder()
       .setCustomId(`devaron_crate_modal_${gameId}_${origCoord}`)
       .setTitle(`Push crate (at ${curCoord.toUpperCase()})`);
@@ -99,9 +99,7 @@ export async function handleKryknaPush(interaction, ctx) {
       await interaction.followUp({ content: 'No Krykna push pending.', ephemeral: true }).catch(discordCatch); return;
     }
     const expectedPlayerNum = game.pendingKryknaPushQueue[0];
-    if (!canActAsPlayer(game, interaction.user.id, expectedPlayerNum)) {
-      await interaction.followUp({ content: `It's Player ${expectedPlayerNum}'s turn to push a Krykna.`, ephemeral: true }).catch(discordCatch); return;
-    }
+    if (!await requirePlayer(interaction, game, interaction.user.id, expectedPlayerNum, canActAsPlayer, `It's Player ${expectedPlayerNum}'s turn to push a Krykna.`)) return;
     const krykna = (game.npcKrykna || []).find((k) => k.id === kryknaId);
     if (!krykna || krykna.defeated) { await interaction.followUp({ content: 'Krykna not found or already defeated.', ephemeral: true }).catch(discordCatch); return; }
     const modal = new ModalBuilder()

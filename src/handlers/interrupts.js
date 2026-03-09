@@ -6,7 +6,7 @@ import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum } from '../game/player-helpers.js';
 import { reduceHp, awardObjectiveVp } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
-import { requireGame } from '../utils/guards.js';
+import { requireGame, requirePlayer } from '../utils/guards.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
 export async function handleStillFaster(interaction, ctx) {
@@ -38,7 +38,7 @@ export async function handleStillFaster(interaction, ctx) {
 
   if (buttonKey === 'still_faster_skip_') {
     const sftPlayerNum = sftGame.pendingStillFaster?.sftPlayerNum;
-    if (!canActAsPlayer(sftGame, interaction.user.id, sftPlayerNum)) { await interaction.followUp({ content: 'Only the Still Faster Than You player may respond.', ephemeral: true }).catch(discordCatch); return; }
+    if (!await requirePlayer(interaction, sftGame, interaction.user.id, sftPlayerNum, canActAsPlayer, 'Only the Still Faster Than You player may respond.')) return;
     delete sftGame.pendingStillFaster;
     sftGame.stillFasterPlayerNum = null;
     await interaction.deferUpdate().catch(() => {});
@@ -51,7 +51,7 @@ export async function handleStillFaster(interaction, ctx) {
     const sftPending = sftGame.pendingStillFaster;
     if (!sftPending) { await interaction.followUp({ content: 'No pending Still Faster Than You.', ephemeral: true }).catch(discordCatch); return; }
     const { sftPlayerNum } = sftPending;
-    if (!canActAsPlayer(sftGame, interaction.user.id, sftPlayerNum)) { await interaction.followUp({ content: 'Only the Still Faster Than You player may respond.', ephemeral: true }).catch(discordCatch); return; }
+    if (!await requirePlayer(interaction, sftGame, interaction.user.id, sftPlayerNum, canActAsPlayer, 'Only the Still Faster Than You player may respond.')) return;
     // Show the SFTY player's non-exhausted DCs as picker buttons
     const sftDcList = sftPlayerNum === 1 ? (sftGame.p1DcList || []) : (sftGame.p2DcList || []);
     const sftMsgIds = sftPlayerNum === 1 ? (sftGame.p1DcMessageIds || []) : (sftGame.p2DcMessageIds || []);
@@ -87,7 +87,7 @@ export async function handleStillFaster(interaction, ctx) {
     const sftPending = sftGame.pendingStillFaster;
     if (!sftPending) { await interaction.followUp({ content: 'No pending Still Faster Than You.', ephemeral: true }).catch(discordCatch); return; }
     const { sftPlayerNum } = sftPending;
-    if (!canActAsPlayer(sftGame, interaction.user.id, sftPlayerNum)) { await interaction.followUp({ content: 'Only the Still Faster Than You player may respond.', ephemeral: true }).catch(discordCatch); return; }
+    if (!await requirePlayer(interaction, sftGame, interaction.user.id, sftPlayerNum, canActAsPlayer, 'Only the Still Faster Than You player may respond.')) return;
     // Grant 2MP to the picked DC's movement bank and a free attack (excluding the activating hostile)
     sftGame.movementBank = sftGame.movementBank || {};
     const sftBank = sftGame.movementBank[sftPickedMsgId] || { total: 0, remaining: 0 };
@@ -123,9 +123,7 @@ export async function handleSquadSwarm(interaction, ctx) {
   const _swGame = await requireGame(interaction, getGame, _swGameId);
   if (!_swGame) return;
   const _swMeta = dcMessageMeta.get(_swMsgId);
-  if (_swMeta && !canActAsPlayer(_swGame, interaction.user.id, _swMeta.playerNum)) {
-    await interaction.followUp({ content: 'Only the Squad Swarm player may respond.', ephemeral: true }).catch(() => {}); return;
-  }
+  if (_swMeta && !await requirePlayer(interaction, _swGame, interaction.user.id, _swMeta.playerNum, canActAsPlayer, 'Only the Squad Swarm player may respond.')) return;
   _swGame.squadSwarmPlayerNum = null;
   if (buttonKey === 'squad_swarm_yes_') {
     const _swTargetName = _swTargetMsgId ? (dcMessageMeta.get(_swTargetMsgId)?.displayName || 'another figure') : 'another figure';
@@ -145,9 +143,7 @@ export async function handleOverdrive(interaction, ctx) {
   if (!_odMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
   const _odGame = await requireGame(interaction, getGame, _odMeta.gameId);
   if (!_odGame) return;
-  if (!canActAsPlayer(_odGame, interaction.user.id, _odMeta.playerNum)) {
-    await interaction.followUp({ content: 'Only the DC owner can use Overdrive.', ephemeral: true }).catch(() => {}); return;
-  }
+  if (!await requirePlayer(interaction, _odGame, interaction.user.id, _odMeta.playerNum, canActAsPlayer, 'Only the DC owner can use Overdrive.')) return;
   const _odActionsData = _odGame.dcActionsData?.[_odMsgId];
   if (!_odActionsData) { await interaction.followUp({ content: 'No active activation found.', ephemeral: true }).catch(() => {}); return; }
   const { prevHp: _odPrevHp, newHp: _odNewHp, maxHp: _odMaxHp } = reduceHp(dcHealthState, _odGame, _odMsgId, 0, 1, _odMeta.playerNum);
@@ -184,9 +180,7 @@ export async function handleSelfDestructProbe(interaction, ctx) {
   if (!_sdpGame) return;
   const _sdpMeta = dcMessageMeta.get(_sdpMsgId);
   if (!_sdpMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
-  if (!canActAsPlayer(_sdpGame, interaction.user.id, _sdpMeta.playerNum)) {
-    await interaction.followUp({ content: 'Only the DC owner can respond.', ephemeral: true }).catch(() => {}); return;
-  }
+  if (!await requirePlayer(interaction, _sdpGame, interaction.user.id, _sdpMeta.playerNum, canActAsPlayer, 'Only the DC owner can respond.')) return;
   if (buttonKey === 'self_destruct_probe_skip_') {
     await logGameAction(_sdpGame, client, `**Self-Destruct** — ${_sdpMeta.displayName || _sdpMeta.dcName} skipped.`, { phase: 'ROUND', icon: 'card' });
     saveGames(); return;
@@ -238,14 +232,13 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
   const _sdcpSuffix = interaction.customId.replace(buttonKey, '');
   const _sdcpParts = _sdcpSuffix.split('_');
   const _sdcpGameId = _sdcpParts[0]; const _sdcpTargetMsgId = _sdcpParts[1];
-  const _sdcpGame = getGame(_sdcpGameId);
-  if (!_sdcpGame || !_sdcpGame.pendingSelfDestruct) {
+  const _sdcpGame = await requireGame(interaction, getGame, _sdcpGameId, { silent: true });
+  if (!_sdcpGame) return;
+  if (!_sdcpGame.pendingSelfDestruct) {
     await interaction.followUp({ content: 'No pending Self-Destruct Protocol.', ephemeral: true }).catch(() => {}); return;
   }
   const _sdcpPending = _sdcpGame.pendingSelfDestruct;
-  if (!canActAsPlayer(_sdcpGame, interaction.user.id, _sdcpPending.defenderPlayerNum)) {
-    await interaction.followUp({ content: 'Only the DC owner may respond.', ephemeral: true }).catch(() => {}); return;
-  }
+  if (!await requirePlayer(interaction, _sdcpGame, interaction.user.id, _sdcpPending.defenderPlayerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
   delete _sdcpGame.pendingSelfDestruct;
   const _sdcpCombat = _sdcpGame.pendingCombat;
   if (buttonKey === 'self_destruct_protocol_use_') {
@@ -304,14 +297,13 @@ export async function handleLastResort(interaction, ctx) {
   const _lrSuffix = interaction.customId.replace(buttonKey, '');
   const _lrParts = _lrSuffix.split('_');
   const _lrGameId = _lrParts[0]; const _lrTargetMsgId = _lrParts[1];
-  const _lrGame = getGame(_lrGameId);
-  if (!_lrGame || !_lrGame.pendingLastResort) {
+  const _lrGame = await requireGame(interaction, getGame, _lrGameId, { silent: true });
+  if (!_lrGame) return;
+  if (!_lrGame.pendingLastResort) {
     await interaction.followUp({ content: 'No pending Last Resort.', ephemeral: true }).catch(() => {}); return;
   }
   const _lrPending = _lrGame.pendingLastResort;
-  if (!canActAsPlayer(_lrGame, interaction.user.id, _lrPending.defenderPlayerNum)) {
-    await interaction.followUp({ content: 'Only the DC owner may respond.', ephemeral: true }).catch(() => {}); return;
-  }
+  if (!await requirePlayer(interaction, _lrGame, interaction.user.id, _lrPending.defenderPlayerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
   delete _lrGame.pendingLastResort;
   const _lrCombat = _lrGame.pendingCombat;
   if (buttonKey === 'last_resort_use_') {
@@ -377,12 +369,11 @@ export async function handleScavengedWalker(interaction, ctx) {
   const _swSuffix = interaction.customId.replace(buttonKey, '');
   const _swParts = _swSuffix.split('_');
   const _swGameId = _swParts[0]; const _swMsgId = _swParts[1];
-  const _swGame = getGame(_swGameId);
+  const _swGame = await requireGame(interaction, getGame, _swGameId);
+  if (!_swGame) return;
   const _swMeta = dcMessageMeta.get(_swMsgId);
-  if (!_swGame || !_swMeta) { await interaction.followUp({ content: 'Game or DC not found.', ephemeral: true }).catch(() => {}); return; }
-  if (!canActAsPlayer(_swGame, interaction.user.id, _swMeta.playerNum)) {
-    await interaction.followUp({ content: 'Only the DC owner may respond.', ephemeral: true }).catch(() => {}); return;
-  }
+  if (!_swMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
+  if (!await requirePlayer(interaction, _swGame, interaction.user.id, _swMeta.playerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
   if (buttonKey === 'scavenged_walker_attack_') {
     // Set -1 Hit penalty flag for the next attack from this DC
     _swGame.scavengedWalkerAttackPenalty = _swGame.scavengedWalkerAttackPenalty || {};
@@ -402,14 +393,13 @@ export async function handleOnDiplomatic(interaction, ctx) {
   const _odmSuffix = interaction.customId.replace('on_diplomatic_', '');
   const _odmParts = _odmSuffix.split('_');
   const _odmGameId = _odmParts[0]; const _odmMsgId = _odmParts[1]; const _odmChoice = _odmParts[2];
-  const _odmGame = getGame(_odmGameId);
+  const _odmGame = await requireGame(interaction, getGame, _odmGameId);
+  if (!_odmGame) return;
   const _odmMeta = dcMessageMeta.get(_odmMsgId);
-  if (!_odmGame || !_odmMeta) {
-    await interaction.followUp({ content: 'Game or DC not found.', ephemeral: true }).catch(() => {}); return;
+  if (!_odmMeta) {
+    await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return;
   }
-  if (!canActAsPlayer(_odmGame, interaction.user.id, _odmMeta.playerNum)) {
-    await interaction.followUp({ content: 'Only the DC owner may respond.', ephemeral: true }).catch(() => {}); return;
-  }
+  if (!await requirePlayer(interaction, _odmGame, interaction.user.id, _odmMeta.playerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
   if (_odmChoice === 'skip') {
     await logGameAction(_odmGame, client, '**On a Diplomatic Mission** — Skipped.', { phase: 'ROUND', icon: 'card' });
   } else {
@@ -445,12 +435,11 @@ export async function handleBelReorder(interaction, ctx) {
 
   const _belParts = interaction.customId.replace(buttonKey, '').split('_');
   const _belGameId = _belParts[0]; const _belCardIdx = parseInt(_belParts[1], 10);
-  const _belGame = getGame(_belGameId);
-  if (!_belGame || !_belGame.pendingBELReorder) { await interaction.followUp({ content: 'No pending deck reorder.', ephemeral: true }).catch(() => {}); return; }
+  const _belGame = await requireGame(interaction, getGame, _belGameId, { silent: true });
+  if (!_belGame) return;
+  if (!_belGame.pendingBELReorder) { await interaction.followUp({ content: 'No pending deck reorder.', ephemeral: true }).catch(() => {}); return; }
   const _belData = _belGame.pendingBELReorder;
-  if (!canActAsPlayer(_belGame, interaction.user.id, _belData.playerNum)) {
-    await interaction.followUp({ content: 'Only the card owner may reorder.', ephemeral: true }).catch(() => {}); return;
-  }
+  if (!await requirePlayer(interaction, _belGame, interaction.user.id, _belData.playerNum, canActAsPlayer, 'Only the card owner may reorder.')) return;
   if (buttonKey === 'bel_reorder_1_') {
     _belData.picked = [_belCardIdx];
     const _belRem = _belData.cards.filter((_, i) => i !== _belCardIdx);

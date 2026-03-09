@@ -20,7 +20,7 @@ import {
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
-import { requireGame } from '../utils/guards.js';
+import { requireGame, requirePlayer } from '../utils/guards.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
@@ -62,10 +62,7 @@ export async function handleDcActivate(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this Play Area can activate their DCs.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner of this Play Area can activate their DCs.')) return;
   const ownerId = getPlayerId(game, playerNum);
   const dcList = getDcList(game, playerNum) || [];
   const dc = dcList[dcIndex];
@@ -272,10 +269,7 @@ export async function handleDcUnactivate(interaction, ctx) {
   }
   const game = await requireGame(interaction, getGame, meta.gameId);
   if (!game) return;
-  if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.followUp({ content: 'Only the owner can un-activate.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner can un-activate.')) return;
   const ownerId = getPlayerId(game, meta.playerNum);
   const wasExhausted = dcExhaustedState.get(msgId) ?? false;
   if (!wasExhausted) {
@@ -374,10 +368,7 @@ export async function handleDcToggle(interaction, ctx) {
   }
   const game = await requireGame(interaction, getGame, meta.gameId);
   if (!game) return;
-  if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this Play Area can toggle their DCs.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this Play Area can toggle their DCs.')) return;
   const ownerId = getPlayerId(game, meta.playerNum);
   const wasExhausted = dcExhaustedState.get(msgId) ?? false;
   const nowExhausted = !wasExhausted;
@@ -515,10 +506,7 @@ export async function handleDcDeplete(interaction, ctx) {
   }
   const game = await requireGame(interaction, getGame, meta.gameId);
   if (!game) return;
-  if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this Play Area can Deplete their upgrade.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this Play Area can Deplete their upgrade.')) return;
   const ownerId = getPlayerId(game, meta.playerNum);
   if (isDepletedRemovedFromGame(game, msgId)) {
     await interaction.followUp({ content: 'This upgrade was already depleted and removed from the game.', ephemeral: true }).catch(discordCatch);
@@ -632,10 +620,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   const game = await requireGame(interaction, getGame, meta.gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
-  if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this activation can play a CC here.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this activation can play a CC here.')) return;
   const ownerId = getPlayerId(game, meta.playerNum);
   const playable = getCardList(game, meta.playerNum, meta.dcName, meta.displayName);
   const card = playable[idx];
@@ -1131,10 +1116,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   const game = await requireGame(interaction, getGame, meta.gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
-  if (!canActAsPlayer(game, interaction.user.id, meta.playerNum)) {
-    await interaction.followUp({ content: 'Only the owner of this Play Area can use these actions.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this Play Area can use these actions.')) return;
   // Resolve attachment-injected special action names and costs
   const _baseSpecialCount = (getDcStats(meta.dcName).specials || []).length;
   let _effectiveActionCost = 1;
@@ -1928,10 +1910,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     return;
   }
   const { playerNum, abilityId, figureIndex, targetFigureKeys } = pending;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the ability owner can choose.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the ability owner can choose.')) return;
   delete game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`];
   const meta = dcMessageMeta.get(msgId);
 
@@ -2077,10 +2056,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
     return;
   }
   const { playerNum, abilityId, validSpaces, targetFigureKey } = pending;
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the activating player can choose the destination.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the activating player can choose the destination.')) return;
   const validLower = (validSpaces || []).map((s) => String(s).toLowerCase());
   if (!validLower.includes(chosenSpace)) {
     await interaction.followUp({ content: 'That space is not a valid destination.', ephemeral: true }).catch(discordCatch);
@@ -2268,10 +2244,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     return;
   }
   const { controlledFigureKey, controlledPlayerNum, controllerPlayerNum } = fo;
-  if (!canActAsPlayer(game, interaction.user.id, controllerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the controller may choose.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, controllerPlayerNum, canActAsPlayer, 'Only the controller may choose.')) return;
   const controlledName = controlledFigureKey.replace(/-\d+-\d+$/, '');
   const controlledStats = getDcStats(controlledName);
   const controlledPos = game.figurePositions?.[controlledPlayerNum]?.[controlledFigureKey];
@@ -2402,10 +2375,7 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
     return;
   }
   const { controlledFigureKey, controlledPlayerNum, controllerPlayerNum } = fo;
-  if (!canActAsPlayer(game, interaction.user.id, controllerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the controller may choose.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, controllerPlayerNum, canActAsPlayer, 'Only the controller may choose.')) return;
   const controlledName = controlledFigureKey.replace(/-\d+-\d+$/, '');
   game.figurePositions = game.figurePositions || {};
   game.figurePositions[controlledPlayerNum] = game.figurePositions[controlledPlayerNum] || {};
@@ -2472,10 +2442,7 @@ export async function handleRushPushFig(interaction, ctx) {
     await interaction.followUp({ content: 'No pending Rush push.', ephemeral: true }).catch(() => {});
     return;
   }
-  if (!canActAsPlayer(game, interaction.user.id, pending.playerNum)) {
-    await interaction.followUp({ content: 'Only the activating player can choose.', ephemeral: true }).catch(() => {});
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the activating player can choose.')) return;
   const targetFk = pending.targets?.[choiceIndex];
   if (!targetFk) { await interaction.followUp({ content: 'Invalid target.', ephemeral: true }).catch(() => {}); return; }
   pending.chosenTarget = targetFk;
@@ -2548,10 +2515,7 @@ export async function handleRushPushSpace(interaction, ctx) {
     await interaction.followUp({ content: 'No pending Rush push.', ephemeral: true }).catch(() => {});
     return;
   }
-  if (!canActAsPlayer(game, interaction.user.id, pending.playerNum)) {
-    await interaction.followUp({ content: 'Only the activating player can choose.', ephemeral: true }).catch(() => {});
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the activating player can choose.')) return;
   const targetFk = pending.chosenTarget;
   const oppNum = opponentPlayerNum(pending.playerNum);
   const prevPos = game.figurePositions?.[oppNum]?.[targetFk];

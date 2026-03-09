@@ -16,7 +16,7 @@ import {
   opponentPlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
-import { requireGame } from '../utils/guards.js';
+import { requireGame, requirePlayer } from '../utils/guards.js';
 
 /**
  * Check a player's hand for CC cards that match a timing trigger.
@@ -222,10 +222,7 @@ export async function handleAttackTarget(interaction, ctx) {
   }
   const attackerPlayerNum = meta.playerNum;
   const { getRange, hasLineOfSight } = ctx;
-  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the owner can attack.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the owner can attack.')) return;
   if (target.hasLOS === false) {
     await interaction.followUp({ content: '🚫 No line of sight to that target. You cannot attack through blocking terrain or solid walls.', ephemeral: true }).catch(discordCatch);
     return;
@@ -1448,20 +1445,14 @@ export async function handleCombatRoll(interaction, ctx) {
     await interaction.followUp({ content: 'No pending combat.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
-    await interaction.followUp({ content: 'Only players in this game can roll.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!canActAsPlayer(game, interaction.user.id, 1) && !await requirePlayer(interaction, game, interaction.user.id, 2, canActAsPlayer, 'Only players in this game can roll.')) return;
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
   const effectiveAttackerPlayerNum = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
 
   if (!combat.attackRoll) {
-    if (!canActAsPlayer(game, interaction.user.id, effectiveAttackerPlayerNum)) {
-      await interaction.followUp({ content: `Only the attacker (P${effectiveAttackerPlayerNum}) may roll attack dice.`, ephemeral: true }).catch(discordCatch);
-      return;
-    }
+    if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerPlayerNum, canActAsPlayer, `Only the attacker (P${effectiveAttackerPlayerNum}) may roll attack dice.`)) return;
     const baseDice = combat.attackInfo?.dice || [];
     const bonusDice = combat.attackBonusDice || 0;
     const bonusColors = combat.attackBonusDiceColors || [];
@@ -1499,10 +1490,7 @@ export async function handleCombatRoll(interaction, ctx) {
   }
 
   if (!combat.defenseRoll) {
-    if (!canActAsPlayer(game, interaction.user.id, defenderPlayerNum)) {
-      await interaction.followUp({ content: `Only the defender (P${defenderPlayerNum}) may roll defense dice.`, ephemeral: true }).catch(discordCatch);
-      return;
-    }
+    if (!await requirePlayer(interaction, game, interaction.user.id, defenderPlayerNum, canActAsPlayer, `Only the defender (P${defenderPlayerNum}) may roll defense dice.`)) return;
     const baseColor = combat.targetStats.defense || 'white';
     const bonusDice = combat.defenseBonusDice || [];
     const pool = [baseColor, ...bonusDice];
@@ -2056,10 +2044,7 @@ export async function handleCombatReroll(interaction, ctx) {
   } else {
     expectedPlayer = side === 'atk' ? effectiveAtk : defenderPlayerNum;
   }
-  if (!expectedPlayer || !canActAsPlayer(game, interaction.user.id, expectedPlayer)) {
-    await interaction.followUp({ content: `Only P${expectedPlayer} can reroll ${combat.rerollPhase === 'forced' ? 'forced' : (side === 'atk' ? 'attack' : 'defense')} dice.`, ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!expectedPlayer || !await requirePlayer(interaction, game, interaction.user.id, expectedPlayer, canActAsPlayer, `Only P${expectedPlayer} can reroll ${combat.rerollPhase === 'forced' ? 'forced' : (side === 'atk' ? 'attack' : 'defense')} dice.`)) return;
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
 
   // Helper: get the dominant icon type of a die result for Double or Nothing
@@ -2289,10 +2274,7 @@ export async function handlePreReroll(interaction, ctx) {
   }
   const pr = (combat.pendingPreRerolls || [])[0];
   if (!pr) { await interaction.followUp({ content: 'No pending pre-reroll.', ephemeral: true }).catch(discordCatch); return; }
-  if (!canActAsPlayer(game, interaction.user.id, pr.playerNum)) {
-    await interaction.followUp({ content: `Only P${pr.playerNum} can make this choice.`, ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pr.playerNum, canActAsPlayer, `Only P${pr.playerNum} can make this choice.`)) return;
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
 
   // Process choice
@@ -3051,10 +3033,7 @@ export async function handleCombatResolveReady(interaction, ctx) {
     await interaction.followUp({ content: 'No pending combat to resolve.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
-    await interaction.followUp({ content: 'Only players in this game can confirm.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!canActAsPlayer(game, interaction.user.id, 1) && !await requirePlayer(interaction, game, interaction.user.id, 2, canActAsPlayer, 'Only players in this game can confirm.')) return;
   await resolveCombatAfterRolls(game, combat, client);
   saveGames();
 }
@@ -3091,10 +3070,7 @@ export async function handleCombatSurge(interaction, ctx) {
   }
   const attackerPlayerNum = combat.attackerPlayerNum;
   const effectiveAttackerForSurge = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
-  if (!canActAsPlayer(game, interaction.user.id, effectiveAttackerForSurge)) {
-    await interaction.followUp({ content: 'Only the attacker may spend surge.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerForSurge, canActAsPlayer, 'Only the attacker may spend surge.')) return;
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
   // Overload (Rebel Saboteur): may trigger the same surge ability up to twice per attack
   const getDcEffS = ctx.getDcEffects || (() => ({}));
@@ -3403,10 +3379,7 @@ export async function handleCombatToken(interaction, ctx) {
   if (combat.tokenPhase !== expectedPhase) return;
   const atkPlayerNum = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
   const playerNum = isAttacker ? atkPlayerNum : opponentPlayerNum(combat.attackerPlayerNum);
-  if (!canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the correct player may spend their token.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the correct player may spend their token.')) return;
 
   // Skip
   if (choice === 'skip') {
@@ -3571,7 +3544,7 @@ export async function handlePowerTokenChoice(interaction, ctx) {
   if (!game) return;
   if (!game.pendingPowerTokenGrant?.grants?.length) { await interaction.followUp({ content: 'No pending token grant found.', ephemeral: true }).catch(() => {}); return; }
   const { grants, channelId, playerNum } = game.pendingPowerTokenGrant;
-  if (playerNum && !canActAsPlayer(game, interaction.user.id, playerNum)) { await interaction.followUp({ content: 'Not your token choice.', ephemeral: true }).catch(() => {}); return; }
+  if (playerNum && !await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Not your token choice.')) return;
   game.figurePowerTokens = game.figurePowerTokens || {};
   const lines = [];
   for (const { figureKey, figName, count } of grants) {
@@ -3632,7 +3605,7 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
   if (!game) return;
   if (!game.pendingSpreadThePainCondPick) { await interaction.followUp({ content: 'No pending condition pick.', ephemeral: true }).catch(() => {}); return; }
   const { attackerPlayerNum, combatThreadId } = game.pendingSpreadThePainCondPick;
-  if (!canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) { await interaction.followUp({ content: 'Not your choice.', ephemeral: true }).catch(() => {}); return; }
+  if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Not your choice.')) return;
   await interaction.message.edit({ components: [] }).catch(() => {});
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) return;
@@ -3833,10 +3806,7 @@ export async function handleLasatDiePick(interaction, ctx) {
     return;
   }
   const effectiveAttacker = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
-  if (!canActAsPlayer(game, interaction.user.id, effectiveAttacker)) {
-    await interaction.followUp({ content: 'Only the attacker may choose.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttacker, canActAsPlayer, 'Only the attacker may choose.')) return;
   if (!(combat.lasatEligibleDiceIndices || []).includes(dieIdx)) {
     await interaction.followUp({ content: 'That die is not eligible.', ephemeral: true }).catch(discordCatch);
     return;
@@ -3868,10 +3838,7 @@ export async function handleLasatFacePick(interaction, ctx) {
     return;
   }
   const effectiveAttacker = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
-  if (!canActAsPlayer(game, interaction.user.id, effectiveAttacker)) {
-    await interaction.followUp({ content: 'Only the attacker may choose.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttacker, canActAsPlayer, 'Only the attacker may choose.')) return;
   const getDiceData = ctx.getDiceData;
   if (!getDiceData) { await interaction.followUp({ content: 'Dice data unavailable.', ephemeral: true }).catch(discordCatch); return; }
   const die = combat.attackDiceResults?.[dieIdx];
@@ -3913,10 +3880,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     return;
   }
   const { controllerPlayerNum, controlledFigureKey, controlledPlayerNum } = fo;
-  if (!canActAsPlayer(game, interaction.user.id, controllerPlayerNum)) {
-    await interaction.followUp({ content: 'Only the controller may choose.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, controllerPlayerNum, canActAsPlayer, 'Only the controller may choose.')) return;
   const targets = game.falseOrdersAttackTargets?.[msgId];
   const target = targets?.[targetIdx];
   if (!target) {

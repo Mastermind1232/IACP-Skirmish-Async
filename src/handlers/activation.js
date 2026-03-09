@@ -23,7 +23,7 @@ import {
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
-import { requireGame } from '../utils/guards.js';
+import { requireGame, requirePlayer } from '../utils/guards.js';
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -135,10 +135,7 @@ export async function handlePassActivationTurn(interaction, ctx) {
   if (await replyIfGameEnded(game, interaction)) return;
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const turnPlayerNum = turnPlayerId === game.player1Id ? 1 : 2;
-  if (!canActAsPlayer(game, interaction.user.id, turnPlayerNum)) {
-    await interaction.followUp({ content: "It's not your turn to pass.", ephemeral: true }).catch(discordCatch);
-    return;
-  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, turnPlayerNum, canActAsPlayer, "It's not your turn to pass.")) return;
   const myRem = getActivationsRemaining(game, turnPlayerNum) ?? 0;
   const otherPlayerNum = opponentPlayerNum(turnPlayerNum);
   const otherRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
