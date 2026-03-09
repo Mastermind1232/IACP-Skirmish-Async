@@ -1,380 +1,438 @@
-# Comprehensive Refactoring & Feature Plan
+# DRY Refactor Plan — Test-Driven Architecture (Audited)
 
-## Deep Audit Summary
-
-Full line-by-line audit of all 47,000+ lines across 47 production files. Below are the findings organized into prioritized work streams.
-
----
-
-## Phase 1: Bug Fixes & Critical Issues (Do First)
-
-### 1A. Button Overflow — Two-Tier Dropdown Picker *(original feature request)*
-
-**Problem:** When >25 valid buttons exist (Discord's 5×5 limit), buttons are silently dropped. Minimap shows all valid cells but buttons don't match.
-
-**Affected call sites (8 total):**
-- `getSpaceChoiceRows` — 7 call sites: Overwatch, Pounce (×2), False Orders, Rush, CC space (×2)
-- `buildLetterRows` — 3 call sites: movement initial, move-pick continuation, letter-back
-
-**Approach:**
-1. Add `buildRowPickerSelect(customIdPrefix, validSpaces, mapSpaces)` in `components.js`
-2. Modify `getSpaceChoiceRows` to return `{ rows, available, overflowed }`
-3. At each call site: when `overflowed`, show select menu dropdown instead of buttons
-4. Add per-context select handlers + "Back to Rows" button handlers
-5. Add `buildLetterPickerSelect` for movement letter overflow
-6. Update `router.js` prefixes and `index.js` dispatch
-
-**Files:** `components.js`, `router.js`, `index.js`, `dc-play-area.js`, `cc-hand.js`, `movement.js`
-
-### 1B. ~~Orphaned Handler: `dc_cc_defender_`~~ *(Not a bug — dispatch exists at index.js:9668)*
-
-### 1C. `updateHandChannelMessages` Called With Wrong Arguments
-
-**Problem:** At `index.js:8712`, inside the Mastery handler, the function is called as:
-```js
-await updateHandChannelMessages(mastGame, mastAPN, client).catch(() => {});
-```
-But the function signature at `index.js:6481` is:
-```js
-async function updateHandChannelMessages(game, client)
-```
-This means `mastAPN` (a number like `1` or `2`) is passed as the Discord `client` parameter. When the function tries to call `client.channels.fetch(handId)`, it crashes because `(2).channels` is `undefined`. The `.catch(() => {})` silently swallows the error.
-
-**Impact:** After Mastery returns a card from discard to hand, the Hand channel message never updates. The player doesn't see the returned card in their hand UI until the next natural refresh.
-
-**Fix:** Change the call to `updateHandChannelMessages(mastGame, client)`.
-
-**Files:** `index.js`
-
-### 1D. DC Name Extraction Uses `split('-')[0]` Instead of Regex
-
-**Problem:** At `index.js:2999`, inside `runDraftRandom`'s `deployForPlayer`:
-```js
-const dcName = k.split('-')[0];
-```
-For figure keys like `Obi-Wan Kenobi-1-0`, this extracts `Obi` instead of `Obi-Wan Kenobi`. The rest of the codebase correctly uses `.replace(/-\d+-\d+$/, '')`.
-
-**Impact:** During random auto-deployment, footprint size is looked up using the wrong DC name, potentially allowing overlapping figure placements or throwing errors for unrecognized names.
-
-**Fix:** Change to `const dcName = k.replace(/-\d+-\d+$/, '');`
-
-**Files:** `index.js`
-
-### 1E. Dead Variable `_spDefEff` (Minor)
-
-**Problem:** At `index.js:3747`, `_spDefEff` is assigned but never read. The Self-Preservation logic correctly uses `_spEff` (line 3750) instead. This is dead code left over from a refactor.
-
-**Fix:** Remove the unused variable.
-
-**Files:** `index.js`
-
-### 1F. Dead Code: `dcDepletedState` is Write-Only
-
-**Problem:** `dcDepletedState` Map (game-state.js:64) is written to in 6 places but **never read anywhere**. It's populated on load, set during setup, and deleted on cleanup — but no handler ever calls `.get()` on it.
-
-**Fix:** Audit whether depletion tracking was intended. If not needed, remove all writes. If needed, implement the read side.
-
-**Files:** `game-state.js`, `index.js`, `botmenu.js`
+## Philosophy
+Every change follows TDD: **write failing test → implement → verify green → move on**.
+No helper is introduced without a test. No call site is changed until the helper's test passes.
 
 ---
 
-## Phase 2: Extract Core Helpers (Biggest Bang for Buck)
+## Phase 1: Pure Helper Functions (No Discord dependency, fully testable)
 
-These eliminate the worst duplication. Each one replaces 15-50+ copy-pasted code blocks.
+### Step 1.1: `opponentPlayerNum(pn)` — in `src/game/player-helpers.js`
 
-### 2A. Extract `applyDamageToFigure()` helper
+**Test file:** `src/game/player-helpers.test.js` (new file)
 
-**Problem:** The health-state-update pattern appears **15+ times** across `index.js` and handlers:
 ```js
-const hs = dcHealthState.get(msgId) || [];
-const [cur, max] = hs[figIdx];
-const newCur = Math.max(0, (cur ?? max) - damage);
-hs[figIdx] = [newCur, max];
-dcHealthState.set(msgId, hs);
-const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
-const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-const idx = (dcIds || []).indexOf(msgId);
-if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
-```
-Every copy risks divergence (some use `max ?? newCur`, some use `max ?? cur`).
-
-**Fix:** Create `applyDamageToFigure(game, playerNum, msgId, figIdx, damage, { dcHealthState })` that:
-- Updates dcHealthState Map
-- Syncs to game.p{N}DcList
-- Returns `{ newCur, max, wasDefeated }`
-
-**Locations to replace:** index.js:3283, 3331, 3407, 3677, 3733, 3854, 4000, 4174; combat.js:82, 432, 2887, 3567, 3785; movement.js:546; round.js:110
-
-**Files:** New `src/game/health.js`, then update `index.js`, `combat.js`, `movement.js`, `round.js`
-
-### 2B. Extract `awardVp()` helper
-
-**Problem:** VP award pattern appears **20+ times**:
-```js
-const vpKey = `player${playerNum}VP`;
-game[vpKey] = game[vpKey] || { total: 0, kills: 0, objectives: 0 };
-game[vpKey].kills += vp;
-game[vpKey].total += vp;
+test('opponentPlayerNum returns 2 for 1', () => assert.strictEqual(opponentPlayerNum(1), 2));
+test('opponentPlayerNum returns 1 for 2', () => assert.strictEqual(opponentPlayerNum(2), 1));
+test('opponentPlayerNum returns 1 for 0 (falsy)', () => assert.strictEqual(opponentPlayerNum(0), 1));
+test('opponentPlayerNum returns 1 for undefined', () => assert.strictEqual(opponentPlayerNum(undefined), 1));
+test('opponentPlayerNum returns 1 for null', () => assert.strictEqual(opponentPlayerNum(null), 1));
 ```
 
-**Fix:** Create `awardVp(game, playerNum, amount, category = 'kills')`.
-
-**Locations:** index.js:3299, 3350, 3427, 3656, 4078, 4111, 4136, 4454, 4797, 5696, 5795 (and more)
-
-**Files:** New function in `src/game/scoring.js` or add to existing game module
-
-### 2C. Extract `getPlayerProp()` helpers
-
-**Problem:** Player-number ternary appears **50+ times**:
+**Implementation:** Add to `src/game/player-helpers.js`:
 ```js
-const dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
-const dcIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-const hand = playerNum === 1 ? game.player1CcHand : game.player2CcHand;
-const playerId = playerNum === 1 ? game.player1Id : game.player2Id;
+export function opponentPlayerNum(pn) { return pn === 1 ? 2 : 1; }
 ```
 
-**Fix:** Create helpers:
+**Call-site replacement:** 99 instances across 12 files. Replace `playerNum === 1 ? 2 : 1` (and all variants like `meta.playerNum === 1 ? 2 : 1`, `attackerPlayerNum === 1 ? 2 : 1`, etc.) with `opponentPlayerNum(variable)`.
+
+**Edge cases to handle:**
+- `(playerNum || 1) === 1 ? 2 : 1` → `opponentPlayerNum(playerNum || 1)` (7 instances in abilities.js)
+- Inline usages like `findMsgIdForFigureKey(game, playerNum === 1 ? 2 : 1, ...)` → extract to variable first
+- Complex: `cbt.defenderPlayerNum ?? (cbt.attackerPlayerNum === 1 ? 2 : 1)` → `cbt.defenderPlayerNum ?? opponentPlayerNum(cbt.attackerPlayerNum)`
+- Optional chaining: `cbt?.attackerPlayerNum ? (cbt.attackerPlayerNum === 1 ? 2 : 1) : null` → `cbt?.attackerPlayerNum ? opponentPlayerNum(cbt.attackerPlayerNum) : null` (3 instances in abilities.js)
+
+**Files to change (by count):**
+- `src/game/abilities.js` — 48 instances
+- `src/handlers/combat.js` — 16 instances
+- `src/handlers/activation.js` — 10 instances
+- `src/handlers/dc-play-area.js` — 8 instances
+- `src/handlers/cc-hand.js` — 3 instances
+- `src/handlers/combat-reactions.js` — 3 instances
+- `src/handlers/movement.js` — 3 instances
+- `src/handlers/round.js` — 3 instances
+- `src/handlers/interrupts.js` — 2 instances
+- `src/discord/apply-ability-result.js` — 1 instance
+- `src/discord/components.js` — 1 instance
+- `src/game/movement.js` — 1 instance
+
+**Re-export:** Add to `src/game/index.js` so existing import chains work.
+
+---
+
+### Step 1.2: `getInitiativePlayerNum(game)` — in `src/game/player-helpers.js`
+
+**Tests:**
 ```js
-export function getPlayerId(game, pn) { return pn === 1 ? game.player1Id : game.player2Id; }
-export function getDcList(game, pn) { return pn === 1 ? game.p1DcList : game.p2DcList; }
-export function getDcMessageIds(game, pn) { return pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds; }
-export function getHand(game, pn) { return pn === 1 ? game.player1CcHand : game.player2CcHand; }
-// etc.
+test('getInitiativePlayerNum returns 1 when p1 has initiative', () => {
+  assert.strictEqual(getInitiativePlayerNum({ initiativePlayerId: 'u1', player1Id: 'u1' }), 1);
+});
+test('getInitiativePlayerNum returns 2 when p2 has initiative', () => {
+  assert.strictEqual(getInitiativePlayerNum({ initiativePlayerId: 'u2', player1Id: 'u1' }), 2);
+});
+test('getInitiativePlayerNum returns 2 when initiativePlayerId is undefined', () => {
+  assert.strictEqual(getInitiativePlayerNum({ player1Id: 'u1' }), 2);
+});
 ```
 
-**Files:** New `src/game/player-helpers.js`, then find-and-replace across codebase
-
-### 2D. Extract `applyCondition()` / `removeCondition()` helpers
-
-**Problem:** Condition application pattern with immunity check appears **20+ times**:
+**Implementation:**
 ```js
-game.figureConditions = game.figureConditions || {};
-game.figureConditions[figureKey] = game.figureConditions[figureKey] || [];
-if (HARMFUL_CONDITIONS.includes(c) && isConditionImmune(game, figureKey)) { /* skip */ }
-else if (!game.figureConditions[figureKey].includes(c)) {
-  game.figureConditions[figureKey].push(c);
+export function getInitiativePlayerNum(game) {
+  return game.initiativePlayerId === game.player1Id ? 1 : 2;
 }
 ```
 
-**Fix:** Create `applyCondition(game, figureKey, condition)` that handles immunity, dedup, and logging.
-
-**Files:** Extend `src/game/conditions.js`, update `index.js`, `combat.js`, `dc-play-area.js`
+**Call sites:** 16 instances across 5 files:
+- `src/handlers/setup.js` — 10 instances (including 1 nonInitiativePlayerNum variant → use `opponentPlayerNum(getInitiativePlayerNum(game))`)
+- `src/handlers/round.js` — 3 instances
+- `src/handlers/activation.js` — 1 instance
+- `src/handlers/cc-hand.js` — 1 instance
+- `src/handlers/dc-play-area.js` — 1 instance
 
 ---
 
-## Phase 3: Structural Refactoring (index.js Split)
+### Step 1.3: Embed color constants — in `src/discord/colors.js` (new file)
 
-### 3A. Extract Context Factory from index.js
-
-**Problem:** ~150 context object assemblies in `index.js` lines 7420-9700, each manually selecting 5-30 properties:
+**Tests:** `src/discord/colors.test.js`
 ```js
-if (buttonKey === 'move_letter_') {
-  const moveLetterContext = {
-    getGame, dcMessageMeta, clearMoveGridMessages,
-    getMoveSpaceGridRows, buildLetterRows,
-  };
-  await handleMoveLetter(interaction, moveLetterContext);
-  return;
-}
+test('COLORS has expected keys', () => {
+  assert.ok(COLORS.DARK_EMBED);
+  assert.ok(COLORS.BLURPLE);
+  assert.strictEqual(typeof COLORS.DARK_EMBED, 'number');
+});
+test('COLORS values are valid hex numbers', () => {
+  for (const val of Object.values(COLORS)) {
+    assert.strictEqual(typeof val, 'number');
+    assert.ok(val >= 0 && val <= 0xffffff);
+  }
+});
 ```
 
-**Fix:** Create a context factory that builds context objects declaratively:
+**Implementation:**
 ```js
-// context-factory.js
-const HANDLER_CONTEXTS = {
-  'move_letter_': ['getGame', 'dcMessageMeta', 'clearMoveGridMessages', 'getMoveSpaceGridRows', 'buildLetterRows'],
-  'move_pick_': ['getGame', 'dcMessageMeta', ...],
-  // ...
+export const COLORS = {
+  DARK_EMBED: 0x2f3136,
+  BLURPLE: 0x5865f2,
+  GREEN: 0x57f287,
+  ORANGE: 0xe67e22,
+  GRAY: 0x95a5a6,
 };
-export function buildContext(handlerKey, allDeps) {
-  const keys = HANDLER_CONTEXTS[handlerKey];
-  return Object.fromEntries(keys.map(k => [k, allDeps[k]]));
-}
 ```
-This cuts ~2,000 lines of boilerplate from index.js.
 
-**Files:** New `src/context-factory.js`, refactor `index.js` dispatch section
+**Note:** `0xf39c12` (gold) already exported as `PHASE_COLOR` from `src/discord/messages.js`. `0xed4245` (red) does NOT exist in the codebase — omitted.
 
-### 3B. Split index.js into focused modules
-
-**Problem:** index.js is 9,802 lines containing:
-- Lines 1-350: Imports
-- Lines 358-800: Helper functions (game logic that shouldn't be here)
-- Lines 801-1200: Bot initialization
-- Lines 1200-7200: Game logic functions defined inline
-- Lines 7420-9700: Interaction dispatch
-
-**Fix:** Split into:
-1. `src/app.js` — Bot initialization, startup, shutdown
-2. `src/orchestrator.js` — Game logic helpers currently inline (lines 358-7200)
-3. `src/dispatcher.js` — Interaction routing (uses context factory)
-4. `index.js` — Entry point, imports and wires everything together
-
-**Files:** New `src/app.js`, `src/orchestrator.js`, `src/dispatcher.js`, slim down `index.js`
-
-### 3C. Move inline functions to proper modules
-
-**Problem:** 33+ functions defined in index.js (lines 6000-9800) that belong in handler or game modules:
-- `getDcStats` (6029) → should be in `data-loader.js`
-- `collectOverlappingFigures` (825) → should be in `src/game/movement.js`
-- `resolveMassivePush` (885) → should be in `src/game/movement.js`
-- `applySquadSubmission` (6686) → should be in `src/handlers/setup.js`
-- `populatePlayAreas` (6561) → should be in `src/handlers/setup.js`
-- `updateDcActionsMessage` (6205) → should be in `src/discord/messages.js`
-- `buildDcEmbedAndFiles` (6396) → should be in `src/discord/embeds.js`
-- `drawStartingHand` (nested in runDraftRandom, 3044) → extract to named function
-
-**Files:** Move functions to their natural homes, update imports
+**Call sites:** 15 hardcoded hex values across 5 files:
+- `src/discord/embeds.js` — 8 instances (4× DARK_EMBED, 2× BLURPLE, 1× GREEN, 1× unused-if-only-orange)
+- `src/handlers/cc-hand.js` — 2 instances (DARK_EMBED)
+- `src/handlers/dc-play-area.js` — 2 instances (DARK_EMBED, GRAY)
+- `src/handlers/combat.js` — 1 instance (ORANGE)
+- `src/handlers/lobby.js` — 1 instance (DARK_EMBED)
+- `index.js` — 1 instance (if any DARK_EMBED)
 
 ---
 
-## Phase 4: Safety & Reliability
+## Phase 2: Validation Guards (Reusable utilities)
 
-### 4A. Add Discord message character limit protection
+### Step 2.1: `requireGame(interaction, getGame, gameId, opts)` — in `src/utils/guards.js` (new file)
 
-**Problem:** No character limit checks anywhere. Discord has a 2000-char message limit and 1024-char embed field limit. `logGameAction()`, `applyAbilityResult`, and embed builders can exceed these.
+**Location:** `src/utils/guards.js` (not `src/handlers/`) — guards are utilities, not handlers. Avoids circular import risk.
 
-**Fix:** Add `enforceContentLimit(content, max = 2000)` utility, apply to:
-- `messages.js:logGameAction` — truncate content
-- `embeds.js:formatHealthSection` — truncate field values
-- `apply-ability-result.js` — truncate logMessage
+**Tests:** `src/utils/guards.test.js`
 
-**Files:** New utility in `src/discord/limits.js`, update `messages.js`, `embeds.js`, `apply-ability-result.js`
+Uses a `mockInteraction()` factory — a simple object with `followUp` as a spy. No Discord.js dependency needed.
 
-### 4B. Add per-game mutex for state mutations
-
-**Problem:** No concurrency protection. Two Discord interactions can modify the same game object concurrently via interleaved async operations, causing state corruption.
-
-**Fix:** Use the existing `async-mutex` dependency (already in package.json!) to lock per-gameId:
 ```js
-const gameLocks = new Map();
-function getGameLock(gameId) {
-  if (!gameLocks.has(gameId)) gameLocks.set(gameId, new Mutex());
-  return gameLocks.get(gameId);
+function mockInteraction() {
+  const i = { followUpCalled: false, followUpArgs: null };
+  i.followUp = async (args) => { i.followUpCalled = true; i.followUpArgs = args; };
+  return i;
 }
-// In dispatcher:
-const lock = getGameLock(gameId);
-await lock.runExclusive(() => handler(interaction, ctx));
+
+test('requireGame returns game when found', async () => {
+  const game = { gameId: 'g1' };
+  const result = await requireGame(mockInteraction(), (id) => game, 'g1');
+  assert.strictEqual(result, game);
+});
+test('requireGame returns null and replies when not found', async () => {
+  const interaction = mockInteraction();
+  const result = await requireGame(interaction, () => null, 'g1');
+  assert.strictEqual(result, null);
+  assert.strictEqual(interaction.followUpCalled, true);
+});
+test('requireGame returns null for ended game when checkEnded=true', async () => {
+  const interaction = mockInteraction();
+  const result = await requireGame(interaction, () => ({ ended: true }), 'g1', { checkEnded: true });
+  assert.strictEqual(result, null);
+});
+test('requireGame returns game for ended game when checkEnded=false', async () => {
+  const game = { ended: true };
+  const result = await requireGame(mockInteraction(), () => game, 'g1');
+  assert.strictEqual(result, game);
+});
+test('requireGame silent mode returns null without replying', async () => {
+  const interaction = mockInteraction();
+  const result = await requireGame(interaction, () => null, 'g1', { silent: true });
+  assert.strictEqual(result, null);
+  assert.strictEqual(interaction.followUpCalled, false);
+});
 ```
 
-**Files:** `src/game-state.js` (add lock), `index.js` or `dispatcher.js` (wrap handlers)
+**Implementation:**
+```js
+import { discordCatch } from '../error-handling.js';
 
-### 4C. Make saveGames() awaitable
+export async function requireGame(interaction, getGame, gameId, opts = {}) {
+  const game = getGame(gameId);
+  if (!game) {
+    if (!opts.silent) {
+      await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
+    }
+    return null;
+  }
+  if (opts.checkEnded && game.ended) {
+    if (!opts.silent) {
+      await interaction.followUp({ content: 'This game has ended.', ephemeral: true }).catch(discordCatch);
+    }
+    return null;
+  }
+  return game;
+}
+```
 
-**Problem:** `saveGamesToDb()` is fire-and-forget (line 109-112). Failed saves are silently logged. Graceful shutdown may not complete writes.
+**Call sites:** 96 instances across handler files:
+- 87 with "Game not found." message → `requireGame(interaction, getGame, gameId)`
+- 9 silent returns → `requireGame(interaction, getGame, gameId, { silent: true })`
 
-**Fix:** Make `saveGames()` return a Promise. Critical handlers can `await saveGames()`. Add retry with exponential backoff for DB write failures.
+Each becomes:
+```js
+// Before (3 lines):
+const game = getGame(gameId);
+if (!game) { await interaction.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
 
-**Files:** `game-state.js`, `db.js`
+// After (2 lines):
+const game = await requireGame(interaction, getGame, gameId);
+if (!game) return;
+```
 
-### 4D. Atomic health state sync
-
-**Problem:** `dcHealthState` Map and `game.p{N}DcList[].healthState` are two sources of truth. `syncHealthStateToGames()` only runs pre-save. If a crash occurs between mutation and save, health changes are lost.
-
-**Fix:** The `applyDamageToFigure()` helper from Phase 2A already solves this by updating both atomically. Ensure all health mutations go through it.
-
-### 4E. Add internal Discord retry for `.edit()` and `.send()`
-
-**Problem:** `withDiscordRetry()` exists in `error-handling.js` but is only used for interaction replies. Internal operations (msg.edit, channel.send) use bare `.catch(() => {})`.
-
-**Fix:** Wrap critical `.edit()` and `.send()` calls with `withDiscordRetry()`.
-
-**Files:** `dc-play-area.js`, `activation.js`, `movement.js`, `apply-ability-result.js`
+**Files by count:**
+- `src/handlers/dc-play-area.js` — 18 instances (2 silent)
+- `src/handlers/cc-hand.js` — 17 instances
+- `src/handlers/setup.js` — 18 instances (2 silent)
+- `src/handlers/combat.js` — 14 instances (2 silent)
+- `src/handlers/activation.js` — 6 instances (2 silent)
+- `src/handlers/game-tools.js` — 5 instances
+- `src/handlers/movement.js` — 5 instances
+- `src/handlers/botmenu.js` — 4 instances
+- `src/handlers/map-events.js` — 3 instances
+- `src/handlers/round.js` — 2 instances
+- `src/handlers/fast-forward.js` — 2 instances
+- `src/handlers/interact.js` — 2 instances (1 silent)
 
 ---
 
-## Phase 5: Code Quality (Nice to Have)
+### Step 2.2: `requirePlayer(interaction, game, userId, playerNum, canActAsPlayer, message)` — in `src/utils/guards.js`
 
-### 5A. Parallelize map renderer image loading
+**Tests:**
+```js
+test('requirePlayer returns true when authorized', async () => {
+  const result = await requirePlayer(mockInteraction(), {}, 'u1', 1, () => true);
+  assert.strictEqual(result, true);
+});
+test('requirePlayer returns false and replies when unauthorized', async () => {
+  const interaction = mockInteraction();
+  const result = await requirePlayer(interaction, {}, 'u99', 1, () => false);
+  assert.strictEqual(result, false);
+  assert.strictEqual(interaction.followUpCalled, true);
+});
+test('requirePlayer forwards custom error message', async () => {
+  const interaction = mockInteraction();
+  await requirePlayer(interaction, {}, 'u99', 1, () => false, 'Only the owner can move.');
+  assert.strictEqual(interaction.followUpArgs.content, 'Only the owner can move.');
+});
+```
 
-**Problem:** Token and condition icon loading is sequential (`await` in for-loops). A map with 20 tokens = 20 sequential file loads.
+**Implementation:**
+```js
+export async function requirePlayer(interaction, game, userId, playerNum, canActAsPlayer, message) {
+  if (!canActAsPlayer(game, userId, playerNum)) {
+    await interaction.followUp({
+      content: message || 'Only the owner can perform this action.',
+      ephemeral: true,
+    }).catch(discordCatch);
+    return false;
+  }
+  return true;
+}
+```
 
-**Fix:** Use `Promise.all()` for independent image loads.
+**Call sites:** 65 instances across 8 handler files. 45+ unique error messages — each is preserved via the `message` parameter.
 
-**Files:** `map-renderer.js`
-
-### 5B. Replace magic numbers with constants
-
-**Problem:** Hardcoded values scattered throughout:
-- `speed * 1.75`, `speed * 2.5` (minimap extent multipliers)
-- `99` (fallback max HP)
-- `4` (Figurehead range), `3` (Brutal Tactics range)
-- `VP_TABLE = [0, 2, 5, 10, 20]`
-
-**Fix:** Extract to named constants in `src/constants.js`.
-
-### 5C. Standardize error handling in handlers
-
-**Problem:** Mix of patterns:
-- `.catch((err) => { console.error('[discord]', err?.message ?? err); })` (45+ times)
-- `.catch(() => {})` (25+ times, silent failures)
-- Early returns without user feedback (20+ places)
-
-**Fix:** Create `discordCatch(err)` helper for consistent logging. Replace silent `.catch(() => {})` with logged catches where appropriate.
-
-### 5D. Handler unit tests
-
-**Problem:** 137 handler functions across 14 files, with ZERO unit tests. Only one integration test (`simulate-game.js`).
-
-**Fix:** Add unit tests for the most complex handlers (combat, activation, movement) using mocked game state and Discord interaction objects.
-
-### 5E. Break apart oversized functions
-
-**Problem:** Several functions exceed 500+ lines:
-- `handleAttackTarget` (~1200 lines)
-- `handleDcAction` (~850 lines)
-- `handleEndEndOfRound` (~634 lines)
-- `handleConfirmActivate` (~550 lines)
-- `handleCcConfirmPlay` (~356 lines)
-
-**Fix:** Extract sub-functions for distinct logical phases (validation → mutation → UI update).
+**Files by count:**
+- `src/handlers/cc-hand.js` — 17 instances
+- `src/handlers/dc-play-area.js` — 12 instances
+- `src/handlers/combat.js` — 12 instances
+- `src/handlers/interrupts.js` — 10 instances
+- `src/handlers/movement.js` — 5 instances
+- `src/handlers/combat-reactions.js` — 4 instances
+- `src/handlers/map-events.js` — 3 instances
+- `src/handlers/activation.js` — 2 instances
 
 ---
 
-## Implementation Order (Recommended)
+## Phase 3: CustomId Parsing Utility
 
+### Step 3.1: `parseCustomId` / `splitCustomId` / `matchCustomId` — in `src/discord/custom-id.js` (new file)
+
+**Tests:** `src/discord/custom-id.test.js`
+```js
+test('parseCustomId extracts suffix after prefix', () => {
+  assert.strictEqual(parseCustomId('refresh_map_game123', 'refresh_map_'), 'game123');
+});
+test('parseCustomId returns null for non-matching prefix', () => {
+  assert.strictEqual(parseCustomId('other_game123', 'refresh_map_'), null);
+});
+test('parseCustomId returns empty string when customId equals prefix', () => {
+  assert.strictEqual(parseCustomId('refresh_map_', 'refresh_map_'), '');
+});
+test('parseCustomId returns null for null/undefined input', () => {
+  assert.strictEqual(parseCustomId(null, 'refresh_map_'), null);
+  assert.strictEqual(parseCustomId(undefined, 'refresh_map_'), null);
+});
+test('splitCustomId splits remaining parts', () => {
+  assert.deepStrictEqual(splitCustomId('deploy_pick_game1_2_3_a4', 'deploy_pick_'), ['game1', '2', '3', 'a4']);
+});
+test('splitCustomId returns empty array for non-matching prefix', () => {
+  assert.deepStrictEqual(splitCustomId('other_thing', 'deploy_pick_'), []);
+});
+test('matchCustomId extracts regex groups', () => {
+  assert.deepStrictEqual(matchCustomId('attack_target_msg1_2_3', /^attack_target_(.+)_(\d+)_(\d+)$/), ['msg1', '2', '3']);
+});
+test('matchCustomId returns null on no match', () => {
+  assert.strictEqual(matchCustomId('other_thing', /^attack_target_(.+)$/), null);
+});
 ```
-Phase 1 (Bugs):     1C → 1D → 1E → 1A → 1B → 1F
-Phase 2 (Helpers):   2A → 2C → 2B → 2D
-Phase 3 (Structure): 3A → 3C → 3B
-Phase 4 (Safety):    4A → 4B → 4C → 4D → 4E
-Phase 5 (Quality):   5A → 5B → 5C → 5D → 5E
+
+**Implementation:**
+```js
+export function parseCustomId(customId, prefix) {
+  if (!customId?.startsWith(prefix)) return null;
+  return customId.slice(prefix.length);
+}
+
+export function splitCustomId(customId, prefix) {
+  const suffix = parseCustomId(customId, prefix);
+  return suffix ? suffix.split('_') : [];
+}
+
+export function matchCustomId(customId, regex) {
+  const m = customId?.match(regex);
+  return m ? m.slice(1) : null;
+}
 ```
 
-Phases 1 and 2 can start immediately.
-
-### Open Questions
-
-- **Initiative swap timing (round.js:398-406):** `swapInitiative()` and `roundNumber++` happen BEFORE `cleanupRoundStart()`. If cleanup logic depends on the old round/initiative context, this ordering could cause subtle bugs. Needs investigation. Phase 3 depends on Phase 2 (helpers need to exist before moving code). Phase 4 is independent. Phase 5 is ongoing.
+**Call sites:** 79 `.replace()` calls + 10 `.match()` calls → gradual adoption. Start with simplest cases (single gameId extraction via `parseCustomId`). Not a forced bulk migration.
 
 ---
 
-## Files Changed (Full List)
+## Phase 4: Verify Existing Helper Adoption
 
-| File | Phases | Changes |
-|------|--------|---------|
-| `index.js` | 1A,1B,2A-D,3A-C | Biggest changes: extract functions, use helpers, context factory |
-| `src/discord/components.js` | 1A | Add `buildRowPickerSelect`, `buildLetterPickerSelect`, overflow flag |
-| `src/router.js` | 1A,1B | New select/button prefixes, remove orphan |
-| `src/handlers/dc-play-area.js` | 1A,2A,2C,2D | Overflow handlers, use helpers |
-| `src/handlers/combat.js` | 2A,2C,2D | Use `applyDamageToFigure`, player helpers |
-| `src/handlers/cc-hand.js` | 1A,2C | Overflow handlers, player helpers |
-| `src/handlers/movement.js` | 1A,2A,2C | Letter overflow, use helpers |
-| `src/handlers/round.js` | 2A,2C | Use helpers |
-| `src/handlers/activation.js` | 2C | Use player helpers |
-| `src/game-state.js` | 1C,4B,4C | Remove dcDepletedState, add mutex, awaitable save |
-| `src/discord/messages.js` | 4A | Content length protection |
-| `src/discord/embeds.js` | 4A | Field length protection |
-| `src/discord/apply-ability-result.js` | 4A,4E | Content limits, retry |
-| `src/error-handling.js` | 4E | Extend retry to internal operations |
-| `src/map-renderer.js` | 5A | Parallel image loading |
-| `src/constants.js` | 5B | New constants |
-| **New files:** | | |
-| `src/game/health.js` | 2A | `applyDamageToFigure()` |
-| `src/game/scoring.js` | 2B | `awardVp()` |
-| `src/game/player-helpers.js` | 2C | Player property accessors |
-| `src/context-factory.js` | 3A | Declarative context builder |
-| `src/discord/limits.js` | 4A | Content/embed limit utilities |
-| `src/orchestrator.js` | 3B | Extracted game logic from index.js |
-| `src/dispatcher.js` | 3B | Extracted interaction routing |
-| `src/app.js` | 3B | Bot init/shutdown |
+### Step 4.1: Audit `dcNameFromFigureKey` usage
+
+**Existing:** `src/game/dc-helpers.js:12` — `dcNameFromFigureKey(fk)` does `fk.replace(/-\d+-\d+$/, '')`.
+
+**Task:** Grep for raw `.replace(/-\d+-\d+$/, '')` patterns that should use the helper instead. Replace where the helper is already imported or easily importable.
+
+### Step 4.2: Add tests for existing `parseFigureKey`
+
+**Tests to add to `src/game/dc-helpers.test.js`:**
+```js
+test('parseFigureKey extracts dgIndex and figureIndex', () => {
+  assert.deepStrictEqual(parseFigureKey('Stormtroopers-1-0'), { dgIndex: 1, figureIndex: 0 });
+});
+test('parseFigureKey handles multi-word names', () => {
+  assert.deepStrictEqual(parseFigureKey('Darth Vader-2-1'), { dgIndex: 2, figureIndex: 1 });
+});
+test('parseFigureKey defaults for invalid input', () => {
+  assert.deepStrictEqual(parseFigureKey('invalid'), { dgIndex: 1, figureIndex: 0 });
+});
+test('dcNameFromFigureKey extracts DC name', () => {
+  assert.strictEqual(dcNameFromFigureKey('Darth Vader-1-0'), 'Darth Vader');
+  assert.strictEqual(dcNameFromFigureKey('Stormtroopers-2-3'), 'Stormtroopers');
+});
+```
+
+---
+
+## Execution Order & Dependency Graph
+
+```
+Phase 1.1 (opponentPlayerNum)     ← No dependencies, biggest impact (99 sites)
+  ↓
+Phase 1.2 (getInitiativePlayerNum) ← Same file, 16 sites (was underestimated)
+  ↓
+Phase 1.3 (COLORS)                 ← Independent, 15 sites across 5 files
+  ↓
+Phase 2.1 (requireGame)            ← Needs mockInteraction test util, 96 sites
+  ↓
+Phase 2.2 (requirePlayer)          ← Same test util, same file, 65 sites
+  ↓
+Phase 3.1 (parseCustomId)          ← Independent, gradual adoption (79+ sites)
+  ↓
+Phase 4 (verify existing helpers)  ← Audit + test only
+```
+
+---
+
+## New Files Created
+
+| File | Purpose | Lines (est.) |
+|---|---|---|
+| `src/game/player-helpers.test.js` | Tests for opponentPlayerNum, getInitiativePlayerNum | ~30 |
+| `src/discord/colors.js` | Embed color constants | ~8 |
+| `src/discord/colors.test.js` | Color constants tests | ~15 |
+| `src/utils/guards.js` | requireGame, requirePlayer | ~30 |
+| `src/utils/guards.test.js` | Guard tests with mockInteraction | ~60 |
+| `src/discord/custom-id.js` | parseCustomId, splitCustomId, matchCustomId | ~15 |
+| `src/discord/custom-id.test.js` | CustomId parser tests | ~35 |
+
+## Files Modified
+
+| File | Changes | Sites |
+|---|---|---|
+| `src/game/player-helpers.js` | Add opponentPlayerNum, getInitiativePlayerNum | +2 functions |
+| `src/game/index.js` | Re-export new helpers | +2 exports |
+| `src/game/abilities.js` | Replace opponent ternaries | 48 |
+| `src/handlers/combat.js` | Ternaries + guards + player guards | 16 + 14 + 12 |
+| `src/handlers/activation.js` | Ternaries + guards + initiative | 10 + 6 + 1 |
+| `src/handlers/dc-play-area.js` | Ternaries + guards + player guards + colors + initiative | 8 + 18 + 12 + 2 + 1 |
+| `src/handlers/cc-hand.js` | Ternaries + guards + player guards + colors + initiative | 3 + 17 + 17 + 2 + 1 |
+| `src/handlers/setup.js` | Guards + initiative | 18 + 10 |
+| `src/handlers/movement.js` | Ternaries + guards + player guards | 3 + 5 + 5 |
+| `src/handlers/round.js` | Ternaries + guards + initiative | 3 + 2 + 3 |
+| `src/handlers/combat-reactions.js` | Ternaries + player guards | 3 + 4 |
+| `src/handlers/interrupts.js` | Ternaries + player guards | 2 + 10 |
+| `src/handlers/game-tools.js` | Guards | 5 |
+| `src/handlers/botmenu.js` | Guards | 4 |
+| `src/handlers/fast-forward.js` | Guards | 2 |
+| `src/handlers/map-events.js` | Guards + player guards | 3 + 3 |
+| `src/handlers/post-combat.js` | Guards | 3 |
+| `src/handlers/interact.js` | Guards | 2 |
+| `src/discord/embeds.js` | Colors | 8 |
+| `src/discord/apply-ability-result.js` | 1 ternary | 1 |
+| `src/discord/components.js` | 1 ternary | 1 |
+| `src/game/movement.js` | 1 ternary | 1 |
+| `src/game/dc-helpers.test.js` | Add parseFigureKey + dcNameFromFigureKey tests | +4 tests |
+
+---
+
+## Risk Assessment
+
+| Change | Risk | Reason |
+|---|---|---|
+| opponentPlayerNum | LOW | Pure function, trivial logic, full tests. High volume but mechanical replacement. |
+| getInitiativePlayerNum | LOW | Pure function, 16 call sites (3× more than initially estimated). |
+| COLORS | LOW | Literal value swap, no behavior change. |
+| requireGame | MEDIUM | Changes control flow (early return). Silent vs messaging variants need care. Each site must verify the `return` still correctly exits the handler (all confirmed top-level). |
+| requirePlayer | MEDIUM | Same control flow concern. 45+ unique custom error messages must be preserved in each call. |
+| parseCustomId | LOW | Gradual opt-in adoption, no forced migration. |
+
+## Success Criteria
+
+1. All 312 passing tests still pass (2 infrastructure scripts excluded)
+2. All new test files pass (est. 30+ new tests)
+3. `grep -rn "=== 1 ? 2 : 1" src/` count drops from 99 to 0
+4. `grep -rn "initiativePlayerId === game.player1Id ? " src/` drops from 16 to 0
+5. `grep -c "'Game not found.'" src/handlers/*.js` drops from ~87 to 0
+6. No hardcoded hex colors remain in handler/embed files
+7. Zero regressions in game behavior
