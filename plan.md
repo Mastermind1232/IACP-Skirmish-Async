@@ -572,3 +572,37 @@ Phase 5 (extract index.js)        ← Structural, 3 tiers (~3,200 lines out)
 7. Zero regressions in game behavior
 8. `index.js` reduced from 7,400 → ~4,200 lines (Phase 5)
 9. All extracted modules registered in handler registry or importable standalone
+
+---
+
+## Completion Status (2026-03-09)
+
+### Completed
+| Phase | Description | Commit | Tests Added |
+|-------|-------------|--------|-------------|
+| 1.1 | opponentPlayerNum — 108 ternary replacements across 12 files | `4e6ebdd` | 5 |
+| 1.2 | getInitiativePlayerNum — 36 ternary replacements across 5 files | `bbb30e3` | 3 |
+| 2.1 | COLORS constants — 34 hardcoded hex replacements across 4 files | `65e9a6b` | 2 |
+| 2.2 | requireGame guard — 63 guard blocks replaced across 15 handlers | `e8103b2`, `be2ba71` | 5 |
+| 2.3 | requirePlayer guard — canActAsPlayer guard blocks replaced | `969573e` | 4 |
+| 3.1 | parseCustomId / splitCustomId / matchCustomId utilities | `d7e842b` | 10 |
+| 4.1 | dcNameFromFigureKey + parseFigureKey test coverage | `3c73109` | 8 |
+| 4.2 | dcNameFromFigureKey — 254 raw regex calls replaced | `8c36100` | 0 |
+| 5.1 | combat-special-effects — 15 handlers extracted to new module | `75d0de0`, `d7371c6` | 0 |
+| 5.4 | board-helpers — 11 pure functions extracted | `75d0de0` | 0 |
+| 5.3 | game-creation + rendering extraction | `7463f08` | 0 |
+
+**Total: 44 new tests, all passing. index.js reduced from 7,400 → 5,943 lines (−1,457 lines, −20%).**
+
+### Deferred
+| Phase | Description | Reason |
+|-------|-------------|--------|
+| 5.2 | combat-damage extraction (~1,700 lines) | `applyDamageAndFinishCombat` accesses 50+ game state properties with ~95 internal function calls. Extraction would require fundamental refactoring of game state management (e.g., state object pattern or context injection) rather than simple file moves. Recommended as a standalone follow-up project. |
+
+### Metrics
+- Ternary opposites (`=== 1 ? 2 : 1`): 99 → 0
+- Initiative ternaries: 36 → 0
+- Hardcoded hex colors in handlers/embeds: 34 → 0
+- Raw `dcNameFromFigureKey` regex patterns: 254 → 0
+- Guard boilerplate blocks eliminated: ~63 (requireGame) + ~8 (requirePlayer)
+- New reusable modules: 7 (player-helpers, dc-helpers, board-helpers, colors, guards, custom-id, combat-special-effects)
