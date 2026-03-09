@@ -26,13 +26,7 @@ Full line-by-line audit of all 47,000+ lines across 47 production files. Below a
 
 **Files:** `components.js`, `router.js`, `index.js`, `dc-play-area.js`, `cc-hand.js`, `movement.js`
 
-### 1B. Orphaned Handler: `dc_cc_defender_`
-
-**Problem:** `dc_cc_defender_` is registered in `router.js` BUTTON_PREFIXES (line 19) but has NO dispatch in `index.js`. If a user clicks this button, nothing happens.
-
-**Fix:** Either add the handler dispatch or remove the dead prefix.
-
-**Files:** `router.js`, `index.js`
+### 1B. ~~Orphaned Handler: `dc_cc_defender_`~~ *(Not a bug — dispatch exists at index.js:9668)*
 
 ### 1C. `updateHandChannelMessages` Called With Wrong Arguments
 

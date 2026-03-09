@@ -60,8 +60,6 @@ function migrateGame(g) {
 const dcMessageMeta = new Map();
 /** messageId -> boolean (exhausted) */
 const dcExhaustedState = new Map();
-/** messageId -> boolean (Skirmish Upgrades with Deplete effect) */
-const dcDepletedState = new Map();
 /** messageId -> healthState array */
 const dcHealthState = new Map();
 /** key = `${gameId}_${playerNum}`, value = { squad, timestamp } */
@@ -195,7 +193,6 @@ export function getGamesMap() {
 export {
   dcMessageMeta,
   dcExhaustedState,
-  dcDepletedState,
   dcHealthState,
   pendingIllegalSquad,
 };

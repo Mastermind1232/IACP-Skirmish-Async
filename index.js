@@ -50,7 +50,6 @@ import {
   CURRENT_GAME_VERSION,
   dcMessageMeta,
   dcExhaustedState,
-  dcDepletedState,
   dcHealthState,
   pendingIllegalSquad,
 } from './src/game-state.js';
@@ -2789,13 +2788,11 @@ async function reorderPlayAreaAfterAttachments(game, playerNum, client) {
     if (oldDcMsgId) {
       dcMessageMeta.delete(oldDcMsgId);
       dcExhaustedState.delete(oldDcMsgId);
-      dcDepletedState.delete(oldDcMsgId);
       dcHealthState.delete(oldDcMsgId);
       dcMsgIdRemap.set(oldDcMsgId, newDcMsgId);
     }
     dcMessageMeta.set(newDcMsgId, { gameId: game.gameId, playerNum, dcName: dc.dcName, displayName: dc.displayName });
     dcExhaustedState.set(newDcMsgId, false);
-    dcDepletedState.set(newDcMsgId, false);
     dcHealthState.set(newDcMsgId, healthState);
 
     // Add components (buttons)
@@ -2996,7 +2993,7 @@ async function runDraftRandom(game, client, options = {}) {
       const occupied = [];
       for (const p of [1, 2]) {
         for (const [k, s] of Object.entries(game.figurePositions[p] || {})) {
-          const dcName = k.split('-')[0];
+          const dcName = k.replace(/-\d+-\d+$/, '');
           const size = game.figureOrientations?.[k] || getFigureSize(dcName);
           occupied.push(...getFootprintCells(s, size));
         }
@@ -3744,7 +3741,6 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       }
       // Self-Preservation (Hired Gun Elite): when you suffer damage, become Focused
       if (newCur > 0) {
-        const _spDefEff = getDcEffects()?.[combat.target.label?.replace(/-\d+-\d+$/, '') || ''];
         const _spDcName = idx >= 0 ? dcList[idx]?.dcName : (combat.target.figureKey || '').replace(/-\d+-\d+$/, '');
         const _spEff = getDcEffects()?.[_spDcName];
         if ((_spEff?.passives || []).includes('Self-Preservation')) {
@@ -6657,7 +6653,6 @@ async function populatePlayAreas(game, client) {
     const msg = await p1PlayArea.send({ embeds: [embed], files });
     dcMessageMeta.set(msg.id, { gameId, playerNum: 1, dcName, displayName });
     dcExhaustedState.set(msg.id, false);
-    dcDepletedState.set(msg.id, false);
     dcHealthState.set(msg.id, healthState);
     const p1Components = getDcPlayAreaComponents(msg.id, false, game, dcName);
     await msg.edit({ components: p1Components });
@@ -6671,7 +6666,6 @@ async function populatePlayAreas(game, client) {
     const msg = await p2PlayArea.send({ embeds: [embed], files });
     dcMessageMeta.set(msg.id, { gameId, playerNum: 2, dcName, displayName });
     dcExhaustedState.set(msg.id, false);
-    dcDepletedState.set(msg.id, false);
     dcHealthState.set(msg.id, healthState);
     const p2Components = getDcPlayAreaComponents(msg.id, false, game, dcName);
     await msg.edit({ components: p2Components });
@@ -7163,7 +7157,6 @@ client.on('messageCreate', async (message) => {
       games.clear();
       dcMessageMeta.clear();
       dcExhaustedState.clear();
-      dcDepletedState.clear();
       dcHealthState.clear();
       await message.channel.send(`Done. Deleted ${deleted} channel(s).`);
     } catch (err) {
@@ -8016,7 +8009,6 @@ client.on('interactionCreate', async (interaction) => {
       client,
       dcMessageMeta,
       dcExhaustedState,
-      dcDepletedState,
       dcHealthState,
       buildDcEmbedAndFiles,
       getConditionsForDcMessage,
@@ -8709,7 +8701,7 @@ client.on('interactionCreate', async (interaction) => {
         mastGame[mastHandKey].push(mastCard);
         const mastThread = await client.channels.fetch(mastCombat.combatThreadId).catch(() => null);
         if (mastThread) await mastThread.send(`**Mastery** — **${mastCard}** returned from discard to hand.`).catch((err) => { console.error('[discord]', err?.message ?? err); });
-        await updateHandChannelMessages(mastGame, mastAPN, client).catch(() => {});
+        await updateHandChannelMessages(mastGame, client).catch(() => {});
       }
     }
     const mastCThread = await client.channels.fetch(mastCombat.combatThreadId).catch(() => null);
@@ -9625,7 +9617,6 @@ client.on('interactionCreate', async (interaction) => {
       saveGames,
       dcMessageMeta,
       dcExhaustedState,
-      dcDepletedState,
       dcHealthState,
       logGameErrorToBotLogs,
       client,
@@ -9689,7 +9680,6 @@ client.on('interactionCreate', async (interaction) => {
       saveGames,
       dcMessageMeta,
       dcExhaustedState,
-      dcDepletedState,
       dcHealthState,
       logGameErrorToBotLogs,
       client,

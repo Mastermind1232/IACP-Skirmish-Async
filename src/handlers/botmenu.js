@@ -24,7 +24,7 @@ function canKillGame(interaction, game) {
  * Delete game's Discord category and channels, remove from state and DB. Shared by Kill Game and Archive confirm.
  * @param {object} game - Game state (before deleteGame)
  * @param {string} gameId - game.gameId
- * @param {object} ctx - client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcDepletedState, dcHealthState, deleteGameFromDb
+ * @param {object} ctx - client, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, deleteGameFromDb
  */
 export async function deleteGameChannelsAndGame(game, gameId, ctx) {
   const {
@@ -33,7 +33,6 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
     saveGames,
     dcMessageMeta,
     dcExhaustedState,
-    dcDepletedState,
     dcHealthState,
     deleteGameFromDb,
   } = ctx;
@@ -62,7 +61,6 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
     if (meta.gameId === gameId) {
       dcMessageMeta.delete(msgId);
       dcExhaustedState.delete(msgId);
-      dcDepletedState.delete(msgId);
       dcHealthState.delete(msgId);
     }
   }

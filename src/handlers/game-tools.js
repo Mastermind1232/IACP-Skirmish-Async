@@ -240,7 +240,7 @@ export async function handleUndo(interaction, ctx) {
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcDepletedState, dcHealthState, logGameErrorToBotLogs, client, deleteGameFromDb
+ * @param {object} ctx - getGame, deleteGame, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, logGameErrorToBotLogs, client, deleteGameFromDb
  */
 export async function handleKillGame(interaction, ctx) {
   const { getGame, logGameErrorToBotLogs } = ctx;
