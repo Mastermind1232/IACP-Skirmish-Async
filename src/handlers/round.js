@@ -487,81 +487,8 @@ export async function handleEndEndOfRound(interaction, ctx) {
 export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
   const { logGameAction } = ctx;
 
-  // Post-deploy effects: fire once at the start of round 1
-  if (game.currentRound === 1 && !game.postDeployEffectsFired) {
-    game.postDeployEffectsFired = true;
-    const _pdEff = getDcEffects() || {};
-    for (const pn of [1, 2]) {
-      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
-        if (!pos) continue;
-        const dcName = dcNameFromFigureKey(fk);
-        const passives = _pdEff[dcName]?.passives || [];
-        // Beskar Armor (The Mandalorian / The Armorer): gain 2 Block Tokens
-        if (passives.includes('Beskar Armor')) {
-          game.figurePowerTokens = game.figurePowerTokens || {};
-          game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-          game.figurePowerTokens[fk].push('Block');
-          game.figurePowerTokens[fk].push('Block');
-          await logGameAction(game, client, `🛡️ **Beskar Armor** — **${dcName}** gains **2 Block Tokens** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
-        }
-        // Stealthy (Davith Elso): become Hidden at start of mission
-        if (passives.includes('Stealthy')) {
-          applyCondition(game, fk, 'Hide');
-          await logGameAction(game, client, `🥷 **Stealthy** — **${dcName}** becomes **Hidden** at start of mission.`, { phase: 'ROUND', icon: 'deployed' });
-        }
-        // Ambush (Ewok Warrior Elite): become Hidden after deployment
-        if (passives.includes('Ambush')) {
-          applyCondition(game, fk, 'Hide');
-          await logGameAction(game, client, `🥷 **Ambush** — **${dcName}** becomes **Hidden** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
-        }
-        // Security Detail (Death Trooper Regular): a friendly LEADER gains 1 Block Token
-        if (passives.includes('Security Detail')) {
-          const leaderFk = Object.keys(game.figurePositions?.[pn] || {}).find(lfk => {
-            if (!game.figurePositions[pn][lfk]) return false;
-            const ldn = dcNameFromFigureKey(lfk);
-            return (_pdEff[ldn]?.keywords || []).some(k => k.toUpperCase() === 'LEADER');
-          });
-          if (leaderFk) {
-            game.figurePowerTokens = game.figurePowerTokens || {};
-            game.figurePowerTokens[leaderFk] = game.figurePowerTokens[leaderFk] || [];
-            game.figurePowerTokens[leaderFk].push('Block');
-            const leaderName = dcNameFromFigureKey(leaderFk);
-            await logGameAction(game, client, `🛡️ **Security Detail** — **${leaderName}** gains **1 Block Token** (from ${dcName}).`, { phase: 'ROUND', icon: 'deployed' });
-          }
-        }
-        // Forward Emplacement (E-Web Engineer Elite): gain movement points equal to speed
-        if (passives.includes('Forward Emplacement')) {
-          const _feSpeed = _pdEff[dcName]?.speed || 0;
-          if (_feSpeed > 0) {
-            game.deployBonusMp = game.deployBonusMp || {};
-            game.deployBonusMp[fk] = (game.deployBonusMp[fk] || 0) + _feSpeed;
-            await logGameAction(game, client, `🏗️ **Forward Emplacement** — **${dcName}** gains **${_feSpeed} MP** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
-          }
-        }
-        // Smooth Landing (Bodhi Rook, Hera Syndulla): self + adjacent friendlies gain 1 MP
-        if (passives.includes('Smooth Landing')) {
-          const _slPos = game.figurePositions?.[pn]?.[fk];
-          if (_slPos) {
-            game.deployBonusMp = game.deployBonusMp || {};
-            game.deployBonusMp[fk] = (game.deployBonusMp[fk] || 0) + 1;
-            const _slGranted = [dcName];
-            const _slMs = getMapSpaces(game.selectedMap?.id);
-            const _slAdj = (_slMs?.adjacency?.[String(_slPos).toLowerCase()] || []).map(a => String(a).toLowerCase());
-            const _slDone = new Set();
-            for (const [afk, apos] of Object.entries(game.figurePositions?.[pn] || {})) {
-              if (!apos || afk === fk) continue;
-              if (!_slAdj.includes(String(apos).toLowerCase())) continue;
-              if (_slDone.has(afk)) continue;
-              _slDone.add(afk);
-              game.deployBonusMp[afk] = (game.deployBonusMp[afk] || 0) + 1;
-              _slGranted.push(dcNameFromFigureKey(afk));
-            }
-            await logGameAction(game, client, `🛬 **Smooth Landing** — ${_slGranted.join(', ')} gain${_slGranted.length === 1 ? 's' : ''} **1 MP** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
-          }
-        }
-      }
-    }
-  }
+  // Post-deploy effects now handled by runPostDeployPhase() in post-deploy.js
+  // (called from the appropriate trigger points: cc-hand.js, index.js Draft Random, etc.)
 
   // Start-of-round DC passive hooks
   {
@@ -652,26 +579,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           await logGameAction(game, client, `⚔️ **First Strike** — Both players receive **4 VPs**.`);
         }
 
-        // [Extra Armor]: After deployment, distribute 4 Block Tokens among friendly figures (round 1 only)
-        if (dcName.includes('Extra Armor') && game.currentRound === 1 && !game[`extraArmorFired_p${playerNum}`]) {
-          game[`extraArmorFired_p${playerNum}`] = true;
-          const allFks = Object.keys(game.figurePositions?.[playerNum] || {});
-          if (allFks.length > 0) {
-            game.figurePowerTokens = game.figurePowerTokens || {};
-            game[`pendingExtraArmor_p${playerNum}`] = { remaining: 4 };
-            const btns = allFks.slice(0, 20).map(fk => new ButtonBuilder()
-              .setCustomId(`extra_armor_pick_${gameId}_${playerNum}_${fk}`)
-              .setLabel(fk.replace(/-\d+-\d+$/, ''))
-              .setStyle(ButtonStyle.Primary)
-            );
-            const rows = [];
-            for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
-            await logGameAction(game, client, `🛡️ **Extra Armor** — <@${ownerId}>, distribute **4 Block Tokens** among your figures (${4} remaining):`, {
-              components: rows,
-              allowedMentions: { users: [ownerId] },
-            });
-          }
-        }
+        // [Extra Armor]: Now handled by post-deploy queue (post-deploy.js)
 
         // [Rule by Fear]: At the start of the first game round, draw 2 CCs, then discard 1
         if (dcName.includes('Rule by Fear') && game.currentRound === 1 && !game[`ruleByFearFired_p${playerNum}`]) {
@@ -814,85 +722,7 @@ export async function handleEndStartOfRound(interaction, ctx) {
   }
   game.startOfRoundWhoseTurn = null;
 
-  // Post-deploy effects: fire once at the start of round 1
-  if (game.currentRound === 1 && !game.postDeployEffectsFired) {
-    game.postDeployEffectsFired = true;
-    const _pdEff = getDcEffects() || {};
-    for (const pn of [1, 2]) {
-      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
-        if (!pos) continue;
-        const dcName = dcNameFromFigureKey(fk);
-        const passives = _pdEff[dcName]?.passives || [];
-        // Beskar Armor (The Mandalorian / The Armorer): gain 2 Block Tokens
-        if (passives.includes('Beskar Armor')) {
-          game.figurePowerTokens = game.figurePowerTokens || {};
-          game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-          game.figurePowerTokens[fk].push('Block');
-          game.figurePowerTokens[fk].push('Block');
-          await logGameAction(game, client, `🛡️ **Beskar Armor** — **${dcName}** gains **2 Block Tokens** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
-        }
-        // Stealthy (Davith Elso): become Hidden at start of mission
-        if (passives.includes('Stealthy')) {
-          applyCondition(game, fk, 'Hide');
-          await logGameAction(game, client, `🥷 **Stealthy** — **${dcName}** becomes **Hidden** at start of mission.`, { phase: 'ROUND', icon: 'deployed' });
-        }
-        // Ambush (Ewok Warrior Elite): become Hidden after deployment
-        if (passives.includes('Ambush')) {
-          applyCondition(game, fk, 'Hide');
-          await logGameAction(game, client, `🥷 **Ambush** — **${dcName}** becomes **Hidden** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
-        }
-        // Security Detail (Death Trooper Regular): a friendly LEADER gains 1 Block Token
-        if (passives.includes('Security Detail')) {
-          const _sdEff = _pdEff || {};
-          const leaderFk = Object.keys(game.figurePositions?.[pn] || {}).find(lfk => {
-            if (!game.figurePositions[pn][lfk]) return false;
-            const ldn = dcNameFromFigureKey(lfk);
-            return (_sdEff[ldn]?.keywords || []).some(k => k.toUpperCase() === 'LEADER');
-          });
-          if (leaderFk) {
-            game.figurePowerTokens = game.figurePowerTokens || {};
-            game.figurePowerTokens[leaderFk] = game.figurePowerTokens[leaderFk] || [];
-            game.figurePowerTokens[leaderFk].push('Block');
-            const leaderName = dcNameFromFigureKey(leaderFk);
-            await logGameAction(game, client, `🛡️ **Security Detail** — **${leaderName}** gains **1 Block Token** (from ${dcName}).`, { phase: 'ROUND', icon: 'deployed' });
-          }
-        }
-        // Forward Emplacement (E-Web Engineer Elite): gain movement points equal to speed
-        if (passives.includes('Forward Emplacement')) {
-          const _feSpeed = _pdEff[dcName]?.speed || 0;
-          if (_feSpeed > 0) {
-            game.deployBonusMp = game.deployBonusMp || {};
-            game.deployBonusMp[fk] = (game.deployBonusMp[fk] || 0) + _feSpeed;
-            await logGameAction(game, client, `🏗️ **Forward Emplacement** — **${dcName}** gains **${_feSpeed} MP** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
-          }
-        }
-        // Smooth Landing (Bodhi Rook, Hera Syndulla): self + adjacent friendlies gain 1 MP
-        if (passives.includes('Smooth Landing')) {
-          const _slPos = game.figurePositions?.[pn]?.[fk];
-          if (_slPos) {
-            // Grant 1 MP to self
-            game.deployBonusMp = game.deployBonusMp || {};
-            game.deployBonusMp[fk] = (game.deployBonusMp[fk] || 0) + 1;
-            const _slGranted = [dcName];
-            // Grant 1 MP to adjacent friendlies
-            const _slMs = getMapSpaces(game.selectedMap?.id);
-            const _slAdj = (_slMs?.adjacency?.[String(_slPos).toLowerCase()] || []).map(a => String(a).toLowerCase());
-            const _slDone = new Set();
-            for (const [afk, apos] of Object.entries(game.figurePositions?.[pn] || {})) {
-              if (!apos || afk === fk) continue;
-              if (!_slAdj.includes(String(apos).toLowerCase())) continue;
-              // Only grant once per figure
-              if (_slDone.has(afk)) continue;
-              _slDone.add(afk);
-              game.deployBonusMp[afk] = (game.deployBonusMp[afk] || 0) + 1;
-              _slGranted.push(dcNameFromFigureKey(afk));
-            }
-            await logGameAction(game, client, `🛬 **Smooth Landing** — ${_slGranted.join(', ')} gain${_slGranted.length === 1 ? 's' : ''} **1 MP** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
-          }
-        }
-      }
-    }
-  }
+  // Post-deploy effects now handled by runPostDeployPhase() in post-deploy.js
 
   // Start-of-round DC passive hooks
   {
@@ -1113,6 +943,11 @@ export async function handleExtraArmorPick(interaction, ctx) {
     delete game[`pendingExtraArmor_p${playerNum}`];
     try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
     await interaction.followUp({ content: 'All 4 Block Tokens distributed.', ephemeral: true }).catch(discordCatch);
+    // If post-deploy queue is active, advance it
+    if (game.postDeployQueue) {
+      const { onExtraArmorComplete } = await import('./post-deploy.js');
+      await onExtraArmorComplete(game, gameId, client, { logGameAction, saveGames });
+    }
   } else {
     await interaction.followUp({ content: `Block Token placed on ${dcName}. ${pending.remaining} remaining — pick another figure.`, ephemeral: true }).catch(discordCatch);
   }

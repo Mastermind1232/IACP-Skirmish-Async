@@ -109,6 +109,7 @@ import {
   handleFalseOrdersMovePick, handleRushPushSpace,
   // Used in allDeps
   runStartOfRoundDcEffects,
+  runPostDeployPhase,
   handlePreReroll,
   handleCombatPassive,
   handleCombatToken,
@@ -1774,6 +1775,23 @@ async function finishSetupAttachments(game, client) {
     console.error('Failed to reorder play area after attachments:', err);
   }
   game.currentRound = 1;
+  game.currentActivationTurnPlayerId = game.initiativePlayerId;
+  await clearPreGameSetup(game, client);
+
+  // Run post-deploy effects BEFORE CC draw (per rules: "after deployment" is before CC shuffle)
+  const postDeployActive = await runPostDeployPhase(game, game.gameId, client, { logGameAction, saveGames }, async () => {
+    await _sendCcShuffleDrawPrompts(game, client);
+    saveGames();
+  });
+
+  if (!postDeployActive) {
+    await _sendCcShuffleDrawPrompts(game, client);
+  }
+  saveGames();
+}
+
+/** Send CC shuffle/draw prompts to both players' hand channels. */
+async function _sendCcShuffleDrawPrompts(game, client) {
   const generalChannel = await client.channels.fetch(game.generalId);
   const initPlayerNum = getInitiativePlayerNum(game);
   const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
@@ -1781,8 +1799,6 @@ async function finishSetupAttachments(game, client) {
     content: deployContent,
     allowedMentions: { users: [game.initiativePlayerId] },
   });
-  game.currentActivationTurnPlayerId = game.initiativePlayerId;
-  await clearPreGameSetup(game, client);
   const p1CcList = game.player1Squad?.ccList || [];
   const p2CcList = game.player2Squad?.ccList || [];
   const p1Placed = (game.p1CcAttachments && Object.values(game.p1CcAttachments).flat()) || [];
@@ -2024,7 +2040,17 @@ async function runDraftRandom(game, client, options = {}) {
 
   await updatePlayAreaDcButtons(game, client);
   await runStartOfRoundDcEffects(game, game.gameId, client, { logGameAction });
-  await sendRoundActivationPhaseMessage(game, client);
+  // Run post-deploy phase (interactive queue); if active, activation phase is deferred
+  let postDeployActive = false;
+  if (game.currentRound === 1) {
+    postDeployActive = await runPostDeployPhase(game, game.gameId, client, { logGameAction, saveGames }, async () => {
+      await sendRoundActivationPhaseMessage(game, client);
+      saveGames();
+    });
+  }
+  if (!postDeployActive) {
+    await sendRoundActivationPhaseMessage(game, client);
+  }
   await clearPreGameSetup(game, client);
   saveGames();
 }
@@ -6139,7 +6165,7 @@ client.on('interactionCreate', async (interaction) => {
       // Locally defined helpers
       applySquadSubmission, shuffleArray, buildHandDisplayPayload,
       updateHandVisualMessage, updatePlayAreaDcButtons,
-      sendRoundActivationPhaseMessage, runStartOfRoundDcEffects,
+      sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, runPostDeployPhase,
       buildDiscardPileDisplayPayload, updateDiscardPileMessage,
       updateAttachmentMessageForDc, updateDcActionsMessage,
       buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents,

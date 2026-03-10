@@ -14,6 +14,13 @@ import {
 import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
 import { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, handleExtraArmorPick, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel } from './round.js';
+import {
+  runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
+  handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
+  handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
+  handleInfiltrateMove, handleInfiltrateSkip,
+  handleWalkerMove, handleWalkerSkip,
+} from './post-deploy.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
 import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems } from './combat.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive } from './activation.js';
@@ -135,6 +142,15 @@ register('interact_choice_', handleInteractChoice);
 register('end_end_of_round_', handleEndEndOfRound);
 register('end_start_of_round_', handleEndStartOfRound);
 register('extra_armor_pick_', handleExtraArmorPick);
+register('pd_pick_', handlePostDeployPick);
+register('pd_security_pick_', handleSecurityDetailPick);
+register('pd_strike_adj_', handleStrikeTeamAdjPick);
+register('pd_strike_token_done_', handleStrikeTeamTokenDone);
+register('pd_strike_token_', handleStrikeTeamTokenPick);
+register('pd_infiltrate_move_', handleInfiltrateMove);
+register('pd_infiltrate_skip_', handleInfiltrateSkip);
+register('pd_walker_move_', handleWalkerMove);
+register('pd_walker_skip_', handleWalkerSkip);
 register('rbf_discard_', handleRbfDiscard);
 register('rogue_one_return_', handleRogueOneReturn);
 register('imp_citadel_', handleImpCitadel);
@@ -377,6 +393,13 @@ setGroup(['end_end_of_round_'], 'round');
 setGroup(['end_start_of_round_'], 'startOfRound');
 
 setGroup([
+  'pd_pick_', 'pd_security_pick_', 'pd_strike_adj_',
+  'pd_strike_token_', 'pd_strike_token_done_',
+  'pd_infiltrate_move_', 'pd_infiltrate_skip_',
+  'pd_walker_move_', 'pd_walker_skip_',
+], 'postDeploy');
+
+setGroup([
   'devaron_door_open_', 'devaron_crate_push_', 'krykna_push_',
 ], 'mapEvents');
 
@@ -441,6 +464,13 @@ export {
 export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
 export { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, handleExtraArmorPick, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel } from './round.js';
+export {
+  runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
+  handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
+  handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
+  handleInfiltrateMove, handleInfiltrateSkip,
+  handleWalkerMove, handleWalkerSkip,
+} from './post-deploy.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
 export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls } from './combat.js';
 export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive } from './activation.js';

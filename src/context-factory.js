@@ -174,6 +174,7 @@ const CONTEXT_GROUPS = {
     'getCcShuffleDrawButton', 'client', 'saveGames', 'isDcAttachment',
     'resolveDcName', 'isFigurelessDc', 'finishSetupAttachments',
     'dcHealthState', 'dcMessageMeta', 'updateAttachmentMessageForDc',
+    'runPostDeployPhase',
   ],
 
   interactCancel: [
@@ -257,6 +258,13 @@ const CONTEXT_GROUPS = {
     'getGame', 'canActAsPlayer', 'saveGames', 'client', 'logGameAction',
     'getMapTokensData', 'postDevaronDoorButtons', 'postDevaronCratePushPrompts',
     'getSpaceController',
+  ],
+
+  postDeploy: [
+    'getGame', 'saveGames', 'client', 'logGameAction',
+    'dcMessageMeta', 'getBoardStateForMovement', 'getMovementProfile',
+    'computeMovementCache', 'getMovementMinimapAttachment',
+    'getMoveSpaceGridRows', 'buildBoardMapPayload',
   ],
 
   combatSpecialEffects: [

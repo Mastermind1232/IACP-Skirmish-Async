@@ -646,9 +646,15 @@ export async function handleMovePick(interaction, ctx) {
         }
       } catch { /* ignore fetch errors */ }
     }
+    const wasPostDeploy = moveState.postDeployReturn;
     delete game.moveInProgress[moveKey];
     // Force Jump: clear mobileMovementActive when all MP is spent
     if (game.mobileMovementActive?.[msgId]) delete game.mobileMovementActive[msgId];
+    // Post-deploy movement: advance the post-deploy queue
+    if (wasPostDeploy && game.postDeployQueue) {
+      const { onPostDeployMovementComplete } = await import('./post-deploy.js');
+      await onPostDeployMovementComplete(game, meta.gameId, client, { logGameAction, saveGames });
+    }
   } else {
     const nextBoard = getBoardStateForMovement(game, figureKey);
     if (nextBoard && computeMovementCache) {
