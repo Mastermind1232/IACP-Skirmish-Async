@@ -35,10 +35,30 @@ const RESTRICTION_KEYWORDS = ['LEADER', 'HUNTER', 'DROID', 'CREATURE', 'TROOPER'
 function getAttachmentRestriction(cardName) {
   const effects = getDcEffects();
   const card = effects[cardName] || effects[`[${cardName}]`];
-  if (!card?.abilityText) return null;
-  const firstLine = card.abilityText.split('\n')[0].trim();
+  if (!card) return null;
+  if (!card.abilityText && !(card.keywords?.length > 0)) return null;
+  const firstLine = (card.abilityText || '').split('\n')[0].trim();
   const onlyMatch = firstLine.match(/^(.+?)\s+ONLY$/i);
-  if (!onlyMatch) return null;
+  // Fallback: if no "X ONLY" line but card has keywords, use keywords as restriction
+  if (!onlyMatch) {
+    if (card.attachment && card.keywords?.length > 0) {
+      const kwRestriction = card.keywords.join(' OR ');
+      const restrictionUpper = kwRestriction.toUpperCase();
+      if (RESTRICTION_KEYWORDS.some(k => restrictionUpper.includes(k))) {
+        return {
+          restrictionText: kwRestriction,
+          filter: (dcName) => {
+            const dcStats = effects[dcName];
+            if (!dcStats) return true;
+            const dcKw = (dcStats.keywords || []).map(k => String(k).toUpperCase());
+            const affiliation = (dcStats.affiliation || '').toUpperCase();
+            return card.keywords.some(kw => _matchesKeywordPhrase(String(kw).toUpperCase(), dcKw, affiliation));
+          },
+        };
+      }
+    }
+    return null;
+  }
   const restrictionRaw = onlyMatch[1].replace(/"/g, '').trim();
   const restrictionUpper = restrictionRaw.toUpperCase();
 
