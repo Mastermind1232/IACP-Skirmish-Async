@@ -136,6 +136,7 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     // Headhunter fully prevented strain + opponent had CCs to discard
     return;
   }
+
   const { newHp: newCur, prevHp: _strainPrev } = reduceHp(dcHealthState, game, msgId, figureIndex, totalHpLoss, playerNum);
   if (!headhunterTriggered) {
     await thread.send(`**${abilityLabel}** (${sourceLabel}) — **${dcName}** suffers 1 Strain (${_strainPrev} → ${newCur} HP).`);
@@ -144,6 +145,26 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
   }
   if (logGameAction) {
     await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** suffered 1 Strain.`, { phase: 'ROUND', icon: 'attack' });
+  }
+  // Submit or Fight (Paz Vizsla): after suffering Strain damage, may return CCs from discard to heal
+  {
+    const _sofEff = getDcEffects?.()?.[dcName] || getDcEffects?.()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if ((_sofEff?.specialAbilityIds || []).includes('submit_or_fight_paz') && newCur > 0) {
+      const _sofDiscardKey = ccDiscardKey(playerNum);
+      const _sofDiscard = game[_sofDiscardKey] || [];
+      if (_sofDiscard.length > 0) {
+        const _sofOwnerId = getPlayerId(game, playerNum);
+        const _sofBtns = [
+          new ButtonBuilder().setCustomId(`submit_fight_use_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Use Submit or Fight').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`submit_fight_skip_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        ];
+        await thread.send({
+          content: `🛡️ **Submit or Fight** — <@${_sofOwnerId}>, **${dcName}** may return a CC from discard to game box to heal 1 Strain damage (${_sofDiscard.length} CC${_sofDiscard.length > 1 ? 's' : ''} in discard).`,
+          components: [new ActionRowBuilder().addComponents(_sofBtns)],
+          allowedMentions: { users: [_sofOwnerId] },
+        }).catch(() => {});
+      }
+    }
   }
   if (newCur <= 0) {
     const attackerPlayerNum = opponentPlayerNum(playerNum);
@@ -2708,6 +2729,25 @@ export async function handleCombatPassive(interaction, ctx) {
     saveGames();
     await proceedAfterTokens(thread, game, combat, ctx);
     return;
+  } else if (abilityKey === 'hr') {
+    // Heavy Repeater (Paz Vizsla)
+    if (choice === 'hit') {
+      combat.bonusHits = (combat.bonusHits || 0) + 1;
+      await thread.send('**Heavy Repeater** — Applied +1 Hit. Paz Vizsla suffers 1 Strain.');
+      await applyStrainToFigure(game, combat.attackerPlayerNum, combat.attackerFigureKey, 1, 'Heavy Repeater', 'Paz Vizsla', ctx, thread);
+    } else if (choice === 'blast') {
+      combat.blastDamage = Math.max(combat.blastDamage || 0, 2);
+      await thread.send('**Heavy Repeater** — Applied Blast 2. Paz Vizsla suffers 1 Strain.');
+      await applyStrainToFigure(game, combat.attackerPlayerNum, combat.attackerFigureKey, 1, 'Heavy Repeater', 'Paz Vizsla', ctx, thread);
+    } else if (choice === 'acc') {
+      combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 3;
+      await thread.send('**Heavy Repeater** — Applied +3 Accuracy. Paz Vizsla suffers 1 Strain.');
+      await applyStrainToFigure(game, combat.attackerPlayerNum, combat.attackerFigureKey, 1, 'Heavy Repeater', 'Paz Vizsla', ctx, thread);
+    } else {
+      await thread.send('**Heavy Repeater** — Skipped.');
+    }
+    combat.heavyRepeaterResolved = true;
+    delete combat.pendingCombatPassive;
   }
 
   saveGames();
@@ -2866,6 +2906,29 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       return;
     }
     combat.callTheShotsResolved = true;
+  }
+
+  // Heavy Repeater (Paz Vizsla): during ranged attack, suffer 1 Strain for +1 Hit, Blast 2, or +3 Accuracy
+  if (!combat.heavyRepeaterResolved) {
+    const getDcEffHR = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const hrDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const hrEff = getDcEffHR[hrDcName] || getDcEffHR[hrDcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if ((hrEff?.specialAbilityIds || []).includes('heavy_repeater_paz') && (hrEff?.attack?.type === 'range' || combat.attackType === 'Ranged')) {
+      combat.pendingCombatPassive = 'heavy_repeater';
+      const btns = [
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_hit`).setLabel('+1 Hit (1 Strain)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_blast`).setLabel('Blast 2 (1 Strain)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_acc`).setLabel('+3 Accuracy (1 Strain)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_hr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      ];
+      await thread.send({
+        content: `**Heavy Repeater** — **${hrDcName}** may suffer 1 Strain to apply a bonus:`,
+        components: [new ActionRowBuilder().addComponents(btns)],
+      });
+      saveGames?.();
+      return;
+    }
+    combat.heavyRepeaterResolved = true;
   }
 
   // Lasat Honor Guard (Zeb Orrelios): after rerolls, may turn 1 die showing only a single attack icon to any other side

@@ -1417,6 +1417,31 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         }
       }
     }
+    // Bo-Rifle (Agent Kallus): before declaring attack, may switch to melee (replace blue→red)
+    if (atkSpecialIds.includes('bo_rifle_kallus') && !game.pendingOverrideAttackDice?.[msgId]) {
+      const baseDice = stats.attack?.dice || [];
+      if (baseDice.includes('blue') && stats.attack?.type === 'range') {
+        const meleeDice = baseDice.map(d => d === 'blue' ? 'red' : d);
+        const brBtns = [
+          new ButtonBuilder()
+            .setCustomId(`bo_rifle_pick_use_${game.gameId}_${msgId}_${figureIndex}`)
+            .setLabel(`Bo-Rifle (Melee: ${meleeDice.map(d => d[0].toUpperCase() + d.slice(1)).join('+')})`)
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(`bo_rifle_pick_skip_${game.gameId}_${msgId}_${figureIndex}`)
+            .setLabel('Normal (Ranged)')
+            .setStyle(ButtonStyle.Secondary),
+        ];
+        game.pendingBoRifle = game.pendingBoRifle || {};
+        game.pendingBoRifle[msgId] = { gameId: game.gameId, playerNum, figureIndex, msgId, meleeDice };
+        await interaction.followUp({
+          content: `**Bo-Rifle** — Treat this attack as **Melee** (swap Blue→Red die)?`,
+          components: [new ActionRowBuilder().addComponents(brBtns)],
+        }).catch(discordCatch);
+        saveGames();
+        return;
+      }
+    }
     // Tripod: track that figure has attacked (for "cannot exit space if attacked")
     if (atkSpecialIds.includes('tripod_eweb')) {
       if (!game.tripodAttacked) game.tripodAttacked = {};
@@ -2280,6 +2305,68 @@ export async function handleEe3DiePick(interaction, ctx) {
 
   await buildAndSendAttackTargets(interaction, ctx, game, meta, msgId, figureKey, figureIndex, {
     dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats,
+    excludeFigureKeys: game.pendingMissileSalvo?.[msgId]?.targetsFired,
+  });
+}
+
+/**
+ * Handle bo_rifle_pick_ button: player chose to use Bo-Rifle (melee) or skip (normal ranged).
+ * customId: bo_rifle_pick_{use|skip}_{gameId}_{msgId}_{figureIndex}
+ */
+export async function handleBoRiflePick(interaction, ctx) {
+  const { getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames } = ctx;
+  const withoutPrefix = interaction.customId.replace('bo_rifle_pick_', '');
+  const parts = withoutPrefix.split('_');
+  const choice = parts[0]; // 'use' or 'skip'
+  const gameId = parts[1];
+  const figureIndex = parseInt(parts[parts.length - 1], 10);
+  const msgId = parts.slice(2, -1).join('_');
+
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) return;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+
+  if (choice === 'use' && game.pendingBoRifle?.[msgId]) {
+    const meleeDice = game.pendingBoRifle[msgId].meleeDice;
+    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+    game.pendingOverrideAttackDice[msgId] = { dice: meleeDice, type: 'melee' };
+    await interaction.message.edit({ content: `**Bo-Rifle** — Melee mode active (${meleeDice.map(d => d[0].toUpperCase() + d.slice(1)).join('+')}).`, components: [] }).catch(() => {});
+  } else {
+    await interaction.message.edit({ content: '**Bo-Rifle** — Skipped (normal ranged attack).', components: [] }).catch(() => {});
+  }
+  if (game.pendingBoRifle?.[msgId]) delete game.pendingBoRifle[msgId];
+  saveGames();
+
+  const stats = getDcStats(meta.dcName);
+  const attackInfo = stats.attack || { dice: ['red'], range: [1, 3] };
+  const [minRange, maxRange] = attackInfo.range || [1, 3];
+  const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
+  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const _loadoutCard = getLoadoutCards()[getConfig(game, `${meta.dcName}-${dgIndex}-${figureIndex}`)?.loadout];
+  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum] || _loadoutCard?.passive === 'Reach' || _hasFuryReach(game, meta.playerNum, attackerKws);
+  // If Bo-Rifle mode, override range to melee
+  const brOverride = game.pendingOverrideAttackDice?.[msgId];
+  const effectiveMinRange = brOverride?.type === 'melee' ? 1 : minRange;
+  const effectiveMaxRange_ = brOverride?.type === 'melee' ? (hasReach ? 2 : 1) : (hasReach && maxRange < 2 ? 2 : maxRange);
+  const ms = getMapSpaces(game.selectedMap?.id);
+  if (!ms) {
+    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const playerNum = meta.playerNum;
+  const enemyPlayerNum = opponentPlayerNum(playerNum);
+  const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+  const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!attackerPos) {
+    await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch(() => {});
+    return;
+  }
+
+  await buildAndSendAttackTargets(interaction, ctx, game, meta, msgId, figureKey, figureIndex, {
+    dgIndex, attackerPos, attackerKws, minRange: effectiveMinRange, effectiveMaxRange: effectiveMaxRange_, ms, playerNum, enemyPlayerNum, stats,
     excludeFigureKeys: game.pendingMissileSalvo?.[msgId]?.targetsFired,
   });
 }

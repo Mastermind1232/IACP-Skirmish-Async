@@ -409,6 +409,14 @@
       ],
       "overrideAttackType": "melee"
     },
+    "bo_rifle_kallus": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "trigger": "pre-attack",
+      "label": "Bo-Rifle",
+      "description": "Before you declare an attack, you may treat your attack type as Melee. If you do, replace 1 blue die with 1 red die.",
+      "wiredStatus": "wired"
+    },
     "Bodyguard": {
       "type": "ccEffect",
       "label": "Gain 2 MP; attack targets you instead of adjacent friendly",
@@ -624,6 +632,14 @@
       "type": "ccEffect",
       "label": "Gain 1 movement point",
       "mpBonus": 1,
+      "wiredStatus": "wired"
+    },
+    "cassian_said_i_had_to": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "trigger": "movement",
+      "label": "Cassian Said I Had To",
+      "description": "Once per round, when a friendly LEADER enters an adjacent space, gain up to 1 Hit Token.",
       "wiredStatus": "wired"
     },
     "Celebration": {
@@ -2229,6 +2245,14 @@
       "description": "After the attack resolves, if it did not miss, the defender suffers 1 Strain.",
       "wiredStatus": "wired"
     },
+    "heavy_repeater_paz": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "trigger": "combat",
+      "label": "Heavy Repeater",
+      "description": "While performing a Ranged attack, you may suffer 1 Strain to apply +1 Hit, Blast 2, or +3 Accuracy to the attack results.",
+      "wiredStatus": "wired"
+    },
     "Hard to Hit": {
       "type": "ccEffect",
       "label": "While defending: reroll 1 defense die",
@@ -3522,6 +3546,14 @@
       "description": "While a friendly figure is defending and you are adjacent to the target space, apply +1 Block.",
       "wiredStatus": "wired"
     },
+    "programming_override_4lom": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "trigger": "start-of-round",
+      "label": "Programming Override",
+      "description": "At the start of each round, choose one TRAIT. You gain that TRAIT until the end of the round.",
+      "wiredStatus": "wired"
+    },
     "Provoke": {
       "type": "ccEffect",
       "label": "After you resolve an activation: choose hostile adjacent to TROOPER/GUARDIAN; that group must activate next",
@@ -4627,6 +4659,14 @@
       "surgeCost": 1,
       "label": "Suppression",
       "description": "After resolving a Ranged attack, if it did not miss due to accuracy, the target suffers Strain equal to the number of Block, Evade, and Dodge results, to a maximum of 2.",
+      "wiredStatus": "wired"
+    },
+    "submit_or_fight_paz": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "trigger": "strain",
+      "label": "Submit or Fight",
+      "description": "When you would suffer Damage from Strain, you may return any number of Command cards from your discard pile to the game box to prevent that much Damage.",
       "wiredStatus": "wired"
     },
     "Survival Instincts": {

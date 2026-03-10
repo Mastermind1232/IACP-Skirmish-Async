@@ -57,6 +57,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'activationDamagedFigures',
   'unstableDevicesUsedThisActivation',
   'yhsiwOptions',
+  'pendingBoRifle',
 ];
 
 /**
@@ -183,6 +184,7 @@ const ROUND_OBJECT_FLAGS = [
   'attackPerformedThisActivation',
   'vadersFocusUsedThisRound',
   'scavengedWalkerAttackPenalty',
+  'roundProgrammingOverrideTrait',
   'autofireActive',
   'fireMissionActive',
   'autofireChainTargetSpace',

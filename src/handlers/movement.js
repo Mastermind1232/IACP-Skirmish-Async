@@ -861,5 +861,37 @@ export async function handleMovePick(interaction, ctx) {
       }
     }
   }
+  // Cassian Said I Had To (K-2S0): when a friendly LEADER enters an adjacent space, gain up to 1 Hit Token (once per round)
+  {
+    const csMapId = game.selectedMap?.id;
+    const csEffects = getDcEffects();
+    const csFriendlyPositions = game.figurePositions?.[playerNum] || {};
+    const csMovedFigDcName = meta.dcName;
+    const csMovedFigEff = csEffects?.[csMovedFigDcName];
+    const csMovedFigKw = (csMovedFigEff?.keywords || []).map(k => String(k).toUpperCase());
+    const csMovedFigIsLeader = csMovedFigKw.includes('LEADER');
+    if (csMovedFigIsLeader) {
+      for (const [fk, pos] of Object.entries(csFriendlyPositions)) {
+        if (!pos || fk === figureKey) continue;
+        const csDcName = dcNameFromFigureKey(fk);
+        const csEff = csEffects?.[csDcName];
+        if (!(csEff?.specialAbilityIds || []).includes('cassian_said_i_had_to')) continue;
+        const csAdjSpaces = csMapId ? (getMapSpaces(csMapId)?.adjacency?.[pos] || []) : [];
+        if (!csAdjSpaces.includes(newTopLeft)) continue;
+        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+        const csKey = `cassian_said_i_had_to_${fk}`;
+        if (game.roundFigureAbilityUsed[csKey]) continue;
+        game.roundFigureAbilityUsed[csKey] = true;
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+        if (game.figurePowerTokens[fk].length < 2) {
+          game.figurePowerTokens[fk].push('Hit');
+          if (logGameAction) {
+            await logGameAction(game, client, `**Cassian Said I Had To** — **${csDcName}** gained a Hit token (friendly LEADER entered adjacent space).`, { phase: 'ROUND', icon: 'attack' });
+          }
+        }
+      }
+    }
+  }
   saveGames();
 }

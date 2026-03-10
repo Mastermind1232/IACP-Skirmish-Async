@@ -648,3 +648,46 @@ export async function handleExcavationPick(interaction, ctx) {
   if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
   saveGames(); return;
 }
+
+// ── Submit or Fight (Paz Vizsla) ────────────────────────────────────────────
+export async function handleSubmitOrFight(interaction, ctx) {
+  await interaction.deferUpdate().catch(() => {});
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction } = ctx;
+  const isUse = interaction.customId.startsWith('submit_fight_use_');
+  const prefix = isUse ? 'submit_fight_use_' : 'submit_fight_skip_';
+  const suffix = interaction.customId.replace(prefix, '');
+  const parts = suffix.split('_');
+  const gameId = parts[0];
+  const figureIndex = parseInt(parts[parts.length - 1], 10);
+  const msgId = parts.slice(1, -1).join('_');
+
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const meta = dcMessageMeta?.get(msgId);
+
+  if (isUse) {
+    const playerNum = meta?.playerNum || (game.player1Id === interaction.user.id ? 1 : 2);
+    if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
+    const discardKey = `p${playerNum}CcDiscard`;
+    const discard = game[discardKey] || [];
+    if (discard.length === 0) {
+      await interaction.followUp({ content: 'No CCs in discard pile.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    // Return last CC from discard to game box (permanently removed)
+    const returnedCc = discard.pop();
+    // Heal 1 HP (reverse the strain damage)
+    const healthState = dcHealthState?.get(msgId);
+    if (healthState?.[figureIndex]) {
+      healthState[figureIndex][0] = Math.min(healthState[figureIndex][0] + 1, healthState[figureIndex][1]);
+    }
+    const dcName = meta?.dcName || 'Paz Vizsla';
+    await interaction.message.edit({ content: `🛡️ **Submit or Fight** — **${dcName}** returned **${returnedCc}** to game box to heal 1 Strain damage.`, components: [] }).catch(() => {});
+    if (logGameAction) {
+      await logGameAction(game, client, `🛡️ **Submit or Fight** — **${dcName}** returned **${returnedCc}** to prevent Strain damage.`, { phase: 'ROUND', icon: 'defend' });
+    }
+  } else {
+    await interaction.message.edit({ content: '**Submit or Fight** — Skipped.', components: [] }).catch(() => {});
+  }
+  saveGames();
+}

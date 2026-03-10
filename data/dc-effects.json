@@ -675,7 +675,8 @@
       "unique": true,
       "affiliation": "Scum",
       "specialAbilityIds": [
-        "shared_intuition"
+        "shared_intuition",
+        "programming_override_4lom"
       ]
     },
     "88-Z": {
@@ -754,7 +755,8 @@
       "unique": true,
       "affiliation": "Imperial",
       "specialAbilityIds": [
-        "hunt_dissent_kallus"
+        "hunt_dissent_kallus",
+        "bo_rifle_kallus"
       ]
     },
     "Ahsoka Tano": {
@@ -1607,6 +1609,9 @@
       "specialAbilityIds": [
         "mounted_terro",
         "flamethrower_terro"
+      ],
+      "passives": [
+        "Professional"
       ],
       "specials": [
         "Mounted"
@@ -3975,7 +3980,8 @@
       "affiliation": "Rebel",
       "specialAbilityIds": [
         "continually_unexpected",
-        "vague_and_unconvincing_k2s0"
+        "vague_and_unconvincing_k2s0",
+        "cassian_said_i_had_to"
       ],
       "specials": [
         "Continually Unexpected"
@@ -7063,7 +7069,10 @@
         "+1 accuracy",
         "+1 Block Token"
       ],
-      "specialAbilityIds": [],
+      "specialAbilityIds": [
+        "heavy_repeater_paz",
+        "submit_or_fight_paz"
+      ],
       "attachment": false,
       "elite": true,
       "unique": true,

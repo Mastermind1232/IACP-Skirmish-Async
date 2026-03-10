@@ -527,6 +527,24 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           await _postExcavationPicker(game, gameId, playerNum, dc, logGameAction, client);
         }
 
+        // Programming Override (4-LOM): choose a TRAIT at start of round
+        if (sIds.includes('programming_override_4lom')) {
+          const ownerId = getPlayerId(game, playerNum);
+          const traits = ['TROOPER', 'SPY', 'HUNTER', 'SMUGGLER', 'FORCE USER', 'BRAWLER', 'CREATURE', 'LEADER', 'GUARDIAN', 'WOOKIEE', 'VEHICLE'];
+          const btns = traits.map(t => new ButtonBuilder()
+            .setCustomId(`prog_override_${gameId}_${playerNum}_${t.replace(/\s/g, '_')}`)
+            .setLabel(t)
+            .setStyle(ButtonStyle.Primary)
+          );
+          const rows = [];
+          for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+          await logGameAction(game, client, `🔧 **Programming Override** — <@${ownerId}>, choose a TRAIT for **${dc.displayName || dc.dcName}** to gain this round:`, {
+            phase: 'ROUND', icon: 'round',
+            components: rows,
+            allowedMentions: { users: [ownerId] },
+          });
+        }
+
         // Shape/Shift (Clawdite Shapeshifter): form picker at start of round
         if (sIds.includes('shape_clawdite_elite') || sIds.includes('shape_clawdite_reg') || sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
           const ownerId = getPlayerId(game, playerNum);
@@ -1041,4 +1059,25 @@ export async function handleImpCitadel(interaction, ctx) {
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
   saveGames();
   await interaction.followUp({ content: `Placed ${label} token on Imperial Citadel.`, ephemeral: true }).catch(discordCatch);
+}
+
+/**
+ * Handle prog_override_ button: 4-LOM chose a TRAIT for the round.
+ * customId: prog_override_{gameId}_{playerNum}_{TRAIT}
+ */
+export async function handleProgrammingOverride(interaction, ctx) {
+  await interaction.deferUpdate().catch(() => {});
+  const { getGame, logGameAction, client, saveGames } = ctx;
+  const withoutPrefix = interaction.customId.replace('prog_override_', '');
+  const parts = withoutPrefix.split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const trait = parts.slice(2).join(' '); // e.g. "FORCE_USER" → "FORCE USER"
+  const game = getGame(gameId);
+  if (!game) return;
+  game.roundProgrammingOverrideTrait = game.roundProgrammingOverrideTrait || {};
+  game.roundProgrammingOverrideTrait[playerNum] = trait;
+  await logGameAction(game, client, `🔧 **Programming Override** — **4-LOM** gains **${trait}** until end of round.`, { phase: 'ROUND', icon: 'round' });
+  try { await interaction.message.edit({ components: [] }).catch(() => {}); } catch {}
+  saveGames();
 }
