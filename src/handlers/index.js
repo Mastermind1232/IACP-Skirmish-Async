@@ -13,7 +13,7 @@ import {
 } from './game-tools.js';
 import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
-import { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, handleExtraArmorPick, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride } from './round.js';
+import { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride } from './round.js';
 import {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
@@ -159,6 +159,8 @@ register('interact_choice_', handleInteractChoice, 'interact');
 register('end_end_of_round_', handleEndEndOfRound, 'round');
 register('end_start_of_round_', handleEndStartOfRound, 'startOfRound');
 register('extra_armor_pick_', handleExtraArmorPick, 'round');
+register('extra_armor_confirm_', handleExtraArmorConfirm, 'round');
+register('extra_armor_cancel_', handleExtraArmorCancel, 'round');
 register('rbf_discard_', handleRbfDiscard, 'round');
 register('rogue_one_return_', handleRogueOneReturn, 'round');
 register('imp_citadel_', handleImpCitadel, 'round');
@@ -422,7 +424,7 @@ export {
 } from './game-tools.js';
 export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
-export { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, handleExtraArmorPick, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride } from './round.js';
+export { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride } from './round.js';
 export {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,

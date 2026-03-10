@@ -407,7 +407,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
     await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
   }
   // Run start-of-round DC effects (post-deploy for R1, DC abilities every round)
-  await runStartOfRoundDcEffects(game, gameId, client, { logGameAction });
+  const hasPendingSor = await runStartOfRoundDcEffects(game, gameId, client, { logGameAction });
   await updateHandVisualMessage(game, 1, client);
   await updateHandVisualMessage(game, 2, client);
   for (const pn of [1, 2]) {
@@ -434,7 +434,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
   const initZone = getInitiativePlayerZoneLabel(game);
   const initNum = getInitiativePlayerNum(game);
   await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
-  await sendRoundActivationPhaseMessage(game, client);
+  if (!hasPendingSor) {
+    await sendRoundActivationPhaseMessage(game, client);
+  }
 
   // Devaron Garrison B: terminal→door selection + crate push prompts (posted after round starts)
   if (mapId === 'devaron-garrison' && variant === 'b') {
@@ -614,6 +616,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           });
           // Post discard picker in hand channel
           if (hand.length > 0) {
+            game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
             const handChannelId = getHandChannelId(game, playerNum);
             try {
               const handCh = await client.channels.fetch(handChannelId);
@@ -651,6 +654,7 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           });
           // Post picker in hand channel
           if (hand.length > 0) {
+            game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
             game[`pendingRogueOne_p${playerNum}`] = { remaining: 2 };
             const handChannelId = getHandChannelId(game, playerNum);
             try {
@@ -688,6 +692,25 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
         }
       }
     }
+  }
+  // Return true if there are pending async effects that block the activation phase
+  return (game.pendingStartOfRoundResolve || 0) > 0;
+}
+
+/**
+ * Called by resolution handlers (rbf_discard, rogue_one_return) when their async
+ * effect completes. Decrements the counter and triggers the activation phase when
+ * all pending effects are resolved.
+ */
+async function resolveStartOfRoundEffect(game, ctx) {
+  game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 1) - 1;
+  if (game.pendingStartOfRoundResolve <= 0) {
+    delete game.pendingStartOfRoundResolve;
+    const { sendRoundActivationPhaseMessage, client, saveGames } = ctx;
+    if (sendRoundActivationPhaseMessage) {
+      await sendRoundActivationPhaseMessage(game, client);
+    }
+    if (saveGames) saveGames();
   }
 }
 
@@ -927,6 +950,7 @@ async function _postExcavationPicker(game, gameId, playerNum, dc, logGameAction,
 
 /**
  * Extra Armor: player picks a figure to give 1 Block Token (repeats until 4 distributed).
+ * Confirm step: first click shows confirm/cancel, second click applies the token.
  */
 export async function handleExtraArmorPick(interaction, ctx) {
   const { getGame, saveGames, logGameAction, client } = ctx;
@@ -936,6 +960,45 @@ export async function handleExtraArmorPick(interaction, ctx) {
   const figureKey = parts.slice(2).join('_');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  // Player verification
+  const ownerId = getPlayerId(game, playerNum);
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owning player can distribute Extra Armor tokens.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const pending = game[`pendingExtraArmor_p${playerNum}`];
+  if (!pending || pending.remaining <= 0) {
+    await interaction.followUp({ content: 'Extra Armor tokens already distributed.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const dcName = dcNameFromFigureKey(figureKey);
+  // Show confirm/cancel buttons
+  const confirmRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`extra_armor_confirm_${gameId}_${playerNum}_${figureKey}`).setLabel(`Confirm: ${dcName}`).setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`extra_armor_cancel_${gameId}_${playerNum}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary),
+  );
+  await interaction.message.edit({
+    content: `🛡️ **Extra Armor** — Place **1 Block Token** on **${dcName}**? (${pending.remaining} remaining)`,
+    components: [confirmRow],
+  }).catch(discordCatch);
+}
+
+/**
+ * Extra Armor confirm: apply the Block Token.
+ */
+export async function handleExtraArmorConfirm(interaction, ctx) {
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const parts = interaction.customId.replace('extra_armor_confirm_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const figureKey = parts.slice(2).join('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const ownerId = getPlayerId(game, playerNum);
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owning player can distribute Extra Armor tokens.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   const pending = game[`pendingExtraArmor_p${playerNum}`];
   if (!pending || pending.remaining <= 0) {
     await interaction.followUp({ content: 'Extra Armor tokens already distributed.', ephemeral: true }).catch(discordCatch);
@@ -949,17 +1012,59 @@ export async function handleExtraArmorPick(interaction, ctx) {
   await logGameAction(game, client, `🛡️ **Extra Armor** — **${dcName}** gains **1 Block Token** (${pending.remaining} remaining).`);
   if (pending.remaining <= 0) {
     delete game[`pendingExtraArmor_p${playerNum}`];
-    try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
-    await interaction.followUp({ content: 'All 4 Block Tokens distributed.', ephemeral: true }).catch(discordCatch);
+    await interaction.message.edit({ content: '🛡️ **Extra Armor** — All 4 Block Tokens distributed.', components: [] }).catch(discordCatch);
     // If post-deploy queue is active, advance it
     if (game.postDeployQueue) {
       const { onExtraArmorComplete } = await import('./post-deploy.js');
       await onExtraArmorComplete(game, gameId, client, { logGameAction, saveGames });
     }
   } else {
-    await interaction.followUp({ content: `Block Token placed on ${dcName}. ${pending.remaining} remaining — pick another figure.`, ephemeral: true }).catch(discordCatch);
+    // Rebuild figure picker with remaining count
+    const allFks = Object.keys(game.figurePositions?.[playerNum] || {});
+    const btns = allFks.slice(0, 20).map(fk => new ButtonBuilder()
+      .setCustomId(`extra_armor_pick_${gameId}_${playerNum}_${fk}`)
+      .setLabel(fk.replace(/-\d+-\d+$/, ''))
+      .setStyle(ButtonStyle.Primary)
+    );
+    const rows = [];
+    for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+    await interaction.message.edit({
+      content: `🛡️ **Extra Armor** — Choose a figure to give **1 Block Token** (${pending.remaining} remaining):`,
+      components: rows,
+    }).catch(discordCatch);
   }
   saveGames();
+}
+
+/**
+ * Extra Armor cancel: go back to figure picker.
+ */
+export async function handleExtraArmorCancel(interaction, ctx) {
+  const { getGame } = ctx;
+  const parts = interaction.customId.replace('extra_armor_cancel_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const ownerId = getPlayerId(game, playerNum);
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owning player can distribute Extra Armor tokens.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const pending = game[`pendingExtraArmor_p${playerNum}`];
+  if (!pending || pending.remaining <= 0) return;
+  const allFks = Object.keys(game.figurePositions?.[playerNum] || {});
+  const btns = allFks.slice(0, 20).map(fk => new ButtonBuilder()
+    .setCustomId(`extra_armor_pick_${gameId}_${playerNum}_${fk}`)
+    .setLabel(fk.replace(/-\d+-\d+$/, ''))
+    .setStyle(ButtonStyle.Primary)
+  );
+  const rows = [];
+  for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  await interaction.message.edit({
+    content: `🛡️ **Extra Armor** — Choose a figure to give **1 Block Token** (${pending.remaining} remaining):`,
+    components: rows,
+  }).catch(discordCatch);
 }
 
 /**
@@ -989,6 +1094,10 @@ export async function handleRbfDiscard(interaction, ctx) {
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
   saveGames();
   await interaction.followUp({ content: `Discarded **${card}**.`, ephemeral: true }).catch(discordCatch);
+  // Resolve start-of-round blocking effect
+  if (game.pendingStartOfRoundResolve > 0) {
+    await resolveStartOfRoundEffect(game, ctx);
+  }
 }
 
 /**
@@ -1024,6 +1133,10 @@ export async function handleRogueOneReturn(interaction, ctx) {
     delete game[`pendingRogueOne_p${playerNum}`];
     try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
     await interaction.followUp({ content: 'Both cards returned to deck.', ephemeral: true }).catch(discordCatch);
+    // Resolve start-of-round blocking effect
+    if (game.pendingStartOfRoundResolve > 0) {
+      await resolveStartOfRoundEffect(game, ctx);
+    }
   } else {
     // Rebuild buttons with updated hand
     const pickBtns = hand.slice(0, 25).map((c, idx) => new ButtonBuilder()

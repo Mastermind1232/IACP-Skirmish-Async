@@ -2036,16 +2036,18 @@ async function runDraftRandom(game, client, options = {}) {
   await logGameAction(game, client, '**Draft Random** — Auto-deployed all figures and drew starting CCs.', { phase: 'DEPLOYMENT', icon: 'deployed' });
 
   await updatePlayAreaDcButtons(game, client);
-  await runStartOfRoundDcEffects(game, game.gameId, client, { logGameAction });
+  const hasPendingSor = await runStartOfRoundDcEffects(game, game.gameId, client, { logGameAction });
   // Run post-deploy phase (interactive queue); if active, activation phase is deferred
   let postDeployActive = false;
   if (game.currentRound === 1) {
     postDeployActive = await runPostDeployPhase(game, game.gameId, client, { logGameAction, saveGames }, async () => {
-      await sendRoundActivationPhaseMessage(game, client);
+      if (!hasPendingSor) {
+        await sendRoundActivationPhaseMessage(game, client);
+      }
       saveGames();
     });
   }
-  if (!postDeployActive) {
+  if (!postDeployActive && !hasPendingSor) {
     await sendRoundActivationPhaseMessage(game, client);
   }
   await clearPreGameSetup(game, client);

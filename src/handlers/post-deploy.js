@@ -8,7 +8,7 @@ import { getDcEffects, getMapSpaces, getDeploymentZones } from '../data-loader.j
 import { dcNameFromFigureKey, applyCondition } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
-  getInitiativePlayerNum, opponentPlayerNum,
+  getInitiativePlayerNum, opponentPlayerNum, getHandChannelId,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
@@ -472,10 +472,22 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
         );
         const rows = [];
         for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
-        await logGameAction(game, client, `🛡️ **Extra Armor** — <@${ownerId}>, distribute **4 Block Tokens** among your figures (4 remaining):`, {
-          components: rows,
+        await logGameAction(game, client, `🛡️ **Extra Armor** — <@${ownerId}>, distribute **4 Block Tokens** among your figures (4 remaining). Check your hand channel.`, {
           allowedMentions: { users: [ownerId] },
         });
+        // Send buttons to player's hand channel so only they can interact
+        const handChId = getHandChannelId(game, ability.playerNum);
+        try {
+          const handCh = await client.channels.fetch(handChId);
+          const sent = await handCh.send({
+            content: '🛡️ **Extra Armor** — Choose a figure to give **1 Block Token** (4 remaining):',
+            components: rows,
+          });
+          game[`pendingExtraArmor_p${ability.playerNum}`].handMsgId = sent.id;
+          game[`pendingExtraArmor_p${ability.playerNum}`].handChId = handChId;
+        } catch (err) {
+          console.error('Extra Armor hand channel send failed:', err);
+        }
       }
       break;
     }

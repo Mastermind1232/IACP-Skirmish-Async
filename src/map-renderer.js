@@ -458,9 +458,23 @@ export async function renderMap(mapId, options = {}) {
   // Figure markers: drawn AFTER tokens/doors so figures render on top
   // Circular clip to hide white background; size-scaled to fill footprint
   // Coord is top-left for large units; center the figure on its footprint
-  // 2x2 footprint = 2 cells → diameter should span ~2 cells; 2x3 = 2–3 cells
-  const sizeMultipliers = { '1x1': 1, '1x2': 1.4, '2x2': 2.05, '2x3': 2.4 };
   const baseTokenSize = Math.min(Math.max(52, 64 * scale), sdx * 0.95, sdy * 0.95);
+  // Helper: draw a rounded rectangle path centered at (cx, cy) with half-dimensions hw, hh
+  function roundedRectPath(cx, cy, hw, hh, r) {
+    const x = cx - hw, y = cy - hh, w = hw * 2, h = hh * 2;
+    const cr = Math.min(r, hw, hh);
+    ctx.beginPath();
+    ctx.moveTo(x + cr, y);
+    ctx.lineTo(x + w - cr, y);
+    ctx.arcTo(x + w, y, x + w, y + cr, cr);
+    ctx.lineTo(x + w, y + h - cr);
+    ctx.arcTo(x + w, y + h, x + w - cr, y + h, cr);
+    ctx.lineTo(x + cr, y + h);
+    ctx.arcTo(x, y + h, x, y + h - cr, cr);
+    ctx.lineTo(x, y + cr);
+    ctx.arcTo(x, y, x + cr, y, cr);
+    ctx.closePath();
+  }
   for (const fig of figures) {
     const coord = fig.coord?.toLowerCase?.() || fig.coord;
     if (!coord) continue;
@@ -477,9 +491,13 @@ export async function renderMap(mapId, options = {}) {
     const centerRow = row + rows / 2;
     const cx = sx0 + centerCol * sdx;
     const cy = sy0 + centerRow * sdy;
-    const mult = sizeMultipliers[fig.figureSize] || 1;
-    const figTokenSize = baseTokenSize * mult;
-    const clipRadius = figTokenSize / 2;
+    // For square footprints use a circle; for rectangular use a rounded rect matching footprint
+    const isSquare = cols === rows;
+    const fillFactor = 0.9;
+    const clipW = isSquare ? baseTokenSize * (cols === 1 ? 1 : cols * 1.05) / 2 : cols * sdx * fillFactor / 2;
+    const clipH = isSquare ? baseTokenSize * (rows === 1 ? 1 : rows * 1.05) / 2 : rows * sdy * fillFactor / 2;
+    const clipRadius = isSquare ? clipW : Math.min(clipW, clipH);
+    const cornerRadius = Math.max(8, Math.round(12 * scale));
     let drewImage = false;
     if (fig.imagePath) {
       const figPath = join(rootDir, fig.imagePath);
@@ -488,21 +506,34 @@ export async function renderMap(mapId, options = {}) {
           const figImg = await loadImage(figPath);
           const tw = figImg.width;
           const th = figImg.height;
-          const tScale = Math.min(figTokenSize / tw, figTokenSize / th);
+          const tScale = Math.min((clipW * 2) / tw, (clipH * 2) / th);
           const dw = Math.round(tw * tScale);
           const dh = Math.round(th * tScale);
+          const outlineGap = Math.max(2, Math.round(3 * scale));
+          const outlineWidth = Math.max(2, Math.round(3 * scale));
+          // Draw colored outline outside the figure
+          ctx.strokeStyle = fig.color || '#fff';
+          ctx.lineWidth = outlineWidth;
+          if (isSquare) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, clipRadius + outlineGap + outlineWidth / 2, 0, Math.PI * 2);
+            ctx.stroke();
+          } else {
+            roundedRectPath(cx, cy, clipW + outlineGap + outlineWidth / 2, clipH + outlineGap + outlineWidth / 2, cornerRadius + outlineGap);
+            ctx.stroke();
+          }
+          // Clip and draw figure image inside
           ctx.save();
-          ctx.beginPath();
-          ctx.arc(cx, cy, clipRadius, 0, Math.PI * 2);
-          ctx.closePath();
+          if (isSquare) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, clipRadius, 0, Math.PI * 2);
+            ctx.closePath();
+          } else {
+            roundedRectPath(cx, cy, clipW, clipH, cornerRadius);
+          }
           ctx.clip();
           ctx.drawImage(figImg, cx - dw / 2, cy - dh / 2, dw, dh);
           ctx.restore();
-          ctx.strokeStyle = fig.color || '#fff';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(cx, cy, clipRadius, 0, Math.PI * 2);
-          ctx.stroke();
           drewImage = true;
         } catch (err) {
           console.error('Map figure image load failed:', fig.imagePath, err);
@@ -514,7 +545,7 @@ export async function renderMap(mapId, options = {}) {
       ctx.font = `bold ${fontSize}px "${FONT_FAMILY}"`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const labelY = cy - clipRadius * 0.6;
+      const labelY = cy - clipH * 0.6;
       ctx.strokeStyle = 'rgba(0,0,0,0.9)';
       ctx.lineWidth = 3;
       ctx.strokeText(fig.label, cx, labelY);
@@ -535,8 +566,8 @@ export async function renderMap(mapId, options = {}) {
     const powerTokenTypes = (fig.powerTokens || []).slice(0, 2);
     const ptSize = Math.max(12, clipRadius * 0.45);
     const ptConfig = getTokenImagesConfig().powerTokens || {};
-    const figX0 = cx - clipRadius;
-    const figY0 = cy - clipRadius;
+    const figX0 = cx - clipW;
+    const figY0 = cy - clipH;
     // Pre-load power token images in parallel
     const ptLoadPromises = [];
     for (let i = 0; i < 2; i++) {
@@ -569,7 +600,7 @@ export async function renderMap(mapId, options = {}) {
     if (conditionIcons.length > 0) {
       const COND_SLOT = { Bleeding: 1, Stunned: 2, Weakened: 3, Focused: 4, Hidden: 5 };
       const condSizeStr = (fig.figureSize || '1x1');
-      const iconSize = Math.max(12, clipRadius * 0.5);
+      const iconSize = Math.max(12, Math.min(clipW, clipH) * 0.5);
       const condImgPromises = conditionIcons.map((cond) => {
         const slot = COND_SLOT[cond] || 1;
         const condIconFile = `Icon-${slot}-${cond} ${condSizeStr}.png`;
@@ -580,8 +611,8 @@ export async function renderMap(mapId, options = {}) {
         return Promise.resolve(null);
       });
       const condImgs = await Promise.all(condImgPromises);
-      let ciX = cx + clipRadius;
-      const ciY = cy - clipRadius;
+      let ciX = cx + clipW;
+      const ciY = cy - clipH;
       for (const condImg of condImgs) {
         if (!condImg) continue;
         ciX -= iconSize;

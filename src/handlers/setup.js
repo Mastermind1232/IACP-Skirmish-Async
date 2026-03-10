@@ -139,10 +139,16 @@ function _matchesKeywordPhrase(phrase, dcKw, affiliation) {
 }
 
 /**
- * Check if an attachment card targets a specific DC by name (not by keyword).
- * Returns the dcMsgId if exactly 1 DC in dcList matches, otherwise null.
+ * Check if an attachment card can auto-attach to exactly 1 eligible DC.
+ * Handles both name-based ("Zeb Orrelios ONLY") and keyword-based ("LEADER ONLY") restrictions.
+ * Excludes DCs that already have an attachment (CRR p.56: one attachment per DC).
+ * @param {string} cardName
+ * @param {Array} dcList
+ * @param {Array} dcMsgIds
+ * @param {Set} [alreadyAttached] - Set of dcMsgIds that already have an attachment
+ * @returns {string|null} dcMsgId if exactly 1 match, null otherwise
  */
-function findAutoAttachTarget(cardName, dcList, dcMsgIds) {
+function findAutoAttachTarget(cardName, dcList, dcMsgIds, alreadyAttached) {
   const effects = getDcEffects();
   const card = effects[cardName] || effects[`[${cardName}]`];
   if (!card?.abilityText) return null;
@@ -156,7 +162,7 @@ function findAutoAttachTarget(cardName, dcList, dcMsgIds) {
     .split(/\s+(?:OR|or)\s+/)
     .map((s) => s.trim().replace(/\([^)]*\)/g, '').trim())
     .filter(Boolean);
-  // If any alternative is a keyword category, show the picker instead
+  // If any alternative is a keyword category, auto-attach if exactly 1 DC qualifies
   const KEYWORDS = ['LEADER', 'HUNTER', 'DROID', 'CREATURE', 'TROOPER', 'VEHICLE',
     'SMUGGLER', 'WOOKIEE', 'WOOKIE', 'FORCE USER', 'HEAVY WEAPON', 'UNIQUE FIGURE',
     'NON-UNIQUE', 'NON-MASSIVE', 'BRAWLER', 'SPY', 'GUARDIAN', 'IMPERIAL', 'REBEL',
@@ -164,10 +170,22 @@ function findAutoAttachTarget(cardName, dcList, dcMsgIds) {
   const isKeyword = alternatives.some((a) =>
     KEYWORDS.some((k) => a.toUpperCase().includes(k)),
   );
-  if (isKeyword) return null;
+  if (isKeyword) {
+    const kwRestriction = getAttachmentRestriction(cardName);
+    if (kwRestriction) {
+      const kwMatches = [];
+      for (let i = 0; i < dcList.length; i++) {
+        if (alreadyAttached?.has(dcMsgIds[i])) continue;
+        if (kwRestriction.filter(dcList[i].dcName)) kwMatches.push(dcMsgIds[i]);
+      }
+      return kwMatches.length === 1 ? kwMatches[0] : null;
+    }
+    return null;
+  }
   // Match alternatives against DC names (case-insensitive)
   const matches = [];
   for (let i = 0; i < dcList.length; i++) {
+    if (alreadyAttached?.has(dcMsgIds[i])) continue;
     const name = (dcList[i].dcName || '').toLowerCase();
     for (const alt of alternatives) {
       if (name.includes(alt.toLowerCase())) {
@@ -1638,13 +1656,15 @@ export async function handleDeploymentDone(interaction, ctx) {
       // Auto-attach all character-specific attachments first
       const dcList = getDcList(game, pn) || [];
       const dcMsgIds = getDcMessageIds(game, pn) || [];
+      const attached = new Set((game.setupAttachmentApplied?.[pn] || []).map(a => a.dcMsgId));
       while (pending.length > 0) {
-        const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds);
+        const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds, attached);
         if (!autoTarget) break; // needs manual picker
         const card = pending[0];
         await applySetupAttachment(game, pn, card, autoTarget, ctx);
         pending.shift();
         game.setupAttachmentApplied[pn].push({ card, dcMsgId: autoTarget });
+        attached.add(autoTarget);
         await logGameAction(game, client, `**${card}** auto-attached to **${ctx.dcMessageMeta?.get(autoTarget)?.displayName || 'DC'}** (setup).`, { phase: 'SETUP', icon: 'card' });
       }
       if (pending.length === 0) {
@@ -1923,16 +1943,18 @@ export async function handleAttachConfirm(interaction, ctx) {
   const dcDisplayName = ctx.dcMessageMeta?.get(dcMsgId)?.displayName || 'DC';
   await logGameAction(game, client, `<@${interaction.user.id}> placed **${card}** on **${dcDisplayName}** (setup).`, { phase: 'SETUP', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
 
-  // Auto-attach any subsequent character-specific attachments
+  // Auto-attach any subsequent attachments (skip DCs that already have one)
   const dcList = getDcList(game, playerNum) || [];
   const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+  const attached = new Set((game.setupAttachmentApplied?.[playerNum] || []).map(a => a.dcMsgId));
   while (pending.length > 0) {
-    const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds);
+    const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds, attached);
     if (!autoTarget) break;
     const autoCard = pending[0];
     await applySetupAttachment(game, playerNum, autoCard, autoTarget, ctx);
     pending.shift();
     game.setupAttachmentApplied[playerNum].push({ card: autoCard, dcMsgId: autoTarget });
+    attached.add(autoTarget);
     const autoDisplayName = ctx.dcMessageMeta?.get(autoTarget)?.displayName || 'DC';
     await logGameAction(game, client, `**${autoCard}** auto-attached to **${autoDisplayName}** (setup).`, { phase: 'SETUP', icon: 'card' });
   }
@@ -2115,13 +2137,15 @@ export async function handleAttachDoneRedo(interaction, ctx) {
   const pending = game.setupAttachmentPending[playerNum];
   const dcList = getDcList(game, playerNum) || [];
   const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+  const attached = new Set((game.setupAttachmentApplied?.[playerNum] || []).map(a => a.dcMsgId));
   while (pending.length > 0) {
-    const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds);
+    const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds, attached);
     if (!autoTarget) break;
     const autoCard = pending[0];
     await applySetupAttachment(game, playerNum, autoCard, autoTarget, ctx);
     pending.shift();
     game.setupAttachmentApplied[playerNum].push({ card: autoCard, dcMsgId: autoTarget });
+    attached.add(autoTarget);
     const autoDisplayName = ctx.dcMessageMeta?.get(autoTarget)?.displayName || 'DC';
     await logGameAction(game, client, `**${autoCard}** auto-attached to **${autoDisplayName}** (setup).`, { phase: 'SETUP', icon: 'card' });
   }
@@ -2142,8 +2166,13 @@ async function _sendAttachmentDropdown(game, gameId, playerNum, card, client) {
   const dcList = getDcList(game, playerNum) || [];
   const dcMsgIds = getDcMessageIds(game, playerNum) || [];
   const restriction = getAttachmentRestriction(card);
+  // DCs that already have an attachment cannot receive another (CRR p.56: "Each Deployment card can have only one Attachment")
+  const alreadyAttached = new Set(
+    (game.setupAttachmentApplied?.[playerNum] || []).map(a => a.dcMsgId),
+  );
   const options = dcList.slice(0, 25).map((dc, i) => {
     const dcName = dc.displayName || dc.dcName || `DC ${i + 1}`;
+    if (alreadyAttached.has(dcMsgIds[i])) return null;
     if (restriction && !restriction.filter(dc.dcName)) return null;
     return { label: dcName.slice(0, 100), value: (dcMsgIds[i] || String(i)).toString() };
   }).filter(Boolean);

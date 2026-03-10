@@ -211,6 +211,11 @@ export function getBoardButtons(gameId, opts = {}) {
       .setLabel('Refresh Map')
       .setStyle(ButtonStyle.Primary),
     getUndoButton(gameId, undoDisabled),
+    new ButtonBuilder()
+      .setCustomId(`ping_active_${gameId}`)
+      .setLabel('Ping Active Player')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('🔔'),
   );
   const rows = [mainRow];
   if (game?.isTestGame && game?.testP2IsBot && !game?.ended) {
