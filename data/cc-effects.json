@@ -1,6 +1,13 @@
 {
   "source": "CC Effect Editor",
   "cards": {
+    "A Powerful Influence": {
+      "cost": 2,
+      "playableBy": "REBEL FORCE USER",
+      "timing": "startOfRound",
+      "effect": "Use at the start of a round. Until the start of the next round, hostile figures within 3 spaces of you cannot interact and are not counted for the purposes of control.",
+      "abilityId": "A Powerful Influence"
+    },
     "Adrenaline": {
       "cost": 2,
       "playableBy": "Any Figure",
