@@ -103,11 +103,6 @@ import {
   // Still directly called in select/modal dispatch sections
   handleRequestResolve, handleRequestReject,
   handleSquadModal, handleDeployModal,
-  handleMapSelectionDraw, handleMapSelectionPick,
-  handleSetupAttachTo, handleArsenalPick,
-  handleCcAttachTo, handleCcPlaySelect, handleCcDiscardSelect,
-  handleCcSpacePick, handlePounceSpacePick, handleOverwatchSpacePick,
-  handleFalseOrdersMovePick, handleRushPushSpace,
   // Used in allDeps
   runStartOfRoundDcEffects,
   runPostDeployPhase,
@@ -5483,6 +5478,110 @@ async function refreshGameVisuals(game) {
   }
 }
 
+/**
+ * Build the shared dependencies bag for handler dispatch.
+ * Defined once; called wherever a handler needs its context built via buildContext().
+ */
+function buildAllDeps() {
+  return {
+    // Core state
+    getGame, setGame, saveGames, deleteGame, deleteGameFromDb,
+    dcMessageMeta, dcExhaustedState, dcHealthState, pendingIllegalSquad, pendingSquadConfirm,
+    client,
+
+    // Auth & utility
+    canActAsPlayer, extractGameIdFromInteraction, logGameErrorToBotLogs,
+    replyIfGameEnded, pushUndo,
+
+    // Constants
+    PENDING_ILLEGAL_TTL_MS, MAX_ACTIVE_GAMES_PER_PLAYER,
+    DC_ACTIONS_PER_ACTIVATION, GAME_PHASES, PHASE_COLOR, ACTION_ICONS,
+    SURGE_LABELS, FIGURE_LETTERS, ThreadAutoArchiveDuration,
+    DEFAULT_DECK_REBELS, DEFAULT_DECK_SCUM, DEFAULT_DECK_IMPERIAL,
+
+    // Discord.js builders
+    ButtonBuilder, ActionRowBuilder, ButtonStyle, EmbedBuilder,
+
+    // Game logic (imported)
+    validateDeckLegal, parseCoord, normalizeCoord, getFootprintCells,
+    getFigureSize, getBoardStateForMovement, getMovementProfile,
+    computeMovementCache, getSpacesAtCost, getMovementTarget,
+    getMovementPath, ensureMovementCache, getNormalizedFootprint,
+    resolveMassivePush, rollAttackDice, rollDefenseDice,
+    rollSingleAttackDie, rollSingleDefenseDie, recalcAttackTotals,
+    recalcDefenseTotals, getInnateRerolls, getAttackerSurgeAbilities,
+    parseSurgeEffect, getAbility, resolveSurgeAbility, getSurgeAbilityLabel,
+    resolveAbility, getPlayableCcFromHand, isCcPlayableNow,
+    isCcPlayLegalByRestriction, filterMapSpacesByBounds,
+    reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, removeFigurePosition,
+
+    // Data loader (imported)
+    getDcEffects, getDiceData, getCcEffect, isCcAttachment, isDcAttachment,
+    isDcUnique, getMapSpaces, getMapRegistry, getMapTokensData,
+    getTournamentRotation, getMissionCardsData, getMissionRules, resolveDcName, isFigurelessDc,
+
+    // Discord UI (imported)
+    logGameAction, getInitiativePlayerZoneLabel,
+    getHandTooltipEmbed, getHandSquadButtons, getMapSelectionTooltipEmbed,
+    getMoveMpButtonRows, getMoveSpaceGridRows, buildLetterRows,
+    getSpaceChoiceRows, buildSpaceSelectMenu, getActionsCounterContent,
+    updateActivationsMessage, getGeneralSetupButtons, getMapTypeButtons,
+    getMapConfirmButton, getMissionSelectDrawMenu, getMissionSelectionPickMenu,
+    getDeploymentZoneButtons, getCcShuffleDrawButton,
+    getIllegalCcPlayButtons, getNegationResponseButtons, getCelebrationButtons,
+    getLobbyEmbed, getLobbyStartButton, updateThreadName, getDeploySpaceGridRows,
+    buildDeployRowButtons,
+
+    // Combat (imported from handlers)
+    sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls,
+
+    // Mission rules (imported)
+    runEndOfRoundRules, runStartOfRoundRules,
+    runNpcThugActivation, runNpcKryknaActivation,
+
+    // Locally defined helpers
+    applySquadSubmission, shuffleArray, buildHandDisplayPayload,
+    updateHandVisualMessage, updatePlayAreaDcButtons,
+    sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, runPostDeployPhase,
+    buildDiscardPileDisplayPayload, updateDiscardPileMessage,
+    updateAttachmentMessageForDc, updateDcActionsMessage,
+    buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents,
+    buildBoardMapPayload, getMapAttachmentForSpaces, ensureMovementBankMessage,
+    updateMovementBankMessage, getConditionCardPath, getDcActionButtons,
+    getActivationMinimapAttachment, getActivateDcButtons,
+    isDepletedRemovedFromGame, getPlayableCcSpecialsForDc,
+    getPlayableCcEndOfActivationForDc, getPlayableCcDoubleActionsForDc,
+    getDcStats, getEffectiveSpeed, getMovementMinimapAttachment,
+    clearMoveGridMessages, getLegalInteractOptions, sendBleedingPrompt,
+    getCommandCardImagePath, findDcMessageIdForFigure, isGroupDefeated,
+    checkWinConditions, applyDamageAndFinishCombat, finishCombatResolution,
+    checkPostCombatSurges, resolveCombatAfterRolls, hasActionsRemainingInGame,
+    getPlayerZoneLabel, updateHandChannelMessages, maybeShowEndActivationPhaseButton,
+    countTerminalsControlledByPlayer, isFigureInDeploymentZone,
+    getFiguresOnOrAdjacentToSpace, applyNpcDamageToFigure,
+    postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons,
+    getSpaceController, shouldShowEndActivationPhaseButton, getPlayReadyMaps,
+    postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState,
+    clearPreGameSetup, getDeployFigureLabels, getDeployButtonRows,
+    getDeploymentMapAttachment, filterValidTopLeftSpaces,
+    updateDeployPromptMessages, finishSetupAttachments,
+    createPlayAreaChannels, createBoardChannel, createHandThreads,
+    refreshAllGameComponents, applyDirectDamageToFigure,
+    getMissionTokenLabel, countActiveGamesForPlayer, sendDeckIllegalAlert, sendSquadConfirmation,
+    runDraftRandom, getRange, hasLineOfSight,
+    getDeploymentZones,
+    // Combat special effects deps
+    calculateKillVp, decrementActivationIfGroupDefeated,
+    getDcUpgradeAttachments, getFigureLabel,
+    filterCondition, isConditionImmune,
+    applyCondition: _applyCondition, HARMFUL_CONDITIONS,
+
+    // Lobby
+    lobbies: getLobbiesMap(),
+    createGameChannels,
+  };
+}
+
 client.on('interactionCreate', async (interaction) => {
   try {
   if (interaction.isAutocomplete()) {
@@ -6016,149 +6115,39 @@ client.on('interactionCreate', async (interaction) => {
       await updateDcActionsMessage(game, msgId, interaction.client);
       return;
     }
-    if (selectKey === 'arsenal_pick_') {
-      const arsenalCtx = {
-        getGame, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames, replyIfGameEnded,
-        getFigureSize, getFootprintCells, getRange, hasLineOfSight, FIGURE_LETTERS,
-      };
-      await handleArsenalPick(interaction, arsenalCtx);
-      return;
-    }
-    if (selectKey === 'map_selection_draw_' || selectKey === 'map_selection_pick_') {
-      const setupChoiceContext = {
-        getGame,
-        getPlayReadyMaps,
-        getMissionCardsData,
-        getMapRegistry,
-        getMapTypeButtons,
-        getMapConfirmButton,
-        getMissionSelectDrawMenu,
-        getMissionSelectionPickMenu,
-        postPinnedMissionCardFromGameState,
-        isDcAttachment,
-        resolveDcName,
-        isFigurelessDc,
-        finishSetupAttachments,
-        client,
-        saveGames,
-      };
-      if (selectKey === 'map_selection_draw_') await handleMapSelectionDraw(interaction, setupChoiceContext);
-      else if (selectKey === 'map_selection_pick_') await handleMapSelectionPick(interaction, setupChoiceContext);
-      return;
-    }
-    if (selectKey === 'setup_attach_to_') {
-      const setupSelectContext = {
-        getGame,
-        updateAttachmentMessageForDc,
-        getCcShuffleDrawButton,
-        clearPreGameSetup,
-        getInitiativePlayerZoneLabel,
-        logGameAction,
-        client,
-        saveGames,
-        finishSetupAttachments,
-        dcHealthState,
-        dcMessageMeta,
-      };
-      await handleSetupAttachTo(interaction, setupSelectContext);
-      return;
-    }
-    const ccHandSelectContext = {
-      getGame,
-      dcMessageMeta,
-      dcHealthState,
-      getCcEffect,
-      getCommandCardImagePath,
-      buildHandDisplayPayload,
-      updateAttachmentMessageForDc,
-      updateHandVisualMessage,
-      updateDiscardPileMessage,
-      logGameAction,
-      saveGames,
-      isCcAttachment,
-      isCcPlayableNow,
-      isCcPlayLegalByRestriction,
-      getIllegalCcPlayButtons,
-      getNegationResponseButtons,
-      client,
-      resolveAbility,
-      pushUndo,
-      getBoardStateForMovement,
-      getSpaceChoiceRows,
-      buildSpaceSelectMenu,
-      getMapAttachmentForSpaces,
-      buildBoardMapPayload,
-    };
-    if (selectKey === 'cc_attach_to_') await handleCcAttachTo(interaction, ccHandSelectContext);
-    else if (selectKey === 'cc_play_select_') await handleCcPlaySelect(interaction, ccHandSelectContext);
-    else if (selectKey === 'cc_discard_select_') await handleCcDiscardSelect(interaction, ccHandSelectContext);
-
-    // Space-select overflow adapters: rewrite customId as if it were a button click, then delegate.
+    // Space-select overflow adapters: rewrite customId as if it were a button click, then
+    // dispatch through the same table-driven system used for buttons (getHandler + buildContext).
     const SPACE_SEL_MAP = {
       'overwatch_space_sel_': 'overwatch_space_',
       'pounce_space_sel_': 'pounce_space_',
       'false_orders_space_sel_': 'false_orders_space_',
       'rush_push_space_sel_': 'rush_push_space_',
+      'shoulder_rush_space_sel_': 'shoulder_rush_space_',
+      'bomb_drop_space_sel_': 'bomb_drop_space_',
       'cc_space_sel_': 'cc_space_',
     };
     if (SPACE_SEL_MAP[selectKey]) {
       const space = interaction.values?.[0];
       if (!space) return;
       const suffix = interaction.customId.slice(selectKey.length);
-      // Reconstruct button-style customId: buttonPrefix + suffix + _ + space
       interaction.customId = `${SPACE_SEL_MAP[selectKey]}${suffix}_${space}`;
       await interaction.deferUpdate().catch(discordCatch);
-      // Re-dispatch as button
       const fakeButtonKey = SPACE_SEL_MAP[selectKey];
-      if (fakeButtonKey === 'overwatch_space_' || fakeButtonKey === 'pounce_space_' || fakeButtonKey === 'false_orders_space_' || fakeButtonKey === 'rush_push_space_') {
-        const dcPlayAreaContext = {
-          getGame,
-          replyIfGameEnded,
-          saveGames,
-          pushUndo,
-          client,
-          dcMessageMeta,
-          dcExhaustedState,
-          dcHealthState,
-          buildDcEmbedAndFiles,
-          getConditionsForDcMessage,
-          getDcPlayAreaComponents,
-          getDcActionButtons,
-          getActionsCounterContent,
-          getActivationMinimapAttachment,
-          updateActivationsMessage,
-          getActivateDcButtons,
-          DC_ACTIONS_PER_ACTIVATION,
-          ACTION_ICONS,
-          getDcStats,
-          getDcEffects,
-          resolveDcName,
-          isFigurelessDc,
-          resolveAbility,
-          logGameAction,
-          getBoardStateForMovement,
-          buildLetterRows,
-          getMoveSpaceGridRows,
-          getSpaceChoiceRows,
-          buildSpaceSelectMenu,
-          getMapAttachmentForSpaces,
-          buildBoardMapPayload,
-          FIGURE_LETTERS,
-          getFigureSize,
-          getFootprintCells,
-          getRange,
-          hasLineOfSight,
-          getMapSpaces,
-          updateHandVisualMessage,
-          updateDiscardPileMessage,
-        };
-        if (fakeButtonKey === 'overwatch_space_') await handleOverwatchSpacePick(interaction, dcPlayAreaContext);
-        else if (fakeButtonKey === 'pounce_space_') await handlePounceSpacePick(interaction, dcPlayAreaContext);
-        else if (fakeButtonKey === 'false_orders_space_') await handleFalseOrdersMovePick(interaction, dcPlayAreaContext);
-        else if (fakeButtonKey === 'rush_push_space_') await handleRushPushSpace(interaction, dcPlayAreaContext);
-      } else if (fakeButtonKey === 'cc_space_') {
-        await handleCcSpacePick(interaction, ccHandSelectContext);
+      const _selHandler = getHandler(fakeButtonKey);
+      if (_selHandler) {
+        const _selGroup = getHandlerGroup(fakeButtonKey);
+        const _selCtx = _selGroup ? buildContext(_selGroup, buildAllDeps()) : {};
+        await _selHandler(interaction, _selCtx);
       }
+      return;
+    }
+
+    // Table-driven select dispatch: catches all registered select handlers
+    const _selHandler = getHandler(selectKey);
+    if (_selHandler) {
+      const _selGroup = getHandlerGroup(selectKey);
+      const _selCtx = _selGroup ? buildContext(_selGroup, buildAllDeps()) : {};
+      await _selHandler(interaction, _selCtx);
       return;
     }
     }); // end withGameLock (select)
@@ -6178,104 +6167,7 @@ client.on('interactionCreate', async (interaction) => {
   await withGameLock(_buttonLockId, async () => {
 
     // ── Table-driven dispatch ─────────────────────────────────────────
-    // Build the shared dependencies bag once per interaction.
-    const allDeps = {
-      // Core state
-      getGame, setGame, saveGames, deleteGame, deleteGameFromDb,
-      dcMessageMeta, dcExhaustedState, dcHealthState, pendingIllegalSquad, pendingSquadConfirm,
-      client,
-
-      // Auth & utility
-      canActAsPlayer, extractGameIdFromInteraction, logGameErrorToBotLogs,
-      replyIfGameEnded, pushUndo,
-
-      // Constants
-      PENDING_ILLEGAL_TTL_MS, MAX_ACTIVE_GAMES_PER_PLAYER,
-      DC_ACTIONS_PER_ACTIVATION, GAME_PHASES, PHASE_COLOR, ACTION_ICONS,
-      SURGE_LABELS, FIGURE_LETTERS, ThreadAutoArchiveDuration,
-      DEFAULT_DECK_REBELS, DEFAULT_DECK_SCUM, DEFAULT_DECK_IMPERIAL,
-
-      // Discord.js builders
-      ButtonBuilder, ActionRowBuilder, ButtonStyle, EmbedBuilder,
-
-      // Game logic (imported)
-      validateDeckLegal, parseCoord, normalizeCoord, getFootprintCells,
-      getFigureSize, getBoardStateForMovement, getMovementProfile,
-      computeMovementCache, getSpacesAtCost, getMovementTarget,
-      getMovementPath, ensureMovementCache, getNormalizedFootprint,
-      resolveMassivePush, rollAttackDice, rollDefenseDice,
-      rollSingleAttackDie, rollSingleDefenseDie, recalcAttackTotals,
-      recalcDefenseTotals, getInnateRerolls, getAttackerSurgeAbilities,
-      parseSurgeEffect, getAbility, resolveSurgeAbility, getSurgeAbilityLabel,
-      resolveAbility, getPlayableCcFromHand, isCcPlayableNow,
-      isCcPlayLegalByRestriction, filterMapSpacesByBounds,
-      reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, removeFigurePosition,
-
-      // Data loader (imported)
-      getDcEffects, getDiceData, getCcEffect, isCcAttachment, isDcAttachment,
-      isDcUnique, getMapSpaces, getMapRegistry, getMapTokensData,
-      getTournamentRotation, getMissionCardsData, getMissionRules, resolveDcName, isFigurelessDc,
-
-      // Discord UI (imported)
-      logGameAction, getInitiativePlayerZoneLabel,
-      getHandTooltipEmbed, getHandSquadButtons, getMapSelectionTooltipEmbed,
-      getMoveMpButtonRows, getMoveSpaceGridRows, buildLetterRows,
-      getSpaceChoiceRows, buildSpaceSelectMenu, getActionsCounterContent,
-      updateActivationsMessage, getGeneralSetupButtons, getMapTypeButtons,
-      getMapConfirmButton, getMissionSelectDrawMenu, getMissionSelectionPickMenu,
-      getDeploymentZoneButtons, getCcShuffleDrawButton,
-      getIllegalCcPlayButtons, getNegationResponseButtons, getCelebrationButtons,
-      getLobbyEmbed, getLobbyStartButton, updateThreadName, getDeploySpaceGridRows,
-      buildDeployRowButtons,
-
-      // Combat (imported from handlers)
-      sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls,
-
-      // Mission rules (imported)
-      runEndOfRoundRules, runStartOfRoundRules,
-      runNpcThugActivation, runNpcKryknaActivation,
-
-      // Locally defined helpers
-      applySquadSubmission, shuffleArray, buildHandDisplayPayload,
-      updateHandVisualMessage, updatePlayAreaDcButtons,
-      sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, runPostDeployPhase,
-      buildDiscardPileDisplayPayload, updateDiscardPileMessage,
-      updateAttachmentMessageForDc, updateDcActionsMessage,
-      buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents,
-      buildBoardMapPayload, getMapAttachmentForSpaces, ensureMovementBankMessage,
-      updateMovementBankMessage, getConditionCardPath, getDcActionButtons,
-      getActivationMinimapAttachment, getActivateDcButtons,
-      isDepletedRemovedFromGame, getPlayableCcSpecialsForDc,
-      getPlayableCcEndOfActivationForDc, getPlayableCcDoubleActionsForDc,
-      getDcStats, getEffectiveSpeed, getMovementMinimapAttachment,
-      clearMoveGridMessages, getLegalInteractOptions, sendBleedingPrompt,
-      getCommandCardImagePath, findDcMessageIdForFigure, isGroupDefeated,
-      checkWinConditions, applyDamageAndFinishCombat, finishCombatResolution,
-      checkPostCombatSurges, resolveCombatAfterRolls, hasActionsRemainingInGame,
-      getPlayerZoneLabel, updateHandChannelMessages, maybeShowEndActivationPhaseButton,
-      countTerminalsControlledByPlayer, isFigureInDeploymentZone,
-      getFiguresOnOrAdjacentToSpace, applyNpcDamageToFigure,
-      postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons,
-      getSpaceController, shouldShowEndActivationPhaseButton, getPlayReadyMaps,
-      postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState,
-      clearPreGameSetup, getDeployFigureLabels, getDeployButtonRows,
-      getDeploymentMapAttachment, filterValidTopLeftSpaces,
-      updateDeployPromptMessages, finishSetupAttachments,
-      createPlayAreaChannels, createBoardChannel, createHandThreads,
-      refreshAllGameComponents, applyDirectDamageToFigure,
-      getMissionTokenLabel, countActiveGamesForPlayer, sendDeckIllegalAlert, sendSquadConfirmation,
-      runDraftRandom, getRange, hasLineOfSight,
-      getDeploymentZones,
-      // Combat special effects deps
-      calculateKillVp, decrementActivationIfGroupDefeated,
-      getDcUpgradeAttachments, getFigureLabel,
-      filterCondition, isConditionImmune,
-      applyCondition: _applyCondition, HARMFUL_CONDITIONS,
-
-      // Lobby
-      lobbies: getLobbiesMap(),
-      createGameChannels,
-    };
+    const allDeps = buildAllDeps();
 
     // Look up handler and context group from the dispatch table
     const _handler = getHandler(buttonKey);

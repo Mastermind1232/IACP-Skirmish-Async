@@ -3,6 +3,22 @@
  * Each context group defines the set of dependency keys its handlers need.
  */
 
+/** Shared combat dependencies — used by both combat and combatReactions groups. */
+const COMBAT_DEPS = [
+  'getGame', 'replyIfGameEnded', 'dcMessageMeta', 'dcHealthState',
+  'findDcMessageIdForFigure', 'getDcStats', 'getDcEffects',
+  'updateDcActionsMessage', 'updateActivationsMessage',
+  'updateAttachmentMessageForDc', 'logGameAction', 'isGroupDefeated',
+  'checkWinConditions', 'finishCombatResolution', 'checkPostCombatSurges',
+  'ACTION_ICONS', 'ThreadAutoArchiveDuration', 'resolveCombatAfterRolls',
+  'saveGames', 'client', 'rollAttackDice', 'rollDefenseDice',
+  'rollSingleAttackDie', 'rollSingleDefenseDie', 'recalcAttackTotals',
+  'recalcDefenseTotals', 'getInnateRerolls', 'getAttackerSurgeAbilities',
+  'SURGE_LABELS', 'parseSurgeEffect', 'getAbility', 'resolveSurgeAbility',
+  'getSurgeAbilityLabel', 'getRange', 'hasLineOfSight', 'getDiceData',
+  'applyDamageAndFinishCombat', 'isDcUnique', 'getCelebrationButtons',
+];
+
 const CONTEXT_GROUPS = {
   ccHand: [
     'getGame', 'dcMessageMeta', 'dcHealthState', 'dcExhaustedState', 'saveGames',
@@ -77,35 +93,10 @@ const CONTEXT_GROUPS = {
     'saveGames', 'client', 'getMoveSpaceGridRows',
   ],
 
-  combat: [
-    'getGame', 'replyIfGameEnded', 'dcMessageMeta', 'dcHealthState',
-    'findDcMessageIdForFigure', 'getDcStats', 'getDcEffects',
-    'updateDcActionsMessage', 'updateActivationsMessage',
-    'updateAttachmentMessageForDc', 'logGameAction', 'isGroupDefeated',
-    'checkWinConditions', 'finishCombatResolution', 'checkPostCombatSurges',
-    'ACTION_ICONS', 'ThreadAutoArchiveDuration', 'resolveCombatAfterRolls',
-    'saveGames', 'client', 'rollAttackDice', 'rollDefenseDice',
-    'rollSingleAttackDie', 'rollSingleDefenseDie', 'recalcAttackTotals',
-    'recalcDefenseTotals', 'getInnateRerolls', 'getAttackerSurgeAbilities',
-    'SURGE_LABELS', 'parseSurgeEffect', 'getAbility', 'resolveSurgeAbility',
-    'getSurgeAbilityLabel', 'getRange', 'hasLineOfSight', 'getDiceData',
-    'applyDamageAndFinishCombat', 'isDcUnique', 'getCelebrationButtons',
-  ],
+  combat: COMBAT_DEPS,
 
   combatReactions: [
-    // Needs all combat deps since proceedAfterRerolls flows into full combat resolution
-    'getGame', 'replyIfGameEnded', 'dcMessageMeta', 'dcHealthState',
-    'findDcMessageIdForFigure', 'getDcStats', 'getDcEffects',
-    'updateDcActionsMessage', 'updateActivationsMessage',
-    'updateAttachmentMessageForDc', 'logGameAction', 'isGroupDefeated',
-    'checkWinConditions', 'finishCombatResolution', 'checkPostCombatSurges',
-    'ACTION_ICONS', 'ThreadAutoArchiveDuration', 'resolveCombatAfterRolls',
-    'saveGames', 'client', 'rollAttackDice', 'rollDefenseDice',
-    'rollSingleAttackDie', 'rollSingleDefenseDie', 'recalcAttackTotals',
-    'recalcDefenseTotals', 'getInnateRerolls', 'getAttackerSurgeAbilities',
-    'SURGE_LABELS', 'parseSurgeEffect', 'getAbility', 'resolveSurgeAbility',
-    'getSurgeAbilityLabel', 'getRange', 'hasLineOfSight', 'getDiceData',
-    'applyDamageAndFinishCombat', 'isDcUnique', 'getCelebrationButtons',
+    ...COMBAT_DEPS,
     // Plus combatReactions-specific deps
     'canActAsPlayer', 'sendRerollUI', 'proceedAfterRerolls', 'sendReadyToResolveRolls',
     'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
@@ -297,4 +288,8 @@ export function buildContext(group, allDeps) {
     ctx[k] = allDeps[k];
   }
   return ctx;
+}
+
+export function getValidGroupNames() {
+  return Object.keys(CONTEXT_GROUPS);
 }

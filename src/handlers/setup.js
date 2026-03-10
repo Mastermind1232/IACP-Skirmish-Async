@@ -2086,6 +2086,8 @@ export async function handleAttachDoneRedo(interaction, ctx) {
   }
 
   // Restore original pending list
+  game.setupAttachmentPending = game.setupAttachmentPending || {};
+  game.setupAttachmentApplied = game.setupAttachmentApplied || {};
   const original = game.setupAttachmentOriginal?.[playerNum];
   if (original) {
     game.setupAttachmentPending[playerNum] = [...original];

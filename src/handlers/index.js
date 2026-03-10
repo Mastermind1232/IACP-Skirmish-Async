@@ -27,6 +27,8 @@ import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEnd
 import {
   handleMapSelection,
   handleMapTypeChoice,
+  handleMapSelectionDraw,
+  handleMapSelectionPick,
   handleDraftRandom,
   handleDetermineInitiative,
   handleDeploymentZone,
@@ -125,341 +127,266 @@ import {
   handleSpreadThePainFigPick, handleSpreadThePainSkip,
   handleMissileSalvoDie, handleMissileSalvoDone,
 } from './combat-special-effects.js';
+import { getValidGroupNames } from '../context-factory.js';
 
 const HANDLERS = new Map();
+const HANDLER_GROUPS = new Map();
 
-function register(key, fn) {
+function register(key, fn, group = null) {
   if (HANDLERS.has(key)) throw new Error(`Duplicate handler: ${key}`);
+  if (group && !getValidGroupNames().includes(group)) {
+    throw new Error(`Unknown context group "${group}" for handler "${key}"`);
+  }
   HANDLERS.set(key, fn);
+  if (group) HANDLER_GROUPS.set(key, group);
 }
 
-register('lobby_join_', handleLobbyJoin);
-register('lobby_start_', handleLobbyStart);
-register('request_resolve_', handleRequestResolve);
-register('request_reject_', handleRequestReject);
-register('refresh_map_', handleRefreshMap);
-register('refresh_all_', handleRefreshAll);
-register('undo_', handleUndo);
-register('kill_game_', handleKillGame);
-register('default_deck_', handleDefaultDeck);
+// --- Lobby & misc ---
+register('lobby_join_', handleLobbyJoin, 'lobbyJoin');
+register('lobby_start_', handleLobbyStart, 'lobbyStart');
+register('request_resolve_', handleRequestResolve, 'requests');
+register('request_reject_', handleRequestReject, 'requests');
+register('refresh_map_', handleRefreshMap, 'refreshMap');
+register('refresh_all_', handleRefreshAll, 'refreshAll');
+register('undo_', handleUndo, 'undo');
+register('kill_game_', handleKillGame, 'killGame');
+register('default_deck_', handleDefaultDeck, 'defaultDeck');
 register('special_done_', handleSpecialDone);
-register('interact_cancel_', handleInteractCancel);
-register('interact_choice_', handleInteractChoice);
-register('end_end_of_round_', handleEndEndOfRound);
-register('end_start_of_round_', handleEndStartOfRound);
-register('extra_armor_pick_', handleExtraArmorPick);
-register('pd_pick_', handlePostDeployPick);
-register('pd_security_pick_', handleSecurityDetailPick);
-register('pd_strike_adj_', handleStrikeTeamAdjPick);
-register('pd_strike_token_done_', handleStrikeTeamTokenDone);
-register('pd_strike_token_', handleStrikeTeamTokenPick);
-register('pd_move_skip_', handlePostDeployMoveSkip);
-register('pd_walker_move_', handleWalkerMove);
-register('pd_walker_skip_', handleWalkerSkip);
-register('rbf_discard_', handleRbfDiscard);
-register('rogue_one_return_', handleRogueOneReturn);
-register('imp_citadel_', handleImpCitadel);
-register('prog_override_', handleProgrammingOverride);
-register('move_mp_', handleMoveMp);
-register('move_adjust_mp_', handleMoveAdjustMp);
-register('move_back_letters_', handleMoveLetterBack);
-register('move_letter_', handleMoveLetter);
-register('move_pick_', handleMovePick);
-register('attack_target_', handleAttackTarget);
-register('cleave_target_', handleCleaveTarget);
-register('cover_fire_block_', handleCoverFireBlock);
-register('cover_fire_discard_', handleCoverFireDiscard);
-register('guidance_systems_', handleGuidanceSystems);
-register('combat_resolve_ready_', handleCombatResolveReady);
-  register('combat_ready_', handleCombatReady);
-  register('combat_roll_', handleCombatRoll);
-  register('combat_surge_', handleCombatSurge);
-  register('combat_reroll_', handleCombatReroll);
-  register('pre_reroll_', handlePreReroll);
-register('combat_passive_', handleCombatPassive);
-register('combat_token_', handleCombatToken);
-register('power_token_choice_', handlePowerTokenChoice);
-register('spread_pain_cond_', handleSpreadThePainCondPick);
-register('figurehead_use_', handleFigureheadDecision);
-register('figurehead_skip_', handleFigureheadDecision);
-register('lasat_die_', handleLasatDiePick);
-register('lasat_face_', handleLasatFacePick);
-register('false_orders_action_', handleFalseOrdersAction);
-register('false_orders_space_', handleFalseOrdersMovePick);
-register('false_orders_atk_', handleFalseOrdersAtkPick);
-register('act_passive_', handleActPassive);
-register('status_phase_', handleStatusPhase);
-register('pass_activation_turn_', handlePassActivationTurn);
-register('end_turn_', handleEndTurn);
-register('dc_end_activation_', handleDcEndActivation);
-register('confirm_activate_', handleConfirmActivate);
-register('cancel_activate_', handleCancelActivate);
-register('map_selection_', handleMapSelection);
-register('map_type_', handleMapTypeChoice);
-register('draft_random_', handleDraftRandom);
-register('determine_initiative_', handleDetermineInitiative);
-register('deployment_zone_red_', handleDeploymentZone);
-register('deployment_zone_blue_', handleDeploymentZone);
-register('deployment_fig_', handleDeploymentFig);
-register('deployment_orient_', handleDeploymentOrient);
-register('deploy_pick_', handleDeployPick);
-register('deploy_row_back_', handleDeployRowBack);
-register('deploy_row_', handleDeployRow);
-register('loadout_pick_', handleLoadoutPick);
-register('form_pick_', handleFormPick);
-register('deployment_done_', handleDeploymentDone);
-register('auto_deploy_', handleAutoDeploy);
-register('map_confirm_', handleMapConfirm);
-register('map_goback_', handleMapGoBack);
-register('setup_attach_to_', handleSetupAttachTo);
-register('attach_confirm_', handleAttachConfirm);
-register('attach_reselect_', handleAttachReselect);
-register('attach_done_confirm_', handleAttachDoneConfirm);
-register('attach_done_redo_', handleAttachDoneRedo);
-register('dc_activate_', handleDcActivate);
-register('dc_unactivate_', handleDcUnactivate);
-register('dc_toggle_', handleDcToggle);
-register('dc_deplete_', handleDcDeplete);
-register('dc_rename_', handleDcRename);
-register('dc_cc_special_', handleDcCcSpecial);
-register('dc_cc_eoa_', handleDcCcEndOfActivation);
-register('dc_cc_double_', handleDcCcDoubleAction);
-register('pounce_space_', handlePounceSpacePick);
-register('rush_push_fig_', handleRushPushFig);
-register('rush_push_space_', handleRushPushSpace);
-register('rush_push_skip_', handleRushPushSkip);
-register('shoulder_rush_fig_', handleShoulderRushFig);
-register('shoulder_rush_space_', handleShoulderRushSpace);
-register('shoulder_rush_skip_', handleShoulderRushSkip);
-register('overwatch_space_', handleOverwatchSpacePick);
-register('ob_deplete_', handleOrbitalBombardmentDeplete);
-register('ob_skip_', handleOrbitalBombardmentSkip);
-register('ob_space_', handleOrbitalBombardmentSpacePick);
-register('bomb_drop_space_', handleBombDropSpacePick);
-register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'));
-register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'));
-register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'));
-register('dc_special_', (i, ctx) => handleDcAction(i, ctx, 'dc_special_'));
-register('dc_ability_choice_', handleDcAbilityChoice);
-register('ee3_pick_die_', handleEe3DiePick);
-register('bo_rifle_pick_', handleBoRiflePick);
-register('squad_confirm_', handleSquadConfirm);
-register('squad_cancel_', handleSquadCancel);
-register('deck_illegal_play_', handleDeckIllegalPlay);
-register('deck_illegal_redo_', handleDeckIllegalRedo);
-register('cc_shuffle_draw_', handleCcShuffleDraw);
-register('ike_keep_', handleIKnowEverythingKeep);
-register('cc_play_', handleCcPlay);
-register('cc_confirm_play_', handleCcConfirmPlay);
-register('cc_cancel_play_', handleCcCancelPlay);
-register('cc_draw_', handleCcDraw);
-register('cc_search_discard_', handleCcSearchDiscard);
-register('cc_close_discard_', handleCcCloseDiscard);
-register('cc_discard_', handleCcDiscard);
-register('cc_choice_', handleCcChoice);
-register('cc_space_', handleCcSpacePick);
-register('squad_select_', handleSquadSelect);
-register('illegal_cc_ignore_', handleIllegalCcIgnore);
-register('illegal_cc_unplay_', handleIllegalCcUnplay);
-register('negation_play_', handleNegationPlay);
-register('negation_let_resolve_', handleNegationLetResolve);
-register('celebration_play_', handleCelebrationPlay);
-register('celebration_pass_', handleCelebrationPass);
-register('botmenu_kill_', handleBotmenuKill);
-register('botmenu_kill_yes_', handleBotmenuKillYes);
-register('botmenu_kill_no_', handleBotmenuKillNo);
-register('fast_forward_', handleFastForward);
-register('dc_cc_defender_', handleDefenderCcPlay);
+register('interact_cancel_', handleInteractCancel, 'interactCancel');
+register('interact_choice_', handleInteractChoice, 'interact');
 
-// New: extracted inline handlers
-register('tough_luck_remove_', handleToughLuck);
-register('tough_luck_skip_', handleToughLuck);
-register('there_is_no_try_die_', handleThereIsNoTry);
-register('there_is_no_try_face_', handleThereIsNoTry);
-register('there_is_no_try_skip_', handleThereIsNoTry);
-register('vet_instincts_pick_', handleVetInstincts);
-register('hunter_protocol_trigger_', handleHunterProtocol);
-register('hunter_protocol_skip_', handleHunterProtocol);
-register('strike_me_down_yes_', handleStrikeMeDown);
-register('strike_me_down_no_', handleStrikeMeDown);
-register('slow_on_draw_yes_', handleSlowOnTheDraw);
-register('slow_on_draw_no_', handleSlowOnTheDraw);
-register('slow_on_draw_resume_', handleSlowOnTheDrawResume);
-register('power_converter_approve_', handlePowerConverter);
-register('power_converter_skip_', handlePowerConverter);
-register('power_converter_die_', handlePowerConverter);
-register('power_converter_color_', handlePowerConverter);
-register('reaction_skip_', handleReactionSkip);
-register('reaction_use_', handleReactionUse);
-register('right_back_block_', handleRightBack);
-register('right_back_nodmg_', handleRightBack);
-register('mastery_pick_', handleMasteryPick);
-register('mastery_skip_', handleMasteryPick);
-register('interrogate_pick_', handleInterrogatePick);
-register('interrogate_discard_', handleInterrogatePick);
-register('interrogate_skip_', handleInterrogatePick);
-register('still_faster_use_', handleStillFaster);
-register('still_faster_skip_', handleStillFaster);
-register('still_faster_dc_pick_', handleStillFaster);
-register('squad_swarm_yes_', handleSquadSwarm);
-register('squad_swarm_no_', handleSquadSwarm);
-register('overdrive_use_', handleOverdrive);
-register('self_destruct_probe_use_', handleSelfDestructProbe);
-register('self_destruct_probe_skip_', handleSelfDestructProbe);
-register('self_destruct_protocol_use_', handleSelfDestructProtocol);
-register('self_destruct_protocol_skip_', handleSelfDestructProtocol);
-register('last_resort_use_', handleLastResort);
-register('last_resort_skip_', handleLastResort);
-register('yhsiw_transfer_', handleYHSIW);
-register('yhsiw_damage_', handleYHSIW);
-register('submit_fight_use_', handleSubmitOrFight);
-register('submit_fight_skip_', handleSubmitOrFight);
-register('scavenged_walker_attack_', handleScavengedWalker);
-register('scavenged_walker_skip_', handleScavengedWalker);
-register('on_diplomatic_', handleOnDiplomatic);
-register('bel_reorder_1_', handleBelReorder);
-register('bel_reorder_2_', handleBelReorder);
-register('ab_blade_pick_', handleAssassinsBladePickTarget);
-register('sf_mp_pick_', handleSuppressiveFireMpPick);
-register('force_slow_pick_', handleForceSlowPick);
-register('excavation_pick_', handleExcavationPick);
-register('devaron_door_open_', handleDevaronDoorOpen);
-register('devaron_crate_push_', handleDevaronCratePush);
-register('krykna_push_', handleKryknaPush);
+// --- Round ---
+register('end_end_of_round_', handleEndEndOfRound, 'round');
+register('end_start_of_round_', handleEndStartOfRound, 'startOfRound');
+register('extra_armor_pick_', handleExtraArmorPick, 'round');
+register('rbf_discard_', handleRbfDiscard, 'round');
+register('rogue_one_return_', handleRogueOneReturn, 'round');
+register('imp_citadel_', handleImpCitadel, 'round');
+register('prog_override_', handleProgrammingOverride, 'round');
 
-// Combat special effects (extracted from index.js)
-register('bleed_accept_', handleBleedResolve);
-register('bleed_prevent_', handleBleedResolve);
-register('sidewinder_apply_', handleSidewinderApply);
-register('sidewinder_skip_', handleSidewinderSkip);
-register('boltslinger_target_', handleBoltslingerTarget);
-register('boltslinger_skip_', handleBoltslingerSkip);
-register('indiscriminate_die_', handleIndiscriminateFireDie);
-register('indiscriminate_skip_', handleIndiscriminateFireSkip);
-register('fighting_knife_target_', handleFightingKnifeTarget);
-register('fighting_knife_skip_', handleFightingKnifeSkip);
-register('concussive_bolt_push_', handleConcussiveBoltPush);
-register('concussive_bolt_skip_', handleConcussiveBoltSkip);
-register('spread_pain_fig_', handleSpreadThePainFigPick);
-register('spread_pain_skip_', handleSpreadThePainSkip);
-register('missile_salvo_die_', handleMissileSalvoDie);
-register('missile_salvo_done_', handleMissileSalvoDone);
+// --- Post-deploy ---
+register('pd_pick_', handlePostDeployPick, 'postDeploy');
+register('pd_security_pick_', handleSecurityDetailPick, 'postDeploy');
+register('pd_strike_adj_', handleStrikeTeamAdjPick, 'postDeploy');
+register('pd_strike_token_done_', handleStrikeTeamTokenDone, 'postDeploy');
+register('pd_strike_token_', handleStrikeTeamTokenPick, 'postDeploy');
+register('pd_move_skip_', handlePostDeployMoveSkip, 'postDeploy');
+register('pd_walker_move_', handleWalkerMove, 'postDeploy');
+register('pd_walker_skip_', handleWalkerSkip, 'postDeploy');
 
-// Context group mapping: handler key → context group name (from context-factory.js)
-const HANDLER_GROUPS = new Map();
-function setGroup(keys, group) { for (const k of keys) HANDLER_GROUPS.set(k, group); }
+// --- Movement ---
+register('move_mp_', handleMoveMp, 'move');
+register('move_adjust_mp_', handleMoveAdjustMp, 'moveAdjust');
+register('move_back_letters_', handleMoveLetterBack, 'moveBackLetters');
+register('move_letter_', handleMoveLetter, 'moveLetter');
+register('move_pick_', handleMovePick, 'movePick');
 
-setGroup([
-  'squad_confirm_', 'squad_cancel_',
-  'deck_illegal_play_', 'deck_illegal_redo_', 'cc_shuffle_draw_', 'ike_keep_', 'cc_play_',
-  'cc_confirm_play_', 'cc_cancel_play_', 'cc_draw_', 'cc_search_discard_',
-  'cc_close_discard_', 'cc_discard_', 'cc_choice_', 'cc_space_', 'squad_select_',
-  'illegal_cc_ignore_', 'illegal_cc_unplay_', 'negation_play_', 'negation_let_resolve_',
-  'celebration_play_', 'celebration_pass_',
-], 'ccHand');
+// --- Combat ---
+register('attack_target_', handleAttackTarget, 'combat');
+register('cleave_target_', handleCleaveTarget, 'combat');
+register('cover_fire_block_', handleCoverFireBlock, 'combat');
+register('cover_fire_discard_', handleCoverFireDiscard, 'combat');
+register('guidance_systems_', handleGuidanceSystems, 'combat');
+register('combat_resolve_ready_', handleCombatResolveReady, 'combat');
+register('combat_ready_', handleCombatReady, 'combat');
+register('combat_roll_', handleCombatRoll, 'combat');
+register('combat_surge_', handleCombatSurge, 'combat');
+register('combat_reroll_', handleCombatReroll, 'combat');
+register('pre_reroll_', handlePreReroll, 'combat');
+register('combat_passive_', handleCombatPassive, 'combat');
+register('combat_token_', handleCombatToken, 'combat');
+register('power_token_choice_', handlePowerTokenChoice, 'combat');
+register('spread_pain_cond_', handleSpreadThePainCondPick, 'combat');
+register('figurehead_use_', handleFigureheadDecision, 'combat');
+register('figurehead_skip_', handleFigureheadDecision, 'combat');
+register('lasat_die_', handleLasatDiePick, 'combat');
+register('lasat_face_', handleLasatFacePick, 'combat');
+register('false_orders_action_', handleFalseOrdersAction, 'dcPlayArea');
+register('false_orders_space_', handleFalseOrdersMovePick, 'dcPlayArea');
+register('false_orders_atk_', handleFalseOrdersAtkPick, 'combat');
 
-setGroup([
-  'dc_activate_', 'dc_unactivate_', 'dc_toggle_', 'dc_deplete_', 'dc_rename_',
-  'dc_cc_special_', 'dc_cc_eoa_', 'dc_cc_double_', 'dc_move_', 'dc_attack_',
-  'dc_interact_', 'dc_special_', 'pounce_space_', 'dc_ability_choice_', 'ee3_pick_die_',
-  'false_orders_action_', 'false_orders_space_', 'rush_push_fig_', 'rush_push_space_',
-  'rush_push_skip_', 'shoulder_rush_fig_', 'shoulder_rush_space_', 'shoulder_rush_skip_',
-  'overwatch_space_', 'ob_deplete_', 'ob_skip_', 'ob_space_',
-  'bomb_drop_space_', 'bo_rifle_pick_',
-], 'dcPlayArea');
+// --- Activation ---
+register('act_passive_', handleActPassive, 'activation');
+register('status_phase_', handleStatusPhase, 'activation');
+register('pass_activation_turn_', handlePassActivationTurn, 'activation');
+register('end_turn_', handleEndTurn, 'activation');
+register('dc_end_activation_', handleDcEndActivation, 'activation');
+register('confirm_activate_', handleConfirmActivate, 'activation');
+register('cancel_activate_', handleCancelActivate, 'activation');
 
-setGroup(['move_mp_'], 'move');
-setGroup(['move_adjust_mp_'], 'moveAdjust');
-setGroup(['move_letter_'], 'moveLetter');
-setGroup(['move_back_letters_'], 'moveBackLetters');
-setGroup(['move_pick_'], 'movePick');
+// --- Setup ---
+register('map_selection_', handleMapSelection, 'setup');
+register('map_type_', handleMapTypeChoice, 'setup');
+register('draft_random_', handleDraftRandom, 'setup');
+register('determine_initiative_', handleDetermineInitiative, 'setup');
+register('deployment_zone_red_', handleDeploymentZone, 'setup');
+register('deployment_zone_blue_', handleDeploymentZone, 'setup');
+register('deployment_fig_', handleDeploymentFig, 'setup');
+register('deployment_orient_', handleDeploymentOrient, 'setup');
+register('deploy_pick_', handleDeployPick, 'setup');
+register('deploy_row_back_', handleDeployRowBack, 'setup');
+register('deploy_row_', handleDeployRow, 'setup');
+register('loadout_pick_', handleLoadoutPick, 'setup');
+register('form_pick_', handleFormPick, 'setup');
+register('deployment_done_', handleDeploymentDone, 'setup');
+register('auto_deploy_', handleAutoDeploy, 'setup');
+register('map_confirm_', handleMapConfirm, 'setup');
+register('map_goback_', handleMapGoBack, 'setup');
+register('setup_attach_to_', handleSetupAttachTo, 'setup');
+register('attach_confirm_', handleAttachConfirm, 'setup');
+register('attach_reselect_', handleAttachReselect, 'setup');
+register('attach_done_confirm_', handleAttachDoneConfirm, 'setup');
+register('attach_done_redo_', handleAttachDoneRedo, 'setup');
 
-setGroup([
-  'cleave_target_', 'attack_target_', 'combat_resolve_ready_', 'combat_ready_',
-  'combat_roll_', 'combat_surge_', 'combat_reroll_', 'pre_reroll_', 'combat_passive_',
-  'combat_token_', 'power_token_choice_', 'spread_pain_cond_', 'figurehead_use_',
-  'figurehead_skip_', 'lasat_die_', 'lasat_face_', 'false_orders_atk_',
-  'guidance_systems_', 'cover_fire_block_', 'cover_fire_discard_',
-], 'combat');
+// --- DC Play Area ---
+register('dc_activate_', handleDcActivate, 'dcPlayArea');
+register('dc_unactivate_', handleDcUnactivate, 'dcPlayArea');
+register('dc_toggle_', handleDcToggle, 'dcPlayArea');
+register('dc_deplete_', handleDcDeplete, 'dcPlayArea');
+register('dc_rename_', handleDcRename, 'dcPlayArea');
+register('dc_cc_special_', handleDcCcSpecial, 'dcPlayArea');
+register('dc_cc_eoa_', handleDcCcEndOfActivation, 'dcPlayArea');
+register('dc_cc_double_', handleDcCcDoubleAction, 'dcPlayArea');
+register('pounce_space_', handlePounceSpacePick, 'dcPlayArea');
+register('rush_push_fig_', handleRushPushFig, 'dcPlayArea');
+register('rush_push_space_', handleRushPushSpace, 'dcPlayArea');
+register('rush_push_skip_', handleRushPushSkip, 'dcPlayArea');
+register('shoulder_rush_fig_', handleShoulderRushFig, 'dcPlayArea');
+register('shoulder_rush_space_', handleShoulderRushSpace, 'dcPlayArea');
+register('shoulder_rush_skip_', handleShoulderRushSkip, 'dcPlayArea');
+register('overwatch_space_', handleOverwatchSpacePick, 'dcPlayArea');
+register('ob_deplete_', handleOrbitalBombardmentDeplete, 'dcPlayArea');
+register('ob_skip_', handleOrbitalBombardmentSkip, 'dcPlayArea');
+register('ob_space_', handleOrbitalBombardmentSpacePick, 'dcPlayArea');
+register('bomb_drop_space_', handleBombDropSpacePick, 'dcPlayArea');
+register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'), 'dcPlayArea');
+register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'), 'dcPlayArea');
+register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'), 'dcPlayArea');
+register('dc_special_', (i, ctx) => handleDcAction(i, ctx, 'dc_special_'), 'dcPlayArea');
+register('dc_ability_choice_', handleDcAbilityChoice, 'dcPlayArea');
+register('ee3_pick_die_', handleEe3DiePick, 'dcPlayArea');
+register('bo_rifle_pick_', handleBoRiflePick, 'dcPlayArea');
 
-setGroup([
-  'tough_luck_remove_', 'tough_luck_skip_', 'there_is_no_try_die_',
-  'there_is_no_try_face_', 'there_is_no_try_skip_', 'vet_instincts_pick_',
-  'hunter_protocol_trigger_', 'hunter_protocol_skip_',
-  'strike_me_down_yes_', 'strike_me_down_no_',
-  'slow_on_draw_yes_', 'slow_on_draw_no_', 'slow_on_draw_resume_',
-  'power_converter_approve_', 'power_converter_skip_',
-  'power_converter_die_', 'power_converter_color_',
-], 'combatReactions');
+// --- CC Hand ---
+register('squad_confirm_', handleSquadConfirm, 'ccHand');
+register('squad_cancel_', handleSquadCancel, 'ccHand');
+register('deck_illegal_play_', handleDeckIllegalPlay, 'ccHand');
+register('deck_illegal_redo_', handleDeckIllegalRedo, 'ccHand');
+register('cc_shuffle_draw_', handleCcShuffleDraw, 'ccHand');
+register('ike_keep_', handleIKnowEverythingKeep, 'ccHand');
+register('cc_play_', handleCcPlay, 'ccHand');
+register('cc_confirm_play_', handleCcConfirmPlay, 'ccHand');
+register('cc_cancel_play_', handleCcCancelPlay, 'ccHand');
+register('cc_draw_', handleCcDraw, 'ccHand');
+register('cc_search_discard_', handleCcSearchDiscard, 'ccHand');
+register('cc_close_discard_', handleCcCloseDiscard, 'ccHand');
+register('cc_discard_', handleCcDiscard, 'ccHand');
+register('cc_choice_', handleCcChoice, 'ccHand');
+register('cc_space_', handleCcSpacePick, 'ccHand');
+register('squad_select_', handleSquadSelect, 'ccHand');
+register('illegal_cc_ignore_', handleIllegalCcIgnore, 'ccHand');
+register('illegal_cc_unplay_', handleIllegalCcUnplay, 'ccHand');
+register('negation_play_', handleNegationPlay, 'ccHand');
+register('negation_let_resolve_', handleNegationLetResolve, 'ccHand');
+register('celebration_play_', handleCelebrationPlay, 'ccHand');
+register('celebration_pass_', handleCelebrationPass, 'ccHand');
 
-setGroup([
-  'reaction_skip_', 'reaction_use_', 'right_back_block_', 'right_back_nodmg_',
-  'mastery_pick_', 'mastery_skip_', 'interrogate_pick_', 'interrogate_discard_',
-  'interrogate_skip_',
-], 'postCombat');
+// --- Botmenu ---
+register('botmenu_kill_', handleBotmenuKill, 'botmenu');
+register('botmenu_kill_yes_', handleBotmenuKillYes, 'botmenu');
+register('botmenu_kill_no_', handleBotmenuKillNo, 'botmenu');
 
-setGroup([
-  'still_faster_use_', 'still_faster_skip_', 'still_faster_dc_pick_',
-  'squad_swarm_yes_', 'squad_swarm_no_', 'overdrive_use_',
-  'self_destruct_probe_use_', 'self_destruct_probe_skip_',
-  'self_destruct_protocol_use_', 'self_destruct_protocol_skip_',
-  'last_resort_use_', 'last_resort_skip_', 'scavenged_walker_attack_',
-  'scavenged_walker_skip_', 'on_diplomatic_', 'bel_reorder_1_', 'bel_reorder_2_',
-  'ab_blade_pick_', 'sf_mp_pick_', 'force_slow_pick_', 'excavation_pick_',
-  'yhsiw_transfer_', 'yhsiw_damage_',
-  'submit_fight_use_', 'submit_fight_skip_',
-], 'interrupts');
+// --- Fast-forward & defender CC ---
+register('fast_forward_', handleFastForward, 'fastForward');
+register('dc_cc_defender_', handleDefenderCcPlay, 'defenderCc');
 
-setGroup([
-  'act_passive_', 'status_phase_', 'pass_activation_turn_', 'end_turn_',
-  'dc_end_activation_', 'confirm_activate_', 'cancel_activate_',
-], 'activation');
+// --- Combat reactions ---
+register('tough_luck_remove_', handleToughLuck, 'combatReactions');
+register('tough_luck_skip_', handleToughLuck, 'combatReactions');
+register('there_is_no_try_die_', handleThereIsNoTry, 'combatReactions');
+register('there_is_no_try_face_', handleThereIsNoTry, 'combatReactions');
+register('there_is_no_try_skip_', handleThereIsNoTry, 'combatReactions');
+register('vet_instincts_pick_', handleVetInstincts, 'combatReactions');
+register('hunter_protocol_trigger_', handleHunterProtocol, 'combatReactions');
+register('hunter_protocol_skip_', handleHunterProtocol, 'combatReactions');
+register('strike_me_down_yes_', handleStrikeMeDown, 'combatReactions');
+register('strike_me_down_no_', handleStrikeMeDown, 'combatReactions');
+register('slow_on_draw_yes_', handleSlowOnTheDraw, 'combatReactions');
+register('slow_on_draw_no_', handleSlowOnTheDraw, 'combatReactions');
+register('slow_on_draw_resume_', handleSlowOnTheDrawResume, 'combatReactions');
+register('power_converter_approve_', handlePowerConverter, 'combatReactions');
+register('power_converter_skip_', handlePowerConverter, 'combatReactions');
+register('power_converter_die_', handlePowerConverter, 'combatReactions');
+register('power_converter_color_', handlePowerConverter, 'combatReactions');
 
-setGroup(['end_end_of_round_', 'extra_armor_pick_', 'rbf_discard_', 'rogue_one_return_', 'imp_citadel_', 'prog_override_'], 'round');
-setGroup(['end_start_of_round_'], 'startOfRound');
-setGroup(['request_resolve_', 'request_reject_'], 'requests');
+// --- Post-combat ---
+register('reaction_skip_', handleReactionSkip, 'postCombat');
+register('reaction_use_', handleReactionUse, 'postCombat');
+register('right_back_block_', handleRightBack, 'postCombat');
+register('right_back_nodmg_', handleRightBack, 'postCombat');
+register('mastery_pick_', handleMasteryPick, 'postCombat');
+register('mastery_skip_', handleMasteryPick, 'postCombat');
+register('interrogate_pick_', handleInterrogatePick, 'postCombat');
+register('interrogate_discard_', handleInterrogatePick, 'postCombat');
+register('interrogate_skip_', handleInterrogatePick, 'postCombat');
 
-setGroup([
-  'pd_pick_', 'pd_security_pick_', 'pd_strike_adj_',
-  'pd_strike_token_', 'pd_strike_token_done_',
-  'pd_move_skip_',
-  'pd_walker_move_', 'pd_walker_skip_',
-], 'postDeploy');
+// --- Interrupts ---
+register('still_faster_use_', handleStillFaster, 'interrupts');
+register('still_faster_skip_', handleStillFaster, 'interrupts');
+register('still_faster_dc_pick_', handleStillFaster, 'interrupts');
+register('squad_swarm_yes_', handleSquadSwarm, 'interrupts');
+register('squad_swarm_no_', handleSquadSwarm, 'interrupts');
+register('overdrive_use_', handleOverdrive, 'interrupts');
+register('self_destruct_probe_use_', handleSelfDestructProbe, 'interrupts');
+register('self_destruct_probe_skip_', handleSelfDestructProbe, 'interrupts');
+register('self_destruct_protocol_use_', handleSelfDestructProtocol, 'interrupts');
+register('self_destruct_protocol_skip_', handleSelfDestructProtocol, 'interrupts');
+register('last_resort_use_', handleLastResort, 'interrupts');
+register('last_resort_skip_', handleLastResort, 'interrupts');
+register('yhsiw_transfer_', handleYHSIW, 'interrupts');
+register('yhsiw_damage_', handleYHSIW, 'interrupts');
+register('submit_fight_use_', handleSubmitOrFight, 'interrupts');
+register('submit_fight_skip_', handleSubmitOrFight, 'interrupts');
+register('scavenged_walker_attack_', handleScavengedWalker, 'interrupts');
+register('scavenged_walker_skip_', handleScavengedWalker, 'interrupts');
+register('on_diplomatic_', handleOnDiplomatic, 'interrupts');
+register('bel_reorder_1_', handleBelReorder, 'interrupts');
+register('bel_reorder_2_', handleBelReorder, 'interrupts');
+register('ab_blade_pick_', handleAssassinsBladePickTarget, 'interrupts');
+register('sf_mp_pick_', handleSuppressiveFireMpPick, 'interrupts');
+register('force_slow_pick_', handleForceSlowPick, 'interrupts');
+register('excavation_pick_', handleExcavationPick, 'interrupts');
 
-setGroup([
-  'devaron_door_open_', 'devaron_crate_push_', 'krykna_push_',
-], 'mapEvents');
+// --- Map events ---
+register('devaron_door_open_', handleDevaronDoorOpen, 'mapEvents');
+register('devaron_crate_push_', handleDevaronCratePush, 'mapEvents');
+register('krykna_push_', handleKryknaPush, 'mapEvents');
 
-setGroup([
-  'bleed_accept_', 'bleed_prevent_', 'sidewinder_apply_', 'sidewinder_skip_',
-  'boltslinger_target_', 'boltslinger_skip_', 'indiscriminate_die_',
-  'indiscriminate_skip_', 'fighting_knife_target_', 'fighting_knife_skip_',
-  'concussive_bolt_push_', 'concussive_bolt_skip_', 'spread_pain_fig_',
-  'spread_pain_skip_', 'missile_salvo_die_', 'missile_salvo_done_',
-], 'combatSpecialEffects');
+// --- Combat special effects ---
+register('bleed_accept_', handleBleedResolve, 'combatSpecialEffects');
+register('bleed_prevent_', handleBleedResolve, 'combatSpecialEffects');
+register('sidewinder_apply_', handleSidewinderApply, 'combatSpecialEffects');
+register('sidewinder_skip_', handleSidewinderSkip, 'combatSpecialEffects');
+register('boltslinger_target_', handleBoltslingerTarget, 'combatSpecialEffects');
+register('boltslinger_skip_', handleBoltslingerSkip, 'combatSpecialEffects');
+register('indiscriminate_die_', handleIndiscriminateFireDie, 'combatSpecialEffects');
+register('indiscriminate_skip_', handleIndiscriminateFireSkip, 'combatSpecialEffects');
+register('fighting_knife_target_', handleFightingKnifeTarget, 'combatSpecialEffects');
+register('fighting_knife_skip_', handleFightingKnifeSkip, 'combatSpecialEffects');
+register('concussive_bolt_push_', handleConcussiveBoltPush, 'combatSpecialEffects');
+register('concussive_bolt_skip_', handleConcussiveBoltSkip, 'combatSpecialEffects');
+register('spread_pain_fig_', handleSpreadThePainFigPick, 'combatSpecialEffects');
+register('spread_pain_skip_', handleSpreadThePainSkip, 'combatSpecialEffects');
+register('missile_salvo_die_', handleMissileSalvoDie, 'combatSpecialEffects');
+register('missile_salvo_done_', handleMissileSalvoDone, 'combatSpecialEffects');
 
-setGroup([
-  'map_selection_', 'map_type_', 'map_confirm_', 'map_goback_', 'draft_random_',
-  'determine_initiative_', 'deployment_zone_red_', 'deployment_zone_blue_',
-  'deployment_fig_', 'deployment_orient_', 'deploy_pick_', 'deploy_row_back_',
-  'deploy_row_', 'loadout_pick_', 'form_pick_', 'deployment_done_', 'auto_deploy_',
-  'attach_confirm_', 'attach_reselect_', 'attach_done_confirm_', 'attach_done_redo_',
-], 'setup');
-
-setGroup(['interact_cancel_'], 'interactCancel');
-setGroup(['interact_choice_'], 'interact');
-setGroup(['refresh_map_'], 'refreshMap');
-setGroup(['refresh_all_'], 'refreshAll');
-setGroup(['undo_'], 'undo');
-setGroup([
-  'botmenu_kill_', 'botmenu_kill_yes_', 'botmenu_kill_no_',
-], 'botmenu');
-setGroup(['fast_forward_'], 'fastForward');
-setGroup(['dc_cc_defender_'], 'defenderCc');
-setGroup(['kill_game_'], 'killGame');
-setGroup(['default_deck_'], 'defaultDeck');
-setGroup(['lobby_join_'], 'lobbyJoin');
-setGroup(['lobby_start_'], 'lobbyStart');
+// --- Select-menu handlers (dispatched via table-driven select dispatch in index.js) ---
+register('arsenal_pick_', handleArsenalPick, 'dcPlayArea');
+register('map_selection_draw_', handleMapSelectionDraw, 'setup');
+register('map_selection_pick_', handleMapSelectionPick, 'setup');
+register('cc_attach_to_', handleCcAttachTo, 'ccHand');
+register('cc_play_select_', handleCcPlaySelect, 'ccHand');
+register('cc_discard_select_', handleCcDiscardSelect, 'ccHand');
 
 /**
  * Return the handler for the given key (prefix), or null if none.
@@ -468,6 +395,11 @@ setGroup(['lobby_start_'], 'lobbyStart');
  */
 export function getHandler(handlerKey) {
   return HANDLERS.get(handlerKey) ?? null;
+}
+
+/** Return all registered handler prefixes (used by router.js to auto-derive BUTTON_PREFIXES). */
+export function getRegisteredButtonPrefixes() {
+  return [...HANDLERS.keys()];
 }
 
 /**
