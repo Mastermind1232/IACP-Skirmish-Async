@@ -471,31 +471,7 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
     const p2Hand = await client.channels.fetch(game.p2HandId);
     const p1Id = game.player1Id;
     const p2Id = game.player2Id;
-    if (game.destructMode) {
-      // Destruct mode: auto-assign random test decks
-      try {
-        const { applySquadSubmission } = ctx;
-        const destructDecks = JSON.parse(
-          (await import('fs')).readFileSync(
-            new URL('../../data/destruct-test-decks.json', import.meta.url), 'utf-8'
-          )
-        );
-        // Pick 2 random distinct decks
-        const shuffled = [...destructDecks].sort(() => Math.random() - 0.5);
-        const deck1 = shuffled[0];
-        const deck2 = shuffled[1] || shuffled[0];
-        const squad1 = { name: deck1.name, dcList: [...deck1.dcList], ccList: [...deck1.ccList], dcCount: deck1.dcList.length, ccCount: deck1.ccList.length };
-        const squad2 = { name: deck2.name, dcList: [...deck2.dcList], ccList: [...deck2.ccList], dcCount: deck2.dcList.length, ccCount: deck2.ccList.length };
-        await applySquadSubmission(game, true, squad1, client);
-        await applySquadSubmission(game, false, squad2, client);
-        await p1Hand.send({ content: `**Destruct mode** — auto-assigned: **${squad1.name}**` });
-        await p2Hand.send({ content: `**Destruct mode** — auto-assigned: **${squad2.name}**` });
-      } catch (err) {
-        console.error('Destruct auto-assign failed:', err);
-        await p1Hand.send({ content: 'Destruct auto-assign failed. Submit your squad manually.' });
-        await p2Hand.send({ content: 'Destruct auto-assign failed. Submit your squad manually.' });
-      }
-    } else {
+    {
       await p1Hand.send({
         content: `<@${p1Id}>, this is your hand — submit your squad below!`,
         allowedMentions: { users: [p1Id] },

@@ -2095,6 +2095,17 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: interactBlockRange + controlBlockRange (A Powerful Influence — hostile figures within range cannot interact / count for control)
+  if (entry.type === 'ccEffect' && entry.interactBlockRange && entry.controlBlockRange) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.powerfulInfluencePlayerNum = playerNum;
+    return {
+      applied: true,
+      logMessage: entry.logMessage || entry.label,
+    };
+  }
+
   // ccEffect: chooseSpaceWithin2OfActivating (Smoke Grenade) — first call: return validSpaces; second call: apply with chosenSpace
   if (entry.type === 'ccEffect' && entry.chooseSpaceWithin2OfActivating) {
     const { game, playerNum, dcMessageMeta, chosenSpace } = context;

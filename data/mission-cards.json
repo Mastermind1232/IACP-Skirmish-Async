@@ -210,16 +210,46 @@
         "setup": "",
         "persistent": "While a figure inside its own deployment zone is defending, apply -1 Block to the defense results.\n\nWhile a figure inside its opponent's deployment zone is defending, apply +1 Evade to the defense results.",
         "startOfRound": "",
-        "endOfRound": "Each player scores 3 VPs for each deployment zone they control. Then, if a player controls the Command Center, that player scores 3 VPs."
+        "endOfRound": "Each player scores 3 VPs for each deployment zone they control. Then, if a player controls the Command Center, that player scores 3 VPs.",
+        "rules": {
+          "persistent": {
+            "defenseModifierByZone": {
+              "ownZone": { "blockBonus": -1 },
+              "opponentZone": { "evadeBonus": 1 }
+            }
+          },
+          "endOfRound": {
+            "vpPerControlledDeploymentZone": {
+              "vp": 3,
+              "vpMessage": "deployment zone(s) controlled (3 VP each)"
+            },
+            "vpForControllingNamedArea": {
+              "areaName": "Command Center",
+              "vp": 3
+            }
+          }
+        }
       },
       "b": {
         "name": "Bomb Drop",
-        "tokenLabel": "",
+        "tokenLabel": "Explosive",
+        "interactLabel": "Retrieve Explosive",
+        "mechanics": {
+          "type": "carry"
+        },
         "imagePath": "vassal_extracted/images/mission-cards/Hoth Battle Station-B-Bomb Drop.jpg",
         "setup": "",
         "persistent": "A figure can retrieve an explosive.\n\nFigures carrying 1 or more explosives gain:\nSpecial Action (\"Bomb Drop\"): Discard 1 explosive you are carrying and choose a space within 3 spaces. Each figure on or adjacent to the chosen space suffers 2 Damage.",
         "startOfRound": "",
-        "endOfRound": "Each figure in an opponent's deployment zone carrying 1 or more explosives discards all carried explosives and gains 4 VPs for each explosive discarded."
+        "endOfRound": "Each figure in an opponent's deployment zone carrying 1 or more explosives discards all carried explosives and gains 4 VPs for each explosive discarded.",
+        "rules": {
+          "endOfRound": {
+            "vpPerContrabandInOpponentDeploymentZone": {
+              "vp": 4,
+              "vpMessage": "explosive(s) discarded in opponent's deployment zone (4 VP each)"
+            }
+          }
+        }
       }
     }
   }

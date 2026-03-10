@@ -3,8 +3,10 @@
  * Each effect type is implemented here; mission-cards.json supplies parameters (e.g. vp: 15).
  */
 import { awardObjectiveVp } from './vp-helpers.js';
-import { getPlayerId, getCcHand } from './player-helpers.js';
+import { getPlayerId, getCcHand, getInitiativePlayerNum } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
+import { getDeploymentZones } from '../data-loader.js';
+import { getPlayerOccupiedCells } from './board-helpers.js';
 
 function normalizeCoord(c) {
   if (c == null || typeof c !== 'string') return '';
@@ -332,6 +334,80 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
           await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** — ${count} crate${count !== 1 ? 's' : ''} controlled (${vpPerCrate} VP each).`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
           await checkWinConditions(game, client);
           if (game.ended) return { gameEnded: true };
+        }
+      }
+    }
+  }
+
+  // vpPerControlledDeploymentZone: award VP for each deployment zone a player controls.
+  // Control = more figures in the zone than the opponent (strict majority).
+  // Used by Hoth Battle Station A (Inside Job): 3 VP per zone controlled.
+  if (rules.vpPerControlledDeploymentZone && mapId) {
+    const { vp, vpMessage } = rules.vpPerControlledDeploymentZone;
+    if (typeof vp === 'number') {
+      const zoneData = getDeploymentZones()?.[mapId];
+      if (zoneData) {
+        const p1Cells = getPlayerOccupiedCells(game, 1);
+        const p2Cells = getPlayerOccupiedCells(game, 2);
+        const vpByPlayer = { 1: 0, 2: 0 };
+        for (const zoneColor of ['red', 'blue']) {
+          const zoneSpaces = new Set((zoneData[zoneColor] || []).map(s => normalizeCoord(s)));
+          if (zoneSpaces.size === 0) continue;
+          let p1Count = 0, p2Count = 0;
+          for (const c of zoneSpaces) {
+            if (p1Cells.has(c)) p1Count++;
+            if (p2Cells.has(c)) p2Count++;
+          }
+          if (p1Count > p2Count) vpByPlayer[1] += vp;
+          else if (p2Count > p1Count) vpByPlayer[2] += vp;
+        }
+        for (const pn of [1, 2]) {
+          if (vpByPlayer[pn] > 0) {
+            const vpVal = vpByPlayer[pn];
+            const count = vpVal / vp;
+            const pid = getPlayerId(game, pn);
+            awardObjectiveVp(game, pn, vpVal);
+            const msg = vpMessage || `deployment zone(s) controlled (${vp} VP each)`;
+            await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** — ${msg}.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+            await checkWinConditions(game, client);
+            if (game.ended) return { gameEnded: true };
+          }
+        }
+      }
+    }
+  }
+
+  // vpPerContrabandInOpponentDeploymentZone: score VP for figures carrying contraband in the OPPONENT's deployment zone.
+  // Used by Hoth Battle Station B (Bomb Drop): 4 VP per explosive discarded.
+  if (rules.vpPerContrabandInOpponentDeploymentZone && game.figureContraband) {
+    const { vp, vpMessage } = rules.vpPerContrabandInOpponentDeploymentZone;
+    if (typeof vp === 'number') {
+      const oppZoneData = getDeploymentZones()?.[mapId];
+      if (oppZoneData) {
+        const initPn = getInitiativePlayerNum(game);
+        for (const pn of [1, 2]) {
+          const oppPn = 3 - pn;
+          const oppZoneColor = oppPn === initPn ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+          const oppZoneSpaces = new Set((oppZoneData[oppZoneColor] || []).map(s => normalizeCoord(s)));
+          let scored = 0;
+          for (const [figureKey, carrying] of Object.entries(game.figureContraband)) {
+            if (!carrying) continue;
+            const poses = game.figurePositions?.[pn] || {};
+            if (!(figureKey in poses)) continue;
+            const figCoord = normalizeCoord(poses[figureKey]);
+            if (!oppZoneSpaces.has(figCoord)) continue;
+            scored++;
+            delete game.figureContraband[figureKey];
+          }
+          if (scored > 0) {
+            const vpVal = vp * scored;
+            const pid = getPlayerId(game, pn);
+            awardObjectiveVp(game, pn, vpVal);
+            const msg = vpMessage || `explosive(s) discarded in opponent's deployment zone (${vp} VP each)`;
+            await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** — ${msg}.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+            await checkWinConditions(game, client);
+            if (game.ended) return { gameEnded: true };
+          }
         }
       }
     }

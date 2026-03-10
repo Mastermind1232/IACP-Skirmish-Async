@@ -153,7 +153,7 @@
       "interactBlockRange": 3,
       "controlBlockRange": 3,
       "logMessage": "Until the start of the next round, hostile figures within 3 spaces cannot interact and are not counted for control.",
-      "wiredStatus": "manual"
+      "wiredStatus": "wired"
     },
     "All in a Day's Work": {
       "type": "ccEffect",

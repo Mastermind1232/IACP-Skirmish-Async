@@ -247,6 +247,7 @@ const ROUND_NULL_FLAGS = [
   'shadowOpsBlockedPlayer',
   'pendingOrbitalBombardment',
   'pendingYHSIW',
+  'powerfulInfluencePlayerNum',
 ];
 
 const ROUND_ARRAY_FLAGS = [

@@ -152,6 +152,23 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
     }
   }
 
+  // A Powerful Influence (CC): hostile figures within 3 spaces of any friendly REBEL FORCE USER cannot interact
+  if (game.powerfulInfluencePlayerNum && figPos) {
+    const apiPn = game.powerfulInfluencePlayerNum;
+    if (playerNum !== apiPn) {
+      const apiPositions = game.figurePositions?.[apiPn] || {};
+      const allEff = getDcEffects();
+      for (const [apiFk, apiCoord] of Object.entries(apiPositions)) {
+        if (!apiCoord) continue;
+        const apiDcName = dcNameFromFigureKey(apiFk);
+        const apiEff = allEff[apiDcName];
+        const apiKw = (apiEff?.keywords || []).map(k => String(k).toUpperCase());
+        if (!apiKw.includes('FORCE USER')) continue;
+        if (getRange(figPos, apiCoord) <= 3) return options; // blocked — return empty
+      }
+    }
+  }
+
   const variant = game?.selectedMission?.variant;
   const interactLabel = game?.selectedMission?.interactLabel;
   const mech = game?.selectedMission?.mechanics;
@@ -226,6 +243,33 @@ function _getAlterMindExcludedCells(game) {
   return excluded;
 }
 
+/** A Powerful Influence (CC): returns { 1: Set<coord>, 2: Set<coord> } of cells that don't count for control. */
+function _getPowerfulInfluenceExcludedCells(game) {
+  const excluded = {};
+  const apiPn = game.powerfulInfluencePlayerNum;
+  if (!apiPn) return excluded;
+  const allEff = getDcEffects();
+  const oppPn = 3 - apiPn;
+  // Find all REBEL FORCE USER figures belonging to the CC player
+  for (const [fk, pos] of Object.entries(game.figurePositions?.[apiPn] || {})) {
+    if (!pos) continue;
+    const dcName = dcNameFromFigureKey(fk);
+    const eff = allEff[dcName];
+    const kw = (eff?.keywords || []).map(k => String(k).toUpperCase());
+    if (!kw.includes('FORCE USER')) continue;
+    // Opponent's figures within 3 spaces don't count for control
+    if (!excluded[oppPn]) excluded[oppPn] = new Set();
+    for (const [tFk, tPos] of Object.entries(game.figurePositions?.[oppPn] || {})) {
+      if (!tPos) continue;
+      if (getRange(pos, tPos) > 3) continue;
+      const tDcName = dcNameFromFigureKey(tFk);
+      const size = getEffectiveFigureSize(game, tFk, tDcName);
+      for (const c of getFootprintCells(tPos, size)) excluded[oppPn].add(normalizeCoord(c));
+    }
+  }
+  return excluded;
+}
+
 /** Returns 1, 2, or null for who controls this space (only they have figure on/adjacent). Same logic as terminals. */
 export function getSpaceController(game, mapId, coord) {
   const mapSpaces = getBoundedMapSpaces(mapId);
@@ -235,10 +279,12 @@ export function getSpaceController(game, mapId, coord) {
   const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
   // Alter Mind (Obi-Wan): figures cost ≤9 within 3 spaces don't count for control
   const alterMindExcluded = _getAlterMindExcludedCells(game);
+  // A Powerful Influence (CC): hostile figures within 3 spaces of REBEL FORCE USER don't count for control
+  const apiExcluded = _getPowerfulInfluenceExcludedCells(game);
   const p1Cells = getPlayerOccupiedCells(game, 1);
   const p2Cells = getPlayerOccupiedCells(game, 2);
-  const p1Has = [...controlSet].some((c) => p1Cells.has(c) && !alterMindExcluded[1]?.has(c));
-  const p2Has = [...controlSet].some((c) => p2Cells.has(c) && !alterMindExcluded[2]?.has(c));
+  const p1Has = [...controlSet].some((c) => p1Cells.has(c) && !alterMindExcluded[1]?.has(c) && !apiExcluded[1]?.has(c));
+  const p2Has = [...controlSet].some((c) => p2Cells.has(c) && !alterMindExcluded[2]?.has(c) && !apiExcluded[2]?.has(c));
   if (p1Has && !p2Has) return 1;
   if (p2Has && !p1Has) return 2;
   return null;
@@ -268,6 +314,7 @@ export function countTerminalsControlledByPlayer(game, playerNum, mapId) {
   const adjacency = mapSpaces.adjacency || {};
 
   const alterMindExcluded = _getAlterMindExcludedCells(game);
+  const apiExcluded = _getPowerfulInfluenceExcludedCells(game);
   const p1Cells = getPlayerOccupiedCells(game, 1);
   const p2Cells = getPlayerOccupiedCells(game, 2);
 
@@ -275,8 +322,8 @@ export function countTerminalsControlledByPlayer(game, playerNum, mapId) {
   for (const term of mapData.terminals) {
     const t = normalizeCoord(term);
     const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
-    const p1Has = [...controlSet].some((c) => p1Cells.has(c) && !alterMindExcluded[1]?.has(c));
-    const p2Has = [...controlSet].some((c) => p2Cells.has(c) && !alterMindExcluded[2]?.has(c));
+    const p1Has = [...controlSet].some((c) => p1Cells.has(c) && !alterMindExcluded[1]?.has(c) && !apiExcluded[1]?.has(c));
+    const p2Has = [...controlSet].some((c) => p2Cells.has(c) && !alterMindExcluded[2]?.has(c) && !apiExcluded[2]?.has(c));
     if (playerNum === 1 && p1Has && !p2Has) count++;
     if (playerNum === 2 && p2Has && !p1Has) count++;
   }

@@ -4,7 +4,7 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize } from '../data-loader.js';
+import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells } from '../game/index.js';
@@ -13,7 +13,7 @@ import {
   getCcHand, getActivatedDcIndices,
   getActivationsRemaining, setActivationsRemaining,
   ccDiscardKey, ccAttachmentsKey, vpKey,
-  opponentPlayerNum,
+  opponentPlayerNum, getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -1270,6 +1270,35 @@ export async function handleAttackTarget(interaction, ctx) {
     if (icFound) {
       game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
       await thread.send('**Improvised Cover** — Adjacent to non-friendly figure (not attacker): +1 Block.');
+    }
+  }
+
+  // Inside Job (Hoth Battle Station A): defense modifier based on deployment zone
+  {
+    const _ijMapId = game.selectedMap?.id;
+    const _ijVariant = game.selectedMission?.variant;
+    if (_ijMapId && _ijVariant) {
+      const _ijMissions = getMissionCardsData()?.[_ijMapId];
+      const _ijRules = _ijMissions?.[_ijVariant]?.rules?.persistent?.defenseModifierByZone;
+      if (_ijRules) {
+        const _ijZoneData = getDeploymentZones()?.[_ijMapId];
+        if (_ijZoneData && target.coord) {
+          const _ijInitPn = getInitiativePlayerNum(game);
+          const _ijDefZoneColor = defenderPlayerNum === _ijInitPn ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+          const _ijOppZoneColor = _ijDefZoneColor === 'red' ? 'blue' : 'red';
+          const _ijOwnSpaces = new Set((_ijZoneData[_ijDefZoneColor] || []).map(s => String(s).toLowerCase()));
+          const _ijOppSpaces = new Set((_ijZoneData[_ijOppZoneColor] || []).map(s => String(s).toLowerCase()));
+          const _ijDefCoord = String(target.coord).toLowerCase();
+          if (_ijOwnSpaces.has(_ijDefCoord) && _ijRules.ownZone?.blockBonus) {
+            game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + _ijRules.ownZone.blockBonus;
+            await thread.send(`**Inside Job** — Defender in own deployment zone: ${_ijRules.ownZone.blockBonus} Block.`);
+          }
+          if (_ijOppSpaces.has(_ijDefCoord) && _ijRules.opponentZone?.evadeBonus) {
+            game.pendingCombat.bonusEvade = (game.pendingCombat.bonusEvade || 0) + _ijRules.opponentZone.evadeBonus;
+            await thread.send(`**Inside Job** — Defender in opponent's deployment zone: +${_ijRules.opponentZone.evadeBonus} Evade.`);
+          }
+        }
+      }
     }
   }
 
