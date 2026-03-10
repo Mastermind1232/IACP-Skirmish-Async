@@ -757,6 +757,7 @@ const GAME_TAGS = [
   { name: 'Normal' },
   { name: 'Fast' },
   { name: 'Hyperspeed' },
+  { name: 'Destruct' },
 ];
 
 const SAMPLE_DECK_P1 = {

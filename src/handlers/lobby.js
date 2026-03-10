@@ -126,6 +126,16 @@ export async function handleLobbyStart(interaction, ctx) {
       player2VP: { total: 0, kills: 0, objectives: 0 },
       ended: false,
     };
+    // Detect Destruct tag on the lobby thread
+    const lobbyThread = interaction.channel;
+    if (lobbyThread?.appliedTags?.length && lobbyThread.parent?.availableTags?.length) {
+      const tagMap = new Map(lobbyThread.parent.availableTags.map(t => [t.id, t.name]));
+      const tagNames = lobbyThread.appliedTags.map(id => tagMap.get(id)).filter(Boolean);
+      if (tagNames.includes('Destruct')) {
+        game.destructMode = true;
+      }
+    }
+
     setGame(gameId, game);
 
     const setupMsg = await generalChannel.send({

@@ -174,7 +174,7 @@ const CONTEXT_GROUPS = {
     'getCcShuffleDrawButton', 'client', 'saveGames', 'isDcAttachment',
     'resolveDcName', 'isFigurelessDc', 'finishSetupAttachments',
     'dcHealthState', 'dcMessageMeta', 'updateAttachmentMessageForDc',
-    'runPostDeployPhase',
+    'runPostDeployPhase', 'applySquadSubmission',
   ],
 
   interactCancel: [
