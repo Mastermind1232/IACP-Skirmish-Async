@@ -788,7 +788,7 @@ export async function handleDeploymentZone(interaction, ctx) {
     const initMapAttachment = await getDeploymentMapAttachment(game, zone);
     if (deployRows.length === 0) {
       const payload = {
-        content: `${initiativePing} — You chose the **${zone}** zone. When finished, click **Deployment Completed** below.`,
+        content: `${initiativePing} — You chose the **${zone}** zone. When finished, click **Deployment Completed** below.\n-# *Attachments (Skirmish Upgrades) are placed after all figures are deployed.*`,
         components: [doneRow],
         allowedMentions: { users: [game.initiativePlayerId] },
       };
@@ -801,7 +801,7 @@ export async function handleDeploymentZone(interaction, ctx) {
         const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
         const components = isLastChunk ? [...chunk, doneRow] : chunk;
         const payload = {
-          content: i === 0 ? `${initiativePing} — You chose the **${zone}** zone. Deploy each figure below (one per row), then click **Deployment Completed** when finished.\n-# *Auto-Deploy places all figures at your zone entrance(s).*` : null,
+          content: i === 0 ? `${initiativePing} — You chose the **${zone}** zone. Deploy each figure below (one per row), then click **Deployment Completed** when finished.\n-# *Auto-Deploy places all figures at your zone entrance(s).*\n-# *Attachments (Skirmish Upgrades) are placed after all figures are deployed.*` : null,
           components,
           allowedMentions: { users: [game.initiativePlayerId] },
         };
@@ -1539,7 +1539,7 @@ export async function handleDeploymentDone(interaction, ctx) {
       const nonInitMapAttachment = await getDeploymentMapAttachment(game, otherZone);
       if (deployRows.length === 0) {
         const payload = {
-          content: `${nonInitiativePing} — Your opponent has deployed. Deploy in the **${otherZone}** zone. When finished, click **Deployment Completed** below.`,
+          content: `${nonInitiativePing} — Your opponent has deployed. Deploy in the **${otherZone}** zone. When finished, click **Deployment Completed** below.\n-# *Attachments (Skirmish Upgrades) are placed after all figures are deployed.*`,
           components: [doneRow],
           allowedMentions: { users: [nonInitiativePlayerId] },
         };
@@ -1552,7 +1552,7 @@ export async function handleDeploymentDone(interaction, ctx) {
           const isLastChunk = i + DEPLOY_ROWS_PER_MSG >= deployRows.length;
           const components = isLastChunk ? [...chunk, doneRow] : chunk;
           const payload = {
-            content: i === 0 ? `${nonInitiativePing} — Your opponent has deployed. Deploy each figure in the **${otherZone}** zone below (one per row), then click **Deployment Completed** when finished.\n-# *Auto-Deploy places all figures at your zone entrance(s).*` : null,
+            content: i === 0 ? `${nonInitiativePing} — Your opponent has deployed. Deploy each figure in the **${otherZone}** zone below (one per row), then click **Deployment Completed** when finished.\n-# *Auto-Deploy places all figures at your zone entrance(s).*\n-# *Attachments (Skirmish Upgrades) are placed after all figures are deployed.*` : null,
             components,
             allowedMentions: { users: [nonInitiativePlayerId] },
           };
