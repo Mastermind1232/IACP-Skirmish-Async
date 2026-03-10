@@ -1142,8 +1142,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   if (buttonKey === 'dc_special_' && specialIdx >= _baseSpecialCount) {
     const _suAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
     const _injected = getAttachmentSpecials(_suAtts, game, msgId);
-    action = _injected.names[specialIdx - _baseSpecialCount] || 'Special';
-    _effectiveActionCost = _injected.costs[specialIdx - _baseSpecialCount] ?? 1;
+    const _bdOffset = specialIdx - _baseSpecialCount - _injected.names.length;
+    if (_bdOffset >= 0 && game?.selectedMission?.name === 'Bomb Drop') {
+      action = 'Bomb Drop';
+      _effectiveActionCost = 1;
+    } else {
+      action = _injected.names[specialIdx - _baseSpecialCount] || 'Special';
+      _effectiveActionCost = _injected.costs[specialIdx - _baseSpecialCount] ?? 1;
+    }
   } else if (buttonKey === 'dc_special_') {
     _effectiveActionCost = (getDcStats(meta.dcName).specialCosts || [])[specialIdx] ?? 1;
   }
@@ -1778,6 +1784,64 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       saveGames();
       return;
     }
+  }
+
+  // Bomb Drop (Hoth Battle Station B): discard 1 explosive, choose space within 3, 2 damage to all on/adjacent
+  if (action === 'Bomb Drop') {
+    const thread = interaction.channel;
+    const selectedFig = actionsData?.selectedFigure ?? 0;
+    const dgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const figKey = `${meta.dcName}-${dgIdx}-${selectedFig}`;
+    if (!game.figureContraband?.[figKey]) {
+      await thread.send('**Bomb Drop** — This figure is not carrying an explosive.').catch(() => {});
+      saveGames();
+      return;
+    }
+    const pos = game.figurePositions?.[meta.playerNum]?.[figKey];
+    if (!pos) {
+      await thread.send('**Bomb Drop** — Figure has no position.').catch(() => {});
+      saveGames();
+      return;
+    }
+    const mapId = game.selectedMap?.id;
+    const ms = getMapSpaces(mapId);
+    if (!ms?.adjacency) {
+      await thread.send('**Bomb Drop** — Map data not available.').catch(() => {});
+      saveGames();
+      return;
+    }
+    // Find spaces within 3 using BFS
+    const startCoord = String(pos).toLowerCase();
+    const visited = new Set([startCoord]);
+    let frontier = [startCoord];
+    for (let d = 0; d < 3; d++) {
+      const next = [];
+      for (const c of frontier) {
+        for (const n of (ms.adjacency[c] || [])) {
+          const nn = String(n).toLowerCase();
+          if (!visited.has(nn)) { visited.add(nn); next.push(nn); }
+        }
+      }
+      frontier = next;
+    }
+    const validSpaces = [...visited];
+    if (validSpaces.length === 0) {
+      await thread.send('**Bomb Drop** — No valid spaces within range.').catch(() => {});
+      saveGames();
+      return;
+    }
+    game.pendingBombDrop = game.pendingBombDrop || {};
+    game.pendingBombDrop[msgId] = { playerNum: meta.playerNum, figureKey: figKey };
+    const spaceRows = getSpaceChoiceRows(`bomb_drop_space_${game.gameId}_${msgId}_`, validSpaces, ms);
+    const bdComponents = spaceRows.overflowed
+      ? [ctx.buildSpaceSelectMenu('bomb_drop_space_sel_', `${game.gameId}_${msgId}`, spaceRows.available)]
+      : spaceRows.rows.slice(0, 5);
+    await thread.send({
+      content: `**Bomb Drop** — Choose a space within 3 to detonate (2 Damage to all figures on/adjacent):`,
+      components: bdComponents,
+    }).catch(() => {});
+    saveGames();
+    return;
   }
 
   // D1: Prefer abilityId from dc-effects (specialAbilityIds[specialIdx]) when present; else synthetic id for library lookup
@@ -3005,5 +3069,63 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
   }).catch(() => {});
   if (logGameAction) await logGameAction(game, interaction.client, `**Orbital Bombardment** — Bombarded spaces: ${spacesStr}. ${resultStr}`, { phase: 'ROUND', icon: 'attack' });
   delete game.pendingOrbitalBombardment;
+  saveGames();
+}
+
+/** Handle Bomb Drop space selection — apply 2 damage to all figures on/adjacent to chosen space. */
+export async function handleBombDropSpacePick(interaction, ctx) {
+  const m = interaction.customId.match(/^bomb_drop_space_([^_]+)_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, msgId, space] = m;
+  const { getGame, saveGames, logGameAction, dcMessageMeta, dcHealthState, getMapSpaces, findDcMessageIdForFigure } = ctx;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game?.pendingBombDrop?.[msgId]) return;
+  const pending = game.pendingBombDrop[msgId];
+  const chosenSpace = String(space).toLowerCase();
+
+  // Discard the explosive
+  if (game.figureContraband?.[pending.figureKey]) {
+    delete game.figureContraband[pending.figureKey];
+  }
+
+  // Find all spaces on/adjacent to chosen space
+  const mapId = game.selectedMap?.id;
+  const ms = getMapSpaces?.(mapId);
+  const adjSpaces = ms?.adjacency?.[chosenSpace] || [];
+  const affectedSpaces = new Set([chosenSpace, ...adjSpaces.map(s => String(s).toLowerCase())]);
+
+  // Apply 2 damage to each figure on affected spaces
+  const damageLog = [];
+  for (const pn of [1, 2]) {
+    const positions = game.figurePositions?.[pn] || {};
+    for (const [fk, pos] of Object.entries(positions)) {
+      if (!pos || !affectedSpaces.has(String(pos).toLowerCase())) continue;
+      const fkMsgId = findDcMessageIdForFigure?.(gameId, pn, fk);
+      if (!fkMsgId) continue;
+      const hs = dcHealthState?.get(fkMsgId) || [];
+      const figMatch = fk.match(/-(\d+)-(\d+)$/);
+      const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
+      const entry = hs[figIdx];
+      if (!entry) continue;
+      const [cur, max] = entry;
+      const newCur = Math.max(0, (cur ?? max) - 2);
+      hs[figIdx] = [newCur, max ?? newCur];
+      dcHealthState?.set(fkMsgId, hs);
+      const dcIds = getDcMessageIds(game, pn);
+      const dcList = getDcList(game, pn);
+      const idx = (dcIds || []).indexOf(fkMsgId);
+      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+      const dcName = dcNameFromFigureKey(fk);
+      damageLog.push(`**${dcName}** (${cur ?? max} → ${newCur} HP)`);
+      if (newCur <= 0) damageLog[damageLog.length - 1] += ' *(may be defeated)*';
+    }
+  }
+  const resultStr = damageLog.length > 0 ? `Damage: ${damageLog.join(', ')}` : 'No figures affected.';
+  await interaction.message.edit({
+    content: `**Bomb Drop** — Detonated at **${chosenSpace.toUpperCase()}**. Each figure on/adjacent suffers 2 Damage.\n${resultStr}`,
+    components: [],
+  }).catch(() => {});
+  if (logGameAction) await logGameAction(game, interaction.client, `**Bomb Drop** — Detonated at **${chosenSpace.toUpperCase()}**. ${resultStr}`, { phase: 'ROUND', icon: 'attack' });
+  delete game.pendingBombDrop[msgId];
   saveGames();
 }

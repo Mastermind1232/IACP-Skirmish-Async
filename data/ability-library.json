@@ -265,7 +265,7 @@
       "label": "Barrage",
       "description": "Perform 2 attacks. The second target must be within 3 spaces of the first target and adds 1 white die to the defense pool.",
       "informational": true,
-      "logMessage": "**Barrage** — Perform 2 attacks (2nd target within 3 of 1st, +1 white defense die on 2nd). *(Resolve manually: use Attack button twice.)*",
+      "logMessage": "**Barrage** — Perform 2 attacks (2nd target must be within 3 of 1st, +1 white defense die on 2nd). Use the Attack button twice.",
       "wiredStatus": "wired"
     },
     "bartered_information": {
@@ -1846,7 +1846,7 @@
       "label": "Focus Fire",
       "description": "(Double Action) Perform 2 attacks, targeting the same figure.",
       "informational": true,
-      "logMessage": "**Focus Fire** — (Double Action) Perform 2 attacks targeting the same figure. *(Costs both actions. Resolve manually: use Attack button twice.)*",
+      "logMessage": "**Focus Fire** — (Double Action) Perform 2 attacks targeting the same figure. Costs both actions; use the Attack button twice.",
       "wiredStatus": "wired"
     },
     "Fool Me Once": {
@@ -2056,7 +2056,6 @@
       "type": "dcSpecial",
       "label": "Fresh Catch",
       "description": "You or an adjacent CREATURE gains 1 Power Token.",
-      "logMessage": "**Fresh Catch** — You or an adjacent CREATURE gains 1 Power Token. *(Choose token type and recipient manually.)*",
       "wiredStatus": "wired"
     },
     "front_line": {
@@ -2908,7 +2907,7 @@
     },
     "Marked Territory": {
       "type": "ccEffect",
-      "label": "Gain 1 Power Token (exterior figure part manual)",
+      "label": "Gain 1 Power Token (+1 if in exterior space)",
       "powerTokenGain": 1,
       "wiredStatus": "wired",
       "logMessage": "Gained **1 Power Token**. If this figure is in an exterior space, gain 1 additional Power Token.",
@@ -3120,7 +3119,7 @@
       "label": "Multi-Fire",
       "description": "Perform 2 attacks. Each attack must have a different target. Apply -1 Hit to each attack's results.",
       "informational": true,
-      "logMessage": "**Multi-Fire** — Perform 2 attacks (different targets, -1 Hit each). *(Resolve manually: use Attack button twice, apply -1 Hit to each result.)*",
+      "logMessage": "**Multi-Fire** — Perform 2 attacks (different targets, -1 Hit each). Use the Attack button twice; apply -1 Hit to each result.",
       "wiredStatus": "wired"
     },
     "mystic_hunter": {
@@ -3155,8 +3154,6 @@
       "type": "dcSpecial",
       "label": "Neurostim",
       "description": "Choose an adjacent friendly figure and roll 1 yellow die. If Block: Block Token. If Surge: Focus.",
-      "rollOneDie": "yellow",
-      "rollOneDieNote": "Choose an adjacent friendly figure. If **Block** rolled → gain 1 Block Token. If **Surge** rolled → become Focused. *(Apply manually.)*",
       "wiredStatus": "wired"
     },
     "neurotoxin_hemlock": {
@@ -3316,7 +3313,7 @@
       "label": "Overclock",
       "description": "Your Junk Droid companion may interrupt to perform a move or attack.",
       "informational": true,
-      "logMessage": "**Overclock** — Your Junk Droid companion may interrupt to perform a move or attack. *(Resolve manually.)*",
+      "logMessage": "**Overclock** — Your Junk Droid companion may interrupt to perform a move or attack.",
       "wiredStatus": "wired"
     },
     "Overdrive": {
@@ -3497,7 +3494,7 @@
     },
     "Prepared for Battle": {
       "type": "ccEffect",
-      "label": "Gain 2 Power Tokens (adjacent LEADER part manual)",
+      "label": "Gain 2 Power Tokens (+1 if adjacent to LEADER)",
       "powerTokenGain": 2,
       "wiredStatus": "wired",
       "logMessage": "Gained **2 Power Tokens**. If adjacent to a friendly LEADER, gain 1 additional Power Token.",
@@ -3657,7 +3654,6 @@
       "type": "dcSpecial",
       "label": "Rat Catcher",
       "description": "You or an adjacent CREATURE gains 1 Block Token.",
-      "logMessage": "**Rat Catcher** — You or an adjacent CREATURE gains 1 Block Token. *(Apply manually.)*",
       "wiredStatus": "wired"
     },
     "Reactive Loyalties": {
@@ -3874,7 +3870,7 @@
       "label": "Saber Orbit",
       "description": "Choose up to 3 adjacent hostile figures. For each, perform a Melee attack using 1 red die.",
       "informational": true,
-      "logMessage": "**Saber Orbit** — Choose up to 3 adjacent hostile figures. For each, perform a Melee attack using 1 red die. *(Resolve each attack manually.)*",
+      "logMessage": "**Saber Orbit** — Choose up to 3 adjacent hostile figures. For each, perform a Melee attack using 1 red die. Use the Attack button for each.",
       "wiredStatus": "wired"
     },
     "saber_strike": {
@@ -4960,7 +4956,7 @@
       "label": "Move friendly DROIDs, then pick hostile in LOS — damage = # DROIDs in play",
       "wiredStatus": "wired",
       "triangulateCountFriendlyDroids": true,
-      "logMessage": "**Triangulate** — Move your DROID figures first (manual), then pick a hostile in LOS. It suffers Damage equal to the number of DROID figures in your squad in play (applied automatically)."
+      "logMessage": "**Triangulate** — Move your DROID figures first, then pick a hostile in LOS. It suffers Damage equal to the number of DROID figures in your squad in play."
     },
     "tripod_eweb": {
       "type": "dcSpecial",
@@ -5021,7 +5017,7 @@
     "Unlimited Power": {
       "type": "ccEffect",
       "label": "When using Emperor: choose any friendly figure on the map instead of within 4 spaces",
-      "logMessage": "**Unlimited Power** — When you use **Emperor**, you may choose any friendly figure on the map instead of one within 4 spaces. Play alongside Emperor; resolve targeting manually.",
+      "logMessage": "**Unlimited Power** — When you use **Emperor**, you may choose any friendly figure on the map instead of one within 4 spaces. Play alongside Emperor.",
       "wiredStatus": "wired",
       "setsUnlimitedPower": true
     },

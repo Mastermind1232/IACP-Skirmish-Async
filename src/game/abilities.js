@@ -1147,6 +1147,196 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // fresh_catch_lothcat (Loth-cat Elite): you or an adjacent CREATURE gains 1 Power Token (choose recipient + type)
+  if (abilityId === 'fresh_catch_lothcat') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey } = context;
+    if (!game || !playerNum || !meta) return { applied: false, manualMessage: 'Resolve **Fresh Catch** manually.' };
+    const mapId = game.selectedMap?.id;
+    // Phase 2: target chosen — grant 1 power token (triggers type choice)
+    if (choiceIndex != null && targetFigureKey) {
+      const tName = dcNameFromFigureKey(targetFigureKey);
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
+      const current = game.figurePowerTokens[targetFigureKey].length;
+      const toAdd = Math.min(1, 2 - current);
+      if (toAdd <= 0) return { applied: true, logMessage: `**Fresh Catch** — **${tName}** already has max Power Tokens.` };
+      game.pendingPowerTokenGrant = { grants: [{ figureKey: targetFigureKey, figName: tName, count: toAdd }], channelId: null, playerNum };
+      return { applied: true, requiresPowerTokenChoice: true, logMessage: `**Fresh Catch** — **${tName}** gains 1 Power Token — choose type.`, refreshDcEmbed: true };
+    }
+    // Phase 1: enumerate self + adjacent CREATUREs
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const dcEffects = getDcEffects() || {};
+    const validTargets = [];
+    // Include self
+    if (activatingKey) validTargets.push(activatingKey);
+    // Include adjacent friendly CREATUREs
+    if (mapId && activatingKey) {
+      const adj = getFiguresAdjacentToTarget(game, activatingKey, mapId);
+      for (const { figureKey: fk, playerNum: p } of adj) {
+        if (p !== playerNum) continue;
+        if (validTargets.includes(fk)) continue;
+        const dn = dcNameFromFigureKey(fk);
+        const kws = (dcEffects[dn]?.keywords || []).map(k => String(k).toUpperCase());
+        if (kws.includes('CREATURE')) validTargets.push(fk);
+      }
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Fresh Catch** — No valid targets.' };
+    if (validTargets.length === 1) {
+      // Auto-select the only target
+      const tName = dcNameFromFigureKey(validTargets[0]);
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[validTargets[0]] = game.figurePowerTokens[validTargets[0]] || [];
+      const current = game.figurePowerTokens[validTargets[0]].length;
+      const toAdd = Math.min(1, 2 - current);
+      if (toAdd <= 0) return { applied: true, logMessage: `**Fresh Catch** — **${tName}** already has max Power Tokens.` };
+      game.pendingPowerTokenGrant = { grants: [{ figureKey: validTargets[0], figName: tName, count: toAdd }], channelId: null, playerNum };
+      return { applied: true, requiresPowerTokenChoice: true, logMessage: `**Fresh Catch** — **${tName}** gains 1 Power Token — choose type.`, refreshDcEmbed: true };
+    }
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map(fk => dcNameFromFigureKey(fk)),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // rat_catcher_lothcat (Loth-cat Regular): you or an adjacent CREATURE gains 1 Block Token
+  if (abilityId === 'rat_catcher_lothcat') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey } = context;
+    if (!game || !playerNum || !meta) return { applied: false, manualMessage: 'Resolve **Rat Catcher** manually.' };
+    const mapId = game.selectedMap?.id;
+    // Phase 2: target chosen — grant 1 Block Token
+    if (choiceIndex != null && targetFigureKey) {
+      const tName = dcNameFromFigureKey(targetFigureKey);
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
+      const current = game.figurePowerTokens[targetFigureKey].length;
+      if (current >= 2) return { applied: true, logMessage: `**Rat Catcher** — **${tName}** already has max Power Tokens.` };
+      game.figurePowerTokens[targetFigureKey].push('Block');
+      return { applied: true, logMessage: `**Rat Catcher** — **${tName}** gained 1 **Block Token**.`, refreshDcEmbed: true };
+    }
+    // Phase 1: enumerate self + adjacent CREATUREs
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const dcEffects = getDcEffects() || {};
+    const validTargets = [];
+    if (activatingKey) validTargets.push(activatingKey);
+    if (mapId && activatingKey) {
+      const adj = getFiguresAdjacentToTarget(game, activatingKey, mapId);
+      for (const { figureKey: fk, playerNum: p } of adj) {
+        if (p !== playerNum) continue;
+        if (validTargets.includes(fk)) continue;
+        const dn = dcNameFromFigureKey(fk);
+        const kws = (dcEffects[dn]?.keywords || []).map(k => String(k).toUpperCase());
+        if (kws.includes('CREATURE')) validTargets.push(fk);
+      }
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Rat Catcher** — No valid targets.' };
+    if (validTargets.length === 1) {
+      const tName = dcNameFromFigureKey(validTargets[0]);
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[validTargets[0]] = game.figurePowerTokens[validTargets[0]] || [];
+      const current = game.figurePowerTokens[validTargets[0]].length;
+      if (current >= 2) return { applied: true, logMessage: `**Rat Catcher** — **${tName}** already has max Power Tokens.` };
+      game.figurePowerTokens[validTargets[0]].push('Block');
+      return { applied: true, logMessage: `**Rat Catcher** — **${tName}** gained 1 **Block Token**.`, refreshDcEmbed: true };
+    }
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map(fk => dcNameFromFigureKey(fk)),
+      targetFigureKeys: validTargets,
+    };
+  }
+
+  // neurostim_hemlock (Hemlock Droid): choose adjacent friendly, roll 1 yellow die → Hit: Block Token, Surge: Focus
+  if (abilityId === 'neurostim_hemlock') {
+    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey } = context;
+    if (!game || !playerNum || !meta) return { applied: false, manualMessage: 'Resolve **Neurostim** manually.' };
+    const mapId = game.selectedMap?.id;
+    // Phase 2: target chosen — roll yellow die and apply result
+    if (choiceIndex != null && targetFigureKey) {
+      const tName = dcNameFromFigureKey(targetFigureKey);
+      const faces = getDiceData().attack?.yellow;
+      if (!faces?.length) return { applied: false, manualMessage: 'Dice data unavailable.' };
+      const face = faces[Math.floor(Math.random() * faces.length)];
+      const hits = face.dmg ?? 0;
+      const surges = face.surge ?? 0;
+      const parts = [];
+      if (hits) parts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+      if (surges) parts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
+      const diceResult = parts.length ? parts.join(', ') : 'blank';
+      const effectParts = [];
+      if (hits > 0) {
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
+        if (game.figurePowerTokens[targetFigureKey].length < 2) {
+          game.figurePowerTokens[targetFigureKey].push('Block');
+          effectParts.push(`**${tName}** gained 1 **Block Token**`);
+        } else {
+          effectParts.push(`**${tName}** at max tokens (Block Token not added)`);
+        }
+      }
+      if (surges > 0) {
+        applyCondition(game, targetFigureKey, 'Focus');
+        effectParts.push(`**${tName}** became **Focused**`);
+      }
+      if (effectParts.length === 0) effectParts.push('no effect');
+      return { applied: true, logMessage: `**Neurostim** — Targeting **${tName}**. Rolled 1 yellow die: **${diceResult}**. ${effectParts.join('; ')}.`, refreshDcEmbed: true };
+    }
+    // Phase 1: enumerate adjacent friendly figures
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const validTargets = [];
+    if (mapId && activatingKey) {
+      const adj = getFiguresAdjacentToTarget(game, activatingKey, mapId);
+      for (const { figureKey: fk, playerNum: p } of adj) {
+        if (p !== playerNum) continue;
+        if (figureKeys.includes(fk)) continue; // exclude self (same DG)
+        validTargets.push(fk);
+      }
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Neurostim** — No adjacent friendly figures.' };
+    if (validTargets.length === 1) {
+      // Auto-select and roll
+      const tFk = validTargets[0];
+      const tName = dcNameFromFigureKey(tFk);
+      const faces = getDiceData().attack?.yellow;
+      if (!faces?.length) return { applied: false, manualMessage: 'Dice data unavailable.' };
+      const face = faces[Math.floor(Math.random() * faces.length)];
+      const hits = face.dmg ?? 0;
+      const surges = face.surge ?? 0;
+      const parts = [];
+      if (hits) parts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+      if (surges) parts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
+      const diceResult = parts.length ? parts.join(', ') : 'blank';
+      const effectParts = [];
+      if (hits > 0) {
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        game.figurePowerTokens[tFk] = game.figurePowerTokens[tFk] || [];
+        if (game.figurePowerTokens[tFk].length < 2) {
+          game.figurePowerTokens[tFk].push('Block');
+          effectParts.push(`**${tName}** gained 1 **Block Token**`);
+        } else {
+          effectParts.push(`**${tName}** at max tokens (Block Token not added)`);
+        }
+      }
+      if (surges > 0) {
+        applyCondition(game, tFk, 'Focus');
+        effectParts.push(`**${tName}** became **Focused**`);
+      }
+      if (effectParts.length === 0) effectParts.push('no effect');
+      return { applied: true, logMessage: `**Neurostim** — Targeting **${tName}**. Rolled 1 yellow die: **${diceResult}**. ${effectParts.join('; ')}.`, refreshDcEmbed: true };
+    }
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validTargets.map(fk => dcNameFromFigureKey(fk)),
+      targetFigureKeys: validTargets,
+    };
+  }
+
   // continually_unexpected (K-2S0): if 2+ Hit/Surge tokens, perform a free Ranged attack
   if (abilityId === 'continually_unexpected') {
     const { game, playerNum, meta, msgId } = context;
@@ -6493,7 +6683,7 @@ export function resolveAbility(abilityId, context) {
       if (!droidCount) return { applied: false, manualMessage: 'No friendly DROIDs in play to deal damage.' };
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       const figMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
-      let dmgNote = `${droidCount} Dmg to ${dcName} manually`;
+      let dmgNote = `${droidCount} Dmg to ${dcName}`;
       if (figMsgId && dcHealthState) {
         const hs = dcHealthState.get(figMsgId) || [];
         const fkM = chosenFigureKey.match(/-(\d+)-(\d+)$/);
@@ -6507,7 +6697,7 @@ export function resolveAbility(abilityId, context) {
           dmgNote = `${droidCount} Dmg (HP: ${cur ?? max}→${newCur})`;
         }
       }
-      return { applied: true, logMessage: `**Triangulate** — **${dcName}**: ${dmgNote}. (Max = ${droidCount} DROIDs in play — verify LOS manually for each.)`, refreshDcEmbed: !!figMsgId };
+      return { applied: true, logMessage: `**Triangulate** — **${dcName}**: ${dmgNote}. (Max = ${droidCount} DROIDs in play.)`, refreshDcEmbed: !!figMsgId };
     }
     // Phase 1: hostile figure picker (move DROIDs first manually)
     const oppNum = opponentPlayerNum(playerNum);

@@ -847,6 +847,17 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       specialCosts = [...specialCosts, ...injected.costs];
     }
   }
+  // Bomb Drop (Hoth Battle Station B): inject special action if figure is carrying explosive
+  if (game?.selectedMission?.mechanics?.type === 'carry' && game?.selectedMission?.name === 'Bomb Drop') {
+    const _bdDgIdx = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _bdPn = game ? (getPlayerNumForMsgId(msgId) ?? 1) : 1;
+    const _bdSelFig = typeof actionsDataOrRemaining === 'object' ? (actionsDataOrRemaining?.selectedFigure ?? 0) : 0;
+    const _bdFk = `${dcName}-${_bdDgIdx}-${_bdSelFig}`;
+    if (game.figureContraband?.[_bdFk]) {
+      specials = [...specials, 'Bomb Drop'];
+      specialCosts = [...specialCosts, 1];
+    }
+  }
   const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const actionsData = typeof actionsDataOrRemaining === 'object' && actionsDataOrRemaining != null ? actionsDataOrRemaining : { remaining: actionsDataOrRemaining, specialsUsed: [] };
   const actionsRemaining = actionsData.remaining ?? 2;

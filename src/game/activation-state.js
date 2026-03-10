@@ -58,6 +58,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'unstableDevicesUsedThisActivation',
   'yhsiwOptions',
   'pendingBoRifle',
+  'pendingBombDrop',
 ];
 
 /**
@@ -192,6 +193,7 @@ const ROUND_OBJECT_FLAGS = [
   'pendingOverwatchPlacement',
   'activationKills',
   'activationDamagedFigures',
+  'pendingBombDrop',
 ];
 
 const ROUND_NULL_FLAGS = [

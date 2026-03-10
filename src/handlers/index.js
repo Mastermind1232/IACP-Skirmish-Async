@@ -42,6 +42,10 @@ import {
   handleMapConfirm,
   handleMapGoBack,
   handleSetupAttachTo,
+  handleAttachConfirm,
+  handleAttachReselect,
+  handleAttachDoneConfirm,
+  handleAttachDoneRedo,
 } from './setup.js';
 import {
   handleDcActivate,
@@ -70,6 +74,7 @@ import {
   handleOrbitalBombardmentDeplete,
   handleOrbitalBombardmentSkip,
   handleOrbitalBombardmentSpacePick,
+  handleBombDropSpacePick,
 } from './dc-play-area.js';
 import {
   handleSquadModal,
@@ -207,6 +212,10 @@ register('auto_deploy_', handleAutoDeploy);
 register('map_confirm_', handleMapConfirm);
 register('map_goback_', handleMapGoBack);
 register('setup_attach_to_', handleSetupAttachTo);
+register('attach_confirm_', handleAttachConfirm);
+register('attach_reselect_', handleAttachReselect);
+register('attach_done_confirm_', handleAttachDoneConfirm);
+register('attach_done_redo_', handleAttachDoneRedo);
 register('dc_activate_', handleDcActivate);
 register('dc_unactivate_', handleDcUnactivate);
 register('dc_toggle_', handleDcToggle);
@@ -226,6 +235,7 @@ register('overwatch_space_', handleOverwatchSpacePick);
 register('ob_deplete_', handleOrbitalBombardmentDeplete);
 register('ob_skip_', handleOrbitalBombardmentSkip);
 register('ob_space_', handleOrbitalBombardmentSpacePick);
+register('bomb_drop_space_', handleBombDropSpacePick);
 register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'));
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'));
 register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'));
@@ -355,6 +365,7 @@ setGroup([
   'false_orders_action_', 'false_orders_space_', 'rush_push_fig_', 'rush_push_space_',
   'rush_push_skip_', 'shoulder_rush_fig_', 'shoulder_rush_space_', 'shoulder_rush_skip_',
   'overwatch_space_', 'ob_deplete_', 'ob_skip_', 'ob_space_',
+  'bomb_drop_space_',
 ], 'dcPlayArea');
 
 setGroup(['move_mp_'], 'move');
@@ -431,6 +442,7 @@ setGroup([
   'determine_initiative_', 'deployment_zone_red_', 'deployment_zone_blue_',
   'deployment_fig_', 'deployment_orient_', 'deploy_pick_', 'deploy_row_back_',
   'deploy_row_', 'loadout_pick_', 'form_pick_', 'deployment_done_', 'auto_deploy_',
+  'attach_confirm_', 'attach_reselect_', 'attach_done_confirm_', 'attach_done_redo_',
 ], 'setup');
 
 setGroup(['interact_cancel_'], 'interactCancel');
@@ -508,6 +520,10 @@ export {
   handleMapConfirm,
   handleMapGoBack,
   handleSetupAttachTo,
+  handleAttachConfirm,
+  handleAttachReselect,
+  handleAttachDoneConfirm,
+  handleAttachDoneRedo,
 } from './setup.js';
 export {
   handleDcActivate,
@@ -536,6 +552,7 @@ export {
   handleOrbitalBombardmentDeplete,
   handleOrbitalBombardmentSkip,
   handleOrbitalBombardmentSpacePick,
+  handleBombDropSpacePick,
 } from './dc-play-area.js';
 export {
   handleSquadModal,

@@ -92,6 +92,7 @@ const BUTTON_PREFIXES = [
   'scavenged_walker_attack_',
   'scavenged_walker_skip_',
   'overwatch_space_',
+  'bomb_drop_space_',
   'ob_deplete_',
   'ob_skip_',
   'ob_space_',
@@ -205,6 +206,10 @@ const BUTTON_PREFIXES = [
   'rogue_one_return_',
   'imp_citadel_',
   'prog_override_',
+  'attach_confirm_',
+  'attach_reselect_',
+  'attach_done_confirm_',
+  'attach_done_redo_',
   'create_game',
   'join_game',
 ];
@@ -233,6 +238,7 @@ const SELECT_PREFIXES = [
   'false_orders_space_sel_',
   'rush_push_space_sel_',
   'shoulder_rush_space_sel_',
+  'bomb_drop_space_sel_',
   'cc_space_sel_',
 ];
 

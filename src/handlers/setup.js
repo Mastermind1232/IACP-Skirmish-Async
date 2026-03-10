@@ -1625,6 +1625,9 @@ export async function handleDeploymentDone(interaction, ctx) {
   if (p1SetupAttachments.length > 0 || p2SetupAttachments.length > 0) {
     game.setupAttachmentPhase = true;
     game.setupAttachmentPending = { 1: p1SetupAttachments.map((e) => resolveDcName(e)), 2: p2SetupAttachments.map((e) => resolveDcName(e)) };
+    // Save originals for potential redo
+    game.setupAttachmentOriginal = { 1: [...game.setupAttachmentPending[1]], 2: [...game.setupAttachmentPending[2]] };
+    game.setupAttachmentApplied = { 1: [], 2: [] };
     const generalChannel = await client.channels.fetch(game.generalId);
     await generalChannel.send({
       content: '**Both players have deployed.** Place your Skirmish Upgrade card(s) on your Deployment cards (see the **Your Hand** thread in your Play Area). When everyone has placed them, shuffle and draw your starting hands.',
@@ -1641,43 +1644,18 @@ export async function handleDeploymentDone(interaction, ctx) {
         const card = pending[0];
         await applySetupAttachment(game, pn, card, autoTarget, ctx);
         pending.shift();
+        game.setupAttachmentApplied[pn].push({ card, dcMsgId: autoTarget });
         await logGameAction(game, client, `**${card}** auto-attached to **${ctx.dcMessageMeta?.get(autoTarget)?.displayName || 'DC'}** (setup).`, { phase: 'SETUP', icon: 'card' });
       }
-      if (pending.length === 0) continue; // all auto-attached
-      const handId = getHandChannelId(game, pn);
-      const handChannel = await client.channels.fetch(handId);
-      const restriction = getAttachmentRestriction(pending[0]);
-      const options = dcList.slice(0, 25).map((dc, i) => {
-        const dcName = dc.displayName || dc.dcName || `DC ${i + 1}`;
-        if (restriction && !restriction.filter(dc.dcName)) return null;
-        return { label: dcName.slice(0, 100), value: (dcMsgIds[i] || String(i)).toString() };
-      }).filter(Boolean);
-      const select = new StringSelectMenuBuilder()
-        .setCustomId(`setup_attach_to_${gameId}_${pn}`)
-        .setPlaceholder('Attach to which Deployment Card?')
-        .addOptions(options);
-      const restrictionNote = restriction ? ` *(${restriction.restrictionText} only)*` : '';
-      const payload = {
-        content: `**Setup — place Skirmish Upgrade (1 of ${pending.length}):** **${pending[0]}**${restrictionNote}. Choose which Deployment Card to attach it to:`,
-        components: [new ActionRowBuilder().addComponents(select)],
-      };
-      // Attach card image if available
-      const imgRel = getDcImagePath(pending[0]);
-      if (imgRel) {
-        const imgPath = join(rootDir, imgRel);
-        if (existsSync(imgPath)) {
-          payload.files = [new AttachmentBuilder(imgPath)];
-        }
+      if (pending.length === 0) {
+        // All auto-attached — show done prompt for confirmation
+        await _sendAttachDonePrompt(game, gameId, pn, client);
+        continue;
       }
-      await handChannel.send(payload);
+      await _sendAttachmentDropdown(game, gameId, pn, pending[0], client);
     }
-    // Check if all attachments were auto-placed (no picker needed for either player)
-    const allDone = (game.setupAttachmentPending[1] || []).length === 0 && (game.setupAttachmentPending[2] || []).length === 0;
-    if (allDone) {
-      game.setupAttachmentPhase = false;
-      game.setupAttachmentPending = null;
-      await finishSetupAttachments(game, client);
-    }
+    // Check if all attachments were auto-placed AND no confirmation needed
+    // (Both players still need to confirm, so don't auto-finalize)
     saveGames();
     return;
   }
@@ -1856,17 +1834,7 @@ export async function handleAutoDeploy(interaction, ctx) {
  * @param {object} ctx - getGame, updateAttachmentMessageForDc, StringSelectMenuBuilder, ActionRowBuilder, getCcShuffleDrawButton, clearPreGameSetup, getInitiativePlayerZoneLabel, logGameAction, client, saveGames, finishSetupAttachments
  */
 export async function handleSetupAttachTo(interaction, ctx) {
-  const {
-    getGame,
-    updateAttachmentMessageForDc,
-    getCcShuffleDrawButton,
-    clearPreGameSetup,
-    getInitiativePlayerZoneLabel,
-    logGameAction,
-    client,
-    saveGames,
-    finishSetupAttachments,
-  } = ctx;
+  const { getGame, logGameAction, client, saveGames } = ctx;
   const match = interaction.customId.match(/^setup_attach_to_([^_]+)_([12])$/);
   if (!match) return;
   const [, gameId, playerNumStr] = match;
@@ -1887,11 +1855,70 @@ export async function handleSetupAttachTo(interaction, ctx) {
   const dcMsgId = interaction.values[0];
   if (!dcMsgId) return;
 
+  // Store choice and show confirmation instead of applying immediately
+  game.pendingAttachConfirm = game.pendingAttachConfirm || {};
+  game.pendingAttachConfirm[playerNum] = { card, dcMsgId };
+
+  // Remove the dropdown from the original message
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+
+  const dcDisplayName = ctx.dcMessageMeta?.get(dcMsgId)?.displayName || dcMsgId;
+  const confirmRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`attach_confirm_${gameId}_${playerNum}`)
+      .setLabel('Confirm')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`attach_reselect_${gameId}_${playerNum}`)
+      .setLabel('Choose Different Card')
+      .setStyle(ButtonStyle.Secondary),
+  );
+  const handId = getHandChannelId(game, playerNum);
+  const handChannel = await client.channels.fetch(handId);
+  await handChannel.send({
+    content: `Attach **${card}** to **${dcDisplayName}**?`,
+    components: [confirmRow],
+  });
+  saveGames();
+}
+
+/**
+ * Confirm a pending attachment selection — apply it and proceed.
+ */
+export async function handleAttachConfirm(interaction, ctx) {
+  const { getGame, logGameAction, client, saveGames, finishSetupAttachments } = ctx;
+  const match = interaction.customId.match(/^attach_confirm_([^_]+)_([12])$/);
+  if (!match) return;
+  const [, gameId, playerNumStr] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const game = getGame(gameId);
+  if (!game || !game.setupAttachmentPhase || !game.setupAttachmentPending) return;
+  const ownerId = getPlayerId(game, playerNum);
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owner of this hand can confirm.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const confirm = game.pendingAttachConfirm?.[playerNum];
+  if (!confirm) {
+    await interaction.followUp({ content: 'No pending attachment to confirm.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const { card, dcMsgId } = confirm;
+  delete game.pendingAttachConfirm[playerNum];
+
+  const pending = game.setupAttachmentPending[playerNum];
+  if (!pending || pending.length === 0 || pending[0] !== card) return;
+
   await applySetupAttachment(game, playerNum, card, dcMsgId, ctx);
   pending.shift();
 
-  // Remove the dropdown from the original message so it doesn't linger
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  // Track applied attachments for potential redo
+  game.setupAttachmentApplied = game.setupAttachmentApplied || {};
+  game.setupAttachmentApplied[playerNum] = game.setupAttachmentApplied[playerNum] || [];
+  game.setupAttachmentApplied[playerNum].push({ card, dcMsgId });
+
+  // Remove confirm buttons
+  try { await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch); } catch {}
 
   const dcDisplayName = ctx.dcMessageMeta?.get(dcMsgId)?.displayName || 'DC';
   await logGameAction(game, client, `<@${interaction.user.id}> placed **${card}** on **${dcDisplayName}** (setup).`, { phase: 'SETUP', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
@@ -1905,46 +1932,286 @@ export async function handleSetupAttachTo(interaction, ctx) {
     const autoCard = pending[0];
     await applySetupAttachment(game, playerNum, autoCard, autoTarget, ctx);
     pending.shift();
+    game.setupAttachmentApplied[playerNum].push({ card: autoCard, dcMsgId: autoTarget });
+    const autoDisplayName = ctx.dcMessageMeta?.get(autoTarget)?.displayName || 'DC';
+    await logGameAction(game, client, `**${autoCard}** auto-attached to **${autoDisplayName}** (setup).`, { phase: 'SETUP', icon: 'card' });
+  }
+
+  await _proceedAttachmentPhase(game, gameId, playerNum, interaction, ctx);
+}
+
+/**
+ * Re-show the attachment dropdown for the current pending card.
+ */
+export async function handleAttachReselect(interaction, ctx) {
+  const { getGame, saveGames, client } = ctx;
+  const match = interaction.customId.match(/^attach_reselect_([^_]+)_([12])$/);
+  if (!match) return;
+  const [, gameId, playerNumStr] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const game = getGame(gameId);
+  if (!game || !game.setupAttachmentPhase || !game.setupAttachmentPending) return;
+  const ownerId = getPlayerId(game, playerNum);
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owner of this hand can do this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Clear pending confirm
+  if (game.pendingAttachConfirm?.[playerNum]) delete game.pendingAttachConfirm[playerNum];
+
+  // Remove buttons from confirm message
+  try { await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch); } catch {}
+
+  const pending = game.setupAttachmentPending[playerNum];
+  if (!pending || pending.length === 0) return;
+
+  await _sendAttachmentDropdown(game, gameId, playerNum, pending[0], client);
+  saveGames();
+}
+
+/**
+ * Confirm all attachments are final — proceed to game start.
+ */
+export async function handleAttachDoneConfirm(interaction, ctx) {
+  const { getGame, saveGames, finishSetupAttachments, client } = ctx;
+  const match = interaction.customId.match(/^attach_done_confirm_([^_]+)_([12])$/);
+  if (!match) return;
+  const [, gameId, playerNumStr] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const game = getGame(gameId);
+  if (!game || !game.setupAttachmentPhase) return;
+  const ownerId = getPlayerId(game, playerNum);
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owner of this hand can confirm.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // Remove buttons
+  try { await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch); } catch {}
+
+  // Mark this player as confirmed
+  game.setupAttachmentConfirmed = game.setupAttachmentConfirmed || {};
+  game.setupAttachmentConfirmed[playerNum] = true;
+
+  const oppNum = opponentPlayerNum(playerNum);
+  const oppPending = (game.setupAttachmentPending?.[oppNum] || []).length;
+  const oppConfirmed = game.setupAttachmentConfirmed?.[oppNum];
+
+  if (oppPending === 0 && oppConfirmed) {
+    // Both done and confirmed — clean up redo notices
+    if (game.attachRedoNoticeIds?.length) {
+      const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
+      if (generalChannel) {
+        for (const nId of game.attachRedoNoticeIds) {
+          await generalChannel.messages.delete(nId).catch(() => {});
+        }
+      }
+    }
+    game.setupAttachmentPhase = false;
+    game.setupAttachmentPending = null;
+    game.setupAttachmentApplied = null;
+    game.setupAttachmentOriginal = null;
+    game.setupAttachmentConfirmed = null;
+    game.pendingAttachConfirm = null;
+    game.attachRedoNoticeIds = null;
+    await finishSetupAttachments(game, client);
+  } else {
+    const handId = getHandChannelId(game, playerNum);
+    const handChannel = await client.channels.fetch(handId);
+    await handChannel.send({ content: 'Attachments confirmed. Waiting for your opponent to finish placing theirs.' });
+  }
+  saveGames();
+}
+
+/**
+ * Redo all attachments — remove applied attachments, restore original pending list.
+ */
+export async function handleAttachDoneRedo(interaction, ctx) {
+  const { getGame, updateAttachmentMessageForDc, logGameAction, saveGames, client } = ctx;
+  const match = interaction.customId.match(/^attach_done_redo_([^_]+)_([12])$/);
+  if (!match) return;
+  const [, gameId, playerNumStr] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const game = getGame(gameId);
+  if (!game || !game.setupAttachmentPhase) return;
+  const ownerId = getPlayerId(game, playerNum);
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owner of this hand can redo.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // Remove buttons
+  try { await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch); } catch {}
+
+  // Reverse all applied attachments
+  const applied = game.setupAttachmentApplied?.[playerNum] || [];
+  const attachKey = dcAttachmentsKey(playerNum);
+  for (const { card, dcMsgId } of applied) {
+    const arr = game[attachKey]?.[dcMsgId];
+    if (Array.isArray(arr)) {
+      const idx = arr.indexOf(card);
+      if (idx >= 0) arr.splice(idx, 1);
+    }
+    // Reverse Focused on the Kill HP bonus
+    if (card === 'Focused on the Kill' && ctx.dcHealthState) {
+      const hs = ctx.dcHealthState.get(dcMsgId);
+      if (hs) {
+        for (let fi = 0; fi < hs.length; fi++) {
+          if (hs[fi]) { hs[fi] = [Math.max(0, hs[fi][0] - 5), Math.max(1, hs[fi][1] - 5)]; }
+        }
+        ctx.dcHealthState.set(dcMsgId, hs);
+        const dcList = getDcList(game, playerNum) || [];
+        const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+        const didx = dcMsgIds.indexOf(dcMsgId);
+        if (didx >= 0 && dcList[didx]) dcList[didx].healthState = [...hs];
+      }
+    }
+    // Reverse Wookiee Avenger — put Debts Repaid back in deck from hand
+    if (card === 'Wookiee Avenger') {
+      const handKey = ccHandKey(playerNum);
+      const deckKey = ccDeckKey(playerNum);
+      const hand = game[handKey] || [];
+      const drIdx = hand.indexOf('Debts Repaid');
+      if (drIdx >= 0) {
+        hand.splice(drIdx, 1);
+        game[handKey] = hand;
+        game[deckKey] = [...(game[deckKey] || []), 'Debts Repaid'];
+        game.wookieeAvengerDrawPenalty = Math.max(0, (game.wookieeAvengerDrawPenalty || 0) - 1);
+      }
+    }
+    // Update DC embed to remove attachment display
+    if (updateAttachmentMessageForDc) {
+      try { await updateAttachmentMessageForDc(game, playerNum, dcMsgId, client); } catch {}
+    }
+  }
+
+  // Restore original pending list
+  const original = game.setupAttachmentOriginal?.[playerNum];
+  if (original) {
+    game.setupAttachmentPending[playerNum] = [...original];
+  }
+  game.setupAttachmentApplied[playerNum] = [];
+  if (game.setupAttachmentConfirmed?.[playerNum]) delete game.setupAttachmentConfirmed[playerNum];
+
+  // Notify both players in general channel
+  const p1Id = getPlayerId(game, 1);
+  const p2Id = getPlayerId(game, 2);
+  const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
+  if (generalChannel) {
+    const redoNoticeMsg = await generalChannel.send({
+      content: `<@${p1Id}> <@${p2Id}> — Attachment placements are being redone. Your play areas will reassemble with the correct attachments once complete.`,
+      allowedMentions: { users: [p1Id, p2Id].filter(Boolean) },
+    }).catch(() => null);
+    if (redoNoticeMsg) {
+      game.attachRedoNoticeIds = game.attachRedoNoticeIds || [];
+      game.attachRedoNoticeIds.push(redoNoticeMsg.id);
+    }
+  }
+  await logGameAction(game, client, `Player ${playerNum} is redoing attachment placements.`, { phase: 'SETUP', icon: 'card' });
+
+  // Start auto-attach + dropdown flow for the restored list
+  const pending = game.setupAttachmentPending[playerNum];
+  const dcList = getDcList(game, playerNum) || [];
+  const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+  while (pending.length > 0) {
+    const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds);
+    if (!autoTarget) break;
+    const autoCard = pending[0];
+    await applySetupAttachment(game, playerNum, autoCard, autoTarget, ctx);
+    pending.shift();
+    game.setupAttachmentApplied[playerNum].push({ card: autoCard, dcMsgId: autoTarget });
     const autoDisplayName = ctx.dcMessageMeta?.get(autoTarget)?.displayName || 'DC';
     await logGameAction(game, client, `**${autoCard}** auto-attached to **${autoDisplayName}** (setup).`, { phase: 'SETUP', icon: 'card' });
   }
 
   if (pending.length > 0) {
-    const handId = getHandChannelId(game, playerNum);
-    const handChannel = await client.channels.fetch(handId);
-    const restriction = getAttachmentRestriction(pending[0]);
-    const options = dcList.slice(0, 25).map((dc, i) => {
-      const dcName = dc.displayName || dc.dcName || `DC ${i + 1}`;
-      if (restriction && !restriction.filter(dc.dcName)) return null;
-      return { label: dcName.slice(0, 100), value: (dcMsgIds[i] || String(i)).toString() };
-    }).filter(Boolean);
-    const select = new StringSelectMenuBuilder()
-      .setCustomId(`setup_attach_to_${gameId}_${playerNum}`)
-      .setPlaceholder('Attach to which Deployment Card?')
-      .addOptions(options);
-    const restrictionNote = restriction ? ` *(${restriction.restrictionText} only)*` : '';
-    const payload = {
-      content: `**Setup — place Skirmish Upgrade (next):** **${pending[0]}**${restrictionNote}. Choose which Deployment Card to attach it to:`,
-      components: [new ActionRowBuilder().addComponents(select)],
-    };
-    const imgRel = getDcImagePath(pending[0]);
-    if (imgRel) {
-      const imgPath = join(rootDir, imgRel);
-      if (existsSync(imgPath)) {
-        payload.files = [new AttachmentBuilder(imgPath)];
-      }
+    await _sendAttachmentDropdown(game, gameId, playerNum, pending[0], client);
+  } else {
+    // All auto-attached again — show done confirmation
+    await _sendAttachDonePrompt(game, gameId, playerNum, client);
+  }
+  saveGames();
+}
+
+/** Helper: send the attachment dropdown for a card. */
+async function _sendAttachmentDropdown(game, gameId, playerNum, card, client) {
+  const handId = getHandChannelId(game, playerNum);
+  const handChannel = await client.channels.fetch(handId);
+  const dcList = getDcList(game, playerNum) || [];
+  const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+  const restriction = getAttachmentRestriction(card);
+  const options = dcList.slice(0, 25).map((dc, i) => {
+    const dcName = dc.displayName || dc.dcName || `DC ${i + 1}`;
+    if (restriction && !restriction.filter(dc.dcName)) return null;
+    return { label: dcName.slice(0, 100), value: (dcMsgIds[i] || String(i)).toString() };
+  }).filter(Boolean);
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`setup_attach_to_${gameId}_${playerNum}`)
+    .setPlaceholder('Attach to which Deployment Card?')
+    .addOptions(options);
+  const restrictionNote = restriction ? ` *(${restriction.restrictionText} only)*` : '';
+  const pending = game.setupAttachmentPending[playerNum] || [];
+  const payload = {
+    content: `**Setup — place Skirmish Upgrade${pending.length > 1 ? ` (${pending.length} remaining)` : ''}:** **${card}**${restrictionNote}. Choose which Deployment Card to attach it to:`,
+    components: [new ActionRowBuilder().addComponents(select)],
+  };
+  const imgRel = getDcImagePath(card);
+  if (imgRel) {
+    const imgPath = join(rootDir, imgRel);
+    if (existsSync(imgPath)) {
+      payload.files = [new AttachmentBuilder(imgPath)];
     }
-    await handChannel.send(payload);
+  }
+  await handChannel.send(payload);
+}
+
+/** Helper: send the "all done" prompt with confirm/redo. */
+async function _sendAttachDonePrompt(game, gameId, playerNum, client) {
+  const handId = getHandChannelId(game, playerNum);
+  const handChannel = await client.channels.fetch(handId);
+  const oppNum = opponentPlayerNum(playerNum);
+  const oppPending = (game.setupAttachmentPending?.[oppNum] || []).length;
+  const oppConfirmed = game.setupAttachmentConfirmed?.[oppNum];
+  const waitNote = (oppPending > 0 || !oppConfirmed) ? '\nWaiting for your opponent to finish placing theirs.' : '';
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`attach_done_confirm_${gameId}_${playerNum}`)
+      .setLabel('Confirm')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`attach_done_redo_${gameId}_${playerNum}`)
+      .setLabel('Redo Attachments')
+      .setStyle(ButtonStyle.Secondary),
+  );
+  await handChannel.send({
+    content: `All attachments placed!${waitNote}`,
+    components: [row],
+  });
+}
+
+/** Helper: after confirming/applying an attachment, proceed to next or show done prompt. */
+async function _proceedAttachmentPhase(game, gameId, playerNum, interaction, ctx) {
+  const { saveGames, finishSetupAttachments, client } = ctx;
+  const pending = game.setupAttachmentPending[playerNum];
+
+  if (pending.length > 0) {
+    await _sendAttachmentDropdown(game, gameId, playerNum, pending[0], client);
     saveGames();
     return;
   }
 
-  const p1Done = (game.setupAttachmentPending[1] || []).length === 0;
-  const p2Done = (game.setupAttachmentPending[2] || []).length === 0;
-  if (p1Done && p2Done) {
-    game.setupAttachmentPhase = false;
-    game.setupAttachmentPending = null;
-    await finishSetupAttachments(game, client);
+  // This player's attachments are all placed — show done prompt
+  const oppNum = opponentPlayerNum(playerNum);
+  const oppPending = (game.setupAttachmentPending?.[oppNum] || []).length;
+  const oppConfirmed = game.setupAttachmentConfirmed?.[oppNum];
+
+  if (oppPending === 0 && oppConfirmed) {
+    // Both done — just need this player's confirm
+    // Show confirm/redo prompt
+    await _sendAttachDonePrompt(game, gameId, playerNum, client);
+  } else {
+    // Opponent not done yet — show prompt with waiting note
+    await _sendAttachDonePrompt(game, gameId, playerNum, client);
   }
   saveGames();
 }
