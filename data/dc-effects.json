@@ -4674,7 +4674,13 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "you_have_something_i_want_gideon"
+      ],
+      "specials": [
+        "You Have Something I Want"
+      ]
     },
     "Murne Rin": {
       "abilityText": "Special Action (False Orders): Choose a hostile figure with a figure cost of 4 or less within 4 spaces. Perform a move or attack with that figure.\n\nSpecial Action (Field Report): Choose up to 2 friendly figures within 4 spaces with 2 or less attack dice in their printed attack pool. The chosen figures become Hidden.\n\nFigurehead: Before a friendly figure within 4 spaces suffers Damage or Strain, you may suffer Damage or Strain to prevent 1 of that Damage or Strain.",
@@ -6074,7 +6080,8 @@
       "speed": 4,
       "passives": [
         "Pierce 1",
-        "Efficient Travel"
+        "Efficient Travel",
+        "Mounted"
       ],
       "figures": 1,
       "attack": {
@@ -6094,7 +6101,13 @@
       "attachment": false,
       "elite": true,
       "unique": false,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "headbutt_tauntaun"
+      ],
+      "specials": [
+        "Headbutt"
+      ]
     },
     "Taron Malicos": {
       "abilityText": "Fallen Master: Friendly non-companion FORCE USER figures may ignore the IMPERIAL restriction when using Command cards.\n\nMadness: At the start of your activation, if you have 2 or fewer Command cards in your hand, you suffer 1 Strain and become Focused.\n\nSpecial Action (Boulder Barrage): Choose a space in your line of sight. Any figure on that space suffers 2 Damage. Then place a Rubble token in or adjacent to that space.",

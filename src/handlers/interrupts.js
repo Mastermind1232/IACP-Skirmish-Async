@@ -290,6 +290,69 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
   saveGames(); return;
 }
 
+// ── 5b. You Have Something I Want (Moff Gideon) ────────────────────────────
+export async function handleYHSIW(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction } = ctx;
+  const isTransfer = interaction.customId.startsWith('yhsiw_transfer_');
+  await interaction.deferUpdate().catch(() => {});
+  const gameId = interaction.customId.replace(isTransfer ? 'yhsiw_transfer_' : 'yhsiw_damage_', '');
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (!game.pendingYHSIW) {
+    await interaction.followUp({ content: 'No pending You Have Something I Want.', ephemeral: true }).catch(() => {}); return;
+  }
+  const pending = game.pendingYHSIW;
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.oppPlayerNum, canActAsPlayer, 'Only the targeted player may respond.')) return;
+  delete game.pendingYHSIW;
+
+  if (isTransfer) {
+    // Transfer the token from target to Moff Gideon
+    const { targetFk, token, gideonFk, gideonPlayerNum, oppPlayerNum } = pending;
+    const isPowerToken = ['Block', 'Evade', 'Hit', 'Surge'].includes(token);
+    if (isPowerToken) {
+      // Remove from target
+      const tTokens = game.figurePowerTokens?.[targetFk] || [];
+      const tIdx = tTokens.indexOf(token);
+      if (tIdx >= 0) tTokens.splice(tIdx, 1);
+      // Add to Gideon
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[gideonFk] = game.figurePowerTokens[gideonFk] || [];
+      if (game.figurePowerTokens[gideonFk].length < 2) {
+        game.figurePowerTokens[gideonFk].push(token);
+      }
+    } else {
+      // Condition token: remove from target, apply to Gideon
+      game.figureConditions = game.figureConditions || {};
+      game.figureConditions[targetFk] = (game.figureConditions[targetFk] || []).filter(c => c !== token);
+      game.figureConditions[gideonFk] = game.figureConditions[gideonFk] || [];
+      if (!game.figureConditions[gideonFk].includes(token)) {
+        game.figureConditions[gideonFk].push(token);
+      }
+    }
+    const targetName = dcNameFromFigureKey(targetFk);
+    await logGameAction(game, client, `**You Have Something I Want** — **${targetName}** transfers **${token}** to **Moff Gideon**.`, { phase: 'ROUND', icon: 'card' });
+  } else {
+    // Suffer 3 Damage
+    const { targetFk, oppPlayerNum } = pending;
+    const targetName = dcNameFromFigureKey(targetFk);
+    let tMsgId = null;
+    for (const [mid, mm] of dcMessageMeta) {
+      if (mm.playerNum === oppPlayerNum && targetFk.startsWith(mm.dcName + '-')) { tMsgId = mid; break; }
+    }
+    if (tMsgId && dcHealthState) {
+      const fkMatch = targetFk.match(/-(\d+)-(\d+)$/);
+      const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+      const { prevHp, newHp } = reduceHp(dcHealthState, game, tMsgId, figIdx, 3, oppPlayerNum);
+      await logGameAction(game, client, `**You Have Something I Want** — **${targetName}** suffers **3 Damage** (HP: ${prevHp}→${newHp}).`, { phase: 'ROUND', icon: 'attack' });
+    } else {
+      await logGameAction(game, client, `**You Have Something I Want** — **${targetName}** suffers **3 Damage** (apply manually).`, { phase: 'ROUND', icon: 'attack' });
+    }
+  }
+  // Disable the buttons
+  try { await interaction.message.edit({ components: [] }); } catch {}
+  saveGames();
+}
+
 // ── 6. Last Resort ──────────────────────────────────────────────────────────
 export async function handleLastResort(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapSpaces, applyDamageAndFinishCombat } = ctx;

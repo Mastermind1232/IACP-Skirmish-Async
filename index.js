@@ -2997,6 +2997,26 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             }
           }
         }
+        // Useful Hide (Tauntaun Rider): when defeated, distribute up to 2 Evade Tokens among friendly figures
+        if (_lsDcName === 'Tauntaun Rider') {
+          const _uhFriendly = Object.keys(game.figurePositions?.[defenderPlayerNum] || {})
+            .filter(k => k !== (combat.target.figureKey || ''));
+          if (_uhFriendly.length > 0) {
+            let _uhGranted = 0;
+            const _uhRecipients = [];
+            for (let _uhi = 0; _uhi < Math.min(2, _uhFriendly.length); _uhi++) {
+              const _uhTarget = _uhFriendly[_uhi];
+              const count = grantPowerTokens(game, _uhTarget, 'Evade', 1, 2);
+              if (count > 0) {
+                _uhGranted += count;
+                _uhRecipients.push(dcNameFromFigureKey(_uhTarget));
+              }
+            }
+            if (_uhGranted > 0) {
+              await logGameAction(game, client, `🎭 **Useful Hide** — **Tauntaun Rider** was defeated. Distributed ${_uhGranted} **Evade Token${_uhGranted !== 1 ? 's' : ''}** to ${_uhRecipients.join(', ')}.`, { phase: 'ROUND', icon: 'card' });
+            }
+          }
+        }
         resultText += ` — **${combat.target.label} defeated!** +${vp} VP`;
         await logGameAction(game, client, `<@${ownerId}> defeated **${combat.target.label}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
         if (idx >= 0) {

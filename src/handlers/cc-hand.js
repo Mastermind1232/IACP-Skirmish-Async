@@ -1123,6 +1123,34 @@ export async function handleCcShuffleDraw(interaction, ctx) {
     await interaction.followUp({ content: "You've already drawn your starting hand.", ephemeral: true }).catch(discordCatch);
     return;
   }
+  // I Know Everything (Moff Gideon): before drawing, opponent searches this player's deck
+  const oppNum = opponentPlayerNum(playerNum);
+  const oppDcList = oppNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  const oppHasGideon = oppDcList.some(d => (d?.dcName || d) === 'Moff Gideon');
+  if (oppHasGideon && !game.iKnowEverythingResolved) {
+    const attachKey2 = ccAttachmentsKey(playerNum);
+    const placed2 = (attachKey2 && game[attachKey2] && Object.values(game[attachKey2]).flat()) || [];
+    const availableCards = ccList.filter(c => !placed2.includes(c));
+    if (availableCards.length >= 2) {
+      // Pick 2 random cards to reveal
+      const shuffledCopy = [...availableCards];
+      shuffleArray(shuffledCopy);
+      const revealed = [shuffledCopy[0], shuffledCopy[1]];
+      game.pendingIKnowEverything = { targetPlayerNum: playerNum, gideonPlayerNum: oppNum, cards: revealed, gameId };
+      const oppPlayerId = getPlayerId(game, oppNum);
+      const cardLabels = revealed.map((c, i) => `**${i + 1}.** ${c}`).join('\n');
+      const keepRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`ike_keep_${gameId}_0`).setLabel(`Keep: ${revealed[0].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`ike_keep_${gameId}_1`).setLabel(`Keep: ${revealed[1].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
+      );
+      await logGameAction(game, client, `🕵️ **I Know Everything** — **Moff Gideon** reveals 2 cards from <@${getPlayerId(game, playerNum)}>'s Command deck:\n${cardLabels}\n\n<@${getPlayerId(game, playerNum)}> — Choose which card to **keep** (the other is removed from the game):`, { components: [keepRow], allowedMentions: { users: [getPlayerId(game, playerNum)] } });
+      saveGames();
+      return;
+    }
+    // Not enough cards, skip I Know Everything
+    game.iKnowEverythingResolved = true;
+  }
+
   const attachKey = ccAttachmentsKey(playerNum);
   const placed = (game[attachKey] && Object.values(game[attachKey]).flat()) || [];
   const deck = ccList.filter((c) => !placed.includes(c));
@@ -1149,6 +1177,76 @@ export async function handleCcShuffleDraw(interaction, ctx) {
     files: handPayload.files || [],
     components: handPayload.components,
   }).catch(discordCatch);
+  await updateHandVisualMessage(game, playerNum, client);
+  if (game.player1CcDrawn && game.player2CcDrawn) {
+    await updatePlayAreaDcButtons(game, client);
+    if (runStartOfRoundDcEffects) await runStartOfRoundDcEffects(game, gameId, client, { logGameAction });
+    await sendRoundActivationPhaseMessage(game, client);
+  }
+  saveGames();
+}
+
+/**
+ * Handle I Know Everything choice (ike_keep_ button).
+ * The targeted player picks which card to keep; the other is removed from the game.
+ * Then triggers the shuffle/draw for that player.
+ */
+export async function handleIKnowEverythingKeep(interaction, ctx) {
+  const { getGame, shuffleArray, buildHandDisplayPayload, updateHandVisualMessage, updatePlayAreaDcButtons, sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, logGameAction, saveGames, client } = ctx;
+  await interaction.deferUpdate().catch(() => {});
+  const match = interaction.customId.match(/^ike_keep_(.+)_(\d)$/);
+  if (!match) return;
+  const [, gameId, keepIdxStr] = match;
+  const keepIdx = parseInt(keepIdxStr, 10);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game || !game.pendingIKnowEverything) {
+    await interaction.followUp({ content: 'No pending I Know Everything choice.', ephemeral: true }).catch(() => {}); return;
+  }
+  const pending = game.pendingIKnowEverything;
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.targetPlayerNum, canActAsPlayer, 'Only the targeted player can choose.')) return;
+
+  const keptCard = pending.cards[keepIdx];
+  const removedCard = pending.cards[1 - keepIdx];
+  const playerNum = pending.targetPlayerNum;
+
+  // Remove the unchosen card from the squad's CC list
+  const squad = getSquad(game, playerNum);
+  if (squad?.ccList) {
+    const rmIdx = squad.ccList.indexOf(removedCard);
+    if (rmIdx >= 0) squad.ccList.splice(rmIdx, 1);
+  }
+
+  delete game.pendingIKnowEverything;
+  game.iKnowEverythingResolved = true;
+
+  await logGameAction(game, client, `🕵️ **I Know Everything** — Kept **${keptCard}**. **${removedCard}** removed from the game.`, { phase: 'DEPLOYMENT', icon: 'card' });
+  try { await interaction.message.edit({ components: [] }); } catch {}
+
+  // Now perform the shuffle and draw for the targeted player
+  const ccList = squad?.ccList || [];
+  const attachKey = ccAttachmentsKey(playerNum);
+  const placed = (game[attachKey] && Object.values(game[attachKey]).flat()) || [];
+  const deck = ccList.filter(c => !placed.includes(c));
+  shuffleArray(deck);
+  let hand = deck.splice(0, 3);
+  const deckKey = ccDeckKey(playerNum);
+  const handKey = ccHandKey(playerNum);
+  game[deckKey] = deck;
+  game[handKey] = hand;
+  const drawnKey = ccDrawnKey(playerNum);
+  game[drawnKey] = true;
+  const playerId = getPlayerId(game, playerNum);
+  await logGameAction(game, client, `<@${playerId}> shuffled and drew 3 Command Cards.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
+
+  // Update hand display in the player's hand thread
+  const handChannelId = getHandChannelId(game, playerNum);
+  if (handChannelId) {
+    try {
+      const handChannel = await client.channels.fetch(handChannelId);
+      const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
+      await handChannel.send(handPayload);
+    } catch {}
+  }
   await updateHandVisualMessage(game, playerNum, client);
   if (game.player1CcDrawn && game.player2CcDrawn) {
     await updatePlayAreaDcButtons(game, client);

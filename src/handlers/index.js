@@ -81,6 +81,7 @@ import {
   handleDeckIllegalPlay,
   handleDeckIllegalRedo,
   handleCcShuffleDraw,
+  handleIKnowEverythingKeep,
   handleCcPlay,
   handleCcDraw,
   handleCcSearchDiscard,
@@ -107,7 +108,7 @@ import {
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
-import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick } from './interrupts.js';
+import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW } from './interrupts.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
 import {
   handleBleedResolve,
@@ -233,6 +234,7 @@ register('ee3_pick_die_', handleEe3DiePick);
 register('deck_illegal_play_', handleDeckIllegalPlay);
 register('deck_illegal_redo_', handleDeckIllegalRedo);
 register('cc_shuffle_draw_', handleCcShuffleDraw);
+register('ike_keep_', handleIKnowEverythingKeep);
 register('cc_play_', handleCcPlay);
 register('cc_confirm_play_', handleCcConfirmPlay);
 register('cc_cancel_play_', handleCcCancelPlay);
@@ -297,6 +299,8 @@ register('self_destruct_protocol_use_', handleSelfDestructProtocol);
 register('self_destruct_protocol_skip_', handleSelfDestructProtocol);
 register('last_resort_use_', handleLastResort);
 register('last_resort_skip_', handleLastResort);
+register('yhsiw_transfer_', handleYHSIW);
+register('yhsiw_damage_', handleYHSIW);
 register('scavenged_walker_attack_', handleScavengedWalker);
 register('scavenged_walker_skip_', handleScavengedWalker);
 register('on_diplomatic_', handleOnDiplomatic);
@@ -333,7 +337,7 @@ const HANDLER_GROUPS = new Map();
 function setGroup(keys, group) { for (const k of keys) HANDLER_GROUPS.set(k, group); }
 
 setGroup([
-  'deck_illegal_play_', 'deck_illegal_redo_', 'cc_shuffle_draw_', 'cc_play_',
+  'deck_illegal_play_', 'deck_illegal_redo_', 'cc_shuffle_draw_', 'ike_keep_', 'cc_play_',
   'cc_confirm_play_', 'cc_cancel_play_', 'cc_draw_', 'cc_search_discard_',
   'cc_close_discard_', 'cc_discard_', 'cc_choice_', 'cc_space_', 'squad_select_',
   'illegal_cc_ignore_', 'illegal_cc_unplay_', 'negation_play_', 'negation_let_resolve_',
@@ -387,6 +391,7 @@ setGroup([
   'last_resort_use_', 'last_resort_skip_', 'scavenged_walker_attack_',
   'scavenged_walker_skip_', 'on_diplomatic_', 'bel_reorder_1_', 'bel_reorder_2_',
   'ab_blade_pick_', 'sf_mp_pick_', 'force_slow_pick_', 'excavation_pick_',
+  'yhsiw_transfer_', 'yhsiw_damage_',
 ], 'interrupts');
 
 setGroup([
@@ -538,6 +543,7 @@ export {
   handleDeckIllegalPlay,
   handleDeckIllegalRedo,
   handleCcShuffleDraw,
+  handleIKnowEverythingKeep,
   handleCcPlay,
   handleCcDraw,
   handleCcSearchDiscard,
@@ -564,7 +570,7 @@ export {
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
-export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick } from './interrupts.js';
+export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW } from './interrupts.js';
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
 export {
   handleBleedResolve,

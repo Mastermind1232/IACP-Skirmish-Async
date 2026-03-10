@@ -3044,6 +3044,37 @@
       "description": "At the start of your activation, gain 3 movement points.",
       "wiredStatus": "wired"
     },
+    "headbutt_tauntaun": {
+      "type": "dcSpecial",
+      "label": "Headbutt",
+      "description": "Move up to 2 spaces, then choose an adjacent hostile figure and roll 1 red die. The chosen figure suffers Damage equal to the Hit results.",
+      "headbuttMove": 2,
+      "headbuttDie": "red",
+      "wiredStatus": "wired"
+    },
+    "useful_hide_tauntaun": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "trigger": "onDefeat",
+      "label": "Useful Hide",
+      "description": "When this figure is defeated, distribute up to 2 Evade Tokens among friendly figures.",
+      "wiredStatus": "wired"
+    },
+    "i_know_everything_gideon": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "trigger": "setup",
+      "label": "I Know Everything",
+      "description": "During setup, before drawing Command cards, search your opponent's Command deck and reveal 2 cards. Your opponent chooses 1 to shuffle back into the deck, then return the other card to the game box.",
+      "wiredStatus": "wired"
+    },
+    "you_have_something_i_want_gideon": {
+      "type": "dcSpecial",
+      "label": "You Have Something I Want",
+      "description": "Once during your activation, choose a Power Token or condition token on a hostile figure within 4 spaces. That figure suffers 3 Damage unless it transfers the chosen token to you.",
+      "freeAction": true,
+      "wiredStatus": "wired"
+    },
     "much_to_learn": {
       "type": "dcSpecial",
       "category": "passive-auto",

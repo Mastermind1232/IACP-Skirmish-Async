@@ -56,6 +56,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'activationKills',
   'activationDamagedFigures',
   'unstableDevicesUsedThisActivation',
+  'yhsiwOptions',
 ];
 
 /**
@@ -243,6 +244,7 @@ const ROUND_NULL_FLAGS = [
   'unlimitedPowerActive',
   'shadowOpsBlockedPlayer',
   'pendingOrbitalBombardment',
+  'pendingYHSIW',
 ];
 
 const ROUND_ARRAY_FLAGS = [

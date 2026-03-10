@@ -1806,7 +1806,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const { rows, available, overflowed } = getSpaceChoiceRows(`pounce_space_${game.gameId}_${msgId}_${figureIndex}_`, resolveResult.validSpaces, mapSpaces);
       const mapAttachment = await getMapAttachmentForSpaces(game, resolveResult.validSpaces);
       game.pendingPounceSpaceChoice = game.pendingPounceSpaceChoice || {};
-      game.pendingPounceSpaceChoice[msgId] = { gameId: game.gameId, playerNum: meta.playerNum, figureIndex, msgId, abilityId, validSpaces: resolveResult.validSpaces, targetFigureKey: resolveResult.targetFigureKey || null };
+      game.pendingPounceSpaceChoice[msgId] = { gameId: game.gameId, playerNum: meta.playerNum, figureIndex, msgId, abilityId, specialIdx, validSpaces: resolveResult.validSpaces, targetFigureKey: resolveResult.targetFigureKey || null };
       const spacePickLabel = resolveResult.spaceChoiceLabel || `**Pounce** — Pick a space to place your figure:`;
       const pounceComponents = overflowed
         ? [ctx.buildSpaceSelectMenu('pounce_space_sel_', `${game.gameId}_${msgId}_${figureIndex}`, available)]
@@ -1864,6 +1864,18 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
           components: [new ActionRowBuilder().addComponents(btns)],
         }).catch(discordCatch);
       }
+    }
+  }
+  // You Have Something I Want (Moff Gideon): present opponent choice buttons
+  if (resolveResult.yhsiwPending && game.pendingYHSIW) {
+    const _yhsiw = game.pendingYHSIW;
+    const oppOwnerId = game[`player${_yhsiw.oppPlayerNum}Id`];
+    const _yhsiwRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`yhsiw_transfer_${game.gameId}`).setLabel(`Transfer ${_yhsiw.token}`).setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`yhsiw_damage_${game.gameId}`).setLabel('Suffer 3 Damage').setStyle(ButtonStyle.Danger),
+    );
+    if (logGameAction) {
+      await logGameAction(game, client, `<@${oppOwnerId}> **You Have Something I Want** — **${dcNameFromFigureKey(_yhsiw.targetFk)}**'s **${_yhsiw.token}** is targeted by **Moff Gideon**. Choose: transfer the token or suffer 3 Damage.`, { components: [_yhsiwRow], allowedMentions: { users: [oppOwnerId] } });
     }
   }
   // Expertise (Ko-Tun Feralo): once per activation, using a Special grants 1 extra action
@@ -2084,6 +2096,39 @@ export async function handlePounceSpacePick(interaction, ctx) {
   const meta = dcMessageMeta.get(msgId);
   const result = resolveAbility(abilityId, { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState: ctx.dcHealthState, chosenSpace, targetFigureKey: targetFigureKey || null });
   delete game.pendingPounceSpaceChoice[msgId];
+
+  // Space choice resolved into a follow-up figure choice (e.g. Headbutt: move → pick adjacent hostile)
+  if (!result.applied && result.requiresChoice && Array.isArray(result.choiceOptions) && result.choiceOptions.length > 0) {
+    const specialIdx = pending.specialIdx || 0;
+    game.pendingDcAbilityChoice = game.pendingDcAbilityChoice || {};
+    game.pendingDcAbilityChoice[`${msgId}_${specialIdx}`] = {
+      gameId, playerNum, abilityId, msgId, figureIndex: pending.figureIndex, specialIdx,
+      targetFigureKeys: result.targetFigureKeys || null,
+    };
+    // Refresh board if figure moved during the space choice phase
+    if (result.refreshBoard && game.boardId && game.selectedMap && buildBoardMapPayload) {
+      try {
+        const boardChannel = await client.channels.fetch(game.boardId);
+        const bPayload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+        await boardChannel.send(bPayload);
+      } catch (err) { console.error('Board refresh after space choice failed:', err); }
+    }
+    const choiceButtons = result.choiceOptions.map((label, i) =>
+      new ButtonBuilder()
+        .setCustomId(`dc_ability_choice_${gameId}_${msgId}_${specialIdx}_${i}`)
+        .setLabel(String(label).slice(0, 80))
+        .setStyle(ButtonStyle.Primary)
+    );
+    const rows = [];
+    for (let i = 0; i < choiceButtons.length; i += 5) {
+      rows.push(new ActionRowBuilder().addComponents(choiceButtons.slice(i, i + 5)));
+    }
+    const prompt = result.choicePrompt || `Choose a target:`;
+    await interaction.followUp({ content: prompt, components: rows.slice(0, 5), ephemeral: false }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+
   if (result.applied) {
     if (result.logMessage) {
       await logGameAction(game, client, result.logMessage, { phase: 'ROUND', icon: 'move' }).catch(discordCatch);

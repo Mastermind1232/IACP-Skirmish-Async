@@ -641,6 +641,82 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // You Have Something I Want (Moff Gideon): choose hostile with token within 4, transfer or 3 damage
+  if (abilityId === 'you_have_something_i_want_gideon') {
+    const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, choiceIndex, targetFigureKey, getRange: getRng } = context;
+    if (!game || !playerNum || !meta || !msgId) return { applied: false, manualMessage: 'Resolve **You Have Something I Want** manually.' };
+
+    // Phase 2: target+token chosen → set up opponent decision
+    if (choiceIndex != null) {
+      const options = game.yhsiwOptions || [];
+      const chosen = options[choiceIndex];
+      if (!chosen) return { applied: false, manualMessage: 'Invalid choice.' };
+      const { figureKey: targetFk, token, playerNum: oppNum } = chosen;
+
+      // Get Moff Gideon's figure key
+      const actionsData = game.dcActionsData?.[msgId];
+      const selectedFig = actionsData?.selectedFigure ?? 0;
+      const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const dgIndex = dgMatch ? dgMatch[1] : '1';
+      const gideonFk = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+
+      // Store pending YHSIW for opponent to respond
+      game.pendingYHSIW = {
+        targetFk, token, gideonFk, gideonPlayerNum: playerNum, oppPlayerNum: oppNum,
+        msgId, gameId: game.gameId,
+      };
+      delete game.yhsiwOptions;
+
+      return {
+        applied: true,
+        freeAction: true,
+        yhsiwPending: true,
+        logMessage: `**You Have Something I Want** — **Moff Gideon** targets **${dcNameFromFigureKey(targetFk)}**'s **${token}** token. Opponent must choose: **transfer** the token or **suffer 3 Damage**.`,
+      };
+    }
+
+    // Phase 1: enumerate hostile figures within 4 spaces with power/condition tokens
+    const actionsData = game.dcActionsData?.[msgId];
+    const selectedFig = actionsData?.selectedFigure ?? 0;
+    const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIndex = dgMatch ? dgMatch[1] : '1';
+    const gideonFk = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+    const gideonPos = game.figurePositions?.[playerNum]?.[gideonFk];
+    if (!gideonPos) return { applied: false, freeAction: true, manualMessage: 'Moff Gideon position unknown.' };
+
+    const oppNum = opponentPlayerNum(playerNum);
+    const oppPositions = game.figurePositions?.[oppNum] || {};
+
+    const targets = [];
+    for (const [fk, pos] of Object.entries(oppPositions)) {
+      if (!pos) continue;
+      const dist = typeof getRng === 'function' ? getRng(gideonPos, pos) : 999;
+      if (dist > 4) continue;
+      // Power tokens
+      const powerTokens = game.figurePowerTokens?.[fk] || [];
+      for (const token of [...new Set(powerTokens)]) {
+        targets.push({ fk, token, pn: oppNum, label: `${dcNameFromFigureKey(fk)} — ${token} Token` });
+      }
+      // Condition tokens
+      const conditions = game.figureConditions?.[fk] || [];
+      for (const cond of conditions) {
+        targets.push({ fk, token: cond, pn: oppNum, label: `${dcNameFromFigureKey(fk)} — ${cond}` });
+      }
+    }
+
+    if (targets.length === 0) return { applied: false, freeAction: true, manualMessage: 'No hostile figures within 4 spaces have Power Tokens or condition tokens.' };
+
+    // Store options for Phase 2 lookup
+    game.yhsiwOptions = targets.map(t => ({ figureKey: t.fk, token: t.token, playerNum: t.pn }));
+
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: targets.map(t => t.label),
+      targetFigureKeys: targets.map(t => t.fk),
+    };
+  }
+
   // tempt (Emperor Palpatine): choose any figure within 4 spaces; 1 damage + 1 Hit Token
   if (abilityId === 'tempt') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getRange: getRng } = context;
@@ -7184,6 +7260,143 @@ export function resolveAbility(abilityId, context) {
       return { requiresSpaceChoice: true, validSpaces: allSpaces.slice(0, 25) };
     }
     return { requiresSpaceChoice: true, validSpaces: [...occupied] };
+  }
+
+  // dcSpecial: headbuttMove (Tauntaun Rider Headbutt) — move up to N spaces, choose adjacent hostile, roll 1 die
+  if (entry.type === 'dcSpecial' && entry.headbuttMove) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenSpace, targetFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = context.msgId || findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId) || context.meta;
+    if (!meta) return { applied: false, manualMessage: 'Resolve manually: no activation meta.' };
+    const actionsData = game.dcActionsData?.[msgId];
+    const selectedFig = actionsData?.selectedFigure ?? 0;
+    const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIndex = dgMatch ? dgMatch[1] : '1';
+    const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+
+    // Phase 3: target chosen → roll die, apply damage
+    if (targetFigureKey) {
+      const color = entry.headbuttDie || 'red';
+      const faces = getDiceData().attack?.[color.toLowerCase()];
+      if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die manually.` };
+      const face = faces[Math.floor(Math.random() * faces.length)];
+      const hits = face.dmg ?? 0;
+      const dieParts = [];
+      if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+      if (face.surge) dieParts.push(`${face.surge} Surge${face.surge !== 1 ? 's' : ''}`);
+      const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
+      const targetName = dcNameFromFigureKey(targetFigureKey);
+      const resultParts = [];
+      if (hits > 0) {
+        const enemyPlayerNum = opponentPlayerNum(playerNum);
+        const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
+        if (dcHealthState && targetMsgId) {
+          const healthState = dcHealthState.get(targetMsgId) || [];
+          const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
+          const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+          const entryHp = healthState[figIdx];
+          if (entryHp) {
+            const [cur, max] = entryHp;
+            const newCur = Math.max(0, (cur ?? max) - hits);
+            healthState[figIdx] = [newCur, max ?? newCur];
+            dcHealthState.set(targetMsgId, healthState);
+            syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
+            resultParts.push(`${hits} Damage (HP: ${cur ?? max} → ${newCur})`);
+          } else {
+            resultParts.push(`apply ${hits} Damage manually`);
+          }
+        } else {
+          resultParts.push(`apply ${hits} Damage manually`);
+        }
+      }
+      return {
+        applied: true,
+        logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.`,
+        refreshDcEmbed: true,
+      };
+    }
+
+    // Phase 2: space chosen → move figure, then enumerate adjacent hostiles
+    if (chosenSpace) {
+      game.figurePositions = game.figurePositions || {};
+      game.figurePositions[playerNum] = game.figurePositions[playerNum] || {};
+      game.figurePositions[playerNum][activatingFigureKey] = chosenSpace;
+      const mapId = game.selectedMap?.id;
+      if (!mapId) return { applied: true, logMessage: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. No map data — resolve attack manually.`, refreshBoard: true };
+      const adjacentAll = getFiguresAdjacentToTarget(game, activatingFigureKey, mapId);
+      const enemyPlayerNum = opponentPlayerNum(playerNum);
+      const validTargets = adjacentAll.filter(f => f.playerNum === enemyPlayerNum);
+      if (validTargets.length === 0) {
+        return { applied: true, logMessage: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. No adjacent hostile figures.`, refreshBoard: true };
+      }
+      if (validTargets.length === 1) {
+        // Auto-target single adjacent hostile: roll immediately
+        const singleTarget = validTargets[0].figureKey;
+        const color = entry.headbuttDie || 'red';
+        const faces = getDiceData().attack?.[color.toLowerCase()];
+        if (!faces?.length) return { applied: true, logMessage: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. Roll 1 ${color} die against **${dcNameFromFigureKey(singleTarget)}** manually.`, refreshBoard: true };
+        const face = faces[Math.floor(Math.random() * faces.length)];
+        const hits = face.dmg ?? 0;
+        const dieParts = [];
+        if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+        if (face.surge) dieParts.push(`${face.surge} Surge${face.surge !== 1 ? 's' : ''}`);
+        const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
+        const tName = dcNameFromFigureKey(singleTarget);
+        const resParts = [];
+        if (hits > 0) {
+          const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, singleTarget, dcMessageMeta);
+          if (dcHealthState && targetMsgId) {
+            const healthState = dcHealthState.get(targetMsgId) || [];
+            const fkMatch = singleTarget.match(/-(\d+)-(\d+)$/);
+            const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+            const entryHp = healthState[figIdx];
+            if (entryHp) {
+              const [cur, max] = entryHp;
+              const newCur = Math.max(0, (cur ?? max) - hits);
+              healthState[figIdx] = [newCur, max ?? newCur];
+              dcHealthState.set(targetMsgId, healthState);
+              syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
+              resParts.push(`${hits} Damage (HP: ${cur ?? max} → ${newCur})`);
+            }
+          }
+        }
+        return {
+          applied: true,
+          logMessage: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. Rolled 1 ${color} die: **${diceResult}**. **${tName}** ${resParts.join(', ') || 'unaffected'}.`,
+          refreshDcEmbed: true,
+          refreshBoard: true,
+        };
+      }
+      // Multiple adjacent hostiles: let player choose
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: validTargets.map(t => dcNameFromFigureKey(t.figureKey)),
+        targetFigureKeys: validTargets.map(t => t.figureKey),
+        choicePrompt: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. Choose an adjacent hostile figure:`,
+        refreshBoard: true,
+      };
+    }
+
+    // Phase 1: enumerate reachable spaces within headbuttMove
+    const activatingPos = game.figurePositions?.[playerNum]?.[activatingFigureKey];
+    if (!activatingPos) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (position unknown).` };
+    const boardState = getBoardStateForMovement(game, activatingFigureKey);
+    if (!boardState?.mapSpaces) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (map not loaded).` };
+    const occ = boardState.occupiedSet;
+    const occArr = occ instanceof Set ? [...occ] : (occ || []);
+    const reachable = getReachableSpaces(activatingPos, entry.headbuttMove, boardState.mapSpaces, occArr);
+    // Include current position (move 0 spaces)
+    const validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map(s => String(s).toLowerCase())]);
+    const validSpaces = [...validSet];
+    if (validSpaces.length === 0) return { applied: false, manualMessage: `No valid spaces for **${entry.label}**.` };
+    return {
+      requiresSpaceChoice: true,
+      validSpaces,
+      spaceChoiceLabel: `**${entry.label}** — Move up to ${entry.headbuttMove} spaces:`,
+    };
   }
 
   // dcSpecial: pounceRange (Nexu Pounce) — place figure in empty space within N, then may attack free

@@ -1,7 +1,7 @@
 # Deterministic Ability Audit
 
 **Code-generated** from `dc-effects.json` + `ability-library.json`. Run `node audit-stubs.cjs` to regenerate.
-Generated: 2026-02-26
+Generated: 2026-03-10
 
 ## Status Key
 - **WIRED** — Fully automated with code
@@ -29,16 +29,23 @@ Generated: 2026-02-26
 | Surge: Concussive Bolt | WIRED_SURGE |
 | Shared Intuition | WIRED |
 
+### 74-Z Speeder Bike (Elite)
+| Ability | Status |
+|---------|--------|
+| Mounted | PASSIVE_DATA_ONLY |
+| Thrusters | PASSIVE_DATA_ONLY |
+| Forward Mounted Blasters | PASSIVE_DATA_ONLY |
+
 ### Agent Blaise
 | Ability | Status |
 |---------|--------|
-| Adapt | NOT_WIRED |
+| Adapt | WIRED |
 | Surge: Interrogate | WIRED_SURGE |
 
 ### Agent Kallus
 | Ability | Status |
 |---------|--------|
-| Hunt Dissent | NOT_WIRED |
+| Hunt Dissent | WIRED |
 | Fulcrum | NOT_WIRED |
 | Bo-Rifle | NOT_WIRED |
 
@@ -47,7 +54,7 @@ Generated: 2026-02-26
 |---------|--------|
 | Special: Force Leap | WIRED |
 | Vigor | WIRED |
-| Twin Sabers | NOT_WIRED |
+| Twin Sabers | WIRED |
 
 ### Alliance Ranger (Elite)
 | Ability | Status |
@@ -65,19 +72,19 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Special: Improved Smuggler's Instincts | WIRED |
-| Slippery | NOT_WIRED |
+| Slippery | WIRED |
 
 ### Alliance Smuggler (Regular)
 | Ability | Status |
 |---------|--------|
 | Special: Smuggler's Instincts | WIRED |
-| Slippery | NOT_WIRED |
+| Slippery | WIRED |
 
 ### Asajj Ventress
 | Ability | Status |
 |---------|--------|
-| Nimble | NOT_WIRED |
-| Consider It My Payment | NOT_WIRED |
+| Nimble | WIRED |
+| Consider It My Payment | WIRED |
 
 ### AT-DP
 | Ability | Status |
@@ -94,8 +101,8 @@ Generated: 2026-02-26
 ### AT-ST
 | Ability | Status |
 |---------|--------|
-| Targeting Computer | NOT_WIRED |
-| Awkward | NOT_WIRED |
+| Targeting Computer | WIRED |
+| Awkward | WIRED |
 
 ### Bantha Rider
 | Ability | Status |
@@ -112,9 +119,9 @@ Generated: 2026-02-26
 ### Bib Fortuna
 | Ability | Status |
 |---------|--------|
-| Dirty Dealing | NOT_WIRED |
+| Dirty Dealing | WIRED |
 | Special: Bartered Information | WIRED |
-| Illicit Arms | NOT_WIRED |
+| Illicit Arms | WIRED |
 
 ### Biv Bodhrik
 | Ability | Status |
@@ -133,7 +140,7 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Smooth Landing | WIRED |
-| Air Support | NOT_WIRED |
+| Air Support | WIRED |
 
 ### Bossk
 | Ability | Status |
@@ -151,9 +158,9 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Special: Inform | WIRED |
-| Cower | NOT_WIRED |
+| Cower | WIRED |
 | Distracting | WIRED |
-| Non-Combatant | NOT_WIRED |
+| Non-Combatant | WIRED |
 
 ### C1-10P "Chopper"
 | Ability | Status |
@@ -165,18 +172,18 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Flawless Execution | WIRED |
-| I Make the Rules Now | NOT_WIRED |
+| I Make the Rules Now | WIRED |
 
 ### Cal Kestis
 | Ability | Status |
 |---------|--------|
 | Special: Wall Run | WIRED |
-| Force Slow | NOT_WIRED |
+| Force Slow | WIRED |
 
 ### Captain Terro
 | Ability | Status |
 |---------|--------|
-| Special: Flamethrower | NOT_WIRED |
+| Special: Flamethrower | WIRED |
 | Mounted | WIRED |
 | Efficient Travel | WIRED |
 | Professional | NOT_WIRED |
@@ -191,8 +198,8 @@ Generated: 2026-02-26
 ### Cassian Andor
 | Ability | Status |
 |---------|--------|
-| Strike Team | NOT_WIRED |
-| It Will be Alright | NOT_WIRED |
+| Strike Team | WIRED |
+| It Will be Alright | WIRED |
 
 ### Chewbacca
 | Ability | Status |
@@ -203,21 +210,21 @@ Generated: 2026-02-26
 ### Chirrut Imwe
 | Ability | Status |
 |---------|--------|
-| Devout | NOT_WIRED |
+| Devout | WIRED |
 | I'm One With the Force | WIRED |
-| The Force is With Me | NOT_WIRED |
+| The Force is With Me | WIRED |
 
 ### Clawdite Shapeshifter (Elite)
 | Ability | Status |
 |---------|--------|
-| Shape | NOT_WIRED |
-| Shift | NOT_WIRED |
+| Shape | WIRED |
+| Shift | WIRED |
 
 ### Clawdite Shapeshifter (Regular)
 | Ability | Status |
 |---------|--------|
-| Shape | NOT_WIRED |
-| Shift | NOT_WIRED |
+| Shape | WIRED |
+| Shift | WIRED |
 
 ### CT-1701
 | Ability | Status |
@@ -228,8 +235,8 @@ Generated: 2026-02-26
 ### Dark Trooper Mk III
 | Ability | Status |
 |---------|--------|
-| Advanced Targeting Computer | NOT_WIRED |
-| Durasteel Fist | NOT_WIRED |
+| Advanced Targeting Computer | WIRED |
+| Durasteel Fist | WIRED |
 | Special: Lift Off | WIRED |
 
 ### Darth Vader
@@ -243,20 +250,20 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Stealthy | WIRED |
-| Cut and Run | NOT_WIRED |
+| Cut and Run | WIRED |
 | Surge: Fell Swoop | WIRED_SURGE |
 
 ### Death Trooper (Elite)
 | Ability | Status |
 |---------|--------|
 | Squad Captain | WIRED |
-| Field Tactics | NOT_WIRED |
+| Field Tactics | WIRED |
 
 ### Death Trooper (Regular)
 | Ability | Status |
 |---------|--------|
 | Security Detail | WIRED |
-| Field Tactics | NOT_WIRED |
+| Field Tactics | WIRED |
 
 ### Del Meeko
 | Ability | Status |
@@ -287,13 +294,13 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Advanced Weapons Research | WIRED |
-| Unhinged Director | NOT_WIRED |
+| Unhinged Director | WIRED |
 
 ### Doctor Aphra
 | Ability | Status |
 |---------|--------|
-| Dubious Counterparts | NOT_WIRED |
-| Excavation | NOT_WIRED |
+| Dubious Counterparts | WIRED |
+| Excavation | WIRED |
 
 ### Dr. Royce Hemlock
 | Ability | Status |
@@ -311,13 +318,13 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Forward Emplacement | WIRED |
-| Tripod | NOT_WIRED |
+| Tripod | WIRED |
 | Assault | N/A_HONOR |
 
 ### E-Web Engineer (Regular)
 | Ability | Status |
 |---------|--------|
-| Tripod | NOT_WIRED |
+| Tripod | WIRED |
 | Assault | N/A_HONOR |
 
 ### Echo Base Trooper (Elite)
@@ -344,12 +351,12 @@ Generated: 2026-02-26
 |---------|--------|
 | Ambush | WIRED |
 | Forest Fighters | WIRED |
-| Special: Sling Barrage | NOT_WIRED |
+| Special: Sling Barrage | WIRED |
 
 ### Ezra Bridger
 | Ability | Status |
 |---------|--------|
-| Brush | NOT_WIRED |
+| Brush | WIRED |
 | Much to Learn | WIRED |
 
 ### Fenn Signis
@@ -369,7 +376,7 @@ Generated: 2026-02-26
 |---------|--------|
 | Vigor | WIRED |
 | Relentless Pursuit | WIRED |
-| Special: Sith Acolyte | INFORMATIONAL |
+| Special: Sith Acolyte | WIRED |
 
 ### Gaarkhan
 | Ability | Status |
@@ -386,20 +393,20 @@ Generated: 2026-02-26
 ### Gar Saxon
 | Ability | Status |
 |---------|--------|
-| Airborne Commander | NOT_WIRED |
-| Personal Combat Shield | NOT_WIRED |
+| Airborne Commander | WIRED |
+| Personal Combat Shield | WIRED |
 | Special: Gar Saxon's Flamethrower | WIRED |
 
 ### General Sorin
 | Ability | Status |
 |---------|--------|
 | Special: Bombardment | WIRED |
-| Advanced Firepower | NOT_WIRED |
+| Advanced Firepower | WIRED |
 
 ### General Weiss
 | Ability | Status |
 |---------|--------|
-| General's Orders | NOT_WIRED |
+| General's Orders | WIRED |
 | Epic Arsenal | WIRED |
 
 ### Gideon Argus
@@ -411,8 +418,8 @@ Generated: 2026-02-26
 ### Greedo
 | Ability | Status |
 |---------|--------|
-| Slow on the Draw | NOT_WIRED |
-| Parting Shot | NOT_WIRED |
+| Slow on the Draw | WIRED |
+| Parting Shot | WIRED |
 
 ### Han Solo
 | Ability | Status |
@@ -424,8 +431,8 @@ Generated: 2026-02-26
 ### Heavy Stormtrooper (Elite)
 | Ability | Status |
 |---------|--------|
-| Modular | NOT_WIRED |
-| Spray Fire | NOT_WIRED |
+| Modular | WIRED |
+| Spray Fire | WIRED |
 
 ### Heavy Stormtrooper (Regular)
 | Ability | Status |
@@ -435,26 +442,26 @@ Generated: 2026-02-26
 ### Hera Syndulla
 | Ability | Status |
 |---------|--------|
-| Call the Shots | NOT_WIRED |
+| Call the Shots | WIRED |
 | Smooth Landing | WIRED |
 
 ### Hired Gun (Elite)
 | Ability | Status |
 |---------|--------|
 | Self-Preservation | WIRED |
-| Parting Shot | NOT_WIRED |
+| Parting Shot | WIRED |
 
 ### Hired Gun (Regular)
 | Ability | Status |
 |---------|--------|
-| Parting Shot | NOT_WIRED |
+| Parting Shot | WIRED |
 | Disposable | WIRED |
 
 ### HK Assassin Droid (Elite)
 | Ability | Status |
 |---------|--------|
 | Targeting Computer | WIRED |
-| Versatile Weaponry | NOT_WIRED |
+| Versatile Weaponry | WIRED |
 | Merciless | WIRED |
 
 ### HK-47
@@ -467,8 +474,8 @@ Generated: 2026-02-26
 ### Hondo Ohnaka
 | Ability | Status |
 |---------|--------|
-| Negotiate | NOT_WIRED |
-| What's Yours is Mine | NOT_WIRED |
+| Negotiate | WIRED |
+| What's Yours is Mine | WIRED |
 
 ### IG-11
 | Ability | Status |
@@ -493,13 +500,13 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Special: Order | WIRED |
-| Cower | NOT_WIRED |
+| Cower | WIRED |
 
 ### ISB Infiltrator (Elite)
 | Ability | Status |
 |---------|--------|
 | In The Shadows | WIRED |
-| Comms Jammer | NOT_WIRED |
+| Comms Jammer | WIRED |
 | Special: Coordinated Raid | WIRED |
 
 ### ISB Infiltrator (Regular)
@@ -520,31 +527,31 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Surge: Bargain | WIRED_SURGE |
-| Take Cover | NOT_WIRED |
-| Scavenged Stock | NOT_WIRED |
+| Take Cover | WIRED |
+| Scavenged Stock | WIRED |
 
 ### Jawa Scavenger (Regular)
 | Ability | Status |
 |---------|--------|
 | Surge: Harass | WIRED_SURGE |
-| Take Cover | NOT_WIRED |
+| Take Cover | WIRED |
 
 ### Jet Trooper (Elite)
 | Ability | Status |
 |---------|--------|
-| Agile | NOT_WIRED |
+| Agile | WIRED |
 | Fly-By | WIRED |
 
 ### Jet Trooper (Regular)
 | Ability | Status |
 |---------|--------|
-| Agile | NOT_WIRED |
+| Agile | WIRED |
 | Jets | WIRED |
 
 ### Jyn Erso
 | Ability | Status |
 |---------|--------|
-| Trust Goes Both Ways | NOT_WIRED |
+| Trust Goes Both Ways | WIRED |
 | Special: Tonfa Strike | WIRED |
 
 ### Jyn Odan
@@ -557,14 +564,14 @@ Generated: 2026-02-26
 ### K-2S0
 | Ability | Status |
 |---------|--------|
-| Vague and Unconvincing | NOT_WIRED |
+| Vague and Unconvincing | WIRED |
 | Cassian Said I Had To | NOT_WIRED |
 | Special: Continually Unexpected | WIRED |
 
 ### Kanan Jarrus
 | Ability | Status |
 |---------|--------|
-| Force Vision | NOT_WIRED |
+| Force Vision | WIRED |
 | Soresu Form | WIRED |
 
 ### Kayn Somos
@@ -576,9 +583,9 @@ Generated: 2026-02-26
 ### Ko-Tun Feralo
 | Ability | Status |
 |---------|--------|
-| Arms Distribution | NOT_WIRED |
-| Dead Precise | NOT_WIRED |
-| Squad Cohesion | NOT_WIRED |
+| Arms Distribution | WIRED |
+| Dead Precise | WIRED |
+| Squad Cohesion | WIRED |
 
 ### Krrsantan
 | Ability | Status |
@@ -590,27 +597,33 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Mounted | WIRED |
-| Special: Hop On! | NOT_WIRED |
+| Special: Hop On! | WIRED |
+
+### KX-Series Security Droid (Elite)
+| Ability | Status |
+|---------|--------|
+| Special: Shoulder Rush | WIRED |
+| Deference Protocol | WIRED |
 
 ### Lando Calrissian
 | Ability | Status |
 |---------|--------|
-| Resourceful | NOT_WIRED |
-| Gambit | NOT_WIRED |
-| Shrewd Scoundrel | NOT_WIRED |
+| Resourceful | WIRED |
+| Gambit | WIRED |
+| Shrewd Scoundrel | WIRED |
 
 ### Leia Organa
 | Ability | Status |
 |---------|--------|
 | Special: Battlefield Leadership | WIRED |
-| Military Efficiency | WIRED |
+| Military Efficiency (Surge) | NOT_WIRED |
 
 ### Loku Kanoloa
 | Ability | Status |
 |---------|--------|
-| Set Your Sights | NOT_WIRED |
+| Set Your Sights | WIRED |
 | Priority Target | WIRED |
-| Mon Cala Special Forces | NOT_WIRED |
+| Mon Cala Special Forces | WIRED |
 
 ### Loth-cat (Elite)
 | Ability | Status |
@@ -642,14 +655,14 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Surge: Critical Hit | WIRED_SURGE |
-| Camouflage | NOT_WIRED |
+| Camouflage | WIRED |
 
 ### Mara Jade
 | Ability | Status |
 |---------|--------|
-| Adaptive Skills | NOT_WIRED |
-| Fast Learner | NOT_WIRED |
-| Professional | NOT_WIRED |
+| Adaptive Skills | WIRED |
+| Fast Learner | WIRED |
+| Professional | PASSIVE_COMBAT |
 
 ### Maul
 | Ability | Status |
@@ -669,6 +682,12 @@ Generated: 2026-02-26
 |---------|--------|
 | Locked and Loaded | WIRED |
 | Return Fire | NOT_WIRED |
+
+### Moff Gideon
+| Ability | Status |
+|---------|--------|
+| I Know Everything | NOT_WIRED |
+| You Have Something I Want | WIRED |
 
 ### Murne Rin
 | Ability | Status |
@@ -694,16 +713,22 @@ Generated: 2026-02-26
 ### Obi-Wan Kenobi
 | Ability | Status |
 |---------|--------|
-| Alter Mind | NOT_WIRED |
-| Strike Me Down | NOT_WIRED |
+| Alter Mind | WIRED |
+| Strike Me Down | WIRED |
 | Into the Force | WIRED |
 
 ### Onar Koma
 | Ability | Status |
 |---------|--------|
 | Special: Rush | WIRED |
-| Get Down | NOT_WIRED |
-| Immune | NOT_WIRED |
+| Get Down | WIRED |
+| Immune | WIRED |
+
+### Paz Vizsla
+| Ability | Status |
+|---------|--------|
+| Heavy Repeater | NOT_WIRED |
+| Submit or Fight | NOT_WIRED |
 
 ### Probe Droid (Elite)
 | Ability | Status |
@@ -720,63 +745,63 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Special: Shock Grenade | WIRED |
-| Coordinated Hunt | NOT_WIRED |
+| Coordinated Hunt | WIRED |
 
 ### Purge Trooper (Elite)
 | Ability | Status |
 |---------|--------|
-| Imperial Loadout | NOT_WIRED |
+| Imperial Loadout | WIRED |
 | Special: On the Hunt | WIRED |
 
 ### R2-D2
 | Ability | Status |
 |---------|--------|
 | Special: Scomp Link | WIRED |
-| Special: Service | NOT_WIRED |
-| Lucky | NOT_WIRED |
+| Special: Service | WIRED |
+| Lucky | WIRED |
 
 ### Rancor
 | Ability | Status |
 |---------|--------|
 | Special: Crippling Blow | WIRED |
-| Trained | NOT_WIRED |
-| Voracious | NOT_WIRED |
+| Trained | WIRED |
+| Voracious | WIRED |
 
 ### Rebel Pathfinder (Elite)
 | Ability | Status |
 |---------|--------|
-| Infiltration | NOT_WIRED |
-| Light It Up | NOT_WIRED |
-| Distracting Fire | NOT_WIRED |
+| Infiltration | WIRED |
+| Light It Up | WIRED |
+| Distracting Fire | WIRED |
 
 ### Rebel Saboteur (Elite)
 | Ability | Status |
 |---------|--------|
-| Overload | NOT_WIRED |
+| Overload | WIRED |
 | Priority Target | WIRED |
 
 ### Rebel Saboteur (Regular)
 | Ability | Status |
 |---------|--------|
-| Overload | NOT_WIRED |
+| Overload | WIRED |
 
 ### Rebel Trooper (Elite)
 | Ability | Status |
 |---------|--------|
-| Aim | NOT_WIRED |
+| Aim | PASSIVE_DATA_ONLY |
 | Special: Get into Position | WIRED |
 
 ### Rebel Trooper (Regular)
 | Ability | Status |
 |---------|--------|
-| Aim | NOT_WIRED |
+| Aim | WIRED |
 
 ### Riot Trooper (Elite)
 | Ability | Status |
 |---------|--------|
 | Stun Batons | WIRED |
 | Shield | WIRED |
-| Professional | NOT_WIRED |
+| Professional | PASSIVE_COMBAT |
 
 ### Riot Trooper (Regular)
 | Ability | Status |
@@ -789,7 +814,7 @@ Generated: 2026-02-26
 |---------|--------|
 | Sentinel | WIRED |
 | Forward Vengeance | WIRED |
-| Professional | NOT_WIRED |
+| Professional | PASSIVE_COMBAT |
 
 ### Royal Guard (Regular)
 | Ability | Status |
@@ -813,26 +838,26 @@ Generated: 2026-02-26
 ### Saska Teft
 | Ability | Status |
 |---------|--------|
-| Shady Contacts | NOT_WIRED |
-| Unstable Devices | NOT_WIRED |
-| Power Converter | NOT_WIRED |
+| Shady Contacts | WIRED |
+| Unstable Devices | WIRED |
+| Power Converter | WIRED |
 
 ### Saw Gerrerra
 | Ability | Status |
 |---------|--------|
 | Brutal Tactics | WIRED |
-| Wanton Destruction | NOT_WIRED |
+| Wanton Destruction | WIRED |
 
 ### SC2-M Repulsor Tank
 | Ability | Status |
 |---------|--------|
 | Special: Focus Fire | INFORMATIONAL |
-| Defensible | NOT_WIRED |
+| Defensible | WIRED |
 
 ### Scout Trooper (Elite)
 | Ability | Status |
 |---------|--------|
-| Camouflage | NOT_WIRED |
+| Camouflage | WIRED |
 | Find Weakness | WIRED |
 | Exploit Weakness | WIRED |
 
@@ -860,7 +885,7 @@ Generated: 2026-02-26
 ### Shoretrooper (Elite)
 | Ability | Status |
 |---------|--------|
-| Squad Training | NOT_WIRED |
+| Squad Training | WIRED |
 
 ### Shyla Varad
 | Ability | Status |
@@ -872,8 +897,8 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Special: Disruptor Rifle | WIRED |
-| Spiked Boots | NOT_WIRED |
-| Immune | NOT_WIRED |
+| Spiked Boots | WIRED |
+| Immune | WIRED |
 
 ### Snowtrooper (Regular)
 | Ability | Status |
@@ -883,13 +908,13 @@ Generated: 2026-02-26
 ### Stormtrooper (Elite)
 | Ability | Status |
 |---------|--------|
-| Squad Training | NOT_WIRED |
+| Squad Training | WIRED |
 | Last Stand | WIRED |
 
 ### Stormtrooper (Regular)
 | Ability | Status |
 |---------|--------|
-| Squad Training | NOT_WIRED |
+| Squad Training | WIRED |
 
 ### Super Commando (Elite)
 | Ability | Status |
@@ -900,21 +925,28 @@ Generated: 2026-02-26
 ### Taron Malicos
 | Ability | Status |
 |---------|--------|
-| Fallen Master | NOT_WIRED |
+| Fallen Master | WIRED |
 | Madness | WIRED |
 | Special: Boulder Barrage | WIRED |
+
+### Tauntaun Rider
+| Ability | Status |
+|---------|--------|
+| Mounted | PASSIVE_DATA_ONLY |
+| Special: Headbutt | WIRED |
+| Useful Hide | NOT_WIRED |
 
 ### The Armorer
 | Ability | Status |
 |---------|--------|
 | Beskar Armor | WIRED |
 | This is the Way | WIRED |
-| Survival is Strength | NOT_WIRED |
+| Survival is Strength | WIRED |
 
 ### The Grand Inquisitor
 | Ability | Status |
 |---------|--------|
-| Precision | NOT_WIRED |
+| Precision | WIRED |
 | Special: Lightsaber Throw | WIRED |
 | Surge: Deadly Spin | WIRED_SURGE |
 
@@ -928,8 +960,8 @@ Generated: 2026-02-26
 ### Thrawn
 | Ability | Status |
 |---------|--------|
-| Long-Laid Plans | NOT_WIRED |
-| Strategize | NOT_WIRED |
+| Long-Laid Plans | WIRED |
+| Strategize | WIRED |
 
 ### Trandoshan Hunter (Elite)
 | Ability | Status |
@@ -947,8 +979,8 @@ Generated: 2026-02-26
 ### Tress Hacnua
 | Ability | Status |
 |---------|--------|
-| Krayt Dragon Fury | NOT_WIRED |
-| Fyrnock Style | NOT_WIRED |
+| Krayt Dragon Fury | WIRED |
+| Fyrnock Style | WIRED |
 | Leg Hydraulics | WIRED |
 
 ### Tusken Raider (Elite)
@@ -966,20 +998,20 @@ Generated: 2026-02-26
 |---------|--------|
 | Special: Spot Weld | INFORMATIONAL |
 | Special: Overclock | INFORMATIONAL |
-| Scrap Battalion | NOT_WIRED |
+| Scrap Battalion | WIRED |
 
 ### Ugnaught Tinkerer (Regular)
 | Ability | Status |
 |---------|--------|
 | Special: Spot Weld | INFORMATIONAL |
-| Scrap Battalion | NOT_WIRED |
+| Scrap Battalion | WIRED |
 
 ### Verena Talos
 | Ability | Status |
 |---------|--------|
 | Special: Close Quarters | WIRED |
 | Surge: Fighting Knife | WIRED_SURGE |
-| Improvised Cover | NOT_WIRED |
+| Improvised Cover | WIRED |
 
 ### Vinto Hreeda
 | Ability | Status |
@@ -1005,12 +1037,12 @@ Generated: 2026-02-26
 | Ability | Status |
 |---------|--------|
 | Special: Prowl | WIRED |
-| Raider | NOT_WIRED |
+| Raider | WIRED |
 
 ### Weequay Pirate (Regular)
 | Ability | Status |
 |---------|--------|
-| Raider | NOT_WIRED |
+| Raider | WIRED |
 
 ### Wing Guard (Elite)
 | Ability | Status |
@@ -1036,10 +1068,10 @@ Generated: 2026-02-26
 ### Yoda
 | Ability | Status |
 |---------|--------|
-| Calming Presence | NOT_WIRED |
-| Wisdom | NOT_WIRED |
+| Calming Presence | WIRED |
+| Wisdom | WIRED |
 | Special: Do or Do Not | WIRED |
-| Force Deflection | NOT_WIRED |
+| Force Deflection | WIRED |
 
 ### Zeb Orrelios
 | Ability | Status |
@@ -1052,26 +1084,27 @@ Generated: 2026-02-26
 |---------|--------|
 | Mystic Hunter | WIRED |
 | Surge: Stun Net | WIRED_SURGE |
-| Shared Calculations | NOT_WIRED |
+| Shared Calculations | WIRED |
 
 ---
 
 ## Summary
 
-**Total abilities:** 383
+**Total abilities:** 395
 
 | Status | Count | % |
 |--------|-------|---|
-| WIRED | 220 | 57% |
-| NOT_WIRED | 127 | 33% |
+| WIRED | 340 | 86% |
 | WIRED_SURGE | 16 | 4% |
-| INFORMATIONAL | 10 | 3% |
+| NOT_WIRED | 12 | 3% |
+| INFORMATIONAL | 9 | 2% |
+| PASSIVE_DATA_ONLY | 5 | 1% |
 | N/A_HONOR | 5 | 1% |
+| PASSIVE_COMBAT | 4 | 1% |
 | N/A | 4 | 1% |
-| PASSIVE_COMBAT | 1 | 0% |
 
-**Automated:** 237 (62%)
-**Not wired:** 127 (33%)
+**Automated:** 360 (91%)
+**Not wired:** 12 (3%)
 
 ---
 
@@ -1080,131 +1113,14 @@ Generated: 2026-02-26
 | Figure | Ability | Description |
 |--------|---------|-------------|
 | 4-LOM | Programming Override | At the start of each round, choose one TRAIT. You gain that TRAIT until the end of the round. |
-| Agent Blaise | Adapt | The first time your opponent plays a Command card each round, choose 1 SPY or TROOPER. That figure becomes Hidden |
-| Agent Kallus | Hunt Dissent | When your opponent plays a Command card, you may distribute 2 Hit Tokens among friendly figures within 1 space. Limit once per round. |
 | Agent Kallus | Fulcrum | At the start of your activation, you may have each player draw 1 Command card. |
 | Agent Kallus | Bo-Rifle | Before you declare an attack, you may treat your attack type as Melee. If you do, replace 1 blue die with 1 red die. |
-| Ahsoka Tano | Twin Sabers | While attacking, you may reroll all attack die or force the defender to reroll all defense die. |
-| Alliance Smuggler (Elite) | Slippery | While defending, apply -2 Accuracy to the attack results. After an attack targeting you resolves, gain 2 movement points. |
-| Alliance Smuggler (Regular) | Slippery | While defending, apply -2 Accuracy to the attack results. After an attack targeting you resolves, gain 2 movement points. |
-| Asajj Ventress | Nimble | After an attack targeting you is resolved, gain 2 movement points for each of your Block results. |
-| Asajj Ventress | Consider It My Payment | At the start of your activation, your opponent reveals a Command card from his hand. During this round, if the next Command card played by that player |
-| AT-ST | Targeting Computer | While attacking, you may reroll 1 attack die. |
-| AT-ST | Awkward | You cannot attack adjacent figures. |
-| Bib Fortuna | Dirty Dealing | You cannot be included in the same army as any REBEL Deployment cards. |
-| Bib Fortuna | Illicit Arms | While a friendly figure is attacking, if your army's affiliation is SCUM, you may discard 1 Command card from your hand to apply +1 Hit to the attack  |
-| Bodhi Rook | Air Support | When a friendly figure spends a Power Token while attacking, apply +2 Accuracy to the attack results. |
-| C-3P0 | Cower | While defending, while adjacent to a friendly figure, you may reroll 1 defense die. |
-| C-3P0 | Non-Combatant | You cannot attack. |
-| Cad Bane | I Make the Rules Now | At the start of another figure's activation, a friendly HUNTER within 4 spaces may gain 1 movement point. Limit once per round. |
-| Cal Kestis | Force Slow | At the start of the round, choose a hostile figure within 3 spaces. That figure's group cannot be activated during its owner's next opportunity to res |
-| Captain Terro | Special: Flamethrower | Choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain, then becomes Weakened. |
 | Captain Terro | Professional | While attacking, you may reroll 1 attack die. |
-| Cassian Andor | Strike Team | After deployment, you and an adjacent friendly figure gain 2 movement points. Then, up to 4 friendly figures outside of your deployment zone each gain |
-| Cassian Andor | It Will be Alright | Once during your activation, you may choose another friendly figure within 2 spaces that can be defeated. That figure is defeated, then perform a move |
-| Chirrut Imwe | Devout | You may use Rebel FORCE USER Command cards. |
-| Chirrut Imwe | The Force is With Me | When a Ranged attack targeting you is declared, choose an adjacent hostile figure. If you do, apply -1 Hit to the attack results and the chosen figure |
-| Clawdite Shapeshifter (Elite) | Shape | When you are deployed, you may gain 1 Form card of your choice from the supply. |
-| Clawdite Shapeshifter (Elite) | Shift | At the start of each round, you may switch your Form card with 1 other Form card of your choice. |
-| Clawdite Shapeshifter (Regular) | Shape | When you are deployed, you may gain 1 Form card of your choice from the supply. |
-| Clawdite Shapeshifter (Regular) | Shift | At the start of each round, you may switch your Form card with 1 other Form card of your choice. |
-| Dark Trooper Mk III | Advanced Targeting Computer | When you declare an attack, you become Focused. During this attack, you may reroll 1 attack die. If the rerolled die has fewer Hit symbols than before |
-| Dark Trooper Mk III | Durasteel Fist | Once during your activation, you may choose 1 adjacent figure or object and roll 1 green die. It suffers Damage equal to the Hit results. Then, if you |
-| Davith Elso | Cut and Run | When you exit a space containing a hostile figure, that figure suffers 1 Damage. Limit once per figure per round. |
-| Death Trooper (Elite) | Field Tactics | After your activation, you may immediately activate a friendly TROOPER or LEADER group with cost 6 or less. That group loses "Field Tactics" this roun |
-| Death Trooper (Regular) | Field Tactics | After your activation, you may immediately activate a friendly TROOPER or LEADER group with cost 6 or less. That group loses "Field Tactics" this roun |
-| Director Krennic | Unhinged Director | When a friendly TROOPER or GUARDIAN within 2 spaces spends a Hit Token or Surge Token while declaring an attack, it may suffer 1 Strain to apply +2 of |
-| Doctor Aphra | Dubious Counterparts | If your army's affiliation is Scum, you may include "0-0-0" and "BT-1" in your army together. After a friendly DROID resolves "Invasive Procedure" or  |
-| Doctor Aphra | Excavation | At the start of each round, you may choose 1 Command card in any discard pile that costs 1 or less, except "Take Initiative". Once during this round,  |
-| E-Web Engineer (Elite) | Tripod | During your activation, you cannot voluntarily exit your space if you attack, and you cannot attack if you exit your space. |
-| E-Web Engineer (Regular) | Tripod | During your activation, you cannot voluntarily exit your space if you attack, and you cannot attack if you exit your space. |
-| Ewok Warrior (Elite) | Special: Sling Barrage | Perform a Ranged attack using your printed attack pool. During this attack, you may reroll up to 1 attack die for each other figure in your group with |
-| Ezra Bridger | Brush | At the start of each round, move up to 4 spaces. |
-| Gar Saxon | Airborne Commander | Friendly Mobile figures within 4 spaces can use your surge abilities. |
-| Gar Saxon | Personal Combat Shield | Whenever you spend a Block while defending, apply +1 Evade to the defense results. |
-| General Sorin | Advanced Firepower | Adjacent friendly DROIDS and VEHICLES can use your surge abilities. |
-| General Weiss | General's Orders | At the start of your activation choose up to 2 other friendly figures on the map. Those figures may each interrupt to perform a move. |
-| Greedo | Slow on the Draw | When you declare an attack, the defender may interrupt to perform an attack targeting you. |
-| Greedo | Parting Shot | When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated. |
-| Heavy Stormtrooper (Elite) | Modular | You may include an attachment card in your army and decrease its cost by 1, to a minimum of 0. During setup, you must attach that card to this group. |
-| Heavy Stormtrooper (Elite) | Spray Fire | While attacking, you may apply -3 Accuracy and +1 Surge to the attack results. |
-| Hera Syndulla | Call the Shots | While another friendly figure within 3 spaces is attacking, you may apply +2 Accuracy, +1 Hit, or +1 Surge to the attack results. Limit once per round |
-| Hired Gun (Elite) | Parting Shot | When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated. |
-| Hired Gun (Regular) | Parting Shot | When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated. |
-| HK Assassin Droid (Elite) | Versatile Weaponry | While attacking, you may force the defender to reroll 1 defense die. |
-| Hondo Ohnaka | Negotiate | When you declare an attack, apply +2 Damage to the attack results unless the defender pays you 2 VPs. |
-| Hondo Ohnaka | What's Yours is Mine | At the end of a round, if you are in an opponent's deployment zone, that opponent loses 2 VPs and you gain 2 VPs. Limit once per mission. |
-| Imperial Officer (Regular) | Cower | While defending, while adjacent to a friendly figure, you may reroll 1 defense die. |
-| ISB Infiltrator (Elite) | Comms Jammer | Your opponent cannot play Command cards during your activation. |
-| Jawa Scavenger (Elite) | Take Cover | While defending, you may apply +1 Block and -1 Evade to the defense results. |
-| Jawa Scavenger (Elite) | Scavenged Stock | If your army's affiliation is Scum, you may include up to 3 DROID groups from any other affiliations in your army. |
-| Jawa Scavenger (Regular) | Take Cover | While defending, you may apply +1 Block and -1 Evade to the defense results. |
-| Jet Trooper (Elite) | Agile | While defending, you may convert 1 Block to 1 Evade |
-| Jet Trooper (Regular) | Agile | While defending, you may convert 1 Block to 1 Evade. |
-| Jyn Erso | Trust Goes Both Ways | At the start or end of your activation, choose an adjacent friendly figure. If you do, you and that figure Recover 1 Damage and gain 1 Surge Token. Li |
-| K-2S0 | Vague and Unconvincing | While defending, your player and your opponent cannot spend power tokens or play Command cards. |
 | K-2S0 | Cassian Said I Had To | Once per round, when a friendly LEADER enters an adjacent space, gain up to 1 Hit Token. |
-| Kanan Jarrus | Force Vision | At the start of you activation, your opponent chooses one of their ready groups and must activate it next if possible. |
-| Ko-Tun Feralo | Arms Distribution | At the beginning of your activation, distribute 2 Power Tokens among up to 2 friendly figures within 3 spaces. |
-| Ko-Tun Feralo | Dead Precise | When a friendly figure within 3 spaces spends a Power Token while attacking, apply Pierce 1 and -1 Evade to the attack results. |
-| Ko-Tun Feralo | Squad Cohesion | When a friendly REBEL figure within 3 spaces declares an attack, it may spend a tower token from a friendly REBEL figure within 3 spaces of itself for |
-| Kuiil | Special: Hop On! | Choose a SMALL friendly figure with a figure cost of 8 or less. When you enter that figure's space during this activation, you may interrupt to push t |
-| Lando Calrissian | Resourceful | While attacking or defending, you may reroll 1 of your attack or defense dice. |
-| Lando Calrissian | Gambit | Before you reroll a die, you may replace it with another die of the same type. After rolling, the new die is considered rerolled. |
-| Lando Calrissian | Shrewd Scoundrel | While attacking or defending, before you reroll a die with "Resourceful", you may guess aloud a number from 0-2. After rerolls, if the number of Hits  |
-| Loku Kanoloa | Set Your Sights | At the start of the mission, place a Recon token on a unique hostile figure. While a friendly figure is attacking a figure with a Recon token, apply P |
-| Loku Kanoloa | Mon Cala Special Forces | When you declare an attack targeting a figure with a Recon token, you become Focused. |
-| Mak Eshka'rey | Camouflage | Hostile figures 4 or more spaces away cannot draw line of sight to you. You do not block line of sight for those figures. |
-| Mara Jade | Adaptive Skills | Your affiliation matches your army's affiliation. You gain 1 of the following traits based on your army's affiliation: 
-- IMPERIAL: HUNTER 
-- SCUM: SM |
-| Mara Jade | Fast Learner | Once per round, you may play a Command card whose restriction matches the name of another Deployment card in your army, except "Arcing Shot". |
-| Mara Jade | Professional | While attacking, you may reroll 1 attack die. |
+| Leia Organa | Military Efficiency (Surge) | After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck. |
 | Migs Mayfeld | Return Fire | After an attack targeting you is resolved, you can interrupt to perform an attack targeting that attacker. Limit once per round. |
-| Obi-Wan Kenobi | Alter Mind | Hostile figures with a figure cost of 9 or less within 3 spaces of you cannot interact and are not counted for the purposes of control. |
-| Obi-Wan Kenobi | Strike Me Down | When an attack targeting you is declared, you may reduce your figure cost by 3. If you do, you are then defeated. |
-| Onar Koma | Get Down | While a small figure within 2 spaces is defending, you may apply +1 Block or +1 Evade to the defense results. Limit once per round. |
-| Onar Koma | Immune | You cannot gain HARMFUL conditions. |
+| Moff Gideon | I Know Everything | During setup, before drawing Command cards, search your opponent's Command deck and reveal 2 cards. Your opponent chooses 1 to shuffle back into the d |
+| Paz Vizsla | Heavy Repeater | While performing a Ranged attack, you may suffer 1 Strain to apply +1 Hit, Blast 2, or +3 Accuracy to the attack results. |
+| Paz Vizsla | Submit or Fight | When you would suffer Damage from Strain, you may return any number of Command cards from your discard pile to the game box to prevent that much Damag |
 | Probe Droid (Regular) | Self-Destruct | At the end of a round, you may roll 1 red die. Each adjacent figure and object suffers Damage equal to the Hit results. Then, you are defeated. |
-| Purge Commander (Elite) | Coordinated Hunt | While you or a friendly HUNTER in your line of sight is attacking, it may reroll 1 attack die. Limit one "Coordinated Hunt" per attack. |
-| Purge Trooper (Elite) | Imperial Loadout | When you are deployed, gain 1 Loadout card from the supply. |
-| R2-D2 | Special: Service | You or an adjacent friendly DROID or VEHICLE recovers 1 Damage. |
-| R2-D2 | Lucky | While defending, if you roll a blank result, add +1 Dodge to the defense results. |
-| Rancor | Trained | While attacking, you may suffer 1 Strain to reroll 1 attack die. |
-| Rancor | Voracious | At the start of another figure's activation, you may defeat a friendly non-companion figure within 2 spaces to recover 2 Damage and ready your Deploym |
-| Rebel Pathfinder (Elite) | Infiltration | After deployment, you may move up to 6 spaces. |
-| Rebel Pathfinder (Elite) | Light It Up | While attacking, if the target of your attack did not have line of sight to you at the start of your activation, you may reroll up to 1 attack die. |
-| Rebel Pathfinder (Elite) | Distracting Fire | After resolving an attack, if it did not miss, you may force the defender's group to activate next if able. Limit once per group per round. |
-| Rebel Saboteur (Elite) | Overload | You can trigger the same Surge ability up to twice per attack. |
-| Rebel Saboteur (Regular) | Overload | You can trigger the same Surge ability up to twice per attack. |
-| Rebel Trooper (Elite) | Aim | If you have not exited your space during this activation, apply +1 Hit and +2 Accuracy to your attack results. |
-| Rebel Trooper (Regular) | Aim | If you have not exited your space during this activation, apply +1 Hit and +2 Accuracy to your attack results. |
-| Riot Trooper (Elite) | Professional | While attacking, you may reroll 1 attack die. |
-| Royal Guard (Elite) | Professional | While attacking, you may reroll one attack die. |
-| Saska Teft | Shady Contacts | You may include up to 1 non-upgrade SCUM Deployment card in your army. |
-| Saska Teft | Unstable Devices | Once during your activation, a friendly figure in your line of sight may gain 1 Device token. |
-| Saska Teft | Power Converter | Once per round, while a friendly figure with a Device token is attacking, it may reroll 1 attack die. Before rerolling, you may replace that die with  |
-| Saw Gerrerra | Wanton Destruction | After a friendly resolves an attack, you may discard 1 Command card from your hand to choose up to 2 figures other than the defender within 2 spaces o |
-| SC2-M Repulsor Tank | Defensible | While defending, you may apply either +1 Block or +1 Evade to your defense results. |
-| Scout Trooper (Elite) | Camouflage | Hostile figures 4 or more spaces away from you cannot draw line of sight to you. You do not block line of sight for those figures. |
-| Shoretrooper (Elite) | Squad Training | While attacking, while adjacent to another friendly TROOPER, you may reroll 1 attack die. |
-| Snowtrooper (Elite) | Spiked Boots | You cannot be pushed out of your space except by MASSIVE figures. |
-| Snowtrooper (Elite) | Immune | You cannot gain HARMFUL conditions. |
-| Stormtrooper (Elite) | Squad Training | While adjacent to another friendly TROOPER, you may reroll 1 attack die. |
-| Stormtrooper (Regular) | Squad Training | While attacking, while adjacent to another friendly TROOPER, you may reroll 1 attack die. |
-| Taron Malicos | Fallen Master | Friendly non-companion FORCE USER figures may ignore the IMPERIAL restriction when using Command cards. |
-| The Armorer | Survival is Strength | While a friendly figure within 3 spaces is defending, if it spent a Block symbol during this attack, it may reroll 1 attack die. |
-| The Grand Inquisitor | Precision | While attacking or defending against an adjacent figure, you may choose 1 die. The player that rolled that die must reroll it. |
-| Thrawn | Long-Laid Plans | At the start of your activation, distribute among friendly figures different Power tokens equal to the current round number. |
-| Thrawn | Strategize | At the start of your activation, look at the top Command card of each player's deck. You may discard one of those cards. |
-| Tress Hacnua | Krayt Dragon Fury | While attacking, X equals the number of Surge rolled. |
-| Tress Hacnua | Fyrnock Style | While attacking or defending, choose 1 attack die. The player that rolled that die must reroll that die. |
-| Ugnaught Tinkerer (Elite) | Scrap Battalion | The Junk Droid readies at the start of your activation. It activates as though it was part of your group and may use your surge abilities. |
-| Ugnaught Tinkerer (Regular) | Scrap Battalion | The Junk Droid readies at the start of your activation. It activates as though it was part of your group and may use your surge abilities. |
-| Verena Talos | Improvised Cover | While defending, if you are adjacent to an object or non-friendly figure other than the attacker, apply +1 Block to the defense results. |
-| Weequay Pirate (Elite) | Raider | While attacking, you may choose 1 die. The player that rolled that die must reroll that die. |
-| Weequay Pirate (Regular) | Raider | While attacking, you may choose 1 die. The player that rolled that die must reroll that die. |
-| Yoda | Calming Presence | At the start of a friendly REBEL figure's activation, that figure may remove one HARMFUL condition and suffer 1 Strain. Limit once per round. |
-| Yoda | Wisdom | At the start of your activation, you may draw 1 Command card. If you do, place 1 card from your hand on the bottom of your deck. |
-| Yoda | Force Deflection | After an attack targeting you or an adjacent friendly REBEL figure resolves, you may have the attacking figure suffer Damage equal to the number of at |
-| Zuckuss | Shared Calculations | While attacking, if a friendly DROID within 3 spaces has line of sight to the target space, you may force the defender to reroll 1 defense die. |
+| Tauntaun Rider | Useful Hide | When this figure is defeated, distribute up to 2 Evade Tokens among friendly figures. |
