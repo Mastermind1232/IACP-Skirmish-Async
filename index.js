@@ -5971,7 +5971,7 @@ client.on('interactionCreate', async (interaction) => {
       // Data loader (imported)
       getDcEffects, getDiceData, getCcEffect, isCcAttachment, isDcAttachment,
       isDcUnique, getMapSpaces, getMapRegistry, getMapTokensData,
-      getTournamentRotation, getMissionRules, resolveDcName, isFigurelessDc,
+      getTournamentRotation, getMissionCardsData, getMissionRules, resolveDcName, isFigurelessDc,
 
       // Discord UI (imported)
       logGameAction, getInitiativePlayerZoneLabel,
