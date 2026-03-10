@@ -184,6 +184,7 @@ const BUTTON_PREFIXES = [
   'lobby_join_',
   'lobby_start_',
   'dc_rename_',
+  'ping_active_',
   'create_game',
   'join_game',
 ];

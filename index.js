@@ -1854,6 +1854,11 @@ async function runDraftRandom(game, client, options = {}) {
         console.error('runDraftRandom: failed to post map to Map Updates:', err);
       }
     }
+    // Send persistent Ping Active Player button
+    const _pingRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`ping_active_${game.gameId}`).setLabel('Ping Active Player').setStyle(ButtonStyle.Secondary).setEmoji('🔔')
+    );
+    await boardChannel.send({ content: 'Use this button to nudge the active player (5-minute cooldown).', components: [_pingRow] }).catch(discordCatch);
   }
 
   // Hand threads live inside each player's play area
@@ -5626,6 +5631,94 @@ client.on('interactionCreate', async (interaction) => {
     }
     if (buttonKey === 'request_reject_') {
       await handleRequestReject(interaction, { logGameErrorToBotLogs });
+      return;
+    }
+    if (buttonKey === 'ping_active_') {
+      await interaction.deferUpdate().catch(discordCatch);
+      const gameId = interaction.customId.replace('ping_active_', '');
+      const game = getGame(gameId);
+      if (!game || game.ended) {
+        await interaction.followUp({ content: 'Game not found or already ended.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      // 5-minute cooldown
+      const PING_COOLDOWN_MS = 5 * 60 * 1000;
+      const now = Date.now();
+      if (game._lastPingActive && now - game._lastPingActive < PING_COOLDOWN_MS) {
+        const remaining = Math.ceil((PING_COOLDOWN_MS - (now - game._lastPingActive)) / 1000);
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        await interaction.followUp({ content: `Ping on cooldown. Try again in ${mins}m ${secs}s.`, ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      game._lastPingActive = now;
+
+      // Determine active player
+      let activePlayerId = null;
+      let contextChannelId = null;
+      let hint = '';
+
+      // Check if either player hasn't submitted their squad yet
+      const p1HasSquad = !!(game.p1DcList?.length);
+      const p2HasSquad = !!(game.p2DcList?.length);
+      if (!game.mapSelected) {
+        // Map selection phase — both players can act
+        activePlayerId = game.currentActivationTurnPlayerId || game.initiativePlayerId || game.player1Id;
+        contextChannelId = game.generalId;
+        hint = 'Map selection is pending.';
+      } else if (!p1HasSquad && !p2HasSquad) {
+        // Neither has submitted — ping both
+        const generalCh = await client.channels.fetch(game.generalId).catch(() => null);
+        if (generalCh) {
+          await generalCh.send({ content: `🔔 **Nudge** — <@${game.player1Id}> <@${game.player2Id}> it's time to submit your squads!`, allowedMentions: { users: [game.player1Id, game.player2Id] } }).catch(discordCatch);
+        }
+        await interaction.followUp({ content: 'Pinged both players to submit squads.', ephemeral: true }).catch(discordCatch);
+        return;
+      } else if (!p1HasSquad) {
+        activePlayerId = game.player1Id;
+        contextChannelId = game.p1HandId;
+        hint = 'Squad submission is pending.';
+      } else if (!p2HasSquad) {
+        activePlayerId = game.player2Id;
+        contextChannelId = game.p2HandId;
+        hint = 'Squad submission is pending.';
+      } else if (game.currentActivationTurnPlayerId) {
+        activePlayerId = game.currentActivationTurnPlayerId;
+        const isP1 = activePlayerId === game.player1Id;
+        contextChannelId = isP1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+        // Check if there's an active DC thread to ping in as well
+        const activeMsgIds = isP1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+        for (const mid of activeMsgIds) {
+          const data = game.dcActionsData?.[mid];
+          if (data?.threadId && data.remaining != null) {
+            // Found an active DC thread — ping there too
+            try {
+              const thread = await client.channels.fetch(data.threadId);
+              if (thread) await thread.send({ content: `🔔 <@${activePlayerId}> it's your turn!`, allowedMentions: { users: [activePlayerId] } }).catch(discordCatch);
+            } catch (_) {}
+            break;
+          }
+        }
+        hint = 'It\'s their activation turn.';
+      } else {
+        activePlayerId = game.player1Id;
+        contextChannelId = game.generalId;
+        hint = '';
+      }
+
+      // Ping in game log
+      const generalCh = await client.channels.fetch(game.generalId).catch(() => null);
+      if (generalCh) {
+        await generalCh.send({ content: `🔔 **Nudge** — <@${activePlayerId}> ${hint}`, allowedMentions: { users: [activePlayerId] } }).catch(discordCatch);
+      }
+      // Ping in contextual channel (if different from game log)
+      if (contextChannelId && contextChannelId !== game.generalId) {
+        try {
+          const ctxCh = await client.channels.fetch(contextChannelId);
+          if (ctxCh) await ctxCh.send({ content: `🔔 <@${activePlayerId}> it's your turn!`, allowedMentions: { users: [activePlayerId] } }).catch(discordCatch);
+        } catch (_) {}
+      }
+      await interaction.followUp({ content: `Pinged <@${activePlayerId}>.`, ephemeral: true }).catch(discordCatch);
       return;
     }
   }
