@@ -5966,7 +5966,7 @@ client.on('interactionCreate', async (interaction) => {
       parseSurgeEffect, getAbility, resolveSurgeAbility, getSurgeAbilityLabel,
       resolveAbility, getPlayableCcFromHand, isCcPlayableNow,
       isCcPlayLegalByRestriction, filterMapSpacesByBounds,
-      reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp,
+      reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, removeFigurePosition,
 
       // Data loader (imported)
       getDcEffects, getDiceData, getCcEffect, isCcAttachment, isDcAttachment,

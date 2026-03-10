@@ -359,7 +359,7 @@ export async function handleMapTypeChoice(interaction, ctx) {
     const mapDef = getMapRegistry?.().find((m) => m.id === mapId);
     const missionData = getMissionCardsData?.()[mapId]?.[variant || 'a'];
     if (!mapDef || !missionData) {
-      console.error(`[Competitive] Invalid mission: missionId=${missionId} mapId=${mapId} variant=${variant} mapDef=${!!mapDef} missionData=${!!missionData} registryLen=${getMapRegistry?.()?.length} mcKeys=${Object.keys(getMissionCardsData?.() || {}).join(',')}`);
+      console.error(`[Competitive] Invalid mission: missionId=${missionId} mapId=${mapId} variant=${variant} mapDef=${!!mapDef} missionData=${!!missionData}`);
       await interaction.followUp({ content: `Invalid mission in rotation (${mapId}:${variant || 'a'}). Use **Random**.`, ephemeral: true }).catch(discordCatch);
       return;
     }
