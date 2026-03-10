@@ -46,7 +46,7 @@ export async function createPlayAreaChannels(guild, gameCategory, prefix, player
   const p1Name = await getPlayerChannelName(guild, player1Id);
   const p2Name = await getPlayerChannelName(guild, player2Id);
   const playAreaPerms = [
-    { id: guild.roles.everyone.id, deny: PermissionFlagsBits.ViewChannel },
+    { id: guild.roles.everyone.id, deny: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages },
     { id: player1Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages },
     { id: player2Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessagesInThreads, deny: PermissionFlagsBits.SendMessages },
     { id: guild.client.user.id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.CreatePublicThreads | PermissionFlagsBits.CreatePrivateThreads | PermissionFlagsBits.ManageThreads | PermissionFlagsBits.SendMessagesInThreads },
