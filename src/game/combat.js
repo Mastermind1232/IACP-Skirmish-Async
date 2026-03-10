@@ -90,6 +90,7 @@ export const SURGE_LABELS = {
   'deadly': 'Deadly (-1 Dodge)',
   'gain 1': '+1 VP',
   'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1',
+  'evade token': 'Gain Evade Token',
 };
 
 /** Get attacker's surge abilities from dc-effects + combat.bonusSurgeAbilities (CCs like Spinning Kick).
@@ -135,9 +136,9 @@ export function parseSurgeEffect(key) {
   if (k === 'hit token 2') { out.surgeGrantHitToken = 2; return out; }
   if (k === 'block token') { out.surgeGrantBlockToken = 1; return out; }
   if (k === 'power token') { out.surgeGrantPowerToken = 1; return out; }
-  // Attacker gains an evade (for own next defense — honour system)
+  // Attacker gains an evade (for own next defense)
   if (k === 'evade') { out.surgeGrantEvade = 1; return out; }
-  // Attacker gains block on own next defense (honour system)
+  // Attacker gains block on own next defense 
   if (k === 'block 1') { out.surgeAttackerBlock = 1; return out; }
   // Spend 1 surge, gain 1 surge back (net zero, allows chaining into other abilities)
   if (k === 'surge 1') { out.surgeGrantExtraSurge = 1; return out; }

@@ -254,7 +254,7 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
         }
       }
       if (grantPowerToken) {
-        await logGameAction(game, client, `**Fluctuations:** Figures on fluctuation spaces received power tokens (Yellow→Surge, Blue→Evade, Green→Block, Red→Hit). _(Reminder: each player may now swap 1 fluctuation — honor system)_`, { phase: 'ROUND', icon: 'round' });
+        await logGameAction(game, client, `**Fluctuations:** Figures on fluctuation spaces received power tokens (Yellow→Surge, Blue→Evade, Green→Block, Red→Hit). _(Reminder: each player may now swap 1 fluctuation.)_`, { phase: 'ROUND', icon: 'round' });
       }
     }
   }
@@ -475,8 +475,8 @@ export function runNpcKryknaActivation(game, mapId, ctx = {}) {
   const claimed1 = game.claimedKrykna?.[1] || 0;
   const claimed2 = game.claimedKrykna?.[2] || 0;
   if (claimed1 > 0 || claimed2 > 0) {
-    if (claimed1 > 0) logs.push(`Player 1 has ${claimed1} claimed Krykna — may deploy in opponent's deployment zone (honor system).`);
-    if (claimed2 > 0) logs.push(`Player 2 has ${claimed2} claimed Krykna — may deploy in opponent's deployment zone (honor system).`);
+    if (claimed1 > 0) logs.push(`Player 1 has ${claimed1} claimed Krykna — may deploy in opponent's deployment zone.`);
+    if (claimed2 > 0) logs.push(`Player 2 has ${claimed2} claimed Krykna — may deploy in opponent's deployment zone.`);
   }
 
   return { logs, damageEvents };

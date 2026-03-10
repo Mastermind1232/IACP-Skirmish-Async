@@ -109,6 +109,7 @@ const CONTEXT_GROUPS = {
     // Plus combatReactions-specific deps
     'canActAsPlayer', 'sendRerollUI', 'proceedAfterRerolls', 'sendReadyToResolveRolls',
     'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
+    'removeFigurePosition',
   ],
 
   postCombat: [
@@ -249,6 +250,7 @@ const CONTEXT_GROUPS = {
     'updateDcActionsMessage', 'buildDcEmbedAndFiles', 'getConditionsForDcMessage',
     'getDcPlayAreaComponents', 'DC_ACTIONS_PER_ACTIVATION',
     'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
+    'updateHandChannelMessages',
   ],
 
   mapEvents: [

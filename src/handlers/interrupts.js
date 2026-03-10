@@ -1,10 +1,12 @@
 /**
  * Interrupt handlers: still_faster, squad_swarm, overdrive, self_destruct_probe,
- * self_destruct_protocol, last_resort, scavenged_walker, on_diplomatic, bel_reorder
+ * self_destruct_protocol, last_resort, scavenged_walker, on_diplomatic, bel_reorder,
+ * ab_blade_pick, sf_mp_pick, force_slow_pick, excavation_pick
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
-import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum } from '../game/player-helpers.js';
-import { reduceHp, awardObjectiveVp } from '../game/index.js';
+import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
+import { reduceHp, awardObjectiveVp, awardKillVp, dcNameFromFigureKey } from '../game/index.js';
+import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 
@@ -461,5 +463,125 @@ export async function handleBelReorder(interaction, ctx) {
   _belGame[_belData.deckKey] = [..._belNewOrder, ..._belDeck.slice(_belData.cards.length)];
   _belGame.pendingBELReorder = null;
   await logGameAction(_belGame, client, `**Behind Enemy Lines** — Opponent's deck top 3 reordered to: ${_belNewOrder.map(c => `**${c}**`).join(', ')}.`, { phase: 'ROUND', icon: 'card' });
+  saveGames(); return;
+}
+
+// ── 10. Assassin's Blade pick ──────────────────────────────────────────────
+// NEW PREFIX: ab_blade_pick_ — add to router.js
+export async function handleAssassinsBladePickTarget(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(() => {});
+  // ab_blade_pick_{gameId}_{figureKey}
+  const suffix = interaction.customId.replace('ab_blade_pick_', '');
+  const parts = suffix.split('_');
+  const gameId = parts[0];
+  const figureKey = parts.slice(1).join('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingAssassinsBlade;
+  if (!pending) { await interaction.followUp({ content: 'No pending Assassin\'s Blade.', ephemeral: true }).catch(() => {}); return; }
+  const { hits, rollStr, defenderPlayerNum, attackerPlayerNum } = pending;
+  delete game.pendingAssassinsBlade;
+  const dcName = dcNameFromFigureKey(figureKey);
+  // Find the DC message for this figure and apply damage
+  for (const [msgId, meta] of dcMessageMeta) {
+    if (meta.gameId !== gameId || meta.playerNum !== defenderPlayerNum || meta.dcName !== dcName) continue;
+    const figIdx = parseInt(figureKey.split('-').pop(), 10) || 0;
+    reduceHp(dcHealthState, game, msgId, figIdx, hits, defenderPlayerNum);
+    break;
+  }
+  await interaction.message.edit({ content: `🗡️ **Assassin's Blade** — Rolled 1 red die: **${rollStr}**. **${dcName}** suffers **${hits} Damage**.`, components: [] }).catch(() => {});
+  await logGameAction(game, client, `🗡️ **Assassin's Blade** — **${dcName}** suffers **${hits} Damage**.`, { phase: 'ROUND', icon: 'attack' });
+  saveGames(); return;
+}
+
+// ── 11. Suppressive Fire MP pick ───────────────────────────────────────────
+// NEW PREFIX: sf_mp_pick_ — add to router.js
+export async function handleSuppressiveFireMpPick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(() => {});
+  // sf_mp_pick_{gameId}_{figureKey}
+  const suffix = interaction.customId.replace('sf_mp_pick_', '');
+  const parts = suffix.split('_');
+  const gameId = parts[0];
+  const figureKey = parts.slice(1).join('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingSuppressiveFireMp;
+  if (!pending) { await interaction.followUp({ content: 'No pending Suppressive Fire MP.', ephemeral: true }).catch(() => {}); return; }
+  const { attackerPlayerNum } = pending;
+  delete game.pendingSuppressiveFireMp;
+  if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the attacker may choose.')) return;
+  const dcName = dcNameFromFigureKey(figureKey);
+  // Find the msgId for this figure
+  let targetMsgId = null;
+  for (const [msgId, meta] of dcMessageMeta) {
+    if (meta.gameId !== gameId || meta.playerNum !== attackerPlayerNum || meta.dcName !== dcName) continue;
+    targetMsgId = msgId;
+    break;
+  }
+  if (!targetMsgId) { await interaction.followUp({ content: 'Could not find DC for this figure.', ephemeral: true }).catch(() => {}); return; }
+  game.movementBank = game.movementBank || {};
+  if (!game.movementBank[targetMsgId]) {
+    game.movementBank[targetMsgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: dcName };
+  } else {
+    game.movementBank[targetMsgId].total += 2;
+    game.movementBank[targetMsgId].remaining += 2;
+  }
+  await interaction.message.edit({ content: `**Suppressive Fire** — **${dcName}** gains **2 MP**.`, components: [] }).catch(() => {});
+  await logGameAction(game, client, `**Suppressive Fire** — **${dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
+  saveGames(); return;
+}
+
+// ── 12. Force Slow pick ────────────────────────────────────────────────────
+// NEW PREFIX: force_slow_pick_ — add to router.js
+export async function handleForceSlowPick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(() => {});
+  // force_slow_pick_{gameId}_{playerNum}_{figureKey}
+  const suffix = interaction.customId.replace('force_slow_pick_', '');
+  const parts = suffix.split('_');
+  const gameId = parts[0];
+  const ownerPlayerNum = parseInt(parts[1], 10);
+  const figureKey = parts.slice(2).join('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, ownerPlayerNum, canActAsPlayer, 'Only the DC owner may choose.')) return;
+  game.forceSlowSkipActivation = game.forceSlowSkipActivation || {};
+  game.forceSlowSkipActivation[figureKey] = true;
+  const dcName = dcNameFromFigureKey(figureKey);
+  await interaction.message.edit({ content: `🐌 **Force Slow** — **${dcName}** will skip its next activation.`, components: [] }).catch(() => {});
+  await logGameAction(game, client, `🐌 **Force Slow** — **${dcName}** will skip its next activation.`, { phase: 'ROUND', icon: 'round' });
+  saveGames(); return;
+}
+
+// ── 13. Excavation pick ────────────────────────────────────────────────────
+// NEW PREFIX: excavation_pick_ — add to router.js
+export async function handleExcavationPick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, logGameAction, updateHandChannelMessages } = ctx;
+  await interaction.deferUpdate().catch(() => {});
+  // excavation_pick_{gameId}_{playerNum}_{cardIndex}
+  const suffix = interaction.customId.replace('excavation_pick_', '');
+  const parts = suffix.split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const cardIndex = parseInt(parts[2], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the DC owner may choose.')) return;
+  const discardKey = ccDiscardKey(playerNum);
+  const handKey = ccHandKey(playerNum);
+  const discard = game[discardKey] || [];
+  if (cardIndex < 0 || cardIndex >= discard.length) {
+    await interaction.followUp({ content: 'Invalid card selection.', ephemeral: true }).catch(() => {}); return;
+  }
+  const cardName = discard[cardIndex];
+  // Move card from discard to hand
+  game[discardKey] = discard.filter((_, i) => i !== cardIndex);
+  game[handKey] = game[handKey] || [];
+  game[handKey].push(cardName);
+  await interaction.message.edit({ content: `⛏️ **Excavation** — **${cardName}** moved from discard to hand.`, components: [] }).catch(() => {});
+  await logGameAction(game, client, `⛏️ **Excavation** — retrieved **${cardName}** from discard pile.`, { phase: 'ROUND', icon: 'round' });
+  if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
   saveGames(); return;
 }

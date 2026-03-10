@@ -5,7 +5,9 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapSpaces } from '../data-loader.js';
 import { cleanupActivation } from '../game/activation-state.js';
-import { applyCondition, filterCondition, dcNameFromFigureKey } from '../game/index.js';
+import { applyCondition, filterCondition, dcNameFromFigureKey, reduceHp, healHp } from '../game/index.js';
+import { getRange } from '../game/spatial.js';
+import { getDiceData, getDcKeywords } from '../data-loader.js';
 import {
   getPlayerId,
   getDcList,
@@ -730,7 +732,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   // Mounted (Captain Terro, Kuiil): gain 3 MP at start of activation
   const _mountedEff = getDcEffects()?.[meta.dcName];
   const _mountedIds = _mountedEff?.specialAbilityIds || [];
-  if (_mountedIds.includes('mounted_terro') || _mountedIds.includes('mounted_kuiil') || _mountedIds.includes('mounted_dewback')) {
+  if (_mountedIds.includes('mounted_terro') || _mountedIds.includes('mounted_kuiil') || _mountedIds.includes('mounted_dewback') || (_mountedEff?.passives || []).includes('Mounted')) {
     game.movementBank = game.movementBank || {};
     game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
     game.movementBank[msgId].total += 3;
@@ -905,8 +907,35 @@ export async function handleConfirmActivate(interaction, ctx) {
     }
   }
   // Durasteel Fist (Dark Trooper Mk III): once during activation, choose adjacent figure, roll 1 green die
-  if (_mountedIds.includes('durasteel_fist_dark_trooper')) {
-    await thread.send({ content: `🤜 **Durasteel Fist** available — Once during this activation, you may choose an adjacent figure/object and roll 1 green die. Apply Hits as damage. If a Surge is rolled and the target is SMALL, push it 1 space. *(Honor system — resolve manually.)*` }).catch(() => {});
+  if (_mountedIds.includes('durasteel_fist_dark_trooper') && !game.roundFigureAbilityUsed?.[`${meta.dcName}_durasteel_fist_${msgId}`]) {
+    const _dfDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _dfActData = game.dcActionsData?.[msgId];
+    const _dfSelFig = _dfActData?.selectedFigure ?? 0;
+    const _dfSelfFk = `${meta.dcName}-${_dfDgIndex}-${_dfSelFig}`;
+    const _dfSelfPos = game.figurePositions?.[meta.playerNum]?.[_dfSelfFk];
+    if (_dfSelfPos) {
+      const _dfMapId = game.selectedMap?.id;
+      const _dfMs = getMapSpaces(_dfMapId);
+      const _dfAdj = (_dfMs?.adjacency?.[String(_dfSelfPos).toLowerCase()] || []).map(a => String(a).toLowerCase());
+      const _dfTargets = [];
+      for (const pn of [1, 2]) {
+        for (const [fk, fp] of Object.entries(game.figurePositions?.[pn] || {})) {
+          if (!fp || fk === _dfSelfFk) continue;
+          if (_dfAdj.includes(String(fp).toLowerCase())) {
+            _dfTargets.push({ fk, playerNum: pn });
+          }
+        }
+      }
+      if (_dfTargets.length > 0) {
+        const _dfBtns = _dfTargets.slice(0, 4).map(({ fk }) =>
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_durasteelfist_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Danger)
+        );
+        _dfBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_durasteelfist_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        await thread.send({ content: `🤜 **Durasteel Fist** — Choose an adjacent figure to target (roll 1 green die, apply Hits as damage):`, components: [new ActionRowBuilder().addComponents(_dfBtns)] }).catch(() => {});
+      } else {
+        await thread.send({ content: `🤜 **Durasteel Fist** — No adjacent figures to target.` }).catch(() => {});
+      }
+    }
   }
   // Comms Jammer (ISB Infiltrator Elite): opponent can't play CCs during your activation
   if (_mountedIds.includes('comms_jammer_isb')) {
@@ -927,42 +956,71 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Negotiate (Hondo): when declaring attack, +2 damage unless target pays 2 VP
   if (_mountedIds.includes('negotiate_hondo')) {
-    await thread.send({ content: `💰 **Negotiate** available — When you attack, target gains +2 damage unless they pay 2 VP. *(Honor system.)*` }).catch(() => {});
+    await thread.send({ content: `💰 **Negotiate** available — When you attack, the target suffers +2 Damage unless they pay 2 VP.` }).catch(() => {});
   }
   // Airborne Commander (Gar Saxon): Mobile figures within 4 can use your surge abilities
   if (_mountedIds.includes('airborne_commander_gar_saxon')) {
-    await thread.send({ content: `🪂 **Airborne Commander** — Mobile figures within 4 spaces may use Gar Saxon's surge abilities. *(Honor system.)*` }).catch(() => {});
+    await thread.send({ content: `🪂 **Airborne Commander** — Mobile figures within 4 spaces may use Gar Saxon's surge abilities.` }).catch(() => {});
   }
   // Advanced Firepower (General Sorin): adjacent DROID/VEHICLE may use your surge abilities
   if (_mountedIds.includes('advanced_firepower_sorin')) {
-    await thread.send({ content: `🔧 **Advanced Firepower** — Adjacent DROID or VEHICLE figures may use Sorin's surge abilities. *(Honor system.)*` }).catch(() => {});
+    await thread.send({ content: `🔧 **Advanced Firepower** — Adjacent DROID or VEHICLE figures may use Sorin's surge abilities.` }).catch(() => {});
   }
   // Unhinged Director (Director Krennic): TROOPER/GUARDIAN within 2 get +2 bonus from tokens
   if (_mountedIds.includes('unhinged_director_krennic')) {
-    await thread.send({ content: `📋 **Unhinged Director** — TROOPER or GUARDIAN within 2 spaces gain +2 (instead of +1) when spending power tokens. *(Honor system.)*` }).catch(() => {});
+    await thread.send({ content: `📋 **Unhinged Director** — TROOPER or GUARDIAN within 2 spaces gain +2 (instead of +1) when spending power tokens.` }).catch(() => {});
   }
   // Squad Cohesion (Ko-Tun): REBEL within 3 can spend another REBEL's token
   if (_mountedIds.includes('squad_cohesion_kotun')) {
-    await thread.send({ content: `🤝 **Squad Cohesion** — REBEL figures within 3 spaces may spend each other's power tokens. *(Honor system.)*` }).catch(() => {});
+    await thread.send({ content: `🤝 **Squad Cohesion** — REBEL figures within 3 spaces may spend each other's power tokens.` }).catch(() => {});
   }
   // Consider It My Payment (Asajj): opponent reveals a CC from hand
   if (_mountedIds.includes('consider_it_my_payment_asajj')) {
     const oppNum = opponentPlayerNum(meta.playerNum);
     const oppOwnerId = game[`player${oppNum}Id`];
-    await thread.send({ content: `💳 **Consider It My Payment** — <@${oppOwnerId}>, reveal a Command Card from your hand. *(Honor system.)*`, allowedMentions: { users: [oppOwnerId] } }).catch(() => {});
+    await thread.send({ content: `💳 **Consider It My Payment** — <@${oppOwnerId}>, reveal a Command Card from your hand.`, allowedMentions: { users: [oppOwnerId] } }).catch(() => {});
   }
-  // General's Orders (General Weiss): choose up to 2 friendlies to move up to 2 spaces
+  // General's Orders (General Weiss): choose up to 2 friendlies; each gains 2 MP
   if (_mountedIds.includes('generals_orders_weiss')) {
-    await thread.send({ content: `🎖️ **General's Orders** — Choose up to 2 friendly figures; each may interrupt to move up to 2 spaces. *(Honor system.)*` }).catch(() => {});
+    const _goGetRange = ctx.getRange || getRange;
+    const _goDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _goSelfFk = `${meta.dcName}-${_goDgIndex}-0`;
+    const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
+      .filter(([fk, fp]) => fk !== _goSelfFk && fp);
+    if (friendlyFigs.length > 0) {
+      game.pendingGeneralsOrders = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: 2, chosen: [] };
+      const btns = friendlyFigs.slice(0, 4).map(([fk]) =>
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_genorders_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+      );
+      btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_genorders_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
+      await thread.send({ content: `🎖️ **General's Orders** — Choose up to 2 friendly figures; each gains **2 MP** (pick 1 of 2):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+    } else {
+      await thread.send({ content: `🎖️ **General's Orders** — No friendly figures available.` }).catch(() => {});
+    }
   }
-  // Long-Laid Plans (Thrawn): distribute N power tokens (N = round#)
+  // Long-Laid Plans (Thrawn): distribute N power tokens (N = round#) among friendlies within 3
   if (_mountedIds.includes('long_laid_plans_thrawn')) {
     const roundNum = game.currentRound || 1;
-    await thread.send({ content: `🧠 **Long-Laid Plans** — Distribute **${roundNum} power token${roundNum > 1 ? 's' : ''}** (round ${roundNum}) among friendly figures. *(Honor system.)*` }).catch(() => {});
+    const _llpGetRange = ctx.getRange || getRange;
+    const _llpDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _llpSelfFk = `${meta.dcName}-${_llpDgIndex}-0`;
+    const _llpSelfPos = game.figurePositions?.[meta.playerNum]?.[_llpSelfFk];
+    const _llpFriendlies = _llpSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
+      .filter(([fk, fp]) => fp && _llpGetRange(_llpSelfPos, fp) <= 3) : [];
+    if (_llpFriendlies.length > 0 && roundNum > 0) {
+      game.pendingTokenDistribution = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: roundNum, ability: 'longlaid', tokenTypes: ['Hit', 'Block', 'Surge', 'Evade'] };
+      const btns = _llpFriendlies.slice(0, 4).map(([fk]) =>
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+      );
+      btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
+      await thread.send({ content: `🧠 **Long-Laid Plans** — Distribute **${roundNum} power token${roundNum > 1 ? 's' : ''}** among friendly figures within 3 spaces. Pick a figure (${roundNum} remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+    } else {
+      await thread.send({ content: `🧠 **Long-Laid Plans** — No friendly figures within 3 spaces (or round 0).` }).catch(() => {});
+    }
   }
   // Strategize (Thrawn): look at top CC of each deck, may discard one
   if (_mountedIds.includes('strategize_thrawn')) {
-    await thread.send({ content: `🧠 **Strategize** — Look at the top CC of each player's deck; you may discard one. *(Honor system.)*` }).catch(() => {});
+    await thread.send({ content: `🧠 **Strategize** — Look at the top CC of each player's deck; you may discard one.` }).catch(() => {});
   }
   // Wisdom (Yoda): draw 1 CC, return 1 to bottom of deck
   if (_mountedIds.includes('wisdom_yoda')) {
@@ -972,7 +1030,22 @@ export async function handleConfirmActivate(interaction, ctx) {
     if (deck.length > 0) {
       const card = deck.shift();
       game[handKey] = [...(game[handKey] || []), card];
-      await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC. Now return 1 CC from your hand to the bottom of your deck. *(Honor system for the return.)*` }).catch(() => {});
+      // Show buttons for each unique card in hand to return to bottom of deck
+      const hand = game[handKey] || [];
+      const uniqueCards = [...new Set(hand)];
+      if (uniqueCards.length > 0) {
+        const rows = [];
+        for (let i = 0; i < uniqueCards.length; i += 5) {
+          const chunk = uniqueCards.slice(i, i + 5);
+          const btns = chunk.map((c, ci) =>
+            new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_wisdom_${i + ci}`).setLabel(c.length > 70 ? c.slice(0, 67) + '...' : c).setStyle(ButtonStyle.Secondary)
+          );
+          rows.push(new ActionRowBuilder().addComponents(btns));
+        }
+        await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC. Choose a card from your hand to return to the bottom of your deck:`, components: rows.slice(0, 5) }).catch(() => {});
+      } else {
+        await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC but hand is empty (cannot return).` }).catch(() => {});
+      }
     } else {
       await thread.send({ content: `🧘 **Wisdom** — Deck is empty; cannot draw.` }).catch(() => {});
     }
@@ -981,15 +1054,44 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (_mountedIds.includes('force_vision_kanan')) {
     const oppNum = opponentPlayerNum(meta.playerNum);
     const oppOwnerId = game[`player${oppNum}Id`];
-    await thread.send({ content: `👁️ **Force Vision** — You may choose which group <@${oppOwnerId}> must activate next. *(Honor system.)*`, allowedMentions: { users: [oppOwnerId] } }).catch(() => {});
+    await thread.send({ content: `👁️ **Force Vision** — You may choose which group <@${oppOwnerId}> must activate next.`, allowedMentions: { users: [oppOwnerId] } }).catch(() => {});
   }
   // Arms Distribution (Ko-Tun): distribute 2 power tokens among friendlies within 3
   if (_mountedIds.includes('arms_distribution_kotun')) {
-    await thread.send({ content: `🎯 **Arms Distribution** — Distribute **2 power tokens** among friendly figures within 3 spaces. *(Honor system.)*` }).catch(() => {});
+    const _adGetRange = ctx.getRange || getRange;
+    const _adDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _adSelfFk = `${meta.dcName}-${_adDgIndex}-0`;
+    const _adSelfPos = game.figurePositions?.[meta.playerNum]?.[_adSelfFk];
+    const _adFriendlies = _adSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
+      .filter(([fk, fp]) => fp && _adGetRange(_adSelfPos, fp) <= 3) : [];
+    if (_adFriendlies.length > 0) {
+      game.pendingTokenDistribution = { gameId: game.gameId, msgId, playerNum: meta.playerNum, remaining: 2, ability: 'armsdist', tokenTypes: ['Hit', 'Block'] };
+      const btns = _adFriendlies.slice(0, 4).map(([fk]) =>
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+      );
+      btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
+      await thread.send({ content: `🎯 **Arms Distribution** — Distribute **2 power tokens** (Hit or Block) among friendly figures within 3 spaces. Pick a figure (2 remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+    } else {
+      await thread.send({ content: `🎯 **Arms Distribution** — No friendly figures within 3 spaces.` }).catch(() => {});
+    }
   }
   // Trust Goes Both Ways (Jyn Erso): choose a friendly within 3 to gain 1 MP
   if (_mountedIds.includes('trust_goes_both_ways_jyn')) {
-    await thread.send({ content: `🤝 **Trust Goes Both Ways** — Choose a friendly figure within 3 spaces to gain **1 MP**. *(Honor system.)*` }).catch(() => {});
+    const _tgbwGetRange = ctx.getRange || getRange;
+    const _tgbwDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _tgbwSelfFk = `${meta.dcName}-${_tgbwDgIndex}-0`;
+    const _tgbwSelfPos = game.figurePositions?.[meta.playerNum]?.[_tgbwSelfFk];
+    const _tgbwFriendlies = _tgbwSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
+      .filter(([fk, fp]) => fk !== _tgbwSelfFk && fp && _tgbwGetRange(_tgbwSelfPos, fp) <= 3) : [];
+    if (_tgbwFriendlies.length > 0) {
+      const btns = _tgbwFriendlies.slice(0, 4).map(([fk]) =>
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustboth_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+      );
+      btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustboth_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+      await thread.send({ content: `🤝 **Trust Goes Both Ways** — Choose a friendly figure within 3 spaces to gain **1 MP**:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+    } else {
+      await thread.send({ content: `🤝 **Trust Goes Both Ways** — No friendly figures within 3 spaces.` }).catch(() => {});
+    }
   }
   // Dead Precise (Ko-Tun): +2 Accuracy if didn't move this activation
   if (_mountedIds.includes('dead_precise_kotun')) {
@@ -997,19 +1099,19 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Adapt (Agent Blaise): choose a trait for the round
   if (_mountedIds.includes('adapt_blaise')) {
-    await thread.send({ content: `🔄 **Adapt** — Choose a trait for this round. Agent Blaise gains that trait. *(Honor system.)*` }).catch(() => {});
+    await thread.send({ content: `🔄 **Adapt** — Choose a trait for this round. Agent Blaise gains that trait.` }).catch(() => {});
   }
   // Hunt Dissent (Agent Kallus): when you or friendly TROOPER within 3 defeats hostile, gain Block Token
   if (_mountedIds.includes('hunt_dissent_kallus')) {
-    await thread.send({ content: `🎯 **Hunt Dissent** — When you or a friendly TROOPER within 3 spaces defeats a hostile figure, gain 1 Block Token. *(Honor system.)*` }).catch(() => {});
+    await thread.send({ content: `🎯 **Hunt Dissent** — When you or a friendly TROOPER within 3 spaces defeats a hostile figure, gain 1 Block Token.` }).catch(() => {});
   }
   // Air Support (Bodhi): after friendly attack, if target in your LOS, target suffers 1 additional damage
   if (_mountedIds.includes('air_support_bodhi')) {
-    await thread.send({ content: `✈️ **Air Support** — After a friendly figure resolves an attack, if the target is in Bodhi's LOS, the target suffers 1 additional Damage. *(Honor system.)*` }).catch(() => {});
+    await thread.send({ content: `✈️ **Air Support** — After a friendly figure resolves an attack, if the target is in Bodhi's LOS, the target suffers 1 additional Damage.` }).catch(() => {});
   }
   // Fast Learner (Mara Jade): once per round, may play CC as different DC
   if (_mountedIds.includes('fast_learner_mara_jade') && !game.roundFigureAbilityUsed?.[`${meta.dcName}_fast_learner`]) {
-    await thread.send({ content: `📚 **Fast Learner** — Once this round, Mara Jade may play a Command card whose restriction matches the name of another Deployment card in your army (except "Arcing Shot"). *(Honor system.)*` }).catch(() => {});
+    await thread.send({ content: `📚 **Fast Learner** — Once this round, Mara Jade may play a Command card whose restriction matches the name of another Deployment card in your army (except "Arcing Shot").` }).catch(() => {});
   }
   // Imperial Loadout (Purge Trooper): show chosen loadout
   if (_mountedIds.includes('imperial_loadout_purge_trooper')) {
@@ -1025,7 +1127,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       if (lCard?.imagePath) try { files.push(new AttachmentBuilder(join(getRootDir(), lCard.imagePath))); } catch {}
       await thread.send({ content: `⚔️ **Imperial Loadout: ${chosenLoadout}** — ${lCard?.abilityText || 'Apply loadout abilities.'}`, files }).catch(() => {});
     } else {
-      await thread.send({ content: `⚔️ **Imperial Loadout** — No loadout card selected. Apply abilities manually. *(Honor system.)*` }).catch(() => {});
+      await thread.send({ content: `⚔️ **Imperial Loadout** — No loadout card selected. Apply abilities manually.` }).catch(() => {});
     }
   }
   // Clawdite Form: show chosen form card + apply Fleet MP bonus (Streetrat)
@@ -1053,13 +1155,13 @@ export async function handleConfirmActivate(interaction, ctx) {
         await thread.send({ content: `🏃 **Fleet** — **${meta.dcName}** gains **${fCard.fleetMp} MP** at start of activation.` }).catch(() => {});
       }
     } else {
-      await thread.send({ content: `🔄 **Shape** — No form card selected. Apply abilities manually. *(Honor system.)*` }).catch(() => {});
+      await thread.send({ content: `🔄 **Shape** — No form card selected. Apply abilities manually.` }).catch(() => {});
     }
   }
   // Scrap Battalion (Ugnaught): Junk Droid readies and co-activates
   if (_mountedIds.includes('scrap_battalion_ugnaught_elite') || _mountedIds.includes('scrap_battalion_ugnaught_reg')) {
     const isElite = _mountedIds.includes('scrap_battalion_ugnaught_elite');
-    await thread.send({ content: `🤖 **Scrap Battalion** — Your Junk Droid readies and activates as part of this group.\n• Speed 4, Health 1, Melee (1 green die), +1 Hit passive\n• Uses ${meta.dcName}'s surge abilities: Bleed, Pierce ${isElite ? '2' : '1'}${isElite ? '\n• **Overclock** (Special Action): Junk Droid may interrupt to move or attack' : ''}\n*(Companion movement + combat: honor system.)*` }).catch(() => {});
+    await thread.send({ content: `🤖 **Scrap Battalion** — Your Junk Droid readies and activates as part of this group.\n• Speed 4, Health 1, Melee (1 green die), +1 Hit passive\n• Uses ${meta.dcName}'s surge abilities: Bleed, Pierce ${isElite ? '2' : '1'}${isElite ? '\n• **Overclock** (Special Action): Junk Droid may interrupt to move or attack' : ''}` }).catch(() => {});
   }
   // --- Skirmish Upgrade attachment activation effects ---
   const _suActivationUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
@@ -1076,17 +1178,62 @@ export async function handleConfirmActivate(interaction, ctx) {
       await thread.send({ content: `**Focused on the Kill** — **${meta.dcName}** gains **2 MP** at start of activation.` }).catch(() => {});
     }
     // Survivalist: end-of-round recovery handled in round.js; movement cost ignore handled in movement.js
-    // Wookiee Avenger (Chewbacca): free Slam action handled as honor system (complex UI)
+    // Wookiee Avenger (Chewbacca): free Slam action (choose adjacent hostile, push 1 space) — not yet automated (needs target picker + space picker)
     // Motivation (UNIQUE): exhaust during activation — friendly with lower cost + LOS discards harmful or recovers 1, gains 1 MP
     if (_suActivationUpgrades.includes('Motivation') && !(game.exhaustedSkirmishUpgrades?.[msgId] || []).includes('Motivation')) {
-      await thread.send({ content: `**Motivation** — You may exhaust this card during activation. Choose a friendly figure with a lower figure cost in your LOS: it may discard a HARMFUL condition or recover 1 Damage, then gain 1 MP. *(Honor system.)*` }).catch(() => {});
+      const _motGetRange = ctx.getRange || getRange;
+      const _motHasLos = ctx.hasLineOfSight;
+      const _motMapSpaces = ctx.getMapSpaces?.(game.selectedMap?.id);
+      const _motDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _motSelfFk = `${meta.dcName}-${_motDgIndex}-0`;
+      const _motSelfPos = game.figurePositions?.[meta.playerNum]?.[_motSelfFk];
+      const _motSelfCost = ctx.getDcStats?.(meta.dcName)?.cost ?? 99;
+      const _motAllFigCoords = [];
+      for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _motAllFigCoords.push(String(fp).toLowerCase());
+      for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _motAllFigCoords.push(String(fp).toLowerCase());
+      const _motFriendlies = _motSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
+        .filter(([fk, fp]) => {
+          if (fk === _motSelfFk || !fp) return false;
+          const dcN = dcNameFromFigureKey(fk);
+          const cost = ctx.getDcStats?.(dcN)?.cost ?? 99;
+          if (cost >= _motSelfCost) return false;
+          if (_motHasLos && _motMapSpaces) {
+            return _motHasLos(String(_motSelfPos).toLowerCase(), String(fp).toLowerCase(), _motMapSpaces, _motAllFigCoords);
+          }
+          return true; // If LOS unavailable, allow all
+        }) : [];
+      if (_motFriendlies.length > 0) {
+        const btns = _motFriendlies.slice(0, 4).map(([fk]) =>
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_motivation_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+        );
+        btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_motivation_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        await thread.send({ content: `**Motivation** — Choose a friendly figure with lower cost in your LOS (recover 1 Damage or discard HARMFUL, then gain 1 MP):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+      } else {
+        await thread.send({ content: `**Motivation** — No eligible friendly figures (lower cost with LOS).` }).catch(() => {});
+      }
     }
     // Trusted Ally (DROID): exhaust during activation — adjacent friendly recovers 1 or discards 1 harmful
     if (_suActivationUpgrades.includes('Trusted Ally') && !(game.exhaustedSkirmishUpgrades?.[msgId] || []).includes('Trusted Ally')) {
-      await thread.send({ content: `**Trusted Ally** — You may exhaust this card during activation. An adjacent friendly figure recovers 1 Damage or discards 1 HARMFUL condition. *(Honor system.)*` }).catch(() => {});
+      const _taMapId = game.selectedMap?.id;
+      const _taMs = getMapSpaces(_taMapId);
+      const _taDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _taSelfFk = `${meta.dcName}-${_taDgIndex}-0`;
+      const _taSelfPos = game.figurePositions?.[meta.playerNum]?.[_taSelfFk];
+      const _taAdj = _taSelfPos ? (_taMs?.adjacency?.[String(_taSelfPos).toLowerCase()] || []).map(a => String(a).toLowerCase()) : [];
+      const _taFriendlies = Object.entries(game.figurePositions?.[meta.playerNum] || {})
+        .filter(([fk, fp]) => fk !== _taSelfFk && fp && _taAdj.includes(String(fp).toLowerCase()));
+      if (_taFriendlies.length > 0) {
+        const btns = _taFriendlies.slice(0, 4).map(([fk]) =>
+          new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustedally_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+        );
+        btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustedally_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        await thread.send({ content: `**Trusted Ally** — Choose an adjacent friendly figure (recover 1 Damage or discard 1 HARMFUL condition):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+      } else {
+        await thread.send({ content: `**Trusted Ally** — No adjacent friendly figures.` }).catch(() => {});
+      }
     }
-    // Driven by Hatred: end-of-round move + attack handled as honor-system reminder (complex multi-step)
-    // Rogue Smuggler: end-of-round exhaust interrupt attack handled as honor-system (complex multi-step)
+    // Driven by Hatred (Darth Vader): end-of-round move 3 + free attack — not yet automated (needs movement + attack flow at round end)
+    // Rogue Smuggler (Han Solo): exhaust to interrupt and attack — not yet automated (needs interrupt trigger + attack flow)
     // Vader's Finest, Smuggler's Run, Z-6 Autofire, Mortar Trooper Fire Mission: injected as special action buttons (automated)
     // Headhunter: auto-triggered via applyStrainToFigure hook (automated)
   }
@@ -1128,7 +1275,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     }
   }
 
-  // Calming Presence (Yoda): when a friendly REBEL FORCE USER activates, remove 1 harmful condition
+  // Calming Presence (Yoda): when a friendly REBEL activates, remove 1 harmful condition + suffer 1 Strain
   // Check if any Yoda figure on the activating player's team has this ability
   if (meta.playerNum) {
     const dcList = getDcList(game, meta.playerNum) || [];
@@ -1137,22 +1284,36 @@ export async function handleConfirmActivate(interaction, ctx) {
       const eff = getDcEffects()?.[dc.dcName];
       if (!(eff?.specialAbilityIds || []).includes('calming_presence_yoda')) continue;
       if (dc.dcName === meta.dcName) continue; // different figure
-      // Check if the activating DC is REBEL FORCE USER
+      // Check if the activating DC is REBEL
       const activatingEff = getDcEffects()?.[meta.dcName];
       if (activatingEff?.affiliation !== 'Rebel') continue;
-      const activatingKws = (activatingEff?.keywords || []).map(k => String(k).toUpperCase());
-      if (!activatingKws.includes('FORCE USER')) continue;
-      // Check if any figure in the activating group has a harmful condition
+      // Collect all harmful conditions across all figures in the activating group
       const dgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const figures = activatingEff?.figures ?? 1;
+      const _cpHarmfulEntries = [];
       for (let fi = 0; fi < figures; fi++) {
         const fk = `${meta.dcName}-${dgIdx}-${fi}`;
         const conds = game.figureConditions?.[fk] || [];
         const harmful = conds.filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c));
-        if (harmful.length > 0) {
-          await thread.send({ content: `🧘 **Calming Presence** (Yoda) — **${meta.dcName}** is a REBEL FORCE USER that just activated. You may remove 1 harmful condition (${harmful.join(', ')}). *(Honor system.)*` }).catch(() => {});
-          break;
+        for (const h of harmful) {
+          _cpHarmfulEntries.push({ fk, condition: h, figIndex: fi });
         }
+      }
+      if (_cpHarmfulEntries.length > 0) {
+        // Deduplicate by fk+condition
+        const seen = new Set();
+        const unique = _cpHarmfulEntries.filter(e => {
+          const key = `${e.fk}_${e.condition}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        const btns = unique.slice(0, 4).map(({ fk, condition }) => {
+          const label = figures > 1 ? `${dcNameFromFigureKey(fk)}: ${condition}` : condition;
+          return new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_calmpres_${fk}_${condition}`).setLabel(label).setStyle(ButtonStyle.Primary);
+        });
+        btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_calmpres_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        await thread.send({ content: `🧘 **Calming Presence** (Yoda) — **${meta.dcName}** is a REBEL figure. Remove 1 harmful condition (the activating figure suffers 1 Strain):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
       }
       break;
     }
@@ -1191,7 +1352,9 @@ export async function handleCancelActivate(interaction, _ctx) {
 
 /**
  * Handle activation-passive choice buttons (act_passive_).
- * Covers: Vigor, Responsive, Hunger (Elite token choice), Tactical Movement, Advanced Weapons Research.
+ * Covers: Vigor, Responsive, Hunger (Elite token choice), Tactical Movement, Advanced Weapons Research,
+ * Open-Minded, Calming Presence, Wisdom, Trust Goes Both Ways, Token Distribution (Arms Distribution,
+ * Long-Laid Plans), General's Orders, Durasteel Fist, Motivation, Trusted Ally.
  */
 export async function handleActPassive(interaction, ctx) {
   await interaction.deferUpdate().catch(() => {});
@@ -1327,6 +1490,343 @@ export async function handleActPassive(interaction, ctx) {
       saveGames();
       return; // Don't save twice
     }
+  // --- Calming Presence: pick condition to remove, suffer 1 Strain ---
+  } else if (ability === 'calmpres') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `🧘 **Calming Presence** — Skipped.`, components: [] }).catch(() => {});
+    } else {
+      // choice format: figureKey_Condition (e.g. "Rebel Ranger-1-0_Stun")
+      // But since figureKey contains hyphens, we stored it as act_passive_{gameId}_{msgId}_calmpres_{fk}_{condition}
+      // The fk and condition are in the remaining parts after 'calmpres'
+      // parts[3:] = calmpres, fk..., Condition
+      // We need to re-parse from customId since figureKeys have hyphens
+      const fullSuffix = interaction.customId.replace(/^act_passive_[^_]+_[^_]+_calmpres_/, '');
+      const lastUnderscore = fullSuffix.lastIndexOf('_');
+      const condFk = fullSuffix.slice(0, lastUnderscore);
+      const condName = fullSuffix.slice(lastUnderscore + 1);
+      filterCondition(game, condFk, condName);
+      // Apply 1 Strain to the activating figure
+      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const selfFk = `${meta.dcName}-${dgIndex}-0`;
+      reduceHp(dcHealthState, game, msgId, 0, 1, meta.playerNum);
+      const condFkName = dcNameFromFigureKey(condFk);
+      await interaction.message.edit({ content: `🧘 **Calming Presence** — Removed **${condName}** from **${condFkName}**. **${displayName}** suffered **1 Strain**.`, components: [] }).catch(() => {});
+      await logGameAction?.(game, client, `**Calming Presence** (Yoda) — Removed ${condName} from ${condFkName}; ${displayName} suffered 1 Strain.`, { phase: 'ACTIVATION', icon: 'condition' });
+    }
+  // --- Wisdom: return 1 CC to bottom of deck ---
+  } else if (ability === 'wisdom') {
+    const handKey = ccHandKey(meta.playerNum);
+    const deckKey = ccDeckKey(meta.playerNum);
+    const hand = game[handKey] || [];
+    const cardIndex = parseInt(choice, 10);
+    const uniqueCards = [...new Set(hand)];
+    if (cardIndex >= 0 && cardIndex < uniqueCards.length) {
+      const cardName = uniqueCards[cardIndex];
+      const idx = hand.indexOf(cardName);
+      if (idx >= 0) {
+        hand.splice(idx, 1);
+        game[handKey] = hand;
+        game[deckKey] = game[deckKey] || [];
+        game[deckKey].push(cardName);
+        await interaction.message.edit({ content: `🧘 **Wisdom** — Returned **${cardName}** to the bottom of the deck.`, components: [] }).catch(() => {});
+        await logGameAction?.(game, client, `**Wisdom** (Yoda) — Drew 1 CC, returned 1 CC to bottom of deck.`, { phase: 'ACTIVATION', icon: 'card' });
+      }
+    }
+  // --- Trust Goes Both Ways: chosen figure gains 1 MP ---
+  } else if (ability === 'trustboth') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `🤝 **Trust Goes Both Ways** — Skipped.`, components: [] }).catch(() => {});
+    } else {
+      const targetFk = choice;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      let targetMsgId = null;
+      for (const [mId, mMeta] of dcMessageMeta) {
+        if (mMeta.gameId !== gameId) continue;
+        if (mMeta.dcName === targetDcName && mMeta.playerNum === meta.playerNum) {
+          targetMsgId = mId;
+          break;
+        }
+      }
+      if (targetMsgId) {
+        game.movementBank = game.movementBank || {};
+        game.movementBank[targetMsgId] = game.movementBank[targetMsgId] || { total: 0, remaining: 0 };
+        game.movementBank[targetMsgId].total += 1;
+        game.movementBank[targetMsgId].remaining += 1;
+      }
+      await interaction.message.edit({ content: `🤝 **Trust Goes Both Ways** — **${targetDcName}** gained **1 MP**.`, components: [] }).catch(() => {});
+      await logGameAction?.(game, client, `**Trust Goes Both Ways** (Jyn Erso) — ${targetDcName} gained 1 MP.`, { phase: 'ACTIVATION', icon: 'activate' });
+    }
+  // --- Token Distribution: used by Arms Distribution and Long-Laid Plans ---
+  } else if (ability === 'tokendist') {
+    const pending = game.pendingTokenDistribution;
+    if (!pending) return;
+    if (choice === 'done') {
+      const abilityLabel = pending.ability === 'longlaid' ? 'Long-Laid Plans' : 'Arms Distribution';
+      await interaction.message.edit({ content: `${pending.ability === 'longlaid' ? '🧠' : '🎯'} **${abilityLabel}** — Done (distributed ${(pending.originalRemaining || pending.remaining) - pending.remaining} token${((pending.originalRemaining || pending.remaining) - pending.remaining) !== 1 ? 's' : ''}).`, components: [] }).catch(() => {});
+      delete game.pendingTokenDistribution;
+    } else {
+      // choice is figureKey — show token type picker
+      pending.pendingTargetFk = choice;
+      if (!pending.originalRemaining) pending.originalRemaining = pending.remaining;
+      const tokenBtns = pending.tokenTypes.map(t =>
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokenpick_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
+      );
+      const targetDcName = dcNameFromFigureKey(choice);
+      await interaction.message.edit({ content: `Choose token type for **${targetDcName}** (${pending.remaining} remaining):`, components: [new ActionRowBuilder().addComponents(tokenBtns)] }).catch(() => {});
+    }
+  } else if (ability === 'tokenpick') {
+    const pending = game.pendingTokenDistribution;
+    if (!pending || !pending.pendingTargetFk) return;
+    const tokenType = choice.charAt(0).toUpperCase() + choice.slice(1);
+    const fk = pending.pendingTargetFk;
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+    game.figurePowerTokens[fk].push(tokenType);
+    pending.remaining--;
+    const targetDcName = dcNameFromFigureKey(fk);
+    delete pending.pendingTargetFk;
+    const abilityLabel = pending.ability === 'longlaid' ? 'Long-Laid Plans' : 'Arms Distribution';
+    const icon = pending.ability === 'longlaid' ? '🧠' : '🎯';
+    await logGameAction?.(game, client, `**${abilityLabel}** — ${targetDcName} gained 1 ${tokenType} Token.`, { phase: 'ACTIVATION', icon: 'activate' });
+    if (pending.remaining <= 0) {
+      await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. Distribution complete.`, components: [] }).catch(() => {});
+      delete game.pendingTokenDistribution;
+    } else {
+      // Show figure picker again for next token
+      const _tdGetRange = getRange;
+      const _tdDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _tdSelfFk = `${meta.dcName}-${_tdDgIndex}-0`;
+      const _tdSelfPos = game.figurePositions?.[meta.playerNum]?.[_tdSelfFk];
+      const _tdFriendlies = _tdSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
+        .filter(([fk2, fp]) => fp && _tdGetRange(_tdSelfPos, fp) <= 3) : [];
+      if (_tdFriendlies.length > 0) {
+        const btns = _tdFriendlies.slice(0, 4).map(([fk2]) =>
+          new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokendist_${fk2}`).setLabel(dcNameFromFigureKey(fk2)).setStyle(ButtonStyle.Primary)
+        );
+        btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokendist_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
+        await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. Pick next figure (${pending.remaining} remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+      } else {
+        await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. No more eligible figures.`, components: [] }).catch(() => {});
+        delete game.pendingTokenDistribution;
+      }
+    }
+  // --- General's Orders: each chosen figure gains 2 MP ---
+  } else if (ability === 'genorders') {
+    const pending = game.pendingGeneralsOrders;
+    if (!pending) return;
+    if (choice === 'done') {
+      await interaction.message.edit({ content: `🎖️ **General's Orders** — Done (${pending.chosen.length} figure${pending.chosen.length !== 1 ? 's' : ''} granted MP).`, components: [] }).catch(() => {});
+      delete game.pendingGeneralsOrders;
+    } else {
+      const targetFk = choice;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      let targetMsgId = null;
+      for (const [mId, mMeta] of dcMessageMeta) {
+        if (mMeta.gameId !== gameId) continue;
+        if (mMeta.dcName === targetDcName && mMeta.playerNum === meta.playerNum) {
+          targetMsgId = mId;
+          break;
+        }
+      }
+      if (targetMsgId) {
+        game.movementBank = game.movementBank || {};
+        game.movementBank[targetMsgId] = game.movementBank[targetMsgId] || { total: 0, remaining: 0 };
+        game.movementBank[targetMsgId].total += 2;
+        game.movementBank[targetMsgId].remaining += 2;
+      }
+      pending.chosen.push(targetFk);
+      pending.remaining--;
+      await logGameAction?.(game, client, `**General's Orders** — ${targetDcName} gained 2 MP.`, { phase: 'ACTIVATION', icon: 'activate' });
+      if (pending.remaining <= 0) {
+        await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. All picks used.`, components: [] }).catch(() => {});
+        delete game.pendingGeneralsOrders;
+      } else {
+        // Show remaining figure choices (exclude already chosen)
+        const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
+          .filter(([fk, fp]) => fp && !pending.chosen.includes(fk));
+        const _goSelfDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const _goSelfFk = `${meta.dcName}-${_goSelfDgIdx}-0`;
+        const filtered = friendlyFigs.filter(([fk]) => fk !== _goSelfFk);
+        if (filtered.length > 0) {
+          const btns = filtered.slice(0, 4).map(([fk]) =>
+            new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+          );
+          btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
+          await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. Pick figure ${2 - pending.remaining + 1} of 2:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+        } else {
+          await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. No more eligible figures.`, components: [] }).catch(() => {});
+          delete game.pendingGeneralsOrders;
+        }
+      }
+    }
+  // --- Durasteel Fist: roll 1 green die on adjacent target ---
+  } else if (ability === 'durasteelfist') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `🤜 **Durasteel Fist** — Skipped.`, components: [] }).catch(() => {});
+    } else {
+      const targetFk = choice;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      game.roundFigureAbilityUsed[`${meta.dcName}_durasteel_fist_${msgId}`] = true;
+      // Roll 1 green die
+      const faces = getDiceData()?.attack?.green;
+      if (!faces?.length) {
+        await interaction.message.edit({ content: `🤜 **Durasteel Fist** — Roll 1 green die manually and apply results to **${targetDcName}**.`, components: [] }).catch(() => {});
+      } else {
+        const face = faces[Math.floor(Math.random() * faces.length)];
+        const hits = face.dmg ?? 0;
+        const surges = face.surge ?? 0;
+        const dieParts = [];
+        if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+        if (surges) dieParts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
+        const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
+        const resultParts = [`Rolled: **${diceResult}**`];
+        // Determine target's playerNum
+        let targetPlayerNum = null;
+        for (const pn of [1, 2]) {
+          if (game.figurePositions?.[pn]?.[targetFk]) { targetPlayerNum = pn; break; }
+        }
+        if (hits > 0 && targetPlayerNum) {
+          // Find target's msgId
+          let targetMsgId = null;
+          for (const [mId, mMeta] of dcMessageMeta) {
+            if (mMeta.gameId !== gameId || mMeta.playerNum !== targetPlayerNum || mMeta.dcName !== targetDcName) continue;
+            targetMsgId = mId;
+            break;
+          }
+          if (targetMsgId) {
+            const fkMatch = targetFk.match(/-(\d+)-(\d+)$/);
+            const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+            const res = reduceHp(dcHealthState, game, targetMsgId, figIdx, hits, targetPlayerNum);
+            resultParts.push(`${hits} Damage to **${targetDcName}** (HP: ${res.prevHp} -> ${res.newHp})`);
+          } else {
+            resultParts.push(`Apply ${hits} Damage to **${targetDcName}** manually`);
+          }
+        }
+        // Surge + SMALL check: push (player chooses push direction — no space picker for single push)
+        if (surges > 0) {
+          const targetKws = getDcKeywords()?.[targetDcName] || [];
+          const isSmall = !targetKws.some(k => /large|massive/i.test(String(k)));
+          if (isSmall) {
+            resultParts.push(`Surge rolled and target is SMALL — push **${targetDcName}** 1 space`);
+          }
+        }
+        await interaction.message.edit({ content: `🤜 **Durasteel Fist** — Target: **${targetDcName}**. ${resultParts.join('. ')}.`, components: [] }).catch(() => {});
+        await logGameAction?.(game, client, `**Durasteel Fist** — Rolled ${diceResult} against ${targetDcName}.`, { phase: 'ACTIVATION', icon: 'activate' });
+      }
+    }
+  // --- Motivation: chosen figure recovers 1 or discards harmful, then gains 1 MP ---
+  } else if (ability === 'motivation') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `**Motivation** — Skipped.`, components: [] }).catch(() => {});
+    } else {
+      const targetFk = choice;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      // Exhaust the upgrade
+      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+      game.exhaustedSkirmishUpgrades[msgId] = game.exhaustedSkirmishUpgrades[msgId] || [];
+      if (!game.exhaustedSkirmishUpgrades[msgId].includes('Motivation')) {
+        game.exhaustedSkirmishUpgrades[msgId].push('Motivation');
+      }
+      // Store pending and show heal vs discard choice
+      game.pendingMotivation = { targetFk, gameId, msgId, playerNum: meta.playerNum };
+      const conds = (game.figureConditions?.[targetFk] || []).filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c));
+      const btns = [
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_motivchoice_heal`).setLabel('Recover 1 Damage').setStyle(ButtonStyle.Primary),
+      ];
+      if (conds.length > 0) {
+        for (const c of [...new Set(conds)].slice(0, 3)) {
+          btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_motivchoice_${c}`).setLabel(`Discard ${c}`).setStyle(ButtonStyle.Danger));
+        }
+      }
+      await interaction.message.edit({ content: `**Motivation** — **${targetDcName}**: Choose one:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+    }
+  } else if (ability === 'motivchoice') {
+    const pending = game.pendingMotivation;
+    if (!pending) return;
+    const targetFk = pending.targetFk;
+    const targetDcName = dcNameFromFigureKey(targetFk);
+    // Find target's msgId for HP operations
+    let targetMsgId = null;
+    for (const [mId, mMeta] of dcMessageMeta) {
+      if (mMeta.gameId !== gameId || mMeta.dcName !== targetDcName || mMeta.playerNum !== meta.playerNum) continue;
+      targetMsgId = mId;
+      break;
+    }
+    const resultParts = [];
+    if (choice === 'heal') {
+      if (targetMsgId) {
+        const fkMatch = targetFk.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        healHp(dcHealthState, game, targetMsgId, figIdx, 1, meta.playerNum);
+        resultParts.push('recovered 1 Damage');
+      }
+    } else {
+      // choice is a condition name
+      filterCondition(game, targetFk, choice);
+      resultParts.push(`discarded ${choice}`);
+    }
+    // Grant 1 MP to target
+    if (targetMsgId) {
+      game.movementBank = game.movementBank || {};
+      game.movementBank[targetMsgId] = game.movementBank[targetMsgId] || { total: 0, remaining: 0 };
+      game.movementBank[targetMsgId].total += 1;
+      game.movementBank[targetMsgId].remaining += 1;
+      resultParts.push('gained 1 MP');
+    }
+    delete game.pendingMotivation;
+    await interaction.message.edit({ content: `**Motivation** — **${targetDcName}**: ${resultParts.join(', ')}.`, components: [] }).catch(() => {});
+    await logGameAction?.(game, client, `**Motivation** — ${targetDcName}: ${resultParts.join(', ')}.`, { phase: 'ACTIVATION', icon: 'activate' });
+  // --- Trusted Ally: chosen figure recovers 1 or discards harmful ---
+  } else if (ability === 'trustedally') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `**Trusted Ally** — Skipped.`, components: [] }).catch(() => {});
+    } else {
+      const targetFk = choice;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      // Exhaust the upgrade
+      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+      game.exhaustedSkirmishUpgrades[msgId] = game.exhaustedSkirmishUpgrades[msgId] || [];
+      if (!game.exhaustedSkirmishUpgrades[msgId].includes('Trusted Ally')) {
+        game.exhaustedSkirmishUpgrades[msgId].push('Trusted Ally');
+      }
+      // Show heal vs discard choice
+      game.pendingTrustedAlly = { targetFk, gameId, msgId, playerNum: meta.playerNum };
+      const conds = (game.figureConditions?.[targetFk] || []).filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c));
+      const btns = [
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tallychoice_heal`).setLabel('Recover 1 Damage').setStyle(ButtonStyle.Primary),
+      ];
+      if (conds.length > 0) {
+        for (const c of [...new Set(conds)].slice(0, 3)) {
+          btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tallychoice_${c}`).setLabel(`Discard ${c}`).setStyle(ButtonStyle.Danger));
+        }
+      }
+      await interaction.message.edit({ content: `**Trusted Ally** — **${targetDcName}**: Choose one:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+    }
+  } else if (ability === 'tallychoice') {
+    const pending = game.pendingTrustedAlly;
+    if (!pending) return;
+    const targetFk = pending.targetFk;
+    const targetDcName = dcNameFromFigureKey(targetFk);
+    let targetMsgId = null;
+    for (const [mId, mMeta] of dcMessageMeta) {
+      if (mMeta.gameId !== gameId || mMeta.dcName !== targetDcName || mMeta.playerNum !== meta.playerNum) continue;
+      targetMsgId = mId;
+      break;
+    }
+    if (choice === 'heal') {
+      if (targetMsgId) {
+        const fkMatch = targetFk.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        healHp(dcHealthState, game, targetMsgId, figIdx, 1, meta.playerNum);
+      }
+      await interaction.message.edit({ content: `**Trusted Ally** — **${targetDcName}** recovered **1 Damage**.`, components: [] }).catch(() => {});
+    } else {
+      filterCondition(game, targetFk, choice);
+      await interaction.message.edit({ content: `**Trusted Ally** — **${targetDcName}** discarded **${choice}**.`, components: [] }).catch(() => {});
+    }
+    delete game.pendingTrustedAlly;
+    await logGameAction?.(game, client, `**Trusted Ally** — ${targetDcName}: ${choice === 'heal' ? 'recovered 1 Damage' : 'discarded ' + choice}.`, { phase: 'ACTIVATION', icon: 'activate' });
   }
   saveGames();
 }

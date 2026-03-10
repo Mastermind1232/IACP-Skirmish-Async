@@ -1,6 +1,25 @@
 {
   "source": "DC Effect Editor",
   "cards": {
+    "74-Z Speeder Bike (Elite)": {
+      "abilityText": "Efficient Travel\n\nMounted: At the start of your activation, gain 3 movement points.\n\nThrusters: While moving, you ignore impassable terrain and must enter at least 1 space that you are already occupying.\n\nForward Mounted Blasters: While attacking, if the target space occupies the same row as both of your spaces, you may reroll 1 attack die. If it does not, apply -1 Hit to the attack results instead.",
+      "keywords": ["TROOPER", "VEHICLE"],
+      "cost": 7,
+      "subCost": 4,
+      "health": 7,
+      "speed": 5,
+      "figures": 2,
+      "attack": {
+        "dice": ["blue", "blue", "yellow"],
+        "type": "ranged"
+      },
+      "defense": ["white"],
+      "surgeAbilities": ["damage 2", "evade token"],
+      "passives": ["Efficient Travel", "Mounted", "Thrusters", "Forward Mounted Blasters"],
+      "affiliation": "Imperial",
+      "unique": false,
+      "attachment": false
+    },
     "[A New Hope]": {
       "abilityText": "Include this card in your army only if each group in your army has one of the following names or sub-names:\n- \"Hero of the Rebellion\"\n- \"C-3PO'\n- \"Chewbacca\"\n- \"Han Solo\"\n- \"Leia Organa\"\n- \"Obi-Wan Kenobi\"\n- \"R2-D2\"\n\n--------------------------\nDeplete this card to have a friendly figure play a Command card with a restriction matching the name of another Deployment card in your army.",
       "keywords": [],
@@ -273,7 +292,7 @@
       "affiliation": "Any"
     },
     "[Mortar Trooper]": {
-      "abilityText": "SHORETROOPER ONLY\n\nDouble Action Special (Fire Mission): Perform an attack. You may draw line of sight from any figure in this group, but still measure range from this figure. Apply Blast 1 to the attack results.\n\nHaul: While moving, treat blocking and impassable terrain as difficult terrain.",
+      "abilityText": "SHORETROOPER ONLY\n\nDouble Action Special (Fire Mission): Perform an attack. You may draw line of sight from any figure in this group, but still measure range from this figure. Apply Blast 1 to the attack results.\n\nGuidance Systems: While attacking, you may apply -1 Hit and +2 Accuracy to the attack results. This ability may be used multiple times per attack.\n\nHaul: While moving, treat blocking and impassable terrain as difficult terrain.",
       "keywords": [
         "TROOPER",
         "HEAVY WEAPON",
@@ -283,7 +302,8 @@
       "health": 7,
       "speed": 3,
       "passives": [
-        "+2 Accuracy"
+        "+2 Accuracy",
+        "Guidance Systems"
       ],
       "figures": 1,
       "attack": {

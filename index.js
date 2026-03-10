@@ -2284,6 +2284,12 @@ async function resolveCombatAfterRolls(game, combat, client) {
     const attackerKws = (attackerEff?.keywords || []).map((k) => String(k).toUpperCase());
     if (attackerKws.includes('TROOPER')) combat.bonusHits = (combat.bonusHits || 0) + trooperHitBonus;
   }
+  // Query (HK-47): if +1 Hit was applied but defender became Bleeding from surges, remove the bonus
+  if (combat.queryBonusHitApplied && (combat.surgeConditions || []).includes('Bleed')) {
+    combat.bonusHits = Math.max(0, (combat.bonusHits || 0) - 1);
+    combat.queryBonusHitApplied = false;
+    await logGameAction(game, client, '**Query** — +1 Hit removed (defender became Bleeding).', { phase: 'ROUND', icon: 'attack' });
+  }
   let { hit, damage, resultText } = computeCombatResult(combat);
   const totalBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
   const attackerPlayerNum = combat.attackerPlayerNum;
@@ -3235,9 +3241,18 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}**. **${_abDcName}** suffers **${_abHits} Damage**.`).catch(discordCatch);
             await logGameAction(game, client, `🗡️ **Assassin's Blade** — **${_abDcName}** suffers **${_abHits} Damage**.`, { phase: 'ROUND', icon: 'attack' });
           } else if (_abHits > 0) {
-            // Multiple adjacent hostiles — honor system for the choice
-            const _abNames = _abAdjacentHostiles.map(({ fk }) => dcNameFromFigureKey(fk)).join(', ');
-            await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}** (${_abHits} Damage). Choose an adjacent hostile figure to apply damage: ${_abNames}. *(Honor system.)*`).catch(discordCatch);
+            // Multiple adjacent hostiles — show picker buttons
+            game.pendingAssassinsBlade = { hits: _abHits, rollStr: _abRollStr, defenderPlayerNum, attackerPlayerNum };
+            const _abBtns = _abAdjacentHostiles.map(({ fk }) => {
+              const name = dcNameFromFigureKey(fk);
+              return new ButtonBuilder()
+                .setCustomId(`ab_blade_pick_${game.gameId}_${fk}`)
+                .setLabel(name)
+                .setStyle(ButtonStyle.Danger);
+            });
+            const _abRows = [];
+            for (let _r = 0; _r < _abBtns.length; _r += 5) _abRows.push(new ActionRowBuilder().addComponents(_abBtns.slice(_r, _r + 5)));
+            await thread.send({ content: `🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}** (${_abHits} Damage). Choose an adjacent hostile figure:`, components: _abRows }).catch(discordCatch);
           } else {
             await thread.send(`🗡️ **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}**. No hits.`).catch(discordCatch);
           }
@@ -3257,11 +3272,53 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       _applyCondition(game, _sfTargetFk, 'Weaken');
     }
     const _sfTargetName = dcNameFromFigureKey(combat.target?.figureKey) || combat.defenderDcName;
-    await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. You may choose a SMALL friendly figure within 3 spaces to gain 2 MP. *(Honor system for MP grant.)*`).catch(discordCatch);
-    await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened after Ranged attack.`, { phase: 'ROUND', icon: 'card' });
+    // Find SMALL friendly figures within 3 spaces of attacker for MP grant
+    const _sfAttackerPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
+    const _sfSmallFriendlies = [];
+    if (_sfAttackerPos) {
+      const _sfEffects = getDcEffects();
+      for (const [_sfFk, _sfPos] of Object.entries(game.figurePositions?.[attackerPlayerNum] || {})) {
+        if (!_sfPos || _sfFk === combat.attackerFigureKey) continue;
+        if (getRange(_sfAttackerPos, _sfPos) > 3) continue;
+        // SMALL check: skip LARGE and MASSIVE figures
+        const _sfDcName = dcNameFromFigureKey(_sfFk);
+        const _sfKwds = (_sfEffects[_sfDcName]?.keywords || []).map(k => String(k).toUpperCase());
+        if (_sfKwds.includes('LARGE') || _sfKwds.includes('MASSIVE')) continue;
+        // Find msgId for this figure's DC
+        const _sfFigMsgId = findDcMessageIdForFigure(game.gameId, attackerPlayerNum, _sfFk);
+        if (_sfFigMsgId) _sfSmallFriendlies.push({ fk: _sfFk, msgId: _sfFigMsgId, dcName: _sfDcName });
+      }
+    }
+    if (_sfSmallFriendlies.length === 1) {
+      // Auto-grant 2 MP to the only eligible friendly
+      const _sfF = _sfSmallFriendlies[0];
+      game.movementBank = game.movementBank || {};
+      if (!game.movementBank[_sfF.msgId]) {
+        game.movementBank[_sfF.msgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: _sfF.dcName };
+      } else {
+        game.movementBank[_sfF.msgId].total += 2;
+        game.movementBank[_sfF.msgId].remaining += 2;
+      }
+      await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. **${_sfF.dcName}** gains **2 MP**.`).catch(discordCatch);
+      await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened; **${_sfF.dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
+    } else if (_sfSmallFriendlies.length > 1) {
+      // Show picker buttons
+      game.pendingSuppressiveFireMp = { attackerPlayerNum };
+      const _sfBtns = _sfSmallFriendlies.map(({ fk, dcName }) =>
+        new ButtonBuilder().setCustomId(`sf_mp_pick_${game.gameId}_${fk}`).setLabel(dcName).setStyle(ButtonStyle.Primary)
+      );
+      const _sfRows = [];
+      for (let _r = 0; _r < _sfBtns.length; _r += 5) _sfRows.push(new ActionRowBuilder().addComponents(_sfBtns.slice(_r, _r + 5)));
+      await thread.send({ content: `**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. Choose a SMALL friendly figure within 3 spaces to gain 2 MP:`, components: _sfRows }).catch(discordCatch);
+      await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened after Ranged attack.`, { phase: 'ROUND', icon: 'card' });
+    } else {
+      await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. No eligible SMALL friendly figures within 3 spaces for MP grant.`).catch(discordCatch);
+      await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened after Ranged attack.`, { phase: 'ROUND', icon: 'card' });
+    }
   }
   // Flame Trooper Incinerate: after attacking, each figure that suffered damage suffers 1 Strain (HP loss). Place Rubble in target space.
   const _ftAtkUpgrades = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
+  const _ftBlastRefreshMsgIds = [];
   if (_ftAtkUpgrades.includes('Flame Trooper') && hit) {
     // Apply 1 Strain (1 HP loss) to target if it suffered damage and survived
     if (damage > 0 && targetMsgId) {
@@ -3272,17 +3329,59 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       } else {
         const _ftHsBefore = dcHealthState.get(targetMsgId);
         if (_ftHsBefore?.[targetFigIndex]?.[0] > 0) {
-            const { newHp: _ftNew } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
+            const { newHp: _ftNew, wasDefeated: _ftDefeated } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
             await thread.send(`**Incinerate** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`).catch(discordCatch);
-            if (_ftNew <= 0) {
-              await thread.send(`⚠️ **${combat.target.label}** may be defeated from Incinerate Strain. *(Apply defeat manually.)*`).catch(() => {});
+            if (_ftDefeated || _ftNew <= 0) {
+              removeFigurePosition(game, defenderPlayerNum, combat.target.figureKey);
+              if (game.figureConditions?.[combat.target.figureKey]) delete game.figureConditions[combat.target.figureKey];
+              const _ftVp = calculateKillVp(combat.defenderDcName);
+              awardKillVp(game, attackerPlayerNum, _ftVp);
+              await logGameAction(game, client, `💀 **Incinerate** — **${combat.target.label}** defeated from Strain (+${_ftVp} VP).`, { phase: 'ROUND', icon: 'attack' });
+              const { dcList: _ftDcList, idx: _ftIdx } = lookupFigureDcIndex(game, defenderPlayerNum, combat.target.figureKey);
+              if (_ftIdx >= 0) {
+                await decrementActivationIfGroupDefeated(game, defenderPlayerNum, _ftIdx, client);
+                const _ftCcKey = ccAttachmentsKey(defenderPlayerNum);
+                if (game[_ftCcKey]?.[targetMsgId]?.length) {
+                  delete game[_ftCcKey][targetMsgId];
+                  await updateAttachmentMessageForDc(game, defenderPlayerNum, targetMsgId, client);
+                }
+              }
+              await checkWinConditions(game, client);
             }
         }
       }
     }
-    // Blast damage also triggers Incinerate Strain on adjacent damaged figures — honor system
-    if (effectiveBlast > 0) {
-      await thread.send('**Incinerate** — Figures that suffered Blast damage also suffer 1 Strain. *(Honor system.)*').catch(() => {});
+    // Blast damage also triggers Incinerate Strain on adjacent damaged figures — auto-apply
+    if (effectiveBlast > 0 && game.selectedMap?.id) {
+      const _ftBlastAdj = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
+      for (const { figureKey: _ftBlastFk, playerNum: _ftBlastPn } of _ftBlastAdj) {
+        // Fireproof: skip friendly figures with Flame Trooper attachment
+        if (_ftBlastPn === attackerPlayerNum && _ftAtkUpgrades.includes('Flame Trooper')) continue;
+        const _ftBlastMsgId = findDcMessageIdForFigure(game.gameId, _ftBlastPn, _ftBlastFk);
+        if (!_ftBlastMsgId) continue;
+        // Fireproof: target immune to Strain if it also has Flame Trooper attachment
+        const _ftBlastUpgrades = game.p1DcAttachments?.[_ftBlastMsgId] || game.p2DcAttachments?.[_ftBlastMsgId] || [];
+        if (_ftBlastUpgrades.includes('Flame Trooper')) continue;
+        const { figureIndex: _ftBlastFigIdx } = parseFigureKey(_ftBlastFk);
+        const _ftBlastHsBefore = dcHealthState.get(_ftBlastMsgId);
+        if (!_ftBlastHsBefore?.[_ftBlastFigIdx] || _ftBlastHsBefore[_ftBlastFigIdx][0] <= 0) continue;
+        const { newHp: _ftBlastNew, wasDefeated: _ftBlastDied } = reduceHp(dcHealthState, game, _ftBlastMsgId, _ftBlastFigIdx, 1, _ftBlastPn);
+        const _ftBlastName = dcNameFromFigureKey(_ftBlastFk);
+        await thread.send(`**Incinerate** — **${_ftBlastName}** suffers 1 Strain from Blast.`).catch(() => {});
+        _ftBlastRefreshMsgIds.push(_ftBlastMsgId);
+        if (_ftBlastDied || _ftBlastNew <= 0) {
+          removeFigurePosition(game, _ftBlastPn, _ftBlastFk);
+          if (game.figureConditions?.[_ftBlastFk]) delete game.figureConditions[_ftBlastFk];
+          const _ftBlastVp = calculateKillVp(_ftBlastName);
+          awardKillVp(game, _ftBlastPn === attackerPlayerNum ? defenderPlayerNum : attackerPlayerNum, _ftBlastVp);
+          await logGameAction(game, client, `💀 **Incinerate** — **${_ftBlastName}** defeated from Blast Strain (+${_ftBlastVp} VP).`, { phase: 'ROUND', icon: 'attack' });
+          const { dcList: _ftBlastDcList, idx: _ftBlastIdx } = lookupFigureDcIndex(game, _ftBlastPn, _ftBlastFk);
+          if (_ftBlastIdx >= 0) {
+            await decrementActivationIfGroupDefeated(game, _ftBlastPn, _ftBlastIdx, client);
+          }
+          await checkWinConditions(game, client);
+        }
+      }
     }
     // Place Rubble token in target space (if attack didn't miss)
     if (combat.target?.figureKey) {
@@ -3302,6 +3401,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null) embedRefreshMsgIds.add(combat.attackerMsgId);
   // Force Deflection embed refresh (flag set earlier in pre-defeat section)
   if (_fdNeedsEmbedRefresh && combat.attackerMsgId) embedRefreshMsgIds.add(combat.attackerMsgId);
+  // Incinerate Blast Strain embed refreshes (collected earlier)
+  if (_ftBlastRefreshMsgIds?.length) for (const _mid of _ftBlastRefreshMsgIds) embedRefreshMsgIds.add(_mid);
 
   // Concentrated Fire: apply Stun to the attacker figure after attack resolves
   if (game.applySelfStunAfterAttackPlayerNum?.[attackerPlayerNum] && combat.attackerMsgId) {
@@ -3833,7 +3934,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
     if (meDiscard.length === 0) {
       await thread.send(`**Military Efficiency** — No cards in discard pile to return.`).catch(discordCatch);
     } else {
-      // Shuffle the most-recently-discarded card back (player chooses in practice — honour system for which card)
+      // Shuffle the most-recently-discarded card back into the deck
       const meCard = meDiscard[meDiscard.length - 1];
       game[meDiscardKey] = meDiscard.slice(0, -1);
       const meDeck = [...(game[meDeckKey] || [])];

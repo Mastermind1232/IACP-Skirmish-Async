@@ -135,7 +135,7 @@ export function resolveAbility(abilityId, context) {
       const existing = game.nextAttackBonusSurgeAbilities[playerNum] || [];
       game.nextAttackBonusSurgeAbilities[playerNum] = [...existing, `cleave ${chosen.nextAttackCleave}`];
     }
-    // Grant Reach for next attack (melee range extended to 2, honor system for diagonal)
+    // Grant Reach for next attack (melee range extended to 2)
     if (chosen.nextAttackReach && game && playerNum) {
       game.nextAttackReach = game.nextAttackReach || {};
       game.nextAttackReach[playerNum] = true;
@@ -152,7 +152,7 @@ export function resolveAbility(abilityId, context) {
     const deckKey = ccDeckKey(playerNum);
     const discard = game[discardKey] || [];
     if (discard.length === 0) return { applied: true, logMessage: '**Military Efficiency** — No cards in discard to return.' };
-    // Shuffle the most-recently-discarded card back (player chooses in practice — honour system for which card)
+    // Shuffle the most-recently-discarded card back (auto-picks last discarded)
     const toReturn = discard[discard.length - 1];
     const newDiscard = discard.slice(0, -1);
     const deck = [...(game[deckKey] || [])];
@@ -160,7 +160,7 @@ export function resolveAbility(abilityId, context) {
     deck.splice(insertIdx, 0, toReturn);
     game[discardKey] = newDiscard;
     game[deckKey] = deck;
-    return { applied: true, logMessage: `**Military Efficiency** — **${toReturn}** shuffled from discard back into your Command deck. (Honour system: choose which card to return — bot uses most-recently-discarded.)`, refreshDiscard: true };
+    return { applied: true, logMessage: `**Military Efficiency** — **${toReturn}** shuffled from discard back into your Command deck.`, refreshDiscard: true };
   }
 
   // dcSpecial: pushTargetWithinRange (Force Throw, Wrist Cord) — pick a SMALL enemy, then pick landing space, then push.
@@ -1040,7 +1040,7 @@ export function resolveAbility(abilityId, context) {
     if (choiceIndex != null && targetFigureKey) {
       applyCondition(game, targetFigureKey, 'Focus');
       const chosenName = dcNameFromFigureKey(targetFigureKey);
-      return { applied: true, logMessage: `**Bartered Information** — **${chosenName}** is now **Focused**. *(You may spend 1 VP to Focus another friendly SCUM within 2: honor system.)*`, refreshDcEmbed: true };
+      return { applied: true, logMessage: `**Bartered Information** — **${chosenName}** is now **Focused**. *(You may also spend 1 VP to Focus another friendly SCUM within 2.)*`, refreshDcEmbed: true };
     }
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
@@ -1429,7 +1429,7 @@ export function resolveAbility(abilityId, context) {
       game.freeAttackBonusPending[msgId] = true;
     }
     const label = entry.label || 'Wall Run';
-    const extraMsg = entry.freeAttackBonus ? ' Then your next attack costs no action.' : ' You may ignore terrain adjacent to walls during this movement (honour system).';
+    const extraMsg = entry.freeAttackBonus ? ' Then your next attack costs no action.' : ' You may ignore terrain adjacent to walls during this movement.';
     return { applied: true, logMessage: entry.logMessage || `**${label}** — Gained ${speed} free movement points (your Speed).${extraMsg}`, refreshMovementBank: true, activeMsgId: msgId };
   }
 
@@ -4610,7 +4610,7 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const targetName = readyAdjacentFriendlyDcName || chosenOption;
     if (!targetName) {
-      // Build choice list from friendly DCs (honor system: player picks an adjacent one)
+      // Build choice list from friendly DCs (player picks an adjacent one)
       const dcList = getDcList(game, playerNum) || [];
       const opts = dcList
         .filter((dc) => dc && !dc.defeated)
@@ -4842,7 +4842,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: celebrationVp only (Celebration) — gain N VP after a unique hostile is defeated (honor system, no armyCost modifier)
+  // ccEffect: celebrationVp only (Celebration) — gain N VP after a unique hostile is defeated (no armyCost modifier)
   if (entry.type === 'ccEffect' && typeof entry.celebrationVp === 'number' && !entry.increaseArmyCostBy) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
@@ -6696,7 +6696,7 @@ export function resolveAbility(abilityId, context) {
       game.freeAttackBonusPending[msgId] = true;
       if (friendlyMsgId) game.freeAttackBonusPending[friendlyMsgId] = true;
       const dcName = dcNameFromFigureKey(chosenFigureKey);
-      return { applied: true, logMessage: `**Coordinated Attack** — **${meta.dcName}** and **${dcName}** each gain 1 free attack. Both must target the same hostile figure. LOS: figures don't block for these attacks (honor system).` };
+      return { applied: true, logMessage: `**Coordinated Attack** — **${meta.dcName}** and **${dcName}** each gain 1 free attack. Both must target the same hostile figure. LOS: figures don't block for these attacks.` };
     }
     // Phase 1: friendly figure picker within 3
     const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -6786,7 +6786,7 @@ export function resolveAbility(abilityId, context) {
       }
       game[deckKey] = deck;
       const dcName = dcNameFromFigureKey(chosenFigureKey);
-      return { applied: true, logMessage: `**Devotion** — Search your Command deck for a card with **${dcName}** as a trait and draw it (honor system). Deck shuffled (${deck.length} cards).` };
+      return { applied: true, logMessage: `**Devotion** — Search your Command deck for a card with **${dcName}** as a trait and draw it. Deck shuffled (${deck.length} cards).` };
     }
     // Phase 1: adjacent friendly picker
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
@@ -7168,7 +7168,7 @@ export function resolveAbility(abilityId, context) {
         game.roundDefenseBonusBlock[playerNum] = (game.roundDefenseBonusBlock[playerNum] || 0) + 1;
         return { applied: true, logMessage: `**Choose a Side (SCUM)** — This round, +1 Block when defending for your figures (${mobileKeys.length} Mobile figure${mobileKeys.length !== 1 ? 's' : ''} benefit). [Personal Combat Shield effect approximated for full team.]` };
       } else {
-        // IMPERIAL: Gar Saxon Flamethrower — grant free fixedAreaEffect-style attack (honor system)
+        // IMPERIAL: Gar Saxon Flamethrower — grant free fixedAreaEffect-style attack
         if (msgId) {
           game.freeAttackBonusPending = game.freeAttackBonusPending || {};
           game.freeAttackBonusPending[msgId] = true;
@@ -7234,7 +7234,7 @@ export function resolveAbility(abilityId, context) {
           mpNote = ` **${dcNameFromFigureKey(chosenFigureKey)}** gains 1 MP.`;
         }
       }
-      return { applied: true, logMessage: `**Navigation Upgrade** — ${strainNote}.${mpNote} Placed as Attachment — exhaust during any friendly DROID's activation for +1 MP (honor system).`, refreshDcEmbed: true };
+      return { applied: true, logMessage: `**Navigation Upgrade** — ${strainNote}.${mpNote} Placed as Attachment — exhaust during any friendly DROID's activation for +1 MP.`, refreshDcEmbed: true };
     }
     const dcEffects = getDcEffects();
     const droidFks = [];
@@ -7246,7 +7246,7 @@ export function resolveAbility(abilityId, context) {
     }
     if (!droidFks.length) {
       const strainNote = applyStrain();
-      return { applied: true, logMessage: `**Navigation Upgrade** — ${strainNote}. No friendly DROIDs on board. Placed as Attachment (exhaust during DROID activation for +1 MP — honor system).`, refreshDcEmbed: true };
+      return { applied: true, logMessage: `**Navigation Upgrade** — ${strainNote}. No friendly DROIDs on board. Placed as Attachment (exhaust during DROID activation for +1 MP).`, refreshDcEmbed: true };
     }
     return { requiresChoice: true, choiceOptions: droidLabels.map((n) => `Give 1 MP to ${n}`), choiceValues: droidFks };
   }
@@ -7383,7 +7383,7 @@ export function resolveAbility(abilityId, context) {
     const oppDiscard = getCcDiscard(game, oppNum) || [];
     const lastCard = oppDiscard[oppDiscard.length - 1] || null;
     const cancelNote = lastCard ? `Opponent's most recent card: **${lastCard}**` : 'No recent opponent card found — identify the card manually.';
-    return { applied: true, logMessage: `**Comm Disruption** — You have **${spyCount}** friendly SPY group${spyCount !== 1 ? 's' : ''}: can cancel any opponent CC with cost ≤ ${spyCount}. ${cancelNote} Discard that card and cancel its effects (honor system if already applied).` };
+    return { applied: true, logMessage: `**Comm Disruption** — You have **${spyCount}** friendly SPY group${spyCount !== 1 ? 's' : ''}: can cancel any opponent CC with cost ≤ ${spyCount}. ${cancelNote} Discard that card and cancel its effects.` };
   }
 
   // ccEffect: setATrapEffect (Set a Trap) — choose a space; at round end a friendly on that space may attack a hostile on it

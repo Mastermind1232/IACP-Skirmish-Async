@@ -1,5 +1,6 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
-import { opponentPlayerNum } from '../game/player-helpers.js';
+import { opponentPlayerNum, getPlayerId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
+import { reduceHp, dcNameFromFigureKey, awardKillVp } from '../game/index.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 
 export async function handleToughLuck(interaction, ctx) {
@@ -288,4 +289,189 @@ export async function handleHunterProtocol(interaction, ctx) {
     if (_hpThread) await _hpThread.send({ content: `**Spend surge?** **${_hpRemaining}** surge left.`, components: [new ActionRowBuilder().addComponents(_hpRows.slice(0, 5))] }).catch(() => {});
   }
   saveGames(); return;
+}
+
+/**
+ * Handle strike_me_down_yes_ / strike_me_down_no_ buttons.
+ * Strike Me Down (Obi-Wan): when attack declared on Obi-Wan, may reduce VP cost by 3 and be defeated, ending the attack.
+ */
+export async function handleStrikeMeDown(interaction, ctx) {
+  const {
+    getGame, canActAsPlayer, saveGames, client,
+    dcHealthState, findDcMessageIdForFigure,
+    removeFigurePosition, logGameAction, isGroupDefeated,
+    updateActivationsMessage, getDcStats,
+    checkWinConditions,
+  } = ctx;
+
+  const isYes = interaction.customId.startsWith('strike_me_down_yes_');
+  const gameId = interaction.customId.replace(/^strike_me_down_(?:yes|no)_/, '');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!game.pendingStrikeMeDown) {
+    await interaction.followUp({ content: 'No pending Strike Me Down.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const smd = game.pendingStrikeMeDown;
+  const defPN = smd.defenderPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, defPN, canActAsPlayer, 'Only the defender (Obi-Wan\'s owner) may respond.')) return;
+  await interaction.deferUpdate().catch(() => {});
+
+  const thread = await client.channels.fetch(smd.combatThreadId).catch(() => null);
+
+  // Clear the buttons from the picker message
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(() => {});
+
+  if (isYes) {
+    // Defeat Obi-Wan: set HP to 0, remove position
+    const fk = smd.defenderFigureKey;
+    const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+    const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+    const targetMsgId = findDcMessageIdForFigure?.(gameId, defPN, fk);
+
+    if (targetMsgId && dcHealthState) {
+      const healthState = dcHealthState.get(targetMsgId) || [];
+      const entry = healthState[figIdx];
+      if (entry) {
+        const curHp = entry[0];
+        if (curHp > 0) reduceHp(dcHealthState, game, targetMsgId, figIdx, curHp, defPN);
+      }
+    }
+
+    // Remove position
+    if (removeFigurePosition) removeFigurePosition(game, defPN, fk);
+
+    // Clean up conditions
+    if (game.figureConditions?.[fk]) delete game.figureConditions[fk];
+
+    // Award VP (reduced by 3, min 0) to the attacker
+    const dcName = dcNameFromFigureKey(fk);
+    const stats = getDcStats?.(dcName);
+    const baseCost = stats?.cost ?? 5;
+    const reducedCost = Math.max(0, baseCost - 3);
+    const atkPN = smd.attackerPlayerNum;
+    if (reducedCost > 0) awardKillVp(game, atkPN, reducedCost);
+
+    // Cancel the pending combat (attack ends)
+    game.pendingCombat = null;
+
+    // Check if group fully defeated → decrement activations
+    if (targetMsgId) {
+      const dcMsgIds = getDcMessageIds(game, defPN);
+      const dcIdx = dcMsgIds?.indexOf(targetMsgId) ?? -1;
+      if (dcIdx >= 0 && isGroupDefeated?.(game, defPN, dcIdx)) {
+        if (updateActivationsMessage) await updateActivationsMessage(game, defPN, client);
+      }
+    }
+
+    if (thread) await thread.send(`**Strike Me Down** — Obi-Wan is defeated (VP cost reduced by 3: ${reducedCost} VP awarded to attacker). Attack ended.`).catch(() => {});
+    if (logGameAction) await logGameAction(game, client, `**Strike Me Down** — Obi-Wan chose to be defeated. Attacker gains ${reducedCost} VP (cost reduced by 3). Attack cancelled.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+
+    // Check win conditions
+    if (checkWinConditions) await checkWinConditions(game, client);
+  } else {
+    if (thread) await thread.send('**Strike Me Down** — Declined. Attack continues normally.').catch(() => {});
+  }
+
+  game.pendingStrikeMeDown = null;
+  saveGames();
+}
+
+/**
+ * Handle slow_on_draw_yes_ / slow_on_draw_no_ buttons.
+ * Slow on the Draw (Greedo): defender may interrupt to attack Greedo before the current attack resolves.
+ */
+export async function handleSlowOnTheDraw(interaction, ctx) {
+  const {
+    getGame, canActAsPlayer, saveGames, client,
+    logGameAction,
+  } = ctx;
+
+  const isYes = interaction.customId.startsWith('slow_on_draw_yes_');
+  const gameId = interaction.customId.replace(/^slow_on_draw_(?:yes|no)_/, '');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!game.pendingSlowOnTheDraw) {
+    await interaction.followUp({ content: 'No pending Slow on the Draw.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const sotd = game.pendingSlowOnTheDraw;
+  const defPN = sotd.defenderPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, defPN, canActAsPlayer, 'Only the defender may respond.')) return;
+  await interaction.deferUpdate().catch(() => {});
+
+  const thread = await client.channels.fetch(sotd.combatThreadId).catch(() => null);
+
+  // Clear the buttons from the picker message
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(() => {});
+
+  if (isYes) {
+    // Queue a free attack for the defender targeting Greedo
+    // Store the current combat state so it can resume after the free attack
+    game.slowOnTheDrawInterrupt = {
+      suspendedCombat: game.pendingCombat,
+      attackerFigureKey: sotd.attackerFigureKey,
+      attackerPlayerNum: sotd.attackerPlayerNum,
+      defenderPlayerNum: defPN,
+    };
+    // Clear pendingCombat so the defender can start a new attack
+    game.pendingCombat = null;
+
+    const defOwnerId = getPlayerId(game, defPN);
+    if (thread) await thread.send({ content: `**Slow on the Draw** — <@${defOwnerId}>, you may now perform an attack targeting **Greedo**. Use your DC's Attack action. After the interrupt attack resolves, click **Resume Original Attack** below to continue.`, allowedMentions: { users: [defOwnerId] } }).catch(() => {});
+
+    // Post a resume button in the thread for after the interrupt attack
+    const resumeRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`slow_on_draw_resume_${gameId}`)
+        .setLabel('Resume Original Attack')
+        .setStyle(ButtonStyle.Success),
+    );
+    if (thread) await thread.send({ content: 'When the interrupt attack is complete (or if you choose not to attack), click below to resume Greedo\'s attack.', components: [resumeRow] }).catch(() => {});
+
+    if (logGameAction) await logGameAction(game, client, `**Slow on the Draw** — Defender interrupts to attack Greedo first.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+  } else {
+    if (thread) await thread.send('**Slow on the Draw** — Declined. Attack continues normally.').catch(() => {});
+  }
+
+  game.pendingSlowOnTheDraw = null;
+  saveGames();
+}
+
+/**
+ * Handle slow_on_draw_resume_ button: restore the suspended combat after the interrupt attack.
+ */
+export async function handleSlowOnTheDrawResume(interaction, ctx) {
+  const {
+    getGame, canActAsPlayer, saveGames, client,
+    logGameAction,
+  } = ctx;
+
+  const gameId = interaction.customId.replace('slow_on_draw_resume_', '');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!game.slowOnTheDrawInterrupt) {
+    await interaction.followUp({ content: 'No suspended Slow on the Draw combat.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  // Either player can click resume
+  if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
+    await interaction.followUp({ content: 'Only players in this game can resume.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate().catch(() => {});
+
+  // Clear the resume button
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(() => {});
+
+  // Restore the suspended combat
+  game.pendingCombat = game.slowOnTheDrawInterrupt.suspendedCombat;
+  const combatThreadId = game.pendingCombat?.combatThreadId;
+  game.slowOnTheDrawInterrupt = null;
+
+  const thread = combatThreadId ? await client.channels.fetch(combatThreadId).catch(() => null) : null;
+  if (thread) await thread.send('**Slow on the Draw** — Interrupt complete. Greedo\'s attack resumes.').catch(() => {});
+  if (logGameAction) await logGameAction(game, client, '**Slow on the Draw** — Interrupt resolved. Original attack resumed.', { phase: 'ROUND', icon: 'card' }).catch(() => {});
+
+  saveGames();
 }

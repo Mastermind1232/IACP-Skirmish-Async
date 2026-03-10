@@ -106,6 +106,25 @@ export async function handleDcActivate(interaction, ctx) {
       game.agitateNextActivation = null;
     }
   }
+  // Force Slow: if any figure of this DC is flagged to skip activation, block it
+  if (game.forceSlowSkipActivation) {
+    const _fsFigPos = game.figurePositions?.[playerNum] || {};
+    for (const fk of Object.keys(_fsFigPos)) {
+      if (!fk.startsWith(dcName + '-') || !_fsFigPos[fk]) continue;
+      if (game.forceSlowSkipActivation[fk]) {
+        delete game.forceSlowSkipActivation[fk];
+        if (Object.keys(game.forceSlowSkipActivation).length === 0) delete game.forceSlowSkipActivation;
+        await interaction.followUp({ content: `🐌 **Force Slow** — **${displayName}** must skip this activation.`, ephemeral: true }).catch(discordCatch);
+        // Mark this DC as exhausted (skip activation counts as its activation)
+        const activatedKey = `p${playerNum}ActivatedDcIndices`;
+        game[activatedKey] = game[activatedKey] || [];
+        if (!game[activatedKey].includes(dcIndex)) game[activatedKey].push(dcIndex);
+        setActivationsRemaining(game, playerNum, getActivationsRemaining(game, playerNum) - 1);
+        saveGames();
+        return;
+      }
+    }
+  }
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const isMyTurn = ownerId === turnPlayerId;
   if (!isMyTurn) {

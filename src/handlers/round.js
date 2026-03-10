@@ -5,10 +5,12 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { getDcEffects, getMapSpaces, getFormCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
-import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey } from '../game/index.js';
+import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, awardKillVp, deductVp } from '../game/index.js';
+import { getRange } from '../game/spatial.js';
+import { getDeploymentZones, getCcEffect } from '../data-loader.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
-  getCcHand, getCcDeck, getDcAttachments,
+  getCcHand, getCcDeck, getCcDiscard, getDcAttachments,
   setActivationsRemaining, setActivatedDcIndices,
   getActivationsTotal,
   ccHandKey, ccDiscardKey,
@@ -160,10 +162,36 @@ export async function handleEndEndOfRound(interaction, ctx) {
         if (!mid) continue;
         const ownerId = getPlayerId(game, pn);
         const oppNum = opponentPlayerNum(pn);
-        await logGameAction(game, client, `💰 **What's Yours is Mine** — <@${ownerId}>, if **${dc.displayName || dc.dcName}** is in the opponent's deployment zone, steal 2 VP from Player ${oppNum}. *(Honor system.)*`, {
-          phase: 'ROUND', icon: 'round',
-          allowedMentions: { users: [ownerId] },
-        });
+        // Auto-check if any figure of this DC is in the opponent's deployment zone
+        const mapId = game.selectedMap?.id;
+        if (mapId && isFigureInDeploymentZone) {
+          // Check if any figure of this DC is in the OPPONENT's deployment zone
+          const _wymFigPos = game.figurePositions?.[pn] || {};
+          let _wymInOppZone = false;
+          for (const fk of Object.keys(_wymFigPos)) {
+            if (!fk.startsWith(dc.dcName + '-')) continue;
+            if (!_wymFigPos[fk]) continue;
+            // isFigureInDeploymentZone checks if figure is in their OWN zone, so we need to check oppNum's zone manually
+            const _wymZoneData = getDeploymentZones()[mapId];
+            if (!_wymZoneData) break;
+            const _wymInitPn = getInitiativePlayerNum(game);
+            const _wymOppZone = oppNum === _wymInitPn ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+            const _wymOppSpaces = new Set((_wymZoneData[_wymOppZone] || []).map(s => String(s).toLowerCase()));
+            if (_wymOppSpaces.has(String(_wymFigPos[fk]).toLowerCase())) { _wymInOppZone = true; break; }
+          }
+          if (_wymInOppZone) {
+            // Steal 2 VP: deduct from opponent, add to owner
+            const _wymOppVpKey = oppNum === 1 ? 'player1VP' : 'player2VP';
+            const _wymOwnVpKey = pn === 1 ? 'player1VP' : 'player2VP';
+            const _wymSteal = Math.min(2, game[_wymOppVpKey] || 0);
+            game[_wymOppVpKey] = (game[_wymOppVpKey] || 0) - _wymSteal;
+            game[_wymOwnVpKey] = (game[_wymOwnVpKey] || 0) + _wymSteal;
+            await logGameAction(game, client, `💰 **What's Yours is Mine** — **${dc.displayName || dc.dcName}** is in the opponent's deployment zone! Stole **${_wymSteal} VP** from Player ${oppNum}.`, { phase: 'ROUND', icon: 'round' });
+            await checkWinConditions(game, client);
+          } else {
+            await logGameAction(game, client, `💰 **What's Yours is Mine** — **${dc.displayName || dc.dcName}** is not in the opponent's deployment zone. No VP stolen.`, { phase: 'ROUND', icon: 'round' });
+          }
+        }
       }
     }
   }
@@ -222,7 +250,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
         new ButtonBuilder().setCustomId(`scavenged_walker_attack_${gameId}_${_swMid}`).setLabel('Interrupt Attack (-1 Hit)').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`scavenged_walker_skip_${gameId}_${_swMid}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
-      await logGameAction(game, client, `<@${_swOwnerId}> **Scavenged Walker** — **${_swDc.displayName || _swDc.dcName}** may interrupt to perform an attack with -1 Hit at end of round. Use Attack button to perform this attack (remember -1 Hit penalty). *(Honor system for -1 Hit.)*`, {
+      await logGameAction(game, client, `<@${_swOwnerId}> **Scavenged Walker** — **${_swDc.displayName || _swDc.dcName}** may interrupt to perform an attack with -1 Hit at end of round.`, {
         components: [_swRow],
         allowedMentions: { users: [_swOwnerId] },
       });
@@ -569,20 +597,12 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
 
         // Force Slow (Cal Kestis): choose a hostile within 3 to skip activation
         if (sIds.includes('force_slow_cal')) {
-          const ownerId = getPlayerId(game, playerNum);
-          await logGameAction(game, client, `🐌 **Force Slow** — <@${ownerId}>, choose a hostile figure within 3 spaces of **${dc.displayName || dc.dcName}**; that figure skips its next activation. *(Honor system.)*`, {
-            phase: 'ROUND', icon: 'round',
-            allowedMentions: { users: [ownerId] },
-          });
+          await _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, client);
         }
 
         // Excavation (Doctor Aphra): choose a CC from discard with cost ≤1, add to hand
         if (sIds.includes('excavation_aphra')) {
-          const ownerId = getPlayerId(game, playerNum);
-          await logGameAction(game, client, `⛏️ **Excavation** — <@${ownerId}>, choose a Command Card from your discard pile with cost 1 or less and add it to your hand. *(Honor system.)*`, {
-            phase: 'ROUND', icon: 'round',
-            allowedMentions: { users: [ownerId] },
-          });
+          await _postExcavationPicker(game, gameId, playerNum, dc, logGameAction, client);
         }
 
         // Shape/Shift (Clawdite Shapeshifter): form picker at start of round
@@ -770,20 +790,12 @@ export async function handleEndStartOfRound(interaction, ctx) {
 
         // Force Slow (Cal Kestis): choose a hostile within 3 to skip activation
         if (sIds.includes('force_slow_cal')) {
-          const ownerId = getPlayerId(game, playerNum);
-          await logGameAction(game, client, `🐌 **Force Slow** — <@${ownerId}>, choose a hostile figure within 3 spaces of **${dc.displayName || dc.dcName}**; that figure skips its next activation. *(Honor system.)*`, {
-            phase: 'ROUND', icon: 'round',
-            allowedMentions: { users: [ownerId] },
-          });
+          await _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, client);
         }
 
         // Excavation (Doctor Aphra): choose a CC from discard with cost ≤1, add to hand
         if (sIds.includes('excavation_aphra')) {
-          const ownerId = getPlayerId(game, playerNum);
-          await logGameAction(game, client, `⛏️ **Excavation** — <@${ownerId}>, choose a Command Card from your discard pile with cost 1 or less and add it to your hand. *(Honor system.)*`, {
-            phase: 'ROUND', icon: 'round',
-            allowedMentions: { users: [ownerId] },
-          });
+          await _postExcavationPicker(game, gameId, playerNum, dc, logGameAction, client);
         }
 
         // Shape/Shift (Clawdite Shapeshifter): form picker at start of round
@@ -853,4 +865,84 @@ export async function handleEndStartOfRound(interaction, ctx) {
   await updateHandChannelMessages(game, client);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
+}
+
+// ── Helpers: Force Slow & Excavation pickers (shared by handleEndEndOfRound + handleEndStartOfRound) ──
+
+async function _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, client) {
+  const ownerId = getPlayerId(game, playerNum);
+  const oppNum = opponentPlayerNum(playerNum);
+  // Find figure key for this DC to get its position
+  const calFk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith(dc.dcName + '-'));
+  const calPos = calFk ? game.figurePositions[playerNum][calFk] : null;
+  if (!calPos) {
+    await logGameAction(game, client, `🐌 **Force Slow** — **${dc.displayName || dc.dcName}** has no figure on board. Skipped.`, { phase: 'ROUND', icon: 'round' });
+    return;
+  }
+  // Find hostile figures within 3 spaces
+  const hostiles = [];
+  for (const [fk, pos] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+    if (!pos) continue;
+    if (getRange(calPos, pos) <= 3) hostiles.push({ fk, dcName: dcNameFromFigureKey(fk) });
+  }
+  if (hostiles.length === 0) {
+    await logGameAction(game, client, `🐌 **Force Slow** — No hostile figures within 3 spaces of **${dc.displayName || dc.dcName}**. Skipped.`, { phase: 'ROUND', icon: 'round' });
+    return;
+  }
+  if (hostiles.length === 1) {
+    // Auto-select the only target
+    game.forceSlowSkipActivation = game.forceSlowSkipActivation || {};
+    game.forceSlowSkipActivation[hostiles[0].fk] = true;
+    await logGameAction(game, client, `🐌 **Force Slow** — **${hostiles[0].dcName}** will skip its next activation (only hostile in range).`, { phase: 'ROUND', icon: 'round' });
+    return;
+  }
+  // Multiple targets — show picker
+  const btns = hostiles.map(({ fk, dcName }) =>
+    new ButtonBuilder().setCustomId(`force_slow_pick_${gameId}_${playerNum}_${fk}`).setLabel(dcName).setStyle(ButtonStyle.Primary)
+  );
+  const rows = [];
+  for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  await logGameAction(game, client, `🐌 **Force Slow** — <@${ownerId}>, choose a hostile figure within 3 spaces of **${dc.displayName || dc.dcName}** to skip its next activation:`, {
+    phase: 'ROUND', icon: 'round',
+    components: rows,
+    allowedMentions: { users: [ownerId] },
+  });
+}
+
+async function _postExcavationPicker(game, gameId, playerNum, dc, logGameAction, client) {
+  const ownerId = getPlayerId(game, playerNum);
+  const discard = getCcDiscard(game, playerNum) || [];
+  // Filter to cost <= 1 cards
+  const eligible = [];
+  for (let i = 0; i < discard.length; i++) {
+    const ccData = getCcEffect(discard[i]);
+    const cost = ccData?.cost ?? 99;
+    if (cost <= 1) eligible.push({ name: discard[i], index: i });
+  }
+  if (eligible.length === 0) {
+    await logGameAction(game, client, `⛏️ **Excavation** — **${dc.displayName || dc.dcName}**: no Command Cards with cost 1 or less in discard pile.`, { phase: 'ROUND', icon: 'round' });
+    return;
+  }
+  if (eligible.length === 1) {
+    // Auto-select the only eligible card
+    const cardName = eligible[0].name;
+    const discardKey = ccDiscardKey(playerNum);
+    const handKey = ccHandKey(playerNum);
+    game[discardKey] = discard.filter((_, i) => i !== eligible[0].index);
+    game[handKey] = game[handKey] || [];
+    game[handKey].push(cardName);
+    await logGameAction(game, client, `⛏️ **Excavation** — **${dc.displayName || dc.dcName}** retrieved **${cardName}** from discard pile (only eligible card).`, { phase: 'ROUND', icon: 'round' });
+    return;
+  }
+  // Multiple eligible — show picker
+  const btns = eligible.map(({ name, index }) =>
+    new ButtonBuilder().setCustomId(`excavation_pick_${gameId}_${playerNum}_${index}`).setLabel(name.slice(0, 80)).setStyle(ButtonStyle.Primary)
+  );
+  const rows = [];
+  for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  await logGameAction(game, client, `⛏️ **Excavation** — <@${ownerId}>, choose a Command Card (cost ≤1) from your discard pile to add to hand:`, {
+    phase: 'ROUND', icon: 'round',
+    components: rows,
+    allowedMentions: { users: [ownerId] },
+  });
 }

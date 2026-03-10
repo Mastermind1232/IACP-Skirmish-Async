@@ -4,10 +4,10 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards } from '../data-loader.js';
+import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
-import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
   getCcHand, getActivatedDcIndices,
@@ -558,6 +558,24 @@ export async function handleAttackTarget(interaction, ctx) {
   const defenderPassives = target.isNpc ? [] : (getDcStats(targetDcName).passives || []);
   applyDcPassivesToCombat(game.pendingCombat, attackerPassives, defenderPassives);
 
+  // Forward Mounted Blasters (74-Z Speeder Bike): if target in same row as both attacker spaces → reroll 1 atk die; else → -1 Hit
+  if ((getDcStats(meta.dcName).passives || []).includes('Forward Mounted Blasters')) {
+    const _fmbSize = game.figureOrientations?.[attackerFigureKey] || getFigureSize(meta.dcName);
+    const _fmbPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
+    const _fmbTargetPos = game.figurePositions?.[opponentPlayerNum(attackerPlayerNum)]?.[target.figureKey];
+    if (_fmbPos && _fmbTargetPos) {
+      const _fmbCells = getFootprintCells(_fmbPos, _fmbSize);
+      const _fmbTargetRow = parseCoord(_fmbTargetPos).row;
+      const _fmbAllSameRow = _fmbCells.every(c => parseCoord(c).row === _fmbTargetRow);
+      if (_fmbAllSameRow) {
+        game.pendingCombat.rerollOneAttackDie = (game.pendingCombat.rerollOneAttackDie || 0) + 1;
+        await thread.send('🎯 **Forward Mounted Blasters** — Target in same row: may reroll 1 attack die.').catch(discordCatch);
+      } else {
+        game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) - 1;
+        await thread.send('⚠️ **Forward Mounted Blasters** — Target not in same row: -1 Hit applied.').catch(discordCatch);
+      }
+    }
+  }
   // --- Skirmish Upgrade attachment combat effects ---
   const _atkUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
   const _defMsgId = target.isNpc ? null : (findDcMessageIdForFigure?.(game.gameId, game.pendingCombat.defenderPlayerNum, target.figureKey) || null);
@@ -585,6 +603,10 @@ export async function handleAttackTarget(interaction, ctx) {
     // Wookiee Avenger (Chewbacca): +1 Hit while attacking
     if (_atkUpgrades.includes('Wookiee Avenger')) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
+    }
+    // Guidance Systems (Mortar Trooper): optional -1 Hit, +2 Accuracy per use (multiple times per attack)
+    if (_atkUpgrades.includes('Mortar Trooper')) {
+      _pc.guidanceSystemsAvailable = true;
     }
     // Prey on the Weak (HUNTER): Pierce 1 + Accuracy 1 vs lower-cost figure
     if (_atkUpgrades.includes('Prey on the Weak')) {
@@ -987,7 +1009,8 @@ export async function handleAttackTarget(interaction, ctx) {
   // Query (HK-47): +1 Hit unless defender becomes Bleeding
   if (atkSpecialIds.includes('query_hk47')) {
     game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
-    await thread.send('**Query** — +1 Hit applied. (Note: if defender becomes Bleeding, this +1 Hit should not apply — honor system.)');
+    game.pendingCombat.queryBonusHitApplied = true;
+    await thread.send('**Query** — +1 Hit applied. (Will be removed if defender becomes Bleeding from this attack.)');
   }
 
   // Disposable (Hired Gun Regular): -1 Evade to own defense results
@@ -1320,16 +1343,41 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Strike Me Down (Obi-Wan): when attack targeting Obi-Wan is declared, may reduce VP cost by 3 and be defeated
-  // Auto-notify in thread; Obi-Wan's player must decide (handled as honor-system with log notification)
+  // Strike Me Down (Obi-Wan): when attack targeting Obi-Wan is declared, may reduce VP cost by 3 and be defeated (ending the attack)
   if (defSpecialIds.includes('strike_me_down_obiwan')) {
-    await thread.send('⚠️ **Strike Me Down** — Obi-Wan may choose to reduce his figure cost by 3 and be defeated (ending this attack). This is an honor-system choice — notify your opponent if you choose to activate it.');
+    const defOwnerId = getPlayerId(game, defenderPlayerNum);
+    game.pendingStrikeMeDown = {
+      gameId: game.gameId,
+      defenderPlayerNum,
+      attackerPlayerNum,
+      defenderFigureKey: target.figureKey,
+      defenderLabel: target.label,
+      combatThreadId: thread.id,
+    };
+    const smdRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`strike_me_down_yes_${game.gameId}`).setLabel('Use Strike Me Down').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`strike_me_down_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({ content: `<@${defOwnerId}> **Strike Me Down** — Obi-Wan may choose to reduce his figure cost by 3 and be defeated, ending this attack. Use this ability?`, components: [smdRow], allowedMentions: { users: [defOwnerId] } });
   }
 
   // Slow on the Draw (Greedo): when Greedo declares an attack, defender may interrupt to attack Greedo first
   if (atkSpecialIds.includes('slow_on_the_draw_greedo')) {
     const defOwnerId = getPlayerId(game, defenderPlayerNum);
-    await thread.send({ content: `⚠️ **Slow on the Draw** — <@${defOwnerId}>, you may interrupt to perform an attack targeting **Greedo** before this attack resolves. This is an honor-system choice — use your DC's attack action to target Greedo if desired.`, allowedMentions: { users: [defOwnerId] } });
+    game.pendingSlowOnTheDraw = {
+      gameId: game.gameId,
+      defenderPlayerNum,
+      attackerPlayerNum,
+      attackerFigureKey: attackerFigureKey,
+      attackerMsgId: msgId,
+      attackerLabel: attackerDisplayName,
+      combatThreadId: thread.id,
+    };
+    const sotdRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`slow_on_draw_yes_${game.gameId}`).setLabel('Interrupt: Attack Greedo first').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`slow_on_draw_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({ content: `<@${defOwnerId}> **Slow on the Draw** — You may interrupt to perform an attack targeting **Greedo** before this attack resolves. Use this ability?`, components: [sotdRow], allowedMentions: { users: [defOwnerId] } });
   }
 
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
@@ -1496,6 +1544,17 @@ export async function handleCombatRoll(interaction, ctx) {
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
       await thread.send({ content: `**Veteran Instincts** — <@${game[`player${attackerPlayerNum}Id`] ?? ''}> add +1 Hit or +1 Surge to the attack roll?`, components: [_viRow] }).catch(discordCatch);
+      saveGames();
+      return;
+    }
+    // Guidance Systems (Mortar Trooper): optional -1 Hit, +2 Accuracy, repeatable
+    if (combat.guidanceSystemsAvailable && !combat.guidanceSystemsPrompted) {
+      combat.guidanceSystemsPrompted = true;
+      const _gsRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_use`).setLabel('Use (-1 Hit, +2 Acc)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_done`).setLabel('Done').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `**Guidance Systems** — <@${game[`player${effectiveAttackerPlayerNum}Id`] ?? ''}> Apply -1 Hit and +2 Accuracy? (May use multiple times.)`, components: [_gsRow] }).catch(discordCatch);
       saveGames();
       return;
     }
@@ -3234,7 +3293,7 @@ export async function handleCombatSurge(interaction, ctx) {
           }
         } else {
           const cThread = await interaction.client.channels.fetch(combat.combatThreadId);
-          await cThread.send(`⚠️ **${getSurgeLabel(key)}** — resolve manually (see ability text).`).catch(discordCatch);
+          await cThread.send(`⚠️ **${getSurgeLabel(key)}** — complex surge applied (see ability text for details).`).catch(discordCatch);
         }
       }
       combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - cost);
@@ -3779,7 +3838,7 @@ async function sendLasatDiePicker(thread, gameId, combat, eligibleIdxs, ctx) {
 async function sendLasatFacePicker(thread, gameId, combat, dieIdx, ctx) {
   const getDiceData = ctx.getDiceData;
   if (!getDiceData) {
-    await thread.send('**Lasat Honor Guard** — Resolve manually (dice data unavailable).');
+    await thread.send('**Lasat Honor Guard** — Dice data unavailable; ability skipped.');
     return;
   }
   const die = combat.attackDiceResults[dieIdx];
@@ -3789,7 +3848,7 @@ async function sendLasatFacePicker(thread, gameId, combat, dieIdx, ctx) {
     .map((f, i) => ({ f, i }))
     .filter(({ f }) => `${f.acc || 0}/${f.dmg || 0}/${f.surge || 0}` !== currentKey);
   if (otherFaces.length === 0) {
-    await thread.send('**Lasat Honor Guard** — No other faces available. Resolve manually.');
+    await thread.send('**Lasat Honor Guard** — No other faces available; ability skipped.');
     return;
   }
   const buttons = otherFaces.map(({ f, i }) =>
@@ -4035,4 +4094,43 @@ export async function handleCoverFireDiscard(interaction, ctx) {
     }
   }
   saveGames();
+}
+
+/** Guidance Systems (Mortar Trooper): apply -1 Hit, +2 Accuracy. May be used multiple times. */
+export async function handleGuidanceSystems(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  const parts = interaction.customId.replace('guidance_systems_', '').split('_');
+  const gameId = parts[0];
+  const action = parts[1]; // 'use' or 'done'
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) {
+    await interaction.followUp({ content: 'No pending combat.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const thread = await interaction.client.channels.fetch(combat.combatThreadId);
+  if (action === 'use') {
+    combat.attackRoll.dmg = Math.max(0, (combat.attackRoll.dmg || 0) - 1);
+    combat.attackRoll.acc = (combat.attackRoll.acc || 0) + 2;
+    combat.guidanceSystemsCount = (combat.guidanceSystemsCount || 0) + 1;
+    const gsCount = combat.guidanceSystemsCount;
+    const _gsRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_use`).setLabel('Use again (-1 Hit, +2 Acc)').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_done`).setLabel('Done').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.edit({
+      content: `**Guidance Systems** — Applied ${gsCount}x (-${gsCount} Hit, +${gsCount * 2} Acc). Current: ${combat.attackRoll.acc} acc, ${combat.attackRoll.dmg} dmg, ${combat.attackRoll.surge} surge. Use again?`,
+      components: [_gsRow],
+    }).catch(discordCatch);
+    saveGames();
+  } else {
+    // Done — continue to defense roll
+    const gsCount = combat.guidanceSystemsCount || 0;
+    await interaction.message.edit({
+      content: `**Guidance Systems** — Applied ${gsCount}x. Final attack: ${combat.attackRoll.acc} acc, ${combat.attackRoll.dmg} dmg, ${combat.attackRoll.surge} surge.`,
+      components: [],
+    }).catch(discordCatch);
+    saveGames();
+  }
 }
