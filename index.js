@@ -100,8 +100,7 @@ import {
   getLobbiesMap,
 } from './src/lobby-state.js';
 import {
-  // Still directly called in select/modal dispatch sections
-  handleRequestResolve, handleRequestReject,
+  // Still directly called in modal dispatch section
   handleSquadModal, handleDeployModal,
   // Used in allDeps
   runStartOfRoundDcEffects,
@@ -5879,14 +5878,6 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isButton()) {
     const buttonKey = getHandlerKey(interaction.customId, 'button');
     if (!buttonKey) return;
-    if (buttonKey === 'request_resolve_') {
-      await handleRequestResolve(interaction, { logGameErrorToBotLogs });
-      return;
-    }
-    if (buttonKey === 'request_reject_') {
-      await handleRequestReject(interaction, { logGameErrorToBotLogs });
-      return;
-    }
     if (buttonKey === 'ping_active_') {
       await interaction.deferUpdate().catch(discordCatch);
       const gameId = interaction.customId.replace('ping_active_', '');
@@ -6164,7 +6155,10 @@ client.on('interactionCreate', async (interaction) => {
 
   if (!interaction.isButton()) return;
   const buttonKey = getHandlerKey(interaction.customId, 'button');
-  if (!buttonKey) return;
+  if (!buttonKey) {
+    console.warn('[dispatch] No handler key for button customId:', interaction.customId);
+    return;
+  }
   // Don't deferUpdate for handlers that need to show a modal (modal requires unacknowledged interaction)
   const MODAL_PREFIXES = ['devaron_crate_push_', 'krykna_push_'];
   if (!MODAL_PREFIXES.includes(buttonKey)) {
@@ -6189,6 +6183,7 @@ client.on('interactionCreate', async (interaction) => {
       }
       return;
     }
+    console.warn('[dispatch] No registered handler for buttonKey:', buttonKey, 'customId:', interaction.customId);
 
     // ── Local handlers (non-combat closures over index.js scope) ──
     const LOCAL_HANDLERS = {

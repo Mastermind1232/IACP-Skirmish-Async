@@ -8,7 +8,6 @@ import {
 } from '../discord/components.js';
 import { cleanupGameLock } from '../game/action-queue.js';
 import { discordCatch } from '../error-handling.js';
-import { requireGame } from '../utils/guards.js';
 
 const BOTMENU_ALLOWED_KILL_ROLES = ['Admin', 'Bothelpers'];
 
@@ -68,45 +67,61 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
 
 /** Kill Game clicked: check permission, show confirmation. */
 export async function handleBotmenuKill(interaction, ctx) {
+  console.log('[botmenu] handleBotmenuKill called, customId:', interaction.customId);
   const { getGame } = ctx;
   const gameId = interaction.customId.replace('botmenu_kill_', '');
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  if (!canKillGame(interaction, game)) {
-    await interaction.followUp({
-      content: 'Only game participants or users with the **Admin** or **Bothelpers** role can kill the game.',
-      ephemeral: true,
+  const game = getGame(gameId);
+  if (!game) {
+    console.log('[botmenu] Game not found for gameId:', gameId);
+    await interaction.editReply({
+      content: 'Game not found.',
+      components: [],
     }).catch(discordCatch);
     return;
   }
-  await interaction.followUp({
-    content: '**Are you sure you want to kill this game?** This will remove the game and its channels. First to confirm wins.',
+  if (!canKillGame(interaction, game)) {
+    await interaction.editReply({
+      content: 'Only game participants or users with the **Admin** or **Bothelpers** role can kill the game.',
+      components: [],
+    }).catch(discordCatch);
+    return;
+  }
+  console.log('[botmenu] Showing kill confirmation for game:', gameId);
+  await interaction.editReply({
+    content: '**Are you sure you want to kill this game?** This will remove the game and its channels.',
     components: [getBotmenuKillConfirmButtons(gameId)],
-    ephemeral: false,
   }).catch(discordCatch);
 }
 
 /** Kill Game Yes: delete channels and game. */
 export async function handleBotmenuKillYes(interaction, ctx) {
+  console.log('[botmenu] handleBotmenuKillYes called, customId:', interaction.customId);
   const { getGame, logGameErrorToBotLogs } = ctx;
   const gameId = interaction.customId.replace('botmenu_kill_yes_', '');
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  if (!canKillGame(interaction, game)) {
-    await interaction.followUp({ content: 'You are not allowed to kill this game.', ephemeral: true }).catch(discordCatch);
+  const game = getGame(gameId);
+  if (!game) {
+    await interaction.editReply({ content: 'Game not found.', components: [] }).catch(discordCatch);
     return;
   }
+  if (!canKillGame(interaction, game)) {
+    await interaction.editReply({ content: 'You are not allowed to kill this game.', components: [] }).catch(discordCatch);
+    return;
+  }
+  // Update message before deletion (channel will be deleted along with it)
+  await interaction.editReply({
+    content: `⏳ Deleting **IA Game #${gameId}**...`,
+    components: [],
+  }).catch(discordCatch);
   try {
     await deleteGameChannelsAndGame(game, gameId, ctx);
-    await interaction.followUp({ content: `Game **IA Game #${gameId}** deleted. All channels removed.`, ephemeral: true }).catch(discordCatch);
+    console.log('[botmenu] Game', gameId, 'deleted successfully');
   } catch (err) {
-    console.error('Kill game error:', err);
+    console.error('[botmenu] Kill game error:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'botmenu_kill');
-    await interaction.followUp({ content: `Failed: ${err.message}`, ephemeral: true }).catch(discordCatch);
   }
 }
 
 /** Kill Game No: cancel. */
 export async function handleBotmenuKillNo(interaction, ctx) {
-  await interaction.editReply({ content: 'Cancelled.', components: [] }).catch(discordCatch);
+  await interaction.editReply({ content: 'Kill game cancelled.', components: [] }).catch(discordCatch);
 }

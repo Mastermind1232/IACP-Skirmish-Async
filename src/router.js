@@ -14,7 +14,8 @@ const LOCAL_BUTTON_PREFIXES = ['ping_active_', 'create_game', 'join_game'];
 let _buttonPrefixes = null;
 function getButtonPrefixes() {
   if (!_buttonPrefixes) {
-    _buttonPrefixes = [...getRegisteredButtonPrefixes(), ...LOCAL_BUTTON_PREFIXES];
+    _buttonPrefixes = [...getRegisteredButtonPrefixes(), ...LOCAL_BUTTON_PREFIXES]
+      .sort((a, b) => b.length - a.length);
   }
   return _buttonPrefixes;
 }
@@ -46,7 +47,8 @@ const LOCAL_SELECT_PREFIXES = [
 let _selectPrefixes = null;
 function getSelectPrefixes() {
   if (!_selectPrefixes) {
-    _selectPrefixes = [...getRegisteredButtonPrefixes(), ...LOCAL_SELECT_PREFIXES];
+    _selectPrefixes = [...getRegisteredButtonPrefixes(), ...LOCAL_SELECT_PREFIXES]
+      .sort((a, b) => b.length - a.length);
   }
   return _selectPrefixes;
 }
