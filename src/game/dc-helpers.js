@@ -70,6 +70,18 @@ export function hasDepleteEffect(dcName) {
 }
 
 /**
+ * True if this Skirmish Upgrade has an Exhaust effect (but NOT deplete-only).
+ * @param {string} dcName
+ * @returns {boolean}
+ */
+export function hasExhaustEffect(dcName) {
+  if (!dcName || !isFigurelessDc(dcName)) return false;
+  const card = getDcEffects()[dcName] || (typeof dcName === 'string' && !dcName.startsWith('[') ? getDcEffects()[`[${dcName}]`] : null);
+  const text = card?.abilityText || '';
+  return /exhaust/i.test(text);
+}
+
+/**
  * Description text for a DC's companion (from dc-effects.companion field).
  * @param {string} dcName
  * @returns {string}

@@ -111,12 +111,37 @@ export function getDcToggleButton(msgId, exhausted, game = null) {
  * @param {boolean} exhausted
  * @param {object} game
  * @param {string} dcName
- * @param {{ isDepletedRemovedFromGame: (game, msgId) => boolean, hasDepleteEffect: (dcName) => boolean }} helpers
+ * @param {{ isDepletedRemovedFromGame: (game, msgId) => boolean, hasDepleteEffect: (dcName) => boolean, hasExhaustEffect: (dcName) => boolean, isFigurelessDc: (dcName) => boolean }} helpers
  */
 export function getDcPlayAreaComponents(msgId, exhausted, game, dcName, helpers = {}) {
-  const { isDepletedRemovedFromGame = () => false, hasDepleteEffect = () => false, getDcStats, gameStarted } = helpers;
+  const { isDepletedRemovedFromGame = () => false, hasDepleteEffect = () => false, hasExhaustEffect = () => false, isFigurelessDc = () => false, getDcStats, gameStarted } = helpers;
   if (game && isDepletedRemovedFromGame(game, msgId)) return [];
-  const toggleRow = getDcToggleButton(msgId, exhausted, game);
+  const figureless = isFigurelessDc(dcName);
+  let toggleRow;
+  if (figureless) {
+    // Skirmish upgrades: no Activate button. Show Exhaust/Ready only if card has an exhaust effect.
+    if (hasExhaustEffect(dcName)) {
+      const bothDrawn = game && game.player1CcDrawn && game.player2CcDrawn;
+      if (exhausted) {
+        toggleRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`dc_toggle_${msgId}`)
+            .setLabel('Ready')
+            .setStyle(ButtonStyle.Success)
+        );
+      } else if (bothDrawn) {
+        toggleRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`dc_toggle_${msgId}`)
+            .setLabel('Exhaust')
+            .setStyle(ButtonStyle.Secondary)
+        );
+      }
+    }
+    // else: no toggle row for figureless cards without exhaust
+  } else {
+    toggleRow = getDcToggleButton(msgId, exhausted, game);
+  }
   const rows = toggleRow ? [toggleRow] : [];
   if (hasDepleteEffect(dcName)) {
     rows.push(
@@ -169,10 +194,6 @@ export function getBoardButtons(gameId, opts = {}) {
       .setLabel('Refresh Map')
       .setStyle(ButtonStyle.Primary),
     getUndoButton(gameId, undoDisabled),
-    new ButtonBuilder()
-      .setCustomId(`refresh_all_${gameId}`)
-      .setLabel('Refresh All')
-      .setStyle(ButtonStyle.Secondary),
   );
   const rows = [mainRow];
   if (game?.isTestGame && game?.testP2IsBot && !game?.ended) {
@@ -572,7 +593,7 @@ export function buildLetterRows(cells, msgId, figureIndex) {
   const btns = letters.map((letter) =>
     new ButtonBuilder()
       .setCustomId(`move_letter_${msgId}_${figureIndex}_${letter}`)
-      .setLabel(`${letter.toUpperCase()} (${counts[letter]})`)
+      .setLabel(letter.toUpperCase())
       .setStyle(ButtonStyle.Primary)
   );
   const rows = [];

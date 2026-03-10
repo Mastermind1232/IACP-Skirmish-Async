@@ -5,6 +5,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { deleteGameChannelsAndGame } from './botmenu.js';
 import { discordCatch } from '../error-handling.js';
+import { logGameAction } from '../discord/messages.js';
 import { requireGame } from '../utils/guards.js';
 
 /**
@@ -122,6 +123,11 @@ export async function handleUndo(interaction, ctx) {
     game.undoStack = savedStack;
   }
   // ===================================
+
+  // Log undo to game log so both players can see what was reverted
+  const undoLabel = last.label || last.card || last.type?.replace(/_/g, ' ') || 'action';
+  const undoUser = interaction.user.username;
+  logGameAction(game, client, `**${undoUser}** undid: ${undoLabel}`).catch(() => {});
 
   // Per-type Discord UI sync (game state is already restored above)
   if (last.type === 'pass_turn') {

@@ -190,6 +190,7 @@ import {
   getDcEffect,
   isFigurelessDc as _isFigurelessDc,
   hasDepleteEffect as _hasDepleteEffect,
+  hasExhaustEffect as _hasExhaustEffect,
   getCompanionDescriptionForDc as _getCompanionDescriptionForDc,
   reduceHp,
   healHp,
@@ -4187,6 +4188,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
 /** DCs whose image is in DC Skirmish Upgrades are figureless (incl. Squad Upgrades like [Flame Trooper]); if image is in dc-figures, it's a figure. */
 const isFigurelessDc = _isFigurelessDc;
 const hasDepleteEffect = _hasDepleteEffect;
+const hasExhaustEffect = _hasExhaustEffect;
 const getCompanionDescriptionForDc = _getCompanionDescriptionForDc;
 
 function getDeckIllegalPlayCustomId(gameId, playerNum) {
@@ -4422,7 +4424,7 @@ function isDepletedRemovedFromGame(game, msgId) {
 /** Returns component rows for a DC message in Play Area (delegates to discord with game-specific helpers). */
 function getDcPlayAreaComponents(msgId, exhausted, game, dcName) {
   const gameStarted = (game?.currentRound || 0) >= 1;
-  return getDcPlayAreaComponentsFromDiscord(msgId, exhausted, game, dcName, { isDepletedRemovedFromGame, hasDepleteEffect, getDcStats, gameStarted });
+  return getDcPlayAreaComponentsFromDiscord(msgId, exhausted, game, dcName, { isDepletedRemovedFromGame, hasDepleteEffect, hasExhaustEffect, isFigurelessDc, getDcStats, gameStarted });
 }
 
 /** True if all figures in this deployment group are defeated (or never deployed). */
@@ -4782,7 +4784,7 @@ client.once('ready', async () => {
         s
           .setName('add')
           .setDescription('Add a Power Token to a figure (max 2 per figure)')
-          .addStringOption((o) => o.setName('figure').setDescription('Figure key, e.g. Stormtrooper (Regular)-1-0').setRequired(true))
+          .addStringOption((o) => o.setName('figure').setDescription('Figure key, e.g. Stormtrooper (Regular)-1-0').setRequired(true).setAutocomplete(true))
           .addStringOption((o) =>
             o.setName('type').setDescription('Token type').setRequired(true).addChoices(
               { name: 'Hit (Damage)', value: 'Hit' },
@@ -4797,7 +4799,7 @@ client.once('ready', async () => {
         s
           .setName('remove')
           .setDescription('Remove a Power Token from a figure')
-          .addStringOption((o) => o.setName('figure').setDescription('Figure key').setRequired(true))
+          .addStringOption((o) => o.setName('figure').setDescription('Figure key').setRequired(true).setAutocomplete(true))
           .addIntegerOption((o) => o.setName('index').setDescription('Which token to remove (1 or 2)').setMinValue(1).setMaxValue(2).setRequired(true))
       )
       .addSubcommand((s) =>
@@ -4808,18 +4810,21 @@ client.once('ready', async () => {
     const movefigure = new SlashCommandBuilder()
       .setName('move-figure')
       .setDescription('Manually move a figure to any coordinate (bypasses movement rules). Use in Game Log channel.')
-      .addStringOption((o) => o.setName('figure').setDescription('Figure key, e.g. Nexu (Regular)-1-0').setRequired(true))
+      .addStringOption((o) => o.setName('figure').setDescription('Figure key, e.g. Nexu (Regular)-1-0').setRequired(true).setAutocomplete(true))
       .addStringOption((o) => o.setName('coord').setDescription('Destination coordinate, e.g. m10').setRequired(true));
+    const refresh = new SlashCommandBuilder()
+      .setName('refresh')
+      .setDescription('Reload all JSON data and refresh every DC embed, hand, discard pile, and map. Use in any game channel.');
     await rest.put(Routes.applicationCommands(client.user.id), {
       body: [
-        botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(), movefigure.toJSON(),
+        botmenu.toJSON(), statcheck.toJSON(), powertoken.toJSON(), movefigure.toJSON(), refresh.toJSON(),
         affiliationwinrateglobal.toJSON(), affiliationwinratepersonal.toJSON(),
         affiliationpickrateglobal.toJSON(), affiliationpickratepersonal.toJSON(),
         dcwinrateglobaltopten.toJSON(), dcwinratepersonaltopten.toJSON(),
         leaderboard.toJSON(), achievements.toJSON(),
       ],
     });
-    console.log('Slash commands registered: /botmenu, /statcheck, /power-token, /move-figure, /affiliationwinrateglobal, /affiliationwinratepersonal, /affiliationpickrateglobal, /affiliationpickratepersonal, /dcwinrateglobaltopten, /dcwinratepersonaltopten, /leaderboard, /achievements');
+    console.log('Slash commands registered: /botmenu, /statcheck, /power-token, /move-figure, /refresh, /affiliationwinrateglobal, /affiliationwinratepersonal, /affiliationpickrateglobal, /affiliationpickratepersonal, /dcwinrateglobaltopten, /dcwinratepersonaltopten, /leaderboard, /achievements');
   } catch (err) {
     console.error('Failed to register slash commands:', err.message);
   }
@@ -5359,6 +5364,27 @@ async function refreshGameVisuals(game) {
 
 client.on('interactionCreate', async (interaction) => {
   try {
+  if (interaction.isAutocomplete()) {
+    const cmd = interaction.commandName;
+    if (cmd === 'move-figure' || cmd === 'power-token') {
+      const focused = interaction.options.getFocused(true);
+      if (focused.name === 'figure') {
+        const result = findGameByChannel(getGamesMap(), interaction.channelId);
+        if (!result) return interaction.respond([]).catch(() => {});
+        const game = result.game;
+        const poses = game.figurePositions || { 1: {}, 2: {} };
+        const allKeys = [...Object.keys(poses[1] || {}), ...Object.keys(poses[2] || {})];
+        const query = focused.value.toLowerCase();
+        const filtered = allKeys
+          .filter((k) => k.toLowerCase().includes(query))
+          .slice(0, 25);
+        return interaction.respond(
+          filtered.map((k) => ({ name: k, value: k }))
+        ).catch(() => {});
+      }
+    }
+    return;
+  }
   if (interaction.isChatInputCommand()) {
     const cmd = interaction.commandName;
     if (cmd === 'botmenu') {
@@ -5500,6 +5526,27 @@ client.on('interactionCreate', async (interaction) => {
         } catch (e) { console.error('move-figure: refresh map failed', e); }
       }
       await interaction.reply({ content: `Moved **${fk}** to **${coordRaw.toUpperCase()}**.`, ephemeral: false }).catch(discordCatch);
+      return;
+    }
+    if (cmd === 'refresh') {
+      const result = findGameByChannel(getGamesMap(), interaction.channelId);
+      if (!result) {
+        await interaction.reply({ content: 'Use /refresh in any channel belonging to an active game.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const game = result.game;
+      if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
+        await interaction.reply({ content: 'Only players in this game can refresh.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      await interaction.deferReply({ ephemeral: true }).catch(discordCatch);
+      try {
+        await refreshAllGameComponents(game, client);
+        await interaction.editReply({ content: 'Full refresh complete. Reloaded all JSON data, map, DCs, hands, discard piles.' }).catch(discordCatch);
+      } catch (err) {
+        console.error('Failed to refresh all:', err);
+        await interaction.editReply({ content: 'Failed to refresh: ' + (err?.message || String(err)) }).catch(discordCatch);
+      }
       return;
     }
     // Stats commands: only in #statistics channel; require DB
