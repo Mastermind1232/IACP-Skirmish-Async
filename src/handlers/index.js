@@ -78,6 +78,8 @@ import {
   handleCcConfirmPlay,
   handleCcCancelPlay,
   handleCcDiscardSelect,
+  handleSquadConfirm,
+  handleSquadCancel,
   handleDeckIllegalPlay,
   handleDeckIllegalRedo,
   handleCcShuffleDraw,
@@ -231,6 +233,8 @@ register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'));
 register('dc_special_', (i, ctx) => handleDcAction(i, ctx, 'dc_special_'));
 register('dc_ability_choice_', handleDcAbilityChoice);
 register('ee3_pick_die_', handleEe3DiePick);
+register('squad_confirm_', handleSquadConfirm);
+register('squad_cancel_', handleSquadCancel);
 register('deck_illegal_play_', handleDeckIllegalPlay);
 register('deck_illegal_redo_', handleDeckIllegalRedo);
 register('cc_shuffle_draw_', handleCcShuffleDraw);
@@ -337,6 +341,7 @@ const HANDLER_GROUPS = new Map();
 function setGroup(keys, group) { for (const k of keys) HANDLER_GROUPS.set(k, group); }
 
 setGroup([
+  'squad_confirm_', 'squad_cancel_',
   'deck_illegal_play_', 'deck_illegal_redo_', 'cc_shuffle_draw_', 'ike_keep_', 'cc_play_',
   'cc_confirm_play_', 'cc_cancel_play_', 'cc_draw_', 'cc_search_discard_',
   'cc_close_discard_', 'cc_discard_', 'cc_choice_', 'cc_space_', 'squad_select_',
@@ -540,6 +545,8 @@ export {
   handleCcConfirmPlay,
   handleCcCancelPlay,
   handleCcDiscardSelect,
+  handleSquadConfirm,
+  handleSquadCancel,
   handleDeckIllegalPlay,
   handleDeckIllegalRedo,
   handleCcShuffleDraw,

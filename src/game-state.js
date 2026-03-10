@@ -65,6 +65,8 @@ const dcExhaustedState = new Map();
 const dcHealthState = new Map();
 /** key = `${gameId}_${playerNum}`, value = { squad, timestamp } */
 const pendingIllegalSquad = new Map();
+/** key = `${gameId}_${playerNum}`, value = { squad, validation, timestamp } */
+const pendingSquadConfirm = new Map();
 
 /** Get a game by id. */
 export function getGame(gameId) {
@@ -215,6 +217,7 @@ export {
   dcExhaustedState,
   dcHealthState,
   pendingIllegalSquad,
+  pendingSquadConfirm,
 };
 
 /** Graceful shutdown: flush pending DB writes before the process exits. */

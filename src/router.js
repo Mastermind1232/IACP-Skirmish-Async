@@ -7,6 +7,8 @@
 const BUTTON_PREFIXES = [
   'request_resolve_',
   'request_reject_',
+  'squad_confirm_',
+  'squad_cancel_',
   'deck_illegal_play_',
   'deck_illegal_redo_',
   'dc_activate_',

@@ -6,8 +6,8 @@
 const CONTEXT_GROUPS = {
   ccHand: [
     'getGame', 'dcMessageMeta', 'dcHealthState', 'dcExhaustedState', 'saveGames',
-    'pushUndo', 'client', 'pendingIllegalSquad', 'PENDING_ILLEGAL_TTL_MS',
-    'validateDeckLegal', 'sendDeckIllegalAlert', 'applySquadSubmission',
+    'pushUndo', 'client', 'pendingIllegalSquad', 'pendingSquadConfirm', 'PENDING_ILLEGAL_TTL_MS',
+    'validateDeckLegal', 'sendDeckIllegalAlert', 'sendSquadConfirmation', 'applySquadSubmission',
     'getHandTooltipEmbed', 'getHandSquadButtons', 'shuffleArray',
     'buildHandDisplayPayload', 'updateHandVisualMessage', 'updatePlayAreaDcButtons',
     'sendRoundActivationPhaseMessage', 'runStartOfRoundDcEffects', 'logGameAction',

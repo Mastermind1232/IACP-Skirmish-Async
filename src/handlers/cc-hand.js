@@ -33,7 +33,7 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
 export async function handleSquadModal(interaction, ctx) {
-  const { getGame, validateDeckLegal, sendDeckIllegalAlert, applySquadSubmission } = ctx;
+  const { getGame, validateDeckLegal, sendSquadConfirmation } = ctx;
   const [, , gameId, playerNum] = interaction.customId.split('_');
   const game = await requireGame(interaction, getGame, gameId, { useReply: true });
   if (!game) return;
@@ -52,13 +52,8 @@ export async function handleSquadModal(interaction, ctx) {
   const squad = { name, dcList, ccList, dcCount: dcList.length, ccCount: ccList.length };
   normalizeSquadInput(squad);
   const validation = validateDeckLegal(squad);
-  await applySquadSubmission(game, isP1, squad, interaction.client);
-  if (!validation.legal) {
-    const errorList = validation.errors.map((e) => `• ${e}`).join('\n');
-    await interaction.reply({ content: `Squad **${name}** submitted. (${dcList.length} DCs, ${ccList.length} CCs)\n\n⚠️ **Heads up** — the bot detected possible issues with this list:\n${errorList}\n\nIf the bot is wrong here, ignore this message!`, ephemeral: true });
-  } else {
-    await interaction.reply({ content: `Squad **${name}** submitted. (${dcList.length} DCs, ${ccList.length} CCs)`, ephemeral: true });
-  }
+  await sendSquadConfirmation(game, isP1, squad, validation, interaction.client);
+  await interaction.reply({ content: `Parsed **${name}** (${dcList.length} DCs, ${ccList.length} CCs). Review your list in the hand channel and confirm.`, ephemeral: true });
 }
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
@@ -1048,6 +1043,44 @@ export async function handleCcDiscardSelect(interaction, ctx) {
   await updateDiscardPileMessage(game, playerNum, interaction.client);
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> discarded **${card}**`, { allowedMentions: { users: [interaction.user.id] }, icon: 'card' });
   saveGames();
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction */
+export async function handleSquadConfirm(interaction, ctx) {
+  const { getGame, pendingSquadConfirm, PENDING_ILLEGAL_TTL_MS, applySquadSubmission } = ctx;
+  const parts = interaction.customId.replace('squad_confirm_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const isP1 = playerNum === 1;
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner of this hand can confirm.')) return;
+  const key = `${gameId}_${playerNum}`;
+  const pending = pendingSquadConfirm.get(key);
+  if (!pending || (Date.now() - pending.timestamp > PENDING_ILLEGAL_TTL_MS)) {
+    pendingSquadConfirm.delete(key);
+    await interaction.followUp({ content: 'This squad confirmation has expired. Please submit your squad again.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  pendingSquadConfirm.delete(key);
+  await applySquadSubmission(game, isP1, pending.squad, interaction.client);
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
+  await interaction.followUp({ content: `Squad **${pending.squad.name || 'Unnamed'}** confirmed.`, ephemeral: true }).catch(discordCatch);
+}
+
+/** @param {import('discord.js').ButtonInteraction} interaction */
+export async function handleSquadCancel(interaction, ctx) {
+  const { getGame, pendingSquadConfirm } = ctx;
+  const parts = interaction.customId.replace('squad_cancel_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner of this hand can cancel.')) return;
+  const key = `${gameId}_${playerNum}`;
+  pendingSquadConfirm.delete(key);
+  await interaction.message.edit({ content: 'Squad submission cancelled. Paste your list or upload a .vsav file to try again.', components: [] }).catch(discordCatch);
+  await interaction.followUp({ content: 'Cancelled. Paste or upload again to resubmit.', ephemeral: true }).catch(discordCatch);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction */

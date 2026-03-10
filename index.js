@@ -53,6 +53,7 @@ import {
   dcExhaustedState,
   dcHealthState,
   pendingIllegalSquad,
+  pendingSquadConfirm,
   cleanupGameMaps,
 } from './src/game-state.js';
 import {
@@ -1465,6 +1466,8 @@ async function postGameOver(game, client, winnerId, reason) {
   cleanupGameMaps(game.gameId);
   pendingIllegalSquad.delete(`${game.gameId}_1`);
   pendingIllegalSquad.delete(`${game.gameId}_2`);
+  pendingSquadConfirm.delete(`${game.gameId}_1`);
+  pendingSquadConfirm.delete(`${game.gameId}_2`);
   const embed = buildScorecardEmbed(game, getMissionVpBonus(game));
   const content = winnerId
     ? `\uD83C\uDFC1 **GAME OVER** — <@${winnerId}> wins by ${reason}!`
@@ -4271,6 +4274,73 @@ async function sendDeckIllegalAlert(game, isP1, squad, validation, client) {
   });
 }
 
+/**
+ * Build a formatted squad confirmation message showing DCs and CCs sorted by cost.
+ * @param {object} squad - { dcList, ccList, name }
+ * @param {object} validation - { legal, errors, dcTotal, ccCount, ccCost }
+ * @returns {string}
+ */
+function buildSquadConfirmText(squad, validation) {
+  const dcList = squad.dcList || [];
+  const ccList = squad.ccList || [];
+
+  // Build DC lines sorted by cost (descending), then name
+  const dcEntries = dcList.map(name => {
+    const stats = getDcStats(name);
+    return { name, cost: stats?.cost ?? 0 };
+  });
+  dcEntries.sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name));
+  const dcLines = dcEntries.map(e => `\u2022 ${e.name} — ${e.cost}pt`).join('\n');
+
+  // Build CC lines sorted by cost (descending), then name
+  const ccEntries = ccList.map(name => {
+    const effect = getCcEffect(name) || getCcEffect(name + '!');
+    return { name, cost: effect?.cost ?? 0 };
+  });
+  ccEntries.sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name));
+  const ccLines = ccEntries.map(e => `\u2022 ${e.name} — ${e.cost}pt`).join('\n');
+
+  let text = `**${squad.name || 'Unnamed'}**\n\n`;
+  text += `**Deployment Cards** (${validation.dcTotal}/${DC_POINTS_LEGAL}pt)\n${dcLines}\n\n`;
+  text += `**Command Cards** (${ccList.length} cards, ${validation.ccCost}/${CC_COST_LEGAL}pt)\n${ccLines}`;
+
+  if (!validation.legal) {
+    const errorList = validation.errors.map(e => `\u2022 ${e}`).join('\n');
+    text += `\n\n\u26a0\ufe0f **Issues detected:**\n${errorList}`;
+  }
+
+  return text;
+}
+
+/**
+ * Send squad confirmation message with Confirm/Cancel buttons to the hand channel.
+ */
+async function sendSquadConfirmation(game, isP1, squad, validation, client) {
+  const gameId = game.gameId;
+  const playerNum = isP1 ? 1 : 2;
+  const playerId = isP1 ? game.player1Id : game.player2Id;
+  const key = `${gameId}_${playerNum}`;
+  pendingSquadConfirm.set(key, { squad, validation, timestamp: Date.now() });
+  const handChannelId = isP1 ? game.p1HandId : game.p2HandId;
+  const handChannel = await client.channels.fetch(handChannelId);
+  const text = buildSquadConfirmText(squad, validation);
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`squad_confirm_${gameId}_${playerNum}`)
+      .setLabel('Confirm')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`squad_cancel_${gameId}_${playerNum}`)
+      .setLabel('Cancel')
+      .setStyle(ButtonStyle.Danger),
+  );
+  await handChannel.send({
+    content: text,
+    components: [row],
+    allowedMentions: { users: [playerId] },
+  });
+}
+
 /** True if any DC in this game has actions remaining to spend. */
 function hasActionsRemainingInGame(game, gameId) {
   for (const [mid, meta] of dcMessageMeta) {
@@ -5303,13 +5373,8 @@ client.on('messageCreate', async (message) => {
         };
         normalizeSquadInput(squad);
         const validation = validateDeckLegal(squad);
-        await applySquadSubmission(game, isP1, squad, message.client);
-        if (!validation.legal) {
-          const errorList = validation.errors.map((e) => `• ${e}`).join('\n');
-          await message.reply(`✓ Squad **${squad.name}** submitted from .vsav (${squad.dcCount} DCs, ${squad.ccCount} CCs)\n\n⚠️ **Heads up** — the bot detected possible issues with this list:\n${errorList}\n\nIf the bot is wrong here, ignore this message!`);
-        } else {
-          await message.reply(`✓ Squad **${squad.name}** submitted from .vsav (${squad.dcCount} DCs, ${squad.ccCount} CCs)`);
-        }
+        await sendSquadConfirmation(game, isP1, squad, validation, message.client);
+        await message.reply(`Parsed **${squad.name}** (${squad.dcCount} DCs, ${squad.ccCount} CCs). Review your list above and confirm.`);
       } catch (err) {
         console.error('vsav parse error:', err);
         await logGameErrorToBotLogs(message.client, message.guild, null, err, 'messageCreate_vsav');
@@ -5336,13 +5401,8 @@ client.on('messageCreate', async (message) => {
         };
         normalizeSquadInput(squad);
         const validation = validateDeckLegal(squad);
-        await applySquadSubmission(game, isP1, squad, message.client);
-        if (!validation.legal) {
-          const errorList = validation.errors.map((e) => `• ${e}`).join('\n');
-          await message.reply(`✓ Squad **${squad.name}** submitted from pasted list (${squad.dcCount} DCs, ${squad.ccCount} CCs)\n\n⚠️ **Heads up** — the bot detected possible issues with this list:\n${errorList}\n\nIf the bot is wrong here, ignore this message!`);
-        } else {
-          await message.reply(`✓ Squad **${squad.name}** submitted from pasted list (${squad.dcCount} DCs, ${squad.ccCount} CCs)`);
-        }
+        await sendSquadConfirmation(game, isP1, squad, validation, message.client);
+        await message.reply(`Parsed **${squad.name}** (${squad.dcCount} DCs, ${squad.ccCount} CCs). Review your list above and confirm.`);
         return;
       }
     }
@@ -6122,7 +6182,7 @@ client.on('interactionCreate', async (interaction) => {
     const allDeps = {
       // Core state
       getGame, setGame, saveGames, deleteGame, deleteGameFromDb,
-      dcMessageMeta, dcExhaustedState, dcHealthState, pendingIllegalSquad,
+      dcMessageMeta, dcExhaustedState, dcHealthState, pendingIllegalSquad, pendingSquadConfirm,
       client,
 
       // Auth & utility
@@ -6203,7 +6263,7 @@ client.on('interactionCreate', async (interaction) => {
       updateDeployPromptMessages, finishSetupAttachments,
       createPlayAreaChannels, createBoardChannel, createHandThreads,
       refreshAllGameComponents, applyDirectDamageToFigure,
-      getMissionTokenLabel, countActiveGamesForPlayer, sendDeckIllegalAlert,
+      getMissionTokenLabel, countActiveGamesForPlayer, sendDeckIllegalAlert, sendSquadConfirmation,
       runDraftRandom, getRange, hasLineOfSight,
       getDeploymentZones,
       // Combat special effects deps
