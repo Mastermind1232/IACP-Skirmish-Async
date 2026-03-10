@@ -254,6 +254,10 @@ const CONTEXT_GROUPS = {
     'updateHandChannelMessages',
   ],
 
+  requests: [
+    'logGameErrorToBotLogs',
+  ],
+
   mapEvents: [
     'getGame', 'canActAsPlayer', 'saveGames', 'client', 'logGameAction',
     'getMapTokensData', 'postDevaronDoorButtons', 'postDevaronCratePushPrompts',

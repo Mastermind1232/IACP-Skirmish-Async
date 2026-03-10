@@ -365,7 +365,7 @@ setGroup([
   'false_orders_action_', 'false_orders_space_', 'rush_push_fig_', 'rush_push_space_',
   'rush_push_skip_', 'shoulder_rush_fig_', 'shoulder_rush_space_', 'shoulder_rush_skip_',
   'overwatch_space_', 'ob_deplete_', 'ob_skip_', 'ob_space_',
-  'bomb_drop_space_',
+  'bomb_drop_space_', 'bo_rifle_pick_',
 ], 'dcPlayArea');
 
 setGroup(['move_mp_'], 'move');
@@ -415,8 +415,9 @@ setGroup([
   'dc_end_activation_', 'confirm_activate_', 'cancel_activate_',
 ], 'activation');
 
-setGroup(['end_end_of_round_'], 'round');
+setGroup(['end_end_of_round_', 'extra_armor_pick_', 'rbf_discard_', 'rogue_one_return_', 'imp_citadel_', 'prog_override_'], 'round');
 setGroup(['end_start_of_round_'], 'startOfRound');
+setGroup(['request_resolve_', 'request_reject_'], 'requests');
 
 setGroup([
   'pd_pick_', 'pd_security_pick_', 'pd_strike_adj_',
