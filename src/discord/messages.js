@@ -37,7 +37,8 @@ export const ACTION_ICONS = {
 };
 
 const gameErrorThreads = new Map();
-const BOT_LOGS_CHANNEL_NAMES = ['bot-logs', 'bot-log', 'bot logs'];
+const BOT_LOGS_CHANNEL_NAMES = ['bot-logs', 'bot-log', 'bot logs', 'botlogs'];
+const BOT_LOGS_CHANNEL_ID = '1467647184542634005';
 
 /** Post a phase header to the game log (only when phase changes) */
 export async function logPhaseHeader(game, client, phase, roundNum = null) {
@@ -107,16 +108,21 @@ export async function logGameErrorToBotLogs(client, guild, gameId, error, contex
       console.error('logGameErrorToBotLogs: no guild (interaction may be in DMs)');
       return;
     }
-    await guild.channels.fetch().catch(discordCatch);
     await guild.roles.fetch().catch(discordCatch);
-    const ch = guild.channels.cache.find((c) => {
-      if (c.type !== ChannelType.GuildText) return false;
-      const name = (c.name || '').toLowerCase().trim();
-      return BOT_LOGS_CHANNEL_NAMES.includes(name) || name.replace(/\s+/g, '-') === 'bot-logs';
-    });
+    // Try fetching by known channel ID first, fall back to name search
+    let ch = null;
+    try { ch = await client.channels.fetch(BOT_LOGS_CHANNEL_ID).catch(() => null); } catch {}
+    if (!ch) {
+      await guild.channels.fetch().catch(discordCatch);
+      ch = guild.channels.cache.find((c) => {
+        if (c.type !== ChannelType.GuildText) return false;
+        const name = (c.name || '').toLowerCase().trim();
+        return BOT_LOGS_CHANNEL_NAMES.includes(name) || name.replace(/\s+/g, '-') === 'bot-logs';
+      });
+    }
     if (!ch) {
       console.error(
-        `Bot logs channel not found in guild "${guild.name}" (${guild.id}). Ensure your existing bot logs text channel is named one of: ${BOT_LOGS_CHANNEL_NAMES.join(', ')}.`
+        `Bot logs channel not found in guild "${guild.name}" (${guild.id}). Ensure your existing bot logs text channel is named one of: ${BOT_LOGS_CHANNEL_NAMES.join(', ')}, or has ID ${BOT_LOGS_CHANNEL_ID}.`
       );
       return;
     }
