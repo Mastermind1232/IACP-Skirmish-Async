@@ -45,6 +45,7 @@ export {
   buildDeployRowButtons,
   getDcActionButtons,
   getActivateDcButtons,
+  buildSpaceSelectMenu,
 } from './components.js';
 export { PHASE_COLOR, GAME_PHASES, ACTION_ICONS, logPhaseHeader, logGameAction, logGameErrorToBotLogs, getThreadName, updateThreadName, getActivationsLine, DC_ACTIONS_PER_ACTIVATION, getActionsCounterContent, updateActivationsMessage } from './messages.js';
 export { buildScorecardEmbed, getInitiativePlayerZoneLabel, formatHealthSection, CARD_BACK_CHAR, getPlayAreaTooltipEmbed, getHandTooltipEmbed, getHandVisualEmbed, getDiscardPileEmbed, getLobbyRosterText, getLobbyEmbed, getMapSelectionTooltipEmbed, getDeployDisplayNames, EMBEDS_PER_MESSAGE } from './embeds.js';
