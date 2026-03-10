@@ -86,6 +86,7 @@ export const SURGE_LABELS = {
   'agitate': 'Agitate', 'fell_swoop': 'Fell Swoop', 'mastery': 'Mastery', 'interrogate': 'Interrogate',
   'utinni_vp_1': 'Utinni! (+1 VP)',
   'autofire_chain': 'Chain Attack (within 3)',
+  'military_efficiency': 'Military Efficiency',
   'deadly': 'Deadly (-1 Dodge)',
   'gain 1': '+1 VP',
   'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1',
@@ -156,6 +157,8 @@ export function parseSurgeEffect(key) {
   if (k === 'mastery') { out.surgeMastery = true; return out; }
   // Interrogate (Agent Blaise): look at opponent's hand, choose a CC; may discard equal/greater cost CC to force discard.
   if (k === 'interrogate') { out.surgeInterrogate = true; return out; }
+  // Military Efficiency (Leia Organa): after resolving attack, shuffle 1 CC from discard into deck
+  if (k === 'military_efficiency') { out.surgeMilitaryEfficiency = true; return out; }
   // Cancel N: remove N results from the attacker's roll (defender surge, e.g. Kuiil)
   const cancelMatch = k.match(/^cancel\s+(\d+)$/);
   if (cancelMatch) { out.surgeCancel = parseInt(cancelMatch[1], 10); return out; }

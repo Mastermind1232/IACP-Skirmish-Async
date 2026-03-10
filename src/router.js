@@ -38,6 +38,8 @@ const BUTTON_PREFIXES = [
   'move_pick_',
   'attack_target_',
   'cleave_target_',
+  'cover_fire_block_',
+  'cover_fire_discard_',
   'combat_resolve_ready_',
   'combat_ready_',
   'combat_roll_',

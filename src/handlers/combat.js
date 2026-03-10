@@ -430,6 +430,14 @@ export async function handleAttackTarget(interaction, ctx) {
       await logGameAction(game, client, `⚡ **Merciless** — **${target.label}** suffers 1 Damage (has harmful condition).`, { phase: 'ROUND', icon: 'attack' });
     }
   }
+  // Aim (Rebel Trooper Elite): if the target has already suffered damage during this group's activation, +1 Hit +2 Accuracy
+  let _aimFired = false;
+  if ((_atkEff?.passives || []).includes('Aim')) {
+    const _aimDamaged = game.activationDamagedFigures?.[msgId] || [];
+    if (target.figureKey && _aimDamaged.includes(target.figureKey)) {
+      _aimFired = true;
+    }
+  }
   const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const combatDeclare = `**P${attackerPlayerNum}:** "${attackerDisplayName}" is attacking **P${defenderPlayerNum}:** "${target.label}"!`;
 
@@ -454,6 +462,7 @@ export async function handleAttackTarget(interaction, ctx) {
   });
   if (_mysticHunterFired) await thread.send(`🔮 **Mystic Hunter** — **${meta.dcName}** becomes **Focused** (+1 green die).`).catch(() => {});
   if (_flyByFired) await thread.send(`🚀 **Fly-By** — Target within 2 spaces: +1 blue die to attack pool.`).catch(() => {});
+  if (_aimFired) await thread.send(`🎯 **Aim** — Target already suffered damage this activation: +1 Hit, +2 Accuracy.`).catch(() => {});
   const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
   const nextPierce = (game.nextAttackBonusPierce?.[attackerPlayerNum] || 0) + (overrideDice?.pierce || 0);
   const nextBonusAcc = (game.nextAttackBonusAccuracy?.[attackerPlayerNum] || 0) + (overrideDice?.bonusAccuracy || 0) + (game._closeQuartersBonusAcc || 0);
@@ -499,6 +508,11 @@ export async function handleAttackTarget(interaction, ctx) {
     attackTargetMsgId: interaction.message.id,
     darksaberBlastToCleave: overrideDice?.darksaberBlastToCleave || false,
   };
+  // Aim (Rebel Trooper Elite): apply +1 Hit +2 Accuracy to pendingCombat
+  if (_aimFired) {
+    game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+    game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
+  }
   // Imperial Loadout (Purge Trooper Elite): inject loadout surge abilities + store post-attack hook
   const _loadoutChoice = getConfig(game, attackerFigureKey)?.loadout;
   if (_loadoutChoice) {
@@ -3123,6 +3137,7 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeFellSwoop) combat.surgeFellSwoop = true;
       if (mod.surgeMastery) combat.surgeMastery = true;
       if (mod.surgeInterrogate) combat.surgeInterrogate = true;
+      if (mod.surgeMilitaryEfficiency) combat.surgeMilitaryEfficiency = true;
       // Autofire chain attack: mark pending so applyDamageAndFinishCombat grants free attack
       if (key === 'autofire_chain') {
         const _afTargetPos = game.figurePositions?.[combat.defenderPlayerNum]?.[combat.target?.figureKey];
@@ -3953,5 +3968,71 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   applyDcPassivesToCombat(game.pendingCombat, controlledStats?.passives || [], targetStats?.passives || []);
   await interaction.message.edit({ content: '**False Orders — Attack declared**. See thread in Game Log.', components: [] }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, `⚔️ **False Orders** — P${controllerPlayerNum} controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+  saveGames();
+}
+
+/**
+ * Cover Fire — Block Token distribution picker.
+ * cover_fire_block_{gameId}_{playerNum}_{figureKey}
+ */
+export async function handleCoverFireBlock(interaction, ctx) {
+  await interaction.deferUpdate().catch(() => {});
+  const { getGame, saveGames, logGameAction, client, findDcMessageIdForFigure } = ctx;
+  const match = interaction.customId.match(/^cover_fire_block_(\d+)_(\d+)_(.+)$/);
+  if (!match) return;
+  const [, gameId, playerNumStr, figureKey] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the attacker can choose.')) return;
+  game.figurePowerTokens = game.figurePowerTokens || {};
+  game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
+  game.figurePowerTokens[figureKey].push('Block');
+  const dcName = dcNameFromFigureKey(figureKey);
+  await interaction.message.edit({ content: `🛡️ **Cover Fire** — **${dcName}** received 1 Block Token.`, components: [] }).catch(discordCatch);
+  if (logGameAction) await logGameAction(game, client, `🛡️ **Cover Fire** — **${dcName}** gained 1 Block Token.`, { phase: 'ROUND', icon: 'card' });
+  saveGames();
+}
+
+/**
+ * Cover Fire — Discard a condition or Power Token from the target.
+ * cover_fire_discard_{gameId}_{type}_{index}_{figureKey}
+ * cover_fire_discard_skip_{gameId}
+ */
+export async function handleCoverFireDiscard(interaction, ctx) {
+  await interaction.deferUpdate().catch(() => {});
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  // Skip button
+  if (interaction.customId.startsWith('cover_fire_discard_skip_')) {
+    await interaction.message.edit({ content: '🛡️ **Cover Fire** — Skipped condition/token removal.', components: [] }).catch(discordCatch);
+    return;
+  }
+  const match = interaction.customId.match(/^cover_fire_discard_(\d+)_(condition|token)_(\d+)_(.+)$/);
+  if (!match) return;
+  const [, gameId, type, indexStr, figureKey] = match;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const dcName = dcNameFromFigureKey(figureKey);
+  if (type === 'condition') {
+    const conds = game.figureConditions?.[figureKey] || [];
+    const idx = parseInt(indexStr, 10);
+    if (idx < conds.length) {
+      const removed = conds[idx];
+      conds.splice(idx, 1);
+      game.figureConditions[figureKey] = conds;
+      await interaction.message.edit({ content: `🛡️ **Cover Fire** — Discarded **${removed}** from **${dcName}**.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `🛡️ **Cover Fire** — Discarded **${removed}** from **${dcName}**.`, { phase: 'ROUND', icon: 'card' });
+    }
+  } else if (type === 'token') {
+    const tokens = game.figurePowerTokens?.[figureKey] || [];
+    const idx = parseInt(indexStr, 10);
+    if (idx < tokens.length) {
+      const removed = tokens[idx];
+      tokens.splice(idx, 1);
+      game.figurePowerTokens[figureKey] = tokens;
+      await interaction.message.edit({ content: `🛡️ **Cover Fire** — Discarded **${removed} Token** from **${dcName}**.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `🛡️ **Cover Fire** — Discarded **${removed} Token** from **${dcName}**.`, { phase: 'ROUND', icon: 'card' });
+    }
+  }
   saveGames();
 }

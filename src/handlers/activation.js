@@ -1128,7 +1128,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     }
   }
 
-  // Calming Presence (Yoda): when a friendly REBEL activates, remove 1 harmful condition
+  // Calming Presence (Yoda): when a friendly REBEL FORCE USER activates, remove 1 harmful condition
   // Check if any Yoda figure on the activating player's team has this ability
   if (meta.playerNum) {
     const dcList = getDcList(game, meta.playerNum) || [];
@@ -1137,9 +1137,11 @@ export async function handleConfirmActivate(interaction, ctx) {
       const eff = getDcEffects()?.[dc.dcName];
       if (!(eff?.specialAbilityIds || []).includes('calming_presence_yoda')) continue;
       if (dc.dcName === meta.dcName) continue; // different figure
-      // Check if the activating DC is REBEL
+      // Check if the activating DC is REBEL FORCE USER
       const activatingEff = getDcEffects()?.[meta.dcName];
       if (activatingEff?.affiliation !== 'Rebel') continue;
+      const activatingKws = (activatingEff?.keywords || []).map(k => String(k).toUpperCase());
+      if (!activatingKws.includes('FORCE USER')) continue;
       // Check if any figure in the activating group has a harmful condition
       const dgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const figures = activatingEff?.figures ?? 1;
@@ -1148,7 +1150,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         const conds = game.figureConditions?.[fk] || [];
         const harmful = conds.filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c));
         if (harmful.length > 0) {
-          await thread.send({ content: `🧘 **Calming Presence** (Yoda) — **${meta.dcName}** is a REBEL figure that just activated. You may remove 1 harmful condition (${harmful.join(', ')}). *(Honor system.)*` }).catch(() => {});
+          await thread.send({ content: `🧘 **Calming Presence** (Yoda) — **${meta.dcName}** is a REBEL FORCE USER that just activated. You may remove 1 harmful condition (${harmful.join(', ')}). *(Honor system.)*` }).catch(() => {});
           break;
         }
       }

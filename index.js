@@ -2405,6 +2405,15 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     return;
   }
 
+  // Track figures damaged by this group's activation (for Aim: Rebel Trooper Elite, etc.)
+  if (damage > 0 && combat.attackerMsgId && combat.target?.figureKey) {
+    game.activationDamagedFigures = game.activationDamagedFigures || {};
+    game.activationDamagedFigures[combat.attackerMsgId] = game.activationDamagedFigures[combat.attackerMsgId] || [];
+    if (!game.activationDamagedFigures[combat.attackerMsgId].includes(combat.target.figureKey)) {
+      game.activationDamagedFigures[combat.attackerMsgId].push(combat.target.figureKey);
+    }
+  }
+
   let _fdNeedsEmbedRefresh = false;
   if (damage > 0 && targetMsgId) {
     let { newHp: newCur } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, damage, defenderPlayerNum);
@@ -3439,6 +3448,70 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       if (mid) embedRefreshMsgIds.add(mid);
     }
   }
+  // Cover Fire (CT-1701): after resolving an attack, distribute 1 Block Token to a friendly figure within 3 spaces.
+  // If the attack hit, may discard 1 condition or Power Token from the target. Limit once per round.
+  const _cfAttEff = getDcEffects()?.[combat.attackerDcName || ''];
+  const _cfKey = `coverFire_${combat.attackerMsgId}`;
+  if ((_cfAttEff?.passives || []).includes('Cover Fire') && combat.attackerMsgId && !game.roundFigureAbilityUsed?.[_cfKey]) {
+    game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+    game.roundFigureAbilityUsed[_cfKey] = true;
+    const _cfAttPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
+    const _cfMapId = game.selectedMap?.id;
+    if (_cfAttPos && _cfMapId) {
+      // Find all friendly figures within 3 spaces
+      const _cfFriendlies = [];
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[attackerPlayerNum] || {})) {
+        if (!pos) continue;
+        if (getRange(_cfAttPos, pos) <= 3) _cfFriendlies.push({ fk, pos });
+      }
+      if (_cfFriendlies.length === 1) {
+        // Auto-grant to the only option
+        grantPowerTokens(game, _cfFriendlies[0].fk, 'Block', 1);
+        const _cfName = dcNameFromFigureKey(_cfFriendlies[0].fk);
+        await logGameAction(game, client, `🛡️ **Cover Fire** — **${_cfName}** gained 1 Block Token.`, { phase: 'ROUND', icon: 'card' });
+        const _cfMid = findDcMessageIdForFigure(game.gameId, attackerPlayerNum, _cfFriendlies[0].fk);
+        if (_cfMid) embedRefreshMsgIds.add(_cfMid);
+      } else if (_cfFriendlies.length > 1) {
+        // Picker buttons for Block token target
+        const _cfBtns = _cfFriendlies.slice(0, 20).map(({ fk }) => {
+          const _cfLabel = dcNameFromFigureKey(fk);
+          return new ButtonBuilder()
+            .setCustomId(`cover_fire_block_${game.gameId}_${attackerPlayerNum}_${fk}`)
+            .setLabel(_cfLabel.slice(0, 80))
+            .setStyle(ButtonStyle.Primary);
+        });
+        const _cfRows = [];
+        for (let i = 0; i < _cfBtns.length; i += 5) {
+          _cfRows.push(new ActionRowBuilder().addComponents(_cfBtns.slice(i, i + 5)));
+        }
+        game.pendingCoverFire = { gameId: game.gameId, attackerPlayerNum, attackerMsgId: combat.attackerMsgId, hit: !!(hit && damage > 0), targetFigureKey: combat.target?.figureKey, targetMsgId, targetFigIndex, defenderPlayerNum, combat: { combatThreadId: combat.combatThreadId, resultText }, embedRefreshMsgIds: [...embedRefreshMsgIds] };
+        await thread.send({ content: `🛡️ **Cover Fire** — <@${ownerId}> Choose a friendly figure within 3 spaces to receive 1 Block Token:`, allowedMentions: { users: [ownerId] }, components: _cfRows });
+        // Don't return — the Block token choice is async but we continue combat resolution
+      }
+    }
+    // If hit and damage > 0, offer to discard a condition or power token from the target
+    if (hit && damage > 0 && combat.target?.figureKey) {
+      const _cfTargetConds = (game.figureConditions?.[combat.target.figureKey] || []).filter(c => c !== 'Bleed' || c); // all conditions
+      const _cfTargetTokens = game.figurePowerTokens?.[combat.target.figureKey] || [];
+      const _cfRemovables = [..._cfTargetConds.map(c => ({ type: 'condition', value: c })), ..._cfTargetTokens.map(t => ({ type: 'token', value: t }))];
+      if (_cfRemovables.length > 0) {
+        const _cfRemBtns = _cfRemovables.slice(0, 20).map(({ type, value }, i) => {
+          const label = type === 'condition' ? `Discard ${value}` : `Discard ${value} Token`;
+          return new ButtonBuilder()
+            .setCustomId(`cover_fire_discard_${game.gameId}_${type}_${i}_${combat.target.figureKey}`)
+            .setLabel(label.slice(0, 80))
+            .setStyle(ButtonStyle.Danger);
+        });
+        _cfRemBtns.push(new ButtonBuilder().setCustomId(`cover_fire_discard_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        const _cfRemRows = [];
+        for (let i = 0; i < _cfRemBtns.length; i += 5) {
+          _cfRemRows.push(new ActionRowBuilder().addComponents(_cfRemBtns.slice(i, i + 5)));
+        }
+        await thread.send({ content: `🛡️ **Cover Fire** — <@${ownerId}> You may discard 1 condition or Power Token from **${combat.target.label}**:`, allowedMentions: { users: [ownerId] }, components: _cfRemRows });
+      }
+    }
+  }
+
   // F6 Cleave: attacker may choose one other figure in melee (adjacent to attacker) to apply cleave damage
   // Triggered by either surge Cleave ability or Cleave N passive on deployment card
   const effectiveCleave = (combat.surgeCleave || 0) + (combat.passiveCleave || 0);
@@ -3749,6 +3822,26 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
         components: [new ActionRowBuilder().addComponents(intBtns)],
       }).catch(discordCatch);
       return true;
+    }
+  }
+  // Military Efficiency (Leia Organa): shuffle 1 CC from discard back into deck
+  if (combat.surgeMilitaryEfficiency && combat.attackerPlayerNum) {
+    const mePlayerNum = combat.attackerPlayerNum;
+    const meDiscardKey = ccDiscardKey(mePlayerNum);
+    const meDeckKey = ccDeckKey(mePlayerNum);
+    const meDiscard = game[meDiscardKey] || [];
+    if (meDiscard.length === 0) {
+      await thread.send(`**Military Efficiency** — No cards in discard pile to return.`).catch(discordCatch);
+    } else {
+      // Shuffle the most-recently-discarded card back (player chooses in practice — honour system for which card)
+      const meCard = meDiscard[meDiscard.length - 1];
+      game[meDiscardKey] = meDiscard.slice(0, -1);
+      const meDeck = [...(game[meDeckKey] || [])];
+      const meInsertIdx = Math.floor(Math.random() * (meDeck.length + 1));
+      meDeck.splice(meInsertIdx, 0, meCard);
+      game[meDeckKey] = meDeck;
+      await thread.send(`**Military Efficiency** — **${meCard}** shuffled from discard back into your Command deck.`).catch(discordCatch);
+      await logGameAction(game, client, `**Military Efficiency** — **${meCard}** shuffled back into P${mePlayerNum}'s Command deck.`, { phase: 'ROUND', icon: 'card' });
     }
   }
   return false;

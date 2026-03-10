@@ -122,7 +122,7 @@
       "type": "dcSpecial",
       "category": "passive",
       "label": "Aim",
-      "description": "If you have not exited a space during this activation, apply +1 Hit and +2 Accuracy to your attack results.",
+      "description": "While attacking during your activation, if the target has suffered damage during this group's activation, apply +1 Hit and +2 Accuracy to the attack results.",
       "wiredStatus": "wired"
     },
     "aim_rebel_trooper_reg": {
@@ -546,7 +546,7 @@
       "category": "passive-reactive",
       "trigger": "friendly-activation",
       "label": "Calming Presence",
-      "description": "When a friendly REBEL figure activates, you may remove 1 harmful condition from that figure.",
+      "description": "When a friendly REBEL FORCE USER figure activates, you may remove 1 harmful condition from that figure and suffer 1 Strain. Limit once per round.",
       "wiredStatus": "wired"
     },
     "Camouflage": {
@@ -2952,14 +2952,12 @@
     },
     "military_efficiency": {
       "type": "dcSpecial",
-      "category": "passive-reactive",
-      "trigger": "post-combat",
+      "category": "surge",
       "label": "Military Efficiency",
-      "description": "After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck.",
+      "description": "Surge: After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Military Efficiency** — After you resolve an attack, choose 1 Command card from your discard pile and shuffle it into your Command deck.",
-      "shuffleOneDiscardToDeck": true
+      "logMessage": "**Military Efficiency** — After you resolve an attack, choose 1 Command card from your discard pile and shuffle it into your Command deck."
     },
     "Miracle Worker": {
       "type": "ccEffect",
@@ -5157,6 +5155,13 @@
       "logMessage": "**You Will Not Deny Me** — Place on Fifth Brother. He cannot be defeated and ignores Harmful conditions. When a hostile figure is defeated, he recovers 2 Damage automatically and this card returns to the game box.",
       "wiredStatus": "wired",
       "setsYouWillNotDenyMe": true
+    },
+    "cover_fire_ct1701": {
+      "type": "dcSpecial",
+      "category": "passive",
+      "label": "Cover Fire",
+      "description": "After you resolve an attack, distribute 1 Block Token to a friendly figure within 3 spaces. Then, if it did not miss, you may discard 1 condition or Power Token from the target. Limit once per round.",
+      "wiredStatus": "wired"
     }
   }
 }

@@ -1789,7 +1789,7 @@
       ]
     },
     "CT-1701": {
-      "abilityText": "Special Action (Barrage): Perform 2 attacks. The target of the second attack must be within 3 spaces of the first target space and adds 1 white die to the defense pool.\n\nCover Fire: After you resolve an attack, distribute 1 Block Token to a friendly figure within 3 spaces. Then, if it did not miss, you may discard 1 condition or Power Token from the target.",
+      "abilityText": "Special Action (Barrage): Perform 2 attacks. The target of the second attack must be within 3 spaces of the first target space and adds 1 white die to the defense pool.\n\nCover Fire: After you resolve an attack, distribute 1 Block Token to a friendly figure within 3 spaces. Then, if it did not miss, you may discard 1 condition or Power Token from the target. Limit once per round.",
       "keywords": [
         "TROOPER",
         "GUARDIAN"
@@ -1820,10 +1820,14 @@
       "unique": true,
       "affiliation": "Rebel",
       "specialAbilityIds": [
-        "barrage_ct1701"
+        "barrage_ct1701",
+        "cover_fire_ct1701"
       ],
       "specials": [
         "Barrage"
+      ],
+      "passives": [
+        "Cover Fire"
       ]
     },
     "Dark Trooper Mk III": {
@@ -4195,7 +4199,7 @@
       ]
     },
     "Leia Organa": {
-      "abilityText": "Special Action (Battlefield Leadership): Perform an attack, then choose another friendly figure within 3 spaces. That figure may interrupt to move up to 1 space and then perform an attack with the same target.\n\nMilitary Efficiency: After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck.",
+      "abilityText": "Special Action (Battlefield Leadership): Perform an attack, then choose another friendly figure within 3 spaces. That figure may interrupt to move up to 1 space and then perform an attack with the same target.\n\nMilitary Efficiency (Surge): After you resolve an attack, you may choose 1 Command card in your discard pile and shuffle it into your Command deck.",
       "keywords": [
         "FORCE USER",
         "LEADER",
@@ -4223,7 +4227,8 @@
       "surgeAbilities": [
         "damage 2",
         "accuracy 3",
-        "recover 2"
+        "recover 2",
+        "military_efficiency"
       ],
       "attachment": false,
       "elite": true,
@@ -5159,19 +5164,19 @@
       "affiliation": "Rebel"
     },
     "Rebel Trooper (Elite)": {
-      "abilityText": "Aim: If you have not exited your space during this activation, apply +1 Hit and +2 Accuracy to your attack results.\n\nDouble Action Special (Get into Position): Gain 4 movement points and become Focused.",
+      "abilityText": "Aim: While attacking during your activation, if the target has suffered damage during this group's activation, apply +1 Hit and +2 Accuracy to the attack results.\n\nDouble Action Special (Get into Position): Move up to 4 spaces and become Focused.",
       "keywords": [
         "TROOPER"
       ],
       "cost": 7,
       "subCost": 3,
-      "health": 5,
+      "health": 3,
       "speed": 4,
       "figures": 3,
       "attack": {
         "dice": [
           "blue",
-          "yellow"
+          "green"
         ],
         "type": "range"
       },
@@ -5179,8 +5184,8 @@
         "white"
       ],
       "surgeAbilities": [
-        "accuracy 2",
-        "pierce 2"
+        "damage 1, pierce 1",
+        "accuracy 3"
       ],
       "specialAbilityIds": [
         "get_into_position",
@@ -5194,6 +5199,9 @@
       ],
       "specialCosts": [
         2
+      ],
+      "passives": [
+        "Aim"
       ]
     },
     "Rebel Trooper (Regular)": {
@@ -6849,12 +6857,12 @@
       ]
     },
     "Yoda": {
-      "abilityText": "Calming Presence: At the start of a friendly REBEL figure's activation, that figure may remove one HARMFUL condition and suffer 1 Strain. Limit once per round.\n\nWisdom: At the start of your activation, you may draw 1 Command card. If you do, place 1 card from your hand on the bottom of your deck.\n\nSpecial Action (Do or Do Not): Choose another friendly REBEL FORCE USER within 4 spaces. That figure becomes Focused.\n\nForce Deflection: After an attack targeting you or an adjacent friendly REBEL figure resolves, you may have the attacking figure suffer Damage equal to the number of attack dice rolled. Limit once per round.",
+      "abilityText": "Calming Presence: At the start of a friendly REBEL FORCE USER figure's activation, that figure may remove one HARMFUL condition and suffer 1 Strain. Limit once per round.\n\nWisdom: At the start of your activation, you may draw 1 Command card. If you do, place 1 card from your hand on the bottom of your deck.\n\nSpecial Action (Do or Do Not): Choose another friendly REBEL FORCE USER within 4 spaces. That figure becomes Focused.\n\nForce Deflection: After an attack targeting you or an adjacent friendly REBEL figure resolves, you may have the attacking figure suffer Damage equal to the number of attack dice rolled. Limit once per round.",
       "keywords": [
         "FORCE USER"
       ],
       "subname": "JEDI MASTER",
-      "cost": 4,
+      "cost": 5,
       "health": 9,
       "speed": 3,
       "figures": 1,

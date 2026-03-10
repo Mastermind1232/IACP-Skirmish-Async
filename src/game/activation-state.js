@@ -53,6 +53,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'darksaberSecondAttack',
   'pendingOverwatchPlacement',
   'activationKills',
+  'activationDamagedFigures',
 ];
 
 /**
@@ -182,6 +183,7 @@ const ROUND_OBJECT_FLAGS = [
   'darksaberSecondAttack',
   'pendingOverwatchPlacement',
   'activationKills',
+  'activationDamagedFigures',
 ];
 
 const ROUND_NULL_FLAGS = [
