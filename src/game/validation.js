@@ -184,6 +184,10 @@ export function validateDeckLegal(squad) {
   if (ccCost !== CC_COST_LEGAL) {
     errors.push(`Command deck total cost is ${ccCost}. Legal total cost is exactly ${CC_COST_LEGAL}.`);
   }
+  // ── Attachment target validation ──
+  const attachmentWarnings = validateAttachmentTargets(dcList);
+  errors.push(...attachmentWarnings);
+
   return {
     legal: errors.length === 0,
     errors,
@@ -191,6 +195,134 @@ export function validateDeckLegal(squad) {
     ccCount: ccList.length,
     ccCost,
   };
+}
+
+// ── Attachment target validation helpers ──
+
+const ATTACHMENT_RESTRICTION_KEYWORDS = ['LEADER', 'HUNTER', 'DROID', 'CREATURE', 'TROOPER', 'VEHICLE',
+  'SMUGGLER', 'WOOKIEE', 'WOOKIE', 'FORCE USER', 'HEAVY WEAPON', 'UNIQUE FIGURE',
+  'NON-UNIQUE', 'NON-MASSIVE', 'BRAWLER', 'SPY', 'GUARDIAN', 'IMPERIAL', 'REBEL',
+  'SCUM', 'FIGURE WITH', 'FIGURE COST', 'GROUP WITH', 'MASSIVE'];
+
+/** Check if a DC's keywords + affiliation satisfy a keyword phrase like "IMPERIAL TROOPER" or "HUNTER". */
+function _matchesKeywordPhrase(phrase, dcKw, affiliation) {
+  const words = phrase.split(/\s+/).filter(Boolean);
+  return words.every(w => dcKw.includes(w) || affiliation === w);
+}
+
+/**
+ * Parse the "X ONLY" restriction from an attachment card's abilityText.
+ * Returns { restrictionText, filter: (dcName, dcEffects) => bool } or null if no restriction.
+ */
+function parseAttachmentRestriction(cardName, dcEffects) {
+  const card = dcEffects[cardName] || dcEffects[`[${cardName}]`];
+  if (!card?.abilityText || !card.attachment) return null;
+  const firstLine = card.abilityText.split('\n')[0].trim();
+  const onlyMatch = firstLine.match(/^(.+?)\s+ONLY$/i);
+  if (!onlyMatch) return null;
+  const restrictionRaw = onlyMatch[1].replace(/"/g, '').trim();
+
+  // Split into OR-alternatives. "4 OR MORE" is a phrase, not an alternative split.
+  const normalized = restrictionRaw.replace(/(\d+)\s+OR\s+MORE/gi, '$1_OR_MORE');
+  const orParts = normalized.split(/\s+OR\s+/i).map(s => s.trim()).filter(Boolean);
+  const alternatives = [];
+  for (const part of orParts) {
+    if (part.includes(',') && !part.includes('NON-')) {
+      const subs = part.split(/,\s*/).map(s => s.trim()).filter(Boolean);
+      alternatives.push(...subs);
+    } else {
+      alternatives.push(part.replace(/_OR_MORE/g, ' OR MORE'));
+    }
+  }
+
+  return {
+    restrictionText: restrictionRaw,
+    filter: (dcName) => {
+      const dcStats = dcEffects[dcName];
+      if (!dcStats) return false;
+      const dcKw = (dcStats.keywords || []).map(k => String(k).toUpperCase());
+      const dcNameUpper = (dcName || '').toUpperCase();
+      const isUnique = !!dcStats.unique;
+      const figureCost = dcStats.cost ?? 0;
+      const figures = dcStats.figures ?? 1;
+      const affiliation = (dcStats.affiliation || '').toUpperCase();
+
+      return alternatives.some(alt => {
+        const altUpper = alt.toUpperCase().replace(/\([^)]*\)/g, '').trim();
+
+        // Handle NON- prefix conditions (conjunctive — all must be met)
+        if (altUpper.includes('NON-')) {
+          if (altUpper.includes('NON-MASSIVE') && dcKw.includes('MASSIVE')) return false;
+          if (altUpper.includes('NON-UNIQUE') && isUnique) return false;
+          const remaining = altUpper.replace(/NON-MASSIVE/g, '').replace(/NON-UNIQUE/g, '').replace(/,/g, '').trim();
+          if (remaining && !_matchesKeywordPhrase(remaining, dcKw, affiliation)) return false;
+          return true;
+        }
+        // "UNIQUE FIGURE" check (optionally "WITH FIGURE COST N OR MORE")
+        if (altUpper.includes('UNIQUE FIGURE')) {
+          if (!isUnique) return false;
+          const costMatch = altUpper.match(/FIGURE COST (\d+) OR MORE/);
+          if (costMatch && figureCost < parseInt(costMatch[1], 10)) return false;
+          return true;
+        }
+        // "GROUP WITH N FIGURES" check
+        const groupMatch = altUpper.match(/(.+?)\s+GROUP WITH (\d+) FIGURES/);
+        if (groupMatch) {
+          const kwPart = groupMatch[1].trim();
+          const reqFigs = parseInt(groupMatch[2], 10);
+          if (figures !== reqFigs) return false;
+          if (!_matchesKeywordPhrase(kwPart, dcKw, affiliation)) return false;
+          return true;
+        }
+        // Simple keyword match
+        if (ATTACHMENT_RESTRICTION_KEYWORDS.some(k => altUpper.includes(k))) {
+          return _matchesKeywordPhrase(altUpper, dcKw, affiliation);
+        }
+        // Name-based match (e.g. "DARTH VADER", "LUKE SKYWALKER", "MAUL", "AT-ST")
+        if (dcNameUpper.includes(altUpper) || altUpper.includes(dcNameUpper.replace(/\s*\(.*\)$/, ''))) return true;
+        return false;
+      });
+    },
+  };
+}
+
+/**
+ * Validate that each attachment card in the army has at least one valid non-attachment target.
+ * @param {string[]} dcList
+ * @returns {string[]} array of error messages for attachments with no valid targets
+ */
+function validateAttachmentTargets(dcList) {
+  const warnings = [];
+  const dcEffects = getDcEffects();
+
+  // Resolve each DC name to its canonical key in dcEffects (reuse resolveDcInput for fuzzy matching)
+  const resolvedNames = dcList.map(entry => {
+    const name = resolveDcName(entry);
+    return resolveDcInput(name, dcEffects);
+  });
+
+  // Separate attachment and non-attachment DCs
+  const nonAttachmentNames = resolvedNames.filter(name => {
+    const stats = dcEffects[name];
+    return stats && !stats.attachment;
+  });
+
+  for (const name of resolvedNames) {
+    const stats = dcEffects[name];
+    if (!stats?.attachment) continue;
+
+    const restriction = parseAttachmentRestriction(name, dcEffects);
+    if (!restriction) continue; // No "X ONLY" restriction line — skip
+
+    const hasValidTarget = nonAttachmentNames.some(targetName => restriction.filter(targetName));
+    if (!hasValidTarget) {
+      // Use display name without brackets for readability
+      const displayName = name.startsWith('[') && name.endsWith(']') ? name.slice(1, -1) : name;
+      warnings.push(`"${displayName}" requires a ${restriction.restrictionText} figure, but none found in army.`);
+    }
+  }
+
+  return warnings;
 }
 
 /**

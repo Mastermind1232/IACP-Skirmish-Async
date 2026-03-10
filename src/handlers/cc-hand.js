@@ -19,7 +19,7 @@ import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { normalizeSquadInput } from '../game/validation.js';
-import { getDcEffects } from '../data-loader.js';
+import { getDcEffects, getDcKeywords } from '../data-loader.js';
 import { awardObjectiveVp } from '../game/index.js';
 import {
   getPlayerId, getHandChannelId, getSquad, getCcDiscard, getCcDeck,
@@ -217,7 +217,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
 
 /** PLAY CARD confirmed — execute the actual play. */
 export async function handleCcConfirmPlay(interaction, ctx) {
-  const { getGame, getCcEffect, isCcAttachment, isCcPlayableNow, isCcPlayLegalByRestriction, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames, getIllegalCcPlayButtons, client } = ctx;
+  const { getGame, getCcEffect, isCcAttachment, isCcPlayableNow, isCcPlayLegalByRestriction, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames, getIllegalCcPlayButtons, getCommandCardImagePath, client } = ctx;
   const gameId = interaction.customId.replace('cc_confirm_play_', '');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
@@ -310,19 +310,93 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       return;
     }
     game.pendingCcAttachment = { playerNum, card };
-    const options = dcList.slice(0, 25).map((d, i) => ({
+    // Filter DCs by playableBy restriction
+    const ccEffect = getCcEffect(card);
+    const playableBy = (ccEffect?.playableBy || '').trim();
+    const hasRestriction = playableBy && playableBy.toLowerCase() !== 'any figure';
+    let options = dcList.slice(0, 25).map((d, i) => ({
       label: (d.displayName || d.dcName || `DC ${i + 1}`).slice(0, 100),
       value: dcMsgIds[i] || String(i),
+      dcName: typeof d === 'object' ? (d.dcName || d.displayName) : d,
+      displayName: typeof d === 'object' ? (d.displayName || d.dcName) : d,
     })).filter((o) => o.value);
+    if (hasRestriction) {
+      const allKeywords = getDcKeywords() || {};
+      const allDcEffects = getDcEffects() || {};
+      const alternatives = playableBy.split(/\s+or\s+/i).map(a => a.trim().replace(/^"|"$/g, '').toLowerCase());
+      const AFFILIATIONS = new Set(['imperial', 'rebel', 'scum', 'mercenary']);
+      options = options.filter(o => {
+        const dcBase = String(o.dcName || '')
+          .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
+          .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
+          .trim();
+        const dispBase = String(o.displayName || dcBase)
+          .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
+          .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
+          .trim();
+        const dcData = allDcEffects[o.dcName] || allDcEffects[dcBase];
+        const affiliationLower = (dcData?.affiliation || '').toLowerCase();
+        const kw = allKeywords[o.dcName] || allKeywords[dcBase] || [];
+        const kwLower = kw.map(k => String(k).toLowerCase());
+        for (const alt of alternatives) {
+          // "Unique" check
+          if (alt === 'unique' || alt === 'any unique figure') {
+            if (dcData?.unique) return true;
+            continue;
+          }
+          // "Any Small Figure" check
+          if (alt === 'any small figure') {
+            if (kwLower.includes('small')) return true;
+            continue;
+          }
+          // Name match
+          const dcLow = dcBase.toLowerCase();
+          const dispLow = dispBase.toLowerCase();
+          if (dcLow.includes(alt) || alt.includes(dcLow) || dispLow.includes(alt) || alt.includes(dispLow))
+            return true;
+          // Decompose into affiliation + keyword parts
+          const words = alt.split(/\s+/);
+          let reqAff = null;
+          const reqKwWords = [];
+          for (const w of words) {
+            if (AFFILIATIONS.has(w) && !reqAff) reqAff = w;
+            else reqKwWords.push(w);
+          }
+          const reqKw = reqKwWords.join(' ');
+          if (reqAff && affiliationLower !== reqAff && affiliationLower !== 'any') continue;
+          if (reqKw && !kwLower.includes(reqKw)) continue;
+          if (reqAff || reqKw) return true;
+        }
+        return false;
+      });
+    }
+    // Remove internal fields before building select menu
+    options = options.map(({ label, value }) => ({ label, value }));
+    if (options.length === 0) {
+      await interaction.followUp({ content: `No eligible Deployment Cards for **${card}** (playable by: ${playableBy}).`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
     const select = new StringSelectMenuBuilder()
       .setCustomId(`cc_attach_to_${gameId}`)
       .setPlaceholder('Attach to which Deployment Card?')
       .addOptions(options);
-    await interaction.followUp({
+    // Build CC card image if available
+    const followUpPayload = {
       content: `**${card}** is an Attachment. Choose which Deployment Card to attach it to:`,
       components: [new ActionRowBuilder().addComponents(select)],
       ephemeral: false,
-    });
+    };
+    if (getCommandCardImagePath) {
+      const { existsSync } = await import('fs');
+      const { AttachmentBuilder } = await import('discord.js');
+      const imgPath = getCommandCardImagePath(card);
+      if (imgPath && existsSync(imgPath)) {
+        const ext = imgPath.toLowerCase().endsWith('.png') ? 'png' : 'jpg';
+        const fileName = `cc-attach-${(card || '').replace(/[^a-zA-Z0-9]/g, '')}.${ext}`;
+        followUpPayload.files = [new AttachmentBuilder(imgPath, { name: fileName })];
+      }
+    }
+    await interaction.followUp(followUpPayload).catch(discordCatch);
     return;
   }
   const effectData = getCcEffect(card);
