@@ -337,7 +337,7 @@ setGroup([
   'combat_roll_', 'combat_surge_', 'combat_reroll_', 'pre_reroll_', 'combat_passive_',
   'combat_token_', 'power_token_choice_', 'spread_pain_cond_', 'figurehead_use_',
   'figurehead_skip_', 'lasat_die_', 'lasat_face_', 'false_orders_atk_',
-  'guidance_systems_',
+  'guidance_systems_', 'cover_fire_block_', 'cover_fire_discard_',
 ], 'combat');
 
 setGroup([

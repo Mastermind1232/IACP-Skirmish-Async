@@ -5194,8 +5194,11 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // .vsav file upload in Player Hand channel
-  const vsavAttach = message.attachments?.find((a) => a.name?.toLowerCase().endsWith('.vsav'));
+  // .vsav / .vpt file upload in Player Hand channel
+  const vsavAttach = message.attachments?.find((a) => {
+    const name = a.name?.toLowerCase() || '';
+    return name.endsWith('.vsav') || name.startsWith('vpt_') || name.endsWith('.vpt');
+  });
   if (vsavAttach) {
     const _vsavMatch = findGameByChannel(getGamesMap(), message.channel.id);
     if (_vsavMatch && (_vsavMatch.isP1 || _vsavMatch.isP2)) {
@@ -5214,14 +5217,14 @@ client.on('messageCreate', async (message) => {
         const content = await res.text();
         const parsed = parseVsav(content);
         if (!parsed || (parsed.dcList.length === 0 && parsed.ccList.length === 0)) {
-          await message.reply('Could not parse that .vsav file. Make sure it was exported from the IACP List Builder.');
+          await message.reply('Could not parse that file. Make sure it was exported from the IACP List Builder.');
           return;
         }
         const squadName = vsavAttach.name
-          ? vsavAttach.name.replace(/\.vsav$/i, '').replace(/^IA List \[[^\]]+\] - /, '').trim()
-          : 'From .vsav';
+          ? vsavAttach.name.replace(/\.vsav$/i, '').replace(/^IA List \[[^\]]+\] - /, '').replace(/^VPT_\w*/i, '').trim()
+          : 'From file';
         const squad = {
-          name: squadName || 'From .vsav',
+          name: squadName || 'From file',
           dcList: parsed.dcList,
           ccList: parsed.ccList,
           dcCount: parsed.dcList.length,
