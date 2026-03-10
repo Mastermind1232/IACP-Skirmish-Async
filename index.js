@@ -82,7 +82,7 @@ import {
 import { getHandlerKey } from './src/router.js';
 import { getHandler, getHandlerGroup } from './src/handlers/index.js';
 import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
-import { buildContext } from './src/context-factory.js';
+import { buildContext, getAllRequiredDepKeys } from './src/context-factory.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
 import { getCommandCardImagePath, getDcImagePath, getConditionCardPath, getFigureImagePath, resolveAssetPath, resolveDcImagePath, resolveMissionCardImagePath, UPGRADE_IMAGE_OVERRIDES } from './src/asset-paths.js';
 import { canActAsPlayer } from './src/utils/can-act-as-player.js';
@@ -2620,7 +2620,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             if (_nimMsgId) {
               grantMovementBank(game, _nimMsgId, _nimMp);
             }
-            await logGameAction(game, client, `🦎 **Nimble** — **${_nimDcName}** gained ${_nimMp} MP (${_nimTotalBlock} Block result${_nimTotalBlock !== 1 ? 's' : ''} × 2).`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+            await logGameAction(game, client, `🦎 **Nimble** — **${_nimDcName}** gained ${_nimMp} MP (${_nimTotalBlock} Block result${_nimTotalBlock !== 1 ? 's' : ''} × 2).`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
           }
         }
       }
@@ -2633,7 +2633,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           if (_slipMsgId) {
             grantMovementBank(game, _slipMsgId, 2);
           }
-          await logGameAction(game, client, `🏃 **Slippery** — **${_slipDcName}** gains 2 MP after being attacked.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+          await logGameAction(game, client, `🏃 **Slippery** — **${_slipDcName}** gains 2 MP after being attacked.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
         }
       }
       // Leg Hydraulics (Tress Hacnua): after resolving an attack, attacker gains 1 MP
@@ -2642,7 +2642,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const _lhEff = getDcEffects()?.[_lhAtkDcName];
         if ((_lhEff?.specialAbilityIds || []).includes('leg_hydraulics_tress') && combat.attackerMsgId) {
           grantMovementBank(game, combat.attackerMsgId, 1);
-          await logGameAction(game, client, `🦿 **Leg Hydraulics** — **${_lhAtkDcName}** gains 1 MP after attacking.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+          await logGameAction(game, client, `🦿 **Leg Hydraulics** — **${_lhAtkDcName}** gains 1 MP after attacking.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
         }
       }
       // Loku Recon Token: Set Your Sights — after Loku's attack resolves, place recon token on target
@@ -2651,7 +2651,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const _lkAtkEff = getDcEffects()?.[_lkAtkDcName];
         if ((_lkAtkEff?.specialAbilityIds || []).includes('set_your_sights_loku') && combat.target?.figureKey) {
           game.reconToken = { figureKey: combat.target.figureKey, playerNum: combat.attackerPlayerNum };
-          await logGameAction(game, client, `🎯 **Set Your Sights** — Recon token placed on **${dcNameFromFigureKey(combat.target.figureKey)}**.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+          await logGameAction(game, client, `🎯 **Set Your Sights** — Recon token placed on **${dcNameFromFigureKey(combat.target.figureKey)}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
         }
       }
       // Force Deflection (Yoda): after attack targeting Yoda or adjacent friendly REBEL resolves,
@@ -2697,7 +2697,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
               if (_fdAtkPrev > 0) {
                 _fdNeedsEmbedRefresh = true;
                 const _fdYodaDcName = dcNameFromFigureKey(_fdYodaFigKey);
-                await logGameAction(game, client, `🔵 **Force Deflection** — **${_fdYodaDcName}** deflects! **${combat.attackerDcName}** suffers **${_fdDiceCount} Damage** (${_fdDiceCount} attack dice rolled). HP: ${_fdAtkPrev} → ${_fdAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+                await logGameAction(game, client, `🔵 **Force Deflection** — **${_fdYodaDcName}** deflects! **${combat.attackerDcName}** suffers **${_fdDiceCount} Damage** (${_fdDiceCount} attack dice rolled). HP: ${_fdAtkPrev} → ${_fdAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
                 // Check if attacker was defeated by Force Deflection
                 if (_fdAtkDefeated) {
                   removeFigurePosition(game, attackerPlayerNum, combat.attackerFigureKey);
@@ -2707,7 +2707,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
                   const _fdAtkFigures = _fdAtkStats?.figures ?? 1;
                   const _fdAtkVp = (_fdAtkFigures > 1 && _fdAtkEffects?.subCost != null) ? _fdAtkEffects.subCost : (_fdAtkStats?.cost ?? 5);
                   awardKillVp(game, defenderPlayerNum, _fdAtkVp);
-                  await logGameAction(game, client, `**Force Deflection** — **${combat.attackerDcName}** was defeated! +${_fdAtkVp} VP to Player ${defenderPlayerNum}.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+                  await logGameAction(game, client, `**Force Deflection** — **${combat.attackerDcName}** was defeated! +${_fdAtkVp} VP to Player ${defenderPlayerNum}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
                 }
               }
             }
@@ -3051,14 +3051,14 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const atkHand = getCcHand(game, attackerPlayerNum) || [];
           const atkDefeatCards = [...new Set(atkHand)].filter(c => ccCards[c]?.timing && _defeatTimings.has(ccCards[c].timing));
           if (atkDefeatCards.length) {
-            await thread.send({ content: `<@${ownerId}> — Hostile defeated! You have ${atkDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [ownerId] } }).catch(() => {});
+            await thread.send({ content: `<@${ownerId}> — Hostile defeated! You have ${atkDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
           }
           // Notify defender about own-figure-defeat reactions in hand
           const defId = getPlayerId(game, defenderPlayerNum);
           const defHand = getCcHand(game, defenderPlayerNum) || [];
           const defDefeatCards = [...new Set(defHand)].filter(c => ccCards[c]?.timing && _ownDefeatTimings.has(ccCards[c].timing));
           if (defDefeatCards.length) {
-            await thread.send({ content: `<@${defId}> — Your figure was defeated! You have ${defDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defId] } }).catch(() => {});
+            await thread.send({ content: `<@${defId}> — Your figure was defeated! You have ${defDefeatCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defId] } }).catch(discordCatch);
           }
         } catch (_defeatPromptErr) {
           console.error('Defeat reaction prompt error:', _defeatPromptErr?.message ?? _defeatPromptErr);
@@ -3431,7 +3431,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if (!_ftBlastHsBefore?.[_ftBlastFigIdx] || _ftBlastHsBefore[_ftBlastFigIdx][0] <= 0) continue;
         const { newHp: _ftBlastNew, wasDefeated: _ftBlastDied } = reduceHp(dcHealthState, game, _ftBlastMsgId, _ftBlastFigIdx, 1, _ftBlastPn);
         const _ftBlastName = dcNameFromFigureKey(_ftBlastFk);
-        await thread.send(`**Incinerate** — **${_ftBlastName}** suffers 1 Strain from Blast.`).catch(() => {});
+        await thread.send(`**Incinerate** — **${_ftBlastName}** suffers 1 Strain from Blast.`).catch(discordCatch);
         _ftBlastRefreshMsgIds.push(_ftBlastMsgId);
         if (_ftBlastDied || _ftBlastNew <= 0) {
           removeFigurePosition(game, _ftBlastPn, _ftBlastFk);
@@ -3456,7 +3456,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         if (!game.rubbleTokens.includes(_ftCoord)) {
           game.rubbleTokens.push(_ftCoord);
         }
-        await thread.send(`**Incinerate** — Rubble token placed at **${String(_ftTargetPos).toUpperCase()}**.`).catch(() => {});
+        await thread.send(`**Incinerate** — Rubble token placed at **${String(_ftTargetPos).toUpperCase()}**.`).catch(discordCatch);
       }
     }
   }
@@ -3928,7 +3928,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
       if (game.movementBank?.[combat.attackerMsgId]) {
         game.movementBank[combat.attackerMsgId].remaining += 2;
         game.movementBank[combat.attackerMsgId].total += 2;
-        updateMovementBankMessage(game, combat.attackerMsgId, client).catch(() => {});
+        updateMovementBankMessage(game, combat.attackerMsgId, client).catch(discordCatch);
       }
       game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
       game.fellSwoopFreeAttack[combat.attackerMsgId] = true;
@@ -4150,7 +4150,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     const _defPostHand = getCcHand(game, _defPostPn) || [];
     const _defPostCards = [...new Set(_defPostHand)].filter(c => _ccCardsAll[c]?.timing && _postAtkTimings.has(_ccCardsAll[c].timing));
     if (_defPostCards.length) {
-      await thread.send({ content: `<@${_defPostId}> — Attack resolved! You have ${_defPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_defPostId] } }).catch(() => {});
+      await thread.send({ content: `<@${_defPostId}> — Attack resolved! You have ${_defPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_defPostId] } }).catch(discordCatch);
     }
     // Attacker: cards triggered by resolving an attack
     const _atkPostTimings = new Set(['afterAttack', 'afterYouResolveAttackTargetingFigure', 'afterYouResolveAttackThatDidNotMissDueToAccuracy']);
@@ -4158,7 +4158,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     const _atkPostHand = getCcHand(game, combat.attackerPlayerNum) || [];
     const _atkPostCards = [...new Set(_atkPostHand)].filter(c => _ccCardsAll[c]?.timing && _atkPostTimings.has(_ccCardsAll[c].timing));
     if (_atkPostCards.length) {
-      await thread.send({ content: `<@${_atkPostId}> — Attack resolved! You have ${_atkPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_atkPostId] } }).catch(() => {});
+      await thread.send({ content: `<@${_atkPostId}> — Attack resolved! You have ${_atkPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_atkPostId] } }).catch(discordCatch);
     }
   } catch (_postAtkErr) {
     console.error('Post-attack reaction prompt error:', _postAtkErr?.message ?? _postAtkErr);
@@ -4189,7 +4189,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     game.freeAttackBonusPending[combat.attackerMsgId] = { from: 'Darksaber Strike' };
     // Clear the override so the second attack uses normal dice
     if (game.pendingOverrideAttackDice?.[combat.attackerMsgId]) delete game.pendingOverrideAttackDice[combat.attackerMsgId];
-    await thread.send('**The Darksaber** — You may now perform a normal attack (use Attack button).').catch(() => {});
+    await thread.send('**The Darksaber** — You may now perform a normal attack (use Attack button).').catch(discordCatch);
   }
 
   for (const msgId of embedRefreshMsgIds) {
@@ -5418,7 +5418,7 @@ async function _serializedMinimapUpdate(game, msgId) {
   const token = Symbol();
   _minimapLatestToken.set(msgId, token);
   const prev = _minimapInFlight.get(msgId);
-  if (prev) await prev.catch(() => {});
+  if (prev) await prev.catch(discordCatch);
   if (_minimapLatestToken.get(msgId) !== token) return; // superseded by newer request
   const p = updateDcActionsMessage(game, msgId, client).catch(err => console.error('[refresh:minimap]', err?.message ?? err));
   _minimapInFlight.set(msgId, p);
@@ -5580,6 +5580,14 @@ function buildAllDeps() {
     lobbies: getLobbiesMap(),
     createGameChannels,
   };
+}
+
+// Startup validation: every dep key in CONTEXT_GROUPS must exist in buildAllDeps()
+{
+  const _allDeps = buildAllDeps();
+  const _required = getAllRequiredDepKeys();
+  const _missing = [..._required].filter(k => !(k in _allDeps));
+  if (_missing.length) throw new Error(`buildAllDeps() missing keys used by CONTEXT_GROUPS: ${_missing.join(', ')}`);
 }
 
 client.on('interactionCreate', async (interaction) => {
@@ -6052,9 +6060,9 @@ client.on('interactionCreate', async (interaction) => {
     } else if (modalKey === 'dc_rename_modal_') {
       const renameMsgId = interaction.customId.replace('dc_rename_modal_', '');
       const renameMeta = dcMessageMeta.get(renameMsgId);
-      if (!renameMeta) { await interaction.reply({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
+      if (!renameMeta) { await interaction.reply({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
       const renameGame = getGame(renameMeta.gameId);
-      if (!renameGame) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(() => {}); return; }
+      if (!renameGame) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
       const renameStats = getDcStats(renameMeta.dcName);
       const renameFigures = renameStats?.figures ?? 1;
       const renameDgMatch = (renameMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
@@ -6087,7 +6095,7 @@ client.on('interactionCreate', async (interaction) => {
       } catch (err) {
         console.error('Failed to refresh DC embed after rename:', err);
       }
-      await interaction.reply({ content: 'Figures renamed!', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: 'Figures renamed!', ephemeral: true }).catch(discordCatch);
       saveGames();
     }
     }); // end withGameLock (modal)

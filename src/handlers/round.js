@@ -1066,7 +1066,7 @@ export async function handleImpCitadel(interaction, ctx) {
  * customId: prog_override_{gameId}_{playerNum}_{TRAIT}
  */
 export async function handleProgrammingOverride(interaction, ctx) {
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const { getGame, logGameAction, client, saveGames } = ctx;
   const withoutPrefix = interaction.customId.replace('prog_override_', '');
   const parts = withoutPrefix.split('_');
@@ -1078,6 +1078,6 @@ export async function handleProgrammingOverride(interaction, ctx) {
   game.roundProgrammingOverrideTrait = game.roundProgrammingOverrideTrait || {};
   game.roundProgrammingOverrideTrait[playerNum] = trait;
   await logGameAction(game, client, `🔧 **Programming Override** — **4-LOM** gains **${trait}** until end of round.`, { phase: 'ROUND', icon: 'round' });
-  try { await interaction.message.edit({ components: [] }).catch(() => {}); } catch {}
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
   saveGames();
 }

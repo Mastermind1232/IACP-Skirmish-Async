@@ -293,3 +293,11 @@ export function buildContext(group, allDeps) {
 export function getValidGroupNames() {
   return Object.keys(CONTEXT_GROUPS);
 }
+
+export function getAllRequiredDepKeys() {
+  const keys = new Set();
+  for (const deps of Object.values(CONTEXT_GROUPS)) {
+    for (const k of deps) keys.add(k);
+  }
+  return keys;
+}

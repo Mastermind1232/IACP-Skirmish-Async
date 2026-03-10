@@ -1,7 +1,7 @@
 /**
  * Interaction router: map customId to handler key (prefix) for dispatch.
- * Button prefixes are auto-derived from the handler registry in handlers/index.js.
- * Only select menu and modal prefixes are maintained here manually.
+ * Button and select prefixes are auto-derived from the handler registry.
+ * Only modal prefixes are maintained here manually (small, stable list).
  */
 import { getRegisteredButtonPrefixes } from './handlers/index.js';
 
@@ -19,7 +19,7 @@ function getButtonPrefixes() {
   return _buttonPrefixes;
 }
 
-/** Modal submit prefixes. */
+/** Modal submit prefixes (inline handlers in index.js, not in the registry). */
 const MODAL_PREFIXES = [
   'squad_modal_',
   'deploy_modal_',
@@ -28,16 +28,13 @@ const MODAL_PREFIXES = [
   'dc_rename_modal_',
 ];
 
-/** String select menu prefixes. */
-const SELECT_PREFIXES = [
+/**
+ * Select prefixes: auto-derived from handler registry (covers all registered
+ * select handlers like arsenal_pick_, cc_attach_to_, etc.) + local prefixes
+ * for inline/adapter handlers not in the registry.
+ */
+const LOCAL_SELECT_PREFIXES = [
   'dc_fig_select_',
-  'arsenal_pick_',
-  'setup_attach_to_',
-  'map_selection_draw_',
-  'map_selection_pick_',
-  'cc_attach_to_',
-  'cc_play_select_',
-  'cc_discard_select_',
   'overwatch_space_sel_',
   'pounce_space_sel_',
   'false_orders_space_sel_',
@@ -46,6 +43,13 @@ const SELECT_PREFIXES = [
   'bomb_drop_space_sel_',
   'cc_space_sel_',
 ];
+let _selectPrefixes = null;
+function getSelectPrefixes() {
+  if (!_selectPrefixes) {
+    _selectPrefixes = [...getRegisteredButtonPrefixes(), ...LOCAL_SELECT_PREFIXES];
+  }
+  return _selectPrefixes;
+}
 
 /**
  * Return the first matching handler key (prefix) for the given customId and interaction type.
@@ -55,11 +59,9 @@ const SELECT_PREFIXES = [
  */
 export function getHandlerKey(customId, type) {
   if (!customId || typeof customId !== 'string') return null;
-  const list = type === 'button' ? getButtonPrefixes() : type === 'modal' ? MODAL_PREFIXES : SELECT_PREFIXES;
+  const list = type === 'button' ? getButtonPrefixes() : type === 'modal' ? MODAL_PREFIXES : getSelectPrefixes();
   for (const prefix of list) {
     if (customId.startsWith(prefix)) return prefix;
   }
   return null;
 }
-
-export { MODAL_PREFIXES, SELECT_PREFIXES };

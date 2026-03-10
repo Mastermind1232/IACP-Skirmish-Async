@@ -195,21 +195,21 @@ export async function handleDcActivate(interaction, ctx) {
         await thread.send({
           content: `**Orbital Bombardment** — You have **${_obTokens} Bombardment token${_obTokens > 1 ? 's' : ''}**. Deplete to choose ${_obTokens} space${_obTokens > 1 ? 's' : ''} — each figure on a chosen space suffers 2 Damage.`,
           components: [obRow],
-        }).catch(() => {});
+        }).catch(discordCatch);
       }
     }
     // Overwatch: remind if token is placed (for interrupt awareness)
     const _owPos = game.overwatchTokenPosition?.[msgId];
     if (_owPos) {
-      await thread.send(`**Overwatch** — Your token is at **${String(_owPos).toUpperCase()}**. Exhaust when a hostile enters a space on/adjacent to the token to interrupt and perform an attack.`).catch(() => {});
+      await thread.send(`**Overwatch** — Your token is at **${String(_owPos).toUpperCase()}**. Exhaust when a hostile enters a space on/adjacent to the token to interrupt and perform an attack.`).catch(discordCatch);
     }
     // Companion activation reminders (Clan of Two, Indentured Jester)
     const _cmpAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
     if (_cmpAtts.includes('Clan of Two')) {
-      await thread.send(`**Clan of Two** — **The Child** activates at the start or end of this activation. At the end, push The Child to your space or an adjacent space.`).catch(() => {});
+      await thread.send(`**Clan of Two** — **The Child** activates at the start or end of this activation. At the end, push The Child to your space or an adjacent space.`).catch(discordCatch);
     }
     if (_cmpAtts.includes('Indentured Jester')) {
-      await thread.send(`**Indentured Jester** — **Salacious B. Crumb** activates at the start or end of this activation. (Not counted for control.)`).catch(() => {});
+      await thread.send(`**Indentured Jester** — **Salacious B. Crumb** activates at the start or end of this activation. (Not counted for control.)`).catch(discordCatch);
     }
     saveGames();
     const logCh = await client.channels.fetch(game.generalId);
@@ -249,7 +249,7 @@ export async function handleDcActivate(interaction, ctx) {
         await thread.send({
           content: `<@${oppId}> — Hostile activated! You have ${reactCards.length} reaction card(s) playable now. Check your Hand channel.`,
           allowedMentions: { users: [oppId] },
-        }).catch(() => {});
+        }).catch(discordCatch);
       }
     } catch (_actReactErr) {
       console.error('Activation reaction prompt error:', _actReactErr?.message ?? _actReactErr);
@@ -558,13 +558,13 @@ export async function handleDcRename(interaction, ctx) {
   const msgId = interaction.customId.replace('dc_rename_', '');
   const meta = dcMessageMeta.get(msgId);
   if (!meta) {
-    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const stats = getDcStats(meta.dcName);
   const figures = stats?.figures ?? 1;
   if (figures <= 1) {
-    await interaction.reply({ content: 'This DC only has one figure.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This DC only has one figure.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const dgIndex = meta.displayName.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -1599,7 +1599,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         }
       }
       if (!inOppZone) {
-        await thread.send(`**Smuggler's Run** — This figure is **not** in the opponent's deployment zone. Cannot deplete.`).catch(() => {});
+        await thread.send(`**Smuggler's Run** — This figure is **not** in the opponent's deployment zone. Cannot deplete.`).catch(discordCatch);
         // Refund action + undo
         if (actionsData) {
           actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + _effectiveActionCost);
@@ -1617,9 +1617,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       // Award 5 VP
       awardObjectiveVp(game, meta.playerNum, 5);
       const vpK = vpKeyFn(meta.playerNum);
-      await thread.send(`**Smuggler's Run** — Depleted! **+5 VP** (${game[vpK].total} total).`).catch(() => {});
+      await thread.send(`**Smuggler's Run** — Depleted! **+5 VP** (${game[vpK].total} total).`).catch(discordCatch);
       await logGameAction(game, client, `**Smuggler's Run** — **${displayName}** depleted in opponent's deployment zone. +5 VP.`, { phase: 'ROUND', icon: 'card' });
-      if (ctx.updateAttachmentMessageForDc) await ctx.updateAttachmentMessageForDc(game, meta.playerNum, msgId, client).catch(() => {});
+      if (ctx.updateAttachmentMessageForDc) await ctx.updateAttachmentMessageForDc(game, meta.playerNum, msgId, client).catch(discordCatch);
       if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
       saveGames();
       return;
@@ -1631,7 +1631,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.freeAttackBonusPending[msgId] = { from: "Vader's Finest" };
       game.pendingMpBonus = game.pendingMpBonus || {};
       game.pendingMpBonus[msgId] = 1;
-      await thread.send(`**Vader's Finest** — Your next attack is free. After attack resolves, gain **1 MP**.`).catch(() => {});
+      await thread.send(`**Vader's Finest** — Your next attack is free. After attack resolves, gain **1 MP**.`).catch(discordCatch);
       await updateDcActionsMessage(game, msgId, client);
       saveGames();
       return;
@@ -1640,7 +1640,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // Vader's Finest: Focus — if < 2 dice in printed attack pool, become Focused (limit once/round/group)
     if (_suHandler === 'VF: Focus') {
       if (game.vadersFocusUsedThisRound?.[msgId]) {
-        await thread.send(`**Vader's Finest** — Focus already used this round for this group.`).catch(() => {});
+        await thread.send(`**Vader's Finest** — Focus already used this round for this group.`).catch(discordCatch);
         if (actionsData) {
           actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + _effectiveActionCost);
           actionsData.specialsUsed = (actionsData.specialsUsed || []).filter(i => i !== specialIdx);
@@ -1668,7 +1668,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         }
       }
       if (printedDiceCount >= 2) {
-        await thread.send(`**Vader's Finest** — This figure has ${printedDiceCount} dice in its printed attack pool (need < 2). Cannot Focus.`).catch(() => {});
+        await thread.send(`**Vader's Finest** — This figure has ${printedDiceCount} dice in its printed attack pool (need < 2). Cannot Focus.`).catch(discordCatch);
         if (actionsData) {
           actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + _effectiveActionCost);
           actionsData.specialsUsed = (actionsData.specialsUsed || []).filter(i => i !== specialIdx);
@@ -1683,9 +1683,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       applyCondition(game, figKey, 'Focus');
       game.vadersFocusUsedThisRound = game.vadersFocusUsedThisRound || {};
       game.vadersFocusUsedThisRound[msgId] = true;
-      await thread.send(`**Vader's Finest** — **${displayName}** becomes **Focused**.`).catch(() => {});
+      await thread.send(`**Vader's Finest** — **${displayName}** becomes **Focused**.`).catch(discordCatch);
       await logGameAction(game, client, `**Vader's Finest** — **${displayName}** becomes Focused.`, { phase: 'ROUND', icon: 'card' });
-      if (ctx.updateAttachmentMessageForDc) await ctx.updateAttachmentMessageForDc(game, meta.playerNum, msgId, client).catch(() => {});
+      if (ctx.updateAttachmentMessageForDc) await ctx.updateAttachmentMessageForDc(game, meta.playerNum, msgId, client).catch(discordCatch);
       saveGames();
       return;
     }
@@ -1696,7 +1696,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.autofireActive[msgId] = true;
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = { from: 'Autofire' };
-      await thread.send(`**Autofire** — Your next attack: defender adds **1 white die**. Surge: **Chain attack** targeting a figure within 3 of target space.`).catch(() => {});
+      await thread.send(`**Autofire** — Your next attack: defender adds **1 white die**. Surge: **Chain attack** targeting a figure within 3 of target space.`).catch(discordCatch);
       saveGames();
       return;
     }
@@ -1707,7 +1707,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.fireMissionActive[msgId] = true;
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = { from: 'Fire Mission' };
-      await thread.send(`**Fire Mission** — Your next attack: LOS from **any figure in this group** (range from acting figure). **+Blast 1**.`).catch(() => {});
+      await thread.send(`**Fire Mission** — Your next attack: LOS from **any figure in this group** (range from acting figure). **+Blast 1**.`).catch(discordCatch);
       saveGames();
       return;
     }
@@ -1721,7 +1721,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       // Grant a second free attack after this one (the "then may perform an attack")
       game.darksaberSecondAttack = game.darksaberSecondAttack || {};
       game.darksaberSecondAttack[msgId] = true;
-      await thread.send(`**Darksaber Strike** — Your next attack: **1 red die, Melee**. **Blast → Cleave** conversion. Then you may perform another attack.`).catch(() => {});
+      await thread.send(`**Darksaber Strike** — Your next attack: **1 red die, Melee**. **Blast → Cleave** conversion. Then you may perform another attack.`).catch(discordCatch);
       saveGames();
       return;
     }
@@ -1731,7 +1731,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const roundNum = game.currentRound || 1;
       game.orbitalBombardmentTokens = game.orbitalBombardmentTokens || {};
       game.orbitalBombardmentTokens[msgId] = (game.orbitalBombardmentTokens[msgId] || 0) + roundNum;
-      await thread.send(`**Orbital Bombardment** — Placed **${roundNum} Bombardment token${roundNum > 1 ? 's' : ''}** (total: **${game.orbitalBombardmentTokens[msgId]}**). You may also perform an attack (use Attack button).`).catch(() => {});
+      await thread.send(`**Orbital Bombardment** — Placed **${roundNum} Bombardment token${roundNum > 1 ? 's' : ''}** (total: **${game.orbitalBombardmentTokens[msgId]}**). You may also perform an attack (use Attack button).`).catch(discordCatch);
       // The card says "Then, you may perform an attack" — grant free attack
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = { from: 'Orbital Bombardment' };
@@ -1747,14 +1747,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const figKey = `${meta.dcName}-${dgIdx}-${selectedFig}`;
       const pos = game.figurePositions?.[meta.playerNum]?.[figKey];
       if (!pos) {
-        await thread.send('**Overwatch** — Figure has no position.').catch(() => {});
+        await thread.send('**Overwatch** — Figure has no position.').catch(discordCatch);
         saveGames();
         return;
       }
       const mapId = game.selectedMap?.id;
       const ms = getMapSpaces(mapId);
       if (!ms?.adjacency) {
-        await thread.send('**Overwatch** — Map data not available.').catch(() => {});
+        await thread.send('**Overwatch** — Map data not available.').catch(discordCatch);
         saveGames();
         return;
       }
@@ -1766,7 +1766,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         if (hasLineOfSight && hasLineOfSight(pos, sp, ms, null)) losValid.push(sp);
       }
       if (losValid.length === 0) {
-        await thread.send('**Overwatch** — No valid spaces in LOS to place the token.').catch(() => {});
+        await thread.send('**Overwatch** — No valid spaces in LOS to place the token.').catch(discordCatch);
         saveGames();
         return;
       }
@@ -1780,7 +1780,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await thread.send({
         content: `**Overwatch** — Choose a space within LOS to place your Overwatch token:`,
         components: owComponents,
-      }).catch(() => {});
+      }).catch(discordCatch);
       saveGames();
       return;
     }
@@ -1793,20 +1793,20 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const dgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const figKey = `${meta.dcName}-${dgIdx}-${selectedFig}`;
     if (!game.figureContraband?.[figKey]) {
-      await thread.send('**Bomb Drop** — This figure is not carrying an explosive.').catch(() => {});
+      await thread.send('**Bomb Drop** — This figure is not carrying an explosive.').catch(discordCatch);
       saveGames();
       return;
     }
     const pos = game.figurePositions?.[meta.playerNum]?.[figKey];
     if (!pos) {
-      await thread.send('**Bomb Drop** — Figure has no position.').catch(() => {});
+      await thread.send('**Bomb Drop** — Figure has no position.').catch(discordCatch);
       saveGames();
       return;
     }
     const mapId = game.selectedMap?.id;
     const ms = getMapSpaces(mapId);
     if (!ms?.adjacency) {
-      await thread.send('**Bomb Drop** — Map data not available.').catch(() => {});
+      await thread.send('**Bomb Drop** — Map data not available.').catch(discordCatch);
       saveGames();
       return;
     }
@@ -1826,7 +1826,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     }
     const validSpaces = [...visited];
     if (validSpaces.length === 0) {
-      await thread.send('**Bomb Drop** — No valid spaces within range.').catch(() => {});
+      await thread.send('**Bomb Drop** — No valid spaces within range.').catch(discordCatch);
       saveGames();
       return;
     }
@@ -1839,7 +1839,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     await thread.send({
       content: `**Bomb Drop** — Choose a space within 3 to detonate (2 Damage to all figures on/adjacent):`,
       components: bdComponents,
-    }).catch(() => {});
+    }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -1881,7 +1881,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     }
     // Refresh DC embed if strain was deducted during ability activation (e.g. Force Throw)
     if (resolveResult.refreshDcEmbed && ctx.updateAttachmentMessageForDc) {
-      await ctx.updateAttachmentMessageForDc(game, meta?.playerNum, msgId, client).catch(() => {});
+      await ctx.updateAttachmentMessageForDc(game, meta?.playerNum, msgId, client).catch(discordCatch);
     }
     await interaction.followUp({ content: `**${action}** — Choose one:`, components: rows.slice(0, 5), ephemeral: false }).catch(discordCatch);
     saveGames();
@@ -2042,7 +2042,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     delete game.wreakVengeanceActive;
     const logParts = [r0.logMessage, r1.logMessage].filter(Boolean);
     const wvLog = `**Wreak Vengeance** — Both Dual-Bladed Fury effects applied:\n${logParts.join('\n')}`;
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch(discordCatch);
     await interaction.followUp({ content: wvLog, ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
@@ -2271,7 +2271,7 @@ export async function handleArsenalPick(interaction, ctx) {
 
   const { getGame, dcMessageMeta, getDcStats, getDcEffects, getMapSpaces, saveGames, replyIfGameEnded } = ctx;
   const meta = dcMessageMeta.get(msgId);
-  if (!meta) { await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(() => {}); return; }
+  if (!meta) { await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch); return; }
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -2396,9 +2396,9 @@ export async function handleBoRiflePick(interaction, ctx) {
     const meleeDice = game.pendingBoRifle[msgId].meleeDice;
     game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
     game.pendingOverrideAttackDice[msgId] = { dice: meleeDice, type: 'melee' };
-    await interaction.message.edit({ content: `**Bo-Rifle** — Melee mode active (${meleeDice.map(d => d[0].toUpperCase() + d.slice(1)).join('+')}).`, components: [] }).catch(() => {});
+    await interaction.message.edit({ content: `**Bo-Rifle** — Melee mode active (${meleeDice.map(d => d[0].toUpperCase() + d.slice(1)).join('+')}).`, components: [] }).catch(discordCatch);
   } else {
-    await interaction.message.edit({ content: '**Bo-Rifle** — Skipped (normal ranged attack).', components: [] }).catch(() => {});
+    await interaction.message.edit({ content: '**Bo-Rifle** — Skipped (normal ranged attack).', components: [] }).catch(discordCatch);
   }
   if (game.pendingBoRifle?.[msgId]) delete game.pendingBoRifle[msgId];
   saveGames();
@@ -2417,7 +2417,7 @@ export async function handleBoRiflePick(interaction, ctx) {
   const effectiveMaxRange_ = brOverride?.type === 'melee' ? (hasReach ? 2 : 1) : (hasReach && maxRange < 2 ? 2 : maxRange);
   const ms = getMapSpaces(game.selectedMap?.id);
   if (!ms) {
-    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const playerNum = meta.playerNum;
@@ -2425,7 +2425,7 @@ export async function handleBoRiflePick(interaction, ctx) {
   const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
   const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!attackerPos) {
-    await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch(discordCatch);
     return;
   }
 
@@ -2596,7 +2596,7 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
   game.figurePositions[controlledPlayerNum] = game.figurePositions[controlledPlayerNum] || {};
   game.figurePositions[controlledPlayerNum][controlledFigureKey] = chosenSpace;
   delete game.pendingFalseOrders;
-  if (logGameAction) await logGameAction(game, client, `🎯 **False Orders** — P${controllerPlayerNum} moved **${controlledName}** to **${chosenSpace.toUpperCase()}**.`, { phase: 'ROUND', icon: 'move' }).catch(() => {});
+  if (logGameAction) await logGameAction(game, client, `🎯 **False Orders** — P${controllerPlayerNum} moved **${controlledName}** to **${chosenSpace.toUpperCase()}**.`, { phase: 'ROUND', icon: 'move' }).catch(discordCatch);
   const doneRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`special_done_${gameId}_${msgId}`)
@@ -2654,18 +2654,18 @@ export async function handleRushPushFig(interaction, ctx) {
   if (!game) return;
   const pending = game.pendingRushPush;
   if (!pending || pending.msgId !== msgId) {
-    await interaction.followUp({ content: 'No pending Rush push.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'No pending Rush push.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the activating player can choose.')) return;
   const targetFk = pending.targets?.[choiceIndex];
-  if (!targetFk) { await interaction.followUp({ content: 'Invalid target.', ephemeral: true }).catch(() => {}); return; }
+  if (!targetFk) { await interaction.followUp({ content: 'Invalid target.', ephemeral: true }).catch(discordCatch); return; }
   pending.chosenTarget = targetFk;
   const oppNum = opponentPlayerNum(pending.playerNum);
   const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
   if (!targetPos) {
     delete game.pendingRushPush;
-    await interaction.message.edit({ content: '**Rush** — Target no longer on board.', components: [] }).catch(() => {});
+    await interaction.message.edit({ content: '**Rush** — Target no longer on board.', components: [] }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -2687,10 +2687,10 @@ export async function handleRushPushFig(interaction, ctx) {
     const tNote = t.wasDefeated ? ' **(may be defeated)**' : '';
     const aNote = a.wasDefeated ? ' **(may be defeated)**' : '';
     const logMsg = `**Rush** — Both suffer 1 Damage: **${targetName}**${tNote}, **Onar**${aNote}. No push (no open space).`;
-    if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
-    await updateDcActionsMessage(game, msgId, client).catch(() => {});
+    if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+    await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
     delete game.pendingRushPush;
-    await interaction.message.edit({ content: logMsg, components: [] }).catch(() => {});
+    await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -2708,8 +2708,8 @@ export async function handleRushPushFig(interaction, ctx) {
     components: rushComponents,
   };
   if (mapAttachment) payload.files = [mapAttachment];
-  await interaction.message.edit({ content: '**Rush** — Choosing push destination...', components: [] }).catch(() => {});
-  await interaction.followUp(payload).catch(() => {});
+  await interaction.message.edit({ content: '**Rush** — Choosing push destination...', components: [] }).catch(discordCatch);
+  await interaction.followUp(payload).catch(discordCatch);
   saveGames();
 }
 
@@ -2727,7 +2727,7 @@ export async function handleRushPushSpace(interaction, ctx) {
   if (!game) return;
   const pending = game.pendingRushPush;
   if (!pending || pending.msgId !== msgId) {
-    await interaction.followUp({ content: 'No pending Rush push.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'No pending Rush push.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the activating player can choose.')) return;
@@ -2745,7 +2745,7 @@ export async function handleRushPushSpace(interaction, ctx) {
   const aNote = a.wasDefeated ? ' **(may be defeated)**' : '';
   const pushNote = pushed ? ` Pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} → ${chosenSpace.toUpperCase()}.` : '';
   const logMsg = `**Rush** —${pushNote} Both suffer 1 Damage: **${targetName}**${tNote}, **Onar**${aNote}.`;
-  if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+  if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   // Refresh board
   if (game.boardId && game.selectedMap && buildBoardMapPayload) {
     try {
@@ -2754,9 +2754,9 @@ export async function handleRushPushSpace(interaction, ctx) {
       await boardChannel.send(boardPayload);
     } catch { /* ignore */ }
   }
-  await updateDcActionsMessage(game, msgId, client).catch(() => {});
+  await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
   delete game.pendingRushPush;
-  await interaction.message.edit({ content: logMsg, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
   saveGames();
 }
 
@@ -2771,7 +2771,7 @@ export async function handleRushPushSkip(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   delete game.pendingRushPush;
-  await interaction.message.edit({ content: '**Rush** — Push skipped.', components: [] }).catch(() => {});
+  await interaction.message.edit({ content: '**Rush** — Push skipped.', components: [] }).catch(discordCatch);
   saveGames();
 }
 
@@ -2789,18 +2789,18 @@ export async function handleShoulderRushFig(interaction, ctx) {
   if (!game) return;
   const pending = game.pendingShoulderRush;
   if (!pending || pending.msgId !== msgId) {
-    await interaction.followUp({ content: 'No pending Shoulder Rush.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'No pending Shoulder Rush.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the activating player can choose.')) return;
   const targetFk = pending.targets?.[choiceIndex];
-  if (!targetFk) { await interaction.followUp({ content: 'Invalid target.', ephemeral: true }).catch(() => {}); return; }
+  if (!targetFk) { await interaction.followUp({ content: 'Invalid target.', ephemeral: true }).catch(discordCatch); return; }
   const oppNum = opponentPlayerNum(pending.playerNum);
   const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
   const targetName = dcNameFromFigureKey(targetFk);
   if (!targetPos) {
     delete game.pendingShoulderRush;
-    await interaction.message.edit({ content: '**Shoulder Rush** — Target no longer on board.', components: [] }).catch(() => {});
+    await interaction.message.edit({ content: '**Shoulder Rush** — Target no longer on board.', components: [] }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -2817,10 +2817,10 @@ export async function handleShoulderRushFig(interaction, ctx) {
     game.forcedAttackTarget = game.forcedAttackTarget || {};
     game.forcedAttackTarget[msgId] = targetFk;
     const logMsg = `**Shoulder Rush** — Targeting **${targetName}** (not SMALL, no push). Attack that figure (free action).`;
-    if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
-    await updateDcActionsMessage(game, msgId, client).catch(() => {});
+    if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+    await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
     delete game.pendingShoulderRush;
-    await interaction.message.edit({ content: logMsg, components: [] }).catch(() => {});
+    await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -2843,10 +2843,10 @@ export async function handleShoulderRushFig(interaction, ctx) {
     game.forcedAttackTarget = game.forcedAttackTarget || {};
     game.forcedAttackTarget[msgId] = targetFk;
     const logMsg = `**Shoulder Rush** — **${targetName}** is SMALL but no room to push. Attack that figure (free action).`;
-    if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
-    await updateDcActionsMessage(game, msgId, client).catch(() => {});
+    if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+    await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
     delete game.pendingShoulderRush;
-    await interaction.message.edit({ content: logMsg, components: [] }).catch(() => {});
+    await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -2863,8 +2863,8 @@ export async function handleShoulderRushFig(interaction, ctx) {
     components: srComponents,
   };
   if (mapAttachment) payload.files = [mapAttachment];
-  await interaction.message.edit({ content: '**Shoulder Rush** — Choosing push destination...', components: [] }).catch(() => {});
-  await interaction.followUp(payload).catch(() => {});
+  await interaction.message.edit({ content: '**Shoulder Rush** — Choosing push destination...', components: [] }).catch(discordCatch);
+  await interaction.followUp(payload).catch(discordCatch);
   saveGames();
 }
 
@@ -2882,7 +2882,7 @@ export async function handleShoulderRushSpace(interaction, ctx) {
   if (!game) return;
   const pending = game.pendingShoulderRush;
   if (!pending || pending.msgId !== msgId) {
-    await interaction.followUp({ content: 'No pending Shoulder Rush.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'No pending Shoulder Rush.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the activating player can choose.')) return;
@@ -2902,7 +2902,7 @@ export async function handleShoulderRushSpace(interaction, ctx) {
   game.forcedAttackTarget = game.forcedAttackTarget || {};
   game.forcedAttackTarget[msgId] = targetFk;
   const logMsg = `**Shoulder Rush** — Pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} → ${chosenSpace.toUpperCase()}. Entered vacated space. Attack that figure (free action).`;
-  if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+  if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   // Refresh board
   if (game.boardId && game.selectedMap && buildBoardMapPayload) {
     try {
@@ -2911,9 +2911,9 @@ export async function handleShoulderRushSpace(interaction, ctx) {
       await boardChannel.send(boardPayload);
     } catch { /* ignore */ }
   }
-  await updateDcActionsMessage(game, msgId, client).catch(() => {});
+  await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
   delete game.pendingShoulderRush;
-  await interaction.message.edit({ content: logMsg, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: logMsg, components: [] }).catch(discordCatch);
   saveGames();
 }
 
@@ -2928,7 +2928,7 @@ export async function handleShoulderRushSkip(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   delete game.pendingShoulderRush;
-  await interaction.message.edit({ content: '**Shoulder Rush** — No target chosen.', components: [] }).catch(() => {});
+  await interaction.message.edit({ content: '**Shoulder Rush** — No target chosen.', components: [] }).catch(discordCatch);
   saveGames();
 }
 
@@ -2946,7 +2946,7 @@ export async function handleOverwatchSpacePick(interaction, ctx) {
   delete game.pendingOverwatchPlacement?.[msgId];
   const meta = dcMessageMeta?.get(msgId);
   const displayName = meta?.displayName || meta?.dcName || 'E-Web Engineer';
-  await interaction.message.edit({ content: `**Overwatch** — Token placed at **${chosenSpace.toUpperCase()}**. When a hostile figure enters a space on or adjacent to this token, you may interrupt to attack.`, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: `**Overwatch** — Token placed at **${chosenSpace.toUpperCase()}**. When a hostile figure enters a space on or adjacent to this token, you may interrupt to attack.`, components: [] }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, interaction.client, `**Overwatch** — **${displayName}** placed token at **${chosenSpace.toUpperCase()}**.`, { phase: 'ROUND', icon: 'card' });
   saveGames();
 }
@@ -2961,7 +2961,7 @@ export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
   if (!game) return;
   const tokenCount = game.orbitalBombardmentTokens?.[msgId] || 0;
   if (tokenCount <= 0) {
-    await interaction.followUp({ content: '**Orbital Bombardment** — No tokens on this card.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: '**Orbital Bombardment** — No tokens on this card.', ephemeral: true }).catch(discordCatch);
     return;
   }
   // Deplete: remove card from attachments
@@ -2979,7 +2979,7 @@ export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
   const ms = getMapSpaces?.(mapId);
   const allSpaces = ms?.adjacency ? Object.keys(ms.adjacency) : [];
   if (allSpaces.length === 0) {
-    await interaction.message.edit({ content: '**Orbital Bombardment** — Map data unavailable. Choose spaces manually.', components: [] }).catch(() => {});
+    await interaction.message.edit({ content: '**Orbital Bombardment** — Map data unavailable. Choose spaces manually.', components: [] }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -2987,7 +2987,7 @@ export async function handleOrbitalBombardmentDeplete(interaction, ctx) {
   await interaction.message.edit({
     content: `**Orbital Bombardment** — Choose space **1 of ${tokenCount}** for bombardment (each figure on a chosen space suffers 2 Damage):`,
     components: spaceRows.rows.slice(0, 5),
-  }).catch(() => {});
+  }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, interaction.client, `**Orbital Bombardment** — **${meta?.displayName || 'DC'}** depleted. Choosing ${tokenCount} spaces for bombardment.`, { phase: 'ROUND', icon: 'card' });
   saveGames();
 }
@@ -2999,7 +2999,7 @@ export async function handleOrbitalBombardmentSkip(interaction, ctx) {
   const { getGame, saveGames } = ctx;
   const game = getGame(m[1]);
   if (!game) return;
-  await interaction.message.edit({ content: '**Orbital Bombardment** — Skipped (tokens remain on card).', components: [] }).catch(() => {});
+  await interaction.message.edit({ content: '**Orbital Bombardment** — Skipped (tokens remain on card).', components: [] }).catch(discordCatch);
   saveGames();
 }
 
@@ -3024,7 +3024,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
     await interaction.message.edit({
       content: `**Orbital Bombardment** — Chosen: ${pending.spacesChosen.map(s => s.toUpperCase()).join(', ')}. Choose space **${pending.spacesChosen.length + 1} of ${pending.spacesRemaining}**:`,
       components: spaceRows.rows.slice(0, 5),
-    }).catch(() => {});
+    }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -3066,7 +3066,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
   await interaction.message.edit({
     content: `**Orbital Bombardment** — Spaces: ${spacesStr}. Each figure suffers 2 Damage.\n${resultStr}`,
     components: [],
-  }).catch(() => {});
+  }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, interaction.client, `**Orbital Bombardment** — Bombarded spaces: ${spacesStr}. ${resultStr}`, { phase: 'ROUND', icon: 'attack' });
   delete game.pendingOrbitalBombardment;
   saveGames();
@@ -3124,7 +3124,7 @@ export async function handleBombDropSpacePick(interaction, ctx) {
   await interaction.message.edit({
     content: `**Bomb Drop** — Detonated at **${chosenSpace.toUpperCase()}**. Each figure on/adjacent suffers 2 Damage.\n${resultStr}`,
     components: [],
-  }).catch(() => {});
+  }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, interaction.client, `**Bomb Drop** — Detonated at **${chosenSpace.toUpperCase()}**. ${resultStr}`, { phase: 'ROUND', icon: 'attack' });
   delete game.pendingBombDrop[msgId];
   saveGames();

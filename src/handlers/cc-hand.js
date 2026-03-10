@@ -1226,14 +1226,14 @@ export async function handleCcShuffleDraw(interaction, ctx) {
  */
 export async function handleIKnowEverythingKeep(interaction, ctx) {
   const { getGame, shuffleArray, buildHandDisplayPayload, updateHandVisualMessage, updatePlayAreaDcButtons, sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, logGameAction, saveGames, client } = ctx;
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const match = interaction.customId.match(/^ike_keep_(.+)_(\d)$/);
   if (!match) return;
   const [, gameId, keepIdxStr] = match;
   const keepIdx = parseInt(keepIdxStr, 10);
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game || !game.pendingIKnowEverything) {
-    await interaction.followUp({ content: 'No pending I Know Everything choice.', ephemeral: true }).catch(() => {}); return;
+    await interaction.followUp({ content: 'No pending I Know Everything choice.', ephemeral: true }).catch(discordCatch); return;
   }
   const pending = game.pendingIKnowEverything;
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.targetPlayerNum, canActAsPlayer, 'Only the targeted player can choose.')) return;

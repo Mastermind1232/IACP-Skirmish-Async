@@ -84,7 +84,7 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
   const _fpUpg = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
   if (_fpUpg.includes('Flame Trooper')) {
     const dcName = dcNameFromFigureKey(figureKey);
-    await thread.send(`**Fireproof** — **${dcName}** is immune to Strain from ${abilityLabel}.`).catch(() => {});
+    await thread.send(`**Fireproof** — **${dcName}** is immune to Strain from ${abilityLabel}.`).catch(discordCatch);
     return;
   }
   const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
@@ -119,11 +119,11 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
           const discardKey = ccDiscardKey(playerNum);
           game[discardKey] = game[discardKey] || [];
           game[discardKey].push(discarded);
-          await thread.send(`**Headhunter** — Strain reduced by 1. P${playerNum} discards **${discarded}** from hand.`).catch(() => {});
+          await thread.send(`**Headhunter** — Strain reduced by 1. P${playerNum} discards **${discarded}** from hand.`).catch(discordCatch);
           if (logGameAction) await logGameAction(game, client, `**Headhunter** — Reduced Strain on **${dcName}**; P${playerNum} discards **${discarded}**.`, { phase: 'ROUND', icon: 'card' });
         } else {
           headhunterDmg = 1;
-          await thread.send(`**Headhunter** — Strain reduced by 1, but P${playerNum} has no CCs. **${dcName}** suffers 1 Damage instead.`).catch(() => {});
+          await thread.send(`**Headhunter** — Strain reduced by 1, but P${playerNum} has no CCs. **${dcName}** suffers 1 Damage instead.`).catch(discordCatch);
           if (logGameAction) await logGameAction(game, client, `**Headhunter** — Reduced Strain on **${dcName}**; no CCs, dealt 1 Damage.`, { phase: 'ROUND', icon: 'card' });
         }
         break;
@@ -162,7 +162,7 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
           content: `🛡️ **Submit or Fight** — <@${_sofOwnerId}>, **${dcName}** may return a CC from discard to game box to heal 1 Strain damage (${_sofDiscard.length} CC${_sofDiscard.length > 1 ? 's' : ''} in discard).`,
           components: [new ActionRowBuilder().addComponents(_sofBtns)],
           allowedMentions: { users: [_sofOwnerId] },
-        }).catch(() => {});
+        }).catch(discordCatch);
       }
     }
   }
@@ -331,7 +331,7 @@ export async function handleAttackTarget(interaction, ctx) {
     }
     // Lightsaber Throw: must target non-adjacent figure
     if (overrideDice.mustTargetNonAdjacent && target.dist != null && target.dist <= 1) {
-      await interaction.followUp({ content: '**Lightsaber Throw** requires targeting a non-adjacent figure. Choose a different target.', ephemeral: true }).catch(() => {});
+      await interaction.followUp({ content: '**Lightsaber Throw** requires targeting a non-adjacent figure. Choose a different target.', ephemeral: true }).catch(discordCatch);
       return;
     }
     // Tusken Cycler: no surge abilities during this attack — stored on pendingCombat
@@ -481,9 +481,9 @@ export async function handleAttackTarget(interaction, ctx) {
     content: '**Pre-combat window** — Both players: resolve any Command Cards, add/remove dice, apply/block damage, etc. When ready, click **Ready to roll combat dice** below.',
     components: [readyRow],
   });
-  if (_mysticHunterFired) await thread.send(`🔮 **Mystic Hunter** — **${meta.dcName}** becomes **Focused** (+1 green die).`).catch(() => {});
-  if (_flyByFired) await thread.send(`🚀 **Fly-By** — Target within 2 spaces: +1 blue die to attack pool.`).catch(() => {});
-  if (_aimFired) await thread.send(`🎯 **Aim** — Target already suffered damage this activation: +1 Hit, +2 Accuracy.`).catch(() => {});
+  if (_mysticHunterFired) await thread.send(`🔮 **Mystic Hunter** — **${meta.dcName}** becomes **Focused** (+1 green die).`).catch(discordCatch);
+  if (_flyByFired) await thread.send(`🚀 **Fly-By** — Target within 2 spaces: +1 blue die to attack pool.`).catch(discordCatch);
+  if (_aimFired) await thread.send(`🎯 **Aim** — Target already suffered damage this activation: +1 Hit, +2 Accuracy.`).catch(discordCatch);
   const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
   const nextPierce = (game.nextAttackBonusPierce?.[attackerPlayerNum] || 0) + (overrideDice?.pierce || 0);
   const nextBonusAcc = (game.nextAttackBonusAccuracy?.[attackerPlayerNum] || 0) + (overrideDice?.bonusAccuracy || 0) + (game._closeQuartersBonusAcc || 0);
@@ -763,7 +763,7 @@ export async function handleAttackTarget(interaction, ctx) {
     game.pendingCombat.bonusBlast = (game.pendingCombat.bonusBlast || 0) + 1;
     game.pendingCombat.fireMissionAttack = true;
     delete game.fireMissionActive[msgId]; // consumed
-    await thread.send('**Fire Mission** — +Blast 1 applied to this attack.').catch(() => {});
+    await thread.send('**Fire Mission** — +Blast 1 applied to this attack.').catch(discordCatch);
   }
 
   // Fury of Kashyyyk: elite WOOKIEE attacking within 2 + another friendly WOOKIEE within 2 of defender → Pierce 1
@@ -1454,7 +1454,7 @@ export async function handleAttackTarget(interaction, ctx) {
     ]);
     const defOwnerId = getPlayerId(game, defenderPlayerNum);
     if (defReactions.length) {
-      await thread.send({ content: `<@${defOwnerId}> — You have ${defReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defOwnerId] } }).catch(() => {});
+      await thread.send({ content: `<@${defOwnerId}> — You have ${defReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [defOwnerId] } }).catch(discordCatch);
     }
     // Auto-prompt attacker for whenYouDeclareAttack cards
     const atkReactions = getPlayableReactionCards(game, attackerPlayerNum, [
@@ -1466,7 +1466,7 @@ export async function handleAttackTarget(interaction, ctx) {
     ]);
     const atkOwnerId = getPlayerId(game, attackerPlayerNum);
     if (atkReactions.length) {
-      await thread.send({ content: `<@${atkOwnerId}> — You have ${atkReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [atkOwnerId] } }).catch(() => {});
+      await thread.send({ content: `<@${atkOwnerId}> — You have ${atkReactions.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [atkOwnerId] } }).catch(discordCatch);
     }
   } catch (err) {
     console.error('Reaction prompt error:', err?.message ?? err);
@@ -1625,7 +1625,7 @@ export async function handleCombatRoll(interaction, ctx) {
     // Autofire: defender adds 1 white die
     if (game.autofireActive?.[combat.attackerMsgId]) {
       pool.push('white');
-      await thread.send('**Autofire** — Defender adds 1 white die to defense pool.').catch(() => {});
+      await thread.send('**Autofire** — Defender adds 1 white die to defense pool.').catch(discordCatch);
     }
     const removeMax = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
     const removeCount = Math.min(removeMax, pool.length);
@@ -3278,7 +3278,7 @@ export async function handleCombatSurge(interaction, ctx) {
     // Disable: disabled figures cannot use Surge abilities
     if (game.disabledFigures?.includes(combat.attackerDisplayName)) {
       await thread.send(`**${combat.attackerDisplayName}** is Disabled — cannot use Surge abilities this round.`).catch(discordCatch);
-      await interaction.deferUpdate().catch(() => {});
+      await interaction.deferUpdate().catch(discordCatch);
       return;
     }
     const idx = parseInt(choice, 10);
@@ -3289,7 +3289,7 @@ export async function handleCombatSurge(interaction, ctx) {
       const maxUses = overloadActive ? 2 : 1;
       const usedCount = (combat.surgeSpentCount || {})[idx] || 0;
       if (usedCount >= maxUses) {
-        await interaction.deferUpdate().catch(() => {});
+        await interaction.deferUpdate().catch(discordCatch);
         return;
       }
       const cost = (key?.startsWith?.('double:') ? 2 : (getAbility(key)?.surgeCost ?? 1));
@@ -3324,7 +3324,7 @@ export async function handleCombatSurge(interaction, ctx) {
         combat.autofireChainPending = true;
         combat.autofireChainTargetSpace = _afTargetPos || null;
         // Cost is deducted by the general decrement below (line with `combat.surgeRemaining -= cost`)
-        await thread.send('**Autofire** — Chain attack queued! After this attack resolves, perform another attack targeting within 3 of the target space.').catch(() => {});
+        await thread.send('**Autofire** — Chain attack queued! After this attack resolves, perform another attack targeting within 3 of the target space.').catch(discordCatch);
       }
       // Utinni! (Jawa Scavenger): spending this surge earns 1 VP
       if (key === 'utinni_vp_1') {
@@ -3332,14 +3332,14 @@ export async function handleCombatSurge(interaction, ctx) {
         // Cost is deducted by the general decrement below (line with `combat.surgeRemaining -= cost`)
         const _utinniVpKey = vpKey(attackerPlayerNum);
         await thread.send(`**Utinni!** — +1 VP earned (${game[_utinniVpKey].total} total).`).catch(discordCatch);
-        if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Utinni!** — Jawa Scavenger earned +1 VP.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+        if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Utinni!** — Jawa Scavenger earned +1 VP.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
       }
       // Gain VP (Senator/Streetrat form surge): spending this surge earns N VP
       if (mod.surgeVpGain && mod.surgeVpGain > 0) {
         awardObjectiveVp(game, attackerPlayerNum, mod.surgeVpGain);
         const _gvpKey = vpKey(attackerPlayerNum);
         await thread.send(`**+${mod.surgeVpGain} VP** earned (${game[_gvpKey].total} total).`).catch(discordCatch);
-        if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Surge: +${mod.surgeVpGain} VP** (${game[_gvpKey].total} total).`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+        if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Surge: +${mod.surgeVpGain} VP** (${game[_gvpKey].total} total).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
       }
       // Bargain (Jawa Scavenger Elite): inline VP exchange during surge phase
       if (mod.surgeBargain) {
@@ -3356,7 +3356,7 @@ export async function handleCombatSurge(interaction, ctx) {
           if (gained > 0) { vp.total += gained; vp.objectives += gained; }
           const net = gained - 1;
           await thread.send(`**Bargain** — Spent 1 VP, rolled green die (${bargainDie.dmg ?? 0}dmg): gained **${gained} VP** (net ${net >= 0 ? '+' : ''}${net}).`).catch(discordCatch);
-          if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Bargain** — Spent 1 VP, gained ${gained} VP (net ${net >= 0 ? '+' : ''}${net})`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+          if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Bargain** — Spent 1 VP, gained ${gained} VP (net ${net >= 0 ? '+' : ''}${net})`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
         } else {
           await thread.send('**Bargain** — No VP available to spend; ability has no effect.').catch(discordCatch);
         }
@@ -3729,15 +3729,15 @@ export async function handleCleaveTarget(interaction, ctx) {
  * Fired after any ability grants a generic "power token"; player picks Hit/Surge/Block/Evade.
  */
 export async function handlePowerTokenChoice(interaction, ctx) {
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const { getGame, saveGames } = ctx;
   const match = interaction.customId.match(/^power_token_choice_([^_]+)_(hit|surge|block|evade)$/);
-  if (!match) { await interaction.followUp({ content: 'Invalid token choice.', ephemeral: true }).catch(() => {}); return; }
+  if (!match) { await interaction.followUp({ content: 'Invalid token choice.', ephemeral: true }).catch(discordCatch); return; }
   const [, gameId, typeRaw] = match;
   const type = typeRaw[0].toUpperCase() + typeRaw.slice(1); // 'Hit', 'Surge', 'Block', 'Evade'
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
-  if (!game.pendingPowerTokenGrant?.grants?.length) { await interaction.followUp({ content: 'No pending token grant found.', ephemeral: true }).catch(() => {}); return; }
+  if (!game.pendingPowerTokenGrant?.grants?.length) { await interaction.followUp({ content: 'No pending token grant found.', ephemeral: true }).catch(discordCatch); return; }
   const { grants, channelId, playerNum } = game.pendingPowerTokenGrant;
   if (playerNum && !await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Not your token choice.')) return;
   game.figurePowerTokens = game.figurePowerTokens || {};
@@ -3791,17 +3791,17 @@ export async function handlePowerTokenChoice(interaction, ctx) {
  * Custom ID: spread_pain_cond_{gameId}_{stun|weaken|bleed|skip}
  */
 export async function handleSpreadThePainCondPick(interaction, ctx) {
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const { getGame, saveGames } = ctx;
   const m = interaction.customId.match(/^spread_pain_cond_([^_]+)_(stun|weaken|bleed|skip)$/);
-  if (!m) { await interaction.followUp({ content: 'Invalid condition choice.', ephemeral: true }).catch(() => {}); return; }
+  if (!m) { await interaction.followUp({ content: 'Invalid condition choice.', ephemeral: true }).catch(discordCatch); return; }
   const [, gameId, condRaw] = m;
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
-  if (!game.pendingSpreadThePainCondPick) { await interaction.followUp({ content: 'No pending condition pick.', ephemeral: true }).catch(() => {}); return; }
+  if (!game.pendingSpreadThePainCondPick) { await interaction.followUp({ content: 'No pending condition pick.', ephemeral: true }).catch(discordCatch); return; }
   const { attackerPlayerNum, combatThreadId } = game.pendingSpreadThePainCondPick;
   if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Not your choice.')) return;
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) return;
   game.pendingSpreadThePainCondPick = null;
@@ -3812,7 +3812,7 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
   if (condRaw !== 'skip') {
     const cond = condRaw[0].toUpperCase() + condRaw.slice(1); // 'Stun' | 'Weaken' | 'Bleed'
     combat.spreadThePainConditions = [...(combat.spreadThePainConditions || []), cond];
-    await thread.send(`**Spread the Pain** — **${cond}** chosen. Will apply post-combat.`).catch(() => {});
+    await thread.send(`**Spread the Pain** — **${cond}** chosen. Will apply post-combat.`).catch(discordCatch);
   }
 
   // Resume surge phase
@@ -3843,7 +3843,7 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
     }
     surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
     const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
-    await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch(() => {});
+    await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch(discordCatch);
   } else {
     await sendReadyToResolveRolls(thread, gameId);
   }
@@ -3861,16 +3861,16 @@ export async function handleFigureheadDecision(interaction, ctx) {
   const gameId = interaction.customId.replace(/^figurehead_(?:use|skip)_/, '');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const pending = game.pendingFigurehead;
   if (!pending) {
-    await interaction.followUp({ content: 'No pending Figurehead decision.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'No pending Figurehead decision.', ephemeral: true }).catch(discordCatch);
     return;
   }
   delete game.pendingFigurehead;
   const combat = game.pendingCombat;
   if (!combat) {
-    await interaction.followUp({ content: 'Combat data missing.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Combat data missing.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex, fhFigKey, fhMsgId, fhFigIndex, fhLabel } = pending;
@@ -3929,9 +3929,9 @@ export async function handleFigureheadDecision(interaction, ctx) {
     await applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
   }
   if (isUse && fhMsgId && ctx.updateAttachmentMessageForDc) {
-    await ctx.updateAttachmentMessageForDc(game, defenderPlayerNum, fhMsgId, client).catch(() => {});
+    await ctx.updateAttachmentMessageForDc(game, defenderPlayerNum, fhMsgId, client).catch(discordCatch);
   }
-  await interaction.editReply({ components: [] }).catch(() => {});
+  await interaction.editReply({ components: [] }).catch(discordCatch);
   saveGames();
 }
 
@@ -4006,7 +4006,7 @@ export async function handleLasatDiePick(interaction, ctx) {
     await interaction.followUp({ content: 'That die is not eligible.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
   combat.lasatChosenDieIndex = dieIdx;
   await sendLasatFacePicker(thread, gameId, combat, dieIdx, ctx);
@@ -4047,7 +4047,7 @@ export async function handleLasatFacePick(interaction, ctx) {
   combat.attackRoll.surge = Math.max(0, (combat.attackRoll.surge || 0) - (die.surge || 0)) + (newFace.surge || 0);
   combat.attackDiceResults[dieIdx] = { ...die, acc: newFace.acc || 0, dmg: newFace.dmg || 0, surge: newFace.surge || 0 };
   combat.lasatHonorGuardPhase = false;
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
   await thread.send(`**Lasat Honor Guard** — Turned die to ${newFace.acc || 0}a/${newFace.dmg || 0}d/${newFace.surge || 0}s. New total: ${combat.attackRoll.acc}a/${combat.attackRoll.dmg}d/${combat.attackRoll.surge}s.`);
   await proceedAfterRerolls(thread, game, combat, ctx);
@@ -4147,7 +4147,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const defEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
   applyDcPassivesToCombat(game.pendingCombat, controlledStats?.passives || [], targetStats?.passives || []);
   await interaction.message.edit({ content: '**False Orders — Attack declared**. See thread in Game Log.', components: [] }).catch(discordCatch);
-  if (logGameAction) await logGameAction(game, client, `⚔️ **False Orders** — P${controllerPlayerNum} controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+  if (logGameAction) await logGameAction(game, client, `⚔️ **False Orders** — P${controllerPlayerNum} controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   saveGames();
 }
 
@@ -4156,7 +4156,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
  * cover_fire_block_{gameId}_{playerNum}_{figureKey}
  */
 export async function handleCoverFireBlock(interaction, ctx) {
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const { getGame, saveGames, logGameAction, client, findDcMessageIdForFigure } = ctx;
   const match = interaction.customId.match(/^cover_fire_block_(\d+)_(\d+)_(.+)$/);
   if (!match) return;
@@ -4180,7 +4180,7 @@ export async function handleCoverFireBlock(interaction, ctx) {
  * cover_fire_discard_skip_{gameId}
  */
 export async function handleCoverFireDiscard(interaction, ctx) {
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const { getGame, saveGames, logGameAction, client } = ctx;
   // Skip button
   if (interaction.customId.startsWith('cover_fire_discard_skip_')) {

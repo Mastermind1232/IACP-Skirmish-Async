@@ -617,11 +617,11 @@ export async function handleMapConfirm(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (game.mapSelected) {
-    await interaction.followUp({ content: 'Map already confirmed.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Map already confirmed.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (!game.selectedMap) {
-    await interaction.followUp({ content: 'No map selected yet. Pick a selection type first.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'No map selected yet. Pick a selection type first.', ephemeral: true }).catch(discordCatch);
     return;
   }
   game.mapSelected = true;
@@ -649,7 +649,7 @@ export async function handleMapGoBack(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (game.mapSelected) {
-    await interaction.followUp({ content: 'Map already confirmed.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Map already confirmed.', ephemeral: true }).catch(discordCatch);
     return;
   }
   // Clear pending selection
@@ -1392,7 +1392,7 @@ export async function handleDeployPick(interaction, ctx) {
  * @param {object} ctx - getGame, logGameAction, client, saveGames
  */
 export async function handleLoadoutPick(interaction, ctx) {
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const { getGame, logGameAction, client, saveGames } = ctx;
   // Parse: loadout_pick_{gameId}_{dcName}-{dgIdx}-{figIdx}_{loadoutName}
   const prefix = 'loadout_pick_';
@@ -1437,7 +1437,7 @@ export async function handleLoadoutPick(interaction, ctx) {
  * Handle form card selection (deployment or round-start shift): form_pick_{gameId}_{figureKey}_{formName}
  */
 export async function handleFormPick(interaction, ctx) {
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const { getGame, logGameAction, client, saveGames } = ctx;
   const prefix = 'form_pick_';
   const rest = interaction.customId.slice(prefix.length);
@@ -1729,13 +1729,13 @@ export async function handleAutoDeploy(interaction, ctx) {
   if (!game) return;
   const ownerId = getPlayerId(game, playerNum);
   if (interaction.user.id !== ownerId) {
-    await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Only the owner of this deck can deploy.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const mapId = game.selectedMap?.id;
   const zones = mapId ? getDeploymentZones()[mapId] : null;
   if (!zones) {
-    await interaction.followUp({ content: 'Deployment zones not found.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Deployment zones not found.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const initiativePlayerNum = getInitiativePlayerNum(game);
@@ -1825,7 +1825,7 @@ export async function handleAutoDeploy(interaction, ctx) {
 
   await logGameAction(game, client, `<@${interaction.user.id}> auto-deployed ${placed} figure(s) in the ${playerZone} zone`, { phase: 'DEPLOYMENT', icon: 'deploy' });
   saveGames();
-  await interaction.followUp({ content: `Auto-deployed ${placed} figure(s) at the ${playerZone} zone entrance.`, ephemeral: true }).catch(() => {});
+  await interaction.followUp({ content: `Auto-deployed ${placed} figure(s) at the ${playerZone} zone entrance.`, ephemeral: true }).catch(discordCatch);
 }
 
 /**
@@ -2003,7 +2003,7 @@ export async function handleAttachDoneConfirm(interaction, ctx) {
       const generalChannel = await client.channels.fetch(game.generalId).catch(() => null);
       if (generalChannel) {
         for (const nId of game.attachRedoNoticeIds) {
-          await generalChannel.messages.delete(nId).catch(() => {});
+          await generalChannel.messages.delete(nId).catch(discordCatch);
         }
       }
     }

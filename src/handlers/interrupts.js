@@ -43,7 +43,7 @@ export async function handleStillFaster(interaction, ctx) {
     if (!await requirePlayer(interaction, sftGame, interaction.user.id, sftPlayerNum, canActAsPlayer, 'Only the Still Faster Than You player may respond.')) return;
     delete sftGame.pendingStillFaster;
     sftGame.stillFasterPlayerNum = null;
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch(discordCatch);
     await interaction.followUp({ content: '**Still Faster Than You** — Skipped.', ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
@@ -72,14 +72,14 @@ export async function handleStillFaster(interaction, ctx) {
     if (sftButtons.length === 0) {
       delete sftGame.pendingStillFaster;
       sftGame.stillFasterPlayerNum = null;
-      await interaction.deferUpdate().catch(() => {});
+      await interaction.deferUpdate().catch(discordCatch);
       await interaction.followUp({ content: '**Still Faster Than You** — No eligible figures to interrupt with.', ephemeral: false }).catch(discordCatch);
       saveGames();
       return;
     }
     const sftRows = [];
     for (let i = 0; i < sftButtons.length; i += 5) sftRows.push(new ActionRowBuilder().addComponents(sftButtons.slice(i, i + 5)));
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch(discordCatch);
     await interaction.followUp({ content: '**Still Faster Than You** — Choose which figure interrupts (move 2 + attack):', components: sftRows.slice(0, 5), ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
@@ -106,7 +106,7 @@ export async function handleStillFaster(interaction, ctx) {
     delete sftGame.pendingStillFaster;
     const sftMeta = dcMessageMeta.get(sftPickedMsgId);
     const sftLabel = sftMeta?.displayName || sftMeta?.dcName || sftPickedMsgId;
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch(discordCatch);
     await interaction.followUp({ content: `**Still Faster Than You** — **${sftLabel}** gains 2 MP and a free Attack. The attack must target a **different hostile** than the one that just activated.`, ephemeral: false }).catch(discordCatch);
     saveGames();
     return;
@@ -142,12 +142,12 @@ export async function handleOverdrive(interaction, ctx) {
 
   const _odMsgId = interaction.customId.replace('overdrive_use_', '');
   const _odMeta = dcMessageMeta.get(_odMsgId);
-  if (!_odMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
+  if (!_odMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
   const _odGame = await requireGame(interaction, getGame, _odMeta.gameId);
   if (!_odGame) return;
   if (!await requirePlayer(interaction, _odGame, interaction.user.id, _odMeta.playerNum, canActAsPlayer, 'Only the DC owner can use Overdrive.')) return;
   const _odActionsData = _odGame.dcActionsData?.[_odMsgId];
-  if (!_odActionsData) { await interaction.followUp({ content: 'No active activation found.', ephemeral: true }).catch(() => {}); return; }
+  if (!_odActionsData) { await interaction.followUp({ content: 'No active activation found.', ephemeral: true }).catch(discordCatch); return; }
   const { prevHp: _odPrevHp, newHp: _odNewHp, maxHp: _odMaxHp } = reduceHp(dcHealthState, _odGame, _odMsgId, 0, 1, _odMeta.playerNum);
   const _odHS = dcHealthState.get(_odMsgId) || [];
   let _odHpNote = '';
@@ -181,7 +181,7 @@ export async function handleSelfDestructProbe(interaction, ctx) {
   const _sdpGame = await requireGame(interaction, getGame, _sdpGameId);
   if (!_sdpGame) return;
   const _sdpMeta = dcMessageMeta.get(_sdpMsgId);
-  if (!_sdpMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
+  if (!_sdpMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
   if (!await requirePlayer(interaction, _sdpGame, interaction.user.id, _sdpMeta.playerNum, canActAsPlayer, 'Only the DC owner can respond.')) return;
   if (buttonKey === 'self_destruct_probe_skip_') {
     await logGameAction(_sdpGame, client, `**Self-Destruct** — ${_sdpMeta.displayName || _sdpMeta.dcName} skipped.`, { phase: 'ROUND', icon: 'card' });
@@ -230,14 +230,14 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapSpaces, applyDamageAndFinishCombat } = ctx;
   const buttonKey = interaction.customId.startsWith('self_destruct_protocol_use_') ? 'self_destruct_protocol_use_' : 'self_destruct_protocol_skip_';
 
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const _sdcpSuffix = interaction.customId.replace(buttonKey, '');
   const _sdcpParts = _sdcpSuffix.split('_');
   const _sdcpGameId = _sdcpParts[0]; const _sdcpTargetMsgId = _sdcpParts[1];
   const _sdcpGame = await requireGame(interaction, getGame, _sdcpGameId, { silent: true });
   if (!_sdcpGame) return;
   if (!_sdcpGame.pendingSelfDestruct) {
-    await interaction.followUp({ content: 'No pending Self-Destruct Protocol.', ephemeral: true }).catch(() => {}); return;
+    await interaction.followUp({ content: 'No pending Self-Destruct Protocol.', ephemeral: true }).catch(discordCatch); return;
   }
   const _sdcpPending = _sdcpGame.pendingSelfDestruct;
   if (!await requirePlayer(interaction, _sdcpGame, interaction.user.id, _sdcpPending.defenderPlayerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
@@ -294,12 +294,12 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
 export async function handleYHSIW(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction } = ctx;
   const isTransfer = interaction.customId.startsWith('yhsiw_transfer_');
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const gameId = interaction.customId.replace(isTransfer ? 'yhsiw_transfer_' : 'yhsiw_damage_', '');
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (!game.pendingYHSIW) {
-    await interaction.followUp({ content: 'No pending You Have Something I Want.', ephemeral: true }).catch(() => {}); return;
+    await interaction.followUp({ content: 'No pending You Have Something I Want.', ephemeral: true }).catch(discordCatch); return;
   }
   const pending = game.pendingYHSIW;
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.oppPlayerNum, canActAsPlayer, 'Only the targeted player may respond.')) return;
@@ -358,14 +358,14 @@ export async function handleLastResort(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapSpaces, applyDamageAndFinishCombat } = ctx;
   const buttonKey = interaction.customId.startsWith('last_resort_use_') ? 'last_resort_use_' : 'last_resort_skip_';
 
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const _lrSuffix = interaction.customId.replace(buttonKey, '');
   const _lrParts = _lrSuffix.split('_');
   const _lrGameId = _lrParts[0]; const _lrTargetMsgId = _lrParts[1];
   const _lrGame = await requireGame(interaction, getGame, _lrGameId, { silent: true });
   if (!_lrGame) return;
   if (!_lrGame.pendingLastResort) {
-    await interaction.followUp({ content: 'No pending Last Resort.', ephemeral: true }).catch(() => {}); return;
+    await interaction.followUp({ content: 'No pending Last Resort.', ephemeral: true }).catch(discordCatch); return;
   }
   const _lrPending = _lrGame.pendingLastResort;
   if (!await requirePlayer(interaction, _lrGame, interaction.user.id, _lrPending.defenderPlayerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
@@ -430,14 +430,14 @@ export async function handleScavengedWalker(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
   const buttonKey = interaction.customId.startsWith('scavenged_walker_attack_') ? 'scavenged_walker_attack_' : 'scavenged_walker_skip_';
 
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const _swSuffix = interaction.customId.replace(buttonKey, '');
   const _swParts = _swSuffix.split('_');
   const _swGameId = _swParts[0]; const _swMsgId = _swParts[1];
   const _swGame = await requireGame(interaction, getGame, _swGameId);
   if (!_swGame) return;
   const _swMeta = dcMessageMeta.get(_swMsgId);
-  if (!_swMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return; }
+  if (!_swMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
   if (!await requirePlayer(interaction, _swGame, interaction.user.id, _swMeta.playerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
   if (buttonKey === 'scavenged_walker_attack_') {
     // Set -1 Hit penalty flag for the next attack from this DC
@@ -454,7 +454,7 @@ export async function handleScavengedWalker(interaction, ctx) {
 export async function handleOnDiplomatic(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, checkWinConditions } = ctx;
 
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const _odmSuffix = interaction.customId.replace('on_diplomatic_', '');
   const _odmParts = _odmSuffix.split('_');
   const _odmGameId = _odmParts[0]; const _odmMsgId = _odmParts[1]; const _odmChoice = _odmParts[2];
@@ -462,7 +462,7 @@ export async function handleOnDiplomatic(interaction, ctx) {
   if (!_odmGame) return;
   const _odmMeta = dcMessageMeta.get(_odmMsgId);
   if (!_odmMeta) {
-    await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(() => {}); return;
+    await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return;
   }
   if (!await requirePlayer(interaction, _odmGame, interaction.user.id, _odmMeta.playerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
   if (_odmChoice === 'skip') {
@@ -502,7 +502,7 @@ export async function handleBelReorder(interaction, ctx) {
   const _belGameId = _belParts[0]; const _belCardIdx = parseInt(_belParts[1], 10);
   const _belGame = await requireGame(interaction, getGame, _belGameId, { silent: true });
   if (!_belGame) return;
-  if (!_belGame.pendingBELReorder) { await interaction.followUp({ content: 'No pending deck reorder.', ephemeral: true }).catch(() => {}); return; }
+  if (!_belGame.pendingBELReorder) { await interaction.followUp({ content: 'No pending deck reorder.', ephemeral: true }).catch(discordCatch); return; }
   const _belData = _belGame.pendingBELReorder;
   if (!await requirePlayer(interaction, _belGame, interaction.user.id, _belData.playerNum, canActAsPlayer, 'Only the card owner may reorder.')) return;
   if (buttonKey === 'bel_reorder_1_') {
@@ -514,7 +514,7 @@ export async function handleBelReorder(interaction, ctx) {
     });
     const _belHandId = _belData.playerNum === 1 ? _belGame.p1HandId : _belGame.p2HandId;
     const _belHandCh2 = await client.channels.fetch(_belHandId).catch(() => null);
-    if (_belHandCh2) await _belHandCh2.send({ content: `**Behind Enemy Lines** — **${_belData.cards[_belCardIdx]}** goes 1st. Choose 2nd card:`, components: [new ActionRowBuilder().addComponents(..._belBtns2.slice(0, 5))] }).catch(() => {});
+    if (_belHandCh2) await _belHandCh2.send({ content: `**Behind Enemy Lines** — **${_belData.cards[_belCardIdx]}** goes 1st. Choose 2nd card:`, components: [new ActionRowBuilder().addComponents(..._belBtns2.slice(0, 5))] }).catch(discordCatch);
     saveGames(); return;
   }
   // bel_reorder_2_: finalize order
@@ -533,7 +533,7 @@ export async function handleBelReorder(interaction, ctx) {
 // NEW PREFIX: ab_blade_pick_ — add to router.js
 export async function handleAssassinsBladePickTarget(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction } = ctx;
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   // ab_blade_pick_{gameId}_{figureKey}
   const suffix = interaction.customId.replace('ab_blade_pick_', '');
   const parts = suffix.split('_');
@@ -542,7 +542,7 @@ export async function handleAssassinsBladePickTarget(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const pending = game.pendingAssassinsBlade;
-  if (!pending) { await interaction.followUp({ content: 'No pending Assassin\'s Blade.', ephemeral: true }).catch(() => {}); return; }
+  if (!pending) { await interaction.followUp({ content: 'No pending Assassin\'s Blade.', ephemeral: true }).catch(discordCatch); return; }
   const { hits, rollStr, defenderPlayerNum, attackerPlayerNum } = pending;
   delete game.pendingAssassinsBlade;
   const dcName = dcNameFromFigureKey(figureKey);
@@ -553,7 +553,7 @@ export async function handleAssassinsBladePickTarget(interaction, ctx) {
     reduceHp(dcHealthState, game, msgId, figIdx, hits, defenderPlayerNum);
     break;
   }
-  await interaction.message.edit({ content: `🗡️ **Assassin's Blade** — Rolled 1 red die: **${rollStr}**. **${dcName}** suffers **${hits} Damage**.`, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: `🗡️ **Assassin's Blade** — Rolled 1 red die: **${rollStr}**. **${dcName}** suffers **${hits} Damage**.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `🗡️ **Assassin's Blade** — **${dcName}** suffers **${hits} Damage**.`, { phase: 'ROUND', icon: 'attack' });
   saveGames(); return;
 }
@@ -562,7 +562,7 @@ export async function handleAssassinsBladePickTarget(interaction, ctx) {
 // NEW PREFIX: sf_mp_pick_ — add to router.js
 export async function handleSuppressiveFireMpPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   // sf_mp_pick_{gameId}_{figureKey}
   const suffix = interaction.customId.replace('sf_mp_pick_', '');
   const parts = suffix.split('_');
@@ -571,7 +571,7 @@ export async function handleSuppressiveFireMpPick(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const pending = game.pendingSuppressiveFireMp;
-  if (!pending) { await interaction.followUp({ content: 'No pending Suppressive Fire MP.', ephemeral: true }).catch(() => {}); return; }
+  if (!pending) { await interaction.followUp({ content: 'No pending Suppressive Fire MP.', ephemeral: true }).catch(discordCatch); return; }
   const { attackerPlayerNum } = pending;
   delete game.pendingSuppressiveFireMp;
   if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the attacker may choose.')) return;
@@ -583,7 +583,7 @@ export async function handleSuppressiveFireMpPick(interaction, ctx) {
     targetMsgId = msgId;
     break;
   }
-  if (!targetMsgId) { await interaction.followUp({ content: 'Could not find DC for this figure.', ephemeral: true }).catch(() => {}); return; }
+  if (!targetMsgId) { await interaction.followUp({ content: 'Could not find DC for this figure.', ephemeral: true }).catch(discordCatch); return; }
   game.movementBank = game.movementBank || {};
   if (!game.movementBank[targetMsgId]) {
     game.movementBank[targetMsgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: dcName };
@@ -591,7 +591,7 @@ export async function handleSuppressiveFireMpPick(interaction, ctx) {
     game.movementBank[targetMsgId].total += 2;
     game.movementBank[targetMsgId].remaining += 2;
   }
-  await interaction.message.edit({ content: `**Suppressive Fire** — **${dcName}** gains **2 MP**.`, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: `**Suppressive Fire** — **${dcName}** gains **2 MP**.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Suppressive Fire** — **${dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
   saveGames(); return;
 }
@@ -600,7 +600,7 @@ export async function handleSuppressiveFireMpPick(interaction, ctx) {
 // NEW PREFIX: force_slow_pick_ — add to router.js
 export async function handleForceSlowPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   // force_slow_pick_{gameId}_{playerNum}_{figureKey}
   const suffix = interaction.customId.replace('force_slow_pick_', '');
   const parts = suffix.split('_');
@@ -613,7 +613,7 @@ export async function handleForceSlowPick(interaction, ctx) {
   game.forceSlowSkipActivation = game.forceSlowSkipActivation || {};
   game.forceSlowSkipActivation[figureKey] = true;
   const dcName = dcNameFromFigureKey(figureKey);
-  await interaction.message.edit({ content: `🐌 **Force Slow** — **${dcName}** will skip its next activation.`, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: `🐌 **Force Slow** — **${dcName}** will skip its next activation.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `🐌 **Force Slow** — **${dcName}** will skip its next activation.`, { phase: 'ROUND', icon: 'round' });
   saveGames(); return;
 }
@@ -622,7 +622,7 @@ export async function handleForceSlowPick(interaction, ctx) {
 // NEW PREFIX: excavation_pick_ — add to router.js
 export async function handleExcavationPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, logGameAction, updateHandChannelMessages } = ctx;
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   // excavation_pick_{gameId}_{playerNum}_{cardIndex}
   const suffix = interaction.customId.replace('excavation_pick_', '');
   const parts = suffix.split('_');
@@ -636,14 +636,14 @@ export async function handleExcavationPick(interaction, ctx) {
   const handKey = ccHandKey(playerNum);
   const discard = game[discardKey] || [];
   if (cardIndex < 0 || cardIndex >= discard.length) {
-    await interaction.followUp({ content: 'Invalid card selection.', ephemeral: true }).catch(() => {}); return;
+    await interaction.followUp({ content: 'Invalid card selection.', ephemeral: true }).catch(discordCatch); return;
   }
   const cardName = discard[cardIndex];
   // Move card from discard to hand
   game[discardKey] = discard.filter((_, i) => i !== cardIndex);
   game[handKey] = game[handKey] || [];
   game[handKey].push(cardName);
-  await interaction.message.edit({ content: `⛏️ **Excavation** — **${cardName}** moved from discard to hand.`, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: `⛏️ **Excavation** — **${cardName}** moved from discard to hand.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `⛏️ **Excavation** — retrieved **${cardName}** from discard pile.`, { phase: 'ROUND', icon: 'round' });
   if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
   saveGames(); return;
@@ -651,7 +651,7 @@ export async function handleExcavationPick(interaction, ctx) {
 
 // ── Submit or Fight (Paz Vizsla) ────────────────────────────────────────────
 export async function handleSubmitOrFight(interaction, ctx) {
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction } = ctx;
   const isUse = interaction.customId.startsWith('submit_fight_use_');
   const prefix = isUse ? 'submit_fight_use_' : 'submit_fight_skip_';
@@ -671,7 +671,7 @@ export async function handleSubmitOrFight(interaction, ctx) {
     const discardKey = `p${playerNum}CcDiscard`;
     const discard = game[discardKey] || [];
     if (discard.length === 0) {
-      await interaction.followUp({ content: 'No CCs in discard pile.', ephemeral: true }).catch(() => {});
+      await interaction.followUp({ content: 'No CCs in discard pile.', ephemeral: true }).catch(discordCatch);
       return;
     }
     // Return last CC from discard to game box (permanently removed)
@@ -682,12 +682,12 @@ export async function handleSubmitOrFight(interaction, ctx) {
       healthState[figureIndex][0] = Math.min(healthState[figureIndex][0] + 1, healthState[figureIndex][1]);
     }
     const dcName = meta?.dcName || 'Paz Vizsla';
-    await interaction.message.edit({ content: `🛡️ **Submit or Fight** — **${dcName}** returned **${returnedCc}** to game box to heal 1 Strain damage.`, components: [] }).catch(() => {});
+    await interaction.message.edit({ content: `🛡️ **Submit or Fight** — **${dcName}** returned **${returnedCc}** to game box to heal 1 Strain damage.`, components: [] }).catch(discordCatch);
     if (logGameAction) {
       await logGameAction(game, client, `🛡️ **Submit or Fight** — **${dcName}** returned **${returnedCc}** to prevent Strain damage.`, { phase: 'ROUND', icon: 'defend' });
     }
   } else {
-    await interaction.message.edit({ content: '**Submit or Fight** — Skipped.', components: [] }).catch(() => {});
+    await interaction.message.edit({ content: '**Submit or Fight** — Skipped.', components: [] }).catch(discordCatch);
   }
   saveGames();
 }

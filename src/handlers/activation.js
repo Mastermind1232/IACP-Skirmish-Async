@@ -737,7 +737,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
     game.movementBank[msgId].total += 3;
     game.movementBank[msgId].remaining += 3;
-    await thread.send({ content: `🐎 **Mounted** — **${displayName}** gains **3 movement points** at the start of activation.` }).catch(() => {});
+    await thread.send({ content: `🐎 **Mounted** — **${displayName}** gains **3 movement points** at the start of activation.` }).catch(discordCatch);
   }
   // Vigor (Ahsoka Tano, Fifth Brother): choose 2 MP or 1 Block Token
   if (meta.dcName === 'Ahsoka Tano' || meta.dcName === 'Fifth Brother') {
@@ -745,7 +745,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_vigor_mp`).setLabel('Gain 2 MP').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_vigor_block`).setLabel('Gain 1 Block Token').setStyle(ButtonStyle.Secondary),
     );
-    await thread.send({ content: `✨ **Vigor** — **${displayName}**: Choose one:`, components: [vigorRow] }).catch(() => {});
+    await thread.send({ content: `✨ **Vigor** — **${displayName}**: Choose one:`, components: [vigorRow] }).catch(discordCatch);
   }
   // Madness (Taron Malicos): if ≤2 CC cards in hand, suffer 1 Strain and become Focused
   if (meta.dcName === 'Taron Malicos') {
@@ -764,7 +764,7 @@ export async function handleConfirmActivate(interaction, ctx) {
           hs[fkIdx] = [Math.max(0, (cur ?? max) - 1), max];
         }
       }
-      await thread.send({ content: `😤 **Madness** — **${displayName}** has ${hand.length} CC card${hand.length !== 1 ? 's' : ''} in hand (≤2). Suffered **1 Strain** and became **Focused**.` }).catch(() => {});
+      await thread.send({ content: `😤 **Madness** — **${displayName}** has ${hand.length} CC card${hand.length !== 1 ? 's' : ''} in hand (≤2). Suffered **1 Strain** and became **Focused**.` }).catch(discordCatch);
       await logGameAction(game, client, `**Madness** — **${displayName}** suffered 1 Strain and became Focused (${hand.length} CC in hand).`, { phase: 'ACTIVATION', icon: 'condition' });
     }
   }
@@ -774,7 +774,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_responsive_mp`).setLabel('Gain 1 MP').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_responsive_heal`).setLabel('Recover 1 Damage').setStyle(ButtonStyle.Secondary),
     );
-    await thread.send({ content: `🏃 **Responsive** — **${displayName}**: Choose one:`, components: [respRow] }).catch(() => {});
+    await thread.send({ content: `🏃 **Responsive** — **${displayName}**: Choose one:`, components: [respRow] }).catch(discordCatch);
   }
   // Fulcrum (Agent Kallus): at start of activation, each player draws 1 CC
   if (meta.dcName === 'Agent Kallus') {
@@ -791,7 +791,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         _fParts.push(`P${pn} deck empty`);
       }
     }
-    await thread.send({ content: `🕵️ **Fulcrum** — Each player draws 1 Command card. (${_fParts.join(', ')})` }).catch(() => {});
+    await thread.send({ content: `🕵️ **Fulcrum** — Each player draws 1 Command card. (${_fParts.join(', ')})` }).catch(discordCatch);
   }
   // Hunger (Wampa Regular/Elite): position-aware hostile proximity check
   {
@@ -811,9 +811,9 @@ export async function handleConfirmActivate(interaction, ctx) {
       game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
       game.movementBank[msgId].total += 2;
       game.movementBank[msgId].remaining += 2;
-      await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **2 MP** (no hostile within 3 spaces).` }).catch(() => {});
+      await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **2 MP** (no hostile within 3 spaces).` }).catch(discordCatch);
     } else if (meta.dcName === 'Wampa' && !_hungerCheck('Wampa', 3, 2, false)) {
-      await thread.send({ content: `🐻 **Hunger** — Hostile figure within 3 spaces; **${displayName}** does not gain MP.` }).catch(() => {});
+      await thread.send({ content: `🐻 **Hunger** — Hostile figure within 3 spaces; **${displayName}** does not gain MP.` }).catch(discordCatch);
     }
     if (meta.dcName === 'Wampa (Elite)') {
       if (_hungerCheck('Wampa (Elite)', 2, 3, true)) {
@@ -825,9 +825,9 @@ export async function handleConfirmActivate(interaction, ctx) {
           new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_hunger_block`).setLabel('Block Token').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_hunger_evade`).setLabel('Evade Token').setStyle(ButtonStyle.Secondary),
         );
-        await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **3 MP** (no hostile within 2 spaces). Choose a token:`, components: [hungerRow] }).catch(() => {});
+        await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **3 MP** (no hostile within 2 spaces). Choose a token:`, components: [hungerRow] }).catch(discordCatch);
       } else {
-        await thread.send({ content: `🐻 **Hunger** — Hostile figure within 2 spaces; **${displayName}** does not gain MP or tokens.` }).catch(() => {});
+        await thread.send({ content: `🐻 **Hunger** — Hostile figure within 2 spaces; **${displayName}** does not gain MP or tokens.` }).catch(discordCatch);
       }
     }
   }
@@ -847,9 +847,9 @@ export async function handleConfirmActivate(interaction, ctx) {
         });
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tacmove_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         const tmRow = new ActionRowBuilder().addComponents(btns);
-        await thread.send({ content: `🎯 **Tactical Movement** — Choose a friendly figure within 3 spaces to gain **2 MP**:`, components: [tmRow] }).catch(() => {});
+        await thread.send({ content: `🎯 **Tactical Movement** — Choose a friendly figure within 3 spaces to gain **2 MP**:`, components: [tmRow] }).catch(discordCatch);
       } else {
-        await thread.send({ content: `🎯 **Tactical Movement** — No friendly figures within 3 spaces.` }).catch(() => {});
+        await thread.send({ content: `🎯 **Tactical Movement** — No friendly figures within 3 spaces.` }).catch(discordCatch);
       }
     }
   }
@@ -881,7 +881,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       game.figurePowerTokens[selfFk] = game.figurePowerTokens[selfFk] || [];
       for (let i = 0; i < surgeCount; i++) game.figurePowerTokens[selfFk].push('Surge');
     }
-    await thread.send({ content: `🔥 **Into the Fray** — **${displayName}** gains **1 MP** and **${surgeCount} Surge Token${surgeCount !== 1 ? 's' : ''}** (${surgeCount} hostile${surgeCount !== 1 ? 's' : ''} with LOS).` }).catch(() => {});
+    await thread.send({ content: `🔥 **Into the Fray** — **${displayName}** gains **1 MP** and **${surgeCount} Surge Token${surgeCount !== 1 ? 's' : ''}** (${surgeCount} hostile${surgeCount !== 1 ? 's' : ''} with LOS).` }).catch(discordCatch);
   }
   // Advanced Weapons Research (Director Krennic): friendly within 2 gains 1 Hit or Surge Token
   if (meta.dcName === 'Director Krennic') {
@@ -900,9 +900,9 @@ export async function handleConfirmActivate(interaction, ctx) {
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         const awrRow = new ActionRowBuilder().addComponents(btns);
         game.pendingAwr = { gameId: game.gameId, msgId, playerNum: meta.playerNum };
-        await thread.send({ content: `🔬 **Advanced Weapons Research** — Choose a friendly figure within 2 spaces to grant a **Hit Token** or **Surge Token**:`, components: [awrRow] }).catch(() => {});
+        await thread.send({ content: `🔬 **Advanced Weapons Research** — Choose a friendly figure within 2 spaces to grant a **Hit Token** or **Surge Token**:`, components: [awrRow] }).catch(discordCatch);
       } else {
-        await thread.send({ content: `🔬 **Advanced Weapons Research** — No friendly figures within 2 spaces.` }).catch(() => {});
+        await thread.send({ content: `🔬 **Advanced Weapons Research** — No friendly figures within 2 spaces.` }).catch(discordCatch);
       }
     }
   }
@@ -931,9 +931,9 @@ export async function handleConfirmActivate(interaction, ctx) {
           new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_durasteelfist_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Danger)
         );
         _dfBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_durasteelfist_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({ content: `🤜 **Durasteel Fist** — Choose an adjacent figure to target (roll 1 green die, apply Hits as damage):`, components: [new ActionRowBuilder().addComponents(_dfBtns)] }).catch(() => {});
+        await thread.send({ content: `🤜 **Durasteel Fist** — Choose an adjacent figure to target (roll 1 green die, apply Hits as damage):`, components: [new ActionRowBuilder().addComponents(_dfBtns)] }).catch(discordCatch);
       } else {
-        await thread.send({ content: `🤜 **Durasteel Fist** — No adjacent figures to target.` }).catch(() => {});
+        await thread.send({ content: `🤜 **Durasteel Fist** — No adjacent figures to target.` }).catch(discordCatch);
       }
     }
   }
@@ -941,7 +941,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (_mountedIds.includes('comms_jammer_isb')) {
     const oppNum = opponentPlayerNum(meta.playerNum);
     game.commsJammerActivePlayerNum = meta.playerNum;
-    await thread.send({ content: `📡 **Comms Jammer** — Opponent (P${oppNum}) cannot play Command Cards during this activation.` }).catch(() => {});
+    await thread.send({ content: `📡 **Comms Jammer** — Opponent (P${oppNum}) cannot play Command Cards during this activation.` }).catch(discordCatch);
   }
   // Power Converter (Saska Teft): combat-time trigger — handled in combat.js, NOT here
   // Unstable Devices (Saska Teft): free once-per-activation — a friendly in LOS gains 1 Device token
@@ -976,43 +976,43 @@ export async function handleConfirmActivate(interaction, ctx) {
         .setCustomId(`act_passive_${game.gameId}_${msgId}_unstabledev_skip`)
         .setLabel('Skip')
         .setStyle(ButtonStyle.Secondary);
-      await thread.send({ content: `🔧 **Unstable Devices** — Grant **1 Device token** to **${f.dcName}**? (free, once per activation)`, components: [new ActionRowBuilder().addComponents(confirmBtn, skipBtn)] }).catch(() => {});
+      await thread.send({ content: `🔧 **Unstable Devices** — Grant **1 Device token** to **${f.dcName}**? (free, once per activation)`, components: [new ActionRowBuilder().addComponents(confirmBtn, skipBtn)] }).catch(discordCatch);
     } else if (_udFriendlies.length > 1) {
       // Multiple friendlies — picker
       const btns = _udFriendlies.slice(0, 4).map(f =>
         new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_unstabledev_${f.figureKey}`).setLabel(f.dcName).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_unstabledev_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🔧 **Unstable Devices** — Choose a friendly figure in LOS to gain **1 Device token** (free, once per activation):`, components: [new ActionRowBuilder().addComponents(...btns)] }).catch(() => {});
+      await thread.send({ content: `🔧 **Unstable Devices** — Choose a friendly figure in LOS to gain **1 Device token** (free, once per activation):`, components: [new ActionRowBuilder().addComponents(...btns)] }).catch(discordCatch);
     } else {
-      await thread.send({ content: `🔧 **Unstable Devices** — No friendly figures in line of sight.` }).catch(() => {});
+      await thread.send({ content: `🔧 **Unstable Devices** — No friendly figures in line of sight.` }).catch(discordCatch);
     }
   }
   // Negotiate (Hondo): when declaring attack, +2 damage unless target pays 2 VP
   if (_mountedIds.includes('negotiate_hondo')) {
-    await thread.send({ content: `💰 **Negotiate** available — When you attack, the target suffers +2 Damage unless they pay 2 VP.` }).catch(() => {});
+    await thread.send({ content: `💰 **Negotiate** available — When you attack, the target suffers +2 Damage unless they pay 2 VP.` }).catch(discordCatch);
   }
   // Airborne Commander (Gar Saxon): Mobile figures within 4 can use your surge abilities
   if (_mountedIds.includes('airborne_commander_gar_saxon')) {
-    await thread.send({ content: `🪂 **Airborne Commander** — Mobile figures within 4 spaces may use Gar Saxon's surge abilities.` }).catch(() => {});
+    await thread.send({ content: `🪂 **Airborne Commander** — Mobile figures within 4 spaces may use Gar Saxon's surge abilities.` }).catch(discordCatch);
   }
   // Advanced Firepower (General Sorin): adjacent DROID/VEHICLE may use your surge abilities
   if (_mountedIds.includes('advanced_firepower_sorin')) {
-    await thread.send({ content: `🔧 **Advanced Firepower** — Adjacent DROID or VEHICLE figures may use Sorin's surge abilities.` }).catch(() => {});
+    await thread.send({ content: `🔧 **Advanced Firepower** — Adjacent DROID or VEHICLE figures may use Sorin's surge abilities.` }).catch(discordCatch);
   }
   // Unhinged Director (Director Krennic): TROOPER/GUARDIAN within 2 get +2 bonus from tokens
   if (_mountedIds.includes('unhinged_director_krennic')) {
-    await thread.send({ content: `📋 **Unhinged Director** — TROOPER or GUARDIAN within 2 spaces gain +2 (instead of +1) when spending power tokens.` }).catch(() => {});
+    await thread.send({ content: `📋 **Unhinged Director** — TROOPER or GUARDIAN within 2 spaces gain +2 (instead of +1) when spending power tokens.` }).catch(discordCatch);
   }
   // Squad Cohesion (Ko-Tun): REBEL within 3 can spend another REBEL's token
   if (_mountedIds.includes('squad_cohesion_kotun')) {
-    await thread.send({ content: `🤝 **Squad Cohesion** — REBEL figures within 3 spaces may spend each other's power tokens.` }).catch(() => {});
+    await thread.send({ content: `🤝 **Squad Cohesion** — REBEL figures within 3 spaces may spend each other's power tokens.` }).catch(discordCatch);
   }
   // Consider It My Payment (Asajj): opponent reveals a CC from hand
   if (_mountedIds.includes('consider_it_my_payment_asajj')) {
     const oppNum = opponentPlayerNum(meta.playerNum);
     const oppOwnerId = game[`player${oppNum}Id`];
-    await thread.send({ content: `💳 **Consider It My Payment** — <@${oppOwnerId}>, reveal a Command Card from your hand.`, allowedMentions: { users: [oppOwnerId] } }).catch(() => {});
+    await thread.send({ content: `💳 **Consider It My Payment** — <@${oppOwnerId}>, reveal a Command Card from your hand.`, allowedMentions: { users: [oppOwnerId] } }).catch(discordCatch);
   }
   // General's Orders (General Weiss): choose up to 2 friendlies; each gains 2 MP
   if (_mountedIds.includes('generals_orders_weiss')) {
@@ -1027,9 +1027,9 @@ export async function handleConfirmActivate(interaction, ctx) {
         new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_genorders_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_genorders_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🎖️ **General's Orders** — Choose up to 2 friendly figures; each gains **2 MP** (pick 1 of 2):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+      await thread.send({ content: `🎖️ **General's Orders** — Choose up to 2 friendly figures; each gains **2 MP** (pick 1 of 2):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
     } else {
-      await thread.send({ content: `🎖️ **General's Orders** — No friendly figures available.` }).catch(() => {});
+      await thread.send({ content: `🎖️ **General's Orders** — No friendly figures available.` }).catch(discordCatch);
     }
   }
   // Long-Laid Plans (Thrawn): distribute N power tokens (N = round#) among friendlies within 3
@@ -1047,14 +1047,14 @@ export async function handleConfirmActivate(interaction, ctx) {
         new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🧠 **Long-Laid Plans** — Distribute **${roundNum} power token${roundNum > 1 ? 's' : ''}** among friendly figures within 3 spaces. Pick a figure (${roundNum} remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+      await thread.send({ content: `🧠 **Long-Laid Plans** — Distribute **${roundNum} power token${roundNum > 1 ? 's' : ''}** among friendly figures within 3 spaces. Pick a figure (${roundNum} remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
     } else {
-      await thread.send({ content: `🧠 **Long-Laid Plans** — No friendly figures within 3 spaces (or round 0).` }).catch(() => {});
+      await thread.send({ content: `🧠 **Long-Laid Plans** — No friendly figures within 3 spaces (or round 0).` }).catch(discordCatch);
     }
   }
   // Strategize (Thrawn): look at top CC of each deck, may discard one
   if (_mountedIds.includes('strategize_thrawn')) {
-    await thread.send({ content: `🧠 **Strategize** — Look at the top CC of each player's deck; you may discard one.` }).catch(() => {});
+    await thread.send({ content: `🧠 **Strategize** — Look at the top CC of each player's deck; you may discard one.` }).catch(discordCatch);
   }
   // Wisdom (Yoda): draw 1 CC, return 1 to bottom of deck
   if (_mountedIds.includes('wisdom_yoda')) {
@@ -1076,19 +1076,19 @@ export async function handleConfirmActivate(interaction, ctx) {
           );
           rows.push(new ActionRowBuilder().addComponents(btns));
         }
-        await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC. Choose a card from your hand to return to the bottom of your deck:`, components: rows.slice(0, 5) }).catch(() => {});
+        await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC. Choose a card from your hand to return to the bottom of your deck:`, components: rows.slice(0, 5) }).catch(discordCatch);
       } else {
-        await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC but hand is empty (cannot return).` }).catch(() => {});
+        await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC but hand is empty (cannot return).` }).catch(discordCatch);
       }
     } else {
-      await thread.send({ content: `🧘 **Wisdom** — Deck is empty; cannot draw.` }).catch(() => {});
+      await thread.send({ content: `🧘 **Wisdom** — Deck is empty; cannot draw.` }).catch(discordCatch);
     }
   }
   // Force Vision (Kanan): force opponent to activate a specific group next
   if (_mountedIds.includes('force_vision_kanan')) {
     const oppNum = opponentPlayerNum(meta.playerNum);
     const oppOwnerId = game[`player${oppNum}Id`];
-    await thread.send({ content: `👁️ **Force Vision** — You may choose which group <@${oppOwnerId}> must activate next.`, allowedMentions: { users: [oppOwnerId] } }).catch(() => {});
+    await thread.send({ content: `👁️ **Force Vision** — You may choose which group <@${oppOwnerId}> must activate next.`, allowedMentions: { users: [oppOwnerId] } }).catch(discordCatch);
   }
   // Arms Distribution (Ko-Tun): distribute 2 power tokens among friendlies within 3
   if (_mountedIds.includes('arms_distribution_kotun')) {
@@ -1104,9 +1104,9 @@ export async function handleConfirmActivate(interaction, ctx) {
         new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_tokendist_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🎯 **Arms Distribution** — Distribute **2 power tokens** (Hit or Block) among friendly figures within 3 spaces. Pick a figure (2 remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+      await thread.send({ content: `🎯 **Arms Distribution** — Distribute **2 power tokens** (Hit or Block) among friendly figures within 3 spaces. Pick a figure (2 remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
     } else {
-      await thread.send({ content: `🎯 **Arms Distribution** — No friendly figures within 3 spaces.` }).catch(() => {});
+      await thread.send({ content: `🎯 **Arms Distribution** — No friendly figures within 3 spaces.` }).catch(discordCatch);
     }
   }
   // Trust Goes Both Ways (Jyn Erso): choose a friendly within 3 to gain 1 MP
@@ -1122,30 +1122,30 @@ export async function handleConfirmActivate(interaction, ctx) {
         new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustboth_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustboth_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🤝 **Trust Goes Both Ways** — Choose a friendly figure within 3 spaces to gain **1 MP**:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+      await thread.send({ content: `🤝 **Trust Goes Both Ways** — Choose a friendly figure within 3 spaces to gain **1 MP**:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
     } else {
-      await thread.send({ content: `🤝 **Trust Goes Both Ways** — No friendly figures within 3 spaces.` }).catch(() => {});
+      await thread.send({ content: `🤝 **Trust Goes Both Ways** — No friendly figures within 3 spaces.` }).catch(discordCatch);
     }
   }
   // Dead Precise (Ko-Tun): +2 Accuracy if didn't move this activation
   if (_mountedIds.includes('dead_precise_kotun')) {
-    await thread.send({ content: `🎯 **Dead Precise** — If you do not move during this activation, apply +2 Accuracy while attacking.` }).catch(() => {});
+    await thread.send({ content: `🎯 **Dead Precise** — If you do not move during this activation, apply +2 Accuracy while attacking.` }).catch(discordCatch);
   }
   // Adapt (Agent Blaise): choose a trait for the round
   if (_mountedIds.includes('adapt_blaise')) {
-    await thread.send({ content: `🔄 **Adapt** — Choose a trait for this round. Agent Blaise gains that trait.` }).catch(() => {});
+    await thread.send({ content: `🔄 **Adapt** — Choose a trait for this round. Agent Blaise gains that trait.` }).catch(discordCatch);
   }
   // Hunt Dissent (Agent Kallus): when you or friendly TROOPER within 3 defeats hostile, gain Block Token
   if (_mountedIds.includes('hunt_dissent_kallus')) {
-    await thread.send({ content: `🎯 **Hunt Dissent** — When you or a friendly TROOPER within 3 spaces defeats a hostile figure, gain 1 Block Token.` }).catch(() => {});
+    await thread.send({ content: `🎯 **Hunt Dissent** — When you or a friendly TROOPER within 3 spaces defeats a hostile figure, gain 1 Block Token.` }).catch(discordCatch);
   }
   // Air Support (Bodhi): after friendly attack, if target in your LOS, target suffers 1 additional damage
   if (_mountedIds.includes('air_support_bodhi')) {
-    await thread.send({ content: `✈️ **Air Support** — After a friendly figure resolves an attack, if the target is in Bodhi's LOS, the target suffers 1 additional Damage.` }).catch(() => {});
+    await thread.send({ content: `✈️ **Air Support** — After a friendly figure resolves an attack, if the target is in Bodhi's LOS, the target suffers 1 additional Damage.` }).catch(discordCatch);
   }
   // Fast Learner (Mara Jade): once per round, may play CC as different DC
   if (_mountedIds.includes('fast_learner_mara_jade') && !game.roundFigureAbilityUsed?.[`${meta.dcName}_fast_learner`]) {
-    await thread.send({ content: `📚 **Fast Learner** — Once this round, Mara Jade may play a Command card whose restriction matches the name of another Deployment card in your army (except "Arcing Shot").` }).catch(() => {});
+    await thread.send({ content: `📚 **Fast Learner** — Once this round, Mara Jade may play a Command card whose restriction matches the name of another Deployment card in your army (except "Arcing Shot").` }).catch(discordCatch);
   }
   // Imperial Loadout (Purge Trooper): show chosen loadout
   if (_mountedIds.includes('imperial_loadout_purge_trooper')) {
@@ -1159,9 +1159,9 @@ export async function handleConfirmActivate(interaction, ctx) {
       const lCard = getLoadoutCards()[chosenLoadout];
       const files = [];
       if (lCard?.imagePath) try { files.push(new AttachmentBuilder(join(getRootDir(), lCard.imagePath))); } catch {}
-      await thread.send({ content: `⚔️ **Imperial Loadout: ${chosenLoadout}** — ${lCard?.abilityText || 'Apply loadout abilities.'}`, files }).catch(() => {});
+      await thread.send({ content: `⚔️ **Imperial Loadout: ${chosenLoadout}** — ${lCard?.abilityText || 'Apply loadout abilities.'}`, files }).catch(discordCatch);
     } else {
-      await thread.send({ content: `⚔️ **Imperial Loadout** — No loadout card selected. Apply abilities manually.` }).catch(() => {});
+      await thread.send({ content: `⚔️ **Imperial Loadout** — No loadout card selected. Apply abilities manually.` }).catch(discordCatch);
     }
   }
   // Clawdite Form: show chosen form card + apply Fleet MP bonus (Streetrat)
@@ -1176,7 +1176,7 @@ export async function handleConfirmActivate(interaction, ctx) {
       const fCard = getFormCards()[chosenForm];
       const files = [];
       if (fCard?.imagePath) try { files.push(new AttachmentBuilder(join(getRootDir(), fCard.imagePath))); } catch {}
-      await thread.send({ content: `🔄 **Form: ${chosenForm}** — ${fCard?.abilityText || 'Apply form abilities.'}`, files }).catch(() => {});
+      await thread.send({ content: `🔄 **Form: ${chosenForm}** — ${fCard?.abilityText || 'Apply form abilities.'}`, files }).catch(discordCatch);
       // Fleet (Streetrat): gain MP at start of activation
       if (fCard?.fleetMp && fCard.fleetMp > 0) {
         game.movementBank = game.movementBank || {};
@@ -1186,16 +1186,16 @@ export async function handleConfirmActivate(interaction, ctx) {
           game.movementBank[msgId].total += fCard.fleetMp;
           game.movementBank[msgId].remaining += fCard.fleetMp;
         }
-        await thread.send({ content: `🏃 **Fleet** — **${meta.dcName}** gains **${fCard.fleetMp} MP** at start of activation.` }).catch(() => {});
+        await thread.send({ content: `🏃 **Fleet** — **${meta.dcName}** gains **${fCard.fleetMp} MP** at start of activation.` }).catch(discordCatch);
       }
     } else {
-      await thread.send({ content: `🔄 **Shape** — No form card selected. Apply abilities manually.` }).catch(() => {});
+      await thread.send({ content: `🔄 **Shape** — No form card selected. Apply abilities manually.` }).catch(discordCatch);
     }
   }
   // Scrap Battalion (Ugnaught): Junk Droid readies and co-activates
   if (_mountedIds.includes('scrap_battalion_ugnaught_elite') || _mountedIds.includes('scrap_battalion_ugnaught_reg')) {
     const isElite = _mountedIds.includes('scrap_battalion_ugnaught_elite');
-    await thread.send({ content: `🤖 **Scrap Battalion** — Your Junk Droid readies and activates as part of this group.\n• Speed 4, Health 1, Melee (1 green die), +1 Hit passive\n• Uses ${meta.dcName}'s surge abilities: Bleed, Pierce ${isElite ? '2' : '1'}${isElite ? '\n• **Overclock** (Special Action): Junk Droid may interrupt to move or attack' : ''}` }).catch(() => {});
+    await thread.send({ content: `🤖 **Scrap Battalion** — Your Junk Droid readies and activates as part of this group.\n• Speed 4, Health 1, Melee (1 green die), +1 Hit passive\n• Uses ${meta.dcName}'s surge abilities: Bleed, Pierce ${isElite ? '2' : '1'}${isElite ? '\n• **Overclock** (Special Action): Junk Droid may interrupt to move or attack' : ''}` }).catch(discordCatch);
   }
   // --- Skirmish Upgrade attachment activation effects ---
   const _suActivationUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
@@ -1209,7 +1209,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         game.movementBank[msgId].total += 2;
         game.movementBank[msgId].remaining += 2;
       }
-      await thread.send({ content: `**Focused on the Kill** — **${meta.dcName}** gains **2 MP** at start of activation.` }).catch(() => {});
+      await thread.send({ content: `**Focused on the Kill** — **${meta.dcName}** gains **2 MP** at start of activation.` }).catch(discordCatch);
     }
     // Survivalist: end-of-round recovery handled in round.js; movement cost ignore handled in movement.js
     // Wookiee Avenger (Chewbacca): free Slam action (choose adjacent hostile, push 1 space) — not yet automated (needs target picker + space picker)
@@ -1241,9 +1241,9 @@ export async function handleConfirmActivate(interaction, ctx) {
           new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_motivation_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
         );
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_motivation_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({ content: `**Motivation** — Choose a friendly figure with lower cost in your LOS (recover 1 Damage or discard HARMFUL, then gain 1 MP):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+        await thread.send({ content: `**Motivation** — Choose a friendly figure with lower cost in your LOS (recover 1 Damage or discard HARMFUL, then gain 1 MP):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
       } else {
-        await thread.send({ content: `**Motivation** — No eligible friendly figures (lower cost with LOS).` }).catch(() => {});
+        await thread.send({ content: `**Motivation** — No eligible friendly figures (lower cost with LOS).` }).catch(discordCatch);
       }
     }
     // Trusted Ally (DROID): exhaust during activation — adjacent friendly recovers 1 or discards 1 harmful
@@ -1261,9 +1261,9 @@ export async function handleConfirmActivate(interaction, ctx) {
           new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustedally_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
         );
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_trustedally_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({ content: `**Trusted Ally** — Choose an adjacent friendly figure (recover 1 Damage or discard 1 HARMFUL condition):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+        await thread.send({ content: `**Trusted Ally** — Choose an adjacent friendly figure (recover 1 Damage or discard 1 HARMFUL condition):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
       } else {
-        await thread.send({ content: `**Trusted Ally** — No adjacent friendly figures.` }).catch(() => {});
+        await thread.send({ content: `**Trusted Ally** — No adjacent friendly figures.` }).catch(discordCatch);
       }
     }
     // Driven by Hatred (Darth Vader): end-of-round move 3 + free attack — not yet automated (needs movement + attack flow at round end)
@@ -1302,7 +1302,7 @@ export async function handleConfirmActivate(interaction, ctx) {
           game.movementBank[mId] = game.movementBank[mId] || { total: 0, remaining: 0 };
           game.movementBank[mId].remaining += 1;
           game.movementBank[mId].total += 1;
-          await thread.send({ content: `🔫 **I Make the Rules Now** — **${fDcName}** (HUNTER within 4 of Cad Bane) gains **1 MP**.` }).catch(() => {});
+          await thread.send({ content: `🔫 **I Make the Rules Now** — **${fDcName}** (HUNTER within 4 of Cad Bane) gains **1 MP**.` }).catch(discordCatch);
           break;
         }
       }
@@ -1347,7 +1347,7 @@ export async function handleConfirmActivate(interaction, ctx) {
           return new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_calmpres_${fk}_${condition}`).setLabel(label).setStyle(ButtonStyle.Primary);
         });
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_calmpres_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({ content: `🧘 **Calming Presence** (Yoda) — **${meta.dcName}** is a REBEL figure. Remove 1 harmful condition (the activating figure suffers 1 Strain):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+        await thread.send({ content: `🧘 **Calming Presence** (Yoda) — **${meta.dcName}** is a REBEL figure. Remove 1 harmful condition (the activating figure suffers 1 Strain):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
       }
       break;
     }
@@ -1391,7 +1391,7 @@ export async function handleCancelActivate(interaction, _ctx) {
  * Long-Laid Plans), General's Orders, Durasteel Fist, Motivation, Trusted Ally.
  */
 export async function handleActPassive(interaction, ctx) {
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
   const { getGame, dcMessageMeta, dcHealthState, saveGames, logGameAction, client, buildDcEmbedAndFiles, getDcPlayAreaComponents } = ctx;
   // Parse: act_passive_{gameId}_{msgId}_{ability}_{choice}
   const parts = interaction.customId.replace(/^act_passive_/, '').split('_');
@@ -1406,7 +1406,7 @@ export async function handleActPassive(interaction, ctx) {
   if (!meta) return;
   const displayName = meta.displayName || meta.dcName;
   // Remove buttons from message
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   if (ability === 'vigor') {
     if (choice === 'mp') {
@@ -1414,14 +1414,14 @@ export async function handleActPassive(interaction, ctx) {
       game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
       game.movementBank[msgId].total += 2;
       game.movementBank[msgId].remaining += 2;
-      await interaction.message.edit({ content: `✨ **Vigor** — **${displayName}** gained **2 MP**.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `✨ **Vigor** — **${displayName}** gained **2 MP**.`, components: [] }).catch(discordCatch);
     } else if (choice === 'block') {
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const fk = `${meta.dcName}-${dgIndex}-0`;
       game.figurePowerTokens = game.figurePowerTokens || {};
       game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
       game.figurePowerTokens[fk].push('Block');
-      await interaction.message.edit({ content: `✨ **Vigor** — **${displayName}** gained **1 Block Token**.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `✨ **Vigor** — **${displayName}** gained **1 Block Token**.`, components: [] }).catch(discordCatch);
     }
   } else if (ability === 'responsive') {
     if (choice === 'mp') {
@@ -1429,7 +1429,7 @@ export async function handleActPassive(interaction, ctx) {
       game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
       game.movementBank[msgId].total += 1;
       game.movementBank[msgId].remaining += 1;
-      await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** gained **1 MP**.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** gained **1 MP**.`, components: [] }).catch(discordCatch);
     } else if (choice === 'heal') {
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const fk = `${meta.dcName}-${dgIndex}-0`;
@@ -1439,7 +1439,7 @@ export async function handleActPassive(interaction, ctx) {
         const [cur, max] = hs[fkIdx];
         hs[fkIdx] = [Math.min(max, (cur ?? max) + 1), max];
       }
-      await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** recovered **1 Damage**.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** recovered **1 Damage**.`, components: [] }).catch(discordCatch);
     }
   } else if (ability === 'hunger') {
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -1448,14 +1448,14 @@ export async function handleActPassive(interaction, ctx) {
     game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
     if (choice === 'block') {
       game.figurePowerTokens[fk].push('Block');
-      await interaction.message.edit({ content: `🐻 **Hunger** — **${displayName}** gained 3 MP and **1 Block Token**.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🐻 **Hunger** — **${displayName}** gained 3 MP and **1 Block Token**.`, components: [] }).catch(discordCatch);
     } else if (choice === 'evade') {
       game.figurePowerTokens[fk].push('Evade');
-      await interaction.message.edit({ content: `🐻 **Hunger** — **${displayName}** gained 3 MP and **1 Evade Token**.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🐻 **Hunger** — **${displayName}** gained 3 MP and **1 Evade Token**.`, components: [] }).catch(discordCatch);
     }
   } else if (ability === 'tacmove') {
     if (choice === 'skip') {
-      await interaction.message.edit({ content: `🎯 **Tactical Movement** — Skipped.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🎯 **Tactical Movement** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
       // choice is the figureKey of the target
       const targetFk = choice;
@@ -1475,11 +1475,11 @@ export async function handleActPassive(interaction, ctx) {
         game.movementBank[targetMsgId].total += 2;
         game.movementBank[targetMsgId].remaining += 2;
       }
-      await interaction.message.edit({ content: `🎯 **Tactical Movement** — **${targetDcName}** gained **2 MP**.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🎯 **Tactical Movement** — **${targetDcName}** gained **2 MP**.`, components: [] }).catch(discordCatch);
     }
   } else if (ability === 'awr') {
     if (choice === 'skip') {
-      await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — Skipped.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — Skipped.`, components: [] }).catch(discordCatch);
       delete game.pendingAwr;
     } else {
       // choice is the figureKey of the target — now offer Hit or Surge token choice
@@ -1490,7 +1490,7 @@ export async function handleActPassive(interaction, ctx) {
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awrtoken_hit`).setLabel('Hit Token').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awrtoken_surge`).setLabel('Surge Token').setStyle(ButtonStyle.Primary),
       );
-      await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}**: Choose token type:`, components: [tokenRow] }).catch(() => {});
+      await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}**: Choose token type:`, components: [tokenRow] }).catch(discordCatch);
     }
   } else if (ability === 'awrtoken') {
     const targetFk = game.pendingAwr?.targetFk;
@@ -1501,7 +1501,7 @@ export async function handleActPassive(interaction, ctx) {
     game.figurePowerTokens[targetFk] = game.figurePowerTokens[targetFk] || [];
     game.figurePowerTokens[targetFk].push(tokenType);
     delete game.pendingAwr;
-    await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(() => {});
+    await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(discordCatch);
   } else if (ability === 'openminded') {
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const fk = `${meta.dcName}-${dgIndex}-0`;
@@ -1510,7 +1510,7 @@ export async function handleActPassive(interaction, ctx) {
       game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
       game.movementBank[msgId].total += 1;
       game.movementBank[msgId].remaining += 1;
-      await interaction.message.edit({ content: `🧠 **Open-Minded** — **${displayName}** gained **1 MP**.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🧠 **Open-Minded** — **${displayName}** gained **1 MP**.`, components: [] }).catch(discordCatch);
     } else if (choice === 'token') {
       // Grant 1 Power Token — player chooses type via power_token_choice_ flow
       game.figurePowerTokens = game.figurePowerTokens || {};
@@ -1520,14 +1520,14 @@ export async function handleActPassive(interaction, ctx) {
       const tokenBtns = ['Hit', 'Surge', 'Block', 'Evade'].map(t =>
         new BB().setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(BS.Secondary)
       );
-      await interaction.message.edit({ content: `🧠 **Open-Minded** — **${displayName}**: Choose Power Token type:`, components: [new AR().addComponents(tokenBtns)] }).catch(() => {});
+      await interaction.message.edit({ content: `🧠 **Open-Minded** — **${displayName}**: Choose Power Token type:`, components: [new AR().addComponents(tokenBtns)] }).catch(discordCatch);
       saveGames();
       return; // Don't save twice
     }
   // --- Calming Presence: pick condition to remove, suffer 1 Strain ---
   } else if (ability === 'calmpres') {
     if (choice === 'skip') {
-      await interaction.message.edit({ content: `🧘 **Calming Presence** — Skipped.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🧘 **Calming Presence** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
       // choice format: figureKey_Condition (e.g. "Rebel Ranger-1-0_Stun")
       // But since figureKey contains hyphens, we stored it as act_passive_{gameId}_{msgId}_calmpres_{fk}_{condition}
@@ -1544,7 +1544,7 @@ export async function handleActPassive(interaction, ctx) {
       const selfFk = `${meta.dcName}-${dgIndex}-0`;
       reduceHp(dcHealthState, game, msgId, 0, 1, meta.playerNum);
       const condFkName = dcNameFromFigureKey(condFk);
-      await interaction.message.edit({ content: `🧘 **Calming Presence** — Removed **${condName}** from **${condFkName}**. **${displayName}** suffered **1 Strain**.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🧘 **Calming Presence** — Removed **${condName}** from **${condFkName}**. **${displayName}** suffered **1 Strain**.`, components: [] }).catch(discordCatch);
       await logGameAction?.(game, client, `**Calming Presence** (Yoda) — Removed ${condName} from ${condFkName}; ${displayName} suffered 1 Strain.`, { phase: 'ACTIVATION', icon: 'condition' });
     }
   // --- Wisdom: return 1 CC to bottom of deck ---
@@ -1562,14 +1562,14 @@ export async function handleActPassive(interaction, ctx) {
         game[handKey] = hand;
         game[deckKey] = game[deckKey] || [];
         game[deckKey].push(cardName);
-        await interaction.message.edit({ content: `🧘 **Wisdom** — Returned **${cardName}** to the bottom of the deck.`, components: [] }).catch(() => {});
+        await interaction.message.edit({ content: `🧘 **Wisdom** — Returned **${cardName}** to the bottom of the deck.`, components: [] }).catch(discordCatch);
         await logGameAction?.(game, client, `**Wisdom** (Yoda) — Drew 1 CC, returned 1 CC to bottom of deck.`, { phase: 'ACTIVATION', icon: 'card' });
       }
     }
   // --- Trust Goes Both Ways: chosen figure gains 1 MP ---
   } else if (ability === 'trustboth') {
     if (choice === 'skip') {
-      await interaction.message.edit({ content: `🤝 **Trust Goes Both Ways** — Skipped.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🤝 **Trust Goes Both Ways** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
       const targetFk = choice;
       const targetDcName = dcNameFromFigureKey(targetFk);
@@ -1587,7 +1587,7 @@ export async function handleActPassive(interaction, ctx) {
         game.movementBank[targetMsgId].total += 1;
         game.movementBank[targetMsgId].remaining += 1;
       }
-      await interaction.message.edit({ content: `🤝 **Trust Goes Both Ways** — **${targetDcName}** gained **1 MP**.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🤝 **Trust Goes Both Ways** — **${targetDcName}** gained **1 MP**.`, components: [] }).catch(discordCatch);
       await logGameAction?.(game, client, `**Trust Goes Both Ways** (Jyn Erso) — ${targetDcName} gained 1 MP.`, { phase: 'ACTIVATION', icon: 'activate' });
     }
   // --- Token Distribution: used by Arms Distribution and Long-Laid Plans ---
@@ -1596,7 +1596,7 @@ export async function handleActPassive(interaction, ctx) {
     if (!pending) return;
     if (choice === 'done') {
       const abilityLabel = pending.ability === 'longlaid' ? 'Long-Laid Plans' : 'Arms Distribution';
-      await interaction.message.edit({ content: `${pending.ability === 'longlaid' ? '🧠' : '🎯'} **${abilityLabel}** — Done (distributed ${(pending.originalRemaining || pending.remaining) - pending.remaining} token${((pending.originalRemaining || pending.remaining) - pending.remaining) !== 1 ? 's' : ''}).`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `${pending.ability === 'longlaid' ? '🧠' : '🎯'} **${abilityLabel}** — Done (distributed ${(pending.originalRemaining || pending.remaining) - pending.remaining} token${((pending.originalRemaining || pending.remaining) - pending.remaining) !== 1 ? 's' : ''}).`, components: [] }).catch(discordCatch);
       delete game.pendingTokenDistribution;
     } else {
       // choice is figureKey — show token type picker
@@ -1606,7 +1606,7 @@ export async function handleActPassive(interaction, ctx) {
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokenpick_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
       );
       const targetDcName = dcNameFromFigureKey(choice);
-      await interaction.message.edit({ content: `Choose token type for **${targetDcName}** (${pending.remaining} remaining):`, components: [new ActionRowBuilder().addComponents(tokenBtns)] }).catch(() => {});
+      await interaction.message.edit({ content: `Choose token type for **${targetDcName}** (${pending.remaining} remaining):`, components: [new ActionRowBuilder().addComponents(tokenBtns)] }).catch(discordCatch);
     }
   } else if (ability === 'tokenpick') {
     const pending = game.pendingTokenDistribution;
@@ -1623,7 +1623,7 @@ export async function handleActPassive(interaction, ctx) {
     const icon = pending.ability === 'longlaid' ? '🧠' : '🎯';
     await logGameAction?.(game, client, `**${abilityLabel}** — ${targetDcName} gained 1 ${tokenType} Token.`, { phase: 'ACTIVATION', icon: 'activate' });
     if (pending.remaining <= 0) {
-      await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. Distribution complete.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. Distribution complete.`, components: [] }).catch(discordCatch);
       delete game.pendingTokenDistribution;
     } else {
       // Show figure picker again for next token
@@ -1638,9 +1638,9 @@ export async function handleActPassive(interaction, ctx) {
           new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokendist_${fk2}`).setLabel(dcNameFromFigureKey(fk2)).setStyle(ButtonStyle.Primary)
         );
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokendist_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-        await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. Pick next figure (${pending.remaining} remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+        await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. Pick next figure (${pending.remaining} remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
       } else {
-        await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. No more eligible figures.`, components: [] }).catch(() => {});
+        await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. No more eligible figures.`, components: [] }).catch(discordCatch);
         delete game.pendingTokenDistribution;
       }
     }
@@ -1649,7 +1649,7 @@ export async function handleActPassive(interaction, ctx) {
     const pending = game.pendingGeneralsOrders;
     if (!pending) return;
     if (choice === 'done') {
-      await interaction.message.edit({ content: `🎖️ **General's Orders** — Done (${pending.chosen.length} figure${pending.chosen.length !== 1 ? 's' : ''} granted MP).`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🎖️ **General's Orders** — Done (${pending.chosen.length} figure${pending.chosen.length !== 1 ? 's' : ''} granted MP).`, components: [] }).catch(discordCatch);
       delete game.pendingGeneralsOrders;
     } else {
       const targetFk = choice;
@@ -1672,7 +1672,7 @@ export async function handleActPassive(interaction, ctx) {
       pending.remaining--;
       await logGameAction?.(game, client, `**General's Orders** — ${targetDcName} gained 2 MP.`, { phase: 'ACTIVATION', icon: 'activate' });
       if (pending.remaining <= 0) {
-        await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. All picks used.`, components: [] }).catch(() => {});
+        await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. All picks used.`, components: [] }).catch(discordCatch);
         delete game.pendingGeneralsOrders;
       } else {
         // Show remaining figure choices (exclude already chosen)
@@ -1686,9 +1686,9 @@ export async function handleActPassive(interaction, ctx) {
             new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
           );
           btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-          await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. Pick figure ${2 - pending.remaining + 1} of 2:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+          await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. Pick figure ${2 - pending.remaining + 1} of 2:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
         } else {
-          await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. No more eligible figures.`, components: [] }).catch(() => {});
+          await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. No more eligible figures.`, components: [] }).catch(discordCatch);
           delete game.pendingGeneralsOrders;
         }
       }
@@ -1696,7 +1696,7 @@ export async function handleActPassive(interaction, ctx) {
   // --- Durasteel Fist: roll 1 green die on adjacent target ---
   } else if (ability === 'durasteelfist') {
     if (choice === 'skip') {
-      await interaction.message.edit({ content: `🤜 **Durasteel Fist** — Skipped.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🤜 **Durasteel Fist** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
       const targetFk = choice;
       const targetDcName = dcNameFromFigureKey(targetFk);
@@ -1705,7 +1705,7 @@ export async function handleActPassive(interaction, ctx) {
       // Roll 1 green die
       const faces = getDiceData()?.attack?.green;
       if (!faces?.length) {
-        await interaction.message.edit({ content: `🤜 **Durasteel Fist** — Roll 1 green die manually and apply results to **${targetDcName}**.`, components: [] }).catch(() => {});
+        await interaction.message.edit({ content: `🤜 **Durasteel Fist** — Roll 1 green die manually and apply results to **${targetDcName}**.`, components: [] }).catch(discordCatch);
       } else {
         const face = faces[Math.floor(Math.random() * faces.length)];
         const hits = face.dmg ?? 0;
@@ -1745,14 +1745,14 @@ export async function handleActPassive(interaction, ctx) {
             resultParts.push(`Surge rolled and target is SMALL — push **${targetDcName}** 1 space`);
           }
         }
-        await interaction.message.edit({ content: `🤜 **Durasteel Fist** — Target: **${targetDcName}**. ${resultParts.join('. ')}.`, components: [] }).catch(() => {});
+        await interaction.message.edit({ content: `🤜 **Durasteel Fist** — Target: **${targetDcName}**. ${resultParts.join('. ')}.`, components: [] }).catch(discordCatch);
         await logGameAction?.(game, client, `**Durasteel Fist** — Rolled ${diceResult} against ${targetDcName}.`, { phase: 'ACTIVATION', icon: 'activate' });
       }
     }
   // --- Motivation: chosen figure recovers 1 or discards harmful, then gains 1 MP ---
   } else if (ability === 'motivation') {
     if (choice === 'skip') {
-      await interaction.message.edit({ content: `**Motivation** — Skipped.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `**Motivation** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
       const targetFk = choice;
       const targetDcName = dcNameFromFigureKey(targetFk);
@@ -1773,7 +1773,7 @@ export async function handleActPassive(interaction, ctx) {
           btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_motivchoice_${c}`).setLabel(`Discard ${c}`).setStyle(ButtonStyle.Danger));
         }
       }
-      await interaction.message.edit({ content: `**Motivation** — **${targetDcName}**: Choose one:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+      await interaction.message.edit({ content: `**Motivation** — **${targetDcName}**: Choose one:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
     }
   } else if (ability === 'motivchoice') {
     const pending = game.pendingMotivation;
@@ -1809,12 +1809,12 @@ export async function handleActPassive(interaction, ctx) {
       resultParts.push('gained 1 MP');
     }
     delete game.pendingMotivation;
-    await interaction.message.edit({ content: `**Motivation** — **${targetDcName}**: ${resultParts.join(', ')}.`, components: [] }).catch(() => {});
+    await interaction.message.edit({ content: `**Motivation** — **${targetDcName}**: ${resultParts.join(', ')}.`, components: [] }).catch(discordCatch);
     await logGameAction?.(game, client, `**Motivation** — ${targetDcName}: ${resultParts.join(', ')}.`, { phase: 'ACTIVATION', icon: 'activate' });
   // --- Trusted Ally: chosen figure recovers 1 or discards harmful ---
   } else if (ability === 'trustedally') {
     if (choice === 'skip') {
-      await interaction.message.edit({ content: `**Trusted Ally** — Skipped.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `**Trusted Ally** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
       const targetFk = choice;
       const targetDcName = dcNameFromFigureKey(targetFk);
@@ -1835,7 +1835,7 @@ export async function handleActPassive(interaction, ctx) {
           btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tallychoice_${c}`).setLabel(`Discard ${c}`).setStyle(ButtonStyle.Danger));
         }
       }
-      await interaction.message.edit({ content: `**Trusted Ally** — **${targetDcName}**: Choose one:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(() => {});
+      await interaction.message.edit({ content: `**Trusted Ally** — **${targetDcName}**: Choose one:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
     }
   } else if (ability === 'tallychoice') {
     const pending = game.pendingTrustedAlly;
@@ -1854,16 +1854,16 @@ export async function handleActPassive(interaction, ctx) {
         const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
         healHp(dcHealthState, game, targetMsgId, figIdx, 1, meta.playerNum);
       }
-      await interaction.message.edit({ content: `**Trusted Ally** — **${targetDcName}** recovered **1 Damage**.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `**Trusted Ally** — **${targetDcName}** recovered **1 Damage**.`, components: [] }).catch(discordCatch);
     } else {
       filterCondition(game, targetFk, choice);
-      await interaction.message.edit({ content: `**Trusted Ally** — **${targetDcName}** discarded **${choice}**.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `**Trusted Ally** — **${targetDcName}** discarded **${choice}**.`, components: [] }).catch(discordCatch);
     }
     delete game.pendingTrustedAlly;
     await logGameAction?.(game, client, `**Trusted Ally** — ${targetDcName}: ${choice === 'heal' ? 'recovered 1 Damage' : 'discarded ' + choice}.`, { phase: 'ACTIVATION', icon: 'activate' });
   } else if (ability === 'unstabledev') {
     if (choice === 'skip') {
-      await interaction.message.edit({ content: `🔧 **Unstable Devices** — Skipped.`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🔧 **Unstable Devices** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
       // choice = figureKey
       const targetFk = choice;
@@ -1872,7 +1872,7 @@ export async function handleActPassive(interaction, ctx) {
       game.deviceTokens[targetFk] = (game.deviceTokens[targetFk] || 0) + 1;
       game.unstableDevicesUsedThisActivation = game.unstableDevicesUsedThisActivation || {};
       game.unstableDevicesUsedThisActivation[msgId] = true;
-      await interaction.message.edit({ content: `🔧 **Unstable Devices** — **${targetDcName}** gains **1 Device token** (now ${game.deviceTokens[targetFk]}).`, components: [] }).catch(() => {});
+      await interaction.message.edit({ content: `🔧 **Unstable Devices** — **${targetDcName}** gains **1 Device token** (now ${game.deviceTokens[targetFk]}).`, components: [] }).catch(discordCatch);
       await logGameAction?.(game, client, `🔧 **Unstable Devices** — **${targetDcName}** gains 1 Device token (now ${game.deviceTokens[targetFk]}).`, { phase: 'ACTIVATION', icon: 'activate' });
     }
   }

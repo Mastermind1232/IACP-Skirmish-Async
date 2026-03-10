@@ -55,6 +55,73 @@ function migrateGame(g) {
   sanitizeCcNames(g.player2CcDiscard);
   if (g.player1Squad?.ccList) sanitizeCcNames(g.player1Squad.ccList);
   if (g.player2Squad?.ccList) sanitizeCcNames(g.player2Squad.ccList);
+
+  ensureGameShape(g);
+}
+
+/**
+ * Ensure commonly-used game state container properties exist with correct defaults.
+ * Only initializes properties that are always-present containers (never used as
+ * state flags via truthiness checks). Pending/active/inProgress properties are
+ * excluded since code checks `if (game.X)` to detect whether that state is active.
+ */
+function ensureGameShape(game) {
+  // Properties that should always be {} (keyed containers)
+  const OBJ = [
+    // Figure state (always keyed by playerNum or figureKey)
+    'figurePositions', 'figureConditions', 'figureStrain', 'figureConfig',
+    'figureOrientations', 'figureNicknames', 'figurePowerTokens', 'figureContraband',
+    // Movement containers (keyed by msgId)
+    'movementBank', 'moveGridMessageIds',
+    // DC state (keyed by msgId)
+    'dcActionsData', 'dcActivationLogMessageIds', 'dcFinishedPinged',
+    'deploySpaceGridMessageIds', 'lastActivationMsgIdByPlayer',
+    // Setup (keyed by playerNum)
+    'setupAttachmentPending', 'setupAttachmentApplied', 'setupAttachmentConfirmed',
+    // CC/DC attachments (keyed by msgId)
+    'p1CcAttachments', 'p2CcAttachments', 'p1DcAttachments', 'p2DcAttachments',
+    // Activation tracking (keyed by msgId or figureKey, reset each activation)
+    'activationStartPositions', 'activationDamagedFigures', 'activationKills',
+    'activationDoubleSpecialAction', 'activationExtraActionThenStun',
+    'attackPerformedThisActivation',
+    // Round-scoped containers (keyed by msgId/figureKey, reset each round)
+    'roundFigureAbilityUsed', 'roundAttackRerollDice', 'roundAttackSurgeBonus',
+    'roundDefenseBonusBlock', 'roundDefenseBonusEvade', 'roundDefenderBonusBlockPerEvade',
+    'roundEfficientTravel', 'roundProgrammingOverrideTrait',
+    'roundTrooperAttackHitBonus', 'roundVehicleSpeedBonus',
+    // Combat targeting (keyed by msgId)
+    'attackTargets', 'falseOrdersAttackTargets', 'falseOrdersUpgrade',
+    'nextAttackBonusSurgeAbilities', 'nextAttackBonusAccuracy', 'nextAttackBonusPierce',
+    'nextAttackReach', 'nextAttacksBonusConditions', 'nextAttacksBonusHits',
+    'nextAttackIgnoreFigureLOS', 'nextActivationFreeAttack', 'nextHostileDefeatVpBonus',
+    // Post-combat / end-of-round containers
+    'postActivationConditions', 'endOfRoundSelfDamage',
+    // Map tokens (keyed by coord or id)
+    'cratePositions', 'crateHealth', 'crateTokens', 'deviceTokens',
+    'ancillaryTokens', 'orbitalBombardmentTokens',
+    // Misc keyed containers
+    'exhaustedSkirmishUpgrades', 'defenderThreadData', 'priceBounties',
+    'paybackBonusSurge', 'optimalBombardmentBlastBonus',
+    'lastResortTriggered', 'partingShotTriggered', 'selfDestructProtocolTriggered',
+    'recoverOnHostileDefeat', 'etiquetteBlockPairs',
+  ];
+  for (const k of OBJ) {
+    if (game[k] == null) game[k] = {};
+  }
+
+  // Properties that should always be [] (arrays)
+  const ARR = [
+    'undoStack', 'openedDoors', 'rubbleTokens',
+    'crippledFigures', 'disabledFigures',
+    'p1ActivatedDcIndices', 'p2ActivatedDcIndices',
+    'p1DepletedDcMessageIds', 'p2DepletedDcMessageIds',
+    'initiativeDeployMessageIds', 'nonInitiativeDeployMessageIds',
+    'nonInitiativeDeployedConfirmIds', 'attachRedoNoticeIds',
+    'setupLogMessageIds',
+  ];
+  for (const k of ARR) {
+    if (!Array.isArray(game[k])) game[k] = [];
+  }
 }
 
 /** messageId -> { gameId, playerNum, dcName, displayName } */

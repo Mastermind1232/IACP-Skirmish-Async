@@ -127,7 +127,7 @@ export async function handleUndo(interaction, ctx) {
   // Log undo to game log so both players can see what was reverted
   const undoLabel = last.label || last.card || last.type?.replace(/_/g, ' ') || 'action';
   const undoUser = interaction.user.username;
-  logGameAction(game, client, `**${undoUser}** undid: ${undoLabel}`).catch(() => {});
+  logGameAction(game, client, `**${undoUser}** undid: ${undoLabel}`).catch(discordCatch);
 
   // Per-type Discord UI sync (game state is already restored above)
   if (last.type === 'pass_turn') {
@@ -252,7 +252,7 @@ export async function handleKillGame(interaction, ctx) {
   }
   try {
     await deleteGameChannelsAndGame(game, gameId, ctx);
-    await interaction.followUp({ content: `Game **IA Game #${gameId}** deleted. All channels removed.`, ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: `Game **IA Game #${gameId}** deleted. All channels removed.`, ephemeral: true }).catch(discordCatch);
   } catch (err) {
     console.error('Kill game error:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'kill_game');

@@ -887,7 +887,7 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
       try {
         const ch = interaction.channel || await client.channels.fetch(game.generalId);
         const msg = await ch.messages.fetch(mid).catch(() => null);
-        if (msg) await msg.edit({ components: [] }).catch(() => {});
+        if (msg) await msg.edit({ components: [] }).catch(discordCatch);
       } catch {}
     }
     delete game.moveGridMessageIds[moveKey];

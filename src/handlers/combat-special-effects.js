@@ -24,11 +24,11 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
   const dieColor = String(die.color || '').replace(/^\w/, (c) => c.toUpperCase());
   const dieDesc = `${dieColor} die (${totalDmg} dmg, ${totalStrain} strain)`;
   if (splashTargets.length === 0) {
-    await thread.send(`**Indiscriminate Fire** — ${dieDesc}: No figures within 2 spaces of the target.`).catch(() => {});
+    await thread.send(`**Indiscriminate Fire** — ${dieDesc}: No figures within 2 spaces of the target.`).catch(discordCatch);
     return;
   }
   if (totalEffect === 0) {
-    await thread.send(`**Indiscriminate Fire** — ${dieDesc}: 0 effect on splash targets.`).catch(() => {});
+    await thread.send(`**Indiscriminate Fire** — ${dieDesc}: 0 effect on splash targets.`).catch(discordCatch);
     return;
   }
   const lines = [];
@@ -56,12 +56,12 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
         const ch = await client.channels.fetch(getPlayAreaId(game, tMeta.playerNum));
         const msg = await ch.messages.fetch(mid);
         const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(mid) ?? false, tMeta.displayName, dcHealthState.get(mid) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, mid));
-        await msg.edit({ embeds: [embed], files }).catch(() => {});
+        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch {}
   }
   const msg = `**Indiscriminate Fire** — ${dieDesc}:\n${lines.join('\n')}`;
-  await thread.send(msg).catch(() => {});
+  await thread.send(msg).catch(discordCatch);
   await logGameAction(game, client, `**Indiscriminate Fire** — ${dieDesc}:\n${lines.join('\n')}`, { phase: 'ROUND', icon: 'attack' });
   saveGames();
 }
@@ -317,7 +317,7 @@ export async function handleIndiscriminateFireDie(interaction, ctx) {
   if (!die) return;
   await interaction.deferUpdate().catch(discordCatch);
   delete game.pendingIndiscriminateFire;
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   const thread = await client.channels.fetch(combatThreadId).catch(() => null);
   if (thread) await applyIndiscriminateFireSplash(game, attackerPlayerNum, combatThreadId, die, targets, thread, ctx);
   saveGames();
@@ -331,7 +331,7 @@ export async function handleIndiscriminateFireSkip(interaction, ctx) {
   const game = getGame(m[1]);
   await interaction.deferUpdate().catch(discordCatch);
   if (game) delete game.pendingIndiscriminateFire;
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }
 
@@ -354,7 +354,7 @@ export async function handleFightingKnifeTarget(interaction, ctx) {
   const target = pending.targets[parseInt(idxStr, 10)];
   if (!target) return;
   await interaction.deferUpdate().catch(discordCatch);
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   delete game.pendingFightingKnife;
   // Roll 1 red die
   const die = rollSingleAttackDie('red');
@@ -396,7 +396,7 @@ export async function handleFightingKnifeSkip(interaction, ctx) {
   if (!game?.pendingFightingKnife) return;
   const pending = game.pendingFightingKnife;
   await interaction.deferUpdate().catch(discordCatch);
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   delete game.pendingFightingKnife;
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
@@ -415,10 +415,10 @@ export async function handleConcussiveBoltPush(interaction, ctx) {
   const pending = game.pendingConcussiveBolt;
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only the attacker can choose the Concussive Bolt push direction.')) return;
   if (!pending.adjSpaces.includes(space)) {
-    await interaction.followUp({ content: 'Invalid push destination.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Invalid push destination.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   delete game.pendingConcussiveBolt;
   // Move the figure to the chosen space
   game.figurePositions = game.figurePositions || {};
@@ -439,7 +439,7 @@ export async function handleConcussiveBoltSkip(interaction, ctx) {
   const game = getGame(m[1]);
   if (!game?.pendingConcussiveBolt) return;
   const pending = game.pendingConcussiveBolt;
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   delete game.pendingConcussiveBolt;
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
@@ -460,7 +460,7 @@ export async function handleSpreadThePainFigPick(interaction, ctx) {
   const pending = game.pendingSpreadThePain;
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only the attacker can choose the Spread the Pain target.')) return;
   await interaction.deferUpdate().catch(discordCatch);
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   const cond = pending.conditions[pending.conditionIdx];
   // Apply condition to figureKey
   const dcName = dcNameFromFigureKey(figureKey);
@@ -483,7 +483,7 @@ export async function handleSpreadThePainSkip(interaction, ctx) {
   if (!game?.pendingSpreadThePain) return;
   const pending = game.pendingSpreadThePain;
   await interaction.deferUpdate().catch(discordCatch);
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   pending.conditionIdx++;
   await advanceSpreadThePain(game, pending, ctx);
 }
@@ -500,7 +500,7 @@ export async function handleMissileSalvoDie(interaction, ctx) {
   const { playerNum, diceAvailable } = game.pendingMissileSalvo[msgId];
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the activating player can choose the Missile Salvo die.')) return;
   if (!diceAvailable.includes(color)) {
-    await interaction.followUp({ content: `The ${color} die is no longer available for this salvo.`, ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: `The ${color} die is no longer available for this salvo.`, ephemeral: true }).catch(discordCatch);
     return;
   }
   // Remove chosen die from available pool
@@ -510,7 +510,7 @@ export async function handleMissileSalvoDie(interaction, ctx) {
   game.pendingOverrideAttackDice[msgId] = { dice: [color], type: 'ranged', bonusAccuracy: 3 };
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
   game.freeAttackBonusPending[msgId] = true;
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   const threadId = game.pendingMissileSalvo[msgId].threadId || game.dcActionsData?.[msgId]?.threadId;
   const salvoThread = threadId ? await client.channels.fetch(threadId).catch(() => null) : null;
   const ownerId = getPlayerId(game, playerNum);
@@ -532,6 +532,6 @@ export async function handleMissileSalvoDone(interaction, ctx) {
   const { playerNum } = game.pendingMissileSalvo[msgId];
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the activating player can end the salvo.')) return;
   delete game.pendingMissileSalvo[msgId];
-  await interaction.message.edit({ components: [] }).catch(() => {});
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }

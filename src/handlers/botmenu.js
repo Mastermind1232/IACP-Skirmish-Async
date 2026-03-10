@@ -98,7 +98,7 @@ export async function handleBotmenuKillYes(interaction, ctx) {
   }
   try {
     await deleteGameChannelsAndGame(game, gameId, ctx);
-    await interaction.followUp({ content: `Game **IA Game #${gameId}** deleted. All channels removed.`, ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: `Game **IA Game #${gameId}** deleted. All channels removed.`, ephemeral: true }).catch(discordCatch);
   } catch (err) {
     console.error('Kill game error:', err);
     await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'botmenu_kill');

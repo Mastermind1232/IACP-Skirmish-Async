@@ -2,6 +2,7 @@ import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { opponentPlayerNum, getPlayerId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
 import { reduceHp, dcNameFromFigureKey, awardKillVp } from '../game/index.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
+import { discordCatch } from '../error-handling.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -18,7 +19,7 @@ export async function handleToughLuck(interaction, ctx) {
   const gameId = parts[3];
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
-  if (!game.pendingToughLuck) { await interaction.followUp({ content: 'No pending Tough Luck.', ephemeral: true }).catch(() => {}); return; }
+  if (!game.pendingToughLuck) { await interaction.followUp({ content: 'No pending Tough Luck.', ephemeral: true }).catch(discordCatch); return; }
   const tlData = game.pendingToughLuck;
   const combat = game.pendingCombat;
   const responder = game.toughLuckPlayerNum;
@@ -80,14 +81,14 @@ export async function handleThereIsNoTry(interaction, ctx) {
   const defNum = combat?.defenderPlayerNum ?? opponentPlayerNum(combat?.attackerPlayerNum);
   if (!await requirePlayer(interaction, game, interaction.user.id, defNum, canActAsPlayer, 'Only the defender may respond.')) return;
   if (!game.pendingThereIsNoTry && type !== 'skip') {
-    await interaction.followUp({ content: 'No pending There Is No Try.', ephemeral: true }).catch(() => {}); return;
+    await interaction.followUp({ content: 'No pending There Is No Try.', ephemeral: true }).catch(discordCatch); return;
   }
   const thread = await client.channels.fetch(combat?.combatThreadId).catch(() => null);
   if (type === 'die') {
     const dieIdx = parseInt(parts[6], 10);
     const defDice = combat?.defenseDiceResults || [];
     const die = defDice[dieIdx];
-    if (!die) { await interaction.followUp({ content: 'Die not found.', ephemeral: true }).catch(() => {}); return; }
+    if (!die) { await interaction.followUp({ content: 'Die not found.', ephemeral: true }).catch(discordCatch); return; }
     game.pendingThereIsNoTry.pickedDieIdx = dieIdx;
     // Build face options based on die color (white/black)
     const color = die.color || 'white';
@@ -101,7 +102,7 @@ export async function handleThereIsNoTry(interaction, ctx) {
         .setLabel(`${face.block ?? 0}B/${face.evade ?? 0}E${face.dodge ? '/Dodge' : ''}`.slice(0, 80))
         .setStyle(ButtonStyle.Primary)
     );
-    if (thread) await thread.send({ content: `**There Is No Try** — Choose any face for die #${dieIdx + 1} (${color}):`, components: [new ActionRowBuilder().addComponents(...faceBtns.slice(0, 5))] }).catch(() => {});
+    if (thread) await thread.send({ content: `**There Is No Try** — Choose any face for die #${dieIdx + 1} (${color}):`, components: [new ActionRowBuilder().addComponents(...faceBtns.slice(0, 5))] }).catch(discordCatch);
     saveGames(); return;
   }
   if (type === 'face') {
@@ -121,7 +122,7 @@ export async function handleThereIsNoTry(interaction, ctx) {
       combat.defenseDiceResults = defDice;
       const newTotal = defDice.reduce((acc, d) => ({ block: acc.block + (d.block ?? 0), evade: acc.evade + (d.evade ?? 0), dodge: acc.dodge || !!d.dodge }), { block: 0, evade: 0, dodge: false });
       combat.defenseRoll = { block: newTotal.block, evade: newTotal.evade, dodge: newTotal.dodge };
-      if (thread) await thread.send(`**There Is No Try** — Die set to ${block}B/${evade}E${dodgeFlag ? ' (Dodge→+2B+1E)' : ''}. New defense totals: ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade.`).catch(() => {});
+      if (thread) await thread.send(`**There Is No Try** — Die set to ${block}B/${evade}E${dodgeFlag ? ' (Dodge→+2B+1E)' : ''}. New defense totals: ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade.`).catch(discordCatch);
     }
     game.pendingThereIsNoTry = null;
     combat.tintResolved = true;
@@ -129,7 +130,7 @@ export async function handleThereIsNoTry(interaction, ctx) {
     // Skip
     game.pendingThereIsNoTry = null;
     combat.tintResolved = true;
-    if (thread) await thread.send('**There Is No Try** — Skipped.').catch(() => {});
+    if (thread) await thread.send('**There Is No Try** — Skipped.').catch(discordCatch);
   }
   // After TINT resolves (face set or skipped): enter reroll window
   if (thread && combat) {
@@ -159,7 +160,7 @@ export async function handleVetInstincts(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const combat = game.pendingCombat;
-  if (!combat) { await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(() => {}); return; }
+  if (!combat) { await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(discordCatch); return; }
   const atkPN = combat.attackerPlayerNum;
   const defPN = opponentPlayerNum(atkPN);
   // Determine phase: block/evade = defense; hit/surge = attack; skip depends on which phase is pending
@@ -170,27 +171,27 @@ export async function handleVetInstincts(interaction, ctx) {
   if (choice === 'hit') {
     combat.attackRoll = { ...combat.attackRoll, dmg: (combat.attackRoll?.dmg || 0) + 1 };
     combat.vetInstinctsAttackApplied = true;
-    if (thread) await thread.send('**Veteran Instincts** — +1 Hit added to attack roll.').catch(() => {});
+    if (thread) await thread.send('**Veteran Instincts** — +1 Hit added to attack roll.').catch(discordCatch);
   } else if (choice === 'surge') {
     combat.attackRoll = { ...combat.attackRoll, surge: (combat.attackRoll?.surge || 0) + 1 };
     combat.vetInstinctsAttackApplied = true;
-    if (thread) await thread.send('**Veteran Instincts** — +1 Surge added to attack roll.').catch(() => {});
+    if (thread) await thread.send('**Veteran Instincts** — +1 Surge added to attack roll.').catch(discordCatch);
   } else if (choice === 'block') {
     combat.defenseRoll = { ...combat.defenseRoll, block: (combat.defenseRoll?.block || 0) + 1 };
     combat.vetInstinctsDefenseApplied = true;
-    if (thread) await thread.send('**Veteran Instincts** — +1 Block added to defense roll.').catch(() => {});
+    if (thread) await thread.send('**Veteran Instincts** — +1 Block added to defense roll.').catch(discordCatch);
   } else if (choice === 'evade') {
     combat.defenseRoll = { ...combat.defenseRoll, evade: (combat.defenseRoll?.evade || 0) + 1 };
     combat.vetInstinctsDefenseApplied = true;
-    if (thread) await thread.send('**Veteran Instincts** — +1 Evade added to defense roll.').catch(() => {});
+    if (thread) await thread.send('**Veteran Instincts** — +1 Evade added to defense roll.').catch(discordCatch);
   } else {
     // skip
     if (!combat.vetInstinctsAttackApplied) {
       combat.vetInstinctsAttackApplied = true;
-      if (thread) await thread.send('**Veteran Instincts** — Attack bonus skipped.').catch(() => {});
+      if (thread) await thread.send('**Veteran Instincts** — Attack bonus skipped.').catch(discordCatch);
     } else {
       combat.vetInstinctsDefenseApplied = true;
-      if (thread) await thread.send('**Veteran Instincts** — Defense bonus skipped.').catch(() => {});
+      if (thread) await thread.send('**Veteran Instincts** — Defense bonus skipped.').catch(discordCatch);
     }
   }
   if (isDefPhase && thread && combat) {
@@ -235,7 +236,7 @@ export async function handleHunterProtocol(interaction, ctx) {
   const _hpGame = await requireGame(interaction, getGame, _hpGameId);
   if (!_hpGame) return;
   const _hpCombat = _hpGame.pendingCombat;
-  if (!_hpCombat || !_hpGame.pendingHunterProtocol) { await interaction.followUp({ content: 'No pending Hunter Protocol.', ephemeral: true }).catch(() => {}); return; }
+  if (!_hpCombat || !_hpGame.pendingHunterProtocol) { await interaction.followUp({ content: 'No pending Hunter Protocol.', ephemeral: true }).catch(discordCatch); return; }
   const _hpAtk = _hpCombat.attackerPlayerNum;
   if (!await requirePlayer(interaction, _hpGame, interaction.user.id, _hpAtk, canActAsPlayer, 'Only the attacker may respond to Hunter Protocol.')) return;
   const _hpThread = await client.channels.fetch(_hpCombat.combatThreadId).catch(() => null);
@@ -258,9 +259,9 @@ export async function handleHunterProtocol(interaction, ctx) {
     const _hpKeyIdx = _hpSurgeList.indexOf(_hpKey);
     if (_hpKeyIdx >= 0) _hpCombat.surgeSpentCount[_hpKeyIdx] = (_hpCombat.surgeSpentCount[_hpKeyIdx] || 0) + 1;
     const _hpLabel = (SURGE_LABELS && SURGE_LABELS[_hpKey]) || getSurgeAbilityLabel?.(_hpKey) || _hpKey;
-    if (_hpThread) await _hpThread.send(`**Hunter Protocol** — Triggered **${_hpLabel}** again (cost: ${_hpCost}). Surge remaining: ${_hpCombat.surgeRemaining}`).catch(() => {});
+    if (_hpThread) await _hpThread.send(`**Hunter Protocol** — Triggered **${_hpLabel}** again (cost: ${_hpCost}). Surge remaining: ${_hpCombat.surgeRemaining}`).catch(discordCatch);
   } else {
-    if (_hpThread) await _hpThread.send('**Hunter Protocol** — Skipped second trigger.').catch(() => {});
+    if (_hpThread) await _hpThread.send('**Hunter Protocol** — Skipped second trigger.').catch(discordCatch);
   }
   // Continue surge flow
   if ((_hpCombat.surgeRemaining || 0) <= 0) {
@@ -286,7 +287,7 @@ export async function handleHunterProtocol(interaction, ctx) {
       _hpRows.push(new ButtonBuilder().setCustomId(`combat_surge_${_hpGameId}_bleed_prevention`).setLabel('Spend 1 Surge — Prevent Bleed').setStyle(ButtonStyle.Secondary));
     }
     _hpRows.push(new ButtonBuilder().setCustomId(`combat_surge_${_hpGameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
-    if (_hpThread) await _hpThread.send({ content: `**Spend surge?** **${_hpRemaining}** surge left.`, components: [new ActionRowBuilder().addComponents(_hpRows.slice(0, 5))] }).catch(() => {});
+    if (_hpThread) await _hpThread.send({ content: `**Spend surge?** **${_hpRemaining}** surge left.`, components: [new ActionRowBuilder().addComponents(_hpRows.slice(0, 5))] }).catch(discordCatch);
   }
   saveGames(); return;
 }
@@ -309,18 +310,18 @@ export async function handleStrikeMeDown(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (!game.pendingStrikeMeDown) {
-    await interaction.followUp({ content: 'No pending Strike Me Down.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'No pending Strike Me Down.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const smd = game.pendingStrikeMeDown;
   const defPN = smd.defenderPlayerNum;
   if (!await requirePlayer(interaction, game, interaction.user.id, defPN, canActAsPlayer, 'Only the defender (Obi-Wan\'s owner) may respond.')) return;
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
 
   const thread = await client.channels.fetch(smd.combatThreadId).catch(() => null);
 
   // Clear the buttons from the picker message
-  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
 
   if (isYes) {
     // Defeat Obi-Wan: set HP to 0, remove position
@@ -364,13 +365,13 @@ export async function handleStrikeMeDown(interaction, ctx) {
       }
     }
 
-    if (thread) await thread.send(`**Strike Me Down** — Obi-Wan is defeated (VP cost reduced by 3: ${reducedCost} VP awarded to attacker). Attack ended.`).catch(() => {});
-    if (logGameAction) await logGameAction(game, client, `**Strike Me Down** — Obi-Wan chose to be defeated. Attacker gains ${reducedCost} VP (cost reduced by 3). Attack cancelled.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+    if (thread) await thread.send(`**Strike Me Down** — Obi-Wan is defeated (VP cost reduced by 3: ${reducedCost} VP awarded to attacker). Attack ended.`).catch(discordCatch);
+    if (logGameAction) await logGameAction(game, client, `**Strike Me Down** — Obi-Wan chose to be defeated. Attacker gains ${reducedCost} VP (cost reduced by 3). Attack cancelled.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
 
     // Check win conditions
     if (checkWinConditions) await checkWinConditions(game, client);
   } else {
-    if (thread) await thread.send('**Strike Me Down** — Declined. Attack continues normally.').catch(() => {});
+    if (thread) await thread.send('**Strike Me Down** — Declined. Attack continues normally.').catch(discordCatch);
   }
 
   game.pendingStrikeMeDown = null;
@@ -392,18 +393,18 @@ export async function handleSlowOnTheDraw(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (!game.pendingSlowOnTheDraw) {
-    await interaction.followUp({ content: 'No pending Slow on the Draw.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'No pending Slow on the Draw.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const sotd = game.pendingSlowOnTheDraw;
   const defPN = sotd.defenderPlayerNum;
   if (!await requirePlayer(interaction, game, interaction.user.id, defPN, canActAsPlayer, 'Only the defender may respond.')) return;
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
 
   const thread = await client.channels.fetch(sotd.combatThreadId).catch(() => null);
 
   // Clear the buttons from the picker message
-  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
 
   if (isYes) {
     // Queue a free attack for the defender targeting Greedo
@@ -418,7 +419,7 @@ export async function handleSlowOnTheDraw(interaction, ctx) {
     game.pendingCombat = null;
 
     const defOwnerId = getPlayerId(game, defPN);
-    if (thread) await thread.send({ content: `**Slow on the Draw** — <@${defOwnerId}>, you may now perform an attack targeting **Greedo**. Use your DC's Attack action. After the interrupt attack resolves, click **Resume Original Attack** below to continue.`, allowedMentions: { users: [defOwnerId] } }).catch(() => {});
+    if (thread) await thread.send({ content: `**Slow on the Draw** — <@${defOwnerId}>, you may now perform an attack targeting **Greedo**. Use your DC's Attack action. After the interrupt attack resolves, click **Resume Original Attack** below to continue.`, allowedMentions: { users: [defOwnerId] } }).catch(discordCatch);
 
     // Post a resume button in the thread for after the interrupt attack
     const resumeRow = new ActionRowBuilder().addComponents(
@@ -427,11 +428,11 @@ export async function handleSlowOnTheDraw(interaction, ctx) {
         .setLabel('Resume Original Attack')
         .setStyle(ButtonStyle.Success),
     );
-    if (thread) await thread.send({ content: 'When the interrupt attack is complete (or if you choose not to attack), click below to resume Greedo\'s attack.', components: [resumeRow] }).catch(() => {});
+    if (thread) await thread.send({ content: 'When the interrupt attack is complete (or if you choose not to attack), click below to resume Greedo\'s attack.', components: [resumeRow] }).catch(discordCatch);
 
-    if (logGameAction) await logGameAction(game, client, `**Slow on the Draw** — Defender interrupts to attack Greedo first.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+    if (logGameAction) await logGameAction(game, client, `**Slow on the Draw** — Defender interrupts to attack Greedo first.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
   } else {
-    if (thread) await thread.send('**Slow on the Draw** — Declined. Attack continues normally.').catch(() => {});
+    if (thread) await thread.send('**Slow on the Draw** — Declined. Attack continues normally.').catch(discordCatch);
   }
 
   game.pendingSlowOnTheDraw = null;
@@ -451,18 +452,18 @@ export async function handleSlowOnTheDrawResume(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (!game.slowOnTheDrawInterrupt) {
-    await interaction.followUp({ content: 'No suspended Slow on the Draw combat.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'No suspended Slow on the Draw combat.', ephemeral: true }).catch(discordCatch);
     return;
   }
   // Either player can click resume
   if (!canActAsPlayer(game, interaction.user.id, 1) && !canActAsPlayer(game, interaction.user.id, 2)) {
-    await interaction.followUp({ content: 'Only players in this game can resume.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Only players in this game can resume.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  await interaction.deferUpdate().catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
 
   // Clear the resume button
-  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(() => {});
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
 
   // Restore the suspended combat
   game.pendingCombat = game.slowOnTheDrawInterrupt.suspendedCombat;
@@ -470,8 +471,8 @@ export async function handleSlowOnTheDrawResume(interaction, ctx) {
   game.slowOnTheDrawInterrupt = null;
 
   const thread = combatThreadId ? await client.channels.fetch(combatThreadId).catch(() => null) : null;
-  if (thread) await thread.send('**Slow on the Draw** — Interrupt complete. Greedo\'s attack resumes.').catch(() => {});
-  if (logGameAction) await logGameAction(game, client, '**Slow on the Draw** — Interrupt resolved. Original attack resumed.', { phase: 'ROUND', icon: 'card' }).catch(() => {});
+  if (thread) await thread.send('**Slow on the Draw** — Interrupt complete. Greedo\'s attack resumes.').catch(discordCatch);
+  if (logGameAction) await logGameAction(game, client, '**Slow on the Draw** — Interrupt resolved. Original attack resumed.', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
 
   saveGames();
 }
@@ -504,11 +505,11 @@ export async function handlePowerConverter(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const combat = game.pendingCombat;
-  if (!combat) { await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(() => {}); return; }
+  if (!combat) { await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(discordCatch); return; }
   const atkPN = combat.attackerPlayerNum;
   if (!await requirePlayer(interaction, game, interaction.user.id, atkPN, canActAsPlayer, 'Only the attacker may respond to Power Converter.')) return;
-  await interaction.deferUpdate().catch(() => {});
-  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(() => {});
+  await interaction.deferUpdate().catch(discordCatch);
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
 
   const thread = await client.channels.fetch(combat.combatThreadId).catch(() => null);
 
@@ -526,7 +527,7 @@ export async function handlePowerConverter(interaction, ctx) {
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${game.gameId}_evade`).setLabel('+1 Evade').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${game.gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
-      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${defPN}Id`] ?? ''}> add +1 Block or +1 Evade to the defense roll?`, components: [_viRow] }).catch(() => {});
+      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${defPN}Id`] ?? ''}> add +1 Block or +1 Evade to the defense roll?`, components: [_viRow] }).catch(discordCatch);
       return; // VI handler will resume reroll flow
     }
     const hasForced = (combat.forcedRerollQueue || []).length > 0;
@@ -552,7 +553,7 @@ export async function handlePowerConverter(interaction, ctx) {
 
   if (isSkip) {
     game.pendingPowerConverter = null;
-    if (thread) await thread.send('**Power Converter** — Skipped.').catch(() => {});
+    if (thread) await thread.send('**Power Converter** — Skipped.').catch(discordCatch);
     await _resumeRerollFlow();
     saveGames();
     return;
@@ -585,7 +586,7 @@ export async function handlePowerConverter(interaction, ctx) {
     );
     const rows = [];
     for (let i = 0; i < buttons.length; i += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
-    await thread.send({ content: `⚡ **Power Converter** — <@${game[`player${atkPN}Id`] ?? ''}> Pick an attack die to reroll (you may swap its color first):`, components: rows.slice(0, 5) }).catch(() => {});
+    await thread.send({ content: `⚡ **Power Converter** — <@${game[`player${atkPN}Id`] ?? ''}> Pick an attack die to reroll (you may swap its color first):`, components: rows.slice(0, 5) }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -603,7 +604,7 @@ export async function handlePowerConverter(interaction, ctx) {
       new ButtonBuilder().setCustomId(`power_converter_color_${gameId}_skip`).setLabel('Keep Current').setStyle(ButtonStyle.Secondary),
     );
     const d = (combat.attackDiceResults || [])[dieIdx];
-    await thread.send({ content: `⚡ **Power Converter** — Replace **${d?.color || '?'} #${dieIdx + 1}** with a different color die, or keep current:`, components: [row] }).catch(() => {});
+    await thread.send({ content: `⚡ **Power Converter** — Replace **${d?.color || '?'} #${dieIdx + 1}** with a different color die, or keep current:`, components: [row] }).catch(discordCatch);
     saveGames();
     return;
   }
@@ -623,8 +624,8 @@ export async function handlePowerConverter(interaction, ctx) {
       combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
       game.powerConverterUsedThisRound = true;
       const swapMsg = colorChoice !== 'skip' && newColor !== oldDie.color ? ` (swapped ${oldDie.color} → ${newColor})` : '';
-      if (thread) await thread.send(`⚡ **Power Converter** — Rerolled${swapMsg} #${dieIdx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`).catch(() => {});
-      if (logGameAction) await logGameAction(game, client, `⚡ **Power Converter** — Rerolled attack die${swapMsg}.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+      if (thread) await thread.send(`⚡ **Power Converter** — Rerolled${swapMsg} #${dieIdx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `⚡ **Power Converter** — Rerolled attack die${swapMsg}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
     }
     delete combat.powerConverterDieIndex;
     await _resumeRerollFlow();
