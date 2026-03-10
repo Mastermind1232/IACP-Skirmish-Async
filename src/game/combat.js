@@ -278,11 +278,11 @@ export function computeCombatResult(combat) {
   let resultText = `**Result:** Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
   if (bonusAcc) resultText += ` | bonus: +${bonusAcc} acc`;
   if (bonusHits || perDefDieDamage) resultText += ` | bonus: +${(bonusHits || 0) + perDefDieDamage} Hit`;
-  if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) resultText += ` | bonus: +${bonusBlock} Block`;
+  if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) resultText += ` | bonus: ${bonusBlock > 0 ? '+' : ''}${bonusBlock} Block`;
   if (cunningBonus) resultText += ` | **Cunning**: +${cunningBonus} Block (from ${defRoll.evade} evade)`;
   if (combat.ignoreDefenseResultsNotOnDice) resultText += ' | CC: ignore defense not on dice';
   if (evadeCancelled > 0) resultText += ` | Evade cancelled ${evadeCancelled} surge`;
-  if (bonusEvade) resultText += ` | bonus: +${bonusEvade} Evade`;
+  if (bonusEvade) resultText += ` | bonus: ${bonusEvade > 0 ? '+' : ''}${bonusEvade} Evade`;
   if (bonusPierce) resultText += ` | bonus: +${bonusPierce} pierce`;
   if (bonusBlast) resultText += ` | bonus: Blast ${bonusBlast}`;
   if ((combat.bonusConditions || []).length) resultText += ` | CC bonus: ${combat.bonusConditions.join(', ')}`;

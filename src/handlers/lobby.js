@@ -60,11 +60,12 @@ export async function handleLobbyJoin(interaction, ctx) {
 /**
  * Handle Start Game button in a lobby post.
  * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - setGame, lobbies, countActiveGamesForPlayer, MAX_ACTIVE_GAMES_PER_PLAYER, createGameChannels, getGeneralSetupButtons, logGameErrorToBotLogs, updateThreadName, EmbedBuilder
+ * @param {object} ctx - setGame, saveGames, lobbies, countActiveGamesForPlayer, MAX_ACTIVE_GAMES_PER_PLAYER, createGameChannels, getGeneralSetupButtons, logGameErrorToBotLogs, updateThreadName, EmbedBuilder
  */
 export async function handleLobbyStart(interaction, ctx) {
   const {
     setGame,
+    saveGames,
     lobbies,
     countActiveGamesForPlayer,
     MAX_ACTIVE_GAMES_PER_PLAYER,
@@ -139,6 +140,7 @@ export async function handleLobbyStart(interaction, ctx) {
       components: [getGeneralSetupButtons(game)],
     });
     game.generalSetupMessageId = setupMsg.id;
+    saveGames();
     await interaction.followUp({
       content: `Game **IA Game #${gameId}** is ready! Head to <#${generalChannel.id}> to select your map.`,
       ephemeral: true,

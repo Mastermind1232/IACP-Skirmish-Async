@@ -3109,10 +3109,23 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       const _bfMs = _bfMapId ? getMapSpaces(_bfMapId) : null;
       const _bfTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
       if (_bfMs && _bfTargetPos) {
-        const _bfAdj = _bfMs.adjacency?.[_bfTargetPos] || [];
+        // Collect all spaces adjacent to the target's footprint (handles multi-space figures)
+        const _bfTargetDcName = dcNameFromFigureKey(combat.target.figureKey);
+        const _bfTargetSize = getFigureSize(_bfTargetDcName) || '1x1';
+        const _bfTargetCells = getFootprintCells(_bfTargetPos, _bfTargetSize);
+        const _bfAdjSet = new Set();
+        for (const _bfCell of _bfTargetCells) {
+          for (const _bfA of (_bfMs.adjacency?.[_bfCell] || [])) _bfAdjSet.add(_bfA);
+        }
+        // Remove the target's own cells from adjacency
+        for (const _bfCell of _bfTargetCells) _bfAdjSet.delete(_bfCell);
         for (const _bfPn of [1, 2]) {
           for (const [_bfFk, _bfPos] of Object.entries(game.figurePositions?.[_bfPn] || {})) {
-            if (!_bfAdj.includes(_bfPos)) continue;
+            // Check if any cell of this figure's footprint is adjacent to the target
+            const _bfFkDcName = dcNameFromFigureKey(_bfFk);
+            const _bfFkSize = getFigureSize(_bfFkDcName) || '1x1';
+            const _bfFkCells = getFootprintCells(_bfPos, _bfFkSize);
+            if (!_bfFkCells.some(c => _bfAdjSet.has(c))) continue;
             if (_bfFk === combat.target.figureKey) continue;
             if (isConditionImmune(game, _bfFk)) continue; // Condition Immunity: skip Stun
             if (_applyCondition(game, _bfFk, 'Stun')) {

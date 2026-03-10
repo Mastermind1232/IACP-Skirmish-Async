@@ -3202,13 +3202,13 @@ export async function handleCombatSurge(interaction, ctx) {
         const _afTargetPos = game.figurePositions?.[combat.defenderPlayerNum]?.[combat.target?.figureKey];
         combat.autofireChainPending = true;
         combat.autofireChainTargetSpace = _afTargetPos || null;
-        combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);
+        // Cost is deducted by the general decrement below (line with `combat.surgeRemaining -= cost`)
         await thread.send('**Autofire** — Chain attack queued! After this attack resolves, perform another attack targeting within 3 of the target space.').catch(() => {});
       }
       // Utinni! (Jawa Scavenger): spending this surge earns 1 VP
       if (key === 'utinni_vp_1') {
         awardObjectiveVp(game, attackerPlayerNum, 1);
-        combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);
+        // Cost is deducted by the general decrement below (line with `combat.surgeRemaining -= cost`)
         const _utinniVpKey = vpKey(attackerPlayerNum);
         await thread.send(`**Utinni!** — +1 VP earned (${game[_utinniVpKey].total} total).`).catch(discordCatch);
         if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Utinni!** — Jawa Scavenger earned +1 VP.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});

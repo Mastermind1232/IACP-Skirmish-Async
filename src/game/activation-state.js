@@ -47,6 +47,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'deflectionPending',
   'dcActivationLogMessageIds',
   'defenderThreadData',
+  'deviceRerollGranted',
   'autofireActive',
   'fireMissionActive',
   'autofireChainTargetSpace',
@@ -76,6 +77,7 @@ const ACTIVATION_PLAYERNUM_FLAGS = [
   'nextAttacksBonusConditions',
   'nextAttackBonusSurgeAbilities',
   'nextAttackBonusPierce',
+  'nextAttackBonusAccuracy',
   'vetInstinctsActiveThisActivation',
 ];
 
@@ -171,6 +173,8 @@ const ROUND_OBJECT_FLAGS = [
   'nextHostileDefeatVpBonus',
   'dcActivationLogMessageIds',
   'defenderThreadData',
+  'deviceRerollGranted',
+  'nextAttackBonusAccuracy',
   'priceBounties',
   'diplomaticMissionEvade',
   'lastResortTriggered',

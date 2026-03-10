@@ -238,7 +238,7 @@ const CONTEXT_GROUPS = {
   ],
 
   lobbyStart: [
-    'setGame', 'lobbies', 'countActiveGamesForPlayer', 'MAX_ACTIVE_GAMES_PER_PLAYER',
+    'setGame', 'saveGames', 'lobbies', 'countActiveGamesForPlayer', 'MAX_ACTIVE_GAMES_PER_PLAYER',
     'createGameChannels', 'getGeneralSetupButtons', 'logGameErrorToBotLogs',
     'updateThreadName', 'EmbedBuilder',
   ],
