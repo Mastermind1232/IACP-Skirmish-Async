@@ -55,6 +55,9 @@ import {
   handleRushPushFig,
   handleRushPushSpace,
   handleRushPushSkip,
+  handleShoulderRushFig,
+  handleShoulderRushSpace,
+  handleShoulderRushSkip,
   handleOverwatchSpacePick,
   handleOrbitalBombardmentDeplete,
   handleOrbitalBombardmentSkip,
@@ -192,6 +195,9 @@ register('pounce_space_', handlePounceSpacePick);
 register('rush_push_fig_', handleRushPushFig);
 register('rush_push_space_', handleRushPushSpace);
 register('rush_push_skip_', handleRushPushSkip);
+register('shoulder_rush_fig_', handleShoulderRushFig);
+register('shoulder_rush_space_', handleShoulderRushSpace);
+register('shoulder_rush_skip_', handleShoulderRushSkip);
 register('overwatch_space_', handleOverwatchSpacePick);
 register('ob_deplete_', handleOrbitalBombardmentDeplete);
 register('ob_skip_', handleOrbitalBombardmentSkip);
@@ -304,7 +310,8 @@ setGroup([
   'dc_cc_special_', 'dc_cc_eoa_', 'dc_cc_double_', 'dc_move_', 'dc_attack_',
   'dc_interact_', 'dc_special_', 'pounce_space_', 'dc_ability_choice_', 'ee3_pick_die_',
   'false_orders_action_', 'false_orders_space_', 'rush_push_fig_', 'rush_push_space_',
-  'rush_push_skip_', 'overwatch_space_', 'ob_deplete_', 'ob_skip_', 'ob_space_',
+  'rush_push_skip_', 'shoulder_rush_fig_', 'shoulder_rush_space_', 'shoulder_rush_skip_',
+  'overwatch_space_', 'ob_deplete_', 'ob_skip_', 'ob_space_',
 ], 'dcPlayArea');
 
 setGroup(['move_mp_'], 'move');
@@ -457,6 +464,9 @@ export {
   handleRushPushFig,
   handleRushPushSpace,
   handleRushPushSkip,
+  handleShoulderRushFig,
+  handleShoulderRushSpace,
+  handleShoulderRushSkip,
   handleOverwatchSpacePick,
   handleOrbitalBombardmentDeplete,
   handleOrbitalBombardmentSkip,

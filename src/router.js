@@ -22,6 +22,9 @@ const BUTTON_PREFIXES = [
   'rush_push_fig_',
   'rush_push_space_',
   'rush_push_skip_',
+  'shoulder_rush_fig_',
+  'shoulder_rush_space_',
+  'shoulder_rush_skip_',
   'ee3_pick_die_',
   'dc_move_',
   'dc_attack_',
@@ -196,6 +199,7 @@ const SELECT_PREFIXES = [
   'pounce_space_sel_',
   'false_orders_space_sel_',
   'rush_push_space_sel_',
+  'shoulder_rush_space_sel_',
   'cc_space_sel_',
 ];
 

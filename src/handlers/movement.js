@@ -777,5 +777,83 @@ export async function handleMovePick(interaction, ctx) {
       });
     }
   }
+  // Shoulder Rush (KX-Series Security Droid): after movement MP exhausted, choose adjacent hostile → push if SMALL + enter space → free attack
+  if (newMp <= 0 && game.shoulderRushPending?.[msgId]) {
+    const srData = game.shoulderRushPending[msgId];
+    delete game.shoulderRushPending[msgId];
+    const srMapId = game.selectedMap?.id;
+    const srAdjSpaces = srMapId ? (getMapSpaces(srMapId)?.adjacency?.[newTopLeft] || []) : [];
+    const srEffects = getDcEffects();
+    const srOppNum = opponentPlayerNum(playerNum);
+    const srOppPos = game.figurePositions?.[srOppNum] || {};
+    const srAdjSet = new Set(srAdjSpaces);
+    const srTargets = [];
+    for (const [fk, pos] of Object.entries(srOppPos)) {
+      if (!pos || !srAdjSet.has(pos)) continue;
+      const srDcName = dcNameFromFigureKey(fk);
+      srTargets.push({ figureKey: fk, dcName: srDcName });
+    }
+    if (srTargets.length > 0) {
+      game.pendingShoulderRush = {
+        msgId, playerNum, activatorFigureKey: figureKey,
+        activatorPos: newTopLeft,
+        targets: srTargets.map(t => t.figureKey),
+      };
+      const srBtns = srTargets.map((t, i) =>
+        new ButtonBuilder()
+          .setCustomId(`shoulder_rush_fig_${game.gameId}_${msgId}_${i}`)
+          .setLabel(t.dcName.replace(/_/g, ' '))
+          .setStyle(ButtonStyle.Primary)
+      );
+      srBtns.push(
+        new ButtonBuilder()
+          .setCustomId(`shoulder_rush_skip_${game.gameId}_${msgId}`)
+          .setLabel('Skip (No Target)')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      const srRows = [];
+      while (srBtns.length > 0) srRows.push(new ActionRowBuilder().addComponents(srBtns.splice(0, 5)));
+      await interaction.followUp({
+        content: '**Shoulder Rush** — Choose an adjacent hostile figure to target:',
+        components: srRows.slice(0, 5),
+      });
+    }
+  }
+  // Deference Protocol (KX-Series Security Droid): when a friendly LEADER enters a space adjacent to KX, it may gain 1 Block token (once per round)
+  {
+    const dpMapId = game.selectedMap?.id;
+    const dpEffects = getDcEffects();
+    // Check all figures on the same team: does any have deference_protocol and is adjacent to the figure that just moved?
+    const friendlyPositions = game.figurePositions?.[playerNum] || {};
+    const movedFigDcName = meta.dcName;
+    const movedFigEff = dpEffects?.[movedFigDcName];
+    const movedFigKw = (movedFigEff?.keywords || []).map(k => String(k).toUpperCase());
+    const movedFigIsLeader = movedFigKw.includes('LEADER');
+    if (movedFigIsLeader) {
+      for (const [fk, pos] of Object.entries(friendlyPositions)) {
+        if (!pos || fk === figureKey) continue; // skip self
+        const dpDcName = dcNameFromFigureKey(fk);
+        const dpEff = dpEffects?.[dpDcName];
+        if (!(dpEff?.specialAbilityIds || []).includes('deference_protocol')) continue;
+        // Check adjacency
+        const adjSpaces = dpMapId ? (getMapSpaces(dpMapId)?.adjacency?.[pos] || []) : [];
+        if (!adjSpaces.includes(newTopLeft)) continue;
+        // Once per round check
+        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+        const dpKey = `deference_protocol_${fk}`;
+        if (game.roundFigureAbilityUsed[dpKey]) continue;
+        game.roundFigureAbilityUsed[dpKey] = true;
+        // Grant Block token
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+        if (game.figurePowerTokens[fk].length < 2) {
+          game.figurePowerTokens[fk].push('Block');
+          if (logGameAction) {
+            await logGameAction(game, client, `**Deference Protocol** — **${dpDcName}** gained a Block token (friendly LEADER entered adjacent space).`, { phase: 'ROUND', icon: 'defend' });
+          }
+        }
+      }
+    }
+  }
   saveGames();
 }

@@ -2020,6 +2020,11 @@ export function resolveAbility(abilityId, context) {
       game.rushPending = game.rushPending || {};
       game.rushPending[msgId] = true;
     }
+    // Shoulder Rush (KX-Series Security Droid): after movement MP exhausted, choose adjacent hostile → push if SMALL + enter space → free attack
+    if (entry.shoulderRushPostMove) {
+      game.shoulderRushPending = game.shoulderRushPending || {};
+      game.shoulderRushPending[msgId] = { playerNum: context.playerNum };
+    }
     return { applied: true, freeAction: !!entry.freeAction, logMessage: entry.logMessage || `**${entry.label}** — Gained ${entry.freeMoveBonus} free movement points.`, refreshMovementBank: true, activeMsgId: msgId };
   }
 

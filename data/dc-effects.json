@@ -311,6 +311,14 @@
       "unique": true,
       "affiliation": "Any"
     },
+    "[Nemik's Manifesto]": {
+      "abilityText": "Your command deck may include up to 3 additional Command cards. \n\nExhaust this card during a friendly figure's activation to have that figure suffer 2 Strain and gain 1 movement point.",
+      "keywords": [],
+      "cost": 1,
+      "attachment": false,
+      "unique": true,
+      "affiliation": "Rebel"
+    },
     "[On a Diplomatic Mission]": {
       "abilityText": "LEADER ONLY\n\nExhaust this card at the end of your activation, if you did not perform an attack, to choose one of the following:\n- You gain 2 movement points\n- Until the end of the round, apply +1 Evade to your defense results\n- You gain 1 VP",
       "keywords": [],
@@ -633,6 +641,12 @@
         "shared_intuition"
       ]
     },
+    "88-Z": {
+      "abilityText": "",
+      "keywords": [],
+      "attachment": false,
+      "companion": true
+    },
     "Agent Blaise": {
       "abilityText": "Adapt: The first time your opponent plays a Command card each round, choose 1 SPY or TROOPER. That figure becomes Hidden\n\nSurge (Interrogate): Look at your opponent's hand and choose a Command card. You may discard a card of equal or greater cost from your hand to discard the chosen card.",
       "keywords": [
@@ -705,44 +719,6 @@
       "specialAbilityIds": [
         "hunt_dissent_kallus"
       ]
-    },
-    "Asajj Ventress": {
-      "abilityText": "Nimble: After an attack targeting you is resolved, gain 2 movement points for each of your Block results.\n\nConsider It My Payment: At the start of your activation, your opponent reveals a Command card from his hand. During this round, if the next Command card played by that player does not have the same name as the revealed card, that player discards a copy of the revealed card, or reveals a hand without any copies of that card.",
-      "keywords": [
-        "DARK DISCIPLE",
-        "FORCE USER",
-        "HUNTER",
-        "PROFESSIONAL"
-      ],
-      "subname": "DARK DISCIPLE",
-      "cost": 7,
-      "health": 12,
-      "speed": 5,
-      "figures": 1,
-      "attack": {
-        "dice": [
-          "yellow",
-          "yellow",
-          "yellow"
-        ],
-        "type": "range"
-      },
-      "defense": [
-        "white"
-      ],
-      "surgeAbilities": [
-        "evade",
-        "accuracy 2, damage 2",
-        "pierce 3"
-      ],
-      "specialAbilityIds": [
-        "nimble_asajj",
-        "consider_it_my_payment_asajj"
-      ],
-      "attachment": false,
-      "elite": true,
-      "unique": true,
-      "affiliation": "Scum"
     },
     "Ahsoka Tano": {
       "abilityText": "Special Action (Force Leap): Place your figure in an empty space within 6 spaces.\n\nVigor: At the start of your activation, you may gain 2 movement points or 1 Block Token.\n\nTwin Sabers: While attacking, you may reroll all attack die or force the defender to reroll all defense die.",
@@ -925,6 +901,44 @@
         "Smuggler's Instincts"
       ]
     },
+    "Asajj Ventress": {
+      "abilityText": "Nimble: After an attack targeting you is resolved, gain 2 movement points for each of your Block results.\n\nConsider It My Payment: At the start of your activation, your opponent reveals a Command card from his hand. During this round, if the next Command card played by that player does not have the same name as the revealed card, that player discards a copy of the revealed card, or reveals a hand without any copies of that card.",
+      "keywords": [
+        "DARK DISCIPLE",
+        "FORCE USER",
+        "HUNTER",
+        "PROFESSIONAL"
+      ],
+      "subname": "DARK DISCIPLE",
+      "cost": 7,
+      "health": 12,
+      "speed": 5,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow",
+          "yellow",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "evade",
+        "accuracy 2, damage 2",
+        "pierce 3"
+      ],
+      "specialAbilityIds": [
+        "nimble_asajj",
+        "consider_it_my_payment_asajj"
+      ],
+      "attachment": false,
+      "elite": true,
+      "unique": true,
+      "affiliation": "Scum"
+    },
     "AT-DP": {
       "abilityText": "Assault: You can perform multiple attacks during your activation. \n\nCharge Generators: While attacking, if you have suffered fewer than 9 Damage, apply +1 Hit to the attack results and you may reroll 1 attack die.",
       "keywords": [
@@ -1102,6 +1116,27 @@
       "elite": true,
       "unique": true,
       "affiliation": "Rebel"
+    },
+    "BD-1": {
+      "abilityText": "Damaged Scomplink: You are not counted for the purpose of control.\n\nSpecial Action (Stim Canister): An adjacent friendly figure recovers 2 Health.\n\nDouble Action Special (Terminal Slicing): Discard an adjacent terminal to draw 1 Command card.",
+      "keywords": [
+        "DROID",
+        "TECHNICIAN"
+      ],
+      "health": 4,
+      "speed": 4,
+      "defense": [
+        "black"
+      ],
+      "specialAbilityIds": [
+        "stim_canister_bd1"
+      ],
+      "specials": [
+        "Stim Canister"
+      ],
+      "attachment": false,
+      "companion": true,
+      "unique": true
     },
     "Bib Fortuna": {
       "abilityText": "Dirty Dealing: You cannot be included in the same army as any REBEL Deployment cards.\n\nSpecial Action (Bartered Information): Choose another friendly SCUM figure within 2 spaces. Then, you may spend 1 VP to choose another such figure. Each chose figure becomes Focused.\n\nIllicit Arms: While a friendly figure is attacking, if your army's affiliation is SCUM, you may discard 1 Command card from your hand to apply +1 Hit to the attack results. Limit once per attack.",
@@ -1473,6 +1508,29 @@
       "specialAbilityIds": [
         "wall_run",
         "force_slow_cal"
+      ]
+    },
+    "Cam Droid": {
+      "abilityText": "Surge (Agitate): If this attack does not miss, the defending figure's group must be the next group to activate, if able.",
+      "keywords": [
+        "DROID"
+      ],
+      "health": 3,
+      "speed": 5,
+      "passives": [
+        "+2 Accuracy",
+        "+1 Evade"
+      ],
+      "attack": {
+        "dice": [
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "attachment": false,
+      "companion": true,
+      "surgeAbilities": [
+        "agitate"
       ]
     },
     "Captain Terro": {
@@ -2104,6 +2162,34 @@
         "defensive_stance",
         "battle_meditation"
       ]
+    },
+    "Dio": {
+      "abilityText": "Attached: When a friendly \"Iden Versio\" exits your space, interrupt to move up to 1 space.\n\nInsignificant: You cannot be the target of an attack while in the same space as a friendly figure.",
+      "keywords": [
+        "DROID"
+      ],
+      "health": 4,
+      "speed": 3,
+      "passives": [
+        "Mobile"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "+1 hit, stun",
+        "damage 1, accuracy 2"
+      ],
+      "attachment": false,
+      "companion": true,
+      "unique": true
     },
     "Director Krennic": {
       "abilityText": "Advanced Weapons Research: At the start of your activation, a friendly figure within 2 spaces may gain 1 Hit Token or 1 Surge Token.\n\nUnhinged Director: When a friendly TROOPER or GUARDIAN within 2 spaces spends a Hit Token or Surge Token while declaring an attack, it may suffer 1 Strain to apply +2 of the chosen symbol to the results instead of +1.",
@@ -3463,6 +3549,29 @@
         "Coordinated Raid"
       ]
     },
+    "J4X-7": {
+      "abilityText": "Supporting Fire: While another friendly figure is attacking a figure adjacent to you, apply Pierce 1 to the attack results. Limit once per activation.",
+      "keywords": [
+        "DROID"
+      ],
+      "health": 4,
+      "speed": 3,
+      "passives": [
+        "Pierce 1"
+      ],
+      "attack": {
+        "dice": [
+          "blue"
+        ],
+        "type": "range"
+      },
+      "surgeAbilities": [
+        "damage 1"
+      ],
+      "attachment": false,
+      "companion": true,
+      "unique": true
+    },
     "Jabba the Hutt": {
       "abilityText": "Special Action (Bully): A figure of your choice within 3 spaces suffers 3 Damage.\n\nSpecial Action (Incentivize): An elite figure of your choice becomes Focused.\n\nSpecial Action (Scheme): Draw 1 Command card.\n\nDouble Action Special (Order Hit): Spend 2 VPs. An elite figure of your choice may interrupt to perform an attack. Then, it gains 2 movement points.\n\nNefarious Gains: When a hostile figure is defeated, gain 1 VP.",
       "keywords": [
@@ -3682,6 +3791,25 @@
       "specialAbilityIds": [
         "agile_jet_trooper_reg"
       ]
+    },
+    "Junk Droid": {
+      "abilityText": "",
+      "keywords": [
+        "DROID"
+      ],
+      "health": 1,
+      "speed": 4,
+      "passives": [
+        "+1 Hit"
+      ],
+      "attack": {
+        "dice": [
+          "green"
+        ],
+        "type": "melee"
+      },
+      "attachment": false,
+      "companion": true
     },
     "Jyn Erso": {
       "abilityText": "Trust Goes Both Ways: At the start or end of your activation, choose an adjacent friendly figure. If you do, you and that figure Recover 1 Damage and gain 1 Surge Token. Limit once per round.\n\nSpecial Action (Tonfa Strike): Move up to 2 spaces, then you may perform a Melee attack using 1 red and 1 green die. Then you may perform an attack.",
@@ -3993,6 +4121,42 @@
       "elite": true,
       "unique": true,
       "affiliation": "Scum"
+    },
+    "KX-Series Security Droid (Elite)": {
+      "abilityText": "Special Action (Shoulder Rush): Move up to 2 spaces and choose an adjacent hostile figure. If that figure is SMALL, push it 1 space and enter the space it exited. Then, perform an attack targeting the chosen figure.\n\nDeference Protocol: Once per round, when a friendly LEADER enters an adjacent space, you may gain 1 Block token.",
+      "keywords": [
+        "DROID",
+        "BRAWLER"
+      ],
+      "cost": 4,
+      "health": 7,
+      "speed": 4,
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "green",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "+1 hit",
+        "weaken"
+      ],
+      "specials": [
+        "Shoulder Rush"
+      ],
+      "specialAbilityIds": [
+        "shoulder_rush",
+        "deference_protocol"
+      ],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial"
     },
     "Lando Calrissian": {
       "abilityText": "Resourceful: While attacking or defending, you may reroll 1 of your attack or defense dice.\n\nGambit: Before you reroll a die, you may replace it with another die of the same type. After rolling, the new die is considered rerolled.\n\nShrewd Scoundrel: While attacking or defending, before you reroll a die with \"Resourceful\", you may guess aloud a number from 0-2. After rerolls, if the number of Hits or Block symbols on that die matches the number you guessed, double that die's results. Limit once per activation.",
@@ -4481,6 +4645,29 @@
         "figurehead"
       ]
     },
+    "Nexu": {
+      "health": 6,
+      "figures": 1,
+      "speed": 5,
+      "cost": 6,
+      "attack": {
+        "dice": [
+          "yellow"
+        ],
+        "range": [
+          1,
+          2
+        ]
+      },
+      "defense": "white",
+      "specials": [
+        "Pounce"
+      ],
+      "specialCosts": [],
+      "specialAbilityIds": [
+        "dc_pounce"
+      ]
+    },
     "Nexu (Elite)": {
       "abilityText": "Special Action (Pounce): Place your figure in an empty space within 3 spaces. Then, you may perform an attack.\n\nCunning: While defending, apply +1 Block to the defense results for each Evade result.\n\nNon-Sentient: You cannot interact.",
       "keywords": [
@@ -4629,6 +4816,22 @@
       "specials": [
         "Rush"
       ]
+    },
+    "Pit Droid": {
+      "abilityText": "Useful: You can retrieve crates. Adjacent heroes can interact with crates you are carrying.\n\nShiny: If you are on the map at the end of the mission, heroes gain 50 credits.",
+      "keywords": [
+        "DROID"
+      ],
+      "cost": 0,
+      "health": 3,
+      "speed": 4,
+      "figures": 1,
+      "defense": [
+        "white"
+      ],
+      "attachment": false,
+      "companion": true,
+      "affiliation": "Any"
     },
     "Probe Droid (Elite)": {
       "abilityText": "Targeting Computer: While attacking, you may reroll 1 attack die.\n\nSelf-Destruct: At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.",
@@ -5243,6 +5446,23 @@
         "parting_gift"
       ]
     },
+    "Salacious B. Crumb": {
+      "abilityText": "Swipe: When you activate in or enter a space containing a hostile figure, it suffers 1 Damage. Limit once per figure per round.\n\nSpecial Action (Scratch): Choose an adjacent hostile figure. That figure suffers 1 Damage.",
+      "keywords": [
+        "BRAWLER"
+      ],
+      "health": 6,
+      "speed": 3,
+      "specialAbilityIds": [
+        "scratch_crumb"
+      ],
+      "specials": [
+        "Scratch"
+      ],
+      "attachment": false,
+      "companion": true,
+      "unique": true
+    },
     "Saska Teft": {
       "abilityText": "Shady Contacts: You may include up to 1 non-upgrade SCUM Deployment card in your army.\n\nUnstable Devices: Once during your activation, a friendly figure in your line of sight may gain 1 Device token.\n\nPower Converter: Once per round, while a friendly figure with a Device token is attacking, it may reroll 1 attack die. Before rerolling, you may replace that die with another attack die of any color. It is considered rerolled.",
       "keywords": [
@@ -5807,6 +6027,63 @@
         "Boulder Barrage"
       ]
     },
+    "The Armorer": {
+      "abilityText": "Beskar Armor: After deployment, you gain 2 Block Tokens.\n\nThis is the Way: When another friendly figure resolves an attack, if the defender was defeated, that figure gains 1 Block Token.\n\nSurvival is Strength: While a friendly figure within 3 spaces is defending, if it spent a Block symbol during this attack, it may reroll 1 attack die.",
+      "keywords": [
+        "GUARDIAN",
+        "LEADER"
+      ],
+      "cost": 6,
+      "health": 10,
+      "speed": 4,
+      "passives": [
+        "Beskar Armor"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "green",
+          "green",
+          "yellow",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1, pierce 1",
+        "cleave 2",
+        "block token"
+      ],
+      "attachment": false,
+      "elite": true,
+      "unique": true,
+      "affiliation": "Scum",
+      "specialAbilityIds": [
+        "survival_is_strength_armorer"
+      ]
+    },
+    "The Child": {
+      "abilityText": "Special Action (Force Heal): An adjacent friendly figure recovers 1 Damage and discards a HARMFUL condition.\n\nForce Exhaustion: When an attack is declared targeting you or a friendly figure with \"Clan of Two\", you may become Incapacitated. If you do, the attacker removes 1 attack die from the attack pool and becomes Weakened.",
+      "keywords": [
+        "FORCE USER"
+      ],
+      "cost": 0,
+      "health": 2,
+      "speed": 3,
+      "defense": [
+        "white"
+      ],
+      "attachment": false,
+      "companion": true,
+      "unique": true,
+      "affiliation": "Any",
+      "specialAbilityIds": [
+        "force_heal"
+      ]
+    },
     "The Grand Inquisitor": {
       "abilityText": "Precision: While attacking or defending against an adjacent figure, you may choose 1 die. The player that rolled that die must reroll it.\n\nSpecial Action (Lightsaber Throw): Perform a Ranged attack targeting a non-adjacent figure using your attack pool. Apply +2 Accuracy to the attack results.\n\nSurge (Deadly Spin): Apply -1 Dodge to the defense results. This attack gains Cleave 3.",
       "keywords": [
@@ -5846,6 +6123,49 @@
       "elite": true,
       "unique": true,
       "affiliation": "Imperial"
+    },
+    "The Mandalorian": {
+      "abilityText": "Beskar Armor: After deployment, you gain 2 Block Tokens\n\nSpecial Action (Disruptor Rifle): Perform an attack. After this attack resolves, if it did not miss and the target has suffered Damage equal to its Health minus 1, the target suffers 1 Damage.\n\nSpecial Action (Din's Wrist Flamethrower): Move up to 2 spaces, then choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain.",
+      "keywords": [
+        "HUNTER",
+        "GUARDIAN"
+      ],
+      "subname": "RENEGADE HUNTER",
+      "cost": 8,
+      "health": 12,
+      "speed": 4,
+      "passives": [
+        "Beskar Armor"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "red",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "block token",
+        "accuracy 2, pierce 1"
+      ],
+      "specialAbilityIds": [
+        "disruptor_rifle_mando",
+        "dins_wrist_flamethrower"
+      ],
+      "specials": [
+        "Disruptor Rifle",
+        "Din's Wrist Flamethrower"
+      ],
+      "attachment": false,
+      "elite": true,
+      "unique": true,
+      "affiliation": "Scum"
     },
     "The Mandalorian, Renegade Hunter": {
       "abilityText": "TBD (IACP – verify from card).",
@@ -5893,43 +6213,23 @@
         "strategize_thrawn"
       ]
     },
-    "The Armorer": {
-      "abilityText": "Beskar Armor: After deployment, you gain 2 Block Tokens.\n\nThis is the Way: When another friendly figure resolves an attack, if the defender was defeated, that figure gains 1 Block Token.\n\nSurvival is Strength: While a friendly figure within 3 spaces is defending, if it spent a Block symbol during this attack, it may reroll 1 attack die.",
-      "keywords": [
-        "GUARDIAN",
-        "LEADER"
-      ],
-      "cost": 6,
-      "health": 10,
+    "Trandoshan Hunter": {
+      "health": 7,
+      "figures": 2,
       "speed": 4,
-      "passives": [
-        "Beskar Armor"
-      ],
-      "figures": 1,
+      "cost": 8,
       "attack": {
         "dice": [
-          "green",
-          "green",
-          "yellow",
-          "yellow"
+          "red"
         ],
-        "type": "melee"
+        "range": [
+          1,
+          3
+        ]
       },
-      "defense": [
-        "black"
-      ],
-      "surgeAbilities": [
-        "damage 1, pierce 1",
-        "cleave 2",
-        "block token"
-      ],
-      "attachment": false,
-      "elite": true,
-      "unique": true,
-      "affiliation": "Scum",
-      "specialAbilityIds": [
-        "survival_is_strength_armorer"
-      ]
+      "defense": "white",
+      "specials": [],
+      "specialCosts": []
     },
     "Trandoshan Hunter (Elite)": {
       "abilityText": "Relentless: When you declare an attack on a target within 3 spaces, that figure suffers 1 Strain.\n\nACP Scattergun: While attacking, if you are adjacent to the target, apply +2 Hits to the attack results.\n\nHardy: At the end of each round, discard all HARMFUL conditions.",
@@ -6319,6 +6619,24 @@
       "attachment": false,
       "affiliation": "Scum"
     },
+    "Weequay Pirate": {
+      "health": 4,
+      "figures": 2,
+      "speed": 4,
+      "cost": 5,
+      "attack": {
+        "dice": [
+          "red"
+        ],
+        "range": [
+          1,
+          3
+        ]
+      },
+      "defense": "white",
+      "specials": [],
+      "specialCosts": []
+    },
     "Weequay Pirate (Elite)": {
       "abilityText": "Special Action (Prowl): You become Hidden.\n\nRaider: While attacking, you may choose 1 die. The player that rolled that die must reroll that die.",
       "keywords": [
@@ -6630,288 +6948,6 @@
       "affiliation": "Scum",
       "specialAbilityIds": [
         "shared_calculations_zuckuss"
-      ]
-    },
-    "[Nemik's Manifesto]": {
-      "abilityText": "Your command deck may include up to 3 additional Command cards. \n\nExhaust this card during a friendly figure's activation to have that figure suffer 2 Strain and gain 1 movement point.",
-      "keywords": [],
-      "cost": 1,
-      "attachment": false,
-      "unique": true,
-      "affiliation": "Rebel"
-    },
-    "88-Z": {
-      "abilityText": "",
-      "keywords": [],
-      "attachment": false,
-      "companion": true
-    },
-    "Pit Droid": {
-      "abilityText": "Useful: You can retrieve crates. Adjacent heroes can interact with crates you are carrying.\n\nShiny: If you are on the map at the end of the mission, heroes gain 50 credits.",
-      "keywords": [
-        "DROID"
-      ],
-      "cost": 0,
-      "health": 3,
-      "speed": 4,
-      "figures": 1,
-      "defense": [
-        "white"
-      ],
-      "attachment": false,
-      "companion": true,
-      "affiliation": "Any"
-    },
-    "J4X-7": {
-      "abilityText": "Supporting Fire: While another friendly figure is attacking a figure adjacent to you, apply Pierce 1 to the attack results. Limit once per activation.",
-      "keywords": [
-        "DROID"
-      ],
-      "health": 4,
-      "speed": 3,
-      "passives": [
-        "Pierce 1"
-      ],
-      "attack": {
-        "dice": [
-          "blue"
-        ],
-        "type": "range"
-      },
-      "surgeAbilities": [
-        "damage 1"
-      ],
-      "attachment": false,
-      "companion": true,
-      "unique": true
-    },
-    "Cam Droid": {
-      "abilityText": "Surge (Agitate): If this attack does not miss, the defending figure's group must be the next group to activate, if able.",
-      "keywords": [
-        "DROID"
-      ],
-      "health": 3,
-      "speed": 5,
-      "passives": [
-        "+2 Accuracy",
-        "+1 Evade"
-      ],
-      "attack": {
-        "dice": [
-          "yellow"
-        ],
-        "type": "range"
-      },
-      "attachment": false,
-      "companion": true,
-      "surgeAbilities": [
-        "agitate"
-      ]
-    },
-    "The Mandalorian": {
-      "abilityText": "Beskar Armor: After deployment, you gain 2 Block Tokens\n\nSpecial Action (Disruptor Rifle): Perform an attack. After this attack resolves, if it did not miss and the target has suffered Damage equal to its Health minus 1, the target suffers 1 Damage.\n\nSpecial Action (Din's Wrist Flamethrower): Move up to 2 spaces, then choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain.",
-      "keywords": [
-        "HUNTER",
-        "GUARDIAN"
-      ],
-      "subname": "RENEGADE HUNTER",
-      "cost": 8,
-      "health": 12,
-      "speed": 4,
-      "passives": [
-        "Beskar Armor"
-      ],
-      "figures": 1,
-      "attack": {
-        "dice": [
-          "blue",
-          "red",
-          "green"
-        ],
-        "type": "range"
-      },
-      "defense": [
-        "black"
-      ],
-      "surgeAbilities": [
-        "damage 2",
-        "block token",
-        "accuracy 2, pierce 1"
-      ],
-      "specialAbilityIds": [
-        "disruptor_rifle_mando",
-        "dins_wrist_flamethrower"
-      ],
-      "specials": [
-        "Disruptor Rifle",
-        "Din's Wrist Flamethrower"
-      ],
-      "attachment": false,
-      "elite": true,
-      "unique": true,
-      "affiliation": "Scum"
-    },
-    "BD-1": {
-      "abilityText": "Damaged Scomplink: You are not counted for the purpose of control.\n\nSpecial Action (Stim Canister): An adjacent friendly figure recovers 2 Health.\n\nDouble Action Special (Terminal Slicing): Discard an adjacent terminal to draw 1 Command card.",
-      "keywords": [
-        "DROID",
-        "TECHNICIAN"
-      ],
-      "health": 4,
-      "speed": 4,
-      "defense": [
-        "black"
-      ],
-      "specialAbilityIds": [
-        "stim_canister_bd1"
-      ],
-      "specials": [
-        "Stim Canister"
-      ],
-      "attachment": false,
-      "companion": true,
-      "unique": true
-    },
-    "Junk Droid": {
-      "abilityText": "",
-      "keywords": [
-        "DROID"
-      ],
-      "health": 1,
-      "speed": 4,
-      "passives": [
-        "+1 Hit"
-      ],
-      "attack": {
-        "dice": [
-          "green"
-        ],
-        "type": "melee"
-      },
-      "attachment": false,
-      "companion": true
-    },
-    "Salacious B. Crumb": {
-      "abilityText": "Swipe: When you activate in or enter a space containing a hostile figure, it suffers 1 Damage. Limit once per figure per round.\n\nSpecial Action (Scratch): Choose an adjacent hostile figure. That figure suffers 1 Damage.",
-      "keywords": [
-        "BRAWLER"
-      ],
-      "health": 6,
-      "speed": 3,
-      "specialAbilityIds": [
-        "scratch_crumb"
-      ],
-      "specials": [
-        "Scratch"
-      ],
-      "attachment": false,
-      "companion": true,
-      "unique": true
-    },
-    "The Child": {
-      "abilityText": "Special Action (Force Heal): An adjacent friendly figure recovers 1 Damage and discards a HARMFUL condition.\n\nForce Exhaustion: When an attack is declared targeting you or a friendly figure with \"Clan of Two\", you may become Incapacitated. If you do, the attacker removes 1 attack die from the attack pool and becomes Weakened.",
-      "keywords": [
-        "FORCE USER"
-      ],
-      "cost": 0,
-      "health": 2,
-      "speed": 3,
-      "defense": [
-        "white"
-      ],
-      "attachment": false,
-      "companion": true,
-      "unique": true,
-      "affiliation": "Any",
-      "specialAbilityIds": [
-        "force_heal"
-      ]
-    },
-    "Dio": {
-      "abilityText": "Attached: When a friendly \"Iden Versio\" exits your space, interrupt to move up to 1 space.\n\nInsignificant: You cannot be the target of an attack while in the same space as a friendly figure.",
-      "keywords": [
-        "DROID"
-      ],
-      "health": 4,
-      "speed": 3,
-      "passives": [
-        "Mobile"
-      ],
-      "figures": 1,
-      "attack": {
-        "dice": [
-          "yellow"
-        ],
-        "type": "range"
-      },
-      "defense": [
-        "white"
-      ],
-      "surgeAbilities": [
-        "+1 hit, stun",
-        "damage 1, accuracy 2"
-      ],
-      "attachment": false,
-      "companion": true,
-      "unique": true
-    },
-    "Trandoshan Hunter": {
-      "health": 7,
-      "figures": 2,
-      "speed": 4,
-      "cost": 8,
-      "attack": {
-        "dice": [
-          "red"
-        ],
-        "range": [
-          1,
-          3
-        ]
-      },
-      "defense": "white",
-      "specials": [],
-      "specialCosts": []
-    },
-    "Weequay Pirate": {
-      "health": 4,
-      "figures": 2,
-      "speed": 4,
-      "cost": 5,
-      "attack": {
-        "dice": [
-          "red"
-        ],
-        "range": [
-          1,
-          3
-        ]
-      },
-      "defense": "white",
-      "specials": [],
-      "specialCosts": []
-    },
-    "Nexu": {
-      "health": 6,
-      "figures": 1,
-      "speed": 5,
-      "cost": 6,
-      "attack": {
-        "dice": [
-          "yellow"
-        ],
-        "range": [
-          1,
-          2
-        ]
-      },
-      "defense": "white",
-      "specials": [
-        "Pounce"
-      ],
-      "specialCosts": [],
-      "specialAbilityIds": [
-        "dc_pounce"
       ]
     }
   }

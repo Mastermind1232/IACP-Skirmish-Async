@@ -2560,6 +2560,163 @@ export async function handleRushPushSkip(interaction, ctx) {
   saveGames();
 }
 
+/**
+ * Handle shoulder_rush_fig_ button: player picks which adjacent hostile to target.
+ */
+export async function handleShoulderRushFig(interaction, ctx) {
+  const m = interaction.customId.match(/^shoulder_rush_fig_([^_]+)_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, msgId, choiceIdxStr] = m;
+  const choiceIndex = parseInt(choiceIdxStr, 10);
+  const { getGame, dcMessageMeta, dcHealthState, getMapSpaces, logGameAction, buildBoardMapPayload,
+    updateDcActionsMessage, getSpaceChoiceRows, getMapAttachmentForSpaces, saveGames, client } = ctx;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingShoulderRush;
+  if (!pending || pending.msgId !== msgId) {
+    await interaction.followUp({ content: 'No pending Shoulder Rush.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the activating player can choose.')) return;
+  const targetFk = pending.targets?.[choiceIndex];
+  if (!targetFk) { await interaction.followUp({ content: 'Invalid target.', ephemeral: true }).catch(() => {}); return; }
+  const oppNum = opponentPlayerNum(pending.playerNum);
+  const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
+  const targetName = dcNameFromFigureKey(targetFk);
+  if (!targetPos) {
+    delete game.pendingShoulderRush;
+    await interaction.message.edit({ content: '**Shoulder Rush** — Target no longer on board.', components: [] }).catch(() => {});
+    saveGames();
+    return;
+  }
+  // Check if target is SMALL
+  const effects = getDcEffects();
+  const targetDcName = dcNameFromFigureKey(targetFk);
+  const targetEff = effects?.[targetDcName];
+  const targetKw = (targetEff?.keywords || []).map(k => String(k).toUpperCase());
+  const isSmall = !targetKw.includes('LARGE') && !targetKw.includes('MASSIVE');
+  if (!isSmall) {
+    // Not SMALL: grant free attack targeting this figure, no push
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[msgId] = true;
+    game.forcedAttackTarget = game.forcedAttackTarget || {};
+    game.forcedAttackTarget[msgId] = targetFk;
+    const logMsg = `**Shoulder Rush** — Targeting **${targetName}** (not SMALL, no push). Attack that figure (free action).`;
+    if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+    await updateDcActionsMessage(game, msgId, client).catch(() => {});
+    delete game.pendingShoulderRush;
+    await interaction.message.edit({ content: logMsg, components: [] }).catch(() => {});
+    saveGames();
+    return;
+  }
+  // Target is SMALL: show push space picker (adjacent to target, unoccupied)
+  pending.chosenTarget = targetFk;
+  const mapId = game.selectedMap?.id;
+  const mapSpaces = mapId ? getMapSpaces(mapId) : null;
+  const adjToTarget = mapSpaces?.adjacency?.[targetPos] || [];
+  const occupied = new Set([
+    ...Object.values(game.figurePositions?.[1] || {}),
+    ...Object.values(game.figurePositions?.[2] || {}),
+  ].filter(Boolean));
+  occupied.delete(targetPos); // target vacates its own space
+  // Valid spaces: adjacent to target, unoccupied (not including current space — must push away)
+  const validSpaces = adjToTarget.filter(s => !occupied.has(s));
+  if (validSpaces.length === 0) {
+    // No room to push — grant free attack without push
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[msgId] = true;
+    game.forcedAttackTarget = game.forcedAttackTarget || {};
+    game.forcedAttackTarget[msgId] = targetFk;
+    const logMsg = `**Shoulder Rush** — **${targetName}** is SMALL but no room to push. Attack that figure (free action).`;
+    if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+    await updateDcActionsMessage(game, msgId, client).catch(() => {});
+    delete game.pendingShoulderRush;
+    await interaction.message.edit({ content: logMsg, components: [] }).catch(() => {});
+    saveGames();
+    return;
+  }
+  // Show space picker
+  const boardState = ctx.getBoardStateForMovement ? ctx.getBoardStateForMovement(game, null) : null;
+  const bMapSpaces = boardState?.mapSpaces || {};
+  const { rows, available: srAvail, overflowed: srOverflowed } = getSpaceChoiceRows(`shoulder_rush_space_${gameId}_${msgId}_`, validSpaces, bMapSpaces);
+  const mapAttachment = await getMapAttachmentForSpaces(game, validSpaces);
+  const srComponents = srOverflowed
+    ? [ctx.buildSpaceSelectMenu('shoulder_rush_space_sel_', `${gameId}_${msgId}`, srAvail)]
+    : rows.slice(0, 5);
+  const payload = {
+    content: `**Shoulder Rush** — **${targetName}** is SMALL. Push to which space? (You will enter the vacated space.)`,
+    components: srComponents,
+  };
+  if (mapAttachment) payload.files = [mapAttachment];
+  await interaction.message.edit({ content: '**Shoulder Rush** — Choosing push destination...', components: [] }).catch(() => {});
+  await interaction.followUp(payload).catch(() => {});
+  saveGames();
+}
+
+/**
+ * Handle shoulder_rush_space_ button: finalize push + enter vacated space + grant free attack.
+ */
+export async function handleShoulderRushSpace(interaction, ctx) {
+  const m = interaction.customId.match(/^shoulder_rush_space_([^_]+)_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, msgId, space] = m;
+  const chosenSpace = String(space).toLowerCase();
+  const { getGame, dcMessageMeta, logGameAction, buildBoardMapPayload,
+    updateDcActionsMessage, saveGames, client } = ctx;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingShoulderRush;
+  if (!pending || pending.msgId !== msgId) {
+    await interaction.followUp({ content: 'No pending Shoulder Rush.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the activating player can choose.')) return;
+  const targetFk = pending.chosenTarget;
+  const oppNum = opponentPlayerNum(pending.playerNum);
+  const prevPos = game.figurePositions?.[oppNum]?.[targetFk];
+  const targetName = dcNameFromFigureKey(targetFk);
+  // Push target to chosen space
+  game.figurePositions[oppNum][targetFk] = chosenSpace;
+  // Move activator into the vacated space
+  if (pending.activatorFigureKey && pending.activatorPos) {
+    game.figurePositions[pending.playerNum][pending.activatorFigureKey] = prevPos;
+  }
+  // Grant free attack targeting the pushed figure
+  game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+  game.freeAttackBonusPending[msgId] = true;
+  game.forcedAttackTarget = game.forcedAttackTarget || {};
+  game.forcedAttackTarget[msgId] = targetFk;
+  const logMsg = `**Shoulder Rush** — Pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} → ${chosenSpace.toUpperCase()}. Entered vacated space. Attack that figure (free action).`;
+  if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+  // Refresh board
+  if (game.boardId && game.selectedMap && buildBoardMapPayload) {
+    try {
+      const boardChannel = await client.channels.fetch(game.boardId);
+      const boardPayload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+      await boardChannel.send(boardPayload);
+    } catch { /* ignore */ }
+  }
+  await updateDcActionsMessage(game, msgId, client).catch(() => {});
+  delete game.pendingShoulderRush;
+  await interaction.message.edit({ content: logMsg, components: [] }).catch(() => {});
+  saveGames();
+}
+
+/**
+ * Handle shoulder_rush_skip_ button: skip Shoulder Rush target selection.
+ */
+export async function handleShoulderRushSkip(interaction, ctx) {
+  const m = interaction.customId.match(/^shoulder_rush_skip_([^_]+)_([^_]+)$/);
+  if (!m) return;
+  const [, gameId, msgId] = m;
+  const { getGame, saveGames } = ctx;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  delete game.pendingShoulderRush;
+  await interaction.message.edit({ content: '**Shoulder Rush** — No target chosen.', components: [] }).catch(() => {});
+  saveGames();
+}
+
 /** Handle Overwatch token space placement. */
 export async function handleOverwatchSpacePick(interaction, ctx) {
   const m = interaction.customId.match(/^overwatch_space_([^_]+)_([^_]+)_(.+)$/);
