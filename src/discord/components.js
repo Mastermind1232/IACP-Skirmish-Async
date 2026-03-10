@@ -287,31 +287,13 @@ export function getMissionSelectionPickMenu(gameId, options) {
   return new ActionRowBuilder().addComponents(select);
 }
 
-/** F16/F11: Bot Stuff menu — Archive and Kill Game (shown via /botmenu in Game Log). */
+/** F16/F11: Bot Stuff menu — Kill Game (shown via /botmenu in Game Log). */
 export function getBotmenuButtons(gameId) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`botmenu_archive_${gameId}`)
-      .setLabel('Archive')
-      .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(`botmenu_kill_${gameId}`)
       .setLabel('Kill Game')
       .setStyle(ButtonStyle.Danger)
-  );
-}
-
-/** Confirm Archive: first confirm wins. */
-export function getBotmenuArchiveConfirmButtons(gameId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`botmenu_archive_yes_${gameId}`)
-      .setLabel('Yes, archive')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`botmenu_archive_no_${gameId}`)
-      .setLabel('No')
-      .setStyle(ButtonStyle.Secondary)
   );
 }
 

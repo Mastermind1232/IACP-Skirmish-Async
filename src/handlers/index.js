@@ -100,10 +100,7 @@ import {
   handleCelebrationPass,
 } from './cc-hand.js';
 import {
-  handleBotmenuArchive,
   handleBotmenuKill,
-  handleBotmenuArchiveYes,
-  handleBotmenuArchiveNo,
   handleBotmenuKillYes,
   handleBotmenuKillNo,
 } from './botmenu.js';
@@ -255,10 +252,7 @@ register('negation_play_', handleNegationPlay);
 register('negation_let_resolve_', handleNegationLetResolve);
 register('celebration_play_', handleCelebrationPlay);
 register('celebration_pass_', handleCelebrationPass);
-register('botmenu_archive_', handleBotmenuArchive);
 register('botmenu_kill_', handleBotmenuKill);
-register('botmenu_archive_yes_', handleBotmenuArchiveYes);
-register('botmenu_archive_no_', handleBotmenuArchiveNo);
 register('botmenu_kill_yes_', handleBotmenuKillYes);
 register('botmenu_kill_no_', handleBotmenuKillNo);
 register('fast_forward_', handleFastForward);
@@ -439,8 +433,7 @@ setGroup(['refresh_map_'], 'refreshMap');
 setGroup(['refresh_all_'], 'refreshAll');
 setGroup(['undo_'], 'undo');
 setGroup([
-  'botmenu_archive_', 'botmenu_kill_', 'botmenu_archive_yes_',
-  'botmenu_archive_no_', 'botmenu_kill_yes_', 'botmenu_kill_no_',
+  'botmenu_kill_', 'botmenu_kill_yes_', 'botmenu_kill_no_',
 ], 'botmenu');
 setGroup(['fast_forward_'], 'fastForward');
 setGroup(['dc_cc_defender_'], 'defenderCc');
@@ -567,10 +560,7 @@ export {
   handleCcSpacePick,
 } from './cc-hand.js';
 export {
-  handleBotmenuArchive,
   handleBotmenuKill,
-  handleBotmenuArchiveYes,
-  handleBotmenuArchiveNo,
   handleBotmenuKillYes,
   handleBotmenuKillNo,
 } from './botmenu.js';

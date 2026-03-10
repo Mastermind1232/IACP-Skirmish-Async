@@ -1,11 +1,9 @@
 /**
- * F16/F11: Bot Stuff menu (Archive, Kill Game) via /botmenu in Game Log.
- * Archive: either player. Kill Game: participants or Admin/Bothelpers only.
- * First confirm wins for both.
+ * F16/F11: Bot Stuff menu (Kill Game) via /botmenu in Game Log.
+ * Kill Game: participants or Admin/Bothelpers only. First confirm wins.
  */
 import {
   getBotmenuButtons,
-  getBotmenuArchiveConfirmButtons,
   getBotmenuKillConfirmButtons,
 } from '../discord/components.js';
 import { cleanupGameLock } from '../game/action-queue.js';
@@ -68,23 +66,6 @@ export async function deleteGameChannelsAndGame(game, gameId, ctx) {
   }
 }
 
-/** Archive clicked: show confirmation. Either player can click. */
-export async function handleBotmenuArchive(interaction, ctx) {
-  const { getGame } = ctx;
-  const gameId = interaction.customId.replace('botmenu_archive_', '');
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  if (interaction.user.id !== game.player1Id && interaction.user.id !== game.player2Id) {
-    await interaction.followUp({ content: 'Only players in this game can archive it.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  await interaction.followUp({
-    content: '**Are you sure you want to archive?** This will remove the game and its channels. First to confirm wins.',
-    components: [getBotmenuArchiveConfirmButtons(gameId)],
-    ephemeral: false,
-  }).catch(discordCatch);
-}
-
 /** Kill Game clicked: check permission, show confirmation. */
 export async function handleBotmenuKill(interaction, ctx) {
   const { getGame } = ctx;
@@ -103,27 +84,6 @@ export async function handleBotmenuKill(interaction, ctx) {
     components: [getBotmenuKillConfirmButtons(gameId)],
     ephemeral: false,
   }).catch(discordCatch);
-}
-
-/** Archive Yes: delete channels and game. */
-export async function handleBotmenuArchiveYes(interaction, ctx) {
-  const { getGame, logGameErrorToBotLogs } = ctx;
-  const gameId = interaction.customId.replace('botmenu_archive_yes_', '');
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  try {
-    await deleteGameChannelsAndGame(game, gameId, ctx);
-    await interaction.followUp({ content: `Game **IA Game #${gameId}** archived. Channels removed.`, ephemeral: true }).catch(() => {});
-  } catch (err) {
-    console.error('Archive error:', err);
-    await logGameErrorToBotLogs(interaction.client, interaction.guild, gameId, err, 'botmenu_archive');
-    await interaction.followUp({ content: `Failed: ${err.message}`, ephemeral: true }).catch(discordCatch);
-  }
-}
-
-/** Archive No: cancel. */
-export async function handleBotmenuArchiveNo(interaction, ctx) {
-  await interaction.editReply({ content: 'Cancelled.', components: [] }).catch(discordCatch);
 }
 
 /** Kill Game Yes: delete channels and game. */

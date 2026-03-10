@@ -16,7 +16,6 @@ export {
   getMissionSelectDrawMenu,
   getMissionSelectionPickMenu,
   getBotmenuButtons,
-  getBotmenuArchiveConfirmButtons,
   getBotmenuKillConfirmButtons,
   getDetermineInitiativeButtons,
   getDeploymentZoneButtons,

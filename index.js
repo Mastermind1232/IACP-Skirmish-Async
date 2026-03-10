@@ -1020,7 +1020,7 @@ function extractGameIdFromInteraction(interaction) {
   const prefixes = [
     'status_phase_', 'end_end_of_round_', 'end_start_of_round_', 'map_selection_', 'draft_random_',
     'pass_activation_turn_', 'combat_ready_', 'combat_roll_', 'cc_play_select_', 'cc_discard_select_', 'cc_attach_to_',
-    'botmenu_archive_yes_', 'botmenu_archive_no_', 'botmenu_kill_yes_', 'botmenu_kill_no_', 'botmenu_archive_', 'botmenu_kill_',
+    'botmenu_kill_yes_', 'botmenu_kill_no_', 'botmenu_kill_',
     'kill_game_', 'refresh_map_', 'refresh_all_', 'undo_', 'deployment_zone_red_', 'deployment_zone_blue_',
   ];
   for (const p of prefixes) {
@@ -4861,7 +4861,7 @@ client.once('ready', async () => {
     const rest = new REST().setToken(process.env.DISCORD_TOKEN);
     const botmenu = new SlashCommandBuilder()
       .setName('botmenu')
-      .setDescription('Open Bot Stuff menu (Archive, Kill Game). Use in the Game Log channel of a game.');
+      .setDescription('Open Bot Stuff menu (Kill Game). Use in the Game Log channel of a game.');
     const statcheck = new SlashCommandBuilder()
       .setName('statcheck')
       .setDescription('Show completed games summary, or a specific player\'s record. Use in #statistics.')
