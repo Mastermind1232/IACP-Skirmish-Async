@@ -45,12 +45,16 @@ import {
 } from './discord/index.js';
 import {
   isFigurelessDc as _isFigurelessDc,
+  hasDepleteEffect as _hasDepleteEffect,
+  hasExhaustEffect as _hasExhaustEffect,
 } from './game/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 
 const isFigurelessDc = _isFigurelessDc;
+const hasDepleteEffect = _hasDepleteEffect;
+const hasExhaustEffect = _hasExhaustEffect;
 
 // ---------------------------------------------------------------------------
 // buildHandDisplayPayload
@@ -446,9 +450,11 @@ export async function buildBoardMapPayload(gameId, map, game, client, { getMissi
 // ---------------------------------------------------------------------------
 
 export async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healthState, conditionsByFigure, dcAttachments = [], tokensByFigure = null, actionsData = null, nicknamesByFigure = null) {
-  const status = exhausted ? 'EXHAUSTED' : 'READIED';
-  const color = exhausted ? COLORS.RED : COLORS.GREEN; // red : green
   const figureless = isFigurelessDc(dcName);
+  const canExhaust = figureless && (hasExhaustEffect(dcName) || hasDepleteEffect(dcName));
+  const showStatus = !figureless || canExhaust;
+  const status = showStatus ? (exhausted ? 'EXHAUSTED' : 'READIED') : null;
+  const color = exhausted ? COLORS.RED : COLORS.GREEN; // red : green
   const dgIndex = displayName.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
@@ -465,7 +471,7 @@ export async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healt
         healthSection,
       ].filter(Boolean);
   const embed = new EmbedBuilder()
-    .setTitle(`${status} — ${displayName}`)
+    .setTitle(status ? `${status} — ${displayName}` : displayName)
     .setDescription(lines.length ? lines.join('\n') : '\u200b')
     .setColor(color);
 

@@ -2,7 +2,10 @@
   "source": "D4 Tournament rotation; update periodically. Mission IDs: mapId:variant (e.g. mos-eisley-outskirts:a)",
   "missionIds": [
     "chopper-base-atollon:a",
+    "chopper-base-atollon:b",
     "lothal-wastes:a",
-    "hoth-battle-station:a"
+    "lothal-wastes:b",
+    "hoth-battle-station:a",
+    "hoth-battle-station:b"
   ]
 }

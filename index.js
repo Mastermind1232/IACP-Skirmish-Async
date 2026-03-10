@@ -2061,7 +2061,8 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId || meta.playerNum !== playerNum) continue;
     const dn = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-    if (meta.dcName === dcName && dn && String(dn[1]) === String(dgIndex)) return msgId;
+    const metaDgIndex = dn ? String(dn[1]) : '1';
+    if (meta.dcName === dcName && metaDgIndex === String(dgIndex)) return msgId;
   }
   return null;
 }

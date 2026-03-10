@@ -7,6 +7,14 @@ import { parseCoord } from './coords.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 
+/** Sync a healthState array back to the player's dcList entry. */
+function syncHealthStateToList(game, playerNum, msgId, healthState) {
+  const dcIds = getDcMessageIds(game, playerNum);
+  const dcList = getDcList(game, playerNum);
+  const idx = dcIds ? dcIds.indexOf(msgId) : -1;
+  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+}
+
 /** Look up DC stats by name (handles display variants). */
 function getStatsForDc(dcName) {
   const map = getDcEffects() || {};
@@ -16,7 +24,7 @@ function getStatsForDc(dcName) {
     return key ? map[key] : {};
   })();
 }
-import { applyCondition, resetCondition, filterCondition } from './conditions.js';
+import { applyCondition, resetCondition, filterCondition, HARMFUL_CONDITIONS } from './conditions.js';
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces } from './movement.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum } from './player-helpers.js';
@@ -70,6 +78,21 @@ function drawCcCards(game, playerNum, n) {
   game[deckKey] = deck;
   game[handKey] = hand;
   return drew;
+}
+
+/**
+ * Add N movement points to a figure's movement bank.
+ * Initializes game.movementBank and the per-msgId entry if needed.
+ * @param {object} game - Game state
+ * @param {string} msgId - DC message ID
+ * @param {number} n - Movement points to add
+ */
+function addMovementPoints(game, msgId, n) {
+  game.movementBank = game.movementBank || {};
+  const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
+  bank.total = (bank.total ?? 0) + n;
+  bank.remaining = (bank.remaining ?? 0) + n;
+  game.movementBank[msgId] = bank;
 }
 
 /**
@@ -285,10 +308,7 @@ export function resolveAbility(abilityId, context) {
         const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
         healthState[selectedFig] = [newCur, max ?? newCur];
         dcHealthState.set(msgId, healthState);
-        const dcIds = getDcMessageIds(game, playerNum);
-        const dcList = getDcList(game, playerNum);
-        const idx = dcIds ? dcIds.indexOf(msgId) : -1;
-        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+        syncHealthStateToList(game, playerNum, msgId, healthState);
         strainApplied = true;
       }
     }
@@ -324,10 +344,7 @@ export function resolveAbility(abilityId, context) {
           const newCur = Math.max(0, (cur ?? max) - totalDmg);
           healthState[figIdx] = [newCur, max ?? newCur];
           dcHealthState.set(targetMsgId, healthState);
-          const dcIds = getDcMessageIds(game, enemyPlayerNum);
-          const dcList = getDcList(game, enemyPlayerNum);
-          const idx = (dcIds || []).indexOf(targetMsgId);
-          if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+          syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
           const dmgStr = damage > 0 && strain > 0 ? `${damage} Damage + ${strain} Strain` : damage > 0 ? `${damage} Damage` : `${strain} Strain`;
           parts.push(`suffered ${dmgStr} (HP: ${cur ?? max} → ${newCur})`);
         } else {
@@ -362,10 +379,7 @@ export function resolveAbility(abilityId, context) {
                 const aNew = Math.max(0, (aCur ?? aMax) - splashDamage);
                 adjHs[adjFigIdx] = [aNew, aMax ?? aNew];
                 dcHealthState.set(adjMsgId, adjHs);
-                const adjDcIds = getDcMessageIds(game, adjPnum);
-                const adjDcList = getDcList(game, adjPnum);
-                const adjIdx = (adjDcIds || []).indexOf(adjMsgId);
-                if (adjIdx >= 0 && adjDcList?.[adjIdx]) adjDcList[adjIdx].healthState = [...adjHs];
+                syncHealthStateToList(game, adjPnum, adjMsgId, adjHs);
                 splashParts.push(`**${adjName}** ${splashDamage} Damage (${aCur ?? aMax}→${aNew})`);
               } else {
                 splashParts.push(`**${adjName}** (apply ${splashDamage} Damage manually)`);
@@ -490,10 +504,7 @@ export function resolveAbility(abilityId, context) {
             const [cur, max] = healthState[figIdx];
             const heal = Math.min(recoverTarget, (max ?? cur) - cur);
             if (heal > 0) { healthState[figIdx] = [cur + heal, max ?? cur]; dcHealthState.set(targetMsgId, healthState); }
-            const dcIds = getDcMessageIds(game, playerNum);
-            const dcList = getDcList(game, playerNum);
-            const idx = (dcIds || []).indexOf(targetMsgId);
-            if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+            syncHealthStateToList(game, playerNum, targetMsgId, healthState);
           }
         }
         parts.push(`${dcNameFromFigureKey(targetFigureKey)} recovered ${recoverTarget} Damage`);
@@ -694,10 +705,7 @@ export function resolveAbility(abilityId, context) {
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
-        game.movementBank = game.movementBank || {};
-        game.movementBank[chosenMsgId] = game.movementBank[chosenMsgId] || { total: 0, remaining: 0 };
-        game.movementBank[chosenMsgId].total += 2;
-        game.movementBank[chosenMsgId].remaining += 2;
+        addMovementPoints(game, chosenMsgId, 2);
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Tactical Maneuver** — **${chosenName}** gained **2 movement points**.` };
@@ -757,10 +765,7 @@ export function resolveAbility(abilityId, context) {
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
-        game.movementBank = game.movementBank || {};
-        game.movementBank[chosenMsgId] = game.movementBank[chosenMsgId] || { total: 0, remaining: 0 };
-        game.movementBank[chosenMsgId].total += 2;
-        game.movementBank[chosenMsgId].remaining += 2;
+        addMovementPoints(game, chosenMsgId, 2);
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Order** — **${chosenName}** gained **2 movement points**.` };
@@ -1150,11 +1155,7 @@ export function resolveAbility(abilityId, context) {
           game.freeAttackBonusPending = game.freeAttackBonusPending || {};
           game.freeAttackBonusPending[tgtMsgId] = true;
           if (entry.grantMpToTarget > 0) {
-            game.movementBank = game.movementBank || {};
-            const bank = game.movementBank[tgtMsgId] || { total: 0, remaining: 0 };
-            bank.total = (bank.total ?? 0) + entry.grantMpToTarget;
-            bank.remaining = (bank.remaining ?? 0) + entry.grantMpToTarget;
-            game.movementBank[tgtMsgId] = bank;
+            addMovementPoints(game, tgtMsgId, entry.grantMpToTarget);
           }
           return { applied: true, logMessage: `**${entry.label}** — **${dcName}** may interrupt to perform a free attack and gains ${entry.grantMpToTarget || 0} MP.${entry.autoDeductVp ? ` (−${entry.autoDeductVp} VP)` : ''}`, refreshDcEmbed: true };
         }
@@ -1223,10 +1224,7 @@ export function resolveAbility(abilityId, context) {
         const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
         healthState[selectedFig] = [newCur, max ?? newCur];
         dcHealthState.set(msgId, healthState);
-        const dcIds = getDcMessageIds(game, playerNum);
-        const dcList = getDcList(game, playerNum);
-        const idx = dcIds ? dcIds.indexOf(msgId) : -1;
-        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+        syncHealthStateToList(game, playerNum, msgId, healthState);
         strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${cur ?? max} \u2192 ${newCur} HP).`;
       } else {
         strainNote = ` (Apply ${entry.strainCostToSelf} Strain to yourself manually.)`;
@@ -1281,10 +1279,7 @@ export function resolveAbility(abilityId, context) {
         const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
         healthState[selectedFig] = [newCur, max ?? newCur];
         dcHealthState.set(msgId, healthState);
-        const dcIds = getDcMessageIds(game, playerNum);
-        const dcList = getDcList(game, playerNum);
-        const idx = dcIds ? dcIds.indexOf(msgId) : -1;
-        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+        syncHealthStateToList(game, playerNum, msgId, healthState);
         strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${cur ?? max} → ${newCur} HP).`;
       } else {
         strainNote = ` (Apply ${entry.strainCostToSelf} Strain to self manually.)`;
@@ -1293,11 +1288,7 @@ export function resolveAbility(abilityId, context) {
     // mpBonus alongside overrideAttackDice (Close and Personal: move + override attack)
     let odMpNote = '';
     if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
-      game.movementBank = game.movementBank || {};
-      const odBank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-      odBank.total = (odBank.total ?? 0) + entry.mpBonus;
-      odBank.remaining = (odBank.remaining ?? 0) + entry.mpBonus;
-      game.movementBank[msgId] = odBank;
+      addMovementPoints(game, msgId, entry.mpBonus);
       odMpNote = ` Gained ${entry.mpBonus} MP.`;
     }
     return {
@@ -1377,11 +1368,7 @@ export function resolveAbility(abilityId, context) {
     let fabMpNote = '';
     let fabMpRefresh = false;
     if (typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
-      game.movementBank = game.movementBank || {};
-      const fabBank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-      fabBank.total = (fabBank.total ?? 0) + entry.mpBonus;
-      fabBank.remaining = (fabBank.remaining ?? 0) + entry.mpBonus;
-      game.movementBank[msgId] = fabBank;
+      addMovementPoints(game, msgId, entry.mpBonus);
       fabMpNote = ` Gained ${entry.mpBonus} MP.`;
       fabMpRefresh = true;
     }
@@ -1418,11 +1405,7 @@ export function resolveAbility(abilityId, context) {
     if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const dcStats = getStatsForDc(meta.dcName);
     const speed = typeof dcStats?.speed === 'number' ? dcStats.speed : 4;
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    bank.total = (bank.total ?? 0) + speed;
-    bank.remaining = (bank.remaining ?? 0) + speed;
-    game.movementBank[msgId] = bank;
+    addMovementPoints(game, msgId, speed);
     // Charge (and similar): also grant a free attack after the move
     if (entry.freeAttackBonus) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
@@ -1495,10 +1478,7 @@ export function resolveAbility(abilityId, context) {
                   const newCur = Math.max(0, (cur ?? max) - hits);
                   hs[fIdx] = [newCur, max ?? newCur];
                   dcHealthState.set(tMsgId, hs);
-                  const dcIds = getDcMessageIds(game, enemyPN);
-                  const dcList = getDcList(game, enemyPN);
-                  const idx = (dcIds || []).indexOf(tMsgId);
-                  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+                  syncHealthStateToList(game, enemyPN, tMsgId, hs);
                   subParts.push(`${hits} Dmg (HP: ${cur ?? max}→${newCur})`);
                 }
               }
@@ -1579,10 +1559,7 @@ export function resolveAbility(abilityId, context) {
               const newCur = Math.max(0, (cur ?? max) - hits);
               healthState[figIdx] = [newCur, max ?? newCur];
               dcHealthState.set(targetMsgId, healthState);
-              const dcIds = getDcMessageIds(game, enemyPlayerNum);
-              const dcList = getDcList(game, enemyPlayerNum);
-              const idx = (dcIds || []).indexOf(targetMsgId);
-              if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+              syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
               resultParts.push(`${hits} Damage (HP: ${cur ?? max} → ${newCur})`);
             } else {
               resultParts.push(`apply ${hits} Damage manually`);
@@ -1695,10 +1672,7 @@ export function resolveAbility(abilityId, context) {
               const newCur = Math.max(0, (cur ?? max) - totalDmg);
               healthState[figIdx] = [newCur, max ?? newCur];
               dcHealthState.set(targetMsgId, healthState);
-              const dcIds = getDcMessageIds(game, enemyPlayerNum);
-              const dcList = getDcList(game, enemyPlayerNum);
-              const idx = (dcIds || []).indexOf(targetMsgId);
-              if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+              syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
               resultParts.push(`${totalDmg} Damage (HP: ${cur ?? max} → ${newCur})`);
             } else {
               resultParts.push(`apply ${totalDmg} Damage manually`);
@@ -1789,10 +1763,7 @@ export function resolveAbility(abilityId, context) {
                   const newCur = Math.max(0, (cur ?? max) - hits);
                   healthState[figIdx] = [newCur, max ?? newCur];
                   dcHealthState.set(figMsgId, healthState);
-                  const dcIds = getDcMessageIds(game, pn);
-                  const dcList = getDcList(game, pn);
-                  const idx = (dcIds || []).indexOf(figMsgId);
-                  if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+                  syncHealthStateToList(game, pn, figMsgId, healthState);
                   affected.push(`${dcNameFromFigureKey(fk)} -${hits}HP (→${newCur})`);
                 } else {
                   affected.push(`${dcNameFromFigureKey(fk)} (-${hits}HP, apply manually)`);
@@ -1829,11 +1800,7 @@ export function resolveAbility(abilityId, context) {
       if (validSpaces.length === 0) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (no spaces in range).` };
       // freeMoveBonus (Mortar Launcher): grant MP before the space pick so player can move first
       if (entry.freeMoveBonus > 0 && msgId) {
-        game.movementBank = game.movementBank || {};
-        const fbBank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-        fbBank.total = (fbBank.total ?? 0) + entry.freeMoveBonus;
-        fbBank.remaining = (fbBank.remaining ?? 0) + entry.freeMoveBonus;
-        game.movementBank[msgId] = fbBank;
+        addMovementPoints(game, msgId, entry.freeMoveBonus);
       }
       const moveNote = entry.freeMoveBonus > 0 ? ` (Move up to ${entry.freeMoveBonus} spaces first, then choose a target space.)` : '';
       return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**${entry.label}** — Choose a target space within ${range}:${moveNote}`, refreshMovementBank: entry.freeMoveBonus > 0, activeMsgId: msgId };
@@ -1894,10 +1861,7 @@ export function resolveAbility(abilityId, context) {
                 const newCur = Math.max(0, (cur ?? max) - totalPerFig);
                 hs[figIdx] = [newCur, max ?? newCur];
                 dcHealthState.set(figMsgId, hs);
-                const dcIds = getDcMessageIds(game, pn);
-                const dcList = getDcList(game, pn);
-                const idx = (dcIds || []).indexOf(figMsgId);
-                if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+                syncHealthStateToList(game, pn, figMsgId, hs);
                 const dmgLabel = [dmgAmt > 0 ? `${dmgAmt} Dmg` : null, strainAmt > 0 ? `${strainAmt} Strain` : null].filter(Boolean).join('+');
                 parts.push(`${dmgLabel} (HP: ${cur ?? max}→${newCur})`);
               } else {
@@ -1936,10 +1900,7 @@ export function resolveAbility(abilityId, context) {
           const newCur = Math.max(0, (cur ?? max) - selfStrainAmt);
           selfHs[selfFigIdx] = [newCur, max ?? newCur];
           dcHealthState.set(msgId, selfHs);
-          const dcIds = getDcMessageIds(game, playerNum);
-          const dcList = getDcList(game, playerNum);
-          const idx = (dcIds || []).indexOf(msgId);
-          if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...selfHs];
+          syncHealthStateToList(game, playerNum, msgId, selfHs);
           results.push(`**${meta?.dcName}** suffers ${selfStrainAmt} Strain (self)`);
         }
       }
@@ -2000,11 +1961,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'dcSpecial' && typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && !entry.nextAttacksBonusHits) {
     const { game, msgId } = context;
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    bank.total = (bank.total ?? 0) + entry.freeMoveBonus;
-    bank.remaining = (bank.remaining ?? 0) + entry.freeMoveBonus;
-    game.movementBank[msgId] = bank;
+    addMovementPoints(game, msgId, entry.freeMoveBonus);
     // Also grant free attack if specified (e.g. Executor)
     if (entry.freeAttackBonus) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
@@ -2032,11 +1989,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'dcSpecial' && typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && entry.nextAttacksBonusHits) {
     const { game, msgId, meta } = context;
     if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    bank.total = (bank.total ?? 0) + entry.freeMoveBonus;
-    bank.remaining = (bank.remaining ?? 0) + entry.freeMoveBonus;
-    game.movementBank[msgId] = bank;
+    addMovementPoints(game, msgId, entry.freeMoveBonus);
     const nb = entry.nextAttacksBonusHits;
     game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
     game.nextAttacksBonusHits[meta.playerNum] = { count: nb.count, bonus: nb.bonus };
@@ -2139,16 +2092,9 @@ export function resolveAbility(abilityId, context) {
     const newCur = Math.max(0, (cur ?? max ?? 0) - damage);
     healthState[0] = [newCur, max ?? cur];
     dcHealthState.set(msgId, healthState);
-    const dcMessageIds = getDcMessageIds(game, playerNum);
-    const dcList = getDcList(game, playerNum);
-    const idx = (dcMessageIds || []).indexOf(msgId);
-    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    syncHealthStateToList(game, playerNum, msgId, healthState);
     if (mpBonus > 0) {
-      game.movementBank = game.movementBank || {};
-      const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-      bank.total = (bank.total ?? 0) + mpBonus;
-      bank.remaining = (bank.remaining ?? 0) + mpBonus;
-      game.movementBank[msgId] = bank;
+      addMovementPoints(game, msgId, mpBonus);
     }
     if (doFocus) {
       const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -2335,11 +2281,7 @@ export function resolveAbility(abilityId, context) {
     const speed = getStatsForDc(meta.dcName)?.speed ?? 4;
     const n = speed + entry.mpBonusFromSpeed;
     if (n < 1) return { applied: false, manualMessage: 'Resolve manually: no MP to gain.' };
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    bank.total = (bank.total ?? 0) + n;
-    bank.remaining = (bank.remaining ?? 0) + n;
-    game.movementBank[msgId] = bank;
+    addMovementPoints(game, msgId, n);
     const msg = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
     return { applied: true, logMessage: msg, refreshMovementBank: true, activeMsgId: msgId };
   }
@@ -2367,7 +2309,7 @@ export function resolveAbility(abilityId, context) {
         choiceValues: ['skip', 'Surge+Hit', 'Hit+Block', 'Block+Evade'],
       };
     }
-    const HARMFUL = ['Stun', 'Weaken', 'Bleed'];
+    const HARMFUL = HARMFUL_CONDITIONS;
     const limit = entry.discardUpToNHarmful;
     let discarded = 0;
     game.figureConditions = game.figureConditions || {};
@@ -2403,18 +2345,11 @@ export function resolveAbility(abilityId, context) {
       }
       if (recovered > 0) {
         dcHealthState.set(msgId, healthState);
-        const dcMessageIds = getDcMessageIds(game, playerNum);
-        const dcList = getDcList(game, playerNum);
-        const idx = (dcMessageIds || []).indexOf(msgId);
-        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+        syncHealthStateToList(game, playerNum, msgId, healthState);
       }
     }
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
     const mp = entry.mpBonus;
-    bank.total = (bank.total ?? 0) + mp;
-    bank.remaining = (bank.remaining ?? 0) + mp;
-    game.movementBank[msgId] = bank;
+    addMovementPoints(game, msgId, mp);
     const parts = [];
     if (discarded > 0) parts.push(`Discarded ${discarded} HARMFUL condition(s)`);
     if (recovered > 0) parts.push(`recovered ${recovered} Damage`);
@@ -2434,10 +2369,7 @@ export function resolveAbility(abilityId, context) {
         const [sCur, sMax] = selfHs[0];
         selfHs[0] = [Math.max(0, (sCur ?? sMax ?? 0) - 1), sMax];
         dcHealthState.set(msgId, selfHs);
-        const dcMids = getDcMessageIds(game, playerNum);
-        const dcLst = getDcList(game, playerNum);
-        const siIdx = (dcMids || []).indexOf(msgId);
-        if (siIdx >= 0 && dcLst?.[siIdx]) dcLst[siIdx].healthState = [...selfHs];
+        syncHealthStateToList(game, playerNum, msgId, selfHs);
       }
       const activatingFk = figureKeys[0];
       game.figurePowerTokens = game.figurePowerTokens || {};
@@ -2471,11 +2403,7 @@ export function resolveAbility(abilityId, context) {
     game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
     const current = game.figurePowerTokens[fk].length;
     const toAdd = Math.min(entry.powerTokenGain, 2 - current);
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    bank.total = (bank.total ?? 0) + entry.mpBonus;
-    bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
-    game.movementBank[msgId] = bank;
+    addMovementPoints(game, msgId, entry.mpBonus);
     if (toAdd > 0) {
       game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: meta?.displayName || fk, count: toAdd }], channelId: null, playerNum };
     }
@@ -2502,11 +2430,7 @@ export function resolveAbility(abilityId, context) {
     for (const fk of figureKeys) {
       applyCondition(game, fk, 'Focus');
     }
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    bank.total = (bank.total ?? 0) + entry.mpBonus;
-    bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
-    game.movementBank[msgId] = bank;
+    addMovementPoints(game, msgId, entry.mpBonus);
     const n = entry.mpBonus;
     const mpMsg = n === 1 ? '1 movement point' : `${n} movement points`;
     return {
@@ -2524,12 +2448,8 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
     const n = entry.mpBonus;
-    bank.total = (bank.total ?? 0) + n;
-    bank.remaining = (bank.remaining ?? 0) + n;
-    game.movementBank[msgId] = bank;
+    addMovementPoints(game, msgId, n);
     let msg = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
     // Rank and File: each other friendly TROOPER also gains N MP immediately
     if (entry.trooperMpBonusRound) {
@@ -2545,10 +2465,7 @@ export function resolveAbility(abilityId, context) {
         const eff = getDcEffects()?.[dc.dcName] || getDcEffects()?.[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
         const kws = (eff?.keywords || []).map((k) => String(k).toUpperCase());
         if (!kws.includes('TROOPER')) continue;
-        const dBank = game.movementBank[dMsgId] || { total: 0, remaining: 0 };
-        dBank.total = (dBank.total ?? 0) + bonus;
-        dBank.remaining = (dBank.remaining ?? 0) + bonus;
-        game.movementBank[dMsgId] = dBank;
+        addMovementPoints(game, dMsgId, bonus);
         trooperCount++;
       }
       if (trooperCount > 0) msg += ` Each of ${trooperCount} other friendly TROOPER(s) also gained ${bonus} MP.`;
@@ -2820,10 +2737,7 @@ export function resolveAbility(abilityId, context) {
     }
     if (recovered > 0) {
       dcHealthState.set(actMsgId, healthState);
-      const dcMessageIds = getDcMessageIds(game, playerNum);
-      const dcList = getDcList(game, playerNum);
-      const idx = (dcMessageIds || []).indexOf(actMsgId);
-      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+      syncHealthStateToList(game, playerNum, actMsgId, healthState);
       return { applied: true, logMessage: `Recovered ${recovered} Damage (round ${n}).`, refreshDcEmbed: true };
     }
     return { applied: true, logMessage: 'No damage to recover.' };
@@ -2876,10 +2790,7 @@ export function resolveAbility(abilityId, context) {
     const heal = Math.min(n, damage);
     healthState[targetFigIndex] = [cur + heal, mx];
     dcHealthState.set(targetMsgId, healthState);
-    const dcMessageIds = getDcMessageIds(game, playerNum);
-    const dcList = getDcList(game, playerNum);
-    const idx = (dcMessageIds || []).indexOf(targetMsgId);
-    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    syncHealthStateToList(game, playerNum, targetMsgId, healthState);
     return { applied: true, logMessage: `Adjacent figure recovered ${heal} Damage.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [targetMsgId] };
   }
 
@@ -2915,10 +2826,7 @@ export function resolveAbility(abilityId, context) {
     }
     if (recovered > 0) {
       dcHealthState.set(actMsgId, healthState);
-      const dcMessageIds = getDcMessageIds(game, playerNum);
-      const dcList = getDcList(game, playerNum);
-      const idx = (dcMessageIds || []).indexOf(actMsgId);
-      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+      syncHealthStateToList(game, playerNum, actMsgId, healthState);
       return { applied: true, logMessage: `Recovered ${recovered} Damage.`, refreshDcEmbed: true };
     }
     return { applied: true, logMessage: 'No damage to recover.' };
@@ -2945,7 +2853,7 @@ export function resolveAbility(abilityId, context) {
     }
     const adjacent = [...adjacentSet];
     if (adjacent.length === 0) return { applied: true, logMessage: 'No adjacent friendly figures.' };
-    const HARMFUL = ['Stun', 'Weaken', 'Bleed'];
+    const HARMFUL = HARMFUL_CONDITIONS;
     game.figureConditions = game.figureConditions || {};
     let discarded = 0;
     for (const fk of adjacent) {
@@ -2973,7 +2881,7 @@ export function resolveAbility(abilityId, context) {
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
-    const HARMFUL = ['Stun', 'Weaken', 'Bleed'];
+    const HARMFUL = HARMFUL_CONDITIONS;
     game.figureConditions = game.figureConditions || {};
     let discarded = 0;
     for (const fk of figureKeys) {
@@ -3023,10 +2931,7 @@ export function resolveAbility(abilityId, context) {
     const newCur = Math.max(0, (cur ?? max ?? 0) - n);
     healthState[targetIdx] = [newCur, max];
     dcHealthState.set(targetMsgId, healthState);
-    const dcMessageIds = getDcMessageIds(game, defenderPlayerNum);
-    const dcList = getDcList(game, defenderPlayerNum);
-    const idx = (dcMessageIds || []).indexOf(targetMsgId);
-    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    syncHealthStateToList(game, defenderPlayerNum, targetMsgId, healthState);
     const bonusNote = n > entry.defenderStrain ? ` (+${n - entry.defenderStrain} from copies in discard)` : '';
     return {
       applied: true,
@@ -3188,11 +3093,7 @@ export function resolveAbility(abilityId, context) {
     const playerNum = meta.playerNum;
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     // Add MP to movement bank
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    bank.total = (bank.total ?? 0) + entry.mpBonus;
-    bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
-    game.movementBank[msgId] = bank;
+    addMovementPoints(game, msgId, entry.mpBonus);
     // Apply Focus to all figures in group
     for (const fk of figureKeys) {
       applyCondition(game, fk, 'Focus');
@@ -3236,10 +3137,7 @@ export function resolveAbility(abilityId, context) {
         if (cur < max) {
           hs[figIdx] = [Math.min(max, cur + 1), max];
           dcHealthState.set(figMsgId, hs);
-          const dcIds = getDcMessageIds(game, pNum);
-          const dcList = getDcList(game, pNum);
-          const idx = (dcIds || []).indexOf(figMsgId);
-          if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+          syncHealthStateToList(game, pNum, figMsgId, hs);
           return `**${dcName}** recovered 1 HP`;
         }
       }
@@ -3306,17 +3204,10 @@ export function resolveAbility(abilityId, context) {
       remaining -= healed;
     }
     dcHealthState.set(msgId, healthState);
-    const dcMessageIds = getDcMessageIds(game, meta.playerNum);
-    const dcList = getDcList(game, meta.playerNum);
-    const idx = (dcMessageIds || []).indexOf(msgId);
-    if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
+    syncHealthStateToList(game, meta.playerNum, msgId, healthState);
     const freeMovePart = entry.freeMoveBonus > 0 ? ` Gained ${entry.freeMoveBonus} free movement point${entry.freeMoveBonus !== 1 ? 's' : ''} — use the Move button.` : '';
     if (entry.freeMoveBonus > 0) {
-      game.movementBank = game.movementBank || {};
-      const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-      bank.total = (bank.total ?? 0) + entry.freeMoveBonus;
-      bank.remaining = (bank.remaining ?? 0) + entry.freeMoveBonus;
-      game.movementBank[msgId] = bank;
+      addMovementPoints(game, msgId, entry.freeMoveBonus);
     }
     return {
       applied: true,
@@ -3347,10 +3238,7 @@ export function resolveAbility(abilityId, context) {
         remaining -= healed;
       }
       dcHealthState.set(healMsgId, hs);
-      const dcMids = getDcMessageIds(game, playerNum);
-      const dcLst = getDcList(game, playerNum);
-      const si = (dcMids || []).indexOf(healMsgId);
-      if (si >= 0 && dcLst?.[si]) dcLst[si].healthState = [...hs];
+      syncHealthStateToList(game, playerNum, healMsgId, hs);
       return totalHealed;
     };
     // Phase 2: apply heal to chosen figure
@@ -3432,10 +3320,7 @@ export function resolveAbility(abilityId, context) {
       }
       dcHealthState.set(adjMsgId, adjHealthState);
       const adjMeta2 = dcMessageMeta.get(adjMsgId);
-      const dcMsgIds = getDcMessageIds(game, adjMeta2?.playerNum);
-      const dcList = getDcList(game, adjMeta2?.playerNum);
-      const idx = (dcMsgIds || []).indexOf(adjMsgId);
-      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...adjHealthState];
+      syncHealthStateToList(game, adjMeta2?.playerNum, adjMsgId, adjHealthState);
       const msg = totalRecovered > 0 ? `**${label}** — ${adjLabel} recovered ${totalRecovered} Damage.` : `**${label}** — ${adjLabel} is already at full health.`;
       return { applied: true, logMessage: msg, refreshDcEmbed: true, refreshDcEmbedMsgIds: [adjMsgId] };
     };
@@ -3462,7 +3347,7 @@ export function resolveAbility(abilityId, context) {
 
   // dcSpecial: healAndClearConditionFriendlyAdjacent (Force Heal) — chosen adjacent friendly recovers 1 Damage and discards 1 HARMFUL condition
   if (entry.type === 'dcSpecial' && entry.healAndClearConditionFriendlyAdjacent) {
-    const HARMFUL = ['Stun', 'Weaken', 'Bleed'];
+    const HARMFUL = HARMFUL_CONDITIONS;
     const { game, msgId, meta, dcMessageMeta, dcHealthState, targetFigureKey } = context;
     if (!game || !msgId || !meta || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const mapId = game.selectedMap?.id;
@@ -3491,9 +3376,7 @@ export function resolveAbility(abilityId, context) {
             dcHealthState.set(adjMsgId, adjHealth);
             const adjMeta2 = dcMessageMeta.get(adjMsgId);
             const dList = getDcList(game, adjMeta2?.playerNum);
-            const dIds = getDcMessageIds(game, adjMeta2?.playerNum);
-            const idx = (dIds || []).indexOf(adjMsgId);
-            if (idx >= 0 && dList?.[idx]) dList[idx].healthState = [...adjHealth];
+            syncHealthStateToList(game, adjMeta2?.playerNum, adjMsgId, adjHealth);
             parts.push('recovered 1 Damage');
           } else {
             parts.push('already at full health');
@@ -3670,10 +3553,7 @@ export function resolveAbility(abilityId, context) {
     attHS[attFigIdx] = [aNew, aM ?? aNew];
     dcHealthState.set(attMsgId, attHS);
     const attP = game.lastAttackAttackerPlayerNum ?? opponentPlayerNum(playerNum);
-    const attDcIds = getDcMessageIds(game, attP);
-    const attDcList = getDcList(game, attP);
-    const attIdx = (attDcIds || []).indexOf(attMsgId);
-    if (attIdx >= 0 && attDcList?.[attIdx]) attDcList[attIdx].healthState = [...attHS];
+    syncHealthStateToList(game, attP, attMsgId, attHS);
     const attDcName = attDcList?.[attIdx]?.displayName || attMsgId;
     return { applied: true, logMessage: `Attacker (**${attDcName}**) suffers **${entry.applyDamageToAttacker} Damage** (HP: ${aC ?? aM} → ${aNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [attMsgId] };
   }
@@ -3700,10 +3580,7 @@ export function resolveAbility(abilityId, context) {
       cftHS[cftIdx] = [cNew, cM ?? cNew];
       dcHealthState.set(cftMsgId, cftHS);
       const cftP = dcMessageMeta.get(cftMsgId)?.playerNum;
-      const cftDcIds = getDcMessageIds(game, cftP);
-      const cftDcList = getDcList(game, cftP);
-      const cftIdx2 = (cftDcIds || []).indexOf(cftMsgId);
-      if (cftIdx2 >= 0 && cftDcList?.[cftIdx2]) cftDcList[cftIdx2].healthState = [...cftHS];
+      syncHealthStateToList(game, cftP, cftMsgId, cftHS);
       const cftName = chosenTargedcNameFromFigureKey(tFk);
       return { applied: true, logMessage: `**Collateral Damage** — **${cftName}** suffers **${flatDmg} Damage** (HP: ${cC ?? cM} → ${cNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [cftMsgId] };
     }
@@ -3735,8 +3612,7 @@ export function resolveAbility(abilityId, context) {
         if (sEntry) {
           const [sC, sM] = sEntry; const sNew = Math.max(0, (sC ?? sM) - flatDmg);
           sHS[sIdx] = [sNew, sM ?? sNew]; dcHealthState.set(soloMsgId, sHS);
-          const sDcIds = getDcMessageIds(game, solo.playerNum); const sDcList = getDcList(game, solo.playerNum);
-          const sIdx2 = (sDcIds || []).indexOf(soloMsgId); if (sIdx2 >= 0 && sDcList?.[sIdx2]) sDcList[sIdx2].healthState = [...sHS];
+          syncHealthStateToList(game, solo.playerNum, soloMsgId, sHS);
           return { applied: true, logMessage: `**Collateral Damage** — **${solo.label}** suffers **${flatDmg} Damage** (HP: ${sC ?? sM} → ${sNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [soloMsgId] };
         }
       }
@@ -4164,10 +4040,7 @@ export function resolveAbility(abilityId, context) {
       const [cur, max] = hs;
       healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - totalDamage), max];
       dcHealthState.set(targetMsgId, healthState);
-      const dcMsgIds = getDcMessageIds(game, oppNum);
-      const dcListArr = getDcList(game, oppNum);
-      const idx2 = (dcMsgIds || []).indexOf(targetMsgId);
-      if (idx2 >= 0 && dcListArr?.[idx2]) dcListArr[idx2].healthState = [...healthState];
+      syncHealthStateToList(game, oppNum, targetMsgId, healthState);
       const strainPart2 = strain > 0 ? ` and ${strain} Strain` : '';
       const tName = targetMeta.displayName || targetMeta.dcName || chosenFigureKey;
       return { applied: true, logMessage: `**${tName}** suffered ${damage > 0 ? `${damage} Damage${strainPart2}` : `${strain} Strain`}.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [targetMsgId] };
@@ -4175,11 +4048,7 @@ export function resolveAbility(abilityId, context) {
     // First call: grant MP, then find adjacent hostiles and auto-apply or offer choice
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    bank.total = (bank.total ?? 0) + entry.mpBonus;
-    bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
-    game.movementBank[msgId] = bank;
+    addMovementPoints(game, msgId, entry.mpBonus);
     if (totalDamage <= 0) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
     const meta = dcMessageMeta.get(msgId);
     if (!meta) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
@@ -4223,10 +4092,7 @@ export function resolveAbility(abilityId, context) {
     const [cur, max] = hs0;
     healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - totalDamage), max];
     dcHealthState.set(targetMsgId, healthState);
-    const dcMsgIds2 = getDcMessageIds(game, oppNum);
-    const dcListArr2 = getDcList(game, oppNum);
-    const idx2 = (dcMsgIds2 || []).indexOf(targetMsgId);
-    if (idx2 >= 0 && dcListArr2?.[idx2]) dcListArr2[idx2].healthState = [...healthState];
+    syncHealthStateToList(game, oppNum, targetMsgId, healthState);
     const strainPart = strain > 0 ? ` and ${strain} Strain` : '';
     return {
       applied: true,
@@ -4270,10 +4136,7 @@ export function resolveAbility(abilityId, context) {
       const [cur, max] = hs;
       healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - totalDamage), max];
       dcHealthState.set(targetMsgId, healthState);
-      const dcMessageIds = getDcMessageIds(game, oppNum);
-      const dcList2 = getDcList(game, oppNum);
-      const idx2 = (dcMessageIds || []).indexOf(targetMsgId);
-      if (idx2 >= 0 && dcList2?.[idx2]) dcList2[idx2].healthState = [...healthState];
+      syncHealthStateToList(game, oppNum, targetMsgId, healthState);
       // Apply conditions to target
       if (targetConditions.length > 0) {
         for (const c of targetConditions) applyCondition(game, targetFk, c);
@@ -4371,10 +4234,7 @@ export function resolveAbility(abilityId, context) {
                 const aNew = Math.max(0, (aCur ?? aMax) - splashDmg);
                 adjHs[adjFi] = [aNew, aMax ?? aNew];
                 dcHealthState.set(adjMsgId, adjHs);
-                const adjIds = getDcMessageIds(game, adjPnum);
-                const adjList = getDcList(game, adjPnum);
-                const adjI = (adjIds || []).indexOf(adjMsgId);
-                if (adjI >= 0 && adjList?.[adjI]) adjList[adjI].healthState = [...adjHs];
+                syncHealthStateToList(game, adjPnum, adjMsgId, adjHs);
                 splashParts.push(`**${adjName}** ${splashDmg} Damage (${aCur ?? aMax}→${aNew})`);
               }
             } else if (splashDmg > 0) {
@@ -5448,11 +5308,7 @@ export function resolveAbility(abilityId, context) {
       const mid = qualifyingMsgIds[i];
       const nm = qualifyingNames[i];
       if (grantMp) {
-        game.movementBank = game.movementBank || {};
-        const bank = game.movementBank[mid] || { total: 0, remaining: 0 };
-        bank.total = (bank.total ?? 0) + 2;
-        bank.remaining = (bank.remaining ?? 0) + 2;
-        game.movementBank[mid] = bank;
+        addMovementPoints(game, mid, 2);
         results.push(`**${nm}** +2 MP`);
       } else {
         game.figurePowerTokens = game.figurePowerTokens || {};
@@ -5553,10 +5409,7 @@ export function resolveAbility(abilityId, context) {
             const newCur = Math.max(0, (cur ?? max) - 2);
             hs[figIdx] = [newCur, max ?? newCur];
             dcHealthState.set(figMsgId, hs);
-            const dcIds = getDcMessageIds(game, oppNum);
-            const dcList = getDcList(game, oppNum);
-            const idx2 = (dcIds || []).indexOf(figMsgId);
-            if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+            syncHealthStateToList(game, oppNum, figMsgId, hs);
             results.push(`**${dcName}** 2 Strain (${cur ?? max}→${newCur})`);
           } else {
             results.push(`**${dcName}** 2 Strain (apply manually)`);
@@ -5606,10 +5459,7 @@ export function resolveAbility(abilityId, context) {
               const newCur = Math.max(0, (cur ?? max) - dmg);
               hs[figIdx] = [newCur, max ?? newCur];
               dcHealthState.set(figMsgId, hs);
-              const dcIds = getDcMessageIds(game, p);
-              const dcList = getDcList(game, p);
-              const idx2 = (dcIds || []).indexOf(figMsgId);
-              if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+              syncHealthStateToList(game, p, figMsgId, hs);
               seenMsgIds.add(figMsgId);
               results.push(`**${dcName}** ${dmg} Dmg (${cur ?? max}→${newCur})`);
             } else {
@@ -5627,10 +5477,7 @@ export function resolveAbility(abilityId, context) {
       const [cur, max] = selfHs[selfFigIdx];
       selfHs[selfFigIdx] = [0, max ?? cur];
       dcHealthState.set(msgId, selfHs);
-      const dcIds = getDcMessageIds(game, playerNum);
-      const dcList = getDcList(game, playerNum);
-      const idx2 = (dcIds || []).indexOf(msgId);
-      if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...selfHs];
+      syncHealthStateToList(game, playerNum, msgId, selfHs);
     }
     const dieDesc = dmg > 0 ? `${dmg} Damage` : 'blank (0 Damage)';
     const adjDesc = results.length ? results.join(', ') : 'No adjacent figures affected.';
@@ -5774,10 +5621,7 @@ export function resolveAbility(abilityId, context) {
         const [cur, max] = hs[figIdx];
         hs[figIdx] = [0, max ?? cur];
         dcHealthState.set(targetMsgId, hs);
-        const dcIds = getDcMessageIds(game, playerNum);
-        const dcList = getDcList(game, playerNum);
-        const idx2 = (dcIds || []).indexOf(targetMsgId);
-        if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+        syncHealthStateToList(game, playerNum, targetMsgId, hs);
       }
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       const targetStats = getDcEffects()[dcName]?.cost ?? 0;
@@ -5918,10 +5762,7 @@ export function resolveAbility(abilityId, context) {
               const newCur = Math.max(0, (cur ?? max) - 2);
               hs[figIdx] = [newCur, max ?? newCur];
               dcHealthState.set(figMsgId, hs);
-              const dcIds = getDcMessageIds(game, pn);
-              const dcList = getDcList(game, pn);
-              const idx2 = (dcIds || []).indexOf(figMsgId);
-              if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+              syncHealthStateToList(game, pn, figMsgId, hs);
               results.push(`**${dcName}**: 2 Dmg (HP: ${cur ?? max}→${newCur})`);
             } else {
               results.push(`**${dcName}**: apply 2 Dmg manually`);
@@ -6078,10 +5919,7 @@ export function resolveAbility(abilityId, context) {
         const newCur = Math.max(0, (cur ?? max) - 4);
         hs[figIdx] = [newCur, max ?? newCur];
         dcHealthState.set(msgId, hs);
-        const dcIds = getDcMessageIds(game, playerNum);
-        const dcList = getDcList(game, playerNum);
-        const idx2 = (dcIds || []).indexOf(msgId);
-        if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+        syncHealthStateToList(game, playerNum, msgId, hs);
         strainNote = `4 Strain (HP: ${cur ?? max}→${newCur})`;
       }
     }
@@ -6126,10 +5964,7 @@ export function resolveAbility(abilityId, context) {
                 const newCur = Math.max(0, (cur ?? max) - hitsFromDie);
                 hs[fi] = [newCur, max ?? newCur];
                 dcHealthState.set(figMsgId, hs);
-                const dcIds = getDcMessageIds(game, pn);
-                const dcList = getDcList(game, pn);
-                const idx2 = (dcIds || []).indexOf(figMsgId);
-                if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+                syncHealthStateToList(game, pn, figMsgId, hs);
                 results.push(`**${dcN}**: ${hitsFromDie} Dmg (HP: ${cur ?? max}→${newCur})`);
               } else { results.push(`**${dcN}**: apply ${hitsFromDie} Dmg manually`); }
             }
@@ -6231,11 +6066,7 @@ export function resolveAbility(abilityId, context) {
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
     // Apply 1 MP + Focus to activating figure (used in both phases)
     const applyMpAndFocus = () => {
-      game.movementBank = game.movementBank || {};
-      const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-      bank.total = (bank.total ?? 0) + 1;
-      bank.remaining = (bank.remaining ?? 0) + 1;
-      game.movementBank[msgId] = bank;
+      addMovementPoints(game, msgId, 1);
       applyCondition(game, activatorFk, 'Focus');
     };
     // Phase 2: apply damage to chosen (chosenFigureKey = 'self' or a friendly figure key)
@@ -6252,10 +6083,7 @@ export function resolveAbility(abilityId, context) {
         const [cur, max] = targetHs[fi];
         targetHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
         dcHealthState.set(damageMsgId, targetHs);
-        const dcMids = getDcMessageIds(game, playerNum);
-        const dcLst = getDcList(game, playerNum);
-        const si = (dcMids || []).indexOf(damageMsgId);
-        if (si >= 0 && dcLst?.[si]) dcLst[si].healthState = [...targetHs];
+        syncHealthStateToList(game, playerNum, damageMsgId, targetHs);
       }
       applyMpAndFocus();
       const targetName = targetIsActivator ? (meta.displayName || meta.dcName) : dcNameFromFigureKey(damageFk);
@@ -6286,10 +6114,7 @@ export function resolveAbility(abilityId, context) {
           const [cur, max] = selfHs[fi];
           selfHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
           dcHealthState.set(msgId, selfHs);
-          const dcMids = getDcMessageIds(game, playerNum);
-          const dcLst = getDcList(game, playerNum);
-          const si = (dcMids || []).indexOf(msgId);
-          if (si >= 0 && dcLst?.[si]) dcLst[si].healthState = [...selfHs];
+          syncHealthStateToList(game, playerNum, msgId, selfHs);
         }
       }
       applyMpAndFocus();
@@ -6336,10 +6161,7 @@ export function resolveAbility(abilityId, context) {
           const [cur, max] = targetHs[fi];
           targetHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
           dcHealthState.set(targetMsgId, targetHs);
-          const dcMids = getDcMessageIds(game, oppNum);
-          const dcLst = getDcList(game, oppNum);
-          const si = (dcMids || []).indexOf(targetMsgId);
-          if (si >= 0 && dcLst?.[si]) dcLst[si].healthState = [...targetHs];
+          syncHealthStateToList(game, oppNum, targetMsgId, targetHs);
         }
       }
       return { applied: true, logMessage: `**Dark Energy** — Pushed **${targetName}** to ${String(chosenSpace).toUpperCase()}, dealt 1 Damage.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
@@ -6424,11 +6246,7 @@ export function resolveAbility(abilityId, context) {
     }
     // Phase 2a: Move 2 spaces
     if (chosenFigureKey === 'move2') {
-      game.movementBank = game.movementBank || {};
-      const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-      bank.total = (bank.total ?? 0) + 2;
-      bank.remaining = (bank.remaining ?? 0) + 2;
-      game.movementBank[msgId] = bank;
+      addMovementPoints(game, msgId, 2);
       return { applied: true, logMessage: `**Looking for a Fight** — Chose to move 2 spaces.`, refreshMovementBank: true, activeMsgId: msgId };
     }
     // Phase 2b: Push hostile — find spaces adjacent to the chosen hostile
@@ -6481,11 +6299,7 @@ export function resolveAbility(abilityId, context) {
       if (!figMsgId) return { applied: false, manualMessage: 'Could not find figure DC — apply action manually.' };
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       const figSpeed = getDcEffects()[dcName]?.speed ?? 3;
-      game.movementBank = game.movementBank || {};
-      const bank = game.movementBank[figMsgId] || { total: 0, remaining: 0 };
-      bank.total = (bank.total || 0) + figSpeed;
-      bank.remaining = (bank.remaining || 0) + figSpeed;
-      game.movementBank[figMsgId] = bank;
+      addMovementPoints(game, figMsgId, figSpeed);
       return { applied: true, logMessage: `**Support Specialist** — **${dcName}** gains ${figSpeed} MP (free interrupt move). Use their Move button to spend MP.` };
     }
     // Phase 1: find DROID/TECHNICIAN/TROOPER friendlies within 3
@@ -6524,11 +6338,7 @@ export function resolveAbility(abilityId, context) {
       if (!figMsgId) return { applied: false, manualMessage: 'Could not find figure DC — apply move manually.' };
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       const figSpeed = getDcEffects()[dcName]?.speed ?? 3;
-      game.movementBank = game.movementBank || {};
-      const bank = game.movementBank[figMsgId] || { total: 0, remaining: 0 };
-      bank.total = (bank.total || 0) + figSpeed;
-      bank.remaining = (bank.remaining || 0) + figSpeed;
-      game.movementBank[figMsgId] = bank;
+      addMovementPoints(game, figMsgId, figSpeed);
       return { applied: true, logMessage: `**Field Tactician** — **${dcName}** gains ${figSpeed} MP (interrupt move). Use their Move button.` };
     }
     // Phase 1: any friendly within 2
@@ -6561,11 +6371,7 @@ export function resolveAbility(abilityId, context) {
       if (!figMsgId) return { applied: false, manualMessage: 'Could not find TROOPER DC — apply interrupt manually.' };
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       const figSpeed = getDcEffects()[dcName]?.speed ?? 3;
-      game.movementBank = game.movementBank || {};
-      const bank = game.movementBank[figMsgId] || { total: 0, remaining: 0 };
-      bank.total = (bank.total || 0) + figSpeed;
-      bank.remaining = (bank.remaining || 0) + figSpeed;
-      game.movementBank[figMsgId] = bank;
+      addMovementPoints(game, figMsgId, figSpeed);
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[figMsgId] = true;
       return { applied: true, logMessage: `**Call the Vanguard** — **${dcName}** gains ${figSpeed} MP + 1 free attack (interrupt). Use their Move and Attack buttons.` };
@@ -6610,10 +6416,7 @@ export function resolveAbility(abilityId, context) {
           const newCur = Math.max(0, (cur ?? max) - droidCount);
           hs[fi] = [newCur, max ?? newCur];
           dcHealthState.set(figMsgId, hs);
-          const dcIds = getDcMessageIds(game, oppNum);
-          const dcList = getDcList(game, oppNum);
-          const idx2 = (dcIds || []).indexOf(figMsgId);
-          if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+          syncHealthStateToList(game, oppNum, figMsgId, hs);
           dmgNote = `${droidCount} Dmg (HP: ${cur ?? max}→${newCur})`;
         }
       }
@@ -6662,10 +6465,7 @@ export function resolveAbility(abilityId, context) {
           const newCur = Math.max(0, (cur ?? max) - dmg);
           hs[fi] = [newCur, max ?? newCur];
           dcHealthState.set(figMsgId, hs);
-          const dcIds = getDcMessageIds(game, oppNum);
-          const dcList = getDcList(game, oppNum);
-          const idx2 = (dcIds || []).indexOf(figMsgId);
-          if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+          syncHealthStateToList(game, oppNum, figMsgId, hs);
           dmgNote = `${dmg} Dmg (HP: ${cur ?? max}→${newCur})`;
         }
       }
@@ -6958,10 +6758,7 @@ export function resolveAbility(abilityId, context) {
           const newCur = Math.max(0, (cur ?? max) - 4); // 2 dmg + 2 strain = 4 total
           hs[fi] = [newCur, max ?? newCur];
           dcHealthState.set(figMsgId, hs);
-          const dcIds = getDcMessageIds(game, oppNum);
-          const dcList = getDcList(game, oppNum);
-          const idx2 = (dcIds || []).indexOf(figMsgId);
-          if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+          syncHealthStateToList(game, oppNum, figMsgId, hs);
           dmgNote = `2 Dmg + 2 Strain (HP: ${cur ?? max}→${newCur})`;
         }
       }
@@ -6969,11 +6766,7 @@ export function resolveAbility(abilityId, context) {
       return { applied: true, logMessage: `**Lord of the Sith** — Force Choke **${dcName}**: ${dmgNote}. (2 MP already added)`, refreshDcEmbed: !!figMsgId };
     }
     // Grant 2 MP to Vader
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    bank.total = (bank.total || 0) + 2;
-    bank.remaining = (bank.remaining || 0) + 2;
-    game.movementBank[msgId] = bank;
+    addMovementPoints(game, msgId, 2);
     if (choiceIndex !== undefined && choiceIndex !== null) {
       if (choiceIndex === 1) {
         // Free melee attack
@@ -7036,21 +6829,14 @@ export function resolveAbility(abilityId, context) {
             const newCur = Math.max(0, (cur ?? max) - dmg);
             hs[fi] = [newCur, max ?? newCur];
             dcHealthState.set(figMsgId, hs);
-            const dcIds = getDcMessageIds(game, attackerPn);
-            const dcList = getDcList(game, attackerPn);
-            const idx2 = (dcIds || []).indexOf(figMsgId);
-            if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+            syncHealthStateToList(game, attackerPn, figMsgId, hs);
             dmgNote = `${dmg} Dmg (HP: ${cur ?? max}→${newCur})`;
           }
         }
       }
       // Grant 2 MP to Fennec
       if (msgId) {
-        game.movementBank = game.movementBank || {};
-        const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-        bank.total = (bank.total || 0) + 2;
-        bank.remaining = (bank.remaining || 0) + 2;
-        game.movementBank[msgId] = bank;
+        addMovementPoints(game, msgId, 2);
       }
       const atkName = attackerFk ? dcNameFromFigureKey(attackerFk) : 'attacker';
       return { applied: true, logMessage: `**Dangerous Prey** — **${atkName}**: ${dmgNote}${isAdjacent ? ' (adjacent — 3 dmg)' : ' (within 4 — 1 dmg)'}. Fennec gains 2 MP.`, refreshDcEmbed: dmg > 0 };
@@ -7079,10 +6865,7 @@ export function resolveAbility(abilityId, context) {
             const newCur = Math.max(0, (cur ?? max) - dmg);
             hs[fi] = [newCur, max ?? newCur];
             dcHealthState.set(figMsgId, hs);
-            const dcIds = getDcMessageIds(game, attackerPn);
-            const dcList = getDcList(game, attackerPn);
-            const idx2 = (dcIds || []).indexOf(figMsgId);
-            if (idx2 >= 0 && dcList?.[idx2]) dcList[idx2].healthState = [...hs];
+            syncHealthStateToList(game, attackerPn, figMsgId, hs);
             dmgNote = `${dmg} Dmg (HP: ${cur ?? max}→${newCur})`;
           }
         }
@@ -7211,10 +6994,7 @@ export function resolveAbility(abilityId, context) {
           const newCur = Math.max(0, (cur ?? max) - 1);
           hs[0] = [newCur, max ?? newCur];
           dcHealthState.set(msgId, hs);
-          const dcList = getDcList(game, playerNum);
-          const dcIds = getDcMessageIds(game, playerNum);
-          const idx = (dcIds || []).indexOf(msgId);
-          if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+          syncHealthStateToList(game, playerNum, msgId, hs);
           strainNote = `1 Strain (HP: ${cur ?? max}→${newCur})`;
         }
       }
@@ -7226,11 +7006,7 @@ export function resolveAbility(abilityId, context) {
       if (chosenFigureKey) {
         const droidMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
         if (droidMsgId) {
-          game.movementBank = game.movementBank || {};
-          const bank = game.movementBank[droidMsgId] || { total: 0, remaining: 0 };
-          bank.total = (bank.total || 0) + 1;
-          bank.remaining = (bank.remaining || 0) + 1;
-          game.movementBank[droidMsgId] = bank;
+          addMovementPoints(game, droidMsgId, 1);
           mpNote = ` **${dcNameFromFigureKey(chosenFigureKey)}** gains 1 MP.`;
         }
       }
@@ -7465,11 +7241,7 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    bank.total = (bank.total ?? 0) + entry.mpBonus;
-    bank.remaining = (bank.remaining ?? 0) + entry.mpBonus;
-    game.movementBank[msgId] = bank;
+    addMovementPoints(game, msgId, entry.mpBonus);
     return { applied: true, logMessage: `Gained **${entry.mpBonus} MP**.` };
   }
 

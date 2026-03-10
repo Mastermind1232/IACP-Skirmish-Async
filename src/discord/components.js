@@ -6,6 +6,23 @@ const MAX_BUTTONS_PER_ROW = 5;
 const MAX_ROWS_PER_MESSAGE = 5;
 const MAX_LABEL_LENGTH = 80;
 
+/**
+ * Group an array of space coordinate strings (e.g. 'a3', 'b12') by their numeric row suffix.
+ * @param {string[]} spaces
+ * @returns {{ byRow: Record<number, string[]>, sortedRows: number[] }}
+ */
+function groupSpacesByRow(spaces) {
+  const byRow = {};
+  for (const s of spaces) {
+    const m = s.match(/^([a-z]+)(\d+)$/i);
+    const row = m ? parseInt(m[2], 10) : 0;
+    if (!byRow[row]) byRow[row] = [];
+    byRow[row].push(s);
+  }
+  const sortedRows = Object.keys(byRow).map(Number).sort((a, b) => a - b);
+  return { byRow, sortedRows };
+}
+
 /** Discord button label limit (2.5). Truncate to max chars; default 80. */
 export function truncateLabel(s, max = MAX_LABEL_LENGTH) {
   if (s == null) return '';
@@ -492,15 +509,8 @@ export function getSelectSquadButton(gameId, playerNum) {
   );
 }
 
-/** Select Squad button for hand thread. */
-export function getHandSquadButtons(gameId, playerNum) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`squad_select_${gameId}_${playerNum}`)
-      .setLabel('Select Squad')
-      .setStyle(ButtonStyle.Primary),
-  );
-}
+/** Select Squad button for hand thread (alias). */
+export const getHandSquadButtons = getSelectSquadButton;
 
 export function getKillGameButton(gameId) {
   return new ActionRowBuilder().addComponents(
@@ -631,16 +641,13 @@ export function getSpaceChoiceRows(customIdPrefix, validSpaces, mapSpaces, maxRo
     if (diff !== 0) return diff;
     return a.localeCompare(b);
   });
-  const byRow = {};
+  const { byRow } = groupSpacesByRow(available);
+  // Preserve insertion order (map-space index sort) rather than numeric row sort
   const rowOrder = [];
   for (const s of available) {
     const m = s.match(/^([a-z]+)(\d+)$/i);
     const row = m ? parseInt(m[2], 10) : 0;
-    if (!byRow[row]) {
-      byRow[row] = [];
-      rowOrder.push(row);
-    }
-    byRow[row].push(s);
+    if (!rowOrder.includes(row)) rowOrder.push(row);
   }
   const rows = [];
   for (const rowNum of rowOrder) {
@@ -747,14 +754,7 @@ export function getDeploySpaceGridRows(gameId, playerNum, flatIndex, validSpaces
   const available = (validSpaces || [])
     .map((s) => String(s).toLowerCase())
     .filter((s) => !occupied.has(s));
-  const byRow = {};
-  for (const s of available) {
-    const m = s.match(/^([a-z]+)(\d+)$/i);
-    const row = m ? parseInt(m[2], 10) : 0;
-    if (!byRow[row]) byRow[row] = [];
-    byRow[row].push(s);
-  }
-  const sortedRows = Object.keys(byRow).map(Number).sort((a, b) => a - b);
+  const { byRow, sortedRows } = groupSpacesByRow(available);
   for (const r of sortedRows) {
     byRow[r].sort((a, b) => (a || '').localeCompare(b || ''));
   }
@@ -785,14 +785,7 @@ export function buildDeployRowButtons(gameId, playerNum, flatIndex, validSpaces,
   const available = (validSpaces || [])
     .map((s) => String(s).toLowerCase())
     .filter((s) => !occupied.has(s));
-  const byRow = {};
-  for (const s of available) {
-    const m = s.match(/^([a-z]+)(\d+)$/i);
-    const row = m ? parseInt(m[2], 10) : 0;
-    if (!byRow[row]) byRow[row] = [];
-    byRow[row].push(s);
-  }
-  const sortedRows = Object.keys(byRow).map(Number).sort((a, b) => a - b);
+  const { sortedRows } = groupSpacesByRow(available);
   const zoneStyle = zone === 'red' ? ButtonStyle.Danger : ButtonStyle.Primary;
   const btns = sortedRows.map((rowNum) =>
     new ButtonBuilder()
