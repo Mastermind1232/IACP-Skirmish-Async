@@ -776,7 +776,7 @@ export function buildDeployRowButtons(gameId, playerNum, flatIndex, validSpaces,
   const btns = sortedRows.map((rowNum) =>
     new ButtonBuilder()
       .setCustomId(`deploy_row_${gameId}_${playerNum}_${flatIndex}_${rowNum}`)
-      .setLabel(`Row ${rowNum} (${byRow[rowNum].length})`)
+      .setLabel(`Row ${rowNum}`)
       .setStyle(zoneStyle)
   );
   const rows = [];

@@ -56,10 +56,14 @@ function resolveDcInput(raw, dcEffects) {
   const fk = fuzzyKey(name);
   if (fuzzyMap[fk]) return fuzzyMap[fk];
   if (fuzzyMap[fuzzyKey(bracketed)]) return fuzzyMap[fuzzyKey(bracketed)];
-  // Bare name without (Regular)/(Elite): defaults to Regular (Elite must be specified explicitly)
+  // Bare name without (Regular)/(Elite): prefer non-hidden variant; skip hidden cards
   const regMatch = keys.find((k) => k.toLowerCase() === `${lower} (regular)`);
-  if (regMatch) return regMatch;
   const eliteMatch = keys.find((k) => k.toLowerCase() === `${lower} (elite)`);
+  // If Regular is hidden, skip to Elite (and vice versa)
+  if (regMatch && !dcEffects[regMatch]?.hidden) return regMatch;
+  if (eliteMatch && !dcEffects[eliteMatch]?.hidden) return eliteMatch;
+  // Fall through to hidden if it's the only option
+  if (regMatch) return regMatch;
   if (eliteMatch) return eliteMatch;
   // Partial parenthetical: "Luke Skywalker (Jedi)" matches "Luke Skywalker (Jedi Knight)"
   // Only applies when input already contains a '(' — bare names are handled above

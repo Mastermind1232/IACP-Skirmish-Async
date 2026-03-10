@@ -3,19 +3,36 @@
   "cards": {
     "74-Z Speeder Bike (Elite)": {
       "abilityText": "Efficient Travel\n\nMounted: At the start of your activation, gain 3 movement points.\n\nThrusters: While moving, you ignore impassable terrain and must enter at least 1 space that you are already occupying.\n\nForward Mounted Blasters: While attacking, if the target space occupies the same row as both of your spaces, you may reroll 1 attack die. If it does not, apply -1 Hit to the attack results instead.",
-      "keywords": ["TROOPER", "VEHICLE"],
+      "keywords": [
+        "TROOPER",
+        "VEHICLE"
+      ],
       "cost": 7,
       "subCost": 4,
       "health": 7,
       "speed": 5,
       "figures": 2,
       "attack": {
-        "dice": ["blue", "blue", "yellow"],
+        "dice": [
+          "blue",
+          "blue",
+          "yellow"
+        ],
         "type": "ranged"
       },
-      "defense": ["white"],
-      "surgeAbilities": ["damage 2", "evade token"],
-      "passives": ["Efficient Travel", "Mounted", "Thrusters", "Forward Mounted Blasters"],
+      "defense": [
+        "white"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "evade token"
+      ],
+      "passives": [
+        "Efficient Travel",
+        "Mounted",
+        "Thrusters",
+        "Forward Mounted Blasters"
+      ],
       "affiliation": "Imperial",
       "unique": false,
       "attachment": false
@@ -6874,7 +6891,8 @@
       "specials": [],
       "specialAbilityIds": [
         "fury_wookiee_reg"
-      ]
+      ],
+      "hidden": true
     },
     "Yoda": {
       "abilityText": "Calming Presence: At the start of a friendly REBEL FORCE USER figure's activation, that figure may remove one HARMFUL condition and suffer 1 Strain. Limit once per round.\n\nWisdom: At the start of your activation, you may draw 1 Command card. If you do, place 1 card from your hand on the bottom of your deck.\n\nSpecial Action (Do or Do Not): Choose another friendly REBEL FORCE USER within 4 spaces. That figure becomes Focused.\n\nForce Deflection: After an attack targeting you or an adjacent friendly REBEL figure resolves, you may have the attacking figure suffer Damage equal to the number of attack dice rolled. Limit once per round.",
