@@ -1798,7 +1798,9 @@ export async function handleAutoDeploy(interaction, ctx) {
       const boardChannel = await client.channels.fetch(game.boardId);
       const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
       await boardChannel.send(payload);
-    } catch {}
+    } catch (err) {
+      console.error('Failed to post board map after auto-deploy:', err?.message ?? err);
+    }
   }
 
   await logGameAction(game, client, `<@${interaction.user.id}> auto-deployed ${placed} figure(s) in the ${playerZone} zone`, { phase: 'DEPLOYMENT', icon: 'deploy' });

@@ -13,6 +13,14 @@ export function truncateLabel(s, max = MAX_LABEL_LENGTH) {
   return str.length <= max ? str : str.slice(0, max - 1) + '…';
 }
 
+/** Truncate a label with a fixed prefix, ensuring the name portion gets an ellipsis if needed. */
+function _truncLabel(prefix, name, max = MAX_LABEL_LENGTH) {
+  const full = `${prefix}${name}`;
+  if (full.length <= max) return full;
+  const maxName = max - prefix.length - 1; // -1 for ellipsis
+  return `${prefix}${name.slice(0, maxName)}…`;
+}
+
 /**
  * Area-based button styles per plan 2.5: combat=red, confirm=green, cancel=grey, etc.
  * @param {string} area - 'attack'|'confirm'|'cancel'|'destructive'|'setup'|'movement'|'surge'|'interact'|'primary'|'secondary'
@@ -920,7 +928,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       const ccBtns = ccSpecials.map((ccName, idx) =>
         new ButtonBuilder()
           .setCustomId(`dc_cc_special_${msgId}_${idx}`)
-          .setLabel(`CC: ${ccName}`.slice(0, 80))
+          .setLabel(_truncLabel('CC: ', ccName))
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(noAct)
       );
@@ -935,7 +943,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       const ccDoubleBtns = ccDoubles.map((ccName, idx) =>
         new ButtonBuilder()
           .setCustomId(`dc_cc_double_${msgId}_${idx}`)
-          .setLabel(`CC (2 Actions): ${ccName}`.slice(0, 80))
+          .setLabel(_truncLabel('CC (2 Actions): ', ccName))
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(isStunned || (actionsRemaining ?? 2) < 2)
       );
@@ -950,7 +958,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       const eoaBtns = eoaCards.map((ccName, idx) =>
         new ButtonBuilder()
           .setCustomId(`dc_cc_eoa_${msgId}_${idx}`)
-          .setLabel(`CC (End of Act.): ${ccName}`.slice(0, 80))
+          .setLabel(_truncLabel('CC (End of Act.): ', ccName))
           .setStyle(ButtonStyle.Success)
           .setDisabled(false)
       );
