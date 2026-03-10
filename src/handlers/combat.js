@@ -1811,11 +1811,7 @@ export async function handleCombatRoll(interaction, ctx) {
       combat.demoralizingMonologueApplied = true;
       game.forceDefenderRerollOne = null;
     }
-    // Power Converter (Saska): device reroll grants +1 atk reroll to friendly figure
-    if (game.deviceRerollGranted?.[combat.attackerMsgId]) {
-      atkSpecialReroll += 1;
-      delete game.deviceRerollGranted[combat.attackerMsgId];
-    }
+    // Power Converter (Saska): now handled as combat-time prompt (see PC check after reroll counts calc)
     // Trusted Ally (Skirmish Upgrade): if a friendly DROID within 3 has this attachment (not exhausted), +1 atk reroll
     {
       const _taFigs = game.figurePositions?.[attackerPlayerNum] || {};
@@ -1848,22 +1844,7 @@ export async function handleCombatRoll(interaction, ctx) {
     }
     const atkRerolls = (combat.rerollOneAttackDie || 0) + (game.roundAttackRerollDice?.[attackerPlayerNum] || 0) + atkInnate.attackReroll + atkSpecialReroll;
     const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll + defSpecialReroll + _dmForcedReroll;
-    // Veteran Instincts: defender may add +1 Block or +1 Evade before the reroll window
-    if (game.vetInstinctsActiveThisActivation?.[defenderPlayerNum] && !combat.vetInstinctsDefenseApplied) {
-      combat.viPendingAtkRerolls = atkRerolls;
-      combat.viPendingDefRerolls = defRerolls;
-      const _viRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_block`).setLabel('+1 Block').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_evade`).setLabel('+1 Evade').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-      );
-      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> add +1 Block or +1 Evade to the defense roll?`, components: [_viRow] }).catch(discordCatch);
-      saveGames();
-      return;
-    }
-    combat.attackerRerollsRemaining = atkRerolls;
-    combat.defenderRerollsRemaining = defRerolls;
-    // Build pre-reroll prompt queue (2C abilities that need a choice before rerolls)
+    // Build pre-reroll prompt queue early (before any interrupts that might save+return)
     combat.pendingPreRerolls = [];
     if (atkSIds.includes('twin_sabers_ahsoka')) {
       combat.pendingPreRerolls.push({ type: 'twin_sabers', playerNum: attackerPlayerNum });
@@ -1880,6 +1861,54 @@ export async function handleCombatRoll(interaction, ctx) {
     if (atkSIds.includes('trained_rancor')) {
       combat.pendingPreRerolls.push({ type: 'trained', playerNum: attackerPlayerNum });
     }
+    // Power Converter (Saska Teft): if attacker has Device token and a friendly DC has power_converter_saska, ping hand channel
+    if (!game.powerConverterUsedThisRound && !combat.powerConverterChecked
+        && (game.deviceTokens?.[combat.attackerFigureKey] || 0) > 0) {
+      // Scan attacker's DCs for power_converter_saska
+      const _pcDcList = getDcList(game, attackerPlayerNum) || [];
+      let _pcFound = false;
+      for (let i = 0; i < _pcDcList.length; i++) {
+        const _pcDcName = _pcDcList[i]?.dcName;
+        const _pcEff = getDcEff()[_pcDcName] || getDcEff()[(_pcDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+        if ((_pcEff?.specialAbilityIds || []).includes('power_converter_saska')) { _pcFound = true; break; }
+      }
+      if (_pcFound) {
+        // Store reroll counts so the handler can resume
+        combat.pcPendingAtkRerolls = atkRerolls;
+        combat.pcPendingDefRerolls = defRerolls;
+        combat.powerConverterChecked = true;
+        game.pendingPowerConverter = { gameId };
+        // Send prompt to attacker's hand channel
+        const _pcHandId = attackerPlayerNum === 1 ? game.p1HandId : game.p2HandId;
+        if (_pcHandId) {
+          const _pcHand = await interaction.client.channels.fetch(_pcHandId).catch(() => null);
+          if (_pcHand) {
+            const _pcRow = new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId(`power_converter_approve_${gameId}`).setLabel('Use Power Converter').setStyle(ButtonStyle.Primary),
+              new ButtonBuilder().setCustomId(`power_converter_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+            );
+            await _pcHand.send({ content: `⚡ **Power Converter** — **${combat.attackerDcName}** has a Device token. Reroll 1 attack die (may swap die color first)?\n<@${game[`player${attackerPlayerNum}Id`] ?? ''}>`, components: [_pcRow] }).catch(discordCatch);
+          }
+        }
+        saveGames();
+        return;
+      }
+    }
+    // Veteran Instincts: defender may add +1 Block or +1 Evade before the reroll window
+    if (game.vetInstinctsActiveThisActivation?.[defenderPlayerNum] && !combat.vetInstinctsDefenseApplied) {
+      combat.viPendingAtkRerolls = atkRerolls;
+      combat.viPendingDefRerolls = defRerolls;
+      const _viRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_block`).setLabel('+1 Block').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_evade`).setLabel('+1 Evade').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> add +1 Block or +1 Evade to the defense roll?`, components: [_viRow] }).catch(discordCatch);
+      saveGames();
+      return;
+    }
+    combat.attackerRerollsRemaining = atkRerolls;
+    combat.defenderRerollsRemaining = defRerolls;
     const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
     if (atkRerolls > 0 || defRerolls > 0 || hasForcedRerolls) {
       if (atkRerolls > 0) {

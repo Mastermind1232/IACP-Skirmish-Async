@@ -55,6 +55,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'pendingOverwatchPlacement',
   'activationKills',
   'activationDamagedFigures',
+  'unstableDevicesUsedThisActivation',
 ];
 
 /**
@@ -255,6 +256,7 @@ const ROUND_FALSE_FLAGS = [
   'noCommandDrawThisRound',
   'p1LaunchPanelFlippedThisRound',
   'p2LaunchPanelFlippedThisRound',
+  'powerConverterUsedThisRound',
 ];
 
 const ROUND_DELETE_FLAGS = [

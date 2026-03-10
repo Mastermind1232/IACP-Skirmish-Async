@@ -475,3 +475,160 @@ export async function handleSlowOnTheDrawResume(interaction, ctx) {
 
   saveGames();
 }
+
+/**
+ * Power Converter (Saska Teft): once per round, while a friendly figure with a Device token is attacking,
+ * may reroll 1 attack die. Before rerolling, you may replace that die with another attack die of any color.
+ *
+ * Button prefixes: power_converter_approve_, power_converter_skip_, power_converter_die_, power_converter_color_
+ */
+export async function handlePowerConverter(interaction, ctx) {
+  const {
+    getGame, canActAsPlayer, saveGames, client,
+    sendRerollUI, proceedAfterRerolls,
+    rollSingleAttackDie, recalcAttackTotals,
+    logGameAction,
+  } = ctx;
+  const customId = interaction.customId;
+  const isApprove = customId.startsWith('power_converter_approve_');
+  const isSkip = customId.startsWith('power_converter_skip_');
+  const isDie = customId.startsWith('power_converter_die_');
+  const isColor = customId.startsWith('power_converter_color_');
+
+  let gameId;
+  if (isApprove) gameId = customId.replace('power_converter_approve_', '');
+  else if (isSkip) gameId = customId.replace('power_converter_skip_', '');
+  else if (isDie) gameId = customId.split('_')[3]; // power_converter_die_{gameId}_{index}
+  else if (isColor) gameId = customId.split('_')[3]; // power_converter_color_{gameId}_{color}
+
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const combat = game.pendingCombat;
+  if (!combat) { await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(() => {}); return; }
+  const atkPN = combat.attackerPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, atkPN, canActAsPlayer, 'Only the attacker may respond to Power Converter.')) return;
+  await interaction.deferUpdate().catch(() => {});
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(() => {});
+
+  const thread = await client.channels.fetch(combat.combatThreadId).catch(() => null);
+
+  // Helper: resume normal reroll flow from stored pending counts
+  const _resumeRerollFlow = async () => {
+    const atkRem = combat.pcPendingAtkRerolls || 0;
+    const defRem = combat.pcPendingDefRerolls || 0;
+    const defPN = opponentPlayerNum(atkPN);
+    // Check Veteran Instincts defense (may have been pending when PC interrupted)
+    if (game.vetInstinctsActiveThisActivation?.[defPN] && !combat.vetInstinctsDefenseApplied && thread) {
+      combat.viPendingAtkRerolls = atkRem;
+      combat.viPendingDefRerolls = defRem;
+      const _viRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${game.gameId}_block`).setLabel('+1 Block').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${game.gameId}_evade`).setLabel('+1 Evade').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`vet_instincts_pick_${game.gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${defPN}Id`] ?? ''}> add +1 Block or +1 Evade to the defense roll?`, components: [_viRow] }).catch(() => {});
+      return; // VI handler will resume reroll flow
+    }
+    const hasForced = (combat.forcedRerollQueue || []).length > 0;
+    combat.attackerRerollsRemaining = atkRem;
+    combat.defenderRerollsRemaining = defRem;
+    if (!combat.pendingPreRerolls) combat.pendingPreRerolls = [];
+    if (atkRem > 0 || defRem > 0 || hasForced) {
+      if (atkRem > 0) {
+        combat.rerollPhase = 'attacker';
+        if (thread) await sendRerollUI(thread, game, combat, 'attacker');
+      } else if (hasForced) {
+        combat.rerollPhase = 'forced';
+        if (thread) await sendRerollUI(thread, game, combat, 'forced');
+      } else {
+        combat.rerollPhase = 'defender';
+        if (thread) await sendRerollUI(thread, game, combat, 'defender');
+      }
+    } else {
+      combat.rerollPhase = null;
+      if (thread) await proceedAfterRerolls(thread, game, combat, ctx);
+    }
+  };
+
+  if (isSkip) {
+    game.pendingPowerConverter = null;
+    if (thread) await thread.send('**Power Converter** — Skipped.').catch(() => {});
+    await _resumeRerollFlow();
+    saveGames();
+    return;
+  }
+
+  if (isApprove) {
+    game.pendingPowerConverter = null;
+    // Show die picker in combat thread
+    const dice = combat.attackDiceResults || [];
+    if (!dice.length || !thread) {
+      await _resumeRerollFlow();
+      saveGames();
+      return;
+    }
+    const buttons = [];
+    for (let i = 0; i < dice.length; i++) {
+      const d = dice[i];
+      buttons.push(
+        new ButtonBuilder()
+          .setCustomId(`power_converter_die_${gameId}_${i}`)
+          .setLabel(`${d.color} #${i + 1}: ${d.acc}a/${d.dmg}d/${d.surge}s`)
+          .setStyle(ButtonStyle.Secondary)
+      );
+    }
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(`power_converter_skip_${gameId}`)
+        .setLabel('Cancel')
+        .setStyle(ButtonStyle.Danger)
+    );
+    const rows = [];
+    for (let i = 0; i < buttons.length; i += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+    await thread.send({ content: `⚡ **Power Converter** — <@${game[`player${atkPN}Id`] ?? ''}> Pick an attack die to reroll (you may swap its color first):`, components: rows.slice(0, 5) }).catch(() => {});
+    saveGames();
+    return;
+  }
+
+  if (isDie) {
+    const dieIdx = parseInt(customId.split('_')[4], 10);
+    combat.powerConverterDieIndex = dieIdx;
+    if (!thread) { await _resumeRerollFlow(); saveGames(); return; }
+    // Show color swap options
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`power_converter_color_${gameId}_red`).setLabel('Swap to Red').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`power_converter_color_${gameId}_blue`).setLabel('Swap to Blue').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`power_converter_color_${gameId}_green`).setLabel('Swap to Green').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`power_converter_color_${gameId}_yellow`).setLabel('Swap to Yellow').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`power_converter_color_${gameId}_skip`).setLabel('Keep Current').setStyle(ButtonStyle.Secondary),
+    );
+    const d = (combat.attackDiceResults || [])[dieIdx];
+    await thread.send({ content: `⚡ **Power Converter** — Replace **${d?.color || '?'} #${dieIdx + 1}** with a different color die, or keep current:`, components: [row] }).catch(() => {});
+    saveGames();
+    return;
+  }
+
+  if (isColor) {
+    const colorChoice = customId.split('_')[4]; // red/blue/green/yellow/skip
+    const dieIdx = combat.powerConverterDieIndex ?? 0;
+    const dice = combat.attackDiceResults || [];
+    if (dieIdx >= 0 && dieIdx < dice.length) {
+      const oldDie = dice[dieIdx];
+      const newColor = colorChoice === 'skip' ? oldDie.color : colorChoice;
+      // Roll the new die
+      const newDie = rollSingleAttackDie(newColor);
+      dice[dieIdx] = newDie;
+      combat.attackDiceResults = dice;
+      const totals = recalcAttackTotals(dice);
+      combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
+      game.powerConverterUsedThisRound = true;
+      const swapMsg = colorChoice !== 'skip' && newColor !== oldDie.color ? ` (swapped ${oldDie.color} → ${newColor})` : '';
+      if (thread) await thread.send(`⚡ **Power Converter** — Rerolled${swapMsg} #${dieIdx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`).catch(() => {});
+      if (logGameAction) await logGameAction(game, client, `⚡ **Power Converter** — Rerolled attack die${swapMsg}.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+    }
+    delete combat.powerConverterDieIndex;
+    await _resumeRerollFlow();
+    saveGames();
+    return;
+  }
+}

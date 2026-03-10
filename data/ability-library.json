@@ -3422,7 +3422,7 @@
       "type": "dcSpecial",
       "category": "passive-reactive",
       "label": "Power Converter",
-      "description": "At the start of your activation, auto-discards device token and grants +1 attack reroll to activating DC. Die replacement is honor-system.",
+      "description": "Combat-time trigger: when a friendly figure with a Device token attacks, player is prompted in hand channel. May reroll 1 attack die, optionally replacing it with any color first.",
       "wiredStatus": "wired"
     },
     "precision_grand_inquisitor": {

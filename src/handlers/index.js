@@ -105,7 +105,7 @@ import {
   handleBotmenuKillNo,
 } from './botmenu.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
-import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume } from './combat-reactions.js';
+import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick } from './interrupts.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
@@ -272,6 +272,10 @@ register('strike_me_down_no_', handleStrikeMeDown);
 register('slow_on_draw_yes_', handleSlowOnTheDraw);
 register('slow_on_draw_no_', handleSlowOnTheDraw);
 register('slow_on_draw_resume_', handleSlowOnTheDrawResume);
+register('power_converter_approve_', handlePowerConverter);
+register('power_converter_skip_', handlePowerConverter);
+register('power_converter_die_', handlePowerConverter);
+register('power_converter_color_', handlePowerConverter);
 register('reaction_skip_', handleReactionSkip);
 register('reaction_use_', handleReactionUse);
 register('right_back_block_', handleRightBack);
@@ -365,6 +369,8 @@ setGroup([
   'hunter_protocol_trigger_', 'hunter_protocol_skip_',
   'strike_me_down_yes_', 'strike_me_down_no_',
   'slow_on_draw_yes_', 'slow_on_draw_no_', 'slow_on_draw_resume_',
+  'power_converter_approve_', 'power_converter_skip_',
+  'power_converter_die_', 'power_converter_color_',
 ], 'combatReactions');
 
 setGroup([
@@ -556,7 +562,7 @@ export {
   handleBotmenuKillNo,
 } from './botmenu.js';
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
-export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume } from './combat-reactions.js';
+export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick } from './interrupts.js';
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';

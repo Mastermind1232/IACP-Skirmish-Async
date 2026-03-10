@@ -943,15 +943,49 @@ export async function handleConfirmActivate(interaction, ctx) {
     game.commsJammerActivePlayerNum = meta.playerNum;
     await thread.send({ content: `📡 **Comms Jammer** — Opponent (P${oppNum}) cannot play Command Cards during this activation.` }).catch(() => {});
   }
-  // Power Converter (Saska Teft): at start of activation, may discard device token for +1 atk reroll
-  if (_mountedIds.includes('power_converter_saska')) {
-    const _pcFk = `${meta.dcName}-0-0`;
-    const _pcTokens = game.deviceTokens?.[_pcFk] || 0;
-    if (_pcTokens > 0) {
-      game.deviceTokens[_pcFk] = _pcTokens - 1;
-      game.deviceRerollGranted = game.deviceRerollGranted || {};
-      game.deviceRerollGranted[msgId] = true;
-      await thread.send({ content: `🔧 **Power Converter** — Discarded 1 Device token (${_pcTokens - 1} remaining). A friendly figure with a Device token may reroll 1 attack die during the next attack.` }).catch(() => {});
+  // Power Converter (Saska Teft): combat-time trigger — handled in combat.js, NOT here
+  // Unstable Devices (Saska Teft): free once-per-activation — a friendly in LOS gains 1 Device token
+  if (_mountedIds.includes('unstable_devices_saska') && !game.unstableDevicesUsedThisActivation?.[msgId]) {
+    const _udHasLos = ctx.hasLineOfSight;
+    const _udMapSpaces = ctx.getMapSpaces?.(game.selectedMap?.id);
+    const _udDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _udSelfFk = `${meta.dcName}-${_udDgIndex}-0`;
+    const _udSelfPos = game.figurePositions?.[meta.playerNum]?.[_udSelfFk];
+    // Collect all figure coords for LOS blocking check
+    const _udAllFigCoords = [];
+    for (const [, fp] of Object.entries(game.figurePositions?.[1] || {})) if (fp) _udAllFigCoords.push(String(fp).toLowerCase());
+    for (const [, fp] of Object.entries(game.figurePositions?.[2] || {})) if (fp) _udAllFigCoords.push(String(fp).toLowerCase());
+    // Find friendlies in LOS
+    const _udFriendlies = [];
+    if (_udSelfPos && _udHasLos && _udMapSpaces) {
+      for (const [fk, fp] of Object.entries(game.figurePositions?.[meta.playerNum] || {})) {
+        if (!fp) continue;
+        if (_udHasLos(String(_udSelfPos).toLowerCase(), String(fp).toLowerCase(), _udMapSpaces, _udAllFigCoords)) {
+          _udFriendlies.push({ figureKey: fk, dcName: dcNameFromFigureKey(fk) });
+        }
+      }
+    }
+    if (_udFriendlies.length === 1) {
+      // Only one friendly in LOS — show confirm button
+      const f = _udFriendlies[0];
+      const confirmBtn = new ButtonBuilder()
+        .setCustomId(`act_passive_${game.gameId}_${msgId}_unstabledev_${f.figureKey}`)
+        .setLabel(`Grant to ${f.dcName}`)
+        .setStyle(ButtonStyle.Primary);
+      const skipBtn = new ButtonBuilder()
+        .setCustomId(`act_passive_${game.gameId}_${msgId}_unstabledev_skip`)
+        .setLabel('Skip')
+        .setStyle(ButtonStyle.Secondary);
+      await thread.send({ content: `🔧 **Unstable Devices** — Grant **1 Device token** to **${f.dcName}**? (free, once per activation)`, components: [new ActionRowBuilder().addComponents(confirmBtn, skipBtn)] }).catch(() => {});
+    } else if (_udFriendlies.length > 1) {
+      // Multiple friendlies — picker
+      const btns = _udFriendlies.slice(0, 4).map(f =>
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_unstabledev_${f.figureKey}`).setLabel(f.dcName).setStyle(ButtonStyle.Primary)
+      );
+      btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_unstabledev_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+      await thread.send({ content: `🔧 **Unstable Devices** — Choose a friendly figure in LOS to gain **1 Device token** (free, once per activation):`, components: [new ActionRowBuilder().addComponents(...btns)] }).catch(() => {});
+    } else {
+      await thread.send({ content: `🔧 **Unstable Devices** — No friendly figures in line of sight.` }).catch(() => {});
     }
   }
   // Negotiate (Hondo): when declaring attack, +2 damage unless target pays 2 VP
@@ -1827,6 +1861,20 @@ export async function handleActPassive(interaction, ctx) {
     }
     delete game.pendingTrustedAlly;
     await logGameAction?.(game, client, `**Trusted Ally** — ${targetDcName}: ${choice === 'heal' ? 'recovered 1 Damage' : 'discarded ' + choice}.`, { phase: 'ACTIVATION', icon: 'activate' });
+  } else if (ability === 'unstabledev') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `🔧 **Unstable Devices** — Skipped.`, components: [] }).catch(() => {});
+    } else {
+      // choice = figureKey
+      const targetFk = choice;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      game.deviceTokens = game.deviceTokens || {};
+      game.deviceTokens[targetFk] = (game.deviceTokens[targetFk] || 0) + 1;
+      game.unstableDevicesUsedThisActivation = game.unstableDevicesUsedThisActivation || {};
+      game.unstableDevicesUsedThisActivation[msgId] = true;
+      await interaction.message.edit({ content: `🔧 **Unstable Devices** — **${targetDcName}** gains **1 Device token** (now ${game.deviceTokens[targetFk]}).`, components: [] }).catch(() => {});
+      await logGameAction?.(game, client, `🔧 **Unstable Devices** — **${targetDcName}** gains 1 Device token (now ${game.deviceTokens[targetFk]}).`, { phase: 'ACTIVATION', icon: 'activate' });
+    }
   }
   saveGames();
 }
