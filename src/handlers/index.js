@@ -18,7 +18,7 @@ import {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
   handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
-  handleInfiltrateMove, handleInfiltrateSkip,
+  handlePostDeployMoveSkip,
   handleWalkerMove, handleWalkerSkip,
 } from './post-deploy.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
@@ -147,8 +147,7 @@ register('pd_security_pick_', handleSecurityDetailPick);
 register('pd_strike_adj_', handleStrikeTeamAdjPick);
 register('pd_strike_token_done_', handleStrikeTeamTokenDone);
 register('pd_strike_token_', handleStrikeTeamTokenPick);
-register('pd_infiltrate_move_', handleInfiltrateMove);
-register('pd_infiltrate_skip_', handleInfiltrateSkip);
+register('pd_move_skip_', handlePostDeployMoveSkip);
 register('pd_walker_move_', handleWalkerMove);
 register('pd_walker_skip_', handleWalkerSkip);
 register('rbf_discard_', handleRbfDiscard);
@@ -395,7 +394,7 @@ setGroup(['end_start_of_round_'], 'startOfRound');
 setGroup([
   'pd_pick_', 'pd_security_pick_', 'pd_strike_adj_',
   'pd_strike_token_', 'pd_strike_token_done_',
-  'pd_infiltrate_move_', 'pd_infiltrate_skip_',
+  'pd_move_skip_',
   'pd_walker_move_', 'pd_walker_skip_',
 ], 'postDeploy');
 
@@ -468,7 +467,7 @@ export {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
   handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
-  handleInfiltrateMove, handleInfiltrateSkip,
+  handlePostDeployMoveSkip,
   handleWalkerMove, handleWalkerSkip,
 } from './post-deploy.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';

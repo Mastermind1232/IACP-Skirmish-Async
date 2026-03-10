@@ -514,13 +514,8 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           }
         }
 
-        // Unstable Devices (Saska Teft): gain 1 device token at start of round
-        if (sIds.includes('unstable_devices_saska')) {
-          game.deviceTokens = game.deviceTokens || {};
-          const _fk = `${dc.dcName}-0-0`;
-          game.deviceTokens[_fk] = (game.deviceTokens[_fk] || 0) + 1;
-          await logGameAction(game, client, `🔧 **Unstable Devices** — **${dc.displayName || dc.dcName}** gains 1 Device token (now ${game.deviceTokens[_fk]}).`, { phase: 'ROUND', icon: 'round' });
-        }
+        // Unstable Devices (Saska Teft): "Once during your activation" — NOT a start-of-round effect
+        // Device token is now granted during activation (activation.js), not here
 
         // Force Slow (Cal Kestis): choose a hostile within 3 to skip activation
         if (sIds.includes('force_slow_cal')) {
@@ -748,13 +743,8 @@ export async function handleEndStartOfRound(interaction, ctx) {
           }
         }
 
-        // Unstable Devices (Saska Teft): gain 1 device token at start of round
-        if (sIds.includes('unstable_devices_saska')) {
-          game.deviceTokens = game.deviceTokens || {};
-          const _fk = `${dc.dcName}-0-0`;
-          game.deviceTokens[_fk] = (game.deviceTokens[_fk] || 0) + 1;
-          await logGameAction(game, client, `🔧 **Unstable Devices** — **${dc.displayName || dc.dcName}** gains 1 Device token (now ${game.deviceTokens[_fk]}).`, { phase: 'ROUND', icon: 'round' });
-        }
+        // Unstable Devices (Saska Teft): "Once during your activation" — NOT a start-of-round effect
+        // Device token is now granted during activation (activation.js), not here
 
         // Force Slow (Cal Kestis): choose a hostile within 3 to skip activation
         if (sIds.includes('force_slow_cal')) {

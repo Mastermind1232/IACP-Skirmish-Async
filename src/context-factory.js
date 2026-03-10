@@ -74,7 +74,7 @@ const CONTEXT_GROUPS = {
     'pushUndo', 'logGameAction', 'countTerminalsControlledByPlayer',
     'buildLetterRows', 'getMovementMinimapAttachment', 'buildBoardMapPayload',
     'updateDcActionsMessage', 'sendBleedingPrompt', 'getDcStats', 'dcHealthState',
-    'saveGames', 'client',
+    'saveGames', 'client', 'getMoveSpaceGridRows',
   ],
 
   combat: [

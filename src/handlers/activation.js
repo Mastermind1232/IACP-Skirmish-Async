@@ -690,7 +690,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   const thread = await dcMsg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
   game.movementBank = game.movementBank || {};
   game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
-  // Deploy bonus MP (Smooth Landing, Forward Emplacement): consume stored MP from post-deploy
+  // Deploy bonus MP (legacy backward-compat — post-deploy MP is now spent immediately via movement engine)
   if (game.deployBonusMp) {
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const prefix = `${meta.dcName}-${dgIndex}-`;
