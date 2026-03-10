@@ -13,7 +13,7 @@ import {
 } from './game-tools.js';
 import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
-import { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects } from './round.js';
+import { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, handleExtraArmorPick, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel } from './round.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
 import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems } from './combat.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive } from './activation.js';
@@ -134,6 +134,10 @@ register('interact_cancel_', handleInteractCancel);
 register('interact_choice_', handleInteractChoice);
 register('end_end_of_round_', handleEndEndOfRound);
 register('end_start_of_round_', handleEndStartOfRound);
+register('extra_armor_pick_', handleExtraArmorPick);
+register('rbf_discard_', handleRbfDiscard);
+register('rogue_one_return_', handleRogueOneReturn);
+register('imp_citadel_', handleImpCitadel);
 register('move_mp_', handleMoveMp);
 register('move_adjust_mp_', handleMoveAdjustMp);
 register('move_back_letters_', handleMoveLetterBack);
@@ -436,7 +440,7 @@ export {
 } from './game-tools.js';
 export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
-export { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects } from './round.js';
+export { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, handleExtraArmorPick, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel } from './round.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
 export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls } from './combat.js';
 export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive } from './activation.js';

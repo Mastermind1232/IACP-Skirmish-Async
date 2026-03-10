@@ -13,7 +13,7 @@ import {
   getCcHand, getCcDeck, getCcDiscard, getDcAttachments,
   setActivationsRemaining, setActivatedDcIndices,
   getActivationsTotal,
-  ccHandKey, ccDiscardKey,
+  ccHandKey, ccDiscardKey, ccDeckKey,
   opponentPlayerNum,
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
@@ -630,6 +630,144 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
       }
     }
   }
+
+  // Skirmish Upgrade timing effects (figureless DCs)
+  {
+    const _suEff = getDcEffects() || {};
+    for (const playerNum of [1, 2]) {
+      const dcList = getDcList(game, playerNum) || [];
+      const ownerId = getPlayerId(game, playerNum);
+      for (const dc of dcList) {
+        if (!dc) continue;
+        const dcName = dc.dcName;
+        const eff = _suEff[dcName] || _suEff[`[${dcName}]`] || _suEff[dcName?.replace(/^\[|\]$/g, '')];
+        if (!eff) continue;
+        const text = eff.abilityText || '';
+
+        // [First Strike]: After setup, both players receive 4 VPs (round 1 only)
+        if (dcName.includes('First Strike') && game.currentRound === 1 && !game.firstStrikeFired) {
+          game.firstStrikeFired = true;
+          game.player1Vp = (game.player1Vp || 0) + 4;
+          game.player2Vp = (game.player2Vp || 0) + 4;
+          await logGameAction(game, client, `⚔️ **First Strike** — Both players receive **4 VPs**.`);
+        }
+
+        // [Extra Armor]: After deployment, distribute 4 Block Tokens among friendly figures (round 1 only)
+        if (dcName.includes('Extra Armor') && game.currentRound === 1 && !game[`extraArmorFired_p${playerNum}`]) {
+          game[`extraArmorFired_p${playerNum}`] = true;
+          const allFks = Object.keys(game.figurePositions?.[playerNum] || {});
+          if (allFks.length > 0) {
+            game.figurePowerTokens = game.figurePowerTokens || {};
+            game[`pendingExtraArmor_p${playerNum}`] = { remaining: 4 };
+            const btns = allFks.slice(0, 20).map(fk => new ButtonBuilder()
+              .setCustomId(`extra_armor_pick_${gameId}_${playerNum}_${fk}`)
+              .setLabel(fk.replace(/-\d+-\d+$/, ''))
+              .setStyle(ButtonStyle.Primary)
+            );
+            const rows = [];
+            for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+            await logGameAction(game, client, `🛡️ **Extra Armor** — <@${ownerId}>, distribute **4 Block Tokens** among your figures (${4} remaining):`, {
+              components: rows,
+              allowedMentions: { users: [ownerId] },
+            });
+          }
+        }
+
+        // [Rule by Fear]: At the start of the first game round, draw 2 CCs, then discard 1
+        if (dcName.includes('Rule by Fear') && game.currentRound === 1 && !game[`ruleByFearFired_p${playerNum}`]) {
+          game[`ruleByFearFired_p${playerNum}`] = true;
+          const deckKey = ccDeckKey(playerNum);
+          const handKey = ccHandKey(playerNum);
+          const deck = game[deckKey] || [];
+          const hand = game[handKey] || [];
+          const drew = [];
+          for (let d = 0; d < 2 && deck.length > 0; d++) {
+            drew.push(deck.shift());
+          }
+          hand.push(...drew);
+          game[deckKey] = deck;
+          game[handKey] = hand;
+          const drewText = drew.length ? drew.map(c => `**${c}**`).join(', ') : 'none (deck empty)';
+          await logGameAction(game, client, `📜 **Rule by Fear** — <@${ownerId}> drew ${drew.length} CC${drew.length !== 1 ? 's' : ''}: ${drewText}. Now choose 1 card to discard.`, {
+            allowedMentions: { users: [ownerId] },
+          });
+          // Post discard picker in hand channel
+          if (hand.length > 0) {
+            const handChannelId = getHandChannelId(game, playerNum);
+            try {
+              const handCh = await client.channels.fetch(handChannelId);
+              const discardBtns = hand.slice(0, 25).map((card, idx) => new ButtonBuilder()
+                .setCustomId(`rbf_discard_${gameId}_${playerNum}_${idx}`)
+                .setLabel(card.length > 80 ? card.slice(0, 77) + '...' : card)
+                .setStyle(ButtonStyle.Danger)
+              );
+              const discardRows = [];
+              for (let r = 0; r < discardBtns.length; r += 5) discardRows.push(new ActionRowBuilder().addComponents(discardBtns.slice(r, r + 5)));
+              await handCh.send({ content: '**Rule by Fear** — Choose 1 card from your hand to discard:', components: discardRows });
+            } catch (err) {
+              console.error('Rule by Fear discard picker failed:', err);
+            }
+          }
+        }
+
+        // [Rogue One]: At the start of the first game round, draw 3 CCs, place 2 on top of deck
+        if (dcName.includes('Rogue One') && game.currentRound === 1 && !game[`rogueOneFired_p${playerNum}`]) {
+          game[`rogueOneFired_p${playerNum}`] = true;
+          const deckKey = ccDeckKey(playerNum);
+          const handKey = ccHandKey(playerNum);
+          const deck = game[deckKey] || [];
+          const hand = game[handKey] || [];
+          const drew = [];
+          for (let d = 0; d < 3 && deck.length > 0; d++) {
+            drew.push(deck.shift());
+          }
+          hand.push(...drew);
+          game[deckKey] = deck;
+          game[handKey] = hand;
+          const drewText = drew.length ? drew.map(c => `**${c}**`).join(', ') : 'none (deck empty)';
+          await logGameAction(game, client, `🎯 **Rogue One** — <@${ownerId}> drew ${drew.length} CC${drew.length !== 1 ? 's' : ''}: ${drewText}. Now place 2 cards from your hand on top of your deck.`, {
+            allowedMentions: { users: [ownerId] },
+          });
+          // Post picker in hand channel
+          if (hand.length > 0) {
+            game[`pendingRogueOne_p${playerNum}`] = { remaining: 2 };
+            const handChannelId = getHandChannelId(game, playerNum);
+            try {
+              const handCh = await client.channels.fetch(handChannelId);
+              const pickBtns = hand.slice(0, 25).map((card, idx) => new ButtonBuilder()
+                .setCustomId(`rogue_one_return_${gameId}_${playerNum}_${idx}`)
+                .setLabel(card.length > 80 ? card.slice(0, 77) + '...' : card)
+                .setStyle(ButtonStyle.Primary)
+              );
+              const pickRows = [];
+              for (let r = 0; r < pickBtns.length; r += 5) pickRows.push(new ActionRowBuilder().addComponents(pickBtns.slice(r, r + 5)));
+              await handCh.send({ content: '**Rogue One** — Choose a card to place on top of your deck (1 of 2):', components: pickRows });
+            } catch (err) {
+              console.error('Rogue One return picker failed:', err);
+            }
+          }
+        }
+
+        // [Imperial Citadel]: At the start of each round, place 1 Focus or Damage token on this card
+        if (dcName.includes('Imperial Citadel') && text.includes('At the start of each round')) {
+          const btns = [
+            new ButtonBuilder()
+              .setCustomId(`imp_citadel_${gameId}_${playerNum}_focus`)
+              .setLabel('Place Focus Token')
+              .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+              .setCustomId(`imp_citadel_${gameId}_${playerNum}_damage`)
+              .setLabel('Place Damage Token')
+              .setStyle(ButtonStyle.Danger),
+          ];
+          await logGameAction(game, client, `🏰 **Imperial Citadel** — <@${ownerId}>, place 1 token on Imperial Citadel:`, {
+            components: [new ActionRowBuilder().addComponents(btns)],
+            allowedMentions: { users: [ownerId] },
+          });
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -945,4 +1083,137 @@ async function _postExcavationPicker(game, gameId, playerNum, dc, logGameAction,
     components: rows,
     allowedMentions: { users: [ownerId] },
   });
+}
+
+// ---- Skirmish Upgrade SOR button handlers ----
+
+/**
+ * Extra Armor: player picks a figure to give 1 Block Token (repeats until 4 distributed).
+ */
+export async function handleExtraArmorPick(interaction, ctx) {
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const parts = interaction.customId.replace('extra_armor_pick_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const figureKey = parts.slice(2).join('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game[`pendingExtraArmor_p${playerNum}`];
+  if (!pending || pending.remaining <= 0) {
+    await interaction.followUp({ content: 'Extra Armor tokens already distributed.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  game.figurePowerTokens = game.figurePowerTokens || {};
+  game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
+  game.figurePowerTokens[figureKey].push('Block');
+  pending.remaining -= 1;
+  const dcName = dcNameFromFigureKey(figureKey);
+  await logGameAction(game, client, `🛡️ **Extra Armor** — **${dcName}** gains **1 Block Token** (${pending.remaining} remaining).`);
+  if (pending.remaining <= 0) {
+    delete game[`pendingExtraArmor_p${playerNum}`];
+    try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+    await interaction.followUp({ content: 'All 4 Block Tokens distributed.', ephemeral: true }).catch(discordCatch);
+  } else {
+    await interaction.followUp({ content: `Block Token placed on ${dcName}. ${pending.remaining} remaining — pick another figure.`, ephemeral: true }).catch(discordCatch);
+  }
+  saveGames();
+}
+
+/**
+ * Rule by Fear: player picks 1 card from hand to discard.
+ */
+export async function handleRbfDiscard(interaction, ctx) {
+  const { getGame, saveGames, updateHandVisualMessage, logGameAction, client } = ctx;
+  const parts = interaction.customId.replace('rbf_discard_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const cardIdx = parseInt(parts[2], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const handKey = ccHandKey(playerNum);
+  const discKey = ccDiscardKey(playerNum);
+  const hand = game[handKey] || [];
+  if (cardIdx < 0 || cardIdx >= hand.length) {
+    await interaction.followUp({ content: 'Invalid card selection.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const card = hand.splice(cardIdx, 1)[0];
+  game[discKey] = game[discKey] || [];
+  game[discKey].push(card);
+  game[handKey] = hand;
+  await logGameAction(game, client, `📜 **Rule by Fear** — discarded **${card}**.`);
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
+  saveGames();
+  await interaction.followUp({ content: `Discarded **${card}**.`, ephemeral: true }).catch(discordCatch);
+}
+
+/**
+ * Rogue One: player picks cards to put on top of deck (2 picks).
+ */
+export async function handleRogueOneReturn(interaction, ctx) {
+  const { getGame, saveGames, updateHandVisualMessage, logGameAction, client } = ctx;
+  const parts = interaction.customId.replace('rogue_one_return_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const cardIdx = parseInt(parts[2], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game[`pendingRogueOne_p${playerNum}`];
+  if (!pending || pending.remaining <= 0) {
+    await interaction.followUp({ content: 'Rogue One card returns already complete.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const handKey = ccHandKey(playerNum);
+  const deckKey = ccDeckKey(playerNum);
+  const hand = game[handKey] || [];
+  if (cardIdx < 0 || cardIdx >= hand.length) {
+    await interaction.followUp({ content: 'Invalid card selection.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const card = hand.splice(cardIdx, 1)[0];
+  game[deckKey] = game[deckKey] || [];
+  game[deckKey].unshift(card);
+  game[handKey] = hand;
+  pending.remaining -= 1;
+  await logGameAction(game, client, `🎯 **Rogue One** — placed **${card}** on top of deck (${pending.remaining} remaining).`);
+  if (pending.remaining <= 0) {
+    delete game[`pendingRogueOne_p${playerNum}`];
+    try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+    await interaction.followUp({ content: 'Both cards returned to deck.', ephemeral: true }).catch(discordCatch);
+  } else {
+    // Rebuild buttons with updated hand
+    const pickBtns = hand.slice(0, 25).map((c, idx) => new ButtonBuilder()
+      .setCustomId(`rogue_one_return_${gameId}_${playerNum}_${idx}`)
+      .setLabel(c.length > 80 ? c.slice(0, 77) + '...' : c)
+      .setStyle(ButtonStyle.Primary)
+    );
+    const pickRows = [];
+    for (let r = 0; r < pickBtns.length; r += 5) pickRows.push(new ActionRowBuilder().addComponents(pickBtns.slice(r, r + 5)));
+    try { await interaction.message.edit({ components: pickRows }).catch(discordCatch); } catch {}
+    await interaction.followUp({ content: `Placed **${card}** on deck. Pick 1 more card to return.`, ephemeral: true }).catch(discordCatch);
+  }
+  if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
+  saveGames();
+}
+
+/**
+ * Imperial Citadel: player picks Focus or Damage token to place on the card.
+ */
+export async function handleImpCitadel(interaction, ctx) {
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const parts = interaction.customId.replace('imp_citadel_', '').split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const tokenType = parts[2]; // 'focus' or 'damage'
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  game.imperialCitadelTokens = game.imperialCitadelTokens || { focus: 0, damage: 0 };
+  const label = tokenType === 'focus' ? 'Focus' : 'Damage';
+  game.imperialCitadelTokens[tokenType] = (game.imperialCitadelTokens[tokenType] || 0) + 1;
+  const total = game.imperialCitadelTokens;
+  await logGameAction(game, client, `🏰 **Imperial Citadel** — placed **1 ${label}** token (now: ${total.focus} Focus, ${total.damage} Damage).`);
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  saveGames();
+  await interaction.followUp({ content: `Placed ${label} token on Imperial Citadel.`, ephemeral: true }).catch(discordCatch);
 }

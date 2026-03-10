@@ -185,6 +185,10 @@ const BUTTON_PREFIXES = [
   'lobby_start_',
   'dc_rename_',
   'ping_active_',
+  'extra_armor_pick_',
+  'rbf_discard_',
+  'rogue_one_return_',
+  'imp_citadel_',
   'create_game',
   'join_game',
 ];

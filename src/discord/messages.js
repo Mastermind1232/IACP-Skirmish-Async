@@ -75,6 +75,7 @@ export async function logGameAction(game, client, content, options = {}) {
     const msgContent = enforceContentLimit(`${icon}${timestamp} — ${content}`);
     const payload = { content: msgContent, allowedMentions: options.allowedMentions };
     if (options.files?.length) payload.files = options.files;
+    if (options.components?.length) payload.components = options.components;
     const sentMsg = await withDiscordRetry(() => ch.send(payload));
     const setupPhases = ['SETUP', 'INITIATIVE', 'DEPLOYMENT'];
     if (phase && setupPhases.includes(phase)) {
