@@ -519,9 +519,9 @@
     "[The General's Ranks]": {
       "abilityText": "NON-UNIQUE ONLY\n\nWhen you perform a move, if it is not your activation, you gain 2 additional movement points. \n\nWhen you perform an attack, if it is not your activation, apply +1 Hit to the attack results.",
       "keywords": [],
-      "cost": 2,
+      "cost": 1,
       "attachment": true,
-      "unique": true,
+      "unique": false,
       "affiliation": "Imperial"
     },
     "[Trusted Ally]": {
