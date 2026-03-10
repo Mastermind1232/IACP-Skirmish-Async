@@ -1661,29 +1661,43 @@ export async function handleDeploymentDone(interaction, ctx) {
   }
 
   game.currentRound = 1;
-  const generalChannel = await client.channels.fetch(game.generalId);
-  const initPlayerNum = getInitiativePlayerNum(game);
-  const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
-  await generalChannel.send({
-    content: deployContent,
-    allowedMentions: { users: [game.initiativePlayerId] },
-  });
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
   await clearPreGameSetup(game, client);
-  try {
-    const p1HandChannel = await client.channels.fetch(game.p1HandId);
-    const p2HandChannel = await client.channels.fetch(game.p2HandId);
-    const ccDeckText = (list) => list.length ? list.join(', ') : '(no command cards)';
-    await p1HandChannel.send({
-      content: `**Your Command Card deck** (${p1CcList.length} cards):\n${ccDeckText(p1CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
-      components: [getCcShuffleDrawButton(gameId)],
+
+  // Run post-deploy effects BEFORE CC draw (per rules: "after deployment" is before CC shuffle)
+  const { runPostDeployPhase } = ctx;
+  const _sendCcPrompts = async () => {
+    const generalChannel = await client.channels.fetch(game.generalId);
+    const initPlayerNum = getInitiativePlayerNum(game);
+    const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
+    await generalChannel.send({
+      content: deployContent,
+      allowedMentions: { users: [game.initiativePlayerId] },
     });
-    await p2HandChannel.send({
-      content: `**Your Command Card deck** (${p2CcList.length} cards):\n${ccDeckText(p2CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
-      components: [getCcShuffleDrawButton(gameId)],
-    });
-  } catch (err) {
-    console.error('Failed to send CC deck prompt:', err);
+    try {
+      const p1HandChannel = await client.channels.fetch(game.p1HandId);
+      const p2HandChannel = await client.channels.fetch(game.p2HandId);
+      const ccDeckText = (list) => list.length ? list.join(', ') : '(no command cards)';
+      await p1HandChannel.send({
+        content: `**Your Command Card deck** (${p1CcList.length} cards):\n${ccDeckText(p1CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
+        components: [getCcShuffleDrawButton(gameId)],
+      });
+      await p2HandChannel.send({
+        content: `**Your Command Card deck** (${p2CcList.length} cards):\n${ccDeckText(p2CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
+        components: [getCcShuffleDrawButton(gameId)],
+      });
+    } catch (err) {
+      console.error('Failed to send CC deck prompt:', err);
+    }
+    saveGames();
+  };
+
+  let postDeployActive = false;
+  if (runPostDeployPhase) {
+    postDeployActive = await runPostDeployPhase(game, gameId, client, { logGameAction, saveGames }, _sendCcPrompts);
+  }
+  if (!postDeployActive) {
+    await _sendCcPrompts();
   }
   saveGames();
 }
@@ -1853,6 +1867,9 @@ export async function handleSetupAttachTo(interaction, ctx) {
 
   await applySetupAttachment(game, playerNum, card, dcMsgId, ctx);
   pending.shift();
+
+  // Remove the dropdown from the original message so it doesn't linger
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
 
   const dcDisplayName = ctx.dcMessageMeta?.get(dcMsgId)?.displayName || 'DC';
   await logGameAction(game, client, `<@${interaction.user.id}> placed **${card}** on **${dcDisplayName}** (setup).`, { phase: 'SETUP', icon: 'card', allowedMentions: { users: [interaction.user.id] } });

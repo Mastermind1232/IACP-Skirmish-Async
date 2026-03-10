@@ -75,6 +75,20 @@ function resolveDcInput(raw, dcEffects) {
   // Quoted subname: 'C1-10P' matches 'C1-10P "Chopper"', 'IG-88' matches 'IG-88 "The Droid With No Name"'
   const quotedMatch = keys.find((k) => k.toLowerCase().startsWith(lower + ' "'));
   if (quotedMatch) return quotedMatch;
+  // Abbreviated name with (Elite)/(Regular): "KX (Elite)" → "KX-Series Security Droid (Elite)"
+  // Extract base name (before parenthetical) and match any key containing it with same suffix
+  const parenIdx = lower.indexOf('(');
+  if (parenIdx > 0) {
+    const baseName = lower.slice(0, parenIdx).trim();
+    const suffix = lower.slice(parenIdx).trim();
+    if (baseName.length >= 2) {
+      const abbrMatch = keys.find((k) => {
+        const kl = k.toLowerCase();
+        return kl.includes(baseName) && kl.endsWith(suffix);
+      });
+      if (abbrMatch) return abbrMatch;
+    }
+  }
   return name; // unresolved — will produce error in validation
 }
 
