@@ -5264,6 +5264,7 @@ client.on('messageCreate', async (message) => {
           name: squadName || 'From file',
           dcList: parsed.dcList,
           ccList: parsed.ccList,
+          unclassified: parsed.unclassified,
           dcCount: parsed.dcList.length,
           ccCount: parsed.ccList.length,
         };

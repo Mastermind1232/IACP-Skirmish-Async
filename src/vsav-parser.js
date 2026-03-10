@@ -28,19 +28,68 @@ function normalizeCardName(name) {
 
 /**
  * Parse vsav file content and extract DC/CC lists.
+ *
+ * Primary source: VASSAL "piece;;;" entries — these are the authoritative card list
+ * representing actual cards in the player's hand/deck.  Older vsav files may only
+ * contain the legacy "D card-" / "C card--" image-reference format, so we fall back
+ * to that when no piece entries are found.
+ *
+ * Newer IACP cards use image names like "014 Paz Vizsla Final.png" instead of the
+ * standard "D card-Faction--Name.ext" convention.  These cannot be classified as DC
+ * or CC from the image name alone, so they are returned in an `unclassified` array
+ * for the caller (normalizeSquadInput) to resolve against the card databases.
+ *
  * @param {string} content - Raw vsav file content (UTF-8)
- * @returns {{ dcList: string[], ccList: string[], squadName?: string } | null}
+ * @returns {{ dcList: string[], ccList: string[], unclassified?: string[], squadName?: string } | null}
  */
 export function parseVsav(content) {
   if (!content || typeof content !== 'string') return null;
 
+  // ── Primary: parse piece;;; entries (authoritative VASSAL card list) ──
+  const pieceDcList = [];
+  const pieceCcList = [];
+  const pieceUnclassified = [];
+
+  const pieceRegex = /piece;;;([^;]+\.(?:jpg|png|gif));([^/\\]+?)(?:\/)/g;
+  let m;
+  while ((m = pieceRegex.exec(content)) !== null) {
+    const img = m[1];
+    const rawName = m[2].trim();
+    if (!rawName || !/[A-Za-z]/.test(rawName) || rawName.length < 2) continue;
+    // Skip companion/token cards (e.g. "Comp card--The Child", "Companion Card--Junk Droid")
+    if (/Comp(?:anion)?\s*[Cc]ard/i.test(img)) continue;
+
+    const name = normalizeCardName(rawName);
+
+    // Classify by image path — handles both legacy and IACP-prefixed naming
+    //   "D card-Imp--Name.jpg"  or  "IACP11_D card-Imp--Name.png"
+    //   "C card--Name.jpg"      or  "IACP9_C card--Name.png"
+    if (/(?:^|_)D card-/i.test(img)) {
+      pieceDcList.push(name);
+    } else if (/(?:^|_)C card-/i.test(img)) {
+      pieceCcList.push(name);
+    } else {
+      // New IACP format (e.g. "014 Paz Vizsla Final.png", "Smoke Grenade Final.png")
+      // Cannot classify from image name — needs database lookup
+      pieceUnclassified.push(name);
+    }
+  }
+
+  if (pieceDcList.length > 0 || pieceCcList.length > 0 || pieceUnclassified.length > 0) {
+    return {
+      dcList: pieceDcList,
+      ccList: pieceCcList,
+      unclassified: pieceUnclassified.length > 0 ? pieceUnclassified : undefined,
+      dcCount: pieceDcList.length,
+      ccCount: pieceCcList.length,
+    };
+  }
+
+  // ── Fallback: legacy regex parsing (older vsav files without piece entries) ──
   const dcList = [];
   const ccList = [];
 
-  // Deployment cards: D card-Imp--, D card-Reb--, D card-Merc--, D card-Neu--, etc.
-  // NOTE: DCs can have duplicates (e.g. 2x Probe Droid Elite), so no deduplication here.
   const dcRegex = /D card-[^;]+\.(?:jpg|png|gif);([^/\\]+?)(?:\/|;;|$)/g;
-  let m;
   while ((m = dcRegex.exec(content)) !== null) {
     const raw = m[1].trim();
     if (raw && !/^[;\s]*$|^;?true$/i.test(raw) && /[A-Za-z]/.test(raw) && raw.length > 2) {
@@ -48,7 +97,6 @@ export function parseVsav(content) {
     }
   }
 
-  // Command cards: C card--Name.jpg;Name/ (CCs can have up to 2 copies — no deduplication)
   const ccRegex = /C card--[^;]+\.(?:jpg|png|gif);([^/\\]+?)(?:\/|;;|$)/g;
   while ((m = ccRegex.exec(content)) !== null) {
     const raw = m[1].trim();
@@ -59,7 +107,6 @@ export function parseVsav(content) {
 
   if (dcList.length === 0 && ccList.length === 0) return null;
 
-  // Squad name from filename pattern "IA List [Faction] - Name.vsav" if we had it
   return {
     dcList,
     ccList,

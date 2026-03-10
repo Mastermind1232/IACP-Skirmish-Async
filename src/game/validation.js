@@ -130,6 +130,27 @@ function resolveCcInput(raw, ccCards) {
 export function normalizeSquadInput(squad) {
   const dcEffects = getDcEffects();
   const ccCards = getCcEffectsData()?.cards || {};
+  // Resolve unclassified vsav piece entries (new IACP image format) into DC or CC lists
+  if (squad?.unclassified?.length) {
+    for (const name of squad.unclassified) {
+      const resolved = resolveDcInput(name, dcEffects);
+      const dcStats = dcEffects[resolved] || dcEffects[`[${resolved}]`]
+        || dcEffects[resolved + ' (Regular)'] || dcEffects[resolved + ' (Elite)'];
+      if (dcStats) {
+        squad.dcList.push(name);
+      } else {
+        // Try CC lookup
+        const ccResolved = resolveCcInput(name, ccCards);
+        if (ccCards[ccResolved] || ccCards[ccResolved + '!'] || ccCards[ccResolved + '?']) {
+          squad.ccList.push(name);
+        } else {
+          // Unknown — add to DC list so validation surfaces the error
+          squad.dcList.push(name);
+        }
+      }
+    }
+    delete squad.unclassified;
+  }
   const autoRegularWarnings = [];
   if (squad?.dcList) {
     squad.dcList = squad.dcList.map((raw) => {

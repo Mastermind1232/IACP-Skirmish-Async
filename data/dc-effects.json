@@ -4644,6 +4644,38 @@
       "unique": true,
       "affiliation": "Scum"
     },
+    "Moff Gideon": {
+      "abilityText": "I Know Everything: During setup, before drawing Command cards, search your opponent's Command deck and reveal 2 cards. Your opponent chooses 1 to shuffle back into the deck, then return the other card to the game box.\n\nYou Have Something I Want: Once during your activation, you may choose a Power Token or condition token on a hostile figure within 4 spaces. That figure suffers 3 Damage unless it transfers the chosen token to you.",
+      "keywords": [
+        "LEADER"
+      ],
+      "cost": 8,
+      "health": 10,
+      "speed": 4,
+      "passives": [
+        "Block 1"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "red",
+          "blue",
+          "yellow"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 1",
+        "pierce 3"
+      ],
+      "attachment": false,
+      "elite": true,
+      "unique": true,
+      "affiliation": "Imperial"
+    },
     "Murne Rin": {
       "abilityText": "Special Action (False Orders): Choose a hostile figure with a figure cost of 4 or less within 4 spaces. Perform a move or attack with that figure.\n\nSpecial Action (Field Report): Choose up to 2 friendly figures within 4 spaces with 2 or less attack dice in their printed attack pool. The chosen figures become Hidden.\n\nFigurehead: Before a friendly figure within 4 spaces suffers Damage or Strain, you may suffer Damage or Strain to prevent 1 of that Damage or Strain.",
       "keywords": [
@@ -6030,6 +6062,39 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Scum"
+    },
+    "Tauntaun Rider": {
+      "abilityText": "Mounted: At the start of your activation, gain 3 movement points.\n\nSpecial Action (Headbutt): Move up to 2 spaces, then choose an adjacent hostile figure and roll 1 red die. The chosen figure suffers Damage equal to the Hit results.\n\nUseful Hide: When this figure is defeated, distribute up to 2 Evade Tokens among friendly figures.",
+      "keywords": [
+        "TROOPER",
+        "CREATURE"
+      ],
+      "cost": 5,
+      "health": 10,
+      "speed": 4,
+      "passives": [
+        "Pierce 1",
+        "Efficient Travel"
+      ],
+      "figures": 1,
+      "attack": {
+        "dice": [
+          "blue",
+          "green"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "damage 2",
+        "accuracy 3, damage 1"
+      ],
+      "attachment": false,
+      "elite": true,
+      "unique": false,
+      "affiliation": "Rebel"
     },
     "Taron Malicos": {
       "abilityText": "Fallen Master: Friendly non-companion FORCE USER figures may ignore the IMPERIAL restriction when using Command cards.\n\nMadness: At the start of your activation, if you have 2 or fewer Command cards in your hand, you suffer 1 Strain and become Focused.\n\nSpecial Action (Boulder Barrage): Choose a space in your line of sight. Any figure on that space suffers 2 Damage. Then place a Rubble token in or adjacent to that space.",
