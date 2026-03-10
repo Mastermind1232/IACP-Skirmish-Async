@@ -56,11 +56,11 @@ function resolveDcInput(raw, dcEffects) {
   const fk = fuzzyKey(name);
   if (fuzzyMap[fk]) return fuzzyMap[fk];
   if (fuzzyMap[fuzzyKey(bracketed)]) return fuzzyMap[fuzzyKey(bracketed)];
-  // Bare name without (Regular)/(Elite): "Wookiee Warrior" → prefer Elite (competitive default)
-  const eliteMatch = keys.find((k) => k.toLowerCase() === `${lower} (elite)`);
-  if (eliteMatch) return eliteMatch;
+  // Bare name without (Regular)/(Elite): defaults to Regular (Elite must be specified explicitly)
   const regMatch = keys.find((k) => k.toLowerCase() === `${lower} (regular)`);
   if (regMatch) return regMatch;
+  const eliteMatch = keys.find((k) => k.toLowerCase() === `${lower} (elite)`);
+  if (eliteMatch) return eliteMatch;
   // Partial parenthetical: "Luke Skywalker (Jedi)" matches "Luke Skywalker (Jedi Knight)"
   // Only applies when input already contains a '(' — bare names are handled above
   if (lower.includes('(')) {
