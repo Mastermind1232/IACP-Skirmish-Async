@@ -3,7 +3,14 @@
  * F17: map_type_ buttons (Competitive/Random/Select Draw/Selection), map_selection_draw_, map_selection_pick_
  */
 import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { getLoadoutCards, getFormCards, getDcEffects } from '../data-loader.js';
+import { getDcImagePath } from '../asset-paths.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const rootDir = join(__dirname, '..', '..');
 import { setConfig } from '../game/figure-config.js';
 import {
   getPlayerId, getSquad, getDcList, getDcMessageIds, getHandChannelId,
@@ -14,6 +21,34 @@ import {
 import { dcNameFromFigureKey } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
+
+/**
+ * Extract keyword restrictions from an attachment card's abilityText (e.g. "LEADER ONLY" → ["LEADER"]).
+ * Returns array of required keywords, or empty array if no keyword restriction.
+ */
+function getAttachmentKeywordRestrictions(cardName) {
+  const effects = getDcEffects();
+  const card = effects[cardName] || effects[`[${cardName}]`];
+  if (!card?.abilityText) return [];
+  const firstLine = card.abilityText.split('\n')[0].trim();
+  const onlyMatch = firstLine.match(/^(.+?)\s+ONLY$/i);
+  if (!onlyMatch) return [];
+  const restriction = onlyMatch[1].replace(/"/g, '').trim();
+  // Split compound restrictions like "UNIQUE FIGURE WITH FIGURE COST 4 OR MORE" — just use keywords array from dc-effects
+  return (card.keywords || []).map(k => String(k).toUpperCase());
+}
+
+/**
+ * Check if a DC meets the keyword restrictions for an attachment.
+ */
+function dcMeetsAttachmentRestrictions(dcName, requiredKeywords) {
+  if (requiredKeywords.length === 0) return true;
+  const effects = getDcEffects();
+  const dcStats = effects[dcName];
+  if (!dcStats) return true; // unknown DC, allow
+  const dcKeywords = (dcStats.keywords || []).map(k => String(k).toUpperCase());
+  return requiredKeywords.every(rk => dcKeywords.includes(rk));
+}
 
 /**
  * Check if an attachment card targets a specific DC by name (not by keyword).
@@ -1515,18 +1550,30 @@ export async function handleDeploymentDone(interaction, ctx) {
       if (pending.length === 0) continue; // all auto-attached
       const handId = getHandChannelId(game, pn);
       const handChannel = await client.channels.fetch(handId);
-      const options = dcList.slice(0, 25).map((dc, i) => ({
-        label: (dc.displayName || dc.dcName || `DC ${i + 1}`).slice(0, 100),
-        value: (dcMsgIds[i] || String(i)).toString(),
-      })).filter((o) => o.value);
+      const requiredKw = getAttachmentKeywordRestrictions(pending[0]);
+      const options = dcList.slice(0, 25).map((dc, i) => {
+        const dcName = dc.displayName || dc.dcName || `DC ${i + 1}`;
+        if (requiredKw.length > 0 && !dcMeetsAttachmentRestrictions(dc.dcName, requiredKw)) return null;
+        return { label: dcName.slice(0, 100), value: (dcMsgIds[i] || String(i)).toString() };
+      }).filter(Boolean);
       const select = new StringSelectMenuBuilder()
         .setCustomId(`setup_attach_to_${gameId}_${pn}`)
         .setPlaceholder('Attach to which Deployment Card?')
         .addOptions(options);
-      await handChannel.send({
-        content: `**Setup — place Skirmish Upgrade (1 of ${pending.length}):** **${pending[0]}**. Choose which Deployment Card to attach it to:`,
+      const restrictionNote = requiredKw.length > 0 ? ` *(${requiredKw.join(' ')} only)*` : '';
+      const payload = {
+        content: `**Setup — place Skirmish Upgrade (1 of ${pending.length}):** **${pending[0]}**${restrictionNote}. Choose which Deployment Card to attach it to:`,
         components: [new ActionRowBuilder().addComponents(select)],
-      });
+      };
+      // Attach card image if available
+      const imgRel = getDcImagePath(pending[0]);
+      if (imgRel) {
+        const imgPath = join(rootDir, imgRel);
+        if (existsSync(imgPath)) {
+          payload.files = [new AttachmentBuilder(imgPath)];
+        }
+      }
+      await handChannel.send(payload);
     }
     // Check if all attachments were auto-placed (no picker needed for either player)
     const allDone = (game.setupAttachmentPending[1] || []).length === 0 && (game.setupAttachmentPending[2] || []).length === 0;
@@ -1750,18 +1797,29 @@ export async function handleSetupAttachTo(interaction, ctx) {
   if (pending.length > 0) {
     const handId = getHandChannelId(game, playerNum);
     const handChannel = await client.channels.fetch(handId);
-    const options = dcList.slice(0, 25).map((dc, i) => ({
-      label: (dc.displayName || dc.dcName || `DC ${i + 1}`).slice(0, 100),
-      value: (dcMsgIds[i] || String(i)).toString(),
-    })).filter((o) => o.value);
+    const requiredKw = getAttachmentKeywordRestrictions(pending[0]);
+    const options = dcList.slice(0, 25).map((dc, i) => {
+      const dcName = dc.displayName || dc.dcName || `DC ${i + 1}`;
+      if (requiredKw.length > 0 && !dcMeetsAttachmentRestrictions(dc.dcName, requiredKw)) return null;
+      return { label: dcName.slice(0, 100), value: (dcMsgIds[i] || String(i)).toString() };
+    }).filter(Boolean);
     const select = new StringSelectMenuBuilder()
       .setCustomId(`setup_attach_to_${gameId}_${playerNum}`)
       .setPlaceholder('Attach to which Deployment Card?')
       .addOptions(options);
-    await handChannel.send({
-      content: `**Setup — place Skirmish Upgrade (next):** **${pending[0]}**. Choose which Deployment Card to attach it to:`,
+    const restrictionNote = requiredKw.length > 0 ? ` *(${requiredKw.join(' ')} only)*` : '';
+    const payload = {
+      content: `**Setup — place Skirmish Upgrade (next):** **${pending[0]}**${restrictionNote}. Choose which Deployment Card to attach it to:`,
       components: [new ActionRowBuilder().addComponents(select)],
-    });
+    };
+    const imgRel = getDcImagePath(pending[0]);
+    if (imgRel) {
+      const imgPath = join(rootDir, imgRel);
+      if (existsSync(imgPath)) {
+        payload.files = [new AttachmentBuilder(imgPath)];
+      }
+    }
+    await handChannel.send(payload);
     saveGames();
     return;
   }
