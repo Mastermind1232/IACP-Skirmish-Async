@@ -22,32 +22,100 @@ import { dcNameFromFigureKey } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 
-/**
- * Extract keyword restrictions from an attachment card's abilityText (e.g. "LEADER ONLY" → ["LEADER"]).
- * Returns array of required keywords, or empty array if no keyword restriction.
- */
-function getAttachmentKeywordRestrictions(cardName) {
-  const effects = getDcEffects();
-  const card = effects[cardName] || effects[`[${cardName}]`];
-  if (!card?.abilityText) return [];
-  const firstLine = card.abilityText.split('\n')[0].trim();
-  const onlyMatch = firstLine.match(/^(.+?)\s+ONLY$/i);
-  if (!onlyMatch) return [];
-  const restriction = onlyMatch[1].replace(/"/g, '').trim();
-  // Split compound restrictions like "UNIQUE FIGURE WITH FIGURE COST 4 OR MORE" — just use keywords array from dc-effects
-  return (card.keywords || []).map(k => String(k).toUpperCase());
-}
+/** Keyword tokens recognized as trait/type restrictions (not DC names). */
+const RESTRICTION_KEYWORDS = ['LEADER', 'HUNTER', 'DROID', 'CREATURE', 'TROOPER', 'VEHICLE',
+  'SMUGGLER', 'WOOKIEE', 'WOOKIE', 'FORCE USER', 'HEAVY WEAPON', 'UNIQUE FIGURE',
+  'NON-UNIQUE', 'NON-MASSIVE', 'BRAWLER', 'SPY', 'GUARDIAN', 'IMPERIAL', 'REBEL',
+  'SCUM', 'FIGURE WITH', 'FIGURE COST', 'GROUP WITH', 'MASSIVE'];
 
 /**
- * Check if a DC meets the keyword restrictions for an attachment.
+ * Parse the restriction line from an attachment card and return a filter function.
+ * Returns { restrictionText, filter: (dcName) => bool } or null if no restriction.
  */
-function dcMeetsAttachmentRestrictions(dcName, requiredKeywords) {
-  if (requiredKeywords.length === 0) return true;
+function getAttachmentRestriction(cardName) {
   const effects = getDcEffects();
-  const dcStats = effects[dcName];
-  if (!dcStats) return true; // unknown DC, allow
-  const dcKeywords = (dcStats.keywords || []).map(k => String(k).toUpperCase());
-  return requiredKeywords.every(rk => dcKeywords.includes(rk));
+  const card = effects[cardName] || effects[`[${cardName}]`];
+  if (!card?.abilityText) return null;
+  const firstLine = card.abilityText.split('\n')[0].trim();
+  const onlyMatch = firstLine.match(/^(.+?)\s+ONLY$/i);
+  if (!onlyMatch) return null;
+  const restrictionRaw = onlyMatch[1].replace(/"/g, '').trim();
+  const restrictionUpper = restrictionRaw.toUpperCase();
+
+  // Split into OR-alternatives. "4 OR MORE" is a phrase, not an alternative split.
+  // "VEHICLE, DROID, OR HEAVY WEAPON" → ["VEHICLE", "DROID", "HEAVY WEAPON"]
+  // "NON-MASSIVE, NON-UNIQUE" → treated as single conjunctive phrase (not split)
+  const normalized = restrictionRaw.replace(/(\d+)\s+OR\s+MORE/gi, '$1_OR_MORE');
+  const orParts = normalized.split(/\s+OR\s+/i).map(s => s.trim()).filter(Boolean);
+  const alternatives = [];
+  for (const part of orParts) {
+    // If part has commas (e.g. "VEHICLE, DROID"), split further — unless all parts are NON- (conjunctive)
+    if (part.includes(',') && !part.includes('NON-')) {
+      const subs = part.split(/,\s*/).map(s => s.trim()).filter(Boolean);
+      alternatives.push(...subs);
+    } else {
+      alternatives.push(part.replace(/_OR_MORE/g, 'OR MORE'));
+    }
+  }
+
+  return {
+    restrictionText: restrictionRaw,
+    filter: (dcName) => {
+      const dcStats = effects[dcName];
+      if (!dcStats) return true; // unknown DC, allow
+      const dcKw = (dcStats.keywords || []).map(k => String(k).toUpperCase());
+      const dcNameUpper = (dcName || '').toUpperCase();
+      const isUnique = !!dcStats.unique;
+      const isElite = !!dcStats.elite;
+      const figureCost = dcStats.cost ?? 0;
+      const figures = dcStats.figures ?? 1;
+      const affiliation = (dcStats.affiliation || '').toUpperCase();
+
+      // Check if DC satisfies ANY alternative
+      return alternatives.some(alt => {
+        const altUpper = alt.toUpperCase().replace(/\([^)]*\)/g, '').trim();
+
+        // Handle NON- prefix conditions (conjunctive — all must be met)
+        if (altUpper.includes('NON-')) {
+          if (altUpper.includes('NON-MASSIVE') && dcKw.includes('MASSIVE')) return false;
+          if (altUpper.includes('NON-UNIQUE') && isUnique) return false;
+          // Check remaining positive keywords after stripping NON- conditions and commas
+          const remaining = altUpper.replace(/NON-MASSIVE/g, '').replace(/NON-UNIQUE/g, '').replace(/,/g, '').trim();
+          if (remaining && !_matchesKeywordPhrase(remaining, dcKw, affiliation)) return false;
+          return true;
+        }
+        // "UNIQUE FIGURE" check (optionally "WITH FIGURE COST N OR MORE")
+        if (altUpper.includes('UNIQUE FIGURE')) {
+          if (!isUnique) return false;
+          const costMatch = altUpper.match(/FIGURE COST (\d+) OR MORE/);
+          if (costMatch && figureCost < parseInt(costMatch[1], 10)) return false;
+          return true;
+        }
+        // "GROUP WITH N FIGURES" check
+        const groupMatch = altUpper.match(/(.+?)\s+GROUP WITH (\d+) FIGURES/);
+        if (groupMatch) {
+          const kwPart = groupMatch[1].trim();
+          const reqFigs = parseInt(groupMatch[2], 10);
+          if (figures !== reqFigs) return false;
+          if (!_matchesKeywordPhrase(kwPart, dcKw, affiliation)) return false;
+          return true;
+        }
+        // Simple keyword match: "LEADER", "HUNTER", "DROID", "TROOPER", compound "IMPERIAL TROOPER"
+        if (RESTRICTION_KEYWORDS.some(k => altUpper.includes(k))) {
+          return _matchesKeywordPhrase(altUpper, dcKw, affiliation);
+        }
+        // Name-based match (e.g. "DARTH VADER", "LUKE SKYWALKER", "MAUL", "AT-ST")
+        if (dcNameUpper.includes(altUpper) || altUpper.includes(dcNameUpper.replace(/\s*\(.*\)$/, ''))) return true;
+        return false;
+      });
+    },
+  };
+}
+
+/** Check if a DC's keywords + affiliation satisfy a keyword phrase like "IMPERIAL TROOPER" or "HUNTER". */
+function _matchesKeywordPhrase(phrase, dcKw, affiliation) {
+  const words = phrase.split(/\s+/).filter(Boolean);
+  return words.every(w => dcKw.includes(w) || affiliation === w);
 }
 
 /**
@@ -1550,17 +1618,17 @@ export async function handleDeploymentDone(interaction, ctx) {
       if (pending.length === 0) continue; // all auto-attached
       const handId = getHandChannelId(game, pn);
       const handChannel = await client.channels.fetch(handId);
-      const requiredKw = getAttachmentKeywordRestrictions(pending[0]);
+      const restriction = getAttachmentRestriction(pending[0]);
       const options = dcList.slice(0, 25).map((dc, i) => {
         const dcName = dc.displayName || dc.dcName || `DC ${i + 1}`;
-        if (requiredKw.length > 0 && !dcMeetsAttachmentRestrictions(dc.dcName, requiredKw)) return null;
+        if (restriction && !restriction.filter(dc.dcName)) return null;
         return { label: dcName.slice(0, 100), value: (dcMsgIds[i] || String(i)).toString() };
       }).filter(Boolean);
       const select = new StringSelectMenuBuilder()
         .setCustomId(`setup_attach_to_${gameId}_${pn}`)
         .setPlaceholder('Attach to which Deployment Card?')
         .addOptions(options);
-      const restrictionNote = requiredKw.length > 0 ? ` *(${requiredKw.join(' ')} only)*` : '';
+      const restrictionNote = restriction ? ` *(${restriction.restrictionText} only)*` : '';
       const payload = {
         content: `**Setup — place Skirmish Upgrade (1 of ${pending.length}):** **${pending[0]}**${restrictionNote}. Choose which Deployment Card to attach it to:`,
         components: [new ActionRowBuilder().addComponents(select)],
@@ -1797,17 +1865,17 @@ export async function handleSetupAttachTo(interaction, ctx) {
   if (pending.length > 0) {
     const handId = getHandChannelId(game, playerNum);
     const handChannel = await client.channels.fetch(handId);
-    const requiredKw = getAttachmentKeywordRestrictions(pending[0]);
+    const restriction = getAttachmentRestriction(pending[0]);
     const options = dcList.slice(0, 25).map((dc, i) => {
       const dcName = dc.displayName || dc.dcName || `DC ${i + 1}`;
-      if (requiredKw.length > 0 && !dcMeetsAttachmentRestrictions(dc.dcName, requiredKw)) return null;
+      if (restriction && !restriction.filter(dc.dcName)) return null;
       return { label: dcName.slice(0, 100), value: (dcMsgIds[i] || String(i)).toString() };
     }).filter(Boolean);
     const select = new StringSelectMenuBuilder()
       .setCustomId(`setup_attach_to_${gameId}_${playerNum}`)
       .setPlaceholder('Attach to which Deployment Card?')
       .addOptions(options);
-    const restrictionNote = requiredKw.length > 0 ? ` *(${requiredKw.join(' ')} only)*` : '';
+    const restrictionNote = restriction ? ` *(${restriction.restrictionText} only)*` : '';
     const payload = {
       content: `**Setup — place Skirmish Upgrade (next):** **${pending[0]}**${restrictionNote}. Choose which Deployment Card to attach it to:`,
       components: [new ActionRowBuilder().addComponents(select)],
