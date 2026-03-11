@@ -4170,7 +4170,7 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
   const REACTION_CARDS = [
     { name: 'Payback', targetDcName: 'Dengar' },
     { name: 'Dangerous Prey', targetDcName: 'Bossk' },
-    { name: "Right Back At Ya!", targetDcName: 'Boba Fett' },
+    { name: "Right Back At Ya!", targetDcName: 'Ahsoka Tano' },
   ];
   combat.promptedReactions = combat.promptedReactions || new Set();
   for (const { name, targetDcName } of REACTION_CARDS) {

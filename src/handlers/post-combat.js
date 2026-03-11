@@ -102,9 +102,9 @@ export async function handleReactionUse(interaction, ctx) {
       game.movementBank[bosskMsgId].total += 2;
     }
   } else if (cardName === "Right Back At Ya!") {
-    // Right Back At Ya!: attacker suffers 1 Damage (3 if Boba spends Block Token)
-    const bobaTokens = game.figurePowerTokens?.[targetFigKey] || [];
-    const hasBlock = bobaTokens.includes('Block');
+    // Right Back At Ya! (Ahsoka): attacker suffers 1 Damage (3 if defender spends Block Token)
+    const defTokens = game.figurePowerTokens?.[targetFigKey] || [];
+    const hasBlock = defTokens.includes('Block');
     if (hasBlock) {
       // Prompt for block token choice
       game.pendingRightBackAtYa = {
@@ -115,7 +115,7 @@ export async function handleReactionUse(interaction, ctx) {
         ownerId,
         attackerFigKey,
         attackerMsgId: attackerMsgId || findDcMessageIdForFigure(game.gameId, attackerPlayerNum, attackerFigKey),
-        bobaFigKey: targetFigKey,
+        defenderFigKey: targetFigKey,
         resultText: pending.resultText,
         combat: pending.combat,
         initialEmbedRefreshMsgIds: pending.initialEmbedRefreshMsgIds,
@@ -158,7 +158,7 @@ export async function handleRightBack(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (!game.pendingRightBackAtYa) { await interaction.followUp({ content: 'No pending Right Back At Ya! choice.', ephemeral: true }).catch(discordCatch); return; }
-  const { ownerId, attackerPlayerNum, defenderPlayerNum, attackerFigKey, attackerMsgId, bobaFigKey } = game.pendingRightBackAtYa;
+  const { ownerId, attackerPlayerNum, defenderPlayerNum, attackerFigKey, attackerMsgId, defenderFigKey } = game.pendingRightBackAtYa;
   if (interaction.user.id !== ownerId) { await interaction.followUp({ content: 'Only the reaction player can choose.', ephemeral: true }).catch(discordCatch); return; }
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
@@ -168,11 +168,11 @@ export async function handleRightBack(interaction, ctx) {
   let dmg = 1;
   if (isBlockVariant) {
     // Spend Block token
-    const bobaTokens = game.figurePowerTokens?.[bobaFigKey] || [];
-    const blockIdx = bobaTokens.indexOf('Block');
-    if (blockIdx >= 0) bobaTokens.splice(blockIdx, 1);
+    const defTokens = game.figurePowerTokens?.[defenderFigKey] || [];
+    const blockIdx = defTokens.indexOf('Block');
+    if (blockIdx >= 0) defTokens.splice(blockIdx, 1);
     if (!game.figurePowerTokens) game.figurePowerTokens = {};
-    game.figurePowerTokens[bobaFigKey] = bobaTokens;
+    game.figurePowerTokens[defenderFigKey] = defTokens;
     dmg = 3;
   }
   const atkMsgId = attackerMsgId || findDcMessageIdForFigure(game.gameId, attackerPlayerNum, attackerFigKey);

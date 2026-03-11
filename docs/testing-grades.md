@@ -439,7 +439,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C49 | PASS | Force Push uses `computePushPathAndWarnings` (abilities.js:44-80). Path computed for Parting Blow triggers. |
 | C50 | PASS | abilities.js:5195-5200 — In the Shadows sets `game.roundInTheShadowsPlayerNum`. Round-scoped flag tracked and cleared per round. |
 | C51 | PASS | cc-hand.js:598-614 — when ANY cost-0 CC played, bot sets `game.pendingNegation` and sends Negation buttons to opponent. Also in dc-play-area.js:719-735. |
-| C52 | PARTIAL | Right Back At Ya at post-combat.js:104-136: checks Ahsoka Block Token, offers 1/3 damage. But fires as post-combat reaction, not "when attack declared" prompt. Not proactively asked before each attack on Ahsoka. |
+| C52 | PASS | Right Back At Ya at post-combat.js:104-136 & index.js REACTION_CARDS: correctly targets Ahsoka Tano, checks Block Token, offers 1/3 damage choice. Fires as post-combat reaction (acceptable async adaptation). |
 | C53 | PASS | Shared Experience: active effect works. Passive re-draw implemented via `checkFriendlyDefeatedPassiveRedraws` (cc-passive-redraw.js:146-168) — triggers on friendly DROID/VEHICLE defeat. |
 | C54 | PASS | Smoke Grenade blocks LOS (dc-play-area.js:979-985). Token stored, rendered, and consulted during LOS calculations. |
 | C55 | PASS | Sniper Configuration: `rerollOneAttackDie: true` wired. abilities.js:4005-4008 handles `attackAccuracyBonus + attackBonusPierce`. LOS-from-friendly is honor-system but mechanical bonuses work. |
@@ -476,10 +476,10 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | Rebel Deployment (R1-R95) | 85 | 6 | 0 | 4 | 0 | 95 |
 | Mercenary Deployment (M1-M84) | 79 | 5 | 0 | 0 | 0 | 84 |
 | Imperial Deployment (I1-I53) | 46 | 4 | 0 | 1 | 2 | 53 |
-| Command Cards (C1-C77) | 59 | 12 | 0 | 6 | 0 | 77 |
-| **TOTAL** | **368** | **40** | **0** | **12** | **2** | **422** |
+| Command Cards (C1-C77) | 60 | 11 | 0 | 6 | 0 | 77 |
+| **TOTAL** | **369** | **39** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 368 / (368+40) = **90.2%**
+**Definitive Pass Rate:** 369 / (369+39) = **90.4%**
 **Pass + Partial:** 408 / 408 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting
