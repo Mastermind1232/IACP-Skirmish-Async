@@ -1,6 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
 import { normalizeCoord, bottomLeftCoord } from '../game/coords.js';
 import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining, opponentPlayerNum } from '../game/player-helpers.js';
+import { isDcCompanion } from '../data-loader.js';
 
 const MAX_BUTTONS_PER_ROW = 5;
 const MAX_ROWS_PER_MESSAGE = 5;
@@ -884,7 +885,9 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const _nsAbilityText = stats.abilityText || '';
   const _isNonSentient = _nsAbilityText.includes('Non-Sentient');
   const _beastTamerOverride = !!game?.beastTamerInteractOverride?.[msgId];
-  const noInteract = noAct || (_isNonSentient && !_beastTamerOverride);
+  // G48: Companion figures cannot interact
+  const _isCompanion = isDcCompanion(dcName);
+  const noInteract = noAct || (_isNonSentient && !_beastTamerOverride) || _isCompanion;
 
   const rows = [];
 

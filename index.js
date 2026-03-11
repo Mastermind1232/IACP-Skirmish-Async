@@ -302,6 +302,7 @@ import {
   isCcAttachment,
   isDcAttachment,
   isDcUnique,
+  isDcCompanion,
   getTournamentRotation,
   getMissionRules,
   getAbilityLibrary,
@@ -2168,6 +2169,8 @@ function findDcMessageIdForFigure(gameId, playerNum, figureKey) {
 
 /** Calculate VP awarded for defeating a figure of the given DC. */
 function calculateKillVp(dcName) {
+  // G47: Companion figures cost 0 VP
+  if (isDcCompanion(dcName)) return 0;
   const stats = getDcStats(dcName);
   const effects = getDcEffects()?.[dcName];
   const figures = stats?.figures ?? 1;

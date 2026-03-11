@@ -325,6 +325,15 @@ export function isDcAttachment(dcName) {
   return card?.attachment === true;
 }
 
+/** True if this Deployment Card is a companion figure (e.g. BD-1, Junk Droid, Dio, The Child). */
+export function isDcCompanion(dcName) {
+  if (!dcName || typeof dcName !== 'string') return false;
+  const n = dcName.trim();
+  const effects = getDcEffects();
+  const card = effects[n] || effects[`[${n}]`] || (n.startsWith('[') ? effects[n] : null);
+  return !!card?.companion;
+}
+
 /** True if this Deployment Card is unique (from dc-effects.json unique field). */
 export function isDcUnique(dcName) {
   if (!dcName || typeof dcName !== 'string') return false;

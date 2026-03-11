@@ -19,6 +19,7 @@ import {
   getMapTokensData,
   getDcKeywords,
   getFigureSize,
+  isDcCompanion,
 } from '../data-loader.js';
 import { getDcList, getDcMessageIds, getDcAttachments, opponentPlayerNum } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
@@ -82,7 +83,9 @@ export function getOccupiedSpacesForMovement(game, excludeFigureKey = null) {
   for (const p of [1, 2]) {
     for (const [k, coord] of Object.entries(poses[p] || {})) {
       if (k === excludeFigureKey) continue;
+      // G39: Companion figures can share spaces — don't block movement
       const dcName = dcNameFromFigureKey(k);
+      if (isDcCompanion(dcName)) continue;
       const size = game.figureOrientations?.[k] || getFigureSize(dcName);
       occupied.push(...getFootprintCells(coord, size));
     }

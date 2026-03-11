@@ -2,6 +2,7 @@
  * Interact handlers: interact_cancel_, interact_choice_
  */
 import { getPlayerId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
+import { isDcCompanion } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 
@@ -54,6 +55,11 @@ export async function handleInteractChoice(interaction, ctx) {
   const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) {
     await interaction.followUp({ content: 'Only the owner can perform this action.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // G48: Companion figures cannot interact (includes retrieve)
+  if (isDcCompanion(meta.dcName)) {
+    await interaction.followUp({ content: 'Companion figures cannot interact.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const actionsData = game.dcActionsData?.[msgId];
