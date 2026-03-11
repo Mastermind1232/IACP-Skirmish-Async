@@ -352,6 +352,12 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
 
     // Build effective keywords for this DC
     const effectiveKw = [...kwLower];
+    // Adaptive Skills: inject conditional trait based on army affiliation
+    if (dcName === adaptiveSkillsDc && armyAffiliation) {
+      const _asMap = { imperial: 'hunter', scum: 'smuggler', rebel: 'guardian' };
+      const _asTrait = _asMap[armyAffiliation];
+      if (_asTrait && !effectiveKw.includes(_asTrait)) effectiveKw.push(_asTrait);
+    }
     // Fallen Master: FORCE USER DCs also count as IMPERIAL for CC restriction purposes
     if (hasFallenMaster && kwLower.includes('force user') && effectiveAffiliation !== 'imperial') {
       // Don't change affiliation, but allow matching IMPERIAL restrictions

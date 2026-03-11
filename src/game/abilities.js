@@ -2714,7 +2714,10 @@ export function resolveAbility(abilityId, context) {
     const n = speed + entry.mpBonusFromSpeed;
     if (n < 1) return { applied: false, manualMessage: 'Resolve manually: no MP to gain.' };
     addMovementPoints(game, msgId, n);
-    const msg = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
+    // C77: Urgency requires all MP to be spent at once
+    game.urgencyMustSpendAll = game.urgencyMustSpendAll || {};
+    game.urgencyMustSpendAll[msgId] = true;
+    const msg = n === 1 ? 'Gained 1 movement point (must spend all at once).' : `Gained ${n} movement points (must spend all at once).`;
     return { applied: true, logMessage: msg, refreshMovementBank: true, activeMsgId: msgId };
   }
 
@@ -6189,9 +6192,16 @@ export function resolveAbility(abilityId, context) {
         syncHealthStateToList(game, playerNum, targetMsgId, hs);
       }
       const dcName = dcNameFromFigureKey(chosenFigureKey);
-      const targetStats = getDcEffects()[dcName]?.cost ?? 0;
-      const halfVp = Math.ceil((typeof targetStats === 'number' ? targetStats : 0) / 2);
-      return { applied: true, logMessage: `**Evacuate** — **${dcName}** is defeated. Opponent gains ${halfVp > 0 ? halfVp + ' VP (half the deployment cost — use `/editvp -' + halfVp + '` to adjust)' : 'no VP'} from this defeat.`, refreshDcEmbed: true };
+      let totalCost = getDcEffects()[dcName]?.cost ?? 0;
+      // Include CC attachment costs in the VP calculation
+      const _evCcAtts = (playerNum === 1 ? game.p1CcAttachments : game.p2CcAttachments)?.[targetMsgId];
+      if (Array.isArray(_evCcAtts)) {
+        for (const ccName of _evCcAtts) {
+          totalCost += getCcEffect(ccName)?.cost ?? 0;
+        }
+      }
+      const halfVp = Math.ceil(totalCost / 2);
+      return { applied: true, logMessage: `**Evacuate** — **${dcName}** is defeated. Opponent gains ${halfVp > 0 ? halfVp + ' VP (half the deployment cost' + (Array.isArray(_evCcAtts) && _evCcAtts.length ? ' incl. attachments' : '') + ' — use `/editvp -' + halfVp + '` to adjust)' : 'no VP'} from this defeat.`, refreshDcEmbed: true };
     }
     // Phase 1: find friendly figures within 2 spaces (not self)
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);

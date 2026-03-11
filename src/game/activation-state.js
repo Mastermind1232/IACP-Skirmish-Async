@@ -212,6 +212,7 @@ const ROUND_OBJECT_FLAGS = [
   'adrenalineBonuses',
   'opportunisticMustSpendNow',
   'imperialRetrofittingMultiAttack',
+  'urgencyMustSpendAll',
 ];
 
 const ROUND_NULL_FLAGS = [

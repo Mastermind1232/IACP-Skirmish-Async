@@ -57,6 +57,11 @@ export async function handleMoveMp(interaction, ctx) {
     await interaction.followUp({ content: `Choose 1–${mpRemaining} MP.`, ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Urgency: must spend all MP at once (C77)
+  if (game.urgencyMustSpendAll?.[msgId] && mp < mpRemaining) {
+    await interaction.followUp({ content: `**Urgency** requires you to spend all **${mpRemaining}** MP at once.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
   const boardState = moveState.boardState || getBoardStateForMovement(game, figureKey);
   if (!boardState) {
     delete game.moveInProgress[moveKey];
@@ -650,6 +655,8 @@ export async function handleMovePick(interaction, ctx) {
     delete game.moveInProgress[moveKey];
     // Force Jump: clear mobileMovementActive when all MP is spent
     if (game.mobileMovementActive?.[msgId]) delete game.mobileMovementActive[msgId];
+    // Urgency: clear must-spend-all flag when movement completes
+    if (game.urgencyMustSpendAll?.[msgId]) delete game.urgencyMustSpendAll[msgId];
     // Post-deploy movement: advance the post-deploy queue
     if (wasPostDeploy && game.postDeployQueue) {
       const { onPostDeployMovementComplete } = await import('./post-deploy.js');
