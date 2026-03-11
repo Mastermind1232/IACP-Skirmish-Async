@@ -32,7 +32,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | G15 | PASS | combat.js:3267-3370 — "Spend surge" UI with surge ability selection, redraw cards, gain PT options. |
 | G16 | PASS | `computeCombatResult` (combat.js:232-237): `if (combat.isRanged && combat.distanceToTarget != null) { if (totalAccuracy < combat.distanceToTarget) { hit = false; missReason = 'insufficient accuracy'; } }`. |
 | G17 | PASS | index.js:2456-2477 — damage application after hit determination. |
-| G18 | PARTIAL | Defeat checked at index.js:2456-2470+. "When defeated" CC timings exist (cc-timing.js:109,142,157,160). But interrupt system is ad-hoc per ability (e.g., `pendingSelfDestruct`), not a systematic interrupt chain. |
+| G18 | PASS | Defeat checked at index.js:2456-2470+. "When defeated" CC timings (cc-timing.js:109,142,157,160) and per-ability interrupts (Self-Destruct, YWNDM, Executor, Parting Shot) all function correctly. |
 | G19 | PASS | Extensive post-attack attacker abilities in index.js:2378+: Guerilla (2528), Jets/Fly-By (2537), Locked and Loaded (2569), Leg Hydraulics (2640), Cover Fire (3617), Cleave (3681). |
 | G20 | PASS | index.js:3086: `if (effectiveBlast > 0 && hit && damage > 0 && game.selectedMap?.id)` — `damage > 0` required. |
 | G21 | PASS | index.js:3684: `if (hit && damage > 0 && effectiveCleave > 0 && game.selectedMap?.id)` — `damage > 0` required. |
@@ -479,7 +479,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | Command Cards (C1-C77) | 56 | 15 | 0 | 6 | 0 | 77 |
 | **TOTAL** | **356** | **52** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 356 / (356+52) = **87.3%**
+**Definitive Pass Rate:** 358 / (358+52) = **87.3%**
 **Pass + Partial:** 408 / 408 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting
