@@ -5766,9 +5766,11 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: jundlandTerrorEffect (Jundland Terror) — grant 2 MP + free attack to Tusken Raider / Bantha Rider next activation
+  // G37/C21: max 1 copy per EOR phase
   if (entry.type === 'ccEffect' && entry.jundlandTerrorEffect) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    game.jundlandTerrorPlayedThisEor = true;
     const traits = ['Tusken Raider', 'Bantha Rider'];
     const dcEffects = getDcEffects();
     const squadDcList = getSquad(game, playerNum)?.dcList || [];
@@ -7977,6 +7979,8 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace } = context;
     const pdf = entry.placeDefeatedFigure;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    // C25: Reinforcements max 1 per SOR phase
+    if (entry.label === 'Reinforcements' && !chosenFigureKey) game.reinforcementsPlayedThisSor = true;
     const dcList = getDcList(game, playerNum) || [];
     const poses = game.figurePositions?.[playerNum] || {};
 

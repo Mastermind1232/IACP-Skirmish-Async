@@ -676,9 +676,14 @@ export async function handleAttackTarget(interaction, ctx) {
     if (_defUpgrades.includes('Wookiee Avenger')) {
       _pc.wookieeAvengerDefend = true;
     }
-    // Cross Training (defending): replace 1 defense die with white die (handled in handleCombatRoll)
+    // Cross Training (defending): replace 1 defense die with white die (exhaust — once per round)
     if (_defUpgrades.includes('Cross Training')) {
-      _pc.crossTrainingDefend = true;
+      const _ctExh = game.crossTrainingExhausted?.[msgId];
+      if (!_ctExh) {
+        _pc.crossTrainingDefend = true;
+        game.crossTrainingExhausted = game.crossTrainingExhausted || {};
+        game.crossTrainingExhausted[msgId] = true;
+      }
     }
     // Rogue Smuggler (defender): lose Distracting — negate the passive if present
     if (_defUpgrades.includes('Rogue Smuggler')) {
@@ -1959,6 +1964,9 @@ export async function handleCombatRoll(interaction, ctx) {
     }
     combat.attackerRerollsRemaining = atkRerolls;
     combat.defenderRerollsRemaining = defRerolls;
+    // G12: Track which die indices have been rerolled (each die max once)
+    combat.attackerRerolledIndices = [];
+    combat.defenderRerolledIndices = [];
     const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
     if (atkRerolls > 0 || defRerolls > 0 || hasForcedRerolls) {
       if (atkRerolls > 0) {
@@ -2068,8 +2076,10 @@ export async function sendRerollUI(thread, game, combat, phase) {
       return;
     }
     const dice = combat.attackDiceResults || [];
+    const alreadyRerolled = combat.attackerRerolledIndices || [];
     const buttons = [];
     for (let i = 0; i < dice.length; i++) {
+      if (alreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
       buttons.push(
         new ButtonBuilder()
           .setCustomId(`combat_reroll_${gameId}_atk_${i}`)
@@ -2137,8 +2147,10 @@ export async function sendRerollUI(thread, game, combat, phase) {
       return;
     }
     const dice = combat.defenseDiceResults || [];
+    const alreadyRerolled = combat.defenderRerolledIndices || [];
     const buttons = [];
     for (let i = 0; i < dice.length; i++) {
+      if (alreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
       buttons.push(
         new ButtonBuilder()
           .setCustomId(`combat_reroll_${gameId}_def_${i}`)
@@ -2274,7 +2286,8 @@ export async function handleCombatReroll(interaction, ctx) {
     const idx = parseInt(choice, 10);
     if (side === 'atk') {
       const dice = combat.attackDiceResults || [];
-      if (idx >= 0 && idx < dice.length && combat.attackerRerollsRemaining > 0) {
+      const _atkAlreadyRerolled = combat.attackerRerolledIndices || [];
+      if (idx >= 0 && idx < dice.length && combat.attackerRerollsRemaining > 0 && !_atkAlreadyRerolled.includes(idx)) {
         const oldDie = dice[idx];
         const newDie = rollSingleAttackDie(oldDie.color);
         dice[idx] = newDie;
@@ -2282,6 +2295,8 @@ export async function handleCombatReroll(interaction, ctx) {
         const totals = recalcAttackTotals(dice);
         combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
         combat.attackerRerollsRemaining -= 1;
+        // G12: mark this die index as rerolled
+        combat.attackerRerolledIndices = [..._atkAlreadyRerolled, idx];
         await thread.send(`**Rerolled** attack ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
         // Double or Nothing: if DON flag is set for attack side, check dominant icon match
         if (game.doubleMatchingIconsOnReroll?.side === 'atk' && !combat.doubleOrNothingApplied) {
@@ -2325,7 +2340,8 @@ export async function handleCombatReroll(interaction, ctx) {
       }
     } else {
       const dice = combat.defenseDiceResults || [];
-      if (idx >= 0 && idx < dice.length && combat.defenderRerollsRemaining > 0) {
+      const _defAlreadyRerolled = combat.defenderRerolledIndices || [];
+      if (idx >= 0 && idx < dice.length && combat.defenderRerollsRemaining > 0 && !_defAlreadyRerolled.includes(idx)) {
         const oldDie = dice[idx];
         const newDie = rollSingleDefenseDie(oldDie.color);
         dice[idx] = newDie;
@@ -2333,6 +2349,8 @@ export async function handleCombatReroll(interaction, ctx) {
         const totals = recalcDefenseTotals(dice);
         combat.defenseRoll = { block: totals.block, evade: totals.evade, dodge: totals.dodge };
         combat.defenderRerollsRemaining -= 1;
+        // G12: mark this die index as rerolled
+        combat.defenderRerolledIndices = [..._defAlreadyRerolled, idx];
         combat.defenderRerolledOrModified = true; // Track for Quick Strike (Electrostaff loadout)
         const dodgeTag = newDie.dodge ? '/DODGE' : '';
         await thread.send(`**Rerolled** defense ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);

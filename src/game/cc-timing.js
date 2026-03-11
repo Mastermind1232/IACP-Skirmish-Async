@@ -64,6 +64,10 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
   const timing = String(effect.timing).toLowerCase().trim();
   if (SPECIAL_ACTION_TIMING.has(timing)) return false;
 
+  // Per-phase named CC limits (G37/C21, C25)
+  if (cardName === 'Jundland Terror' && game?.jundlandTerrorPlayedThisEor) return false;
+  if (cardName === 'Reinforcements' && game?.reinforcementsPlayedThisSor) return false;
+
   const ctx = getCcPlayContext(game, playerNum);
 
   switch (timing) {

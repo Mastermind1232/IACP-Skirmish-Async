@@ -3678,16 +3678,13 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     }
   }
 
-  // F6 Cleave: attacker may choose one other figure in melee (adjacent to attacker) to apply cleave damage
-  // Triggered by either surge Cleave ability or Cleave N passive on deployment card
+  // F6 Cleave: attacker may choose one figure adjacent to the TARGET (not attacker) to apply cleave damage
+  // Works for both melee and ranged attacks (G34: ranged cleave for Grand Inquisitor, etc.)
   const effectiveCleave = (combat.surgeCleave || 0) + (combat.passiveCleave || 0);
   if (hit && damage > 0 && effectiveCleave > 0 && game.selectedMap?.id) {
-    const attMeta = combat.attackerMsgId ? dcMessageMeta.get(combat.attackerMsgId) : null;
-    const attDg = (attMeta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const attackerFigureKey = attMeta ? `${attMeta.dcName}-${attDg}-${combat.attackerFigureIndex ?? 0}` : null;
-    if (attackerFigureKey) {
-      const adjacentToAttacker = getFiguresAdjacentToTarget(game, attackerFigureKey, game.selectedMap.id);
-      const cleaveTargets = adjacentToAttacker.filter(
+    if (combat.target?.figureKey) {
+      const adjacentToTarget = getFiguresAdjacentToTarget(game, combat.target.figureKey, game.selectedMap.id);
+      const cleaveTargets = adjacentToTarget.filter(
         (c) => c.playerNum === defenderPlayerNum && c.figureKey !== combat.target.figureKey
       );
       if (cleaveTargets.length > 0) {
@@ -3708,7 +3705,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         };
         const cleaveRows = getCleaveTargetButtons(game.gameId, targetsWithLabels);
         await thread.send({
-          content: `**Cleave (${effectiveCleave} damage):** <@${ownerId}> — Choose one target in melee to apply cleave damage:`,
+          content: `**Cleave (${effectiveCleave} damage):** <@${ownerId}> — Choose one figure adjacent to the target to apply cleave damage:`,
           allowedMentions: { users: [ownerId] },
           components: cleaveRows,
         });

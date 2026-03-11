@@ -194,6 +194,7 @@ const ROUND_OBJECT_FLAGS = [
   'activationKills',
   'activationDamagedFigures',
   'pendingBombDrop',
+  'crossTrainingExhausted',
 ];
 
 const ROUND_NULL_FLAGS = [
@@ -269,6 +270,8 @@ const ROUND_FALSE_FLAGS = [
 const ROUND_DELETE_FLAGS = [
   'commsJammerActivePlayerNum',
   'partingShotTriggered',
+  'jundlandTerrorPlayedThisEor',
+  'reinforcementsPlayedThisSor',
 ];
 
 /**
