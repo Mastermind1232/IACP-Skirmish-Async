@@ -2523,6 +2523,8 @@ async function resolveCombatAfterRolls(game, combat, client) {
 /** Apply damage, conditions, defeat logic, and finish combat resolution. Called from resolveCombatAfterRolls and handleFigureheadDecision. */
 async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client) {
   const thread = await client.channels.fetch(combat.combatThreadId);
+  // Store applied damage on combat object for post-combat checks (Return Fire, etc.)
+  combat._appliedDamage = damage;
   // Store last attack metadata for post-attack CC effect handlers
   game.lastAttackAttackerMsgId = combat.attackerMsgId ?? null;
   game.lastAttackAttackerFigureIndex = combat.attackerFigureIndex ?? 0;
@@ -3094,6 +3096,27 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         }
         // Nefarious Gains (Jabba): when a hostile figure is defeated, Jabba's owner gains 1 VP
         await checkNefariousGains(game, defenderPlayerNum, client);
+        // Imperial Citadel: when a friendly Imperial figure is defeated, transfer its Power Tokens to the Citadel card
+        {
+          const _icDefDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
+          const _icDefEff = getDcEffects()?.[_icDefDcName];
+          if (_icDefEff?.affiliation === 'Imperial') {
+            const _icDcList = getDcList(game, defenderPlayerNum) || [];
+            if (_icDcList.some(dc => dc.dcName === '[Imperial Citadel]')) {
+              const _icTokens = game.figurePowerTokens?.[combat.target.figureKey] || [];
+              if (_icTokens.length > 0) {
+                game.imperialCitadelTokens = game.imperialCitadelTokens || { focus: 0, damage: 0, hit: 0, surge: 0, block: 0, evade: 0 };
+                for (const t of _icTokens) {
+                  const tLower = String(t).toLowerCase();
+                  game.imperialCitadelTokens[tLower] = (game.imperialCitadelTokens[tLower] || 0) + 1;
+                }
+                const _icCount = _icTokens.length;
+                delete game.figurePowerTokens[combat.target.figureKey];
+                await logGameAction(game, client, `**Imperial Citadel** — ${_icCount} Power Token${_icCount !== 1 ? 's' : ''} transferred from defeated **${_icDefDcName}** to the Citadel.`, { phase: 'ROUND', icon: 'card' });
+              }
+            }
+          }
+        }
         // Hunt Dissent (Agent Kallus): when Kallus or friendly TROOPER within 3 defeats hostile, Kallus gains Block Token
         await checkHuntDissent(game, attackerPlayerNum, combat.attackerFigureKey, client);
         // Into the Force (Obi-Wan): when defeated, a friendly figure becomes Focused
@@ -4466,6 +4489,49 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     }
   } catch (_postAtkErr) {
     console.error('Post-attack reaction prompt error:', _postAtkErr?.message ?? _postAtkErr);
+  }
+
+  // Return Fire (Han Solo / Migs Mayfeld): after attack targeting this figure resolves, interrupt free attack
+  {
+    const _rfDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    const _rfDefFk = combat.target?.figureKey;
+    const _rfDefDcName = _rfDefFk ? dcNameFromFigureKey(_rfDefFk) : null;
+    const _rfDefEff = _rfDefDcName ? getDcEffect(_rfDefDcName) : null;
+    const _rfDefIds = _rfDefEff?.specialAbilityIds || [];
+    const _rfHasReturnFire = _rfDefIds.includes('return_fire') || _rfDefIds.includes('return_fire_migs');
+    if (_rfHasReturnFire && _rfDefFk && game.figurePositions?.[_rfDefPN]?.[_rfDefFk]) {
+      const _rfKey = `returnFire_${_rfDefFk}`;
+      if (!game.roundFigureAbilityUsed?.[_rfKey]) {
+        // Han Solo's return_fire requires 0 damage unless Rogue Smuggler upgrade overrides
+        let _rfCanFire = true;
+        if (_rfDefIds.includes('return_fire') && !_rfDefIds.includes('return_fire_migs')) {
+          const _rfDamage = combat._appliedDamage ?? 0;
+          const _rfDefMsgId = findDcMessageIdForFigure(game.gameId, _rfDefPN, _rfDefFk);
+          const _rfUpgrades = _rfDefMsgId ? (game.p1DcAttachments?.[_rfDefMsgId] || game.p2DcAttachments?.[_rfDefMsgId] || []) : [];
+          const _rfHasRogue = _rfUpgrades.includes('Rogue Smuggler');
+          if (_rfDamage > 0 && !_rfHasRogue) _rfCanFire = false;
+        }
+        if (_rfCanFire) {
+          game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+          game.roundFigureAbilityUsed[_rfKey] = true;
+          // Set free attack bonus for the defender
+          const _rfDefMsgId = findDcMessageIdForFigure(game.gameId, _rfDefPN, _rfDefFk);
+          if (_rfDefMsgId) {
+            game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+            game.freeAttackBonusPending[_rfDefMsgId] = true;
+            game.forcedAttackTarget = game.forcedAttackTarget || {};
+            game.forcedAttackTarget[_rfDefMsgId] = combat.attackerFigureKey;
+            const _rfOwnerId = getPlayerId(game, _rfDefPN);
+            const _rfLabel = _rfDefIds.includes('return_fire_migs') ? 'Return Fire (Migs)' : 'Return Fire';
+            await thread.send({
+              content: `<@${_rfOwnerId}> **${_rfLabel}** — Interrupt: perform a free attack targeting **${combat.attackerDcName}**! Use the **Attack** button on your DC card.`,
+              allowedMentions: { users: [_rfOwnerId] },
+            }).catch(discordCatch);
+            await logGameAction(game, client, `**${_rfLabel}** — **${_rfDefDcName}** may interrupt to attack **${combat.attackerDcName}**.`, { phase: 'ROUND', icon: 'attack' });
+          }
+        }
+      }
+    }
   }
 
   delete game.pendingCombat;

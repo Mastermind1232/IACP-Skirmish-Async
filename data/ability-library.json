@@ -3825,10 +3825,28 @@
     "return_fire": {
       "type": "dcSpecial",
       "label": "Return Fire",
+      "trigger": "combat-after-defending",
       "description": "After an attack targeting you resolves with no damage, interrupt to perform an attack targeting the attacker. Limit once per round.",
       "freeAttackBonus": true,
       "freeAction": true,
-      "logMessage": "**Return Fire** — (Interrupt: triggered after an attack targeting you resolves with 0 Damage.) Your next attack costs no action — click **Attack** to target the attacker. Limit once per round.",
+      "logMessage": "**Return Fire** — (Interrupt: attack targeting you resolved with 0 Damage.) Free attack targeting the attacker. Limit once per round.",
+      "wiredStatus": "wired"
+    },
+    "return_fire_migs": {
+      "type": "dcSpecial",
+      "label": "Return Fire",
+      "trigger": "combat-after-defending",
+      "description": "After an attack targeting you is resolved, you can interrupt to perform an attack targeting that attacker. Limit once per round.",
+      "freeAttackBonus": true,
+      "freeAction": true,
+      "logMessage": "**Return Fire** — (Interrupt: attack targeting you resolved.) Free attack targeting the attacker. Limit once per round.",
+      "wiredStatus": "wired"
+    },
+    "droid_arm_migs": {
+      "type": "dcSpecial",
+      "label": "Droid Arm",
+      "trigger": "pre-attack",
+      "description": "Before you declare an attack, you may discard a Power Token to draw line of sight to the target from a space adjacent to you.",
       "wiredStatus": "wired"
     },
     "Reverse Engineer": {

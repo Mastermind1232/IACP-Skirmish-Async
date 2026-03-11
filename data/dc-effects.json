@@ -4662,7 +4662,9 @@
       "unique": true,
       "affiliation": "Scum",
       "specialAbilityIds": [
-        "locked_and_loaded"
+        "locked_and_loaded",
+        "droid_arm_migs",
+        "return_fire_migs"
       ],
       "specials": [
         "Locked and Loaded"

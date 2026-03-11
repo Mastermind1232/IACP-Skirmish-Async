@@ -12,7 +12,7 @@ import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
   getCcHand, getActivatedDcIndices,
   getActivationsRemaining, setActivationsRemaining,
-  ccDiscardKey, ccAttachmentsKey, vpKey,
+  ccDiscardKey, ccHandKey, ccAttachmentsKey, vpKey,
   opponentPlayerNum, getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
@@ -280,6 +280,13 @@ export async function handleAttackTarget(interaction, ctx) {
     }
     delete game.forcedAttackTarget[msgId];
   }
+  // Droid Arm (Migs Mayfeld): deduct 1 Power Token when attacking a target only visible via Droid Arm
+  if (target.droidArmLOS) {
+    const _daTokens = game.figurePowerTokens?.[`${meta.dcName}-${(meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1}-${figureIndex}`] || [];
+    if (_daTokens.length > 0) {
+      _daTokens.splice(0, 1); // remove first token
+    }
+  }
   // Ballistics Matrix: clear per-attack flag after this attack proceeds
   if (game.nextAttackIgnoreFigureLOS?.[attackerPlayerNum]) delete game.nextAttackIgnoreFigureLOS[attackerPlayerNum];
   delete game.attackTargets[`${msgId}_${figureIndex}`];
@@ -501,6 +508,7 @@ export async function handleAttackTarget(interaction, ctx) {
     content: '**Pre-combat window** — Both players: resolve any Command Cards, add/remove dice, apply/block damage, etc. When ready, click **Ready to roll combat dice** below.',
     components: [readyRow],
   });
+  if (target.droidArmLOS) await thread.send(`**Droid Arm** — LOS drawn from adjacent space (1 Power Token discarded).`).catch(discordCatch);
   if (_mysticHunterFired) await thread.send(`🔮 **Mystic Hunter** — **${meta.dcName}** becomes **Focused** (+1 green die).`).catch(discordCatch);
   if (_fullOfRageFired) await thread.send(`**Full of Rage** — Krrsantan becomes **Focused** before attacking (${_fullOfRageDmg} damage suffered, +1 green die).`).catch(discordCatch);
   if (_flyByFired) await thread.send(`🚀 **Fly-By** — Target within 2 spaces: +1 blue die to attack pool.`).catch(discordCatch);
@@ -752,6 +760,50 @@ export async function handleAttackTarget(interaction, ctx) {
         game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
         game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'Feeding Frenzy'];
         await thread.send('**Feeding Frenzy** — Exhausted: target has suffered damage, +1 Hit applied.').catch(discordCatch);
+      }
+    }
+    // --- Zillo Technique (I51-I52): defender's team SU — exhaust: reduce Pierce by 2; discard CC: +1 Block ---
+    if (!target.isNpc) {
+      const _ztDefPN = game.pendingCombat.defenderPlayerNum;
+      const _ztDcList = getDcList(game, _ztDefPN) || [];
+      const _ztDcMsgIds = getDcMessageIds(game, _ztDefPN) || [];
+      let _ztMsgId = null;
+      for (let _ztI = 0; _ztI < _ztDcList.length; _ztI++) {
+        if (_ztDcList[_ztI]?.dcName === '[Zillo Technique]') { _ztMsgId = _ztDcMsgIds[_ztI] || null; break; }
+      }
+      if (_ztMsgId) {
+        const _ztExh = game.exhaustedSkirmishUpgrades?.[_ztMsgId] || [];
+        const _ztDepleted = (game.p1DepletedDcMessageIds || []).includes(_ztMsgId) || (game.p2DepletedDcMessageIds || []).includes(_ztMsgId);
+        // Exhaust effect: reduce Pierce by 2
+        if (!_ztExh.includes('Zillo Technique') && !_ztDepleted) {
+          _pc.defenderReducePierce = (_pc.defenderReducePierce || 0) + 2;
+          game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+          game.exhaustedSkirmishUpgrades[_ztMsgId] = [..._ztExh, 'Zillo Technique'];
+          await thread.send('**Zillo Technique** — Exhausted: Pierce reduced by 2 for this attack.').catch(discordCatch);
+        }
+        // Discard CC effect: +1 Block (limit once per attack, no exhaust/deplete cost)
+        const _ztHandKey = ccHandKey(_ztDefPN);
+        const _ztHand = game[_ztHandKey] || [];
+        if (_ztHand.length > 0) {
+          const _ztDefOwnerId = getPlayerId(game, _ztDefPN);
+          const _ztBtns = _ztHand.slice(0, 20).map((c, i) =>
+            new ButtonBuilder()
+              .setCustomId(`zillo_discard_${game.gameId}_${_ztDefPN}_${i}`)
+              .setLabel(String(c).slice(0, 80))
+              .setStyle(ButtonStyle.Danger)
+          );
+          _ztBtns.push(new ButtonBuilder().setCustomId(`zillo_discard_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+          game.pendingZilloDiscard = { defenderPN: _ztDefPN, combatThreadId: thread.id };
+          const _ztRows = [];
+          for (let _ztR = 0; _ztR < _ztBtns.length; _ztR += 5) {
+            _ztRows.push(new ActionRowBuilder().addComponents(_ztBtns.slice(_ztR, _ztR + 5)));
+          }
+          await thread.send({
+            content: `<@${_ztDefOwnerId}> **Zillo Technique** — Discard 1 Command card for **+1 Block**? (once per attack)`,
+            allowedMentions: { users: [_ztDefOwnerId] },
+            components: _ztRows.slice(0, 5),
+          }).catch(discordCatch);
+        }
       }
     }
   }
@@ -4565,4 +4617,45 @@ export async function handleGuidanceSystems(interaction, ctx) {
     }).catch(discordCatch);
     saveGames();
   }
+}
+
+/**
+ * Zillo Technique: defender discards a CC from hand for +1 Block, or skips.
+ */
+export async function handleZilloDiscard(interaction, ctx) {
+  const { getGame, saveGames, client } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const isSkip = interaction.customId.startsWith('zillo_discard_skip_');
+  const parts = interaction.customId.replace(/^zillo_discard_(?:skip_)?/, '').split('_');
+  const gameId = parts[0];
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const combat = game.pendingCombat;
+  const pending = game.pendingZilloDiscard;
+  if (!combat || !pending) {
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    return;
+  }
+  const thread = combat.combatThreadId ? await client.channels.fetch(combat.combatThreadId) : null;
+  if (isSkip) {
+    delete game.pendingZilloDiscard;
+    await interaction.message.edit({ content: '**Zillo Technique** — Skipped (+1 Block).', components: [] }).catch(discordCatch);
+  } else {
+    const defPN = pending.defenderPN;
+    const cardIdx = parseInt(parts[1], 10);
+    const handKey = ccHandKey(defPN);
+    const hand = game[handKey] || [];
+    if (cardIdx >= 0 && cardIdx < hand.length) {
+      const cardName = hand[cardIdx];
+      hand.splice(cardIdx, 1);
+      const discKey = ccDiscardKey(defPN);
+      game[discKey] = game[discKey] || [];
+      game[discKey].push(cardName);
+      combat.bonusBlock = (combat.bonusBlock || 0) + 1;
+      delete game.pendingZilloDiscard;
+      await interaction.message.edit({ content: `**Zillo Technique** — Discarded **${cardName}**: +1 Block applied to defense.`, components: [] }).catch(discordCatch);
+      if (thread) await thread.send(`**Zillo Technique** — Defender discarded **${cardName}** for **+1 Block**.`).catch(discordCatch);
+    }
+  }
+  saveGames();
 }

@@ -1064,12 +1064,26 @@ async function buildAndSendAttackTargets(
         }
       }
     }
+    // Droid Arm (Migs Mayfeld): if no normal LOS and attacker has droid_arm_migs + power tokens, check LOS from adjacent spaces
+    let droidArmLOS = false;
+    if (!los && (stats.specialAbilityIds || []).includes('droid_arm_migs')) {
+      const _daTokens = game.figurePowerTokens?.[figureKey] || [];
+      if (_daTokens.length > 0 && ms?.adjacency) {
+        const _daAdj = (ms.adjacency[String(attackerPos).toLowerCase()] || []).map(s => String(s).toLowerCase());
+        droidArmOuter: for (const adjSpace of _daAdj) {
+          for (const tc of cells) {
+            if (hasLineOfSight(adjSpace, tc, effectiveMs, losCoords)) { droidArmLOS = true; break droidArmOuter; }
+          }
+        }
+        if (droidArmLOS) los = true;
+      }
+    }
     const m = k.match(/-(\d+)-(\d+)$/);
     const dg = m ? parseInt(m[1], 10) : 1;
     const fi = m ? parseInt(m[2], 10) : 0;
     const figCount = getDcStats(dcName).figures ?? 1;
     const label = figCount > 1 ? `${dg}${FIGURE_LETTERS[fi] || 'a'}` : (totals[dcName] > 1 ? `${dcName} [DG ${dg}]` : dcName);
-    targets.push({ figureKey: k, coord, label, hasLOS: los, dist });
+    targets.push({ figureKey: k, coord, label, hasLOS: los, dist, droidArmLOS });
   }
   // Missile Salvo: filter out already-targeted figures
   if (excludeFigureKeys?.length) {
@@ -1154,9 +1168,10 @@ async function buildAndSendAttackTargets(
         chunk.map((t, idx) => {
           const targetIndex = i + idx;
           const noLOS = t.hasLOS === false;
+          const daTag = t.droidArmLOS ? ' [Droid Arm]' : '';
           return new ButtonBuilder()
             .setCustomId(`attack_target_${msgId}_${figureIndex}_${targetIndex}`)
-            .setLabel(`${t.label} (${t.coord.toUpperCase()})${noLOS ? ' [No LOS]' : ''}`.slice(0, 80))
+            .setLabel(`${t.label} (${t.coord.toUpperCase()})${noLOS ? ' [No LOS]' : daTag}`.slice(0, 80))
             .setStyle(noLOS ? ButtonStyle.Secondary : ButtonStyle.Danger)
             .setDisabled(noLOS);
         })

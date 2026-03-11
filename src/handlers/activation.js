@@ -1524,6 +1524,28 @@ export async function handleConfirmActivate(interaction, ctx) {
       }
     }
   }
+  // Imperial Citadel (I47): at start of a friendly Imperial figure's activation, it may gain 1 Power Token from this card
+  {
+    const _icAtkEff = getDcEffects()?.[meta.dcName];
+    if (_icAtkEff?.affiliation === 'Imperial') {
+      const _icDcList = getDcList(game, meta.playerNum) || [];
+      if (_icDcList.some(dc => dc.dcName === '[Imperial Citadel]')) {
+        const _icTokens = game.imperialCitadelTokens || {};
+        const _icAvailable = Object.entries(_icTokens).filter(([, count]) => count > 0);
+        if (_icAvailable.length > 0) {
+          const _icBtns = _icAvailable.slice(0, 4).map(([type, count]) => {
+            const label = `${type.charAt(0).toUpperCase() + type.slice(1)} (${count})`;
+            return new ButtonBuilder()
+              .setCustomId(`act_passive_${game.gameId}_${msgId}_citadel_token_${type}`)
+              .setLabel(label)
+              .setStyle(ButtonStyle.Primary);
+          });
+          _icBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_citadel_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+          await thread.send({ content: `**Imperial Citadel** — **${displayName}** may gain 1 Power Token from the Citadel:`, components: [new ActionRowBuilder().addComponents(_icBtns)] }).catch(discordCatch);
+        }
+      }
+    }
+  }
   // I Make the Rules Now (Cad Bane): when another figure activates, HUNTER within 4 of Cad Bane gains 1 MP
   // Scan all DCs on BOTH teams for this ability
   for (const pn of [1, 2]) {
@@ -2277,6 +2299,27 @@ export async function handleActPassive(interaction, ctx) {
         applyCondition(game, _irFigKey, 'Focus');
         await interaction.message.edit({ content: `**Imperial Retrofitting** — Depleted. **${displayName}** becomes **Focused**.`, components: [] }).catch(discordCatch);
         await logGameAction?.(game, client, `**Imperial Retrofitting** depleted — **${displayName}** becomes Focused.`, { phase: 'ACTIVATION', icon: 'card' });
+      }
+    }
+  } else if (ability === 'citadel') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `**Imperial Citadel** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      // choice is 'token_<type>' e.g. 'token_focus', 'token_block'
+      const _icType = choice.replace('token_', '');
+      const _icTokens = game.imperialCitadelTokens || {};
+      if ((_icTokens[_icType] || 0) > 0) {
+        _icTokens[_icType]--;
+        game.imperialCitadelTokens = _icTokens;
+        const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const fk = `${meta.dcName}-${dgIndex}-0`;
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+        game.figurePowerTokens[fk].push(_icType.charAt(0).toUpperCase() + _icType.slice(1));
+        await interaction.message.edit({ content: `**Imperial Citadel** — **${displayName}** gained 1 **${_icType.charAt(0).toUpperCase() + _icType.slice(1)} Token** from the Citadel.`, components: [] }).catch(discordCatch);
+        await logGameAction?.(game, client, `**Imperial Citadel** — **${displayName}** gained 1 ${_icType.charAt(0).toUpperCase() + _icType.slice(1)} Token from the Citadel.`, { phase: 'ACTIVATION', icon: 'card' });
+      } else {
+        await interaction.message.edit({ content: `**Imperial Citadel** — No ${_icType} tokens remaining.`, components: [] }).catch(discordCatch);
       }
     }
   } else if (ability === 'unstabledev') {
