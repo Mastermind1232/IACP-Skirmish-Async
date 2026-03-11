@@ -63,7 +63,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | G46 | PASS | mission-rules.js:37-40 — excludes "salacious b. crumb" and conditionally "the child" from control. |
 | G47 | PASS | `calculateKillVp()` (index.js:2172) returns 0 for companion figures via `isDcCompanion()` check. |
 | G48 | PASS | Companion interact disabled: UI (components.js:889 `_isCompanion`) + server guard (interact.js:62 `isDcCompanion`). |
-| G49 | PARTIAL | CC timing checks `playableBy` trait, so companions with matching traits (e.g. J4X-7 LEADER for Field Tactician) can play CCs. No explicit companion CC framework. |
+| G49 | PASS | Companions are treated identically to regular DCs for CC play eligibility. cc-timing.js:302-424 `isCcPlayLegalByRestriction` checks `getDcList()` which includes companions, matching by keywords. No explicit companion framework needed — works by design. |
 | G50 | PASS | mission-rules.js:28-56 — `getNamedAreaController()` with figure counting, tie logic, space control. |
 | G51 | PASS | movement.js:184 — impassableEdges in movementBlockingSet; spatial.js:45-59 `impassableEdgeToWallSegment()`. |
 | G52 | PASS | movement.js:164,384-387 — blockingSet checked for movement. |
@@ -209,7 +209,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | R72 | PASS | Murne Figurehead automated (combat.js:4222-4259). Interactive interrupt for redirect fully coded. |
 | R73 | PASS | False Orders fully automated at combat.js:4064-4151. `falseOrdersControllerPlayerNum` tracked throughout combat (combat.js:1564,2181,3266,3575). Controller rolls dice and spends surge. |
 | R74 | PASS | Saska devices: `deviceTokens` at activation.js:1871-1876. Power Converter at combat-reactions.js:481-580: reroll with optional color swap. Once per round tracked. |
-| R75 | PARTIAL | Device tokens placed and consumed via Power Converter. But no broader device system (removal on defeat, board rendering outside combat flow). |
+| R75 | PASS | Device tokens placed per-figure (activation.js:2335-2340), consumed via Power Converter (combat.js:2132-2163), rendered on board (map-renderer.js:290-291). Device tokens + conditions cleaned up on defeat via centralized `removeFigurePosition()` (player-helpers.js:41-44). |
 | R76 | MANUAL | Shared reroll pool (once anyone uses reroll, exhausted for ALL device figures) requires runtime verification of the once-per-round tracking scope. |
 | R77 | PASS | combat-reactions.js:481-580 — dice color swap during Power Converter reroll. |
 | R78 | PASS | combat.js:1210-1217 — `camouflage_mak` blocks ranged attacks from 4+ spaces. Attack cancelled automatically. |
@@ -279,7 +279,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | M40 | PASS | abilities.js:3081-3085,3466-3469 — Sustained by Rage damage recovery. |
 | M41 | PASS | combat.js:2688,2873-2881 — Onar Get Down defensive bonus via pending combat passive. |
 | M42 | PASS | cc-timing.js:303,313,341-355 — Fallen Master: FORCE USER figures re-check CC restrictions with IMPERIAL affiliation override. Correctly allows FORCE USER figures to use IMPERIAL CCs. |
-| M43 | PARTIAL | Rubble placement system exists (game-state.js:114, ability-library.json). But Taron-specific rubble effects (combat bonuses from rubble) not implemented. |
+| M43 | PARTIAL | Boulder Barrage places rubble tokens correctly (abilities.js:2291-2295). Rubble affects movement cost (movement.js:173-179). But Wasskah wall-breaking interaction not implemented — rubble does not modify `impassableEdges` map geometry. |
 | M44 | PASS | combat.js:121 — Stun Net as surge effect, applies without damage requirement. |
 | M45 | PASS | activation.js:1274-1305 — Cad Bane triggers at other figure activation. |
 | M46 | PASS | Same handler triggers on hostile figure activation. |
@@ -294,7 +294,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | M55 | PASS | dc-play-area.js grants +1 action after 0-0-0 resolves Invasive Procedure; combat-special-effects.js grants +1 action after BT-1 ends Missile Salvo. Both check Doctor Aphra alive on same team. |
 | M56 | PASS | interrupts.js:621-650 — Excavation with `excavation_pick_` handlers. round.js:911-947 filters cost ≤1. |
 | M57 | PASS | Excavation fires at SOR only (round.js:528). Cannot replay a card excavated in the same SOR since it goes to hand, not play. |
-| M58 | PARTIAL | Excavation filters cost ≤1 but no explicit Fool Me Once interaction handler. |
+| M58 | PASS | Excavation reads from player's discard pile (round.js:1092). Fool Me Once removes opponent's discard to `game.gameBox` (abilities.js:2576-2578), making those cards unavailable to Excavation. Interaction works correctly by design — no explicit handler needed. |
 | M59 | PASS | Excavation blocked by Rest in Peace (interrupts.js:635-638). Interaction properly enforced. |
 | M60 | PASS | Greedo uses same defense modifier logic as Hired Guns. |
 | M61 | PASS | Illicit Arms automated (same as M62). Bartered Information also enforces Scum-only correctly. |
@@ -472,15 +472,15 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 
 | Section | PASS | PARTIAL | FAIL | MANUAL | N/A | Total |
 |---|---|---|---|---|---|---|
-| General Mechanics (G1-G113) | 97 | 15 | 0 | 1 | 0 | 113 |
-| Rebel Deployment (R1-R95) | 83 | 8 | 0 | 4 | 0 | 95 |
-| Mercenary Deployment (M1-M84) | 78 | 6 | 0 | 0 | 0 | 84 |
+| General Mechanics (G1-G113) | 98 | 14 | 0 | 1 | 0 | 113 |
+| Rebel Deployment (R1-R95) | 84 | 7 | 0 | 4 | 0 | 95 |
+| Mercenary Deployment (M1-M84) | 79 | 5 | 0 | 0 | 0 | 84 |
 | Imperial Deployment (I1-I53) | 46 | 4 | 0 | 1 | 2 | 53 |
 | Command Cards (C1-C77) | 59 | 12 | 0 | 6 | 0 | 77 |
-| **TOTAL** | **363** | **45** | **0** | **12** | **2** | **422** |
+| **TOTAL** | **366** | **42** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 363 / (363+45) = **89.0%**
-**Pass + Partial:** 409 / 409 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
+**Definitive Pass Rate:** 366 / (366+42) = **89.7%**
+**Pass + Partial:** 408 / 408 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting
 **N/A items:** 2 deck-building conventions, not code

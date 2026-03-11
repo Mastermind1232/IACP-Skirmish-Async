@@ -37,9 +37,11 @@ export function setActivatedDcIndices(game, pn, v)   { if (pn === 1) game.p1Acti
 
 // ── Mutations ────────────────────────────────────────────────────────────────
 
-/** Remove a figure's position from the game state. */
+/** Remove a figure's position and clean up per-figure state (device tokens, conditions). */
 export function removeFigurePosition(game, pn, figureKey) {
   if (game.figurePositions?.[pn]) delete game.figurePositions[pn][figureKey];
+  if (game.deviceTokens?.[figureKey]) delete game.deviceTokens[figureKey];
+  if (game.figureConditions?.[figureKey]) delete game.figureConditions[figureKey];
 }
 
 // ── Key helpers (for code that needs both read + write via game[key]) ───────
