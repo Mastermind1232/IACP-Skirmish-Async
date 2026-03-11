@@ -5,7 +5,7 @@
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
-import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey } from '../game/index.js';
+import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, getMaxPowerTokens } from '../game/index.js';
 import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -317,7 +317,7 @@ export async function handleYHSIW(interaction, ctx) {
       // Add to Gideon
       game.figurePowerTokens = game.figurePowerTokens || {};
       game.figurePowerTokens[gideonFk] = game.figurePowerTokens[gideonFk] || [];
-      if (game.figurePowerTokens[gideonFk].length < 2) {
+      if (game.figurePowerTokens[gideonFk].length < getMaxPowerTokens(gideonFk)) {
         game.figurePowerTokens[gideonFk].push(token);
       }
     } else {

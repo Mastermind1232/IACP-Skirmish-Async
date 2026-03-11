@@ -4,7 +4,7 @@
  */
 import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapSpaces, getMapTokensData } from '../data-loader.js';
 import { parseCoord, normalizeCoord, getFootprintCells } from './coords.js';
-import { dcNameFromFigureKey } from './dc-helpers.js';
+import { dcNameFromFigureKey, getMaxPowerTokens } from './dc-helpers.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 
 /** Sync a healthState array back to the player's dcList entry. */
@@ -560,13 +560,14 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve ${entry.label} manually.` };
     const mapId = game.selectedMap?.id;
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    // Helper: add Hit tokens to a figure key (up to max 2) — specifically Hit tokens, not generic power tokens
+    // Helper: add Hit tokens to a figure key (up to per-figure max) — specifically Hit tokens, not generic power tokens
     function addHitToken(fk, n) {
       if (n <= 0) return;
       game.figurePowerTokens = game.figurePowerTokens || {};
       game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
       const current = game.figurePowerTokens[fk].length;
-      for (let i = 0; i < Math.min(n, 2 - current); i++) game.figurePowerTokens[fk].push('Hit');
+      const cap = getMaxPowerTokens(fk);
+      for (let i = 0; i < Math.min(n, cap - current); i++) game.figurePowerTokens[fk].push('Hit');
     }
     // Second call: apply effects to self + chosen target
     if (choiceIndex != null && targetFigureKey) {
@@ -818,7 +819,7 @@ export function resolveAbility(abilityId, context) {
       // Grant 1 Hit Token to target
       game.figurePowerTokens = game.figurePowerTokens || {};
       game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
-      if (game.figurePowerTokens[targetFigureKey].length < 2) game.figurePowerTokens[targetFigureKey].push('Hit');
+      if (game.figurePowerTokens[targetFigureKey].length < getMaxPowerTokens(targetFigureKey)) game.figurePowerTokens[targetFigureKey].push('Hit');
       return { applied: true, logMessage: `**Tempt** — **${chosenName}** suffers 1 Damage and gains 1 Hit Token. *(Apply 1 damage manually via HP buttons.)*`, refreshDcEmbed: true };
     }
     // Enumerate all figures (friendly + hostile) within 4 spaces except self
@@ -1249,7 +1250,7 @@ export function resolveAbility(abilityId, context) {
       game.figurePowerTokens = game.figurePowerTokens || {};
       game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
       const current = game.figurePowerTokens[targetFigureKey].length;
-      const toAdd = Math.min(1, 2 - current);
+      const toAdd = Math.min(1, getMaxPowerTokens(targetFigureKey) - current);
       if (toAdd <= 0) return { applied: true, logMessage: `**Fresh Catch** — **${tName}** already has max Power Tokens.` };
       game.pendingPowerTokenGrant = { grants: [{ figureKey: targetFigureKey, figName: tName, count: toAdd }], channelId: null, playerNum };
       return { applied: true, requiresPowerTokenChoice: true, logMessage: `**Fresh Catch** — **${tName}** gains 1 Power Token — choose type.`, refreshDcEmbed: true };
@@ -1279,7 +1280,7 @@ export function resolveAbility(abilityId, context) {
       game.figurePowerTokens = game.figurePowerTokens || {};
       game.figurePowerTokens[validTargets[0]] = game.figurePowerTokens[validTargets[0]] || [];
       const current = game.figurePowerTokens[validTargets[0]].length;
-      const toAdd = Math.min(1, 2 - current);
+      const toAdd = Math.min(1, getMaxPowerTokens(validTargets[0]) - current);
       if (toAdd <= 0) return { applied: true, logMessage: `**Fresh Catch** — **${tName}** already has max Power Tokens.` };
       game.pendingPowerTokenGrant = { grants: [{ figureKey: validTargets[0], figName: tName, count: toAdd }], channelId: null, playerNum };
       return { applied: true, requiresPowerTokenChoice: true, logMessage: `**Fresh Catch** — **${tName}** gains 1 Power Token — choose type.`, refreshDcEmbed: true };
@@ -1362,7 +1363,7 @@ export function resolveAbility(abilityId, context) {
       if (hits > 0) {
         game.figurePowerTokens = game.figurePowerTokens || {};
         game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
-        if (game.figurePowerTokens[targetFigureKey].length < 2) {
+        if (game.figurePowerTokens[targetFigureKey].length < getMaxPowerTokens(targetFigureKey)) {
           game.figurePowerTokens[targetFigureKey].push('Block');
           effectParts.push(`**${tName}** gained 1 **Block Token**`);
         } else {
@@ -1406,7 +1407,7 @@ export function resolveAbility(abilityId, context) {
       if (hits > 0) {
         game.figurePowerTokens = game.figurePowerTokens || {};
         game.figurePowerTokens[tFk] = game.figurePowerTokens[tFk] || [];
-        if (game.figurePowerTokens[tFk].length < 2) {
+        if (game.figurePowerTokens[tFk].length < getMaxPowerTokens(tFk)) {
           game.figurePowerTokens[tFk].push('Block');
           effectParts.push(`**${tName}** gained 1 **Block Token**`);
         } else {
@@ -1616,7 +1617,14 @@ export function resolveAbility(abilityId, context) {
       return { applied: true, logMessage: `**${entry.label || 'Override Attack'}** — Free${typeNote} attack: ${diceDesc}${pierceNote}${accNote}. Resolve manually (no active activation).` };
     }
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[msgId] = true;
+    // Saber Orbit: up to N free melee attacks with override dice
+    if (entry.saberOrbitChain > 1) {
+      game.freeAttackBonusPending[msgId] = entry.saberOrbitChain;
+      game.saberOrbitAttacksRemaining = game.saberOrbitAttacksRemaining || {};
+      game.saberOrbitAttacksRemaining[msgId] = entry.saberOrbitChain;
+    } else {
+      game.freeAttackBonusPending[msgId] = true;
+    }
     game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
     game.pendingOverrideAttackDice[msgId] = {
       dice: entry.overrideAttackDice,
@@ -2799,7 +2807,7 @@ export function resolveAbility(abilityId, context) {
       game.figurePowerTokens = game.figurePowerTokens || {};
       game.figurePowerTokens[activatingFk] = game.figurePowerTokens[activatingFk] || [];
       const tokensCur = game.figurePowerTokens[activatingFk].length;
-      const tokensToAdd = combo.slice(0, Math.max(0, 2 - tokensCur));
+      const tokensToAdd = combo.slice(0, Math.max(0, getMaxPowerTokens(activatingFk) - tokensCur));
       for (const tok of tokensToAdd) game.figurePowerTokens[activatingFk].push(tok);
       parts.push(`suffered 1 Damage, gained ${tokensToAdd.length} Power Token(s): ${tokensToAdd.join(' + ')}`);
       tokenRefresh = true;
@@ -2826,7 +2834,7 @@ export function resolveAbility(abilityId, context) {
     game.figurePowerTokens = game.figurePowerTokens || {};
     game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
     const current = game.figurePowerTokens[fk].length;
-    const toAdd = Math.min(entry.powerTokenGain, 2 - current);
+    const toAdd = Math.min(entry.powerTokenGain, getMaxPowerTokens(fk) - current);
     addMovementPoints(game, msgId, entry.mpBonus);
     if (toAdd > 0) {
       game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: meta?.displayName || fk, count: toAdd }], channelId: null, playerNum };
@@ -2936,7 +2944,7 @@ export function resolveAbility(abilityId, context) {
       if (!pos || !activatorPos) continue;
       if (getRng(activatorPos, pos) > 3) continue;
       const existing = (game.figurePowerTokens?.[efk] || []).length;
-      if (existing >= 2) continue; // already at max tokens
+      if (existing >= getMaxPowerTokens(efk)) continue; // already at max tokens
       eligible.push(efk);
     }
 
@@ -2945,7 +2953,7 @@ export function resolveAbility(abilityId, context) {
     if (pending && choiceIndex != null && targetFigureKey) {
       game.figurePowerTokens = game.figurePowerTokens || {};
       game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
-      if (game.figurePowerTokens[targetFigureKey].length < 2) {
+      if (game.figurePowerTokens[targetFigureKey].length < getMaxPowerTokens(targetFigureKey)) {
         game.figurePowerTokens[targetFigureKey].push('Hit');
       }
       pending.remaining -= 1;
@@ -2955,7 +2963,7 @@ export function resolveAbility(abilityId, context) {
         return { applied: true, logMessage: `**Combat Resupply** — **${tName}** gained 1 Hit Token. Distribution complete.`, refreshDcEmbed: true };
       }
       // Still more to distribute — re-check eligible (some may now be full)
-      const stillEligible = eligible.filter((efk) => (game.figurePowerTokens[efk] || []).length < 2);
+      const stillEligible = eligible.filter((efk) => (game.figurePowerTokens[efk] || []).length < getMaxPowerTokens(efk));
       if (stillEligible.length === 0) {
         delete game.pendingCombatResupply[msgId];
         return { applied: true, logMessage: `**Combat Resupply** — **${tName}** gained 1 Hit Token. No more eligible figures (all at max tokens).`, refreshDcEmbed: true };
@@ -2974,7 +2982,7 @@ export function resolveAbility(abilityId, context) {
     game.figurePowerTokens = game.figurePowerTokens || {};
     game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
     const current = game.figurePowerTokens[fk].length;
-    const ptToAdd = Math.min(entry.powerTokenGain, 2 - current);
+    const ptToAdd = Math.min(entry.powerTokenGain, getMaxPowerTokens(fk) - current);
     if (ptToAdd > 0) {
       game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: fk, count: ptToAdd }], channelId: null, playerNum };
     }
@@ -2985,10 +2993,10 @@ export function resolveAbility(abilityId, context) {
 
     // Auto-distribute if only 1 eligible figure
     if (eligible.length === 1) {
-      const tokensToAdd = Math.min(roundNum, 2 - (game.figurePowerTokens[eligible[0]] || []).length);
+      const tokensToAdd = Math.min(roundNum, getMaxPowerTokens(eligible[0]) - (game.figurePowerTokens[eligible[0]] || []).length);
       for (let i = 0; i < tokensToAdd; i++) {
         game.figurePowerTokens[eligible[0]] = game.figurePowerTokens[eligible[0]] || [];
-        if (game.figurePowerTokens[eligible[0]].length < 2) game.figurePowerTokens[eligible[0]].push('Hit');
+        if (game.figurePowerTokens[eligible[0]].length < getMaxPowerTokens(eligible[0])) game.figurePowerTokens[eligible[0]].push('Hit');
       }
       const eName = dcNameFromFigureKey(eligible[0]);
       return { applied: true, requiresPowerTokenChoice: ptToAdd > 0, logMessage: `Gained ${ptToAdd} Power Token(s). **${eName}** gained ${tokensToAdd} Hit Token(s) (round ${roundNum}).`, refreshDcEmbed: true };
@@ -3065,8 +3073,8 @@ export function resolveAbility(abilityId, context) {
       }
     }
     const nTotal = n + conditionalPtBonus;
-    const toAdd = Math.min(nTotal, 2 - current);
-    if (toAdd <= 0) return { applied: false, manualMessage: 'That figure already has 2 Power Tokens (max).' };
+    const toAdd = Math.min(nTotal, getMaxPowerTokens(fk) - current);
+    if (toAdd <= 0) return { applied: false, manualMessage: `That figure already has ${getMaxPowerTokens(fk)} Power Tokens (max).` };
     game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: fk, count: toAdd }], channelId: null, playerNum };
     const msg = (toAdd === 1 ? 'Gained 1 Power Token' : `Gained ${toAdd} Power Tokens`) + conditionalPtNote + ' — choose type.';
     // Veteran Instincts: set activation-long flag so attacker/defender may add +1 Hit/Surge or Block/Evade
@@ -4862,14 +4870,14 @@ export function resolveAbility(abilityId, context) {
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures in group.' };
-    const totalToAdd = Math.min(entry.powerTokenGainToGroup, figureKeys.length * 2);
+    const totalToAdd = Math.min(entry.powerTokenGainToGroup, figureKeys.reduce((sum, fk) => sum + getMaxPowerTokens(fk), 0));
     game.figurePowerTokens = game.figurePowerTokens || {};
     const grants = [];
     let remaining = totalToAdd;
     for (const fk of figureKeys) {
       if (remaining <= 0) break;
       const current = (game.figurePowerTokens[fk] || []).length;
-      const cap = 2 - current;
+      const cap = getMaxPowerTokens(fk) - current;
       const toAdd = Math.min(remaining, Math.max(0, cap));
       if (toAdd > 0) grants.push({ figureKey: fk, figName: fk, count: toAdd });
       remaining -= toAdd;
@@ -6844,7 +6852,7 @@ export function resolveAbility(abilityId, context) {
     // Phase 1: grant Wild Power Token + present Move/Push choice
     game.figurePowerTokens = game.figurePowerTokens || {};
     game.figurePowerTokens[activatorFk] = game.figurePowerTokens[activatorFk] || [];
-    if (game.figurePowerTokens[activatorFk].length < 2) game.figurePowerTokens[activatorFk].push('Wild');
+    if (game.figurePowerTokens[activatorFk].length < getMaxPowerTokens(activatorFk)) game.figurePowerTokens[activatorFk].push('Wild');
     const mapId = game.selectedMap?.id;
     const adjHostileFks = [];
     if (mapId) {

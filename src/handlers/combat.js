@@ -7,7 +7,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
-import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
   getCcHand, getActivatedDcIndices,
@@ -3669,12 +3669,14 @@ export async function handleCombatSurge(interaction, ctx) {
       if ((mod.surgeGrantEvade || 0) > 0 && combat.attackerFigureKey) {
         game.figurePowerTokens = game.figurePowerTokens || {};
         game.figurePowerTokens[combat.attackerFigureKey] = game.figurePowerTokens[combat.attackerFigureKey] || [];
-        for (let _i = 0; _i < mod.surgeGrantEvade; _i++) game.figurePowerTokens[combat.attackerFigureKey].push('Evade');
+        const _evMax = getMaxPowerTokens(combat.attackerFigureKey);
+        for (let _i = 0; _i < mod.surgeGrantEvade; _i++) { if (game.figurePowerTokens[combat.attackerFigureKey].length < _evMax) game.figurePowerTokens[combat.attackerFigureKey].push('Evade'); }
       }
       if ((mod.surgeAttackerBlock || 0) > 0 && combat.attackerFigureKey) {
         game.figurePowerTokens = game.figurePowerTokens || {};
         game.figurePowerTokens[combat.attackerFigureKey] = game.figurePowerTokens[combat.attackerFigureKey] || [];
-        for (let _i = 0; _i < mod.surgeAttackerBlock; _i++) game.figurePowerTokens[combat.attackerFigureKey].push('Block');
+        const _blMax = getMaxPowerTokens(combat.attackerFigureKey);
+        for (let _i = 0; _i < mod.surgeAttackerBlock; _i++) { if (game.figurePowerTokens[combat.attackerFigureKey].length < _blMax) game.figurePowerTokens[combat.attackerFigureKey].push('Block'); }
       }
       // Surge-for-surge: add back to remaining before the cost decrement below
       if ((mod.surgeGrantExtraSurge || 0) > 0) {
@@ -4043,8 +4045,12 @@ export async function handlePowerTokenChoice(interaction, ctx) {
   const lines = [];
   for (const { figureKey, figName, count } of grants) {
     game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
-    for (let i = 0; i < count; i++) game.figurePowerTokens[figureKey].push(type);
-    lines.push(`${figName}: ${count > 1 ? `${count}× ` : ''}**${type}**`);
+    const maxTokens = getMaxPowerTokens(figureKey);
+    let added = 0;
+    for (let i = 0; i < count; i++) {
+      if (game.figurePowerTokens[figureKey].length < maxTokens) { game.figurePowerTokens[figureKey].push(type); added++; }
+    }
+    lines.push(`${figName}: ${added > 1 ? `${added}× ` : ''}**${type}**`);
   }
   game.pendingPowerTokenGrant = null;
   if (channelId) {

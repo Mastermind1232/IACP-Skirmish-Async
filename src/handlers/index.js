@@ -126,6 +126,9 @@ import {
   handleConcussiveBoltPush, handleConcussiveBoltSkip,
   handleSpreadThePainFigPick, handleSpreadThePainSkip,
   handleMissileSalvoDie, handleMissileSalvoDone,
+  handleHeavyFireUse, handleHeavyFireSkip,
+  handleHeavyFireTarget, handleHeavyFireDone,
+  handleHeavyFireCondition,
 } from './combat-special-effects.js';
 import { getValidGroupNames } from '../context-factory.js';
 
@@ -393,6 +396,11 @@ register('spread_pain_fig_', handleSpreadThePainFigPick, 'combatSpecialEffects')
 register('spread_pain_skip_', handleSpreadThePainSkip, 'combatSpecialEffects');
 register('missile_salvo_die_', handleMissileSalvoDie, 'combatSpecialEffects');
 register('missile_salvo_done_', handleMissileSalvoDone, 'combatSpecialEffects');
+register('heavy_fire_use_', handleHeavyFireUse, 'combatSpecialEffects');
+register('heavy_fire_skip_', handleHeavyFireSkip, 'combatSpecialEffects');
+register('heavy_fire_tgt_done_', handleHeavyFireDone, 'combatSpecialEffects');
+register('heavy_fire_tgt_', handleHeavyFireTarget, 'combatSpecialEffects');
+register('heavy_fire_cond_', handleHeavyFireCondition, 'combatSpecialEffects');
 
 // --- Select-menu handlers (dispatched via table-driven select dispatch in index.js) ---
 register('arsenal_pick_', handleArsenalPick, 'dcPlayArea');
@@ -549,4 +557,7 @@ export {
   handleConcussiveBoltPush, handleConcussiveBoltSkip,
   handleSpreadThePainFigPick, handleSpreadThePainSkip,
   handleMissileSalvoDie, handleMissileSalvoDone,
+  handleHeavyFireUse, handleHeavyFireSkip,
+  handleHeavyFireTarget, handleHeavyFireDone,
+  handleHeavyFireCondition,
 } from './combat-special-effects.js';

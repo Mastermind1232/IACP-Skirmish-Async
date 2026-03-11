@@ -2427,6 +2427,10 @@ async function resolveCombatAfterRolls(game, combat, client) {
     if (condPending.count <= 0) delete game.nextAttacksBonusConditions[combat.attackerPlayerNum];
   }
   const defenderPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
+  // Snapshot target position before damage resolution can remove it (used by Heavy Fire, etc.)
+  if (combat.target?.figureKey && !combat._savedTargetPos) {
+    combat._savedTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey] || null;
+  }
   const roundBlock = game.roundDefenseBonusBlock?.[defenderPlayerNum] || 0;
   const roundEvade = game.roundDefenseBonusEvade?.[defenderPlayerNum] || 0;
   if (roundBlock) combat.bonusBlock = (combat.bonusBlock || 0) + roundBlock;
@@ -4350,6 +4354,69 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     }
   }
 
+  // Heavy Fire (Skirmish Upgrade): after a friendly VEHICLE or HEAVY WEAPON resolves an attack,
+  // for each die in that figure's printed attack pool, you may choose 1 hostile figure within 2 spaces
+  // of the target space. Each chosen figure suffers 1 Damage. Then, for each chosen figure, the
+  // figure that attacked gains 1 HARMFUL condition of your opponent's choice.
+  if (game.selectedMap?.id && combat.target?.figureKey && combat.attackerDcName) {
+    const _hfPlayerNum = combat.attackerPlayerNum;
+    const _hfDcList = getDcList(game, _hfPlayerNum) || [];
+    const _hfDcMsgIds = getDcMessageIds(game, _hfPlayerNum) || [];
+    const _hfIdx = _hfDcList.findIndex(dc => dc.dcName === '[Heavy Fire]');
+    if (_hfIdx >= 0) {
+      const _hfMsgId = _hfDcMsgIds[_hfIdx];
+      const _hfExhausted = _hfMsgId ? (dcExhaustedState.get(_hfMsgId) ?? false) : true;
+      if (!_hfExhausted) {
+        // Check if attacker is VEHICLE or HEAVY WEAPON
+        const _hfAttKws = (getDcKeywords(game)[combat.attackerDcName] || []).map(k => String(k).toUpperCase());
+        if (_hfAttKws.includes('VEHICLE') || _hfAttKws.includes('HEAVY WEAPON')) {
+          // Count printed attack dice
+          const _hfAttEff = getDcEffect(combat.attackerDcName);
+          const _hfPrintedDice = _hfAttEff?.attack?.dice || [];
+          const _hfDiceCount = _hfPrintedDice.length;
+          if (_hfDiceCount > 0) {
+            // Find hostile figures within 2 spaces of target space
+            const _hfDefPN = opponentPlayerNum(_hfPlayerNum);
+            const _hfTargetPos = game.figurePositions?.[_hfDefPN]?.[combat.target.figureKey] || combat._savedTargetPos;
+            if (_hfTargetPos) {
+              const _hfHostiles = [];
+              const _hfDefFigs = game.figurePositions?.[_hfDefPN] || {};
+              for (const [fk, pos] of Object.entries(_hfDefFigs)) {
+                if (!isWithinN(pos, _hfTargetPos, 2, game.selectedMap.id)) continue;
+                const { label: lbl } = getFigureLabel(game, _hfDefPN, fk);
+                _hfHostiles.push({ figureKey: fk, playerNum: _hfDefPN, label: lbl });
+              }
+              if (_hfHostiles.length > 0) {
+                const _hfOwnerId = getPlayerId(game, _hfPlayerNum);
+                const _hfBtns = [
+                  new ButtonBuilder().setCustomId(`heavy_fire_use_${game.gameId}`).setLabel(`Use Heavy Fire (${_hfDiceCount} target${_hfDiceCount !== 1 ? 's' : ''})`).setStyle(ButtonStyle.Danger),
+                  new ButtonBuilder().setCustomId(`heavy_fire_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+                ];
+                game.pendingHeavyFire = {
+                  attackerPlayerNum: _hfPlayerNum,
+                  attackerFigureKey: combat.attackerFigureKey,
+                  attackerDcName: combat.attackerDcName,
+                  attackerMsgId: combat.attackerMsgId,
+                  combatThreadId: combat.combatThreadId,
+                  hfMsgId: _hfMsgId,
+                  diceCount: _hfDiceCount,
+                  hostiles: _hfHostiles,
+                  chosenTargets: [],
+                  conditionsOwed: 0,
+                };
+                await thread.send({
+                  content: `<@${_hfOwnerId}> **Heavy Fire** — Your **${combat.attackerDcName}** resolved an attack (printed pool: ${_hfDiceCount} dice). Exhaust Heavy Fire to deal 1 Damage to up to ${_hfDiceCount} hostile figure${_hfDiceCount !== 1 ? 's' : ''} within 2 spaces of the target?`,
+                  allowedMentions: { users: [_hfOwnerId] },
+                  components: [new ActionRowBuilder().addComponents(_hfBtns)],
+                }).catch(discordCatch);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   // Missile Salvo: after each salvo attack, record target + show remaining die buttons
   if (combat.attackerMsgId && game.pendingMissileSalvo?.[combat.attackerMsgId]) {
     const ms = game.pendingMissileSalvo[combat.attackerMsgId];
@@ -4427,6 +4494,20 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     // Clear the override so the second attack uses normal dice
     if (game.pendingOverrideAttackDice?.[combat.attackerMsgId]) delete game.pendingOverrideAttackDice[combat.attackerMsgId];
     await thread.send('**The Darksaber** — You may now perform a normal attack (use Attack button).').catch(discordCatch);
+  }
+  // Saber Orbit (Second Sister): re-apply override dice for remaining chained attacks
+  if (game.saberOrbitAttacksRemaining?.[combat.attackerMsgId] > 0) {
+    game.saberOrbitAttacksRemaining[combat.attackerMsgId] -= 1;
+    const soRemaining = game.saberOrbitAttacksRemaining[combat.attackerMsgId];
+    if (soRemaining > 0) {
+      // Re-set the override dice for the next Saber Orbit attack
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[combat.attackerMsgId] = { dice: ['red'], type: 'melee', pierce: 0, bonusAccuracy: 0 };
+      await thread.send(`**Saber Orbit** — ${soRemaining} attack${soRemaining !== 1 ? 's' : ''} remaining (1 red die, Melee). Use the Attack button.`).catch(discordCatch);
+    } else {
+      delete game.saberOrbitAttacksRemaining[combat.attackerMsgId];
+      await thread.send('**Saber Orbit** — All attacks resolved.').catch(discordCatch);
+    }
   }
 
   for (const msgId of embedRefreshMsgIds) {

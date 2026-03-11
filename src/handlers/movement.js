@@ -5,7 +5,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getDcEffects, getMapSpaces } from '../data-loader.js';
 import { bottomLeftCoord, getFootprintCells } from '../game/coords.js';
-import { reduceHp, dcNameFromFigureKey } from '../game/index.js';
+import { reduceHp, dcNameFromFigureKey, getMaxPowerTokens } from '../game/index.js';
 import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -852,7 +852,7 @@ export async function handleMovePick(interaction, ctx) {
         // Grant Block token
         game.figurePowerTokens = game.figurePowerTokens || {};
         game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-        if (game.figurePowerTokens[fk].length < 2) {
+        if (game.figurePowerTokens[fk].length < getMaxPowerTokens(fk)) {
           game.figurePowerTokens[fk].push('Block');
           if (logGameAction) {
             await logGameAction(game, client, `**Deference Protocol** — **${dpDcName}** gained a Block token (friendly LEADER entered adjacent space).`, { phase: 'ROUND', icon: 'defend' });
@@ -884,7 +884,7 @@ export async function handleMovePick(interaction, ctx) {
         game.roundFigureAbilityUsed[csKey] = true;
         game.figurePowerTokens = game.figurePowerTokens || {};
         game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-        if (game.figurePowerTokens[fk].length < 2) {
+        if (game.figurePowerTokens[fk].length < getMaxPowerTokens(fk)) {
           game.figurePowerTokens[fk].push('Hit');
           if (logGameAction) {
             await logGameAction(game, client, `**Cassian Said I Had To** — **${csDcName}** gained a Hit token (friendly LEADER entered adjacent space).`, { phase: 'ROUND', icon: 'attack' });

@@ -3869,8 +3869,10 @@
       "type": "dcSpecial",
       "label": "Saber Orbit",
       "description": "Choose up to 3 adjacent hostile figures. For each, perform a Melee attack using 1 red die.",
-      "informational": true,
-      "logMessage": "**Saber Orbit** — Choose up to 3 adjacent hostile figures. For each, perform a Melee attack using 1 red die. Use the Attack button for each.",
+      "overrideAttackDice": ["red"],
+      "overrideAttackType": "melee",
+      "saberOrbitChain": 3,
+      "logMessage": "**Saber Orbit** — Up to 3 free Melee attacks (1 red die each). Use the Attack button for each target.",
       "wiredStatus": "wired"
     },
     "saber_strike": {

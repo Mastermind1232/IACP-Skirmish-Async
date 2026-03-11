@@ -590,3 +590,270 @@ export async function handleMissileSalvoDone(interaction, ctx) {
   }
   saveGames();
 }
+
+// ── Heavy Fire handlers ─────────────────────────────────────────────────────
+
+/** Internal helper: advance to next Heavy Fire target pick, or finish. */
+async function advanceHeavyFirePick(game, pending, ctx) {
+  const { client, saveGames, logGameAction } = ctx;
+  const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+  if (!thread) { saveGames(); return; }
+
+  const remaining = pending.diceCount - pending.chosenTargets.length;
+  if (remaining <= 0 || pending.hostiles.length === 0) {
+    await startHeavyFireConditions(game, pending, ctx);
+    return;
+  }
+
+  // Filter out already-chosen targets
+  const chosenKeys = new Set(pending.chosenTargets.map(t => t.figureKey));
+  const available = pending.hostiles.filter(t => !chosenKeys.has(t.figureKey));
+  if (available.length === 0) {
+    await startHeavyFireConditions(game, pending, ctx);
+    return;
+  }
+
+  const ownerId = getPlayerId(game, pending.attackerPlayerNum);
+  const btns = available.slice(0, 4).map((t, i) =>
+    new ButtonBuilder()
+      .setCustomId(`heavy_fire_tgt_${game.gameId}_${i}`)
+      .setLabel(t.label)
+      .setStyle(ButtonStyle.Danger)
+  );
+  btns.push(new ButtonBuilder().setCustomId(`heavy_fire_tgt_done_${game.gameId}`).setLabel('Done Picking').setStyle(ButtonStyle.Secondary));
+  // Stash available snapshot for index lookup
+  pending.availableSnapshot = available;
+  await thread.send({
+    content: `<@${ownerId}> **Heavy Fire** — Pick hostile target ${pending.chosenTargets.length + 1}/${pending.diceCount} (within 2 of target space). ${remaining} pick${remaining !== 1 ? 's' : ''} left:`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(btns)],
+  }).catch(discordCatch);
+  saveGames();
+}
+
+/** Internal helper: apply damage to all chosen targets, then start opponent condition picking. */
+async function startHeavyFireConditions(game, pending, ctx) {
+  const {
+    client, saveGames, dcMessageMeta, dcHealthState, dcExhaustedState,
+    findDcMessageIdForFigure, buildDcEmbedAndFiles, getConditionsForDcMessage,
+    getDcUpgradeAttachments, getDcEffects, logGameAction, calculateKillVp,
+    decrementActivationIfGroupDefeated, checkWinConditions,
+  } = ctx;
+  const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+  if (!thread) { saveGames(); return; }
+
+  if (pending.chosenTargets.length === 0) {
+    await thread.send('**Heavy Fire** — No targets chosen. Effect skipped.').catch(discordCatch);
+    delete game.pendingHeavyFire;
+    saveGames();
+    return;
+  }
+
+  // Apply 1 Damage to each chosen hostile
+  const lines = [];
+  const defeatedTargets = [];
+  for (const t of pending.chosenTargets) {
+    const mid = findDcMessageIdForFigure(game.gameId, t.playerNum, t.figureKey);
+    if (!mid) continue;
+    const { figureIndex: figIdx } = parseFigureKey(t.figureKey);
+    const { newHp, wasDefeated } = reduceHp(dcHealthState, game, mid, figIdx, 1, t.playerNum);
+    lines.push(`• **${t.label}** suffers 1 Damage`);
+    if (wasDefeated) {
+      removeFigurePosition(game, t.playerNum, t.figureKey);
+      if (game.figureConditions?.[t.figureKey]) delete game.figureConditions[t.figureKey];
+      const dcEff = getDcEffects()?.[dcNameFromFigureKey(t.figureKey)];
+      const vp = dcEff?.cost ?? 1;
+      awardKillVp(game, pending.attackerPlayerNum, vp);
+      lines.push(`  → **${t.label} defeated!** +${vp} VP`);
+      defeatedTargets.push(t);
+      const _ngHF = checkNefariousGains(game, t.playerNum);
+      if (_ngHF) lines.push(`  → **Nefarious Gains** — Jabba gains 1 VP (P${_ngHF.jabbaOwnerPN} VP: ${_ngHF.vpTotal})`);
+      const dcIds = getDcMessageIds(game, t.playerNum);
+      const idx = (dcIds || []).indexOf(mid);
+      if (idx >= 0) {
+        await decrementActivationIfGroupDefeated(game, t.playerNum, idx, client);
+      }
+      await checkWinConditions(game, client);
+    }
+    // Refresh DC embed
+    try {
+      const tMeta = dcMessageMeta.get(mid);
+      if (tMeta) {
+        const ch = await client.channels.fetch(getPlayAreaId(game, tMeta.playerNum));
+        const msg = await ch.messages.fetch(mid);
+        const { embed, files } = await buildDcEmbedAndFiles(tMeta.dcName, dcExhaustedState.get(mid) ?? false, tMeta.displayName, dcHealthState.get(mid) || [], getConditionsForDcMessage(game, tMeta), getDcUpgradeAttachments(game, mid));
+        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
+      }
+    } catch {}
+  }
+  const dmgMsg = `**Heavy Fire** — Splash damage:\n${lines.join('\n')}`;
+  await thread.send(dmgMsg).catch(discordCatch);
+  await logGameAction(game, client, dmgMsg, { phase: 'ROUND', icon: 'attack' });
+
+  // Filter out defeated targets from condition penalty list
+  const defeatedKeys = new Set(defeatedTargets.map(t => t.figureKey));
+  const survivingChosen = pending.chosenTargets.filter(t => !defeatedKeys.has(t.figureKey));
+  pending.conditionsOwed = survivingChosen.length;
+
+  if (pending.conditionsOwed <= 0) {
+    await thread.send('**Heavy Fire** — No conditions owed (all targeted figures were defeated).').catch(discordCatch);
+    delete game.pendingHeavyFire;
+    saveGames();
+    return;
+  }
+
+  // Opponent picks 1 harmful condition per surviving chosen target to apply to the attacker
+  pending.conditionsApplied = 0;
+  await advanceHeavyFireConditionPick(game, pending, ctx);
+}
+
+/** Internal helper: prompt opponent to pick 1 harmful condition for the attacker. */
+async function advanceHeavyFireConditionPick(game, pending, ctx) {
+  const { client, saveGames } = ctx;
+  const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+  if (!thread) { saveGames(); return; }
+
+  if (pending.conditionsApplied >= pending.conditionsOwed) {
+    await thread.send(`**Heavy Fire** — All ${pending.conditionsOwed} harmful condition${pending.conditionsOwed !== 1 ? 's' : ''} applied to **${pending.attackerDcName}**.`).catch(discordCatch);
+    delete game.pendingHeavyFire;
+    saveGames();
+    return;
+  }
+
+  const oppPN = opponentPlayerNum(pending.attackerPlayerNum);
+  const oppId = getPlayerId(game, oppPN);
+  const conditions = ['Stun', 'Bleed', 'Weaken'];
+  const btns = conditions.map(c =>
+    new ButtonBuilder()
+      .setCustomId(`heavy_fire_cond_${game.gameId}_${c}`)
+      .setLabel(c)
+      .setStyle(ButtonStyle.Danger)
+  );
+  const condNum = pending.conditionsApplied + 1;
+  await thread.send({
+    content: `<@${oppId}> **Heavy Fire** — Choose a harmful condition to apply to **${pending.attackerDcName}** (${condNum}/${pending.conditionsOwed}):`,
+    allowedMentions: { users: [oppId] },
+    components: [new ActionRowBuilder().addComponents(btns)],
+  }).catch(discordCatch);
+  saveGames();
+}
+
+/** Heavy Fire "Use" button: heavy_fire_use_{gameId} */
+export async function handleHeavyFireUse(interaction, ctx) {
+  const { getGame, saveGames, client, canActAsPlayer, dcExhaustedState,
+    dcMessageMeta, buildDcEmbedAndFiles, getConditionsForDcMessage,
+    getDcUpgradeAttachments, logGameAction } = ctx;
+  const m = interaction.customId.match(/^heavy_fire_use_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  if (!game?.pendingHeavyFire) return;
+  const pending = game.pendingHeavyFire;
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only the attacker can use Heavy Fire.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  // Exhaust the Heavy Fire card
+  if (pending.hfMsgId) {
+    dcExhaustedState.set(pending.hfMsgId, true);
+    // Refresh the Heavy Fire DC embed
+    try {
+      const hfMeta = dcMessageMeta.get(pending.hfMsgId);
+      if (hfMeta) {
+        const ch = await client.channels.fetch(getPlayAreaId(game, hfMeta.playerNum));
+        const msg = await ch.messages.fetch(pending.hfMsgId);
+        const { embed, files } = await buildDcEmbedAndFiles(hfMeta.dcName, true, hfMeta.displayName, [], getConditionsForDcMessage(game, hfMeta), getDcUpgradeAttachments(game, pending.hfMsgId));
+        await msg.edit({ embeds: [embed], files }).catch(discordCatch);
+      }
+    } catch {}
+  }
+  await logGameAction(game, client, `**Heavy Fire** — Exhausted by P${pending.attackerPlayerNum} after **${pending.attackerDcName}** resolved an attack.`, { phase: 'ROUND', icon: 'card' });
+
+  // Start target picking
+  await advanceHeavyFirePick(game, pending, ctx);
+}
+
+/** Heavy Fire skip (don't use): heavy_fire_skip_{gameId} */
+export async function handleHeavyFireSkip(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  const m = interaction.customId.match(/^heavy_fire_skip_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  await interaction.deferUpdate().catch(discordCatch);
+  if (game) delete game.pendingHeavyFire;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  saveGames();
+}
+
+/** Heavy Fire target pick: heavy_fire_tgt_{gameId}_{index} */
+export async function handleHeavyFireTarget(interaction, ctx) {
+  const { getGame, saveGames, canActAsPlayer } = ctx;
+  const m = interaction.customId.match(/^heavy_fire_tgt_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, idxStr] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingHeavyFire) return;
+  const pending = game.pendingHeavyFire;
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only the attacker can pick Heavy Fire targets.')) return;
+  const available = pending.availableSnapshot || [];
+  const target = available[parseInt(idxStr, 10)];
+  if (!target) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  pending.chosenTargets.push(target);
+
+  // Check if we've picked enough or can pick more
+  if (pending.chosenTargets.length >= pending.diceCount) {
+    await startHeavyFireConditions(game, pending, ctx);
+  } else {
+    await advanceHeavyFirePick(game, pending, ctx);
+  }
+}
+
+/** Heavy Fire "Done Picking" button: heavy_fire_tgt_done_{gameId} */
+export async function handleHeavyFireDone(interaction, ctx) {
+  const { getGame, saveGames, canActAsPlayer } = ctx;
+  const m = interaction.customId.match(/^heavy_fire_tgt_done_([^_]+)$/);
+  if (!m) return;
+  const game = getGame(m[1]);
+  if (!game?.pendingHeavyFire) return;
+  const pending = game.pendingHeavyFire;
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only the attacker can finish Heavy Fire picking.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  // Finish picking — apply damage to whatever was chosen
+  await startHeavyFireConditions(game, pending, ctx);
+}
+
+/** Heavy Fire condition choice by opponent: heavy_fire_cond_{gameId}_{condition} */
+export async function handleHeavyFireCondition(interaction, ctx) {
+  const { getGame, saveGames, client, canActAsPlayer, applyCondition,
+    isConditionImmune, logGameAction } = ctx;
+  const m = interaction.customId.match(/^heavy_fire_cond_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, condition] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingHeavyFire) return;
+  const pending = game.pendingHeavyFire;
+  const oppPN = opponentPlayerNum(pending.attackerPlayerNum);
+  if (!await requirePlayer(interaction, game, interaction.user.id, oppPN, canActAsPlayer, 'Only the opponent can choose the Heavy Fire condition.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  // Apply the chosen harmful condition to the attacker figure
+  const attackerFk = pending.attackerFigureKey;
+  if (isConditionImmune(game, attackerFk)) {
+    const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+    if (thread) await thread.send(`**Heavy Fire** — **${pending.attackerDcName}** is immune to conditions; **${condition}** not applied.`).catch(discordCatch);
+    await logGameAction(game, client, `**Heavy Fire** — **${pending.attackerDcName}** is immune to conditions; **${condition}** not applied.`, { phase: 'ROUND', icon: 'card' });
+  } else {
+    applyCondition(game, attackerFk, condition);
+    const thread = await client.channels.fetch(pending.combatThreadId).catch(() => null);
+    if (thread) await thread.send(`**Heavy Fire** — **${pending.attackerDcName}** gains **${condition}** (opponent's choice).`).catch(discordCatch);
+    await logGameAction(game, client, `**Heavy Fire** — **${pending.attackerDcName}** gains **${condition}** (opponent's choice).`, { phase: 'ROUND', icon: 'card' });
+  }
+
+  pending.conditionsApplied++;
+  await advanceHeavyFireConditionPick(game, pending, ctx);
+}

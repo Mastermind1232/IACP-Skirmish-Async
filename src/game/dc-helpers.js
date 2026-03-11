@@ -93,3 +93,17 @@ export function getCompanionDescriptionForDc(dcName) {
   if (typeof c === 'string' && c.trim()) return c.trim();
   return 'Companion (see ability text)';
 }
+
+/**
+ * Return the maximum number of Power Tokens a figure can hold.
+ * Normally 2; Migs Mayfeld's "Locked and Loaded" raises it to 3.
+ * @param {string} figureKey - e.g. "Migs Mayfeld-1-0"
+ * @returns {number}
+ */
+export function getMaxPowerTokens(figureKey) {
+  if (!figureKey) return 2;
+  const dcName = dcNameFromFigureKey(figureKey);
+  const eff = getDcEffect(dcName);
+  if (eff?.specialAbilityIds?.includes('locked_and_loaded')) return 3;
+  return 2;
+}

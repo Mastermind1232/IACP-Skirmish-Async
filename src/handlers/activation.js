@@ -5,7 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapSpaces, getFigureSize } from '../data-loader.js';
 import { cleanupActivation } from '../game/activation-state.js';
-import { applyCondition, filterCondition, dcNameFromFigureKey, reduceHp, healHp } from '../game/index.js';
+import { applyCondition, filterCondition, dcNameFromFigureKey, reduceHp, healHp, getMaxPowerTokens } from '../game/index.js';
 import { getRange } from '../game/spatial.js';
 import { getFootprintCells } from '../game/coords.js';
 import { getDiceData, getDcKeywords } from '../data-loader.js';
@@ -343,7 +343,7 @@ export async function handleEndTurn(interaction, ctx) {
       if (!tokens.includes('Block')) {
         game.figurePowerTokens = game.figurePowerTokens || {};
         game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-        if (game.figurePowerTokens[fk].length < 2) {
+        if (game.figurePowerTokens[fk].length < getMaxPowerTokens(fk)) {
           game.figurePowerTokens[fk].push('Block');
           const fkName = dcNameFromFigureKey(fk);
           await logGameAction(game, client, `🛡️ **Shield** — **${fkName}** gained 1 **Block Token** at end of activation.`, { phase: 'ROUND', icon: 'activate' });
@@ -414,7 +414,8 @@ export async function handleEndTurn(interaction, ctx) {
     if (_htlBlockCount > 0) {
       game.figurePowerTokens = game.figurePowerTokens || {};
       game.figurePowerTokens[_htlFk] = game.figurePowerTokens[_htlFk] || [];
-      for (let i = 0; i < _htlBlockCount; i++) game.figurePowerTokens[_htlFk].push('Block');
+      const _htlMax = getMaxPowerTokens(_htlFk);
+      for (let i = 0; i < _htlBlockCount; i++) { if (game.figurePowerTokens[_htlFk].length < _htlMax) game.figurePowerTokens[_htlFk].push('Block'); }
     }
     await logGameAction(game, client, `🛡️ **Hold the Line** — **${meta.displayName || 'Baze Malbus'}** gained **${_htlBlockCount} Block Token${_htlBlockCount !== 1 ? 's' : ''}** (${_htlBlockCount} hostile${_htlBlockCount !== 1 ? 's' : ''} with LOS).`, { phase: 'ROUND', icon: 'activate' });
   }
@@ -1492,6 +1493,37 @@ export async function handleConfirmActivate(interaction, ctx) {
       }
     }
   }
+  // Imperial Retrofitting (I48): at start of activation of AT-ST, General Weiss, or SC2-M Repulsor Tank
+  // Scan the activating player's DCs for [Imperial Retrofitting] and offer exhaust/deplete options
+  {
+    const _irEligibleNames = ['AT-ST', 'General Weiss', 'SC2-M Repulsor Tank'];
+    if (_irEligibleNames.includes(meta.dcName)) {
+      const _irDcList = getDcList(game, meta.playerNum) || [];
+      const _irDcMsgIds = getDcMessageIds(game, meta.playerNum) || [];
+      let _irMsgId = null;
+      for (let di = 0; di < _irDcList.length; di++) {
+        const dc = _irDcList[di];
+        if (dc?.dcName === '[Imperial Retrofitting]') {
+          _irMsgId = _irDcMsgIds[di] || null;
+          break;
+        }
+      }
+      if (_irMsgId) {
+        const _irDepleted = (game.p1DepletedDcMessageIds || []).includes(_irMsgId) || (game.p2DepletedDcMessageIds || []).includes(_irMsgId);
+        const _irExhausted = (game.exhaustedSkirmishUpgrades?.[_irMsgId] || []).includes('Imperial Retrofitting');
+        if (!_irDepleted) {
+          const _irBtns = [];
+          if (!_irExhausted) {
+            _irBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_impretro_multiattack_${_irMsgId}`).setLabel('IR: Multi-Attack (Exhaust)').setStyle(ButtonStyle.Primary));
+            _irBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_impretro_move_${_irMsgId}`).setLabel('IR: Move (Exhaust)').setStyle(ButtonStyle.Primary));
+          }
+          _irBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_impretro_focus_${_irMsgId}`).setLabel('IR: Focus (Deplete)').setStyle(ButtonStyle.Danger));
+          _irBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_impretro_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+          await thread.send({ content: `**Imperial Retrofitting** — Choose an option for **${displayName}**:`, components: [new ActionRowBuilder().addComponents(_irBtns)] }).catch(discordCatch);
+        }
+      }
+    }
+  }
   // I Make the Rules Now (Cad Bane): when another figure activates, HUNTER within 4 of Cad Bane gains 1 MP
   // Scan all DCs on BOTH teams for this ability
   for (const pn of [1, 2]) {
@@ -2173,6 +2205,80 @@ export async function handleActPassive(interaction, ctx) {
     }
     delete game.pendingTrustedAlly;
     await logGameAction?.(game, client, `**Trusted Ally** — ${targetDcName}: ${choice === 'heal' ? 'recovered 1 Damage' : 'discarded ' + choice}.`, { phase: 'ACTIVATION', icon: 'activate' });
+  // --- Imperial Retrofitting (I48): exhaust for multi-attack/move, deplete for Focus ---
+  } else if (ability === 'impretro') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `**Imperial Retrofitting** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      // choice is 'multiattack_<irMsgId>', 'move_<irMsgId>', or 'focus_<irMsgId>'
+      const _irParts = choice.split('_');
+      const _irAction = _irParts[0]; // 'multiattack', 'move', or 'focus'
+      const _irCardMsgId = _irParts.slice(1).join('_'); // the IR card's msgId
+      if (_irAction === 'multiattack') {
+        // Exhaust Imperial Retrofitting
+        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+        game.exhaustedSkirmishUpgrades[_irCardMsgId] = game.exhaustedSkirmishUpgrades[_irCardMsgId] || [];
+        if (!game.exhaustedSkirmishUpgrades[_irCardMsgId].includes('Imperial Retrofitting')) {
+          game.exhaustedSkirmishUpgrades[_irCardMsgId].push('Imperial Retrofitting');
+        }
+        // Allow multiple attacks this activation for the vehicle
+        game.imperialRetrofittingMultiAttack = game.imperialRetrofittingMultiAttack || {};
+        game.imperialRetrofittingMultiAttack[msgId] = true;
+        await interaction.message.edit({ content: `**Imperial Retrofitting** — Exhausted. **${displayName}** may perform **multiple attacks** this activation.`, components: [] }).catch(discordCatch);
+        await logGameAction?.(game, client, `**Imperial Retrofitting** exhausted — **${displayName}** may perform multiple attacks this activation.`, { phase: 'ACTIVATION', icon: 'card' });
+        // After exhaust, offer deplete for Focus if card is not yet depleted
+        const _irStillAvailable = !(game.p1DepletedDcMessageIds || []).includes(_irCardMsgId) && !(game.p2DepletedDcMessageIds || []).includes(_irCardMsgId);
+        if (_irStillAvailable) {
+          const _irFocusBtns = [
+            new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_impretro_focus_${_irCardMsgId}`).setLabel('IR: Focus (Deplete)').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_impretro_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          ];
+          await interaction.channel.send({ content: `**Imperial Retrofitting** — Also deplete for **Focus** before declaring an attack?`, components: [new ActionRowBuilder().addComponents(_irFocusBtns)] }).catch(discordCatch);
+        }
+      } else if (_irAction === 'move') {
+        // Exhaust Imperial Retrofitting
+        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+        game.exhaustedSkirmishUpgrades[_irCardMsgId] = game.exhaustedSkirmishUpgrades[_irCardMsgId] || [];
+        if (!game.exhaustedSkirmishUpgrades[_irCardMsgId].includes('Imperial Retrofitting')) {
+          game.exhaustedSkirmishUpgrades[_irCardMsgId].push('Imperial Retrofitting');
+        }
+        // Grant Speed MP to the vehicle
+        const _irSpeed = ctx.getDcStats?.(meta.dcName)?.speed ?? 4;
+        game.movementBank = game.movementBank || {};
+        if (!game.movementBank[msgId]) {
+          game.movementBank[msgId] = { total: _irSpeed, remaining: _irSpeed, threadId: interaction.channel?.id, messageId: null, displayName: displayName };
+        } else {
+          game.movementBank[msgId].total += _irSpeed;
+          game.movementBank[msgId].remaining += _irSpeed;
+        }
+        await interaction.message.edit({ content: `**Imperial Retrofitting** — Exhausted. **${displayName}** performs a move (**${_irSpeed} MP**).`, components: [] }).catch(discordCatch);
+        await logGameAction?.(game, client, `**Imperial Retrofitting** exhausted — **${displayName}** gains ${_irSpeed} MP (performs a move).`, { phase: 'ACTIVATION', icon: 'card' });
+        // After exhaust, offer deplete for Focus if card is not yet depleted
+        const _irStillAvailable = !(game.p1DepletedDcMessageIds || []).includes(_irCardMsgId) && !(game.p2DepletedDcMessageIds || []).includes(_irCardMsgId);
+        if (_irStillAvailable) {
+          const _irFocusBtns = [
+            new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_impretro_focus_${_irCardMsgId}`).setLabel('IR: Focus (Deplete)').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_impretro_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          ];
+          await interaction.channel.send({ content: `**Imperial Retrofitting** — Also deplete for **Focus** before declaring an attack?`, components: [new ActionRowBuilder().addComponents(_irFocusBtns)] }).catch(discordCatch);
+        }
+      } else if (_irAction === 'focus') {
+        // Deplete Imperial Retrofitting — mark as depleted
+        if (meta.playerNum === 1) {
+          game.p1DepletedDcMessageIds = game.p1DepletedDcMessageIds || [];
+          if (!game.p1DepletedDcMessageIds.includes(_irCardMsgId)) game.p1DepletedDcMessageIds.push(_irCardMsgId);
+        } else {
+          game.p2DepletedDcMessageIds = game.p2DepletedDcMessageIds || [];
+          if (!game.p2DepletedDcMessageIds.includes(_irCardMsgId)) game.p2DepletedDcMessageIds.push(_irCardMsgId);
+        }
+        // Apply Focus to the vehicle figure
+        const _irDgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const _irFigKey = `${meta.dcName}-${_irDgIdx}-0`;
+        applyCondition(game, _irFigKey, 'Focus');
+        await interaction.message.edit({ content: `**Imperial Retrofitting** — Depleted. **${displayName}** becomes **Focused**.`, components: [] }).catch(discordCatch);
+        await logGameAction?.(game, client, `**Imperial Retrofitting** depleted — **${displayName}** becomes Focused.`, { phase: 'ACTIVATION', icon: 'card' });
+      }
+    }
   } else if (ability === 'unstabledev') {
     if (choice === 'skip') {
       await interaction.message.edit({ content: `🔧 **Unstable Devices** — Skipped.`, components: [] }).catch(discordCatch);

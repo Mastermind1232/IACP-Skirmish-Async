@@ -55,6 +55,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'fireMissionActive',
   'autofireChainTargetSpace',
   'darksaberSecondAttack',
+  'saberOrbitAttacksRemaining',
   'pendingOverwatchPlacement',
   'activationKills',
   'activationDamagedFigures',
@@ -64,6 +65,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'pendingBombDrop',
   'activationExtraActionThenStun',
   'beastTamerInteractOverride',
+  'imperialRetrofittingMultiAttack',
 ];
 
 /**
@@ -199,6 +201,7 @@ const ROUND_OBJECT_FLAGS = [
   'fireMissionActive',
   'autofireChainTargetSpace',
   'darksaberSecondAttack',
+  'saberOrbitAttacksRemaining',
   'pendingOverwatchPlacement',
   'activationKills',
   'activationDamagedFigures',
@@ -208,6 +211,7 @@ const ROUND_OBJECT_FLAGS = [
   'disarmPermanentWeakened',
   'adrenalineBonuses',
   'opportunisticMustSpendNow',
+  'imperialRetrofittingMultiAttack',
 ];
 
 const ROUND_NULL_FLAGS = [

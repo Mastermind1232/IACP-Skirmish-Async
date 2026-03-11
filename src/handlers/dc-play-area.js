@@ -423,6 +423,7 @@ export async function handleDcUnactivate(interaction, ctx) {
   if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
   if (game.hitAndRunPendingMp?.msgId === msgId) delete game.hitAndRunPendingMp;
   if (game.pendingOverrideAttackDice?.[msgId]) delete game.pendingOverrideAttackDice[msgId];
+  if (game.saberOrbitAttacksRemaining?.[msgId]) delete game.saberOrbitAttacksRemaining[msgId];
   if (game.pendingMissileSalvo?.[msgId]) delete game.pendingMissileSalvo[msgId];
   if (game.pendingEe3Carbine?.[msgId]) delete game.pendingEe3Carbine[msgId];
   // Stun: discarded at the end of the figure's activation
@@ -1441,7 +1442,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     if (game.attackPerformedThisActivation?.[msgId]) {
       const isFreeAttack = hasFellSwoopFreeAttack || hasPummelFreeAttack ||
         game.freeAttackBonusPending?.[msgId] != null || game.pounceAttackPending?.[msgId] != null;
-      if (!isFreeAttack) {
+      // Imperial Retrofitting: multi-attack bypass
+      const hasIRMultiAttack = !!game.imperialRetrofittingMultiAttack?.[msgId];
+      if (!isFreeAttack && !hasIRMultiAttack) {
         const dcAbilityText = getDcEffects()?.[meta.dcName]?.abilityText || '';
         let hasAssault = /\bAssault:/i.test(dcAbilityText);
         // Scavenged Walker: "You lose ASSAULT"
@@ -2127,7 +2130,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       .setStyle(ButtonStyle.Success)
   );
   await interaction.followUp({
-    content: `**${action}** — ${resolveResult.applied ? 'Resolved.' : manualMsg} Click **Done** when finished.`,
+    content: `**${action}** — ${resolveResult.applied ? (resolveResult.logMessage || 'Resolved.') : manualMsg} Click **Done** when finished.`,
     components: [doneRow],
     ephemeral: false,
   }).catch(discordCatch);

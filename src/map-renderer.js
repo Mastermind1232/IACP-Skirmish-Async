@@ -562,15 +562,15 @@ export async function renderMap(mapId, options = {}) {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-    // Power Tokens: 2 slots at top-left of unit (slot 1, slot 2 right next to it)
-    const powerTokenTypes = (fig.powerTokens || []).slice(0, 2);
-    const ptSize = Math.max(12, clipRadius * 0.45);
+    // Power Tokens: up to 3 slots at top-left of unit
+    const powerTokenTypes = (fig.powerTokens || []).slice(0, 3);
+    const ptSize = Math.max(12, clipRadius * (powerTokenTypes.length > 2 ? 0.38 : 0.45));
     const ptConfig = getTokenImagesConfig().powerTokens || {};
     const figX0 = cx - clipW;
     const figY0 = cy - clipH;
     // Pre-load power token images in parallel
     const ptLoadPromises = [];
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < powerTokenTypes.length; i++) {
       const ptType = powerTokenTypes[i];
       if (ptType) {
         const filename = ptConfig[ptType] || ptConfig.Surge;
