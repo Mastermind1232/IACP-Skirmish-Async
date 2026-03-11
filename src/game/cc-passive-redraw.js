@@ -13,7 +13,7 @@
  */
 import { getDcKeywords } from '../data-loader.js';
 import {
-  ccHandKey, ccDiscardKey, getDcList,
+  ccHandKey, ccDiscardKey, ccDeckKey, getDcList,
 } from './player-helpers.js';
 
 // ── Passive redraw card definitions ──────────────────────────────────────────
@@ -197,4 +197,51 @@ export function checkStartOfRoundPassiveRedraws(game, playerNum) {
     }
   }
   return { redrawn };
+}
+
+// ── De Wanna Wanga passive reshuffle ────────────────────────────────────────
+
+/**
+ * Cards that, once per round, shuffle back into the deck when discarded from hand.
+ */
+export const HAND_DISCARD_RESHUFFLE_CARDS = new Set([
+  'De Wanna Wanga',
+]);
+
+/**
+ * Check for hand-discard passive reshuffle after a CC is played/discarded from hand.
+ * If the card is De Wanna Wanga and the once-per-round limit hasn't been used,
+ * move it from discard pile to deck and shuffle.
+ *
+ * @param {object} game - Game state
+ * @param {number} playerNum - 1 or 2
+ * @param {string} cardName - Name of the card that was just discarded from hand
+ * @returns {{ reshuffled: boolean }}
+ */
+export function checkHandDiscardPassiveReshuffle(game, playerNum, cardName) {
+  if (!HAND_DISCARD_RESHUFFLE_CARDS.has(cardName)) return { reshuffled: false };
+
+  // Once per round check
+  game.deWannaWangaUsedThisRound = game.deWannaWangaUsedThisRound || {};
+  if (game.deWannaWangaUsedThisRound[playerNum]) return { reshuffled: false };
+
+  const dKey = ccDiscardKey(playerNum);
+  const discard = game[dKey] || [];
+  const idx = discard.indexOf(cardName);
+  if (idx < 0) return { reshuffled: false };
+
+  // Move from discard to deck and shuffle
+  discard.splice(idx, 1);
+  game[dKey] = discard;
+  const deckKey = ccDeckKey(playerNum);
+  const deck = game[deckKey] || [];
+  deck.push(cardName);
+  // Fisher-Yates shuffle
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  game[deckKey] = deck;
+  game.deWannaWangaUsedThisRound[playerNum] = true;
+  return { reshuffled: true };
 }

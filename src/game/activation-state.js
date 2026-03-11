@@ -297,6 +297,7 @@ const ROUND_DELETE_FLAGS = [
   'jundlandTerrorPlayedThisEor',
   'reinforcementsPlayedThisSor',
   'pendingBlackMarket',
+  'deWannaWangaUsedThisRound',
 ];
 
 /**

@@ -20,6 +20,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects, getDcKeywords } from '../data-loader.js';
+import { checkHandDiscardPassiveReshuffle } from '../game/cc-passive-redraw.js';
 import { awardObjectiveVp } from '../game/index.js';
 import {
   getPlayerId, getHandChannelId, getSquad, getCcDiscard, getCcDeck, getCcHand,
@@ -462,6 +463,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       game[handKey] = hand;
       game[discardKey] = game[discardKey] || [];
       game[discardKey].push(card);
+      // C57: De Wanna Wanga passive reshuffle
+      { const _dww = checkHandDiscardPassiveReshuffle(game, playerNum, card);
+        if (_dww.reshuffled && logGameAction) await logGameAction(game, interaction.client, `**De Wanna Wanga** (passive) — Shuffled back into command deck.`, { phase: 'ROUND', icon: 'card' }); }
       const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
       const handMessages = await handChannel.messages.fetch({ limit: 20 });
       const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
@@ -505,6 +509,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       game[handKey] = hand;
       game[discardKey] = game[discardKey] || [];
       game[discardKey].push(card);
+      // C57: De Wanna Wanga passive reshuffle
+      { const _dww = checkHandDiscardPassiveReshuffle(game, playerNum, card);
+        if (_dww.reshuffled && logGameAction) await logGameAction(game, interaction.client, `**De Wanna Wanga** (passive) — Shuffled back into command deck.`, { phase: 'ROUND', icon: 'card' }); }
       const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
       const handMessages = await handChannel.messages.fetch({ limit: 20 });
       const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
@@ -635,6 +642,11 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   game[handKey] = hand;
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push(card);
+  // C57: De Wanna Wanga passive — once per round, when discarded from hand, shuffle into deck instead
+  const _dwwResult = checkHandDiscardPassiveReshuffle(game, playerNum, card);
+  if (_dwwResult.reshuffled && logGameAction) {
+    await logGameAction(game, interaction.client, `**De Wanna Wanga** (passive) — Shuffled back into command deck instead of staying in discard.`, { phase: 'ROUND', icon: 'card' });
+  }
   const handChannel = await interaction.client.channels.fetch(isP1Hand ? game.p1HandId : game.p2HandId);
   const handMessages = await handChannel.messages.fetch({ limit: 20 });
   const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));

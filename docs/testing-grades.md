@@ -85,7 +85,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | G68 | PASS | Same as G66 — `massiveMovementLocked` covers EOR voluntary movement restriction. |
 | G69 | PASS | `collectOverlappingFigures` returns friendly first (movement.js:606-623). Push ordering correct. |
 | G70 | PASS | Same as G69 — friendly-first ordering enforced in `collectOverlappingFigures`. |
-| G71 | PARTIAL | Push exists but companion-specific inclusion not verified. |
+| G71 | PASS | `collectOverlappingFigures` (movement.js:609) iterates all figurePositions directly — companions included. `resolveMassivePush` pushes all overlapping figures including companions. |
 | G72 | PASS | combat.js and abilities.js — Hit, Block, Surge, Evade tokens; `figurePowerTokens` in game state. |
 | G73 | PARTIAL | Token cap enforced at 2 (game-helpers.js:30-38). Migs has max 3. But no "choose which to discard" when gaining 3rd — code simply caps. |
 | G74 | PARTIAL | Discard pile mechanics exist (index.js:3940-4009 for Mastery, Military Efficiency redraw). Not full "select from discard" feature. |
@@ -239,7 +239,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 |---|---|---|
 | M1 | PASS | abilities.js:189-239 — Wrist Cord (`pushTargetWithinRange`) with MP cost at lines 220-221. |
 | M2 | PASS | abilities.js:2096-2179 — Flamethrower (`fixedAreaEffect` with MP cost). |
-| M3 | PARTIAL | Arsenal checked at dc-play-area.js:1375-1383 but no validation.js rule requiring IG-88 to bring upgrade. |
+| M3 | PASS | Arsenal checked at dc-play-area.js:1375-1383. IG-88 included in `EXPECTED_UPGRADES` (validation.js:400) — warns if missing [Focused on the Kill]. |
 | M4 | PASS | dc-play-area.js:1375-1386 — Arsenal declaration; `arsenal_pick_` handler at handlers/index.js:386. |
 | M5 | PASS | index.js:3193-3203 — Crippling Blow Stun applied only if hit (line 3195). |
 | M6 | PASS | Crippling Blow only applies if `hit && combat.target?.figureKey` — excludes misses. |
@@ -346,7 +346,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | I16 | PASS | abilities.js:1048-1083 (Elite) and 1085-1115 (Regular) — Coordinated Raid. Elite: IMPERIAL cost ≤4 within 4 spaces. Regular: same group. Both grant interrupt attack. |
 | I17 | PASS | Ranged cleave via `getFiguresAdjacentToTarget` (index.js:3941). TGI Cleave via `deadly_spin` surge (dc-effects.json:6249). |
 | I18 | PASS | `precision_grand_inquisitor` wired in combat.js:1894-1905 via `forcedRerollQueue`. Adjacent attacker/defender can force 1 die reroll. |
-| I19 | PARTIAL | Hunt Dissent at activation.js:1138-1140 — reminder message only. No automated defeat tracking or Block Token granting. ACS range extension not dynamically applied. |
+| I19 | PASS | Hunt Dissent fully automated: defeat tracking (index.js:2195-2237) grants Block Tokens to Kallus/adjacent TROOPERs. Multiple defeat paths covered. |
 | I20 | PASS | combat.js:914-922 — auto-Focuses Dark Trooper on attack declare. combat.js:2301-2312 — if rerolled die has fewer Hits, +1 Hit bonus. |
 | I21 | PASS | "I Know Everything" at cc-hand.js:1159-1184,1229-1267 — reveals 2 cards, opponent keeps one, other removed. "The Darksaber" via `pendingDarksaberSecondAttack`. Both automated. |
 | I22 | PARTIAL | Thrawn: Long-Laid Plans IS automated (activation.js:1035-1053 — distributes N power tokens). Strategize is reminder only (activation.js:1055-1058 — "Look at top CC of each deck"). |
@@ -357,7 +357,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | I27 | PASS | dc-play-area.js:1743-1785 — Overwatch token placement with LOS validation. Position stored in game state. Reminder at activation start (lines 201-205). |
 | I28 | PASS | Incinerate fully implemented (index.js:3676-3763). Strain on target + Blast-damaged figures, Fireproof immunity, Rubble token placement. |
 | I29 | MANUAL | Wasskah breakable walls are map-specific geometry — requires runtime testing with Drokkatta/Taron/Flametrooper on Wasskah. |
-| I30 | PARTIAL | Fireproof at combat.js:83-88 blocks Strain (`Flame Trooper` check). But Bleed immunity not explicitly coded. |
+| I30 | PASS | Fireproof blocks both Strain (combat.js:84-88) and Bleed (index.js:2633-2636 `defenderFireproof` check prevents Bleed condition). |
 | I31 | PASS | Sorin Advanced Firepower automated (combat.js:1346-1369). Bombardment also automated. Aura check for Droids/Vehicles at combat time. |
 | I32 | N/A | Deck-building convention, not code. |
 | I33 | PASS | combat.js:1772-1794 — Coordinated Hunt: checks if attacker is Purge Commander (self +1 reroll) OR if attacker is HUNTER with Purge Commander in LOS. |
@@ -374,7 +374,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | I44 | PASS | Quick Strike fires at index.js:3503-3509. `defenderRerolledOrModified` tracked and consumed correctly. |
 | I45 | PASS | combat.js:679-681 sets `crossTrainingDefend = true`. Lines 1620-1624: replaces first non-white defense die with white. |
 | I46 | PASS | Cross-Training exhaust tracked (combat.js:665-669). Die swap correctly limited to once per round. |
-| I47 | PARTIAL | Imperial Citadel SOR token placement automated (round.js:676-692,1157-1175). But "gain on defeat" (transfer PTs from defeated figure to Citadel) has no automated defeat hook. |
+| I47 | PASS | Imperial Citadel: SOR token placement (round.js:676-692), defeat PT transfer (index.js:3146-3162), activation token grant (activation.js:1527-1544). |
 | I48 | PASS | Imperial Retrofitting automated (activation.js:1498-1527, 2232-2305). Fully implemented. |
 | I49 | PASS | combat.js:733-740 — +1 Hit when attacking during non-activation. dc-play-area.js:1220-1224 — +2 MP for non-activation move. Both correctly gate on "not during this group's activation." |
 | I50 | PASS | dc-play-area.js:1628-1690 — two special action buttons: "VF: Attack+Move" and "VF: Focus" (once/round via `vadersFocusUsedThisRound`). |
@@ -400,7 +400,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C10 | MANUAL | Capitalize: `defensePoolRemoveMax: 1`. Whether defeated figure gains conditions from that attack is standard defeat logic — no Capitalize-specific code. Requires runtime check. |
 | C11 | PARTIAL | Cloned Reinforcements uses `placeDefeatedFigure` (abilities.js:7971-8137). Places figure on board but does NOT explicitly set respawned group to Readied if entire group was defeated. |
 | C12 | PARTIAL | Same handler. Reinforced figure inherits DC's exhausted state implicitly (per-DC not per-figure). Partially correct by structure but not explicitly coded. |
-| C13 | PARTIAL | Comm Disruption (abilities.js:7425-7439): counts SPY groups, reports cancelable card cost. But no automatic interrupt/prompt system asks "play Comm Disruption?" each time opponent plays a card. |
+| C13 | PASS | Comm Disruption fully automated: `promptCommDisruption` (cc-hand.js:45-90) prompts opponent after every CC play. SPY group count check, cancel + return to hand, skip buttons. |
 | C14 | PASS | Comm Disruption auto-prompt: `promptCommDisruption()` in cc-hand.js checks opponent's hand after any CC play. Timing expanded in cc-timing.js:211 to `duringActivation || duringRound || pendingPrompt`. |
 | C15 | PARTIAL | Dirty Trick timing `whenHostileFigureEntersAdjacentSpace` maps to `ctx.duringActivation`. Trigger typically happens during OPPONENT's activation — no automated prompt when hostile moves past smuggler/hunter. Honor-system. |
 | C16 | MANUAL | Parting Blow + Dirty Trick: both available during activation, player must choose. No automated conflict resolution. |
@@ -444,7 +444,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C54 | PASS | Smoke Grenade blocks LOS (dc-play-area.js:979-985). Token stored, rendered, and consulted during LOS calculations. |
 | C55 | PASS | Sniper Configuration: `rerollOneAttackDie: true` wired. abilities.js:4005-4008 handles `attackAccuracyBonus + attackBonusPierce`. LOS-from-friendly is honor-system but mechanical bonuses work. |
 | C56 | PASS | Strength in Numbers cost enforced (activation.js:799-807). Base group cost excluding attachments verified. |
-| C57 | PARTIAL | abilities.js:4844-4875 — De Wanna Wanga active effect (choose from discard, shuffle into deck) works. But PASSIVE "once per round when discarded, may shuffle into deck" NOT implemented. |
+| C57 | PASS | Active effect works (abilities.js:4844-4875). Passive reshuffle implemented via `checkHandDiscardPassiveReshuffle` (cc-passive-redraw.js) — once per round, auto-shuffles into deck when played. Hooked at 3 CC play paths in cc-hand.js. |
 | C58 | PASS | Devotion auto-search (abilities.js:7186-7252). Programmatically searches for and draws matching card. |
 | C59 | PASS | abilities.js:5996-6012 — Droid Mastery: finds J4X-7, applies Focus, grants free attack via `freeAttackBonusPending`. |
 | C60 | PARTIAL | Element of Surprise: `defensePoolRemoveMax: 1` removes defense die when played. But "target did not have LOS to you at start of activation" check NOT enforced. |
