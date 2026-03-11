@@ -65,6 +65,8 @@ const SPECIAL_ACTION_TIMING = new Set([
 export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffect) {
   // Shadow Ops: opponent cannot play Command cards this round
   if (game?.shadowOpsBlockedPlayer === playerNum) return false;
+  // Critical Hit (Mak): target cannot play Command cards this round
+  if (game?.criticalHitBlockedPlayer === playerNum) return false;
   // Comms Jammer (ISB Infiltrator Elite): opponent cannot play CCs during this activation
   if (game?.commsJammerActivePlayerNum && game.commsJammerActivePlayerNum !== playerNum) return false;
   const effect = getEffect(cardName);

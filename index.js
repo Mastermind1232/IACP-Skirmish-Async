@@ -2684,6 +2684,11 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           }
         }
       }
+      // Critical Hit (Mak): if target suffered damage, target cannot play CCs this round
+      if (damage > 0 && combat.surgeCriticalHit) {
+        game.criticalHitBlockedPlayer = defenderPlayerNum;
+        await logGameAction(game, client, `🎯 **Critical Hit** — **${combat.target.label}** cannot play Command cards for the rest of this round.`, { phase: 'ROUND', icon: 'attack' });
+      }
       // Self-Preservation (Hired Gun Elite): when you suffer damage, become Focused
       if (newCur > 0) {
         const _spDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);

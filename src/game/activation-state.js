@@ -270,6 +270,7 @@ const ROUND_NULL_FLAGS = [
   'terminalControlPlayerNum',
   'unlimitedPowerActive',
   'shadowOpsBlockedPlayer',
+  'criticalHitBlockedPlayer',
   'pendingOrbitalBombardment',
   'pendingYHSIW',
   'powerfulInfluencePlayerNum',
