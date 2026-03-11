@@ -2632,6 +2632,27 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           await logGameAction(game, client, `**Fireproof** — **${combat.target.label}** is immune to Bleed.`, { phase: 'ROUND', icon: 'card' });
         }
         for (const _ac of allConditions) _applyCondition(game, combat.target.figureKey, _ac);
+        // Punishing Strike (Skirmish Upgrade): when one of your figures applies a HARMFUL condition,
+        // exhaust to discard that condition and apply a different HARMFUL condition instead.
+        const _psHarmful = allConditions.filter((c) => HARMFUL_CONDITIONS.includes(c));
+        if (_psHarmful.length > 0) {
+          const _psAtkDcList = getDcList(game, attackerPlayerNum) || [];
+          const _psHasPS = _psAtkDcList.some(dc => dc.dcName === '[Punishing Strike]');
+          const _psExhKey = `ps_army_p${attackerPlayerNum}`;
+          const _psAlreadyExhausted = (game.exhaustedSkirmishUpgrades?.[_psExhKey] || []).includes('Punishing Strike');
+          if (_psHasPS && !_psAlreadyExhausted) {
+            // Show prompt for each harmful condition applied (use first one)
+            const _psCond = _psHarmful[0];
+            const _psOtherConds = HARMFUL_CONDITIONS.filter(c => c !== _psCond);
+            const _psBtns = _psOtherConds.map(c =>
+              new ButtonBuilder().setCustomId(`ps_replace_${game.gameId}_${combat.target.figureKey}_${_psCond}_${c}`).setLabel(`Replace with ${c}`).setStyle(ButtonStyle.Primary)
+            );
+            _psBtns.push(new ButtonBuilder().setCustomId(`ps_replace_${game.gameId}_${combat.target.figureKey}_${_psCond}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+            const _psRow = new ActionRowBuilder().addComponents(_psBtns);
+            game.pendingPunishingStrike = { attackerPlayerNum, targetFigureKey: combat.target.figureKey, originalCondition: _psCond };
+            await thread.send({ content: `**Punishing Strike** — **${combat.target.label}** was applied **${_psCond}**. Exhaust Punishing Strike to replace it with a different harmful condition?`, components: [_psRow] }).catch(discordCatch);
+          }
+        }
       }
       // Furious Charge: if defender's player played this CC, and suffered >= threshold damage, grant Focus
       if (game.conditionalFocusIfDamagedGte?.playerNum === defenderPlayerNum && damage >= game.conditionalFocusIfDamagedGte.threshold) {

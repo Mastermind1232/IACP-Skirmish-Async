@@ -1315,6 +1315,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   }
 
   if (action === 'Move') {
+    // G36: Parting Blow / Parting Shot — reset once-per-move flag at the start of each new Move action
+    if (game.partingShotTriggered) game.partingShotTriggered = {};
     try {
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
       const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;

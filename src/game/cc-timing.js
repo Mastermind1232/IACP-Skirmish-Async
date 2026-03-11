@@ -208,8 +208,10 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
       // Windfall: playable during your activation (play when a CC is discarded)
       return ctx.duringActivation;
     case 'whencommandcardplayed':
-      // Comm Disruption: playable during your activation (play when opponent plays a CC)
-      return ctx.duringActivation;
+      // Comm Disruption: playable when opponent plays a CC — during activation OR
+      // reactively via the Comm Disruption prompt (C14). Also allow during duringRound
+      // so the opponent can respond outside their own activation turn.
+      return ctx.duringActivation || ctx.duringRound || !!(game?.pendingCommDisruptionPrompt?.targetPlayerNum === playerNum);
     case 'whenenemyfigureactivates':
       // Overcharged Weapons: playable during your activation (play when hostile activates)
       return ctx.duringActivation;

@@ -22,7 +22,7 @@ import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects, getDcKeywords } from '../data-loader.js';
 import { awardObjectiveVp } from '../game/index.js';
 import {
-  getPlayerId, getHandChannelId, getSquad, getCcDiscard, getCcDeck,
+  getPlayerId, getHandChannelId, getSquad, getCcDiscard, getCcDeck, getCcHand,
   getDiscardThreadId,
   ccHandKey, ccDiscardKey, ccDeckKey, ccDrawnKey, ccAttachmentsKey, vpKey as vpKeyFn,
   opponentPlayerNum,
@@ -30,6 +30,60 @@ import {
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
+
+/**
+ * C14: After a CC is played, check if opponent has Comm Disruption in hand
+ * and prompt them to play it reactively.
+ * @param {object} game - Game state
+ * @param {string} gameId - Game ID
+ * @param {number} playerNum - Player who just played a CC
+ * @param {string} card - Name of the CC that was just played
+ * @param {object} client - Discord client
+ * @param {Function} logGameAction
+ * @param {Function} saveGames
+ */
+async function promptCommDisruption(game, gameId, playerNum, card, client, logGameAction, saveGames) {
+  // Don't prompt for Comm Disruption itself or Negation
+  if (card === 'Comm Disruption' || card === 'Negation') return;
+  const oppNum = opponentPlayerNum(playerNum);
+  const oppHand = getCcHand(game, oppNum) || [];
+  if (!oppHand.includes('Comm Disruption')) return;
+  // Check SPY group count for the opponent (Comm Disruption player)
+  const dcEffectsData = getDcEffects() || {};
+  const oppDcList = (oppNum === 1 ? game.p1DcList : game.p2DcList) || [];
+  const spyCount = oppDcList.filter((dc) => {
+    if (!dc || dc.defeated) return false;
+    const kws = (dcEffectsData[dc.dcName]?.keywords || []).map((k) => String(k).toUpperCase());
+    return kws.includes('SPY');
+  }).length;
+  if (spyCount <= 0) return;
+  // Get the played card's cost
+  const getCcEffect = (await import('../data-loader.js')).getCcEffect;
+  const playedEffect = getCcEffect(card);
+  const playedCost = typeof playedEffect?.cost === 'number' ? playedEffect.cost : 0;
+  if (playedCost > spyCount) return; // can't cancel — cost too high
+  // Prompt the opponent in their hand channel
+  const oppHandId = getHandChannelId(game, oppNum);
+  if (!oppHandId) return;
+  try {
+    const oppHandChannel = await client.channels.fetch(oppHandId);
+    const oppId = getPlayerId(game, oppNum);
+    game.pendingCommDisruptionPrompt = { targetPlayerNum: oppNum, playedCard: card, playedBy: playerNum, gameId };
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`comm_disruption_play_${gameId}`).setLabel('Play Comm Disruption').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`comm_disruption_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await oppHandChannel.send({
+      content: `<@${oppId}> Your opponent played **${card}** (cost ${playedCost}). You have **${spyCount}** friendly SPY group${spyCount !== 1 ? 's' : ''}. Play **Comm Disruption** to cancel it?`,
+      components: [row],
+      allowedMentions: { users: [oppId] },
+    });
+    saveGames();
+  } catch (err) {
+    // Non-fatal: if we can't prompt, the game continues
+    console.error('[Comm Disruption] Failed to prompt opponent:', err.message);
+  }
+}
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
 export async function handleSquadModal(interaction, ctx) {
@@ -435,6 +489,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         );
       }
       await handChannel.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(discordCatch);
+      // C14: Comm Disruption — prompt opponent if they have it in hand
+      await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
       saveGames();
       return;
     }
@@ -476,6 +532,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       const payload = { content: `**Pick a space** (for **${card}**):`, components: ccComponents, fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
       await handChannel.send(payload).catch(discordCatch);
+      // C14: Comm Disruption — prompt opponent if they have it in hand
+      await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
       saveGames();
       return;
     }
@@ -551,6 +609,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         game[wfKey].total = (game[wfKey].total || 0) + cost;
         await logGameAction(game, interaction.client, `**Windfall**: P${wfNum} gains +${cost} VP.`, { icon: 'card' });
       }
+      // C14: Comm Disruption — prompt opponent if they have it in hand
+      await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
       saveGames();
       return;
     }
@@ -613,6 +673,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     }).catch(() => null);
     if (waitingMsg) game.pendingNegation.waitingMsgId = waitingMsg.id;
     if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
+    // C14: Comm Disruption — prompt opponent if they have it in hand
+    await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
     saveGames();
     return;
   }
@@ -634,6 +696,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   if (ctx.pushUndo) {
     ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
   }
+  // C14: Comm Disruption — prompt opponent if they have it in hand
+  await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
   saveGames();
 }
 
@@ -649,6 +713,60 @@ export async function handleCcCancelPlay(interaction, ctx) {
   }
   delete game.pendingCcConfirmation;
   await interaction.message.delete().catch(discordCatch);
+  saveGames();
+}
+
+/**
+ * C14: Handler for "Play Comm Disruption" button.
+ * Plays Comm Disruption from the opponent's hand to cancel the played card.
+ */
+export async function handleCommDisruptionPlay(interaction, ctx) {
+  const { getGame, getCcEffect, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames, client } = ctx;
+  const gameId = interaction.customId.replace('comm_disruption_play_', '');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingCommDisruptionPrompt;
+  if (!pending) {
+    await interaction.followUp({ content: 'No Comm Disruption prompt pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const { targetPlayerNum, playedCard, playedBy } = pending;
+  if (!await requirePlayer(interaction, game, interaction.user.id, targetPlayerNum, canActAsPlayer, 'Only the prompted player can respond.')) return;
+  delete game.pendingCommDisruptionPrompt;
+
+  // Remove Comm Disruption from hand and add to discard
+  const handKey = ccHandKey(targetPlayerNum);
+  const discardKey = ccDiscardKey(targetPlayerNum);
+  const hand = (game[handKey] || []).slice();
+  const cdIdx = hand.indexOf('Comm Disruption');
+  if (cdIdx < 0) {
+    await interaction.followUp({ content: 'Comm Disruption is no longer in your hand.', ephemeral: true }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+  hand.splice(cdIdx, 1);
+  game[handKey] = hand;
+  game[discardKey] = (game[discardKey] || []).concat('Comm Disruption');
+
+  // Also discard the played card from the opponent's discard (cancel its effects)
+  // The card is already in the opponent's discard — we note the cancellation
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  await updateHandVisualMessage(game, targetPlayerNum, interaction.client);
+  await updateDiscardPileMessage(game, targetPlayerNum, interaction.client);
+  await logGameAction(game, interaction.client, `**Comm Disruption** — <@${interaction.user.id}> cancelled **${playedCard}**! Discard that card and cancel its effects.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  saveGames();
+}
+
+/**
+ * C14: Handler for "Skip" Comm Disruption button.
+ */
+export async function handleCommDisruptionSkip(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  const gameId = interaction.customId.replace('comm_disruption_skip_', '');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  delete game.pendingCommDisruptionPrompt;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
   saveGames();
 }
 

@@ -107,6 +107,13 @@ export async function handleEndEndOfRound(interaction, ctx) {
   game.endOfRoundWhoseTurn = null;
   game.dcFinishedPinged = {};
   game.pendingEndTurn = {};
+  // G102: Ready (un-exhaust) all Skirmish Upgrades BEFORE End of Round effects,
+  // so cards like Zillo Technique can be used during EOR triggers.
+  if (game.exhaustedSkirmishUpgrades) {
+    for (const msgId of Object.keys(game.exhaustedSkirmishUpgrades)) {
+      delete game.exhaustedSkirmishUpgrades[msgId];
+    }
+  }
   // Clear per-activation conditions (Stun, Weaken) from all figures at end of round.
   // Rules: Stun/Weaken removed at end of that figure's activation; each figure activates once per round,
   // so clearing at end of round is equivalent.

@@ -28,6 +28,7 @@ import { applyCondition, resetCondition, filterCondition, isConditionImmune, HAR
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces } from './movement.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum } from './player-helpers.js';
+import { checkDeckDiscardPassiveRedraws } from './cc-passive-redraw.js';
 
 /**
  * Compute BFS shortest path between two spaces, then detect hostile figures
@@ -7183,6 +7184,61 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Push: ${n}`), choiceValues: validKeys };
   }
 
+  // dcSpecial: hopOnPush (Kuiil Hop On!) — pick friendly SMALL figure, push up to 4 spaces
+  if (entry.type === 'dcSpecial' && entry.hopOnPush) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Phase 3: move target figure to chosen space
+    if (chosenFigureKey && chosenSpace) {
+      const targetPn = playerNum; // always friendly
+      const oldPos = game.figurePositions?.[targetPn]?.[chosenFigureKey];
+      const destLower = String(chosenSpace).toLowerCase();
+      game.figurePositions = game.figurePositions || {};
+      game.figurePositions[targetPn] = game.figurePositions[targetPn] || {};
+      game.figurePositions[targetPn][chosenFigureKey] = destLower;
+      const dcName = dcNameFromFigureKey(chosenFigureKey);
+
+      const { pathStr, warnings } = computePushPathAndWarnings(game, oldPos, destLower, targetPn);
+      let logMsg = `**Hop On!** — **${dcName}** pushed from **${String(oldPos || '?').toUpperCase()}** to **${String(chosenSpace).toUpperCase()}**${pathStr}.`;
+      if (warnings.length > 0) {
+        const warnList = warnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
+        logMsg += `\n⚠️ Exits adjacency to: ${warnList} — opponent may play **Parting Blow** or similar interrupts.`;
+      }
+      return { applied: true, logMessage: logMsg, refreshBoard: true };
+    }
+    // Phase 2: space picker within 4 of chosen figure's current position
+    if (chosenFigureKey) {
+      const targetPos = game.figurePositions?.[playerNum]?.[chosenFigureKey];
+      if (!targetPos) return { applied: false, manualMessage: 'Could not locate target figure position. Push manually.' };
+      const boardState = getBoardStateForMovement(game, null);
+      if (!boardState?.mapSpaces) return { applied: false, manualMessage: 'Push manually (no map data).' };
+      const occ = boardState.occupiedSet;
+      const occArr = occ instanceof Set ? [...occ] : (occ || []);
+      const reachable = getReachableSpaces(targetPos, 4, boardState.mapSpaces, occArr);
+      const validSpaces = reachable.map((s) => String(s).toLowerCase()).filter((s) => !occArr.includes(s));
+      if (!validSpaces.length) return { applied: false, manualMessage: 'No empty spaces within 4 to push the figure to.' };
+      return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**Hop On!** — Choose destination (within 4 of ${dcNameFromFigureKey(chosenFigureKey)}):`, chosenFigureKey };
+    }
+    // Phase 1: pick friendly SMALL figure
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const meta = msgId ? dcMessageMeta.get(msgId) : null;
+    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    const dcEffects = getDcEffects();
+    const validKeys = [];
+    const validLabels = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos || actKeys.includes(fk)) continue;
+      const dcN = dcNameFromFigureKey(fk);
+      const eff = dcEffects[dcN] || {};
+      const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
+      if (kws.includes('MASSIVE') || kws.includes('LARGE')) continue; // only SMALL figures
+      validKeys.push(fk); validLabels.push(dcN);
+    }
+    if (!validKeys.length) return { applied: false, manualMessage: 'No friendly SMALL figures to push.' };
+    return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Push: ${n}`), choiceValues: validKeys };
+  }
+
   // ccEffect: devotionEffect (Devotion) — pick adjacent friendly; search deck for matching CC; draw + shuffle
   if (entry.type === 'ccEffect' && entry.devotionEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
@@ -7600,7 +7656,7 @@ export function resolveAbility(abilityId, context) {
     // Grant free attack
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[msgId] = true;
-    // Mark as used this move (cleared at activation cleanup)
+    // Mark as used this move (cleared when a new Move action starts — G36)
     game.partingShotTriggered[msgId] = true;
     // Apply Stun to activating figure
     const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);

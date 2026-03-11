@@ -15,6 +15,7 @@ import {
   ccDiscardKey, ccHandKey, ccAttachmentsKey, vpKey,
   opponentPlayerNum, getInitiativePlayerNum,
 } from '../game/player-helpers.js';
+import { checkSurgePassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 
@@ -3760,6 +3761,19 @@ export async function handleCombatSurge(interaction, ctx) {
       combat.surgeSpentCount[idx] = (combat.surgeSpentCount[idx] || 0) + 1;
       const label = getSurgeLabel(key);
       await thread.send(`**Surge spent (${cost}):** ${label}`).catch(discordCatch);
+      // CC Passive Redraw: surge-triggered (Knowledge and Defense, Targeting Network)
+      {
+        const _prResult = checkSurgePassiveRedraws(game, attackerPlayerNum, combat.attackerDcName);
+        for (const _prCard of _prResult.redrawn) {
+          await thread.send(`**Passive Redraw** — **${_prCard}** re-drawn from discard pile (surge spent by ${combat.attackerDcName}).`).catch(discordCatch);
+          if (ctx.logGameAction && ctx.client) {
+            await ctx.logGameAction(game, ctx.client, `**Passive Redraw** — **${_prCard}** re-drawn from discard (surge spent by **${combat.attackerDcName}**).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+          }
+          if (ctx.updateHandVisualMessage) {
+            await ctx.updateHandVisualMessage(game, attackerPlayerNum, ctx.client || interaction.client).catch(discordCatch);
+          }
+        }
+      }
       // Hunter Protocol: offer to trigger the same surge ability once more
       if (game.surgeDoublingActive?.[attackerPlayerNum] && key && !combat.surgeDoubledAbility && !key.startsWith('double:') && key !== 'utinni_vp_1') {
         if ((combat.surgeRemaining || 0) >= cost) {

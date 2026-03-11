@@ -2369,6 +2369,7 @@
       "category": "dc-special",
       "label": "Hop On!",
       "description": "Push a friendly SMALL figure up to 4 spaces.",
+      "hopOnPush": true,
       "wiredStatus": "wired"
     },
     "Hostile Negotiation": {

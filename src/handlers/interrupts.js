@@ -5,7 +5,7 @@
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
-import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, getMaxPowerTokens } from '../game/index.js';
+import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, getMaxPowerTokens, applyCondition, filterCondition, HARMFUL_CONDITIONS } from '../game/index.js';
 import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -842,5 +842,49 @@ export async function handleBlackMarket(interaction, ctx) {
   if (_bmChoice === 'draw' || _bmChoice === 'discard') {
     await checkWinConditions(game, client);
   }
+  saveGames();
+}
+
+// ── Punishing Strike (Skirmish Upgrade) ─────────────────────────────────────
+// ps_replace_{gameId}_{targetFigureKey}_{originalCondition}_{newCondition|skip}
+export async function handlePunishingStrike(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
+  const m = interaction.customId.match(/^ps_replace_([^_]+)_(.+?)_(Stun|Bleed|Weaken)_(Stun|Bleed|Weaken|skip)$/);
+  if (!m) return;
+  const [, gameId, targetFigureKey, originalCondition, choice] = m;
+  const game = getGame(gameId);
+  if (!game) return;
+  const pending = game.pendingPunishingStrike;
+  if (!pending) {
+    await interaction.message.edit({ content: '**Punishing Strike** — No longer pending.', components: [] }).catch(discordCatch);
+    return;
+  }
+  const attackerPn = pending.attackerPlayerNum;
+  const playerId = getPlayerId(game, attackerPn);
+  if (!canActAsPlayer(interaction, game, attackerPn)) {
+    await interaction.reply({ content: 'Only the attacker\'s player can choose.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  if (choice === 'skip') {
+    delete game.pendingPunishingStrike;
+    await interaction.message.edit({ content: `**Punishing Strike** — Skipped. **${originalCondition}** remains on **${dcNameFromFigureKey(targetFigureKey)}**.`, components: [] }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+
+  // Exhaust Punishing Strike
+  const _psExhKey = `ps_army_p${attackerPn}`;
+  game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+  game.exhaustedSkirmishUpgrades[_psExhKey] = [...(game.exhaustedSkirmishUpgrades[_psExhKey] || []), 'Punishing Strike'];
+
+  // Remove original condition, apply new one
+  filterCondition(game, targetFigureKey, originalCondition);
+  applyCondition(game, targetFigureKey, choice);
+
+  const targetName = dcNameFromFigureKey(targetFigureKey);
+  delete game.pendingPunishingStrike;
+  await interaction.message.edit({ content: `**Punishing Strike** — Exhausted: replaced **${originalCondition}** with **${choice}** on **${targetName}**.`, components: [] }).catch(discordCatch);
+  await logGameAction(game, client, `**[Punishing Strike]** — Replaced **${originalCondition}** with **${choice}** on **${targetName}**.`, { phase: 'ROUND', icon: 'card' });
   saveGames();
 }

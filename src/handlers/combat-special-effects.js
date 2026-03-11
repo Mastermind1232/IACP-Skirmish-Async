@@ -5,8 +5,9 @@
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { reduceHp, awardKillVp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey, checkNefariousGains, applyCondition } from '../game/index.js';
-import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, removeFigurePosition } from '../game/player-helpers.js';
+import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, ccDiscardKey, removeFigurePosition } from '../game/player-helpers.js';
 import { getDcKeywords } from '../data-loader.js';
+import { checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch } from '../error-handling.js';
 import { requirePlayer } from '../utils/guards.js';
 
@@ -211,7 +212,14 @@ export async function handleBleedResolve(interaction, ctx) {
     }
     const discardedCard = deck.splice(0, 1)[0];
     game[deckKey] = deck;
+    const bleedDiscardKey = ccDiscardKey(playerNum);
+    game[bleedDiscardKey] = [...(game[bleedDiscardKey] || []), discardedCard];
     await logGameAction(game, interaction.client, `\u{1FA78} **Bleeding** — **${dcName}** prevented 1 damage (discarded **${discardedCard}** from deck top).`, { phase: 'ROUND', icon: 'card' });
+    // CC Passive Redraw: deck-discard trigger (Built on Hope)
+    const _bprResult = checkDeckDiscardPassiveRedraws(game, playerNum, discardedCard);
+    for (const _bprCard of _bprResult.redrawn) {
+      await logGameAction(game, interaction.client, `**Passive Redraw** — **${_bprCard}** re-drawn from discard (discarded from deck).`, { phase: 'ROUND', icon: 'card' });
+    }
   }
   filterCondition(game, figureKey, 'Bleed');
   await interaction.message.edit({ components: [] }).catch(discordCatch);

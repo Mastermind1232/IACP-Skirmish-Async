@@ -106,6 +106,8 @@ import {
   handleNegationLetResolve,
   handleCelebrationPlay,
   handleCelebrationPass,
+  handleCommDisruptionPlay,
+  handleCommDisruptionSkip,
 } from './cc-hand.js';
 import {
   handleBotmenuKill,
@@ -115,7 +117,7 @@ import {
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
-import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket } from './interrupts.js';
+import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike } from './interrupts.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
 import {
   handleBleedResolve,
@@ -299,6 +301,8 @@ register('negation_play_', handleNegationPlay, 'ccHand');
 register('negation_let_resolve_', handleNegationLetResolve, 'ccHand');
 register('celebration_play_', handleCelebrationPlay, 'ccHand');
 register('celebration_pass_', handleCelebrationPass, 'ccHand');
+register('comm_disruption_play_', handleCommDisruptionPlay, 'ccHand');
+register('comm_disruption_skip_', handleCommDisruptionSkip, 'ccHand');
 
 // --- Botmenu ---
 register('botmenu_kill_', handleBotmenuKill, 'botmenu');
@@ -369,6 +373,7 @@ register('bel_reorder_1_', handleBelReorder, 'interrupts');
 register('bel_reorder_2_', handleBelReorder, 'interrupts');
 register('ab_blade_pick_', handleAssassinsBladePickTarget, 'interrupts');
 register('sf_mp_pick_', handleSuppressiveFireMpPick, 'interrupts');
+register('ps_replace_', handlePunishingStrike, 'interrupts');
 register('force_slow_pick_', handleForceSlowPick, 'interrupts');
 register('excavation_pick_', handleExcavationPick, 'interrupts');
 register('bm_draw_', handleBlackMarket, 'interrupts');
@@ -548,7 +553,7 @@ export {
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
-export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket } from './interrupts.js';
+export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike } from './interrupts.js';
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
 export {
   handleBleedResolve,
