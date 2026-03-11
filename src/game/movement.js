@@ -192,7 +192,21 @@ export function getBoardStateForMovement(game, excludeFigureKey = null) {
       if (!openedSet.has(ek)) movementBlockingSet.add(ek);
     }
   }
-  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, spacesSet };
+  // G64: Track cells occupied by Massive figures (Massive cannot enter other Massive)
+  const massiveOccupiedSet = new Set();
+  const poses = game.figurePositions || { 1: {}, 2: {} };
+  for (const p of [1, 2]) {
+    for (const [k, coord] of Object.entries(poses[p] || {})) {
+      if (k === excludeFigureKey) continue;
+      const dn = dcNameFromFigureKey(k);
+      const kws = getDcKeywords()?.[dn] || [];
+      if (kws.some((kw) => String(kw).toUpperCase() === 'MASSIVE')) {
+        const sz = game.figureOrientations?.[k] || getFigureSize(dn);
+        for (const cell of getFootprintCells(coord, sz)) massiveOccupiedSet.add(normalizeCoord(cell));
+      }
+    }
+  }
+  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, spacesSet, massiveOccupiedSet };
 }
 
 export function getMovementProfile(dcName, figureKey, game) {
@@ -460,6 +474,10 @@ export function computeMovementCache(startCoord, mpLimit, board, profile) {
     queue.sort((a, b) => a.cost - b.cost);
     const current = queue.shift();
     if (current.cost > mpLimit) continue;
+    // G64: Massive figures cannot enter spaces occupied by other Massive figures
+    const hitsMassive = profile.isMassive && board.massiveOccupiedSet &&
+      current.footprint.some((cell) => board.massiveOccupiedSet.has(cell));
+    if (hitsMassive) continue; // skip entirely — cannot pass through or end here
     const isOccupied = current.footprint.some((cell) => board.occupiedSet.has(cell));
     const canEnd = !isOccupied || profile.canEndOnOccupied;
     nodes.set(current.key, { ...current, isOccupied, canEnd });
@@ -662,6 +680,9 @@ export async function resolveMassivePush(game, profile, figureKey, playerNum, ne
     }
   }
   if (overlaps.length > 0) {
-    await logGameAction(game, client, `Massive figure pushed ${overlaps.length} figure(s) aside.`, { icon: 'move', phase: 'ROUND' });
+    // G66-G68: After Massive ends on occupied space and pushes, lock voluntary movement for rest of phase
+    game.massiveMovementLocked = game.massiveMovementLocked || {};
+    game.massiveMovementLocked[figureKey] = true;
+    await logGameAction(game, client, `Massive figure pushed ${overlaps.length} figure(s) aside. Cannot voluntarily move again this phase.`, { icon: 'move', phase: 'ROUND' });
   }
 }

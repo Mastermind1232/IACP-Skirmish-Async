@@ -1196,6 +1196,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** is **Stunned** and cannot Move or Attack this activation.`, ephemeral: true }).catch(discordCatch);
         return;
       }
+      // G66-G68: Massive figures cannot voluntarily move again after pushing figures this phase
+      if (game.massiveMovementLocked?.[figureKey]) {
+        await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** pushed figures after ending movement and cannot voluntarily move again this phase.`, ephemeral: true }).catch(discordCatch);
+        return;
+      }
       const playerNum = meta.playerNum;
       const pos = game.figurePositions?.[playerNum]?.[figureKey];
       if (!pos) {
@@ -2081,6 +2086,43 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     return;
   }
 
+  // Lure of the Dark Side Phase 2: hostile chosen → directly enter attack flow (Lure = attack only)
+  if (resolveResult.applied && resolveResult.lureActionPick) {
+    const lure = game.pendingLure;
+    if (!lure) {
+      await interaction.followUp({ content: 'Lure state lost.', ephemeral: true }).catch(discordCatch);
+      saveGames();
+      return;
+    }
+    // Convert pendingLure to pendingFalseOrders format for combat reuse
+    game.pendingFalseOrders = {
+      controlledFigureKey: lure.controlledFigureKey,
+      controlledPlayerNum: lure.controlledPlayerNum,
+      controllerPlayerNum: lure.controllerPlayerNum,
+      maxRange: lure.maxRange || 4,
+      postAttackStrain: lure.postAttackStrain || 2,
+      isLure: true,
+    };
+    delete game.pendingLure;
+    // Auto-trigger attack flow (skip move/attack choice — Lure is attack-only)
+    const controlledName = dcNameFromFigureKey(lure.controlledFigureKey);
+    const atkBtn = new ButtonBuilder()
+      .setCustomId(`false_orders_action_${gameId}_${msgId}_attack`)
+      .setLabel(`Attack with ${controlledName}`)
+      .setStyle(ButtonStyle.Danger);
+    const skipBtn = new ButtonBuilder()
+      .setCustomId(`false_orders_action_${gameId}_${msgId}_skip`)
+      .setLabel('Skip (no attack)')
+      .setStyle(ButtonStyle.Secondary);
+    await interaction.followUp({
+      content: `**Lure of the Dark Side** — **${controlledName}** gained 2 Hit Tokens. Choose a target to attack (within 4 spaces):`,
+      components: [new ActionRowBuilder().addComponents(atkBtn, skipBtn)],
+      ephemeral: false,
+    }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+
   // Push ability Phase 2: figure chosen, now pick landing space
   if (!resolveResult.applied && resolveResult.requiresSpaceChoice && Array.isArray(resolveResult.validSpaces) && resolveResult.validSpaces.length > 0) {
     if (getSpaceChoiceRows && getMapAttachmentForSpaces) {
@@ -2440,7 +2482,7 @@ export async function handleBoRiflePick(interaction, ctx) {
  * customId: false_orders_action_{gameId}_{msgId}_{move|attack}
  */
 export async function handleFalseOrdersAction(interaction, ctx) {
-  const m = interaction.customId.match(/^false_orders_action_([^_]+)_([^_]+)_(move|attack)$/);
+  const m = interaction.customId.match(/^false_orders_action_([^_]+)_([^_]+)_(move|attack|skip)$/);
   if (!m) return;
   const [, gameId, msgId, choice] = m;
   const {
@@ -2454,8 +2496,8 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const fo = game.pendingFalseOrders;
-  if (!fo || fo.murneRinMsgId !== msgId) {
-    await interaction.followUp({ content: 'No pending False Orders.', ephemeral: true }).catch(discordCatch);
+  if (!fo || (!fo.isLure && fo.murneRinMsgId !== msgId)) {
+    await interaction.followUp({ content: 'No pending False Orders / Lure.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const { controlledFigureKey, controlledPlayerNum, controllerPlayerNum } = fo;
@@ -2463,6 +2505,22 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   const controlledName = dcNameFromFigureKey(controlledFigureKey);
   const controlledStats = getDcStats(controlledName);
   const controlledPos = game.figurePositions?.[controlledPlayerNum]?.[controlledFigureKey];
+
+  // Lure skip: hostile suffers 2 strain anyway (per card rules, strain happens regardless)
+  if (choice === 'skip') {
+    if (fo.isLure && fo.postAttackStrain > 0) {
+      const { applyStrainToFigure } = ctx;
+      if (applyStrainToFigure) {
+        await applyStrainToFigure(game, controlledPlayerNum, controlledFigureKey, fo.postAttackStrain, ctx.logGameAction, ctx.client, ctx.dcHealthState, ctx.dcMessageMeta);
+      }
+      await interaction.followUp({ content: `**Lure of the Dark Side** — Skipped attack. **${controlledName}** suffers ${fo.postAttackStrain} Strain.`, ephemeral: false }).catch(discordCatch);
+    } else {
+      await interaction.followUp({ content: `Skipped.`, ephemeral: false }).catch(discordCatch);
+    }
+    delete game.pendingFalseOrders;
+    saveGames();
+    return;
+  }
 
   if (choice === 'move') {
     if (!controlledPos) {
@@ -2515,7 +2573,9 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   const controlledEff = getDcEffects()[controlledName] || getDcEffects()[controlledName?.replace(/\s*\[.*\]\s*$/, '')];
   const controlledKws = (controlledEff?.keywords || []).map((k) => String(k).toUpperCase());
   const foHasReach = controlledKws.includes('REACH') || (controlledEff?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || _hasFuryReach(game, controlledPlayerNum, controlledKws);
-  const foEffectiveMaxRange = foHasReach && foMaxRange < 2 ? 2 : foMaxRange;
+  let foEffectiveMaxRange = foHasReach && foMaxRange < 2 ? 2 : foMaxRange;
+  // Lure of the Dark Side: cap range at 4 (or whatever maxRange is set)
+  if (fo.isLure && fo.maxRange) foEffectiveMaxRange = Math.min(foEffectiveMaxRange, fo.maxRange);
   const ms = getMapSpaces(game.selectedMap?.id);
   if (!ms) {
     await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);

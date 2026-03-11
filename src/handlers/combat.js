@@ -4088,8 +4088,8 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const fo = game.pendingFalseOrders;
-  if (!fo || fo.murneRinMsgId !== msgId) {
-    await interaction.followUp({ content: 'No pending False Orders.', ephemeral: true }).catch(discordCatch);
+  if (!fo || (!fo.isLure && fo.murneRinMsgId !== msgId)) {
+    await interaction.followUp({ content: 'No pending False Orders / Lure.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const { controllerPlayerNum, controlledFigureKey, controlledPlayerNum } = fo;
@@ -4160,12 +4160,15 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     defenseRoll: null,
     attackTargetMsgId: interaction.message.id,
     falseOrdersControllerPlayerNum: controllerPlayerNum,
+    isLure: !!fo.isLure,
+    lurePostAttackStrain: fo.postAttackStrain || 0,
   };
   const controlledEff = getDcEffects()[controlledName] || getDcEffects()[controlledName?.replace(/\s*\[.*\]\s*$/, '')];
   const defEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
   applyDcPassivesToCombat(game.pendingCombat, controlledStats?.passives || [], targetStats?.passives || []);
-  await interaction.message.edit({ content: '**False Orders — Attack declared**. See thread in Game Log.', components: [] }).catch(discordCatch);
-  if (logGameAction) await logGameAction(game, client, `⚔️ **False Orders** — P${controllerPlayerNum} controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  const abilityLabel = fo.isLure ? 'Lure of the Dark Side' : 'False Orders';
+  await interaction.message.edit({ content: `**${abilityLabel} — Attack declared**. See thread in Game Log.`, components: [] }).catch(discordCatch);
+  if (logGameAction) await logGameAction(game, client, `⚔️ **${abilityLabel}** — P${controllerPlayerNum} controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   saveGames();
 }
 

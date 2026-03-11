@@ -4379,6 +4379,71 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: lureOfTheDarkSide (Lure of the Dark Side) — G25-G28, C3
+  // Choose hostile figure in LOS, give +2 Hit tokens, perform attack with that figure, then 2 Strain.
+  // Phase 1: find hostiles in LOS from activating figure, return picker
+  // Phase 2: chosen hostile → set up pendingLure for combat delegation (like False Orders)
+  if (entry.type === 'ccEffect' && entry.lureOfTheDarkSide) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey, hasLineOfSight: losCheck, getMapSpaces: getMs } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const oppNum = opponentPlayerNum(playerNum);
+    // Find activating figure (the FORCE USER playing this card)
+    const activatingMsgId = game.dcActionsData ? Object.keys(game.dcActionsData).find(mid => game.dcActionsData[mid]?.threadId) : null;
+    const activatingMeta = activatingMsgId ? dcMessageMeta.get(activatingMsgId) : null;
+    const activatingFk = activatingMeta ? `${activatingMeta.dcName}-${(activatingMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '0'}-0` : null;
+    const activatingPos = activatingFk ? game.figurePositions?.[playerNum]?.[activatingFk] : null;
+
+    if (chosenFigureKey) {
+      // Phase 2: Player chose the hostile figure — set up Lure attack delegation
+      const hostilePos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
+      if (!hostilePos) return { applied: false, manualMessage: 'Hostile figure has no position.' };
+      // Grant +2 Hit power tokens to the hostile figure
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[chosenFigureKey] = game.figurePowerTokens[chosenFigureKey] || [];
+      game.figurePowerTokens[chosenFigureKey].push('Hit', 'Hit');
+      // Set up Lure attack (analogous to False Orders)
+      game.pendingLure = {
+        controllerPlayerNum: playerNum,        // force user's player
+        controlledFigureKey: chosenFigureKey,   // hostile being controlled
+        controlledPlayerNum: oppNum,            // hostile's owner
+        maxRange: 4,                            // target must be within 4 spaces
+        postAttackStrain: 2,                    // hostile suffers 2 strain after attack
+      };
+      return {
+        applied: true,
+        lureActionPick: true,
+        logMessage: `**Lure of the Dark Side** — **${dcNameFromFigureKey(chosenFigureKey)}** gains 2 Hit Tokens. ${dcNameFromFigureKey(activatingFk || '')} will perform an attack with that figure.`,
+      };
+    }
+
+    // Phase 1: find hostile figures in activating figure's LOS
+    if (!activatingPos) return { applied: false, manualMessage: 'Cannot determine activating figure position for LOS check.' };
+    const hostilePoses = game.figurePositions?.[oppNum] || {};
+    const mapId = game.selectedMap?.id;
+    if (!mapId) return { applied: false, manualMessage: 'No map selected.' };
+    const mapSpaces = mapId && getMs ? getMs(mapId) : null;
+    const candidates = [];
+    for (const [fk, pos] of Object.entries(hostilePoses)) {
+      // Check LOS from activating figure to hostile
+      const inLos = losCheck && mapSpaces ? losCheck(activatingPos, pos, mapSpaces) : true;
+      if (inLos) {
+        candidates.push({ figureKey: fk, label: dcNameFromFigureKey(fk) });
+      }
+    }
+    if (candidates.length === 0) return { applied: false, manualMessage: 'No hostile figures in line of sight.' };
+    if (candidates.length === 1) {
+      // Auto-select the only candidate
+      return resolveAbility(entry, { ...context, chosenFigureKey: candidates[0].figureKey });
+    }
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceLabel: 'Choose a hostile figure in LOS for Lure of the Dark Side:',
+      choices: candidates.map(c => c.label),
+      choiceValues: candidates.map(c => c.figureKey),
+    };
+  }
+
   // ccEffect: chooseAdjacentHostileThen — choose one adjacent hostile figure, apply damage and/or strain.
   // Supports: damage, strain, scaleStrainToRound, weaken/stun/bleed (conditions on target), selfStrain (cost),
   //           healSelfIfTrait: {trait, amount} — recover N damage if activating DC has the named trait.

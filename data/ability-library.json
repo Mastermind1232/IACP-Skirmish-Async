@@ -2861,10 +2861,8 @@
     },
     "Lure of the Dark Side": {
       "type": "ccEffect",
-      "label": "Hostile +2 Hit Tokens, attack with that figure, then 2 Strain",
-      "chooseAdjacentHostileThen": {
-        "strain": 2
-      },
+      "label": "Lure: Choose hostile in LOS, +2 Hit Tokens, attack with that figure, then 2 Strain",
+      "lureOfTheDarkSide": true,
       "wiredStatus": "wired"
     },
     "Mandalorian Steel": {

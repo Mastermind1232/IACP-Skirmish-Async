@@ -70,6 +70,7 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'tripodAttacked',
   'activationStartPositions',
   'overdriveUsedThisActivation',
+  'massiveMovementLocked',
 ];
 
 /**
@@ -195,6 +196,7 @@ const ROUND_OBJECT_FLAGS = [
   'activationDamagedFigures',
   'pendingBombDrop',
   'crossTrainingExhausted',
+  'massiveMovementLocked',
 ];
 
 const ROUND_NULL_FLAGS = [

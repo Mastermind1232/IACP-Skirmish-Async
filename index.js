@@ -4014,6 +4014,18 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
 async function finishCombatResolution(game, combat, resultText, embedRefreshMsgIds, client) {
   const thread = await client.channels.fetch(combat.combatThreadId);
   await thread.send(resultText);
+  // Lure of the Dark Side: after attack resolves, hostile figure suffers strain (damage to HP)
+  if (combat.isLure && combat.lurePostAttackStrain > 0 && combat.attackerFigureKey) {
+    const lureFk = combat.attackerFigureKey;
+    const lurePn = combat.attackerPlayerNum;
+    const lureMsgId = findDcMessageIdForFigure(game.gameId, lurePn, lureFk);
+    if (lureMsgId) {
+      const { figureIndex: lureFi } = parseFigureKey(lureFk);
+      reduceHp(dcHealthState, game, lureMsgId, lureFi, combat.lurePostAttackStrain, lurePn);
+    }
+    await thread.send(`**Lure of the Dark Side** — **${combat.attackerDcName}** suffers ${combat.lurePostAttackStrain} Strain.`).catch(discordCatch);
+    await logGameAction(game, client, `**Lure of the Dark Side** — **${combat.attackerDcName}** suffers ${combat.lurePostAttackStrain} Strain after the attack.`, { phase: 'ROUND', icon: 'card' });
+  }
   // Hit and Run: add pending MP when attack resolves
   const pending = game.hitAndRunPendingMp;
   if (pending && pending.msgId === combat.attackerMsgId && pending.amount > 0) {
