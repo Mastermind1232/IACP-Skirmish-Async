@@ -4,8 +4,9 @@
  * concussive bolt, spread the pain, missile salvo.
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
-import { reduceHp, awardKillVp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey, checkNefariousGains } from '../game/index.js';
+import { reduceHp, awardKillVp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey, checkNefariousGains, applyCondition } from '../game/index.js';
 import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, removeFigurePosition } from '../game/player-helpers.js';
+import { getDcKeywords } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requirePlayer } from '../utils/guards.js';
 
@@ -38,6 +39,19 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
     const { figureIndex: figIdx } = parseFigureKey(t.figureKey);
     const { newHp, maxHp: splashMaxHp } = reduceHp(dcHealthState, game, mid, figIdx, totalEffect, t.playerNum);
     if (splashMaxHp === 0) continue;
+    // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage, become Focused
+    if (totalEffect >= 3 && newHp > 0) {
+      const _fokSplashDcList = getDcList(game, t.playerNum) || [];
+      if (_fokSplashDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]')) {
+        const _fokSplashName = dcNameFromFigureKey(t.figureKey);
+        const _fokSplashKws = (getDcKeywords(game)[_fokSplashName] || []).map(k => String(k).toUpperCase());
+        if (_fokSplashKws.includes('WOOKIEE')) {
+          if (applyCondition(game, t.figureKey, 'Focus')) {
+            await logGameAction(game, client, `**Fury of Kashyyyk** — **${_fokSplashName}** became **Focused** (suffered ${totalEffect} Damage from Indiscriminate Fire).`, { phase: 'ROUND', icon: 'card' });
+          }
+        }
+      }
+    }
     const parts = [];
     if (totalDmg > 0) parts.push(`${totalDmg} Damage`);
     if (totalStrain > 0) parts.push(`${totalStrain} Strain`);
@@ -371,6 +385,19 @@ export async function handleFightingKnifeTarget(interaction, ctx) {
   if (hits > 0 && target.msgId) {
     const { figureIndex: figIndex } = parseFigureKey(target.figureKey);
     const { newHp: newCur, wasDefeated: fkDefeated } = reduceHp(dcHealthState, game, target.msgId, figIndex, hits, target.playerNum);
+    // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage, become Focused
+    if (hits >= 3 && newCur > 0) {
+      const _fokFkDcList = getDcList(game, target.playerNum) || [];
+      if (_fokFkDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]')) {
+        const _fokFkName = dcNameFromFigureKey(target.figureKey);
+        const _fokFkKws = (getDcKeywords(game)[_fokFkName] || []).map(k => String(k).toUpperCase());
+        if (_fokFkKws.includes('WOOKIEE')) {
+          if (applyCondition(game, target.figureKey, 'Focus')) {
+            await logGameAction(game, client, `**Fury of Kashyyyk** — **${_fokFkName}** became **Focused** (suffered ${hits} Damage from Fighting Knife).`, { phase: 'ROUND', icon: 'card' });
+          }
+        }
+      }
+    }
     embedRefreshMsgIds.add(target.msgId);
     if (fkDefeated) {
       removeFigurePosition(game, target.playerNum, target.figureKey);
@@ -531,7 +558,7 @@ export async function handleMissileSalvoDie(interaction, ctx) {
 
 /** Missile Salvo done: missile_salvo_done_{gameId}_{msgId} */
 export async function handleMissileSalvoDone(interaction, ctx) {
-  const { getGame, saveGames, canActAsPlayer } = ctx;
+  const { getGame, saveGames, canActAsPlayer, dcMessageMeta, updateDcActionsMessage, client } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   const m = interaction.customId.match(/^missile_salvo_done_([^_]+)_(.+)$/);
   if (!m) return;
@@ -542,5 +569,24 @@ export async function handleMissileSalvoDone(interaction, ctx) {
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the activating player can end the salvo.')) return;
   delete game.pendingMissileSalvo[msgId];
   await interaction.message.edit({ components: [] }).catch(discordCatch);
+  // Dubious Counterparts (Doctor Aphra): after a friendly DROID resolves Missile Salvo,
+  // that figure may perform 1 additional action
+  const _dcAphraDcList = getDcList(game, playerNum) || [];
+  const _dcAphraAlive = _dcAphraDcList.some(dc => dc?.dcName === 'Doctor Aphra') &&
+    Object.keys(game.figurePositions?.[playerNum] || {}).some(fk => fk.startsWith('Doctor Aphra-'));
+  if (_dcAphraAlive) {
+    const actionsData = game.dcActionsData?.[msgId];
+    if (actionsData) {
+      actionsData.remaining = Math.min((actionsData.total ?? 2) + 1, actionsData.remaining + 1);
+      if (updateDcActionsMessage) await updateDcActionsMessage(game, msgId, client || interaction.client);
+      const _dcMeta = dcMessageMeta?.get(msgId);
+      const _dcDisplayName = _dcMeta?.displayName || _dcMeta?.dcName || 'BT-1';
+      const _dcThreadId = actionsData.threadId;
+      const _dcThread = _dcThreadId ? await (client || interaction.client).channels.fetch(_dcThreadId).catch(() => null) : interaction.channel;
+      if (_dcThread) {
+        await _dcThread.send(`**Dubious Counterparts** (Doctor Aphra) — **${_dcDisplayName}** gains 1 additional action after resolving **Missile Salvo**.`).catch(discordCatch);
+      }
+    }
+  }
   saveGames();
 }

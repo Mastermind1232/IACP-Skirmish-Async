@@ -271,6 +271,7 @@ const CONTEXT_GROUPS = {
     'finishCombatResolution', 'ensureMovementBankMessage',
     'rollSingleAttackDie', 'getDcEffects', 'getMapSpaces', 'getFigureLabel',
     'filterCondition', 'isConditionImmune', 'applyCondition', 'HARMFUL_CONDITIONS',
+    'updateDcActionsMessage',
   ],
 };
 

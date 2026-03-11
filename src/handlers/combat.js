@@ -149,7 +149,7 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
   // Submit or Fight (Paz Vizsla): after suffering Strain damage, may return CCs from discard to heal
   {
     const _sofEff = getDcEffects?.()?.[dcName] || getDcEffects?.()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
-    if ((_sofEff?.specialAbilityIds || []).includes('submit_or_fight_paz') && newCur > 0) {
+    if ((_sofEff?.specialAbilityIds || []).includes('submit_or_fight_paz') && newCur > 0 && !game.restInPeaceActive) {
       const _sofDiscardKey = ccDiscardKey(playerNum);
       const _sofDiscard = game[_sofDiscardKey] || [];
       if (_sofDiscard.length > 0) {
@@ -630,10 +630,10 @@ export async function handleAttackTarget(interaction, ctx) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
       _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
     }
-    // Heir to the Jedi (Luke): reroll 1 atk die; +1 Hit on Ranged; Saber Strike Focus handled at declaration
+    // Heir to the Jedi (Luke): reroll 1 atk die; +1 Hit on Melee; Saber Strike Focus handled at declaration
     if (_atkUpgrades.includes('Heir to the Jedi')) {
       _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
-      if (isRanged) _pc.bonusHits = (_pc.bonusHits || 0) + 1;
+      if (!isRanged) _pc.bonusHits = (_pc.bonusHits || 0) + 1;
     }
     // Rogue Smuggler (Han Solo): reroll 1 atk die (Distracting loss handled separately)
     if (_atkUpgrades.includes('Rogue Smuggler')) {
@@ -3905,6 +3905,19 @@ export async function handleCleaveTarget(interaction, ctx) {
     const cleaveFigIndex = cleaveM ? parseInt(cleaveM[2], 10) : 0;
     const cleaveDmg = pending.surgeCleave || 0;
     const { newHp: newCCur, wasDefeated: cleaveDefeated } = reduceHp(dcHealthState, game, cleaveMsgId, cleaveFigIndex, cleaveDmg, cleavePlayerNum);
+    // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage, become Focused
+    if (cleaveDmg >= 3 && newCCur > 0) {
+      const _fokCleaveDcList = getDcList(game, cleavePlayerNum) || [];
+      if (_fokCleaveDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]')) {
+        const _fokCleaveName = dcNameFromFigureKey(cleaveFigureKey);
+        const _fokCleaveKws = (getDcKeywordsGlobal(game)[_fokCleaveName] || []).map(k => String(k).toUpperCase());
+        if (_fokCleaveKws.includes('WOOKIEE')) {
+          if (applyCondition(game, cleaveFigureKey, 'Focus')) {
+            await logGameAction(game, client, `**Fury of Kashyyyk** — **${_fokCleaveName}** became **Focused** (suffered ${cleaveDmg} Cleave Damage).`, { phase: 'ROUND', icon: 'card' });
+          }
+        }
+      }
+    }
     {
       const cleaveDcIds = getDcMessageIds(game, cleavePlayerNum);
       const cleaveDcList = getDcList(game, cleavePlayerNum);

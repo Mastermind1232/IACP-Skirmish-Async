@@ -632,6 +632,11 @@ export async function handleExcavationPick(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the DC owner may choose.')) return;
+  // Rest in Peace: block discard-pile retrieval
+  if (game.restInPeaceActive) {
+    await interaction.message.edit({ content: '**Excavation** — Blocked by **Rest in Peace** (cannot retrieve from discard piles this round).', components: [] }).catch(discordCatch);
+    return;
+  }
   const discardKey = ccDiscardKey(playerNum);
   const handKey = ccHandKey(playerNum);
   const discard = game[discardKey] || [];
@@ -719,6 +724,11 @@ export async function handleSubmitOrFight(interaction, ctx) {
   if (isUse) {
     const playerNum = meta?.playerNum || (game.player1Id === interaction.user.id ? 1 : 2);
     if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
+    // Rest in Peace: block discard-pile access
+    if (game.restInPeaceActive) {
+      await interaction.message.edit({ content: '**Submit or Fight** — Blocked by **Rest in Peace** (cannot access discard piles this round).', components: [] }).catch(discordCatch);
+      return;
+    }
     const discardKey = `p${playerNum}CcDiscard`;
     const discard = game[discardKey] || [];
     if (discard.length === 0) {

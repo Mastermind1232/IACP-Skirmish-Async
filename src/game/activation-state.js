@@ -256,6 +256,7 @@ const ROUND_NULL_FLAGS = [
   'pendingOrbitalBombardment',
   'pendingYHSIW',
   'powerfulInfluencePlayerNum',
+  'restInPeaceActive',
 ];
 
 const ROUND_ARRAY_FLAGS = [

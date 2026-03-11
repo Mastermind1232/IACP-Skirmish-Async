@@ -208,6 +208,11 @@ export async function handleMasteryPick(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   delete mastGame.pendingMastery;
   if (!isMasterySkip) {
+    // Rest in Peace: block discard-pile retrieval
+    if (mastGame.restInPeaceActive) {
+      const mastThread = await client.channels.fetch(mastCombat.combatThreadId).catch(() => null);
+      if (mastThread) await mastThread.send('**Mastery** — Blocked by **Rest in Peace** (cannot retrieve from discard piles this round).').catch(discordCatch);
+    } else {
     const mastCardIdx = parseInt(interaction.customId.split('_').pop(), 10);
     const mastCard = mastEl[mastCardIdx];
     if (mastCard) {
@@ -221,6 +226,7 @@ export async function handleMasteryPick(interaction, ctx) {
       const mastThread = await client.channels.fetch(mastCombat.combatThreadId).catch(() => null);
       if (mastThread) await mastThread.send(`**Mastery** — **${mastCard}** returned from discard to hand.`).catch(discordCatch);
       await updateHandChannelMessages(mastGame, client).catch(discordCatch);
+    }
     }
   }
   const mastCThread = await client.channels.fetch(mastCombat.combatThreadId).catch(() => null);

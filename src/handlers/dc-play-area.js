@@ -1994,6 +1994,20 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await thread.send(`**Expertise** — ${displayName} gains 1 extra action this activation.`).catch(discordCatch);
     }
   }
+  // Dubious Counterparts (Doctor Aphra): after a friendly DROID resolves Invasive Procedure,
+  // that figure may perform 1 additional action
+  if (buttonKey === 'dc_special_' && abilityId === 'invasive_procedure' && resolveResult.applied && actionsData) {
+    const playerNum = meta.playerNum;
+    const _dcAphraDcList = getDcList(game, playerNum) || [];
+    const _dcAphraAlive = _dcAphraDcList.some(dc => dc?.dcName === 'Doctor Aphra') &&
+      Object.keys(game.figurePositions?.[playerNum] || {}).some(fk => fk.startsWith('Doctor Aphra-'));
+    if (_dcAphraAlive) {
+      actionsData.remaining = Math.min((actionsData.total ?? DC_ACTIONS_PER_ACTIVATION) + 1, actionsData.remaining + 1);
+      await updateDcActionsMessage(game, msgId, client);
+      const thread = interaction.channel;
+      await thread.send(`**Dubious Counterparts** (Doctor Aphra) — **${displayName}** gains 1 additional action after resolving **Invasive Procedure**.`).catch(discordCatch);
+    }
+  }
   const manualMsg = resolveResult.manualMessage || 'Resolve manually (see rules).';
   const doneRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()

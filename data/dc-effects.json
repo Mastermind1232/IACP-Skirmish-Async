@@ -251,7 +251,7 @@
       "affiliation": "Any"
     },
     "[Heir to the Jedi]": {
-      "abilityText": "LUKE SKYWALKER ONLY\n\nWhile attacking, you may reroll 1 attack die.\n\nWhen you declare a Ranged attack, apply +1 Hit to the attack results.\n\nBefore you declare an attack using \"Saber Strike\" you become Focused.",
+      "abilityText": "LUKE SKYWALKER ONLY\n\nWhile attacking, you may reroll 1 attack die.\n\nWhen you declare a Melee attack, apply +1 Hit to the attack results.\n\nBefore you declare an attack using \"Saber Strike\" you become Focused.",
       "keywords": [
         "LUKE SKYWALKER"
       ],

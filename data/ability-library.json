@@ -1395,7 +1395,7 @@
       "type": "dcSpecial",
       "category": "passive",
       "label": "Dubious Counterparts",
-      "description": "Your army may include Scum DROID deployment cards. Army-building rule. Validated in validateArmyAffiliation.",
+      "description": "Your army may include Scum DROID deployment cards (army-building, validated in validateArmyAffiliation). After a friendly DROID resolves Invasive Procedure or Missile Salvo, that figure may perform 1 additional action. Wired in dc-play-area.js (Invasive Procedure) and combat-special-effects.js (Missile Salvo done).",
       "wiredStatus": "wired"
     },
     "durasteel_fist_dark_trooper": {
@@ -3800,6 +3800,7 @@
       "type": "ccEffect",
       "label": "At end of round when you discard this card: draw 1",
       "draw": 1,
+      "restInPeaceEffect": true,
       "wiredStatus": "wired"
     },
     "Retaliation": {

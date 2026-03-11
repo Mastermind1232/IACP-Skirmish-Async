@@ -291,7 +291,7 @@ Deep-audited against codebase on 2026-03-11 (2nd pass with full code reads).
 | M52 | PASS | Pounce only requires one space within counted range. |
 | M53 | PARTIAL | activation.js:1195-1199 posts notification. `overclock` and `spot_weld` in ability-library are `informational: true`. Junk Droid companion mechanic is honor-system only — no companion figure tracking or automated combat/movement. |
 | M54 | PASS | Aphra BT-1 and 0-0-0 deployed together via attachment logic. |
-| M55 | FAIL | No code grants Aphra bonus action when droids brought into play. `dubious_counterparts_aphra` in ability-library is army-building rule only. |
+| M55 | PASS | dc-play-area.js grants +1 action after 0-0-0 resolves Invasive Procedure; combat-special-effects.js grants +1 action after BT-1 ends Missile Salvo. Both check Doctor Aphra alive on same team. |
 | M56 | PASS | interrupts.js:621-650 — Excavation with `excavation_pick_` handlers. round.js:911-947 filters cost ≤1. |
 | M57 | PASS | Excavation fires at SOR only (round.js:528). Cannot replay a card excavated in the same SOR since it goes to hand, not play. |
 | M58 | PARTIAL | Excavation filters cost ≤1 but no explicit Fool Me Once interaction handler. |

@@ -994,6 +994,11 @@ async function _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, 
 }
 
 async function _postExcavationPicker(game, gameId, playerNum, dc, logGameAction, client) {
+  // Rest in Peace: block discard-pile access
+  if (game.restInPeaceActive) {
+    await logGameAction(game, client, `⛏️ **Excavation** — **${dc.displayName || dc.dcName}**: blocked by **Rest in Peace** (cannot retrieve from discard piles this round).`, { phase: 'ROUND', icon: 'round' });
+    return;
+  }
   const ownerId = getPlayerId(game, playerNum);
   const discard = getCcDiscard(game, playerNum) || [];
   // Filter to cost <= 1 cards

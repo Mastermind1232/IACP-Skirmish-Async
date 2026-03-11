@@ -171,6 +171,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'dcSpecial' && entry.shuffleOneDiscardToDeck) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (game.restInPeaceActive) return { applied: true, logMessage: '**Military Efficiency** — Blocked by **Rest in Peace** (cannot retrieve from discard this round).' };
     const discardKey = ccDiscardKey(playerNum);
     const deckKey = ccDeckKey(playerNum);
     const discard = game[discardKey] || [];
@@ -2394,6 +2395,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.returnDiscardToHand) {
     const { game, playerNum, cardName } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (game.restInPeaceActive) return { applied: false, manualMessage: '**Rest in Peace** is active — players cannot retrieve Command cards from discard piles this round.' };
     const discardKey = ccDiscardKey(playerNum);
     const handKey = ccHandKey(playerNum);
     const discard = (game[discardKey] || []).slice();
@@ -2548,6 +2550,19 @@ export function resolveAbility(abilityId, context) {
       };
     }
     return { applied: true, drewCards: drew };
+  }
+
+  // ccEffect: restInPeaceEffect (Rest in Peace) — block all discard-pile access for the round; draw 1 (end-of-round draw)
+  if (entry.type === 'ccEffect' && entry.restInPeaceEffect) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.restInPeaceActive = true;
+    const drew = drawCcCards(game, playerNum, entry.draw || 1);
+    return {
+      applied: true,
+      drewCards: drew.length > 0 ? drew : undefined,
+      logMessage: '**Rest in Peace** — Players cannot choose, play, or re-draw Command cards in discard piles this round.',
+    };
   }
 
   // ccEffect: Draw N cards (optionally conditional on figure trait, e.g. Officer's Training)
@@ -4948,6 +4963,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.shuffleOneFromDiscardIntoDeck) {
     const { game, playerNum, cardName } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (game.restInPeaceActive) return { applied: false, manualMessage: '**Rest in Peace** is active — players cannot retrieve Command cards from discard piles this round.' };
     const discardKey = ccDiscardKey(playerNum);
     const deckKey = ccDeckKey(playerNum);
     const discard = (game[discardKey] || []).slice();
@@ -7020,6 +7036,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.learnByExampleEffect) {
     const { game, playerNum, choiceIndex } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    if (game.restInPeaceActive) return { applied: false, manualMessage: '**Rest in Peace** is active — players cannot choose Command cards from discard piles this round.' };
     const allDiscards = [...new Set([...(game.player1CcDiscard || []), ...(game.player2CcDiscard || [])])];
     const forceUserCards = allDiscards.filter((card) => {
       const eff = getCcEffect(card);
@@ -8068,6 +8085,7 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.stealsFromOpponentDiscard) {
     const { game, playerNum, chosenOption } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    if (game.restInPeaceActive) return { applied: false, manualMessage: '**Rest in Peace** is active — players cannot choose Command cards from discard piles this round.' };
     const oppDiscardKey = ccDiscardKey(3 - playerNum);
     const oppDiscard = (game[oppDiscardKey] || []).slice();
     if (chosenOption == null) {

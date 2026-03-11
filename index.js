@@ -2607,7 +2607,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           }
         }
       }
-      // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage and survives, become Focused
+      // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage, become Focused
       if (damage >= 3 && newCur > 0) {
         const _fokDefDcList = getDcList(game, defenderPlayerNum) || [];
         const _fokHasFury = _fokDefDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]');
@@ -3179,6 +3179,19 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const { figureIndex: blastFigIndex } = parseFigureKey(blastFigureKey);
         const { newHp: newBCur, wasDefeated: blastDefeated } = reduceHp(dcHealthState, game, blastMsgId, blastFigIndex, effectiveBlast, blastPlayerNum);
         const { dcList: blastDcList, idx: blastIdx } = lookupFigureDcIndex(game, blastPlayerNum, blastFigureKey);
+        // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage, become Focused
+        if (effectiveBlast >= 3 && newBCur > 0) {
+          const _fokBlastDcList = getDcList(game, blastPlayerNum) || [];
+          if (_fokBlastDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]')) {
+            const _fokBlastName = dcNameFromFigureKey(blastFigureKey);
+            const _fokBlastKws = (getDcKeywords(game)[_fokBlastName] || []).map(k => String(k).toUpperCase());
+            if (_fokBlastKws.includes('WOOKIEE')) {
+              if (_applyCondition(game, blastFigureKey, 'Focus')) {
+                await logGameAction(game, client, `**Fury of Kashyyyk** — **${_fokBlastName}** became **Focused** (suffered ${effectiveBlast} Blast Damage).`, { phase: 'ROUND', icon: 'card' });
+              }
+            }
+          }
+        }
         if (blastDefeated) {
           removeFigurePosition(game, blastPlayerNum, blastFigureKey);
           if (game.figureConditions?.[blastFigureKey]) delete game.figureConditions[blastFigureKey];
@@ -3649,18 +3662,18 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     }
   }
 
-  // Stalk Prey: attacker gains +2 MP and +1 Hit Token on hit
+  // Stalk Prey: attacker gains +2 MP and +1 Hit Token after attack resolves
   if (hit && combat.surgeStalkPrey && combat.attackerMsgId) {
     game.movementBank = game.movementBank || {};
     const spBank = game.movementBank[combat.attackerMsgId] || { total: 0, remaining: 0 };
     spBank.total = (spBank.total ?? 0) + 2;
     spBank.remaining = (spBank.remaining ?? 0) + 2;
     game.movementBank[combat.attackerMsgId] = spBank;
-    game.figurePowerTokens = game.figurePowerTokens || {};
-    game.figurePowerTokens[combat.attackerFigureKey] = [...(game.figurePowerTokens[combat.attackerFigureKey] || []), 'Hit'];
+    grantPowerTokens(game, combat.attackerFigureKey, 'Hit', 1);
     await logGameAction(game, client, `**Stalk Prey** — **${combat.attackerDcName}** gained +2 MP and +1 Hit Token`, { phase: 'ROUND', icon: 'card' });
     await ensureMovementBankMessage(game, combat.attackerMsgId, client);
     embedRefreshMsgIds.add(combat.attackerMsgId);
+    delete combat.surgeStalkPrey;
   }
   // Squad Command: Focus an adjacent friendly TROOPER
   if (hit && combat.surgeSquadCommand && game.selectedMap?.id && combat.attackerFigureKey) {
@@ -4034,28 +4047,33 @@ async function checkPostCombatSurges(game, combat, resultText, embedRefreshMsgId
     const mastKey = `${combat.attackerFigureKey}_mastery`;
     if (!game.roundFigureAbilityUsed[mastKey]) {
       game.roundFigureAbilityUsed[mastKey] = true;
-      const mastPlayerNum = combat.attackerPlayerNum;
-      const mastDiscardKey = ccDiscardKey(mastPlayerNum);
-      const mastDiscard = game[mastDiscardKey] || [];
-      const mastEligible = mastDiscard.filter((cardName) => {
-        const entry = getCcEffect(cardName);
-        return entry && (entry.cost ?? 99) <= 1 && String(entry.playableBy || '').toUpperCase().includes('FORCE USER');
-      });
-      if (mastEligible.length === 0) {
-        await thread.send(`**Mastery** — No eligible FORCE USER Command cards (cost ≤ 1) in your discard pile.`).catch(discordCatch);
+      // Rest in Peace: block discard-pile retrieval
+      if (game.restInPeaceActive) {
+        await thread.send('**Mastery** — Blocked by **Rest in Peace** (cannot retrieve from discard piles this round).').catch(discordCatch);
       } else {
-        game.pendingMastery = { gameId: game.gameId, attackerPlayerNum: mastPlayerNum, discardKey: mastDiscardKey, eligible: mastEligible, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum };
-        const mastOwnerId = getPlayerId(game, mastPlayerNum);
-        const mastBtns = mastEligible.slice(0, 4).map((cardName, i) =>
-          new ButtonBuilder().setCustomId(`mastery_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Primary)
-        );
-        mastBtns.push(new ButtonBuilder().setCustomId(`mastery_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({
-          content: `<@${mastOwnerId}> **Mastery** — Choose a FORCE USER CC (cost ≤ 1) from your discard pile to return to hand:`,
-          allowedMentions: { users: [mastOwnerId] },
-          components: [new ActionRowBuilder().addComponents(mastBtns)],
-        }).catch(discordCatch);
-        return true;
+        const mastPlayerNum = combat.attackerPlayerNum;
+        const mastDiscardKey = ccDiscardKey(mastPlayerNum);
+        const mastDiscard = game[mastDiscardKey] || [];
+        const mastEligible = mastDiscard.filter((cardName) => {
+          const entry = getCcEffect(cardName);
+          return entry && (entry.cost ?? 99) <= 1 && String(entry.playableBy || '').toUpperCase().includes('FORCE USER');
+        });
+        if (mastEligible.length === 0) {
+          await thread.send(`**Mastery** — No eligible FORCE USER Command cards (cost ≤ 1) in your discard pile.`).catch(discordCatch);
+        } else {
+          game.pendingMastery = { gameId: game.gameId, attackerPlayerNum: mastPlayerNum, discardKey: mastDiscardKey, eligible: mastEligible, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum };
+          const mastOwnerId = getPlayerId(game, mastPlayerNum);
+          const mastBtns = mastEligible.slice(0, 4).map((cardName, i) =>
+            new ButtonBuilder().setCustomId(`mastery_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Primary)
+          );
+          mastBtns.push(new ButtonBuilder().setCustomId(`mastery_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+          await thread.send({
+            content: `<@${mastOwnerId}> **Mastery** — Choose a FORCE USER CC (cost ≤ 1) from your discard pile to return to hand:`,
+            allowedMentions: { users: [mastOwnerId] },
+            components: [new ActionRowBuilder().addComponents(mastBtns)],
+          }).catch(discordCatch);
+          return true;
+        }
       }
     }
   }
