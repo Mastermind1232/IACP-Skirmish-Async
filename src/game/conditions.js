@@ -15,6 +15,8 @@ export const HARMFUL_CONDITIONS = ['Stun', 'Bleed', 'Weaken'];
  */
 export function filterCondition(game, figureKey, cond) {
   if (!game.figureConditions?.[figureKey]) return;
+  // Disarm permanent Weakened: skip removal of Weaken if the figure has the Disarm lock
+  if (cond === 'Weaken' && game.disarmPermanentWeakened?.[figureKey]) return;
   game.figureConditions[figureKey] = game.figureConditions[figureKey].filter((c) => c !== cond);
   if (game.figureConditions[figureKey].length === 0) delete game.figureConditions[figureKey];
 }

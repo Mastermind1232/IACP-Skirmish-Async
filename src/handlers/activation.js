@@ -1328,7 +1328,8 @@ export async function handleConfirmActivate(interaction, ctx) {
       for (let fi = 0; fi < figures; fi++) {
         const fk = `${meta.dcName}-${dgIdx}-${fi}`;
         const conds = game.figureConditions?.[fk] || [];
-        const harmful = conds.filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c));
+        // Disarm permanent Weakened: exclude locked Weaken from removable choices
+        const harmful = conds.filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[fk]));
         for (const h of harmful) {
           _cpHarmfulEntries.push({ fk, condition: h, figIndex: fi });
         }
@@ -1764,7 +1765,8 @@ export async function handleActPassive(interaction, ctx) {
       }
       // Store pending and show heal vs discard choice
       game.pendingMotivation = { targetFk, gameId, msgId, playerNum: meta.playerNum };
-      const conds = (game.figureConditions?.[targetFk] || []).filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c));
+      // Disarm permanent Weakened: exclude locked Weaken from discardable choices
+      const conds = (game.figureConditions?.[targetFk] || []).filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[targetFk]));
       const btns = [
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_motivchoice_heal`).setLabel('Recover 1 Damage').setStyle(ButtonStyle.Primary),
       ];
@@ -1826,7 +1828,8 @@ export async function handleActPassive(interaction, ctx) {
       }
       // Show heal vs discard choice
       game.pendingTrustedAlly = { targetFk, gameId, msgId, playerNum: meta.playerNum };
-      const conds = (game.figureConditions?.[targetFk] || []).filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c));
+      // Disarm permanent Weakened: exclude locked Weaken from discardable choices
+      const conds = (game.figureConditions?.[targetFk] || []).filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[targetFk]));
       const btns = [
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tallychoice_heal`).setLabel('Recover 1 Damage').setStyle(ButtonStyle.Primary),
       ];

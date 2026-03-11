@@ -381,6 +381,59 @@ function validateAttachmentTargets(dcList) {
   return warnings;
 }
 
+// ── Unique upgrade warnings (test cases R5, R11, R41, I2, M3) ──
+
+/**
+ * Figure-to-upgrade mapping for figures that are typically expected to bring
+ * their unique skirmish upgrade. Deploying without the upgrade is legal but
+ * unusual, so we surface warnings (not errors).
+ *
+ * Keys are canonical DC figure names; values are { upgrade, label } where
+ * `upgrade` is the bracketed dc-effects key and `label` is a human-readable
+ * upgrade name.
+ */
+const EXPECTED_UPGRADES = [
+  { figure: 'Chewbacca',                  upgrade: '[Wookiee Avenger]',     label: 'Wookiee Avenger' },      // R5
+  { figure: 'Han Solo',                   upgrade: '[Rogue Smuggler]',      label: 'Rogue Smuggler' },       // R11
+  { figure: 'Luke Skywalker',             upgrade: '[Heir to the Jedi]',    label: 'Heir to the Jedi' },     // R41
+  { figure: 'Darth Vader',                upgrade: '[Driven by Hatred]',    label: 'Driven by Hatred' },     // I2
+  { figure: 'IG-88',                      upgrade: '[Focused on the Kill]', label: 'Focused on the Kill' },  // M3
+];
+
+/**
+ * Check whether figures with strongly-expected unique upgrades are deployed
+ * without those upgrades. Returns an array of warning strings (empty if all
+ * expected upgrades are present or the figures are absent).
+ *
+ * @param {{ dcList: string[] }} squad
+ * @returns {string[]} warning messages
+ */
+export function validateUpgradeWarnings(squad) {
+  const warnings = [];
+  const dcList = squad?.dcList || [];
+  if (!dcList.length) return warnings;
+
+  const dcEffects = getDcEffects();
+
+  // Resolve each DC entry to its canonical name
+  const resolvedNames = dcList.map((entry) => {
+    const name = resolveDcName(entry);
+    return resolveDcInput(name, dcEffects);
+  });
+
+  const nameSet = new Set(resolvedNames);
+
+  for (const { figure, upgrade, label } of EXPECTED_UPGRADES) {
+    // Check if the figure is in the army
+    if (!nameSet.has(figure)) continue;
+    // Check if the upgrade is in the army
+    if (nameSet.has(upgrade)) continue;
+    warnings.push(`"${figure}" is deployed without "${label}". This is legal but uncommon — did you forget to include it?`);
+  }
+
+  return warnings;
+}
+
 /**
  * Validate army affiliation consistency.
  * Determines the primary affiliation from non-"Any" DCs and warns about mismatches,

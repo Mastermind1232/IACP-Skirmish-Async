@@ -422,6 +422,19 @@ export async function handleAttackTarget(interaction, ctx) {
       _mysticHunterFired = true;
     }
   }
+  // Full of Rage (Krrsantan): auto-Focus before attacking if 6+ damage suffered
+  let _fullOfRageFired = false;
+  if ((_atkEff?.specialAbilityIds || []).includes('full_of_rage') && !attackerConds.includes('Focus')) {
+    const _forHpArr = dcHealthState?.get(msgId) || [];
+    const _forFigHp = _forHpArr[figureIndex];
+    const _forDmg = _forFigHp ? Math.max(0, (_forFigHp[1] ?? _forFigHp[0] ?? 0) - (_forFigHp[0] ?? 0)) : 0;
+    if (_forDmg >= 6) {
+      if (applyCondition(game, attackerFigureKey, 'Focus')) {
+        attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'green'] };
+        _fullOfRageFired = true;
+      }
+    }
+  }
   // Fly-By (Jet Trooper Elite): if target within 2 spaces, add 1 blue die
   let _flyByFired = false;
   if ((_atkEff?.passives || []).includes('Fly-By') && target.dist != null && target.dist <= 2) {
@@ -482,6 +495,7 @@ export async function handleAttackTarget(interaction, ctx) {
     components: [readyRow],
   });
   if (_mysticHunterFired) await thread.send(`🔮 **Mystic Hunter** — **${meta.dcName}** becomes **Focused** (+1 green die).`).catch(discordCatch);
+  if (_fullOfRageFired) await thread.send(`**Full of Rage** — Krrsantan becomes **Focused** before attacking (+1 green die).`).catch(discordCatch);
   if (_flyByFired) await thread.send(`🚀 **Fly-By** — Target within 2 spaces: +1 blue die to attack pool.`).catch(discordCatch);
   if (_aimFired) await thread.send(`🎯 **Aim** — Target already suffered damage this activation: +1 Hit, +2 Accuracy.`).catch(discordCatch);
   const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
@@ -624,6 +638,15 @@ export async function handleAttackTarget(interaction, ctx) {
     // Wookiee Avenger (Chewbacca): +1 Hit while attacking
     if (_atkUpgrades.includes('Wookiee Avenger')) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
+    }
+    // Cross Training (attacking): replace 1 attack die with a different color (exhaust — once per round)
+    if (_atkUpgrades.includes('Cross Training')) {
+      const _ctAtkExh = game.crossTrainingExhausted?.[msgId];
+      if (!_ctAtkExh) {
+        _pc.crossTrainingAttack = true;
+        game.crossTrainingExhausted = game.crossTrainingExhausted || {};
+        game.crossTrainingExhausted[msgId] = true;
+      }
     }
     // Guidance Systems (Mortar Trooper): optional -1 Hit, +2 Accuracy per use (multiple times per attack)
     if (_atkUpgrades.includes('Mortar Trooper')) {
@@ -1580,6 +1603,11 @@ export async function handleCombatRoll(interaction, ctx) {
     if (removeMax > 0) dice = dice.slice(0, Math.max(0, dice.length - removeMax));
     const keepMax = combat.attackPoolKeepMax;
     if (typeof keepMax === 'number' && keepMax > 0 && dice.length > keepMax) dice = dice.slice(0, keepMax);
+    // Cross Training (Skirmish Upgrade): replace 1 non-white attack die with white
+    if (combat.crossTrainingAttack) {
+      const _ctAtkIdx = dice.findIndex(c => c !== 'white');
+      if (_ctAtkIdx !== -1) dice[_ctAtkIdx] = 'white';
+    }
     const addYellowUntil = combat.attackPoolAddYellowUntilTotal;
     if (typeof addYellowUntil === 'number' && addYellowUntil > 0 && dice.length < addYellowUntil) {
       const toAdd = addYellowUntil - dice.length;

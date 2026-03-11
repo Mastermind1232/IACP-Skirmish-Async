@@ -3135,7 +3135,9 @@ export function resolveAbility(abilityId, context) {
     let discarded = 0;
     for (const fk of adjacent) {
       const existing = game.figureConditions[fk] || [];
-      const kept = existing.filter((c) => !HARMFUL.includes(c));
+      // Disarm permanent Weakened: preserve Weaken if locked by Disarm
+      const lockedWeaken = game.disarmPermanentWeakened?.[fk];
+      const kept = existing.filter((c) => !HARMFUL.includes(c) || (c === 'Weaken' && lockedWeaken));
       if (kept.length < existing.length) {
         game.figureConditions[fk] = kept.length ? kept : [];
         discarded += existing.length - kept.length;
@@ -3163,7 +3165,9 @@ export function resolveAbility(abilityId, context) {
     let discarded = 0;
     for (const fk of figureKeys) {
       const existing = game.figureConditions[fk] || [];
-      const kept = existing.filter((c) => !HARMFUL.includes(c));
+      // Disarm permanent Weakened: preserve Weaken if locked by Disarm
+      const lockedWeaken = game.disarmPermanentWeakened?.[fk];
+      const kept = existing.filter((c) => !HARMFUL.includes(c) || (c === 'Weaken' && lockedWeaken));
       if (kept.length < existing.length) {
         game.figureConditions[fk] = kept.length ? kept : [];
         discarded += existing.length - kept.length;
@@ -3420,7 +3424,8 @@ export function resolveAbility(abilityId, context) {
       }
       // At full HP — try discarding 1 harmful condition
       const conds = game.figureConditions?.[figKey] || [];
-      const harmful = conds.filter(c => harmfulConditions.includes(c));
+      // Disarm permanent Weakened: skip locked Weaken when choosing which condition to discard
+      const harmful = conds.filter(c => harmfulConditions.includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[figKey]));
       if (harmful.length > 0) {
         const removed = harmful[0];
         filterCondition(game, figKey, removed);
@@ -3661,7 +3666,8 @@ export function resolveAbility(abilityId, context) {
         }
       }
       const existing = game.figureConditions?.[fk] || [];
-      const harmful = existing.find((c) => HARMFUL.includes(c));
+      // Disarm permanent Weakened: skip locked Weaken when choosing which condition to discard
+      const harmful = existing.find((c) => HARMFUL.includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[fk]));
       if (harmful) {
         filterCondition(game, fk, harmful);
         parts.push(`discarded ${harmful}`);
@@ -4482,6 +4488,11 @@ export function resolveAbility(abilityId, context) {
       // Apply conditions to target
       if (targetConditions.length > 0) {
         for (const c of targetConditions) applyCondition(game, targetFk, c);
+      }
+      // Disarm: lock the Weakened condition so it cannot be removed until end of round
+      if (abilityId === 'Disarm' && targetConditions.includes('Weaken')) {
+        game.disarmPermanentWeakened = game.disarmPermanentWeakened || {};
+        game.disarmPermanentWeakened[targetFk] = true;
       }
       // Apply self-strain to activating figure(s)
       const refreshIds = [targetMsgId];

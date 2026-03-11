@@ -6,6 +6,7 @@ export {
   validateDeckLegal,
   normalizeSquadInput,
   validateArmyAffiliation,
+  validateUpgradeWarnings,
   resolveDcName,
   DC_POINTS_LEGAL,
   CC_CARDS_LEGAL,

@@ -197,6 +197,7 @@ const ROUND_OBJECT_FLAGS = [
   'pendingBombDrop',
   'crossTrainingExhausted',
   'massiveMovementLocked',
+  'disarmPermanentWeakened',
 ];
 
 const ROUND_NULL_FLAGS = [
