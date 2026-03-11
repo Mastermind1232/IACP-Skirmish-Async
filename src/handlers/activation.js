@@ -674,6 +674,20 @@ export async function handleConfirmActivate(interaction, ctx) {
     await interaction.followUp({ content: 'No activations remaining.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Strength in Numbers: enforce combined deployment cost <= 12
+  const sinData = game.strengthInNumbersData;
+  if (sinData && sinData.playerNum === meta.playerNum) {
+    const candidateCost = ctx.getDcStats?.(meta.dcName)?.cost ?? 0;
+    const combinedCost = (sinData.triggeringGroupCost || 0) + candidateCost;
+    if (combinedCost > 12) {
+      const displayName = meta.displayName || meta.dcName;
+      await interaction.followUp({
+        content: `**Strength in Numbers** — Combined deployment cost of **${sinData.triggeringGroupName || 'previous group'}** (${sinData.triggeringGroupCost}) + **${displayName}** (${candidateCost}) = **${combinedCost}**, which exceeds the 12-point cap. Choose a cheaper group.`,
+        ephemeral: true,
+      }).catch(discordCatch);
+      return;
+    }
+  }
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   dcExhaustedState.set(msgId, true);
   setActivationsRemaining(game, meta.playerNum, (getActivationsRemaining(game, meta.playerNum) || 0) - 1);
@@ -685,6 +699,11 @@ export async function handleConfirmActivate(interaction, ctx) {
     }
   }
   await updateActivationsMessage(game, meta.playerNum, client);
+  // Strength in Numbers: clear the flag after the extra activation is committed
+  if (game.strengthInNumbersData && game.strengthInNumbersData.playerNum === meta.playerNum) {
+    game.strengthInNumbersData = null;
+    game.strengthInNumbersPlayerNum = null;
+  }
   const displayName = meta.displayName || meta.dcName;
   const playAreaId = getPlayAreaId(game, meta.playerNum);
   const playChannel = await client.channels.fetch(playAreaId);
@@ -1275,6 +1294,41 @@ export async function handleConfirmActivate(interaction, ctx) {
     // Rogue Smuggler (Han Solo): exhaust to interrupt and attack — not yet automated (needs interrupt trigger + attack flow)
     // Vader's Finest, Smuggler's Run, Z-6 Autofire, Mortar Trooper Fire Mission: injected as special action buttons (automated)
     // Headhunter: auto-triggered via applyStrainToFigure hook (automated)
+    // Beast Tamer (M69-M70): exhaust at start of CREATURE activation → grant Speed MP; if NON-SENTIENT → allow interact
+    if (_suActivationUpgrades.includes('Beast Tamer') && !(game.exhaustedSkirmishUpgrades?.[msgId] || []).includes('Beast Tamer')) {
+      const _btEff = getDcEffects()?.[meta.dcName];
+      const _btKws = (_btEff?.keywords || []).map(k => String(k).toUpperCase());
+      if (_btKws.includes('CREATURE')) {
+        // Exhaust Beast Tamer
+        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+        game.exhaustedSkirmishUpgrades[msgId] = game.exhaustedSkirmishUpgrades[msgId] || [];
+        if (!game.exhaustedSkirmishUpgrades[msgId].includes('Beast Tamer')) {
+          game.exhaustedSkirmishUpgrades[msgId].push('Beast Tamer');
+        }
+        // Grant Speed MP (perform a move = gain movement points equal to Speed)
+        const _btSpeed = ctx.getDcStats?.(meta.dcName)?.speed ?? 0;
+        if (_btSpeed > 0) {
+          game.movementBank = game.movementBank || {};
+          if (!game.movementBank[msgId]) {
+            game.movementBank[msgId] = { total: _btSpeed, remaining: _btSpeed, threadId: thread.id, messageId: null, displayName: meta.displayName || meta.dcName };
+          } else {
+            game.movementBank[msgId].total += _btSpeed;
+            game.movementBank[msgId].remaining += _btSpeed;
+          }
+        }
+        // If NON-SENTIENT, allow interact during this activation
+        const _btAbilityText = _btEff?.abilityText || '';
+        const _btIsNonSentient = _btAbilityText.includes('Non-Sentient');
+        if (_btIsNonSentient) {
+          game.beastTamerInteractOverride = game.beastTamerInteractOverride || {};
+          game.beastTamerInteractOverride[msgId] = true;
+          await thread.send({ content: `**Beast Tamer** — **${displayName}** gains **${_btSpeed} MP** (Speed) and **can interact** this activation (Non-Sentient override).` }).catch(discordCatch);
+        } else {
+          await thread.send({ content: `**Beast Tamer** — **${displayName}** gains **${_btSpeed} MP** (Speed).` }).catch(discordCatch);
+        }
+        await logGameAction(game, client, `**Beast Tamer** exhausted — **${displayName}** gains ${_btSpeed} MP${_btIsNonSentient ? ' and can interact' : ''}.`, { phase: 'ACTIVATION', icon: 'activate' });
+      }
+    }
   }
   // I Make the Rules Now (Cad Bane): when another figure activates, HUNTER within 4 of Cad Bane gains 1 MP
   // Scan all DCs on BOTH teams for this ability

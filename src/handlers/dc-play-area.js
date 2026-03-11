@@ -125,6 +125,19 @@ export async function handleDcActivate(interaction, ctx) {
       }
     }
   }
+  // Strength in Numbers: enforce combined deployment cost <= 12
+  const sinData = game.strengthInNumbersData;
+  if (sinData && sinData.playerNum === playerNum) {
+    const candidateCost = ctx.getDcStats?.(dcName)?.cost ?? 0;
+    const combinedCost = (sinData.triggeringGroupCost || 0) + candidateCost;
+    if (combinedCost > 12) {
+      await interaction.followUp({
+        content: `**Strength in Numbers** — Combined deployment cost of **${sinData.triggeringGroupName || 'previous group'}** (${sinData.triggeringGroupCost}) + **${displayName}** (${candidateCost}) = **${combinedCost}**, which exceeds the 12-point cap. Choose a cheaper group.`,
+        ephemeral: true,
+      }).catch(discordCatch);
+      return;
+    }
+  }
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const isMyTurn = ownerId === turnPlayerId;
   if (!isMyTurn) {
@@ -167,6 +180,11 @@ export async function handleDcActivate(interaction, ctx) {
     setActivationsRemaining(game, playerNum, getActivationsRemaining(game, playerNum) - 1);
     getActivatedDcIndices(game, playerNum).push(dcIndex);
     await updateActivationsMessage(game, playerNum, client);
+    // Strength in Numbers: clear the flag after the extra activation is committed
+    if (game.strengthInNumbersData && game.strengthInNumbersData.playerNum === playerNum) {
+      game.strengthInNumbersData = null;
+      game.strengthInNumbersPlayerNum = null;
+    }
     // Meditation: if this player has a deferred free attack (from Meditation CC) and this DC is FORCE USER, grant it
     if (game.nextActivationFreeAttack?.[playerNum]) {
       const _natEff = getDcEffects ? (getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')]) : null;
@@ -1480,6 +1498,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   }
 
   if (action === 'Interact') {
+    // Non-Sentient: creatures with this trait cannot interact unless Beast Tamer override
+    const _intEff = getDcEffects()?.[meta.dcName];
+    const _intAbilityText = _intEff?.abilityText || '';
+    if (_intAbilityText.includes('Non-Sentient') && !game.beastTamerInteractOverride?.[msgId]) {
+      await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** has the **Non-Sentient** trait and cannot interact.`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
     const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
     const playerNum = meta.playerNum;

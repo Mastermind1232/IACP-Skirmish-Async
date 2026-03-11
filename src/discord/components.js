@@ -880,6 +880,12 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const toTheLimitActive = !!game?.activationExtraActionThenStun?.[msgId];
   const noMove = noAct || toTheLimitActive;
 
+  // Non-Sentient: creatures with this trait cannot interact (unless Beast Tamer override is active)
+  const _nsAbilityText = stats.abilityText || '';
+  const _isNonSentient = _nsAbilityText.includes('Non-Sentient');
+  const _beastTamerOverride = !!game?.beastTamerInteractOverride?.[msgId];
+  const noInteract = noAct || (_isNonSentient && !_beastTamerOverride);
+
   const rows = [];
 
   if (figures > 1) {
@@ -887,10 +893,11 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       // Figure already selected: show action buttons (no dropdown — frees up a row slot)
       const suffix = ` ${dgIndex}${FIGURE_LETTERS[selectedFigure]}`;
       const moveLbl = toTheLimitActive ? `Move${suffix} (blocked)` : `Move${suffix}`;
+      const interactLbl = _isNonSentient && !_beastTamerOverride ? `Interact${suffix} (Non-Sentient)` : `Interact${suffix}`;
       const comps = [
         new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(noMove),
         new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noAct),
-        new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noAct),
+        new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(interactLbl.slice(0, 80)).setStyle(ButtonStyle.Secondary).setDisabled(noInteract),
       ];
       rows.push(new ActionRowBuilder().addComponents(...comps));
     } else {
@@ -909,13 +916,14 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   } else {
     const stunLabel = isStunned ? '⚡ Stunned — no actions' : null;
     const moveLbl = toTheLimitActive ? 'Move (blocked)' : 'Move';
+    const _singleInteractLbl = _isNonSentient && !_beastTamerOverride ? 'Interact (Non-Sentient)' : 'Interact';
     const comps = stunLabel
       ? [new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel(stunLabel.slice(0, 80)).setStyle(ButtonStyle.Secondary).setDisabled(true),
          new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(true),
-         new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(true)]
+         new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel(_singleInteractLbl).setStyle(ButtonStyle.Secondary).setDisabled(true)]
       : [new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(noMove),
          new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noAct),
-         new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noAct)];
+         new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel(_singleInteractLbl).setStyle(ButtonStyle.Secondary).setDisabled(noInteract)];
     rows.push(new ActionRowBuilder().addComponents(...comps));
   }
 

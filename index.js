@@ -2866,6 +2866,45 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           }
         }
       }
+      // Distracting Fire (Rebel Pathfinder Elite): after an attack resolves, if any enemy
+      // Rebel Pathfinder with distracting_fire has LOS to the attacker, deal 1 Damage to attacker.
+      {
+        const _dfAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
+        if (_dfAtkPos && combat.attackerMsgId && game.selectedMap?.id) {
+          const _dfMapSp = getMapSpaces(game.selectedMap.id);
+          // Scan the defender's side for alive Rebel Pathfinder figures
+          const _dfFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
+          for (const [_dfFk, _dfPos] of Object.entries(_dfFriendlyFigs)) {
+            const _dfDcName = dcNameFromFigureKey(_dfFk);
+            const _dfEff = getDcEffects()?.[_dfDcName];
+            if (!(_dfEff?.specialAbilityIds || []).includes('distracting_fire_rebel_pathfinder')) continue;
+            // Check LOS from Pathfinder to attacker
+            const _dfAtkCoord = String(_dfAtkPos).toLowerCase();
+            const _dfPathCoord = String(_dfPos).toLowerCase();
+            if (!hasLineOfSight(_dfPathCoord, _dfAtkCoord, _dfMapSp, null)) continue;
+            // Deal 1 Damage to the attacker
+            const _dfAtkFigIdx = combat.attackerFigureIndex ?? 0;
+            const { newHp: _dfAtkNew, prevHp: _dfAtkPrev, wasDefeated: _dfAtkDefeated } = reduceHp(dcHealthState, game, combat.attackerMsgId, _dfAtkFigIdx, 1, attackerPlayerNum);
+            if (_dfAtkPrev > 0) {
+              _fdNeedsEmbedRefresh = true;
+              await logGameAction(game, client, `**Distracting Fire** — **${_dfDcName}** has LOS to attacker **${combat.attackerDcName}**! Attacker suffers **1 Damage**. HP: ${_dfAtkPrev} → ${_dfAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+              if (_dfAtkDefeated) {
+                removeFigurePosition(game, attackerPlayerNum, combat.attackerFigureKey);
+                if (game.figureConditions?.[combat.attackerFigureKey]) delete game.figureConditions[combat.attackerFigureKey];
+                const _dfAtkStats = getDcStats(combat.attackerDcName);
+                const _dfAtkEffects = getDcEffects()?.[combat.attackerDcName];
+                const _dfAtkFigures = _dfAtkStats?.figures ?? 1;
+                const _dfAtkVp = (_dfAtkFigures > 1 && _dfAtkEffects?.subCost != null) ? _dfAtkEffects.subCost : (_dfAtkStats?.cost ?? 5);
+                awardKillVp(game, defenderPlayerNum, _dfAtkVp);
+                await logGameAction(game, client, `**Distracting Fire** — **${combat.attackerDcName}** was defeated! +${_dfAtkVp} VP to Player ${defenderPlayerNum}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+                await checkNefariousGains(game, attackerPlayerNum, client);
+                await checkHuntDissent(game, defenderPlayerNum, combat.target.figureKey, client);
+              }
+            }
+            break; // Only one Distracting Fire trigger per attack
+          }
+        }
+      }
       // You Will Not Deny Me: prevent Fifth Brother from being defeated (restore HP to 1)
       if (newCur <= 0 && game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum) {
         const _ywndmDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
@@ -4340,7 +4379,6 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
       'afterAttackTargetingYouResolved',
       'afterAttack',
       'afterDamage',
-      'afterHostileFigureSuffersDamage',
       'afterYouResolveAttackTargetingFigure',
     ]);
     // Defender: cards triggered by being attacked
@@ -4351,8 +4389,8 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     if (_defPostCards.length) {
       await thread.send({ content: `<@${_defPostId}> — Attack resolved! You have ${_defPostCards.length} reaction card(s) playable now. Check your Hand channel.`, allowedMentions: { users: [_defPostId] } }).catch(discordCatch);
     }
-    // Attacker: cards triggered by resolving an attack
-    const _atkPostTimings = new Set(['afterAttack', 'afterYouResolveAttackTargetingFigure', 'afterYouResolveAttackThatDidNotMissDueToAccuracy']);
+    // Attacker: cards triggered by resolving an attack (includes Opportunistic — hostile suffered damage)
+    const _atkPostTimings = new Set(['afterAttack', 'afterYouResolveAttackTargetingFigure', 'afterYouResolveAttackThatDidNotMissDueToAccuracy', 'afterHostileFigureSuffersDamage']);
     const _atkPostId = getPlayerId(game, combat.attackerPlayerNum);
     const _atkPostHand = getCcHand(game, combat.attackerPlayerNum) || [];
     const _atkPostCards = [...new Set(_atkPostHand)].filter(c => _ccCardsAll[c]?.timing && _atkPostTimings.has(_ccCardsAll[c].timing));

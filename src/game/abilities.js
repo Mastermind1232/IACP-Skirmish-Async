@@ -2460,8 +2460,12 @@ export function resolveAbility(abilityId, context) {
 
     const oppNum = opponentPlayerNum(playerNum);
     const discardKey = ccDiscardKey(oppNum);
-    const cleared = (game[discardKey] || []).length;
+    const removedCards = (game[discardKey] || []).slice();
+    const cleared = removedCards.length;
     game[discardKey] = [];
+    // Move removed cards to gameBox (permanently out of the game)
+    game.gameBox = game.gameBox || [];
+    game.gameBox.push(...removedCards);
     let drew = [];
     if (typeof entry.draw === 'number' && entry.draw > 0 && entry.drawIfTrait && dcMessageMeta) {
       const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
@@ -2766,12 +2770,24 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: +N MP (Fleet Footed, Rank and File, etc.) — requires active activation
+  // ccEffect: +N MP (Fleet Footed, Rank and File, Opportunistic, etc.)
   if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
-    const { game, playerNum, dcMessageMeta } = context;
+    const { game, playerNum, dcMessageMeta, cardName } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
+    // Opportunistic (C66): playable outside activation when a hostile suffers damage.
+    // If no activation is in progress, mark as applied with manual MP spend instruction.
+    if (!msgId) {
+      const ccEffect = getCcEffect(cardName);
+      const timing = (ccEffect?.timing || '').toLowerCase().replace(/\s+/g, '');
+      if (timing === 'afterhostilefiguresuffersdamage') {
+        const n = entry.mpBonus;
+        game.opportunisticMustSpendNow = game.opportunisticMustSpendNow || {};
+        game.opportunisticMustSpendNow[playerNum] = { mp: n, card: cardName };
+        return { applied: true, logMessage: `Gained **${n} MP** (outside activation — must be spent immediately on any friendly SCUM figure). Move the figure manually.` };
+      }
+      return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
+    }
     const n = entry.mpBonus;
     addMovementPoints(game, msgId, n);
     let msg = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
@@ -5400,8 +5416,23 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.strengthInNumbersPlayerNum) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    // Find the just-activated group's base deployment cost
+    const sinDcList = getDcList(game, playerNum) || [];
+    const sinActivated = game[activatedDcIndicesKey(playerNum)] || [];
+    let sinTriggerCost = 0;
+    let sinTriggerName = '';
+    if (sinActivated.length > 0) {
+      const lastIdx = sinActivated[sinActivated.length - 1];
+      const lastDc = sinDcList[lastIdx];
+      if (lastDc) {
+        const stats = getStatsForDc(lastDc.dcName);
+        sinTriggerCost = stats?.cost ?? 0;
+        sinTriggerName = lastDc.displayName || lastDc.dcName;
+      }
+    }
     game.strengthInNumbersPlayerNum = playerNum;
-    return { applied: true, logMessage: 'You may immediately activate another group (combined deployment cost of the two groups cannot exceed 12).' };
+    game.strengthInNumbersData = { playerNum, triggeringGroupCost: sinTriggerCost, triggeringGroupName: sinTriggerName };
+    return { applied: true, logMessage: `You may immediately activate another group (combined deployment cost of the two groups cannot exceed 12). Triggering group: **${sinTriggerName}** (cost ${sinTriggerCost}).` };
   }
 
   // ccEffect: provokeNextActivation (Provoke)
@@ -7822,10 +7853,20 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: mpBonus (standalone — gain N MP during your activation; no damage or condition cost)
   if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
-    const { game, playerNum, dcMessageMeta } = context;
+    const { game, playerNum, dcMessageMeta, cardName } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
+    if (!msgId) {
+      // Opportunistic (C66): playable outside activation — MP must be spent immediately
+      const ccEff = getCcEffect(cardName);
+      const tmg = (ccEff?.timing || '').toLowerCase().replace(/\s+/g, '');
+      if (tmg === 'afterhostilefiguresuffersdamage') {
+        game.opportunisticMustSpendNow = game.opportunisticMustSpendNow || {};
+        game.opportunisticMustSpendNow[playerNum] = { mp: entry.mpBonus, card: cardName };
+        return { applied: true, logMessage: `Gained **${entry.mpBonus} MP** (outside activation — must be spent immediately on any friendly SCUM figure). Move the figure manually.` };
+      }
+      return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
+    }
     addMovementPoints(game, msgId, entry.mpBonus);
     return { applied: true, logMessage: `Gained **${entry.mpBonus} MP**.` };
   }

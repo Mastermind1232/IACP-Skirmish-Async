@@ -202,6 +202,7 @@ test("resolveAbility Fool Me Once clears opponent discard and draws 1 if SPY", (
   const result = resolveAbility('Fool Me Once', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.player2CcDiscard.length, 0);
+  assert.deepStrictEqual(game.gameBox, ['X', 'Y']);
   assert.strictEqual(result.drewCards?.length, 1);
   assert.strictEqual(game.player1CcHand.length, 1);
 });
@@ -225,6 +226,7 @@ test("resolveAbility Fool Me Once applies 2 Strain to activating figure", () => 
   const result = resolveAbility('Fool Me Once', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.player2CcDiscard.length, 0);
+  assert.deepStrictEqual(game.gameBox, ['X', 'Y']);
   // Strain cost: 8 - 2 = 6
   const hs = dcHealthState.get(msgId);
   assert.strictEqual(hs[0][0], 6);

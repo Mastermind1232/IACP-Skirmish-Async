@@ -63,6 +63,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'pendingBoRifle',
   'pendingBombDrop',
   'activationExtraActionThenStun',
+  'beastTamerInteractOverride',
 ];
 
 /**
@@ -206,6 +207,7 @@ const ROUND_OBJECT_FLAGS = [
   'massiveMovementLocked',
   'disarmPermanentWeakened',
   'adrenalineBonuses',
+  'opportunisticMustSpendNow',
 ];
 
 const ROUND_NULL_FLAGS = [
@@ -220,6 +222,7 @@ const ROUND_NULL_FLAGS = [
   'sitTightPlayerNum',
   'roundInTheShadowsPlayerNum',
   'strengthInNumbersPlayerNum',
+  'strengthInNumbersData',
   'provokeNextActivation',
   'agitateNextActivation',
   'stillFasterExcludeMsgId',

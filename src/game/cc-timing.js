@@ -9,7 +9,7 @@ import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand } 
  * Derive current CC play context from game state.
  * @param {object} game - Game state
  * @param {number} playerNum - 1 or 2
- * @returns {{ startOfRound: boolean, duringActivation: boolean, endOfRound: boolean, duringAttack: boolean, isAttacker: boolean, isDefender: boolean }}
+ * @returns {{ startOfRound: boolean, duringActivation: boolean, endOfRound: boolean, duringAttack: boolean, isAttacker: boolean, isDefender: boolean, duringRound: boolean }}
  */
 export function getCcPlayContext(game, playerNum) {
   const playerId = getPlayerId(game, playerNum);
@@ -28,6 +28,13 @@ export function getCcPlayContext(game, playerNum) {
     duringAttack && combat.attackerPlayerNum === playerNum;
   const isDefender =
     duringAttack && combat.defenderPlayerNum === playerNum;
+  // duringRound: true whenever a round is active (activation phase, not SoR/EoR)
+  // Allows reaction cards like Opportunistic to be played outside the owner's activation
+  const duringRound = !!(
+    game.currentRound &&
+    game.currentActivationTurnPlayerId &&
+    !game.endOfRoundWhoseTurn
+  );
 
   return {
     startOfRound,
@@ -36,6 +43,7 @@ export function getCcPlayContext(game, playerNum) {
     duringAttack,
     isAttacker,
     isDefender,
+    duringRound,
   };
 }
 
@@ -171,8 +179,10 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
       // Rapid Recalibration: play while attacking, before defender rerolls
       return ctx.duringAttack && ctx.isAttacker;
     case 'afterhostilefiguresuffersdamage':
-      // Opportunistic: playable during your activation (play when hostile suffers damage)
-      return ctx.duringActivation;
+      // Opportunistic: playable whenever a hostile suffers damage — during your activation
+      // OR during the opponent's activation (honor-based). If played outside your activation,
+      // the gained MP must be spent immediately (enforced via game flag).
+      return ctx.duringActivation || ctx.duringRound;
     case 'afterspecialorinteract':
       // All in a Day's Work: playable after you resolve a Special Action or Interact during your activation
       return ctx.duringActivation;
