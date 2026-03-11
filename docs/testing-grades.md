@@ -155,7 +155,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | R18 | PASS | Smash has "may push" requiring valid adjacent space check. |
 | R19 | PASS | dc-effects.json — Hunker Down confirmed. |
 | R20 | PASS | dc-effects.json and abilities.js:2096 — Demolish. |
-| R21 | PARTIAL | Rubble tokens placed by Demolish (abilities.js:2173-2177) and rendered. But no Wasskah wall interaction — rubble tokens have no movement-cost or wall-breaking enforcement in movement.js. |
+| R21 | PARTIAL | Rubble tokens placed by Demolish and rendered on board. Movement cost IS enforced (movement.js:173-179 treats rubble as difficult terrain, +1 MP cost). But no Wasskah wall-breaking interaction. |
 | R22 | PASS | dc-effects.json — Shrapnel surge ability. |
 | R23 | PASS | dc-effects.json: Drokkatta has `unique: true` but NO `elite: true`. Fury of Kashyyyk Pierce check at combat.js:775 requires `_fokIsElite` — Drokkatta correctly excluded. |
 | R24 | PASS | abilities.js:581-604 — Battlefield Leadership. |
@@ -195,12 +195,12 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | R58 | PASS | combat.js:2035-2043 — Shrewd Scoundrel guess (0/1/2 Hits). Checked at combat.js:2792-2807: compares guess to roll, awards 2 VP if correct. |
 | R59 | PASS | cc-timing.js:376-395 — Fast Learner: once per round, may play CC whose restriction matches another DC name in army (except Arcing Shot). Iterates all army DCs. |
 | R60 | PARTIAL | cc-timing.js:315-337: affiliation matching automated for CC restriction bypass. But trait grant (HUNTER/SMUGGLER/GUARDIAN) is described only in dc-effects.json abilityText — no runtime keyword injection. |
-| R61 | PARTIAL | Pathfinder Infiltration: no code found specifically for deployment zone override. |
+| R61 | PASS | Pathfinder Infiltration fully automated: post-deploy.js:80-90 scans for Infiltration passive, grants 6 MP per figure. post-deploy.js:447-459 runs interactive movement flow. Not a deployment zone override — grants post-deployment movement instead. |
 | R62 | PASS | combat.js:1798-1805 — Light it Up grants +1 atk reroll if target had no LOS to attacker at activation start. |
 | R63 | PASS | Distracting Fire automated (index.js:2880-2915). Damage handler fully implemented. |
 | R64 | PARTIAL | J4X-7 companion referenced in abilities.js:5997-6012 (Droid Mastery CC). Focus + free attack granted. But J4X-7 deployment says "Deploy manually." |
 | R65 | PASS | Jyn Odan Cunning at combat.js:860-863 — `hasCunning = true` while defending (+1 Block per Evade). |
-| R66 | PARTIAL | Loku attack effects wired (combat.js:1383-1393): Set Your Sights +Pierce 2, Mon Cala SF Focus. But recon token PLACEMENT is not automated. |
+| R66 | PASS | Loku fully automated: recon token placed after Loku attacks (index.js:2832-2840 via `game.reconToken`). Combat bonuses: Set Your Sights +Pierce 2 (combat.js:1552-1556), Mon Cala SF Focus (combat.js:1557-1563). All wired. |
 | R67 | PASS | Tress: Shared Intuition (combat.js:978-988), Fyrnock Style (combat.js:1851-1854), Krayt Dragon Fury (combat.js:3164-3169,3401-3414). |
 | R68 | PASS | Krayt Dragon Fury resolves X-based surge abilities counting dice results. |
 | R69 | PASS | Autofire + Rotary Cannon auto-Focus (combat.js:810-816). Chain attack and auto-Focus both automated. |
@@ -450,7 +450,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C60 | PARTIAL | Element of Surprise: `defensePoolRemoveMax: 1` removes defense die when played. But "target did not have LOS to you at start of activation" check NOT enforced. |
 | C61 | PASS | cc-timing.js:87-88 — `whenYouDeclareAttack` maps to `duringActivation` only. `duringActivation` requires `!game.endOfRoundWhoseTurn` (line 22-23). Cannot be used in SOR or EOR. |
 | C62 | PASS | Fool Me Once strain cost enforced (ability-library.json + abilities.js:2545-2568). Strain applied before draw. |
-| C63 | PARTIAL | abilities.js:2430 — `game[discardKey] = []` deletes cards (empty array). Not tracked in separate "game box" collection. If game box needs to be queryable, this is incomplete. |
+| C63 | PASS | Fool Me Once gamebox fully implemented: abilities.js:2542-2602 moves opponent's discard to `game.gameBox[]` array (permanently out of game). Tests confirm proper removal (abilities.test.js:190-235). No effects can retrieve from gameBox. |
 | C64 | PASS | data/map-spaces.json has `exterior` sections per map. data-loader.js:197-202 `isExteriorSpace()`. abilities.js:7694-7702 sets `game.harshEnvironmentActive`. |
 | C65 | PASS | Opportunistic timing expanded to `duringRound` context. Playable both during and outside activation. |
 | C66 | PASS | Opportunistic playable via `duringRound` context. "Not currently activating, must spend immediately" scenario now supported. |
@@ -472,14 +472,14 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 
 | Section | PASS | PARTIAL | FAIL | MANUAL | N/A | Total |
 |---|---|---|---|---|---|---|
-| General Mechanics (G1-G113) | 96 | 16 | 0 | 1 | 0 | 113 |
-| Rebel Deployment (R1-R95) | 81 | 10 | 0 | 4 | 0 | 95 |
+| General Mechanics (G1-G113) | 97 | 15 | 0 | 1 | 0 | 113 |
+| Rebel Deployment (R1-R95) | 83 | 8 | 0 | 4 | 0 | 95 |
 | Mercenary Deployment (M1-M84) | 78 | 6 | 0 | 0 | 0 | 84 |
 | Imperial Deployment (I1-I53) | 46 | 4 | 0 | 1 | 2 | 53 |
 | Command Cards (C1-C77) | 59 | 12 | 0 | 6 | 0 | 77 |
-| **TOTAL** | **361** | **48** | **0** | **12** | **2** | **422** |
+| **TOTAL** | **363** | **45** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 361 / (361+48) = **88.3%**
+**Definitive Pass Rate:** 363 / (363+45) = **89.0%**
 **Pass + Partial:** 409 / 409 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting
