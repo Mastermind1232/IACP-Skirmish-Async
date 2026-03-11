@@ -8616,12 +8616,39 @@ export function resolveAbility(abilityId, context) {
           shuffleMsg = ` **${abilityId}** shuffled back into deck.`;
         }
       }
-      return {
+      // C11: If entire group is now back on board, ready the DC (so respawned group can activate)
+      const _pdfResult = {
         applied: true,
         logMessage: `Placed **${figLabel}** at **${String(chosenSpace).toUpperCase()}**.${shuffleMsg}`,
         refreshBoard: true,
         ...(pdf.shuffleBackToDeck ? { refreshDiscard: true } : {}),
       };
+      const _pdfDcName = dcNameFromFigureKey(chosenFigureKey);
+      const _pdfStats = getStatsForDc(_pdfDcName);
+      const _pdfFigCount = _pdfStats?.figures ?? 1;
+      if (_pdfFigCount >= 1) {
+        const _pdfDgIdx = chosenFigureKey.split('-').slice(-2, -1)[0];
+        const _pdfAllOnBoard = Array.from({ length: _pdfFigCount }, (_, fi) =>
+          `${_pdfDcName}-${_pdfDgIdx}-${fi}`
+        ).every(fk => game.figurePositions?.[playerNum]?.[fk]);
+        if (_pdfAllOnBoard) {
+          const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+          const dcListAll = getDcList(game, playerNum) || [];
+          for (let di = 0; di < dcListAll.length; di++) {
+            const dcEntry = dcListAll[di];
+            const entryName = typeof dcEntry === 'object' ? (dcEntry.dcName || dcEntry.displayName) : dcEntry;
+            if (entryName === _pdfDcName && dcEntry?.exhausted) {
+              dcEntry.exhausted = false;
+              if (dcMsgIds[di]) {
+                _pdfResult.readyDcMsgIds = [dcMsgIds[di]];
+                _pdfResult.logMessage += ` Group **readied** (can activate this round).`;
+              }
+              break;
+            }
+          }
+        }
+      }
+      return _pdfResult;
     }
 
     // 2nd call: figure chosen, compute valid spaces

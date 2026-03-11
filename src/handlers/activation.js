@@ -1029,15 +1029,18 @@ export async function handleConfirmActivate(interaction, ctx) {
     }
     await thread.send({ content: `🔥 **Into the Fray** — **${displayName}** gains **1 MP** and **${surgeCount} Surge Token${surgeCount !== 1 ? 's' : ''}** (${surgeCount} hostile${surgeCount !== 1 ? 's' : ''} with LOS).` }).catch(discordCatch);
   }
-  // Advanced Weapons Research (Director Krennic): friendly within 2 gains 1 Hit or Surge Token
+  // Advanced Weapons Research (Director Krennic): friendly within range gains 1 Hit or Surge Token
+  // Range is 2 (or 3 with Advanced Com Systems attachment)
   if (meta.dcName === 'Director Krennic') {
     const _getRange = ctx.getRange;
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const selfFk = `Director Krennic-${dgIndex}-0`;
     const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
     if (selfPos && _getRange) {
+      const _awrAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+      const _awrRange = _awrAtts.some(a => a.includes('Advanced Com Systems')) ? 3 : 2;
       const friendlyFigs = Object.entries(game.figurePositions?.[meta.playerNum] || {})
-        .filter(([fk, fp]) => fk !== selfFk && fp && _getRange(selfPos, fp) <= 2);
+        .filter(([fk, fp]) => fk !== selfFk && fp && _getRange(selfPos, fp) <= _awrRange);
       if (friendlyFigs.length > 0) {
         const btns = friendlyFigs.slice(0, 3).map(([fk]) => {
           const label = dcNameFromFigureKey(fk);
@@ -1046,9 +1049,9 @@ export async function handleConfirmActivate(interaction, ctx) {
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_awr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         const awrRow = new ActionRowBuilder().addComponents(btns);
         game.pendingAwr = { gameId: game.gameId, msgId, playerNum: meta.playerNum };
-        await thread.send({ content: `🔬 **Advanced Weapons Research** — Choose a friendly figure within 2 spaces to grant a **Hit Token** or **Surge Token**:`, components: [awrRow] }).catch(discordCatch);
+        await thread.send({ content: `🔬 **Advanced Weapons Research** — Choose a friendly figure within ${_awrRange} spaces to grant a **Hit Token** or **Surge Token**:`, components: [awrRow] }).catch(discordCatch);
       } else {
-        await thread.send({ content: `🔬 **Advanced Weapons Research** — No friendly figures within 2 spaces.` }).catch(discordCatch);
+        await thread.send({ content: `🔬 **Advanced Weapons Research** — No friendly figures within ${_awrRange} spaces.` }).catch(discordCatch);
       }
     }
   }

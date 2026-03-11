@@ -353,7 +353,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | I23 | PASS | Interrogate: surge parsed at combat.js:159-160. Handler at post-combat.js:236-326 — shows opponent hand, pick card, optional discard-to-force-discard. Full interactive flow. |
 | I24 | PASS | BT-1 Assassin `battle_meditation` (combat.js:951-957) re-applies Focus before EACH attack. Focus consumed in combat resolution, then re-granted on next attack via `resetCondition`. Works correctly across Missile Salvo multi-attacks. |
 | I25 | PASS | Gifted Mechanic trait filter verified (ability-library.json:2175-2182). Adjacent Droid or Vehicle filter correctly applied. |
-| I26 | PARTIAL | Advanced Weapons Research at activation.js:886-895 — range hardcoded to 2 (`_getRange(selfPos, fp) <= 2`). No dynamic ACS check to extend range to 3. |
+| I26 | PASS | Advanced Weapons Research at activation.js:1032-1054 — range dynamically checks for ACS attachment: `_awrAtts.some(a => a.includes('Advanced Com Systems')) ? 3 : 2`. Message text also reflects actual range. |
 | I27 | PASS | dc-play-area.js:1743-1785 — Overwatch token placement with LOS validation. Position stored in game state. Reminder at activation start (lines 201-205). |
 | I28 | PASS | Incinerate fully implemented (index.js:3676-3763). Strain on target + Blast-damaged figures, Fireproof immunity, Rubble token placement. |
 | I29 | MANUAL | Wasskah breakable walls are map-specific geometry — requires runtime testing with Drokkatta/Taron/Flametrooper on Wasskah. |
@@ -398,7 +398,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C8 | PASS | Adrenaline `cc:adrenaline` wired with `adrenalineEffect: true`. abilities.js applies +5 maxHp/curHp to each friendly WOOKIEE. round.js end-of-round reverts +5 maxHp and deals 5 Damage. Tracked via `game.adrenalineBonuses`. |
 | C9 | PASS | Blaze of Glory timing `afterActivationResolves` (cc-effects.json:134), same as Son of Skywalker. `readyOwnDeploymentCard: true` + `endOfRoundSelfDamage: 3` (abilities.js:4792). round.js:223-236 applies self-damage at EOR. |
 | C10 | MANUAL | Capitalize: `defensePoolRemoveMax: 1`. Whether defeated figure gains conditions from that attack is standard defeat logic — no Capitalize-specific code. Requires runtime check. |
-| C11 | PARTIAL | Cloned Reinforcements uses `placeDefeatedFigure` (abilities.js:7971-8137). Places figure on board but does NOT explicitly set respawned group to Readied if entire group was defeated. |
+| C11 | PASS | Cloned Reinforcements uses `placeDefeatedFigure` (abilities.js:8511-8680). After placing, checks if all figures in group are back on board — if so, sets DC `exhausted = false` and returns `readyDcMsgIds` so apply-ability-result.js rebuilds the embed as readied. |
 | C12 | PASS | Reinforced figure joining existing group inherits DC's exhausted/readied state implicitly — exhaustion is tracked per-DC, not per-figure, so correct by design. |
 | C13 | PASS | Comm Disruption fully automated: `promptCommDisruption` (cc-hand.js:45-90) prompts opponent after every CC play. SPY group count check, cancel + return to hand, skip buttons. |
 | C14 | PASS | Comm Disruption auto-prompt: `promptCommDisruption()` in cc-hand.js checks opponent's hand after any CC play. Timing expanded in cc-timing.js:211 to `duringActivation || duringRound || pendingPrompt`. |
@@ -420,7 +420,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C30 | MANUAL | Support Specialist is `informational: true` only. No handler. Whether "action" includes special action is rules interpretation — not enforced in code. |
 | C31 | MANUAL | Same — CC action inclusion is rules interpretation, not coded. |
 | C32 | PASS | Vanish (abilities.js:5275-5285): `vanishImmunityUntilNextActivation: true` + `nextActivationMpBonus: 4`. Immunity + 4 MP at next activation. |
-| C33 | PARTIAL | You Will Not Deny Me (index.js:2718-2727): prevent defeat, restore to 1 HP. Timing is `other` mapping to `ctx.duringActivation` — may not be active during combat resolution. Zillo interaction depends on correct timing window. |
+| C33 | PASS | You Will Not Deny Me fully implemented: abilities.js:8277-8286 sets `youWillNotDenyMeActive`. index.js:2958-2967 prevents Fifth Brother defeat (restores HP to 1). conditions.js:36-37 grants condition immunity. index.js:3092-3109 recovers 2 HP on hostile defeat then game-boxes card. Zillo interaction correct — Zillo resolves pre-damage, YWNDM fires post-damage. |
 | C34 | PASS | Combat.js:1445-1453 auto-prompts defender with all playable reaction cards (including `whenAttackDeclaredOnYou` cards like Ambush) when attack declared. Defender sees Ambush automatically if in hand. |
 | C35 | PARTIAL | Arcing Shot timing `beforeYouDeclareAttack` for Drokkatta. Can be played (timing works). But targeting override (target figure adjacent to empty space in your LOS) not automated — honor-system. |
 | C36 | PARTIAL | Bodyguard timing `whenAttackDeclaredOnAdjacentFriendly`. Grants MP and logs redirect. But actual attack target swap not automated in combat resolution. |
@@ -475,12 +475,12 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | General Mechanics (G1-G113) | 96 | 16 | 0 | 1 | 0 | 113 |
 | Rebel Deployment (R1-R95) | 81 | 10 | 0 | 4 | 0 | 95 |
 | Mercenary Deployment (M1-M84) | 78 | 6 | 0 | 0 | 0 | 84 |
-| Imperial Deployment (I1-I53) | 45 | 5 | 0 | 1 | 2 | 53 |
-| Command Cards (C1-C77) | 56 | 15 | 0 | 6 | 0 | 77 |
-| **TOTAL** | **356** | **52** | **0** | **12** | **2** | **422** |
+| Imperial Deployment (I1-I53) | 46 | 4 | 0 | 1 | 2 | 53 |
+| Command Cards (C1-C77) | 59 | 12 | 0 | 6 | 0 | 77 |
+| **TOTAL** | **361** | **48** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 358 / (358+52) = **87.3%**
-**Pass + Partial:** 408 / 408 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
+**Definitive Pass Rate:** 361 / (361+48) = **88.3%**
+**Pass + Partial:** 409 / 409 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting
 **N/A items:** 2 deck-building conventions, not code
