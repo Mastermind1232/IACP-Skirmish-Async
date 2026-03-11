@@ -803,6 +803,11 @@ export async function handleAttackTarget(interaction, ctx) {
     game.pendingCombat.autofireAttack = true;
     delete game.autofireActive[msgId]; // consumed
   }
+  // Barrage (CT-1701) second attack: mark on combat so defender adds 1 white die
+  if (game.barrageDefenseBonus?.[msgId]) {
+    game.pendingCombat.barrageAttack = true;
+    delete game.barrageDefenseBonus[msgId]; // consumed
+  }
   // Fire Mission: +Blast 1
   if (game.fireMissionActive?.[msgId]) {
     game.pendingCombat.bonusBlast = (game.pendingCombat.bonusBlast || 0) + 1;
@@ -1531,6 +1536,43 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send({ content: `<@${defOwnerId}> **Slow on the Draw** — You may interrupt to perform an attack targeting **Greedo** before this attack resolves. Use this ability?`, components: [sotdRow], allowedMentions: { users: [defOwnerId] } });
   }
 
+  // Illicit Arms (Bib Fortuna): while a friendly figure is attacking, if army affiliation is SCUM,
+  // may discard 1 CC from hand to apply +1 Hit. Limit once per attack.
+  {
+    const friendlyPosIA = game.figurePositions?.[attackerPlayerNum] || {};
+    let bibFound = false;
+    for (const [fk, pos] of Object.entries(friendlyPosIA)) {
+      if (bibFound) break;
+      if (!pos) continue;
+      const fkDcName = dcNameFromFigureKey(fk);
+      const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+      if (!(fkEff?.specialAbilityIds || []).includes('illicit_arms_bib')) continue;
+      // Check army affiliation is Scum
+      if (String(fkEff?.affiliation || '').toLowerCase() !== 'scum') continue;
+      // Bib is alive — check if owner has CCs in hand
+      const bibOwnerHand = getCcHand(game, attackerPlayerNum) || [];
+      if (bibOwnerHand.length === 0) {
+        await thread.send(`**Illicit Arms** (${fkDcName}) — No Command cards in hand to discard.`).catch(discordCatch);
+        bibFound = true;
+        break;
+      }
+      const atkOwnerId = getPlayerId(game, attackerPlayerNum);
+      game.pendingIllicitArms = {
+        gameId: game.gameId,
+        playerNum: attackerPlayerNum,
+        bibFigureKey: fk,
+        bibDcName: fkDcName,
+        combatThreadId: thread.id,
+      };
+      const iaRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`illicit_arms_use_${game.gameId}`).setLabel('Use Illicit Arms (+1 Hit)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`illicit_arms_skip_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `<@${atkOwnerId}> **Illicit Arms** (${fkDcName}) — You may discard 1 Command card from your hand to apply **+1 Hit** to this attack. Use this ability?`, components: [iaRow], allowedMentions: { users: [atkOwnerId] } });
+      bibFound = true;
+    }
+  }
+
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
   if (nextPierce) delete game.nextAttackBonusPierce?.[attackerPlayerNum];
   if (nextBonusAcc) delete game.nextAttackBonusAccuracy?.[attackerPlayerNum];
@@ -1733,6 +1775,11 @@ export async function handleCombatRoll(interaction, ctx) {
       pool.push('white');
       await thread.send('**Autofire** — Defender adds 1 white die to defense pool.').catch(discordCatch);
     }
+    // Barrage (CT-1701) second attack: defender adds 1 white die
+    if (combat.barrageAttack) {
+      pool.push('white');
+      await thread.send('**Barrage** — Defender adds 1 white die to defense pool (second attack).').catch(discordCatch);
+    }
     const removeMax = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
     const removeCount = Math.min(removeMax, pool.length);
     const diceToRoll = pool.slice(0, pool.length - removeCount);
@@ -1817,7 +1864,9 @@ export async function handleCombatRoll(interaction, ctx) {
         const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
         if (!(fe?.specialAbilityIds || []).includes('inspiring')) continue;
         if (atkPos && isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkPos).toLowerCase(), 3)) {
-          atkSpecialReroll += 1; break;
+          atkSpecialReroll += 1;
+          await thread.send(`**Inspiring** (${fn}) — friendly within 3 spaces, +1 attack reroll granted.`).catch(discordCatch);
+          break;
         }
       }
     }

@@ -2188,6 +2188,57 @@ async function checkNefariousGains(game, defeatedOwnerPN, client) {
 }
 
 /**
+ * Hunt Dissent (Agent Kallus): when a hostile figure is defeated by Kallus
+ * or a friendly TROOPER within 3 spaces of Kallus, Kallus gains 1 Block Token.
+ * @param {object} game
+ * @param {number} attackerPlayerNum - playerNum who defeated the hostile figure
+ * @param {string|null} attackerFigureKey - figureKey of the figure that did the defeating
+ * @param {object} client - Discord client (for logging)
+ */
+async function checkHuntDissent(game, attackerPlayerNum, attackerFigureKey, client) {
+  if (!attackerFigureKey) return;
+  // Find all alive Kallus figures on the attacker's team
+  const kallusFigures = Object.keys(game.figurePositions?.[attackerPlayerNum] || {})
+    .filter(fk => fk.startsWith('Agent Kallus-'));
+  if (kallusFigures.length === 0) return;
+  // Verify Kallus has hunt_dissent_kallus ability
+  const kallusEff = getDcEffects()?.['Agent Kallus'];
+  if (!(kallusEff?.specialAbilityIds || []).includes('hunt_dissent_kallus')) return;
+  const attackerDcName = dcNameFromFigureKey(attackerFigureKey);
+  const isAttackerKallus = attackerDcName === 'Agent Kallus';
+  // Check if attacker is a TROOPER
+  let isAttackerTrooper = false;
+  if (!isAttackerKallus) {
+    const atkEff = getDcEffects()?.[attackerDcName];
+    const atkKws = (atkEff?.keywords || []).map(k => String(k).toUpperCase());
+    isAttackerTrooper = atkKws.includes('TROOPER');
+  }
+  if (!isAttackerKallus && !isAttackerTrooper) return;
+  for (const kallusFk of kallusFigures) {
+    if (isAttackerKallus) {
+      // Kallus himself defeated the figure — grant Block Token
+      const granted = grantPowerTokens(game, kallusFk, 'Block', 1);
+      if (granted > 0) {
+        await logGameAction(game, client, `🛡️ **Hunt Dissent** — **Agent Kallus** gains 1 **Block Token** (defeated hostile figure).`, { phase: 'ROUND', icon: 'card' });
+      }
+    } else {
+      // Attacker is a TROOPER — check within 3 spaces of Kallus
+      const kallusPos = game.figurePositions?.[attackerPlayerNum]?.[kallusFk];
+      const atkPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
+      if (kallusPos && atkPos) {
+        const dist = getRange(kallusPos, atkPos);
+        if (dist <= 3) {
+          const granted = grantPowerTokens(game, kallusFk, 'Block', 1);
+          if (granted > 0) {
+            await logGameAction(game, client, `🛡️ **Hunt Dissent** — **Agent Kallus** gains 1 **Block Token** (friendly TROOPER **${attackerDcName}** defeated hostile within 3 spaces).`, { phase: 'ROUND', icon: 'card' });
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
  * If a deployment group is fully defeated and hasn't activated yet,
  * decrement the owner's remaining activations.
  */
@@ -2807,6 +2858,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
                   await logGameAction(game, client, `**Force Deflection** — **${combat.attackerDcName}** was defeated! +${_fdAtkVp} VP to Player ${defenderPlayerNum}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
                   // Nefarious Gains (Jabba): Force Deflection defeat
                   await checkNefariousGains(game, attackerPlayerNum, client);
+                  // Hunt Dissent (Agent Kallus): Force Deflection defeat (defender defeated attacker)
+                  await checkHuntDissent(game, defenderPlayerNum, combat.target.figureKey, client);
                 }
               }
             }
@@ -2998,6 +3051,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         }
         // Nefarious Gains (Jabba): when a hostile figure is defeated, Jabba's owner gains 1 VP
         await checkNefariousGains(game, defenderPlayerNum, client);
+        // Hunt Dissent (Agent Kallus): when Kallus or friendly TROOPER within 3 defeats hostile, Kallus gains Block Token
+        await checkHuntDissent(game, attackerPlayerNum, combat.attackerFigureKey, client);
         // Into the Force (Obi-Wan): when defeated, a friendly figure becomes Focused
         if (_lsDcName === 'Obi-Wan Kenobi') {
           const _obiAlive = Object.keys(game.figurePositions?.[defenderPlayerNum] || {}).filter(k => !k.startsWith('Obi-Wan Kenobi-'));
@@ -3219,6 +3274,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           }
           // Nefarious Gains (Jabba): blast defeat
           await checkNefariousGains(game, blastPlayerNum, client);
+          // Hunt Dissent (Agent Kallus): blast defeat
+          await checkHuntDissent(game, attackerPlayerNum, combat.attackerFigureKey, client);
           await checkWinConditions(game, client);
           const blastDefeatedDcName = blastDcList[blastIdx]?.dcName;
           if (!game.pendingCelebration && isDcUnique(blastDefeatedDcName)) {
@@ -3324,6 +3381,22 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[combat.attackerMsgId] = true;
     await thread.send('**Tonfa Strike** — You may perform an additional attack (use Attack button).');
+  }
+  // Barrage (CT-1701): after first attack resolves, grant second free attack (defender +1 white die, within 3 of first target)
+  if (game.barrageSecondAttack?.[combat.attackerMsgId]) {
+    delete game.barrageSecondAttack[combat.attackerMsgId];
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[combat.attackerMsgId] = true;
+    // Store first target's position so second attack target must be within 3 spaces
+    const _barrageTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target?.figureKey];
+    if (_barrageTargetPos) {
+      game.barrageTargetSpace = game.barrageTargetSpace || {};
+      game.barrageTargetSpace[combat.attackerMsgId] = _barrageTargetPos;
+    }
+    // Mark that the next attack from this figure adds 1 white die to defense pool
+    game.barrageDefenseBonus = game.barrageDefenseBonus || {};
+    game.barrageDefenseBonus[combat.attackerMsgId] = true;
+    await thread.send('**Barrage** — You may perform a second attack (target within 3 of first target, defender +1 white die). Use the **Attack** button.');
   }
   // Imperial Loadout post-attack effects
   if (combat.loadoutPostAttack) {
@@ -3505,6 +3578,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
               await logGameAction(game, client, `💀 **Incinerate** — **${combat.target.label}** defeated from Strain (+${_ftVp} VP).`, { phase: 'ROUND', icon: 'attack' });
               // Nefarious Gains (Jabba): Incinerate defeat
               await checkNefariousGains(game, defenderPlayerNum, client);
+              // Hunt Dissent (Agent Kallus): Incinerate defeat
+              await checkHuntDissent(game, attackerPlayerNum, combat.attackerFigureKey, client);
               const { dcList: _ftDcList, idx: _ftIdx } = lookupFigureDcIndex(game, defenderPlayerNum, combat.target.figureKey);
               if (_ftIdx >= 0) {
                 await decrementActivationIfGroupDefeated(game, defenderPlayerNum, _ftIdx, client);
@@ -3545,6 +3620,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           await logGameAction(game, client, `💀 **Incinerate** — **${_ftBlastName}** defeated from Blast Strain (+${_ftBlastVp} VP).`, { phase: 'ROUND', icon: 'attack' });
           // Nefarious Gains (Jabba): Incinerate blast defeat
           await checkNefariousGains(game, _ftBlastPn, client);
+          // Hunt Dissent (Agent Kallus): Incinerate blast defeat
+          await checkHuntDissent(game, attackerPlayerNum, combat.attackerFigureKey, client);
           const { dcList: _ftBlastDcList, idx: _ftBlastIdx } = lookupFigureDcIndex(game, _ftBlastPn, _ftBlastFk);
           if (_ftBlastIdx >= 0) {
             await decrementActivationIfGroupDefeated(game, _ftBlastPn, _ftBlastIdx, client);

@@ -1602,6 +1602,11 @@ export function resolveAbility(abilityId, context) {
       game.tonfaStrikeSecondAttack = game.tonfaStrikeSecondAttack || {};
       game.tonfaStrikeSecondAttack[msgId] = true;
     }
+    // Barrage (CT-1701): mark so second free attack is granted after first resolves (defender +1 white die, within 3 of first target)
+    if (entry.label === 'Barrage') {
+      game.barrageSecondAttack = game.barrageSecondAttack || {};
+      game.barrageSecondAttack[msgId] = true;
+    }
     // Close Quarters: at attack time, override dice with adjacent hostile's pool + remove 1 defense die
     if (entry.closeQuartersOverride) {
       game.closeQuartersActive = game.closeQuartersActive || {};

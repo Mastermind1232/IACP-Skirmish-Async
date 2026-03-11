@@ -113,7 +113,7 @@ import {
   handleBotmenuKillNo,
 } from './botmenu.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
-import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter } from './combat-reactions.js';
+import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred } from './interrupts.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
@@ -320,6 +320,9 @@ register('power_converter_approve_', handlePowerConverter, 'combatReactions');
 register('power_converter_skip_', handlePowerConverter, 'combatReactions');
 register('power_converter_die_', handlePowerConverter, 'combatReactions');
 register('power_converter_color_', handlePowerConverter, 'combatReactions');
+register('illicit_arms_use_', handleIllicitArms, 'combatReactions');
+register('illicit_arms_skip_', handleIllicitArms, 'combatReactions');
+register('illicit_arms_pick_', handleIllicitArms, 'combatReactions');
 
 // --- Post-combat ---
 register('reaction_skip_', handleReactionSkip, 'postCombat');
@@ -527,7 +530,7 @@ export {
   handleBotmenuKillNo,
 } from './botmenu.js';
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
-export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter } from './combat-reactions.js';
+export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred } from './interrupts.js';
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';

@@ -6,7 +6,7 @@ import { awardObjectiveVp } from './vp-helpers.js';
 import { getPlayerId, getCcHand, getInitiativePlayerNum } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { getDeploymentZones } from '../data-loader.js';
-import { getPlayerOccupiedCells } from './board-helpers.js';
+import { getPlayerOccupiedCellsForControl } from './board-helpers.js';
 
 function normalizeCoord(c) {
   if (c == null || typeof c !== 'string') return '';
@@ -26,7 +26,8 @@ function extractTokenCoords(missionTokenData) {
 }
 
 /** Who controls a named area: player with more figures in the area's cells; tie or none = null.
- *  Excludes companion figures not counted for control (Indentured Jester, Clan of Two incapacitated). */
+ *  Excludes companion figures not counted for control (Indentured Jester, Clan of Two incapacitated,
+ *  Dio while Iden Versio is alive). */
 function getNamedAreaController(game, mapId, areaName, getMapTokensDataFn) {
   const allTokens = typeof getMapTokensDataFn === 'function' ? getMapTokensDataFn() : {};
   const mapData = allTokens[mapId];
@@ -35,9 +36,15 @@ function getNamedAreaController(game, mapId, areaName, getMapTokensDataFn) {
   if (!area || !Array.isArray(area.cells) || area.cells.length === 0) return null;
   const cellSet = new Set(area.cells.map((c) => normalizeCoord(c)));
   // Companions not counted for control: Salacious B. Crumb (Indentured Jester — always excluded),
-  // The Child (Clan of Two — excluded while incapacitated, i.e. when game.childIncapacitated is true)
+  // The Child (Clan of Two — excluded while incapacitated, i.e. when game.childIncapacitated is true),
+  // Dio (excluded while Iden Versio is alive; counts after Iden is defeated)
   const excludedNames = new Set(['salacious b. crumb']);
   if (game.childIncapacitated) excludedNames.add('the child');
+  // Pre-check whether Iden Versio is alive for each player (Dio excluded only while Iden lives)
+  const idenAlive = {};
+  for (const pn of [1, 2]) {
+    idenAlive[pn] = Object.keys(game.figurePositions?.[pn] || {}).some((fk) => dcNameFromFigureKey(fk) === 'Iden Versio');
+  }
   let p1 = 0;
   let p2 = 0;
   for (const pn of [1, 2]) {
@@ -46,6 +53,8 @@ function getNamedAreaController(game, mapId, areaName, getMapTokensDataFn) {
       if (!cellSet.has(normalizeCoord(cell))) continue;
       const dcName = dcNameFromFigureKey((fk || '')).toLowerCase();
       if (excludedNames.has(dcName)) continue;
+      // Dio excluded while its owner Iden Versio is alive
+      if (dcName === 'dio' && idenAlive[pn]) continue;
       if (pn === 1) p1++;
       else p2++;
     }
@@ -347,8 +356,8 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
     if (typeof vp === 'number') {
       const zoneData = getDeploymentZones()?.[mapId];
       if (zoneData) {
-        const p1Cells = getPlayerOccupiedCells(game, 1);
-        const p2Cells = getPlayerOccupiedCells(game, 2);
+        const p1Cells = getPlayerOccupiedCellsForControl(game, 1);
+        const p2Cells = getPlayerOccupiedCellsForControl(game, 2);
         const vpByPlayer = { 1: 0, 2: 0 };
         for (const zoneColor of ['red', 'blue']) {
           const zoneSpaces = new Set((zoneData[zoneColor] || []).map(s => normalizeCoord(s)));

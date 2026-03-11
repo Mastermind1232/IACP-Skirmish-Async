@@ -1,5 +1,5 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
-import { opponentPlayerNum, getPlayerId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
+import { opponentPlayerNum, getPlayerId, getDcList, getDcMessageIds, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { reduceHp, dcNameFromFigureKey, awardKillVp, checkNefariousGains } from '../game/index.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
@@ -642,6 +642,123 @@ export async function handlePowerConverter(interaction, ctx) {
     }
     delete combat.powerConverterDieIndex;
     await _resumeRerollFlow();
+    saveGames();
+    return;
+  }
+}
+
+/**
+ * Handle illicit_arms_use_ / illicit_arms_skip_ / illicit_arms_pick_ buttons.
+ * Illicit Arms (Bib Fortuna): while a friendly figure is attacking, if army
+ * affiliation is SCUM, may discard 1 CC from hand to apply +1 Hit.
+ * Limit once per attack.
+ */
+export async function handleIllicitArms(interaction, ctx) {
+  const {
+    getGame, canActAsPlayer, saveGames, client,
+    logGameAction,
+  } = ctx;
+
+  const customId = interaction.customId;
+  const isUse = customId.startsWith('illicit_arms_use_');
+  const isSkip = customId.startsWith('illicit_arms_skip_');
+  const isPick = customId.startsWith('illicit_arms_pick_');
+
+  let gameId;
+  if (isPick) {
+    // illicit_arms_pick_{gameId}_{ccIndex}
+    const match = customId.match(/^illicit_arms_pick_([^_]+)_(\d+)$/);
+    if (!match) return;
+    gameId = match[1];
+  } else {
+    gameId = customId.replace(/^illicit_arms_(?:use|skip)_/, '');
+  }
+
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!game.pendingIllicitArms) {
+    await interaction.followUp({ content: 'No pending Illicit Arms.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const ia = game.pendingIllicitArms;
+  if (!await requirePlayer(interaction, game, interaction.user.id, ia.playerNum, canActAsPlayer, 'Only the attacker\'s owner may respond.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+
+  const thread = await client.channels.fetch(ia.combatThreadId).catch(() => null);
+
+  // Clear buttons from the picker message
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
+
+  if (isSkip) {
+    if (thread) await thread.send('**Illicit Arms** — Declined.').catch(discordCatch);
+    game.pendingIllicitArms = null;
+    saveGames();
+    return;
+  }
+
+  if (isUse) {
+    // Show CC pick buttons from hand
+    const hand = getCcHand(game, ia.playerNum) || [];
+    if (hand.length === 0) {
+      if (thread) await thread.send('**Illicit Arms** — No Command cards in hand to discard.').catch(discordCatch);
+      game.pendingIllicitArms = null;
+      saveGames();
+      return;
+    }
+    // Build buttons for each CC in hand (max 25 buttons = 5 rows of 5)
+    const rows = [];
+    let currentBtns = [];
+    for (let i = 0; i < hand.length && rows.length < 5; i++) {
+      const label = String(hand[i]).slice(0, 80);
+      currentBtns.push(
+        new ButtonBuilder()
+          .setCustomId(`illicit_arms_pick_${gameId}_${i}`)
+          .setLabel(label)
+          .setStyle(ButtonStyle.Primary)
+      );
+      if (currentBtns.length === 5 || i === hand.length - 1) {
+        rows.push(new ActionRowBuilder().addComponents(...currentBtns));
+        currentBtns = [];
+      }
+    }
+    const ownerId = getPlayerId(game, ia.playerNum);
+    if (thread) {
+      await thread.send({
+        content: `<@${ownerId}> **Illicit Arms** — Choose a Command card to discard for **+1 Hit**:`,
+        components: rows,
+        allowedMentions: { users: [ownerId] },
+      }).catch(discordCatch);
+    }
+    saveGames();
+    return;
+  }
+
+  if (isPick) {
+    const match = customId.match(/^illicit_arms_pick_([^_]+)_(\d+)$/);
+    const ccIndex = parseInt(match[2], 10);
+    const handKey = ccHandKey(ia.playerNum);
+    const hand = game[handKey] || [];
+    if (ccIndex < 0 || ccIndex >= hand.length) {
+      if (thread) await thread.send('**Illicit Arms** — Invalid card selection.').catch(discordCatch);
+      game.pendingIllicitArms = null;
+      saveGames();
+      return;
+    }
+    const discarded = hand.splice(ccIndex, 1)[0];
+    game[handKey] = hand;
+    const discKey = ccDiscardKey(ia.playerNum);
+    game[discKey] = game[discKey] || [];
+    game[discKey].push(discarded);
+
+    // Apply +1 Hit
+    if (game.pendingCombat) {
+      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+    }
+
+    if (thread) await thread.send(`**Illicit Arms** (${ia.bibDcName}) — Discarded **${discarded}** for **+1 Hit**.`).catch(discordCatch);
+    if (logGameAction) await logGameAction(game, client, `**Illicit Arms** (${ia.bibDcName}) — Discarded **${discarded}** for +1 Hit.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+
+    game.pendingIllicitArms = null;
     saveGames();
     return;
   }

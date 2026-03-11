@@ -35,6 +35,40 @@ export function getPlayerOccupiedCells(game, playerNum) {
   return cells;
 }
 
+/** Check if a figure should be excluded from control counting.
+ *  - Salacious B. Crumb: always excluded (Indentured Jester).
+ *  - The Child: excluded when incapacitated (game.childIncapacitated).
+ *  - Dio: excluded while Iden Versio is alive (has a figure in figurePositions for the same player).
+ *    When Iden is defeated (removed from figurePositions), Dio counts for control. */
+function _isExcludedFromControl(game, playerNum, figureKey) {
+  const dcName = dcNameFromFigureKey(figureKey).toLowerCase();
+  if (dcName === 'salacious b. crumb') return true;
+  if (dcName === 'the child' && game.childIncapacitated) return true;
+  if (dcName === 'dio') {
+    // Dio is excluded while its owner Iden Versio is alive (present in figurePositions)
+    const poses = game.figurePositions?.[playerNum] || {};
+    const idenAlive = Object.keys(poses).some((fk) => dcNameFromFigureKey(fk) === 'Iden Versio');
+    if (idenAlive) return true;
+  }
+  return false;
+}
+
+/** Like getPlayerOccupiedCells, but excludes companion figures not counted for control.
+ *  Used by getSpaceController, countTerminalsControlledByPlayer, and deployment-zone control. */
+export function getPlayerOccupiedCellsForControl(game, playerNum) {
+  const cells = new Set();
+  const poses = game.figurePositions?.[playerNum] || {};
+  for (const [k, coord] of Object.entries(poses)) {
+    if (_isExcludedFromControl(game, playerNum, k)) continue;
+    const dcName = dcNameFromFigureKey(k);
+    const size = getEffectiveFigureSize(game, k, dcName);
+    for (const c of getFootprintCells(coord, size)) {
+      cells.add(normalizeCoord(c));
+    }
+  }
+  return cells;
+}
+
 /** Extract flat coordinate array from a missionA/missionB token data block (generic — no hardcoded key names). */
 export function getMissionTokenCoords(missionTokenData) {
   if (!missionTokenData) return [];
@@ -281,8 +315,8 @@ export function getSpaceController(game, mapId, coord) {
   const alterMindExcluded = _getAlterMindExcludedCells(game);
   // A Powerful Influence (CC): hostile figures within 3 spaces of REBEL FORCE USER don't count for control
   const apiExcluded = _getPowerfulInfluenceExcludedCells(game);
-  const p1Cells = getPlayerOccupiedCells(game, 1);
-  const p2Cells = getPlayerOccupiedCells(game, 2);
+  const p1Cells = getPlayerOccupiedCellsForControl(game, 1);
+  const p2Cells = getPlayerOccupiedCellsForControl(game, 2);
   const p1Has = [...controlSet].some((c) => p1Cells.has(c) && !alterMindExcluded[1]?.has(c) && !apiExcluded[1]?.has(c));
   const p2Has = [...controlSet].some((c) => p2Cells.has(c) && !alterMindExcluded[2]?.has(c) && !apiExcluded[2]?.has(c));
   if (p1Has && !p2Has) return 1;
@@ -315,8 +349,8 @@ export function countTerminalsControlledByPlayer(game, playerNum, mapId) {
 
   const alterMindExcluded = _getAlterMindExcludedCells(game);
   const apiExcluded = _getPowerfulInfluenceExcludedCells(game);
-  const p1Cells = getPlayerOccupiedCells(game, 1);
-  const p2Cells = getPlayerOccupiedCells(game, 2);
+  const p1Cells = getPlayerOccupiedCellsForControl(game, 1);
+  const p2Cells = getPlayerOccupiedCellsForControl(game, 2);
 
   let count = 0;
   for (const term of mapData.terminals) {

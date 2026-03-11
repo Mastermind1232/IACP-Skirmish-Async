@@ -179,7 +179,7 @@ Deep-audited against codebase on 2026-03-11 (2nd pass with full code reads).
 | R42 | PASS | combat.js:615-666 — Luke (Hero) reroll on sabre strike. |
 | R43 | FAIL | No "+1 damage on sabre strike" found for Luke Hero. |
 | R44 | PASS | combat.js:661-666 — Luke (Hero) autofocus on sabre strike. |
-| R45 | FAIL | No global reroll for Luke Hero. |
+| R45 | PASS | combat.js:1809-1823 — Inspiring: scans team for alive figure with inspiring ability, grants +1 atk reroll if within 3 spaces. |
 | R46 | PASS | board-helpers.js:136-152 blocks interaction for hostile figures cost ≤9 within 3 spaces of Obi-Wan. board-helpers.js:218-270 excludes from objective control. Both automated. |
 | R47 | PASS | combat.js:1396-1411: Yes/No buttons for Strike Me Down. combat-reactions.js:296-379: reduces VP by 3, defeats Obi-Wan, cancels attack. |
 | R48 | PASS | abilities.js:1603 — Verena Close Quarters attack override. |

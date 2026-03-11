@@ -1035,6 +1035,13 @@ async function buildAndSendAttackTargets(
     if (_chainFiltered.length > 0) targets.splice(0, targets.length, ..._chainFiltered);
     delete game.autofireChainTargetSpace[msgId];
   }
+  // Barrage (CT-1701) second attack: restrict targets to within 3 spaces of first target
+  if (game.barrageTargetSpace?.[msgId]) {
+    const _barrageSpace = game.barrageTargetSpace[msgId];
+    const _barrageFiltered = targets.filter(t => getRange(_barrageSpace, t.coord) <= 3);
+    if (_barrageFiltered.length > 0) targets.splice(0, targets.length, ..._barrageFiltered);
+    delete game.barrageTargetSpace[msgId];
+  }
   if (targets.length === 0) {
     await interaction.followUp({ content: 'No valid targets in range.', ephemeral: true }).catch(discordCatch);
     return;

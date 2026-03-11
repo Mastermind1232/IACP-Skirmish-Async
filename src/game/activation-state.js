@@ -22,6 +22,9 @@ const ACTIVATION_MSGID_FLAGS = [
   'cripplingBlowPending',
   'disruptorRiflePending',
   'tonfaStrikeSecondAttack',
+  'barrageSecondAttack',
+  'barrageTargetSpace',
+  'barrageDefenseBonus',
   'pendingMultiTargetRoll',
   'closeQuartersActive',
   'mobileMovementActive',
@@ -156,6 +159,9 @@ const ROUND_OBJECT_FLAGS = [
   'cripplingBlowPending',
   'disruptorRiflePending',
   'tonfaStrikeSecondAttack',
+  'barrageSecondAttack',
+  'barrageTargetSpace',
+  'barrageDefenseBonus',
   'pendingMultiTargetRoll',
   'closeQuartersActive',
   'selfDestructProtocolTriggered',
@@ -257,6 +263,7 @@ const ROUND_NULL_FLAGS = [
   'pendingYHSIW',
   'powerfulInfluencePlayerNum',
   'restInPeaceActive',
+  'pendingIllicitArms',
 ];
 
 const ROUND_ARRAY_FLAGS = [

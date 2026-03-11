@@ -264,8 +264,8 @@
       "type": "dcSpecial",
       "label": "Barrage",
       "description": "Perform 2 attacks. The second target must be within 3 spaces of the first target and adds 1 white die to the defense pool.",
-      "informational": true,
-      "logMessage": "**Barrage** — Perform 2 attacks (2nd target must be within 3 of 1st, +1 white defense die on 2nd). Use the Attack button twice.",
+      "freeAttackBonus": true,
+      "logMessage": "**Barrage** — Perform 2 attacks (2nd target within 3 of 1st, defender +1 white die on 2nd). Click **Attack** for the first attack.",
       "wiredStatus": "wired"
     },
     "bartered_information": {

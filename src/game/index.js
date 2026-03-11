@@ -100,6 +100,7 @@ export { grantMovementBank, grantPowerTokens, getPlayerDeploymentZones } from '.
 export {
   getEffectiveFigureSize,
   getPlayerOccupiedCells,
+  getPlayerOccupiedCellsForControl,
   getMissionTokenCoords,
   isFigureAdjacentOrOnMissionToken,
   getEffectiveSpeed,
