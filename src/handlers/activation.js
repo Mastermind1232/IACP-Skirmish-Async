@@ -564,7 +564,11 @@ export async function handleDcEndActivation(interaction, ctx) {
       return !ctx.dcExhaustedState?.get(id);
     });
     const activatedCost = ctx.getDcStats?.(meta.dcName)?.cost ?? 0;
-    const eligibleIds = sameNameIds.filter(() => (activatedCost + (ctx.getDcStats?.(meta.dcName)?.cost ?? 0)) <= 15);
+    const eligibleIds = sameNameIds.filter((id, i) => {
+      const dc = _sqDcList[_sqDcIds.indexOf(id)];
+      const candidateCost = dc ? (ctx.getDcStats?.(dc.dcName)?.cost ?? 0) : 0;
+      return (activatedCost + candidateCost) <= 15;
+    });
     if (eligibleIds.length > 0) {
       const ownerId = getPlayerId(game, meta.playerNum);
       const btns = eligibleIds.slice(0, 4).map((id) =>
@@ -1829,7 +1833,7 @@ export async function handleActPassive(interaction, ctx) {
         }
         // Surge + SMALL check: push (player chooses push direction — no space picker for single push)
         if (surges > 0) {
-          const targetKws = getDcKeywords()?.[targetDcName] || [];
+          const targetKws = getDcKeywords(game)?.[targetDcName] || [];
           const isSmall = !targetKws.some(k => /large|massive/i.test(String(k)));
           if (isSmall) {
             resultParts.push(`Surge rolled and target is SMALL — push **${targetDcName}** 1 space`);

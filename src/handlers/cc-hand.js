@@ -316,7 +316,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       displayName: typeof d === 'object' ? (d.displayName || d.dcName) : d,
     })).filter((o) => o.value);
     if (hasRestriction) {
-      const allKeywords = getDcKeywords() || {};
+      const allKeywords = getDcKeywords(game) || {};
       const allDcEffects = getDcEffects() || {};
       const alternatives = playableBy.split(/\s+or\s+/i).map(a => a.trim().replace(/^"|"$/g, '').toLowerCase());
       const AFFILIATIONS = new Set(['imperial', 'rebel', 'scum', 'mercenary']);

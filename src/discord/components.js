@@ -876,14 +876,19 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const isStunned = checkFigIdx != null && !!(game?.figureConditions?.[`${dcName}-${dgIndex}-${checkFigIdx}`] || []).includes('Stun');
   const noAct = noActions || isStunned;
 
+  // To the Limit (C75): extra action cannot be a Move
+  const toTheLimitActive = !!game?.activationExtraActionThenStun?.[msgId];
+  const noMove = noAct || toTheLimitActive;
+
   const rows = [];
 
   if (figures > 1) {
     if (selectedFigure != null && selectedFigure < figures) {
       // Figure already selected: show action buttons (no dropdown — frees up a row slot)
       const suffix = ` ${dgIndex}${FIGURE_LETTERS[selectedFigure]}`;
+      const moveLbl = toTheLimitActive ? `Move${suffix} (blocked)` : `Move${suffix}`;
       const comps = [
-        new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(`Move${suffix}`).setStyle(ButtonStyle.Success).setDisabled(noAct),
+        new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(noMove),
         new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noAct),
         new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noAct),
       ];
@@ -903,11 +908,12 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     }
   } else {
     const stunLabel = isStunned ? '⚡ Stunned — no actions' : null;
+    const moveLbl = toTheLimitActive ? 'Move (blocked)' : 'Move';
     const comps = stunLabel
       ? [new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel(stunLabel.slice(0, 80)).setStyle(ButtonStyle.Secondary).setDisabled(true),
          new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(true),
          new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(true)]
-      : [new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel('Move').setStyle(ButtonStyle.Success).setDisabled(noAct),
+      : [new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(noMove),
          new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noAct),
          new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noAct)];
     rows.push(new ActionRowBuilder().addComponents(...comps));

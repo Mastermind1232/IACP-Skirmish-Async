@@ -87,7 +87,7 @@ export { cleanupActivation, cleanupRoundStart } from './activation-state.js';
 
 export { reduceHp, healHp, healHpDistributed } from './damage-helpers.js';
 
-export { awardKillVp, awardObjectiveVp, deductVp } from './vp-helpers.js';
+export { awardKillVp, awardObjectiveVp, deductVp, checkNefariousGains } from './vp-helpers.js';
 
 export { filterCondition, isConditionImmune, HARMFUL_CONDITIONS, applyCondition, resetCondition } from './conditions.js';
 

@@ -24,7 +24,7 @@ function getStatsForDc(dcName) {
     return key ? map[key] : {};
   })();
 }
-import { applyCondition, resetCondition, filterCondition, HARMFUL_CONDITIONS } from './conditions.js';
+import { applyCondition, resetCondition, filterCondition, isConditionImmune, HARMFUL_CONDITIONS } from './conditions.js';
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces } from './movement.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum } from './player-helpers.js';
@@ -998,6 +998,7 @@ export function resolveAbility(abilityId, context) {
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = dcEffects?.[fkDcName];
         if (!fkEff?.elite) continue;
+        if (fkEff.affiliation !== 'Scum' && fkEff.affiliation !== 'Mercenary') continue;
         validTargets.push(fk);
       }
     }
@@ -2423,8 +2424,33 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: clearOpponentDiscard + optional draw with drawIfTrait (Fool Me Once)
   if (entry.type === 'ccEffect' && entry.clearOpponentDiscard) {
-    const { game, playerNum, dcMessageMeta } = context;
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+
+    // Apply strain cost to activating figure (e.g. Fool Me Once costs 2 Strain)
+    let strainNote = '';
+    let refreshDcEmbed = false;
+    if (entry.strainCostToSelf > 0 && dcMessageMeta && dcHealthState) {
+      const selfMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      if (selfMsgId) {
+        const selectedFig = game.dcActionsData?.[selfMsgId]?.selectedFigure ?? 0;
+        const healthState = dcHealthState.get(selfMsgId) || [];
+        if (healthState[selectedFig]) {
+          const [cur, max] = healthState[selectedFig];
+          const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
+          healthState[selectedFig] = [newCur, max ?? newCur];
+          dcHealthState.set(selfMsgId, healthState);
+          syncHealthStateToList(game, playerNum, selfMsgId, healthState);
+          strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${cur ?? max} → ${newCur} HP).`;
+          refreshDcEmbed = true;
+        } else {
+          strainNote = ` (Apply ${entry.strainCostToSelf} Strain to yourself manually.)`;
+        }
+      } else {
+        strainNote = ` (Apply ${entry.strainCostToSelf} Strain to yourself manually.)`;
+      }
+    }
+
     const oppNum = opponentPlayerNum(playerNum);
     const discardKey = ccDiscardKey(oppNum);
     const cleared = (game[discardKey] || []).length;
@@ -2447,9 +2473,10 @@ export function resolveAbility(abilityId, context) {
     if (drew.length > 0) parts.push(`drew ${drew.length} card(s)`);
     return {
       applied: true,
-      logMessage: parts.length ? parts.join('; ') + '.' : 'Opponent discard cleared.',
+      logMessage: (parts.length ? parts.join('; ') + '.' : 'Opponent discard cleared.') + strainNote,
       drewCards: drew.length ? drew : undefined,
       refreshOpponentDiscard: cleared > 0,
+      refreshDcEmbed,
     };
   }
 
@@ -5122,6 +5149,15 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Choose 1 attack die and remove it from the attack pool.' };
   }
 
+  // ccEffect: elusiveEffect (Elusive) — while defending, choose 1 attack die to nullify results, then 1 defense die is also nullified
+  if (entry.type === 'ccEffect' && entry.elusiveEffect) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: while defending, choose 1 attack die and remove its results, then remove 1 defense die results.' };
+    cbt.elusiveActive = true;
+    return { applied: true, logMessage: 'Elusive — After rerolls, choose 1 attack die to nullify. 1 defense die will also be nullified.' };
+  }
+
   // ccEffect: attackPoolKeepMax (Savage Vigor) — attacker keeps only N dice
   if (entry.type === 'ccEffect' && typeof entry.attackPoolKeepMax === 'number' && entry.attackPoolKeepMax > 0) {
     const { game, combat } = context;
@@ -5282,9 +5318,27 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play after resolving a Special Action during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    // Grant 1 extra action
+    const actionsData = game.dcActionsData?.[msgId];
+    if (actionsData && typeof actionsData.remaining === 'number') {
+      actionsData.remaining = Math.min(actionsData.total ?? 2, actionsData.remaining + 1);
+    }
     game.activationExtraActionThenStun = game.activationExtraActionThenStun || {};
     game.activationExtraActionThenStun[msgId] = true;
-    return { applied: true, logMessage: 'Perform 1 additional action; then you become Stunned.' };
+    // Determine the activating figure key for immunity check
+    const meta = dcMessageMeta.get(msgId);
+    const figureKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const selectedFig = actionsData?.selectedFigure ?? 0;
+    const figureKey = figureKeys[selectedFig] || figureKeys[0];
+    // C76: Check harmful condition immunity before applying Stun
+    if (figureKey && isConditionImmune(game, figureKey)) {
+      return { applied: true, logMessage: 'Perform 1 additional action. Figure is immune to HARMFUL conditions — Stun skipped.', refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId] };
+    }
+    // Apply Stun
+    if (figureKey) {
+      applyCondition(game, figureKey, 'Stun');
+    }
+    return { applied: true, logMessage: 'Perform 1 additional action; then you become Stunned.', refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], conditionCardsToPost: ['Stun'] };
   }
 
   // ccEffect: pickpocketVpByAccuracy (Pickpocket) — choiceIndex 0–3 = green die Accuracy result
@@ -7272,16 +7326,23 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Overcharged Weapons** — **${meta?.dcName || 'VEHICLE'}** gains 1 free attack (+Pierce 2). ${meta?.dcName || 'Vehicle'} is exhausted and Weakened.` };
   }
 
-  // ccEffect: partingBlowEffect (Parting Blow) — interrupt: free attack on hostile exiting adjacent + become Stunned
+  // ccEffect: partingBlowEffect (Parting Blow) — interrupt: free attack on hostile exiting adjacent + become Stunned (once per move)
   if (entry.type === 'ccEffect' && entry.partingBlowEffect) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
+    // Once per move: check if already used this move
+    game.partingShotTriggered = game.partingShotTriggered || {};
+    if (game.partingShotTriggered[msgId]) {
+      return { applied: false, manualMessage: 'Parting Blow already used this move.' };
+    }
     const meta = dcMessageMeta.get(msgId);
     // Grant free attack
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[msgId] = true;
+    // Mark as used this move (cleared at activation cleanup)
+    game.partingShotTriggered[msgId] = true;
     // Apply Stun to activating figure
     const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     actKeys.forEach((fk) => { applyCondition(game, fk, 'Stun'); });
@@ -7462,10 +7523,20 @@ export function resolveAbility(abilityId, context) {
     const opts = [];
     const vals = [];
     for (const dca of playerDcs) {
-      const kwA = new Set((dcEffects[dca.dcName]?.keywords || []).map((k) => String(k).toUpperCase()));
+      // dca is the card to exhaust — it must currently be readied (not exhausted)
+      if (dcExhaustedState?.get(dca.msgId) !== false) continue;
+      const effA = dcEffects[dca.dcName] || {};
+      const kwA = new Set((effA.keywords || []).map((k) => String(k).toUpperCase()));
+      const costA = effA.cost ?? 0;
       for (const dcb of playerDcs) {
         if (dca.msgId === dcb.msgId) continue;
-        const kwB = (dcEffects[dcb.dcName]?.keywords || []).map((k) => String(k).toUpperCase());
+        // dcb is the card to ready — it must currently be exhausted
+        if (dcExhaustedState?.get(dcb.msgId) !== true) continue;
+        const effB = dcEffects[dcb.dcName] || {};
+        const costB = effB.cost ?? 0;
+        // Ready DC must have equal or lower deployment cost
+        if (costB > costA) continue;
+        const kwB = (effB.keywords || []).map((k) => String(k).toUpperCase());
         const shared = kwB.find((k) => kwA.has(k));
         if (shared && opts.length < 25) {
           opts.push(`Exhaust ${dca.dcName} → Ready ${dcb.dcName} (${shared})`);
@@ -7727,7 +7798,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: mpBonus (Adrenaline — gain N MP during your activation; standalone, no damage or condition cost)
+  // ccEffect: mpBonus (standalone — gain N MP during your activation; no damage or condition cost)
   if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
@@ -7735,6 +7806,53 @@ export function resolveAbility(abilityId, context) {
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
     addMovementPoints(game, msgId, entry.mpBonus);
     return { applied: true, logMessage: `Gained **${entry.mpBonus} MP**.` };
+  }
+
+  // ccEffect: adrenalineEffect (Adrenaline) — +5 Health to each friendly WOOKIEE this round; at end of round each suffers 5 Damage
+  if (entry.type === 'ccEffect' && entry.adrenalineEffect) {
+    const { game, playerNum, dcHealthState } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve manually: apply +5 Health to each of your WOOKIEEs this round.' };
+    const dcEffects = getDcEffects() || {};
+    const dcList = getDcList(game, playerNum) || [];
+    const dcIds = getDcMessageIds(game, playerNum) || [];
+    const boosted = [];
+    for (let i = 0; i < dcList.length; i++) {
+      const dc = dcList[i];
+      if (!dc || dc.defeated) continue;
+      const mid = dcIds[i];
+      if (!mid) continue;
+      const baseName = (dc.dcName || '').replace(/\s*\[.*\]\s*$/, '').trim();
+      const eff = dcEffects[baseName] || dcEffects[dc.dcName] || {};
+      const kws = (eff.keywords || []).map(k => String(k).toUpperCase());
+      if (!kws.includes('WOOKIEE') && !kws.includes('WOOKIE')) continue;
+      // Boost each figure in this DC's healthState by +5 max and +5 current
+      const healthState = dcHealthState ? dcHealthState.get(mid) : (dc.healthState || null);
+      if (!healthState || !Array.isArray(healthState)) continue;
+      for (let fi = 0; fi < healthState.length; fi++) {
+        if (!Array.isArray(healthState[fi])) continue;
+        const [cur, max] = healthState[fi];
+        const curHp = cur ?? max ?? 0;
+        const maxHp = max ?? cur ?? 0;
+        healthState[fi] = [curHp + 5, maxHp + 5];
+      }
+      if (dcHealthState) {
+        dcHealthState.set(mid, healthState);
+        syncHealthStateToList(game, playerNum, mid, healthState);
+      } else {
+        dc.healthState = [...healthState];
+      }
+      boosted.push({ msgId: mid, dcName: dc.displayName || dc.dcName, figureCount: healthState.length });
+    }
+    if (boosted.length === 0) {
+      return { applied: false, manualMessage: 'No friendly WOOKIEE figures found. Resolve manually if applicable.' };
+    }
+    // Store tracking data for end-of-round cleanup
+    game.adrenalineBonuses = game.adrenalineBonuses || {};
+    for (const b of boosted) {
+      game.adrenalineBonuses[b.msgId] = { playerNum, dcName: b.dcName, figureCount: b.figureCount };
+    }
+    const names = boosted.map(b => `**${b.dcName}**`).join(', ');
+    return { applied: true, logMessage: `**Adrenaline** — ${names} gained **+5 Health** this round.` };
   }
 
   // ccEffect: readyOwnDeploymentCard (Son of Skywalker — ready your DC after any activation)

@@ -293,7 +293,7 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
   if (!playableBy || playableBy.toLowerCase() === 'any figure') return { legal: true };
 
   const dcList = getDcList(game, playerNum) || [];
-  const allKeywords = getDcKeywords();
+  const allKeywords = getDcKeywords(game);
   const dcEffects = getDcEffects() || {};
   const p = playableBy.toLowerCase();
 
@@ -406,14 +406,15 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
 }
 
 /** Check if DC keywords match a CC's playableBy (shared logic for all CC timing checks). */
-export function ccPlayableByMatches(playableBy, dcName, displayName, hasDarksaberImperial = false, extraKeywords = null) {
+export function ccPlayableByMatches(playableBy, dcName, displayName, hasDarksaberImperial = false, extraKeywords = null, game = null) {
   if (!playableBy) return false;
   if (playableBy.toLowerCase() === 'any figure') return true;
   const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
   const displayBase = (displayName || dcBase).replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
   const d = dcBase.toLowerCase();
   const disp = displayBase.toLowerCase();
-  const baseKeywords = getDcKeywords()[dcName] || getDcKeywords()[dcBase];
+  const kwMap = getDcKeywords(game);
+  const baseKeywords = kwMap[dcName] || kwMap[dcBase];
   const keywords = extraKeywords ? [...(baseKeywords || []), ...extraKeywords] : baseKeywords;
   const alternatives = playableBy.split(/\s+or\s+/i).map((s) => s.trim().toLowerCase());
   for (const p of alternatives) {
@@ -428,7 +429,8 @@ export function ccPlayableByMatches(playableBy, dcName, displayName, hasDarksabe
 /** Check if activating DC has The Darksaber and is a FORCE USER → can use IMPERIAL CCs. */
 export function hasDarksaberImperial(game, playerNum, dcName) {
   const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-  const keywords = getDcKeywords()[dcName] || getDcKeywords()[dcBase];
+  const kwMap = getDcKeywords(game);
+  const keywords = kwMap[dcName] || kwMap[dcBase];
   if (!keywords?.some((k) => String(k).toUpperCase() === 'FORCE USER')) return false;
   const atts = getDcAttachments(game, playerNum) || {};
   const msgIds = getDcMessageIds(game, playerNum) || [];
@@ -441,10 +443,10 @@ export function hasDarksaberImperial(game, playerNum, dcName) {
 }
 
 /** True if this DC can legally play this CC (for Special Action timing). */
-export function isCcPlayableByDc(ccName, dcName, displayName, hasDarksaber = false, extraKeywords = null) {
+export function isCcPlayableByDc(ccName, dcName, displayName, hasDarksaber = false, extraKeywords = null, game = null) {
   const effect = getCcEffect(ccName);
   if (!effect || (effect.timing || '').toLowerCase() !== 'specialaction') return false;
-  return ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber, extraKeywords);
+  return ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber, extraKeywords, game);
 }
 
 /** CC names in hand that are Special Action and legally playable by this DC. */
@@ -452,14 +454,14 @@ export function getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName)
   const hand = getCcHand(game, playerNum) || [];
   const darksaber = hasDarksaberImperial(game, playerNum, dcName);
   const extraKw = _getProgrammingOverrideKeywords(game, playerNum, dcName);
-  return hand.filter((ccName) => isCcPlayableByDc(ccName, dcName, displayName, darksaber, extraKw));
+  return hand.filter((ccName) => isCcPlayableByDc(ccName, dcName, displayName, darksaber, extraKw, game));
 }
 
 /** True if this DC can legally play this CC (for Double Action Special timing). */
-export function isCcDoubleActionPlayableByDc(ccName, dcName, displayName, hasDarksaber = false, extraKeywords = null) {
+export function isCcDoubleActionPlayableByDc(ccName, dcName, displayName, hasDarksaber = false, extraKeywords = null, game = null) {
   const effect = getCcEffect(ccName);
   if (!effect || (effect.timing || '').toLowerCase() !== 'doubleactionspecial') return false;
-  return ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber, extraKeywords);
+  return ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber, extraKeywords, game);
 }
 
 /** CC names in hand that are Double Action Special and legally playable by this DC. */
@@ -467,7 +469,7 @@ export function getPlayableCcDoubleActionsForDc(game, playerNum, dcName, display
   const hand = getCcHand(game, playerNum) || [];
   const darksaber = hasDarksaberImperial(game, playerNum, dcName);
   const extraKw = _getProgrammingOverrideKeywords(game, playerNum, dcName);
-  return hand.filter((ccName) => isCcDoubleActionPlayableByDc(ccName, dcName, displayName, darksaber, extraKw));
+  return hand.filter((ccName) => isCcDoubleActionPlayableByDc(ccName, dcName, displayName, darksaber, extraKw, game));
 }
 
 /** CC names in hand that are End-of-Activation timing and legally playable by this DC. */
@@ -478,7 +480,7 @@ export function getPlayableCcEndOfActivationForDc(game, playerNum, dcName, displ
   return hand.filter((ccName) => {
     const effect = getCcEffect(ccName);
     if (!effect || (effect.timing || '').toLowerCase() !== 'endofactivation') return false;
-    return ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, darksaber, extraKw);
+    return ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, darksaber, extraKw, game);
   });
 }
 

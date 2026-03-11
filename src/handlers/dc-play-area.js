@@ -1162,6 +1162,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     await interaction.followUp({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // C75 — To the Limit: extra action cannot be Move
+  if (action === 'Move' && game.activationExtraActionThenStun?.[msgId]) {
+    await interaction.followUp({ content: '**To the Limit** — the extra action cannot be a Move. Choose Attack, Special, or Interact.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   if (buttonKey === 'dc_special_') {
     const parts = interaction.customId.replace('dc_special_', '').split('_');
     const specialIdx = parseInt(parts[0], 10);

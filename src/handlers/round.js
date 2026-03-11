@@ -21,6 +21,22 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 
 /**
+ * Returns a Set of form names already chosen by OTHER Clawdite Shapeshifters
+ * on the same team.  Used to prevent two Clawdites from sharing a form.
+ */
+function getFormsChosenByTeamClawdites(game, playerNum, excludeFigureKey) {
+  const taken = new Set();
+  const positions = game.figurePositions?.[playerNum] || {};
+  for (const fk of Object.keys(positions)) {
+    if (fk === excludeFigureKey) continue;
+    if (!fk.startsWith('Clawdite Shapeshifter')) continue;
+    const form = getConfig(game, fk)?.form;
+    if (form) taken.add(form);
+  }
+  return taken;
+}
+
+/**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, replyIfGameEnded, getPlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, dcMessageMeta, dcExhaustedState, dcHealthState, isDepletedRemovedFromGame, buildDcEmbedAndFiles, getDcPlayAreaComponents, countTerminalsControlledByPlayer, isFigureInDeploymentZone, checkWinConditions, getMapTokensData, getSpaceController, getMissionRules, runEndOfRoundRules, getFiguresOnOrAdjacentToSpace, runNpcThugActivation, applyNpcDamageToFigure, getMapSpaces, getMapRegistry, filterMapSpacesByBounds, getInitiativePlayerZoneLabel, updateHandVisualMessage, buildHandDisplayPayload, sendRoundActivationPhaseMessage, buildBoardMapPayload, postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, client
  */
@@ -237,6 +253,48 @@ export async function handleEndEndOfRound(interaction, ctx) {
       await logGameAction(game, client, `**End of round:** ${displayName} suffered ${entry.damage} Damage (e.g. Blaze of Glory).`, { phase: 'ROUND', icon: 'round' });
     }
     game.endOfRoundSelfDamage = {};
+  }
+  // Adrenaline: deal 5 Damage then revert +5 maxHp bonus for each boosted WOOKIEE
+  if (game.adrenalineBonuses && typeof game.adrenalineBonuses === 'object') {
+    for (const [msgId, info] of Object.entries(game.adrenalineBonuses)) {
+      const pn = info.playerNum;
+      if (!dcMessageMeta.get(msgId)) continue;
+      const healthState = dcHealthState.get(msgId);
+      if (!healthState) continue;
+      for (let fi = 0; fi < healthState.length; fi++) {
+        if (!Array.isArray(healthState[fi])) continue;
+        const [cur, max] = healthState[fi];
+        const curHp = cur ?? max ?? 0;
+        const maxHp = max ?? cur ?? 0;
+        // 1. Suffer 5 damage
+        const afterDamage = Math.max(0, curHp - 5);
+        // 2. Revert the +5 max HP bonus
+        const newMax = Math.max(0, maxHp - 5);
+        // Clamp current to new max
+        const newCur = Math.min(afterDamage, newMax);
+        healthState[fi] = [newCur, newMax];
+      }
+      dcHealthState.set(msgId, healthState);
+      // Sync to dcList
+      const dcIds = getDcMessageIds(game, pn) || [];
+      const dcListArr = getDcList(game, pn) || [];
+      const idx = dcIds.indexOf(msgId);
+      if (idx >= 0 && dcListArr[idx]) dcListArr[idx].healthState = [...healthState];
+      // Check for defeats
+      for (let fi = 0; fi < healthState.length; fi++) {
+        if (!Array.isArray(healthState[fi])) continue;
+        if (healthState[fi][0] <= 0) {
+          // Figure defeated by Adrenaline end-of-round damage
+          const dcName = info.dcName || 'Figure';
+          const figureKey = Object.keys(game.figurePositions?.[pn] || {}).find(fk => fk.startsWith(dcName.replace(/\s*\[.*\]\s*$/, '').trim()));
+          if (figureKey && game.figurePositions?.[pn]?.[figureKey]) {
+            delete game.figurePositions[pn][figureKey];
+          }
+        }
+      }
+      await logGameAction(game, client, `**End of round — Adrenaline** — **${info.dcName}** lost **+5 Health** bonus and suffered **5 Damage**.`, { phase: 'ROUND', icon: 'round' });
+    }
+    game.adrenalineBonuses = {};
   }
   // Scavenged Walker: end of round, may interrupt to perform an attack with -1 Hit
   for (const pn of [1, 2]) {
@@ -578,7 +636,8 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           const _fk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith(dc.dcName + '-'));
           const _curForm = _fk ? getConfig(game, _fk)?.form : null;
           const formCards = getFormCards();
-          const formNames = Object.keys(formCards);
+          const takenForms = _fk ? getFormsChosenByTeamClawdites(game, playerNum, _fk) : new Set();
+          const formNames = Object.keys(formCards).filter(n => !takenForms.has(n));
           if (_fk && formNames.length > 0) {
             const btns = formNames.map(name => new ButtonBuilder()
               .setCustomId(`form_pick_${gameId}_${_fk}_${name}`)
@@ -828,7 +887,8 @@ export async function handleEndStartOfRound(interaction, ctx) {
           const _fk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith(dc.dcName + '-'));
           const _curForm = _fk ? getConfig(game, _fk)?.form : null;
           const formCards = getFormCards();
-          const formNames = Object.keys(formCards);
+          const takenForms = _fk ? getFormsChosenByTeamClawdites(game, playerNum, _fk) : new Set();
+          const formNames = Object.keys(formCards).filter(n => !takenForms.has(n));
           if (_fk && formNames.length > 0) {
             const btns = formNames.map(name => new ButtonBuilder()
               .setCustomId(`form_pick_${gameId}_${_fk}_${name}`)

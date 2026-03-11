@@ -7,7 +7,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
-import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
   getCcHand, getActivatedDcIndices,
@@ -177,6 +177,9 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     if (logGameAction) {
       await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
     }
+    // Nefarious Gains (Jabba): strain/ability defeat
+    const _ngStrain = checkNefariousGains(game, playerNum);
+    if (_ngStrain && logGameAction) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngStrain.jabbaOwnerPN} VP: ${_ngStrain.vpTotal}`, { phase: 'ROUND', icon: 'card' });
     const dcIds = getDcMessageIds(game, playerNum);
     const idx = (dcIds || []).indexOf(msgId);
     if (idx >= 0 && isGroupDefeated?.(game, playerNum, idx)) {
@@ -422,13 +425,14 @@ export async function handleAttackTarget(interaction, ctx) {
       _mysticHunterFired = true;
     }
   }
-  // Full of Rage (Krrsantan): auto-Focus before attacking if 6+ damage suffered
+  // Full of Rage (Krrsantan): auto-Focus before attacking if 3+ damage suffered
   let _fullOfRageFired = false;
+  let _fullOfRageDmg = 0;
   if ((_atkEff?.specialAbilityIds || []).includes('full_of_rage') && !attackerConds.includes('Focus')) {
     const _forHpArr = dcHealthState?.get(msgId) || [];
     const _forFigHp = _forHpArr[figureIndex];
-    const _forDmg = _forFigHp ? Math.max(0, (_forFigHp[1] ?? _forFigHp[0] ?? 0) - (_forFigHp[0] ?? 0)) : 0;
-    if (_forDmg >= 6) {
+    _fullOfRageDmg = _forFigHp ? Math.max(0, (_forFigHp[1] ?? _forFigHp[0] ?? 0) - (_forFigHp[0] ?? 0)) : 0;
+    if (_fullOfRageDmg >= 3) {
       if (applyCondition(game, attackerFigureKey, 'Focus')) {
         attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'green'] };
         _fullOfRageFired = true;
@@ -495,7 +499,7 @@ export async function handleAttackTarget(interaction, ctx) {
     components: [readyRow],
   });
   if (_mysticHunterFired) await thread.send(`🔮 **Mystic Hunter** — **${meta.dcName}** becomes **Focused** (+1 green die).`).catch(discordCatch);
-  if (_fullOfRageFired) await thread.send(`**Full of Rage** — Krrsantan becomes **Focused** before attacking (+1 green die).`).catch(discordCatch);
+  if (_fullOfRageFired) await thread.send(`**Full of Rage** — Krrsantan becomes **Focused** before attacking (${_fullOfRageDmg} damage suffered, +1 green die).`).catch(discordCatch);
   if (_flyByFired) await thread.send(`🚀 **Fly-By** — Target within 2 spaces: +1 blue die to attack pool.`).catch(discordCatch);
   if (_aimFired) await thread.send(`🎯 **Aim** — Target already suffered damage this activation: +1 Hit, +2 Accuracy.`).catch(discordCatch);
   const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
@@ -701,11 +705,11 @@ export async function handleAttackTarget(interaction, ctx) {
     }
     // Cross Training (defending): replace 1 defense die with white die (exhaust — once per round)
     if (_defUpgrades.includes('Cross Training')) {
-      const _ctExh = game.crossTrainingExhausted?.[msgId];
+      const _ctExh = game.crossTrainingExhausted?.[_defMsgId];
       if (!_ctExh) {
         _pc.crossTrainingDefend = true;
         game.crossTrainingExhausted = game.crossTrainingExhausted || {};
-        game.crossTrainingExhausted[msgId] = true;
+        game.crossTrainingExhausted[_defMsgId] = true;
       }
     }
     // Rogue Smuggler (defender): lose Distracting — negate the passive if present
@@ -811,7 +815,8 @@ export async function handleAttackTarget(interaction, ctx) {
   {
     const _fokAtkDcList = getDcList(game, attackerPlayerNum) || [];
     if (_fokAtkDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]')) {
-      const _fokAtkKws = (getDcKeywordsGlobal()[meta.dcName] || []).map(k => String(k).toUpperCase());
+      const _fokKwMap = getDcKeywordsGlobal(game);
+      const _fokAtkKws = (_fokKwMap[meta.dcName] || []).map(k => String(k).toUpperCase());
       const _fokAtkEff = getDcEffectsGlobal()[meta.dcName];
       const _fokIsElite = meta.dcName?.includes('(Elite)') || _fokAtkEff?.elite === true;
       if (_fokAtkKws.includes('WOOKIEE') && _fokIsElite && distanceToTarget <= 2 && !target.isNpc) {
@@ -821,7 +826,7 @@ export async function handleAttackTarget(interaction, ctx) {
           const hasFriendlyWookiee = Object.entries(friendlyPositions).some(([fk, pos]) => {
             if (!pos || fk === attackerFigureKey) return false;
             const fkDcName = dcNameFromFigureKey(fk);
-            const fkKws = (getDcKeywordsGlobal()[fkDcName] || []).map(k => String(k).toUpperCase());
+            const fkKws = (_fokKwMap[fkDcName] || []).map(k => String(k).toUpperCase());
             return fkKws.includes('WOOKIEE') && _getRange(pos, defPos) <= 2;
           });
           if (hasFriendlyWookiee) {
@@ -1236,6 +1241,61 @@ export async function handleAttackTarget(interaction, ctx) {
           await thread.send(`**Bespin Security** (${fkDcName}) — adjacent to attacker, +1 attack reroll.`);
           bespinApplied = true;
         }
+      }
+    }
+  }
+
+  // Airborne Commander (Gar Saxon): friendly Mobile figures within 4 spaces may use Gar Saxon's surge abilities
+  if (mapSpaces && getRange) {
+    const atkPosAC = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
+    const atkKwsAC = (getDcKeywordsGlobal(game)[meta.dcName] || []).map(k => String(k).toUpperCase());
+    const attackerIsMobile = atkKwsAC.includes('MOBILE');
+    if (atkPosAC) {
+      const friendlyPosAC = game.figurePositions?.[attackerPlayerNum] || {};
+      for (const [fk, pos] of Object.entries(friendlyPosAC)) {
+        if (fk === attackerFigureKey || !pos) continue;
+        const fkDcName = dcNameFromFigureKey(fk);
+        const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+        if (!(fkEff?.specialAbilityIds || []).includes('airborne_commander_gar_saxon')) continue;
+        if (getRange(atkPosAC, pos) > 4) continue;
+        if (!attackerIsMobile) {
+          await thread.send(`**Airborne Commander** — ${fkDcName} is within 4 spaces, but **${meta.dcName}** does not have the **Mobile** keyword. Surge sharing skipped.`).catch(discordCatch);
+          break;
+        }
+        const saxonSurges = fkEff?.surgeAbilities || [];
+        if (saxonSurges.length) {
+          game.pendingCombat.bonusSurgeAbilities.push(...saxonSurges);
+          await thread.send(`**Airborne Commander** (${fkDcName}) — **${meta.dcName}** is Mobile and within 4 spaces: Gar Saxon's surge abilities added (${saxonSurges.join(', ')}).`).catch(discordCatch);
+        }
+        break; // only one Airborne Commander source
+      }
+    }
+  }
+
+  // Advanced Firepower (General Sorin): adjacent friendly DROID or VEHICLE may use Sorin's surge abilities
+  if (mapSpaces) {
+    const atkPosAF = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
+    const atkKwsAF = (getDcKeywordsGlobal(game)[meta.dcName] || []).map(k => String(k).toUpperCase());
+    const attackerIsDroidOrVehicle = atkKwsAF.includes('DROID') || atkKwsAF.includes('VEHICLE');
+    if (atkPosAF) {
+      const adjToAtkAF = new Set((mapSpaces.adjacency?.[String(atkPosAF).toLowerCase()] || []).map(s => String(s).toLowerCase()));
+      const friendlyPosAF = game.figurePositions?.[attackerPlayerNum] || {};
+      for (const [fk, pos] of Object.entries(friendlyPosAF)) {
+        if (fk === attackerFigureKey || !pos) continue;
+        if (!adjToAtkAF.has(String(pos).toLowerCase())) continue;
+        const fkDcName = dcNameFromFigureKey(fk);
+        const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+        if (!(fkEff?.specialAbilityIds || []).includes('advanced_firepower_sorin')) continue;
+        if (!attackerIsDroidOrVehicle) {
+          await thread.send(`**Advanced Firepower** — ${fkDcName} is adjacent, but **${meta.dcName}** is not a DROID or VEHICLE. Surge sharing skipped.`).catch(discordCatch);
+          break;
+        }
+        const sorinSurges = fkEff?.surgeAbilities || [];
+        if (sorinSurges.length) {
+          game.pendingCombat.bonusSurgeAbilities.push(...sorinSurges);
+          await thread.send(`**Advanced Firepower** (${fkDcName}) — **${meta.dcName}** is an adjacent DROID/VEHICLE: Sorin's surge abilities added (${sorinSurges.join(', ')}).`).catch(discordCatch);
+        }
+        break; // only one Advanced Firepower source
       }
     }
   }
@@ -2147,9 +2207,12 @@ export async function sendRerollUI(thread, game, combat, phase) {
       return;
     }
     const buttons = [];
+    const atkAlreadyRerolled = combat.attackerRerolledIndices || []; // G12
+    const defAlreadyRerolled = combat.defenderRerolledIndices || []; // G12
     if (entry.pool === 'attack' || entry.pool === 'any') {
       const aDice = combat.attackDiceResults || [];
       for (let i = 0; i < aDice.length; i++) {
+        if (atkAlreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
         buttons.push(
           new ButtonBuilder()
             .setCustomId(`combat_reroll_${gameId}_atk_${i}`)
@@ -2161,6 +2224,7 @@ export async function sendRerollUI(thread, game, combat, phase) {
     if (entry.pool === 'defense' || entry.pool === 'any') {
       const dDice = combat.defenseDiceResults || [];
       for (let i = 0; i < dDice.length; i++) {
+        if (defAlreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
         buttons.push(
           new ButtonBuilder()
             .setCustomId(`combat_reroll_${gameId}_def_${i}`)
@@ -2269,7 +2333,8 @@ export async function handleCombatReroll(interaction, ctx) {
       const idx = parseInt(choice, 10);
       if (side === 'atk') {
         const dice = combat.attackDiceResults || [];
-        if (idx >= 0 && idx < dice.length) {
+        const _frAtkRerolled = combat.attackerRerolledIndices || [];
+        if (idx >= 0 && idx < dice.length && !_frAtkRerolled.includes(idx)) { // G12: reject already-rerolled
           const oldDie = dice[idx];
           const newDie = rollSingleAttackDie(oldDie.color);
           dice[idx] = newDie;
@@ -2277,11 +2342,15 @@ export async function handleCombatReroll(interaction, ctx) {
           const totals = recalcAttackTotals(dice);
           combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
           _frEntry.remaining -= 1;
+          // G12: mark this die index as rerolled (forced)
+          if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
+          if (!combat.attackerRerolledIndices.includes(idx)) combat.attackerRerolledIndices.push(idx);
           await thread.send(`**${_frEntry.source}** forced reroll ATK ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
         }
       } else {
         const dice = combat.defenseDiceResults || [];
-        if (idx >= 0 && idx < dice.length) {
+        const _frDefRerolled = combat.defenderRerolledIndices || [];
+        if (idx >= 0 && idx < dice.length && !_frDefRerolled.includes(idx)) { // G12: reject already-rerolled
           const oldDie = dice[idx];
           const newDie = rollSingleDefenseDie(oldDie.color);
           dice[idx] = newDie;
@@ -2289,6 +2358,9 @@ export async function handleCombatReroll(interaction, ctx) {
           const totals = recalcDefenseTotals(dice);
           combat.defenseRoll = { block: totals.block, evade: totals.evade, dodge: totals.dodge };
           _frEntry.remaining -= 1;
+          // G12: mark this die index as rerolled (forced)
+          if (!combat.defenderRerolledIndices) combat.defenderRerolledIndices = [];
+          if (!combat.defenderRerolledIndices.includes(idx)) combat.defenderRerolledIndices.push(idx);
           const dodgeTag = newDie.dodge ? '/DODGE' : '';
           await thread.send(`**${_frEntry.source}** forced reroll DEF ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
         }
@@ -2863,6 +2935,56 @@ export async function handleCombatPassive(interaction, ctx) {
     }
     combat.heavyRepeaterResolved = true;
     delete combat.pendingCombatPassive;
+  } else if (abilityKey === 'elusive') {
+    // Elusive: defender chose an attack die to nullify, then worst defense die is also nullified
+    if (choice === 'skip') {
+      await thread.send('**Elusive** — Skipped.');
+    } else {
+      const dieIdx = parseInt(choice, 10);
+      const atkDice = combat.attackDiceResults;
+      const defDice = combat.defenseDiceResults;
+      if (atkDice && dieIdx >= 0 && dieIdx < atkDice.length) {
+        const oldAtk = atkDice[dieIdx];
+        const atkRemovedDmg = oldAtk.dmg || 0;
+        const atkRemovedSurge = oldAtk.surge || 0;
+        const atkRemovedAcc = oldAtk.acc || 0;
+        // Nullify the chosen attack die
+        atkDice[dieIdx] = { ...oldAtk, dmg: 0, surge: 0, acc: 0 };
+        // Recalculate attack totals
+        combat.attackRoll = { dmg: 0, surge: 0, acc: 0 };
+        for (const d of atkDice) {
+          combat.attackRoll.dmg += (d.dmg || 0);
+          combat.attackRoll.surge += (d.surge || 0);
+          combat.attackRoll.acc += (d.acc || 0);
+        }
+        let defMsg = '';
+        // Nullify the worst defense die (lowest total contribution)
+        if (defDice && defDice.length > 0) {
+          let worstIdx = 0;
+          let worstVal = Infinity;
+          for (let di = 0; di < defDice.length; di++) {
+            const val = (defDice[di].block || 0) + (defDice[di].evade || 0) + (defDice[di].dodge ? 100 : 0);
+            if (val < worstVal) { worstVal = val; worstIdx = di; }
+          }
+          const oldDef = defDice[worstIdx];
+          const defRemovedBlock = oldDef.block || 0;
+          const defRemovedEvade = oldDef.evade || 0;
+          const hadDodge = !!oldDef.dodge;
+          defDice[worstIdx] = { ...oldDef, block: 0, evade: 0, dodge: false };
+          // Recalculate defense totals
+          combat.defenseRoll = { block: 0, evade: 0, dodge: false };
+          for (const d of defDice) {
+            combat.defenseRoll.block += (d.block || 0);
+            combat.defenseRoll.evade += (d.evade || 0);
+            if (d.dodge) combat.defenseRoll.dodge = true;
+          }
+          defMsg = ` Defense die #${worstIdx + 1} (${oldDef.color}) nullified: -${defRemovedBlock} Block, -${defRemovedEvade} Evade${hadDodge ? ', -Dodge' : ''}.`;
+        }
+        await thread.send(`**Elusive** — Attack die #${dieIdx + 1} (${oldAtk.color}) nullified: -${atkRemovedDmg} Hit, -${atkRemovedSurge} Surge, -${atkRemovedAcc} Acc.${defMsg}`);
+      }
+    }
+    combat.elusiveResolved = true;
+    delete combat.pendingCombatPassive;
   }
 
   saveGames();
@@ -3065,6 +3187,29 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
         return;
       }
     }
+  }
+
+  // Elusive (CC): while defending, defender chooses 1 attack die to nullify, then worst defense die also nullified
+  if (combat.elusiveActive && !combat.elusiveResolved && combat.attackDiceResults?.length > 0) {
+    combat.pendingCombatPassive = 'elusive';
+    const atkDice = combat.attackDiceResults;
+    const btns = atkDice.map((d, i) =>
+      new ButtonBuilder()
+        .setCustomId(`combat_passive_${game.gameId}_elusive_${i}`)
+        .setLabel(`#${i + 1} ${d.color}: ${d.dmg || 0}H/${d.surge || 0}S/${d.acc || 0}A`.slice(0, 80))
+        .setStyle(ButtonStyle.Primary)
+    );
+    btns.push(new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_elusive_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const rows = [];
+    for (let ri = 0; ri < btns.length; ri += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(ri, ri + 5)));
+    const defenderPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
+    const defenderId = game[`player${defenderPlayerNum}Id`] ?? '';
+    await thread.send({
+      content: `**Elusive** — <@${defenderId}> choose an attack die to nullify (its results will be removed). One defense die will also be nullified.`,
+      components: rows.slice(0, 5),
+    });
+    saveGames?.();
+    return;
   }
 
   const defRoll = combat.defenseRoll;
@@ -3775,6 +3920,9 @@ export async function handleCleaveTarget(interaction, ctx) {
         const vp = (figures > 1 && subCost != null) ? subCost : cost;
         awardKillVp(game, attackerPlayerNum, vp);
         await logGameAction(game, client, `Cleave: <@${ownerId}> defeated **${cleaveLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+        // Nefarious Gains (Jabba): Cleave defeat
+        const _ngCleave = checkNefariousGains(game, cleavePlayerNum);
+        if (_ngCleave) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngCleave.jabbaOwnerPN} VP: ${_ngCleave.vpTotal}`, { phase: 'ROUND', icon: 'card' });
         if (cleaveIdx >= 0 && isGroupDefeated(game, cleavePlayerNum, cleaveIdx)) {
           const activatedIndices = getActivatedDcIndices(game, cleavePlayerNum) || [];
           if (!activatedIndices.includes(cleaveIdx)) {
@@ -3981,6 +4129,9 @@ export async function handleFigureheadDecision(interaction, ctx) {
           awardKillVp(game, attackerPlayerNum, fhVp);
           fhResultText += ` — **${fhLabel || 'Murne Rin'} defeated!** +${fhVp} VP`;
           if (logGameAction) await logGameAction(game, client, `**Figurehead** — ${fhLabel || 'Murne Rin'} was defeated! +${fhVp} VP`, { phase: 'ROUND', icon: 'attack' });
+          // Nefarious Gains (Jabba): Figurehead defeat
+          const _ngFH = checkNefariousGains(game, defenderPlayerNum);
+          if (_ngFH && logGameAction) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngFH.jabbaOwnerPN} VP: ${_ngFH.vpTotal}`, { phase: 'ROUND', icon: 'card' });
           const fhDcIds = getDcMessageIds(game, defenderPlayerNum);
           const fhIdx = (fhDcIds || []).indexOf(fhMsgId);
           if (fhIdx >= 0 && isGroupDefeated?.(game, defenderPlayerNum, fhIdx)) {

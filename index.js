@@ -115,6 +115,8 @@ import {
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
+  validateUpgradeWarnings,
+  validateArmyAffiliation,
   normalizeSquadInput,
   resolveDcName,
   DC_POINTS_LEGAL,
@@ -193,6 +195,7 @@ import {
   awardKillVp,
   awardObjectiveVp,
   deductVp,
+  checkNefariousGains as _checkNefariousGainsVp,
   opponentPlayerNum,
   getInitiativePlayerNum,
   getEffectiveFigureSize,
@@ -1420,9 +1423,15 @@ async function checkWinConditions(game, client) {
   const p2Figures = Object.keys(game.figurePositions?.[2] || {}).length;
 
   if (vp1 >= 40 || vp2 >= 40) {
-    // If both players hit 40+ VP simultaneously, player with more VP wins
-    const winnerId = vp1 > vp2 ? game.player1Id : vp2 > vp1 ? game.player2Id : (vp1 >= 40 ? game.player1Id : game.player2Id);
-    const reason = vp1 >= 40 && vp2 >= 40 ? `40 VP (${vp1} vs ${vp2})` : '40 VP';
+    if (vp1 !== vp2) {
+      // Clear winner by VP total
+      const winnerId = vp1 > vp2 ? game.player1Id : game.player2Id;
+      const reason = vp1 >= 40 && vp2 >= 40 ? `40 VP (${vp1} vs ${vp2})` : '40 VP';
+      await postGameOver(game, client, winnerId, reason);
+      return { ended: true, winnerId, reason };
+    }
+    // VP tied — run tiebreakers
+    const { winnerId, reason } = await resolveVpTiebreaker(game, client, vp1);
     await postGameOver(game, client, winnerId, reason);
     return { ended: true, winnerId, reason };
   }
@@ -1437,6 +1446,70 @@ async function checkWinConditions(game, client) {
     return { ended: true, winnerId, reason };
   }
   return { ended: false };
+}
+
+/**
+ * Resolve a VP tie when both players reach 40+ VP with the same total.
+ * Tiebreaker order:
+ *   1. Player with more kill VP wins
+ *   2. Player with less total damage received wins
+ *   3. Roll a blue die — higher accuracy wins (re-roll on tie)
+ * @returns {{ winnerId: string, reason: string }}
+ */
+async function resolveVpTiebreaker(game, client, tiedVp) {
+  const kills1 = game.player1VP?.kills ?? 0;
+  const kills2 = game.player2VP?.kills ?? 0;
+
+  // Tiebreaker 1: kill VP
+  if (kills1 !== kills2) {
+    const winnerId = kills1 > kills2 ? game.player1Id : game.player2Id;
+    const reason = `VP tiebreaker: kill VP (${kills1} vs ${kills2}), tied at ${tiedVp} VP`;
+    await logGameAction(game, client, `VP tied at **${tiedVp}**. Tiebreaker 1 — **Kill VP**: P1 ${kills1} vs P2 ${kills2}. **<@${winnerId}> wins!**`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [winnerId] } });
+    return { winnerId, reason };
+  }
+
+  // Tiebreaker 2: total damage received (lower wins)
+  const dmg1 = game.totalDamageReceived?.[1] ?? 0;
+  const dmg2 = game.totalDamageReceived?.[2] ?? 0;
+  if (dmg1 !== dmg2) {
+    const winnerId = dmg1 < dmg2 ? game.player1Id : game.player2Id;
+    const reason = `VP tiebreaker: damage received (${dmg1} vs ${dmg2}), tied at ${tiedVp} VP`;
+    await logGameAction(game, client, `VP tied at **${tiedVp}**. Kill VP tied (${kills1} each). Tiebreaker 2 — **Total damage received**: P1 ${dmg1} vs P2 ${dmg2} (lower wins). **<@${winnerId}> wins!**`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [winnerId] } });
+    return { winnerId, reason };
+  }
+
+  // Tiebreaker 3: roll blue die (higher accuracy wins, re-roll on tie)
+  await logGameAction(game, client, `VP tied at **${tiedVp}**. Kill VP tied (${kills1} each). Damage received tied (${dmg1} each). Tiebreaker 3 — **Blue die roll-off!**`, { phase: 'ROUND', icon: 'round' });
+
+  const blueFaces = getDiceData().attack?.blue;
+  if (!blueFaces?.length) {
+    // Fallback: should never happen, but default to player 1 if dice data missing
+    return { winnerId: game.player1Id, reason: `VP tiebreaker: blue die (dice data unavailable), tied at ${tiedVp} VP` };
+  }
+
+  let attempts = 0;
+  const maxAttempts = 20; // safety limit to prevent infinite loop
+  while (attempts < maxAttempts) {
+    attempts++;
+    const face1 = blueFaces[Math.floor(Math.random() * blueFaces.length)];
+    const face2 = blueFaces[Math.floor(Math.random() * blueFaces.length)];
+    const acc1 = face1.acc ?? 0;
+    const acc2 = face2.acc ?? 0;
+
+    if (acc1 !== acc2) {
+      const winnerId = acc1 > acc2 ? game.player1Id : game.player2Id;
+      const reason = `VP tiebreaker: blue die roll (${acc1} vs ${acc2} accuracy), tied at ${tiedVp} VP`;
+      await logGameAction(game, client, `Blue die roll-off (attempt ${attempts}): P1 rolled **${acc1} accuracy**, P2 rolled **${acc2} accuracy**. **<@${winnerId}> wins!**`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [winnerId] } });
+      return { winnerId, reason };
+    }
+    await logGameAction(game, client, `Blue die roll-off (attempt ${attempts}): P1 rolled **${acc1} accuracy**, P2 rolled **${acc2} accuracy** — tied, re-rolling...`, { phase: 'ROUND', icon: 'round' });
+  }
+
+  // Extremely unlikely: 20 ties in a row — pick randomly
+  const winnerId = Math.random() < 0.5 ? game.player1Id : game.player2Id;
+  const reason = `VP tiebreaker: blue die (random after ${maxAttempts} tied rolls), tied at ${tiedVp} VP`;
+  await logGameAction(game, client, `Blue die roll-off: ${maxAttempts} consecutive ties! Random tiebreak: **<@${winnerId}> wins!**`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [winnerId] } });
+  return { winnerId, reason };
 }
 
 /** Post a public achievement unlock notification to #achievements. */
@@ -2101,6 +2174,20 @@ function calculateKillVp(dcName) {
 }
 
 /**
+ * Nefarious Gains (Jabba the Hutt): when ANY hostile figure is defeated,
+ * check if Jabba is alive on the opposing team and award 1 objective VP.
+ * Delegates VP logic to the pure helper in vp-helpers.js.
+ * @param {object} game
+ * @param {number} defeatedOwnerPN - playerNum who owned the defeated figure
+ * @param {object} client - Discord client (for logging)
+ */
+async function checkNefariousGains(game, defeatedOwnerPN, client) {
+  const result = _checkNefariousGainsVp(game, defeatedOwnerPN);
+  if (!result) return;
+  await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${result.jabbaOwnerPN} VP: ${result.vpTotal}`, { phase: 'ROUND', icon: 'card' });
+}
+
+/**
  * If a deployment group is fully defeated and hasn't activated yet,
  * decrement the owner's remaining activations.
  */
@@ -2174,6 +2261,8 @@ async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, source
         const vp = calculateKillVp(dcName);
         awardKillVp(game, oppPN, vp);
         await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** was defeated! +${vp} VP to Player ${oppPN}.`, { phase: 'ROUND', icon: 'attack' });
+        // Nefarious Gains (Jabba): NPC damage defeat
+        await checkNefariousGains(game, playerNum, client);
       } else {
         await logGameAction(game, client, `**${sourceLabel}:** **${dcName}** suffered **${damage} damage** (${newHp}/${maxHp} HP remaining).`, { phase: 'ROUND', icon: 'attack' });
       }
@@ -2212,6 +2301,8 @@ async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage,
     const vp = calculateKillVp(dcList[idx]?.dcName);
     awardKillVp(game, oppPN, vp);
     if (thread) await thread.send(`**${sourceName}** — ${figName} was **defeated**! +${vp} VP.`).catch(discordCatch);
+    // Nefarious Gains (Jabba): direct damage defeat
+    await checkNefariousGains(game, playerNum, client);
     await checkWinConditions(game, client);
   }
 }
@@ -2465,16 +2556,21 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       const dcMessageIds = getDcMessageIds(game, defenderPlayerNum);
       const dcList = getDcList(game, defenderPlayerNum);
       const idx = (dcMessageIds || []).indexOf(targetMsgId);
-      let allConditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
-      // Condition Immunity: filter out harmful conditions for immune figures
-      if (allConditions.length && isConditionImmune(game, combat.target.figureKey)) {
-        const blocked = allConditions.filter((c) => HARMFUL_CONDITIONS.includes(c));
-        allConditions = allConditions.filter((c) => !HARMFUL_CONDITIONS.includes(c));
-        if (blocked.length) {
-          await logGameAction(game, client, `**Condition Immunity** — **${combat.target.label}** is immune to ${blocked.join(', ')}.`, { phase: 'ROUND', icon: 'card' });
+      // G22: Surge conditions (Bleed, Stun, Weaken, etc.) only apply when the attack deals damage.
+      // This block is already inside `if (damage > 0 && targetMsgId)`, but we add an explicit
+      // guard as defense-in-depth so conditions are never applied if damage is 0.
+      if (damage > 0) {
+        let allConditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
+        // Condition Immunity: filter out harmful conditions for immune figures
+        if (allConditions.length && isConditionImmune(game, combat.target.figureKey)) {
+          const blocked = allConditions.filter((c) => HARMFUL_CONDITIONS.includes(c));
+          allConditions = allConditions.filter((c) => !HARMFUL_CONDITIONS.includes(c));
+          if (blocked.length) {
+            await logGameAction(game, client, `**Condition Immunity** — **${combat.target.label}** is immune to ${blocked.join(', ')}.`, { phase: 'ROUND', icon: 'card' });
+          }
         }
+        for (const _ac of allConditions) _applyCondition(game, combat.target.figureKey, _ac);
       }
-      for (const _ac of allConditions) _applyCondition(game, combat.target.figureKey, _ac);
       // Furious Charge: if defender's player played this CC, and suffered >= threshold damage, grant Focus
       if (game.conditionalFocusIfDamagedGte?.playerNum === defenderPlayerNum && damage >= game.conditionalFocusIfDamagedGte.threshold) {
         if (_applyCondition(game, combat.target.figureKey, 'Focus')) {
@@ -2517,7 +2613,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         const _fokHasFury = _fokDefDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]');
         if (_fokHasFury) {
           const _fokTargetName = dcNameFromFigureKey(combat.target.figureKey);
-          const _fokTargetKws = (getDcKeywords()[_fokTargetName] || []).map(k => String(k).toUpperCase());
+          const _fokTargetKws = (getDcKeywords(game)[_fokTargetName] || []).map(k => String(k).toUpperCase());
           if (_fokTargetKws.includes('WOOKIEE')) {
             if (_applyCondition(game, combat.target.figureKey, 'Focus')) {
               await logGameAction(game, client, `**Fury of Kashyyyk** — **${_fokTargetName}** became **Focused** (suffered ${damage} Damage).`, { phase: 'ROUND', icon: 'card' });
@@ -2709,6 +2805,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
                   const _fdAtkVp = (_fdAtkFigures > 1 && _fdAtkEffects?.subCost != null) ? _fdAtkEffects.subCost : (_fdAtkStats?.cost ?? 5);
                   awardKillVp(game, defenderPlayerNum, _fdAtkVp);
                   await logGameAction(game, client, `**Force Deflection** — **${combat.attackerDcName}** was defeated! +${_fdAtkVp} VP to Player ${defenderPlayerNum}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+                  // Nefarious Gains (Jabba): Force Deflection defeat
+                  await checkNefariousGains(game, attackerPlayerNum, client);
                 }
               }
             }
@@ -2899,19 +2997,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           }
         }
         // Nefarious Gains (Jabba): when a hostile figure is defeated, Jabba's owner gains 1 VP
-        const _jabbaOwner = attackerPlayerNum; // attacker defeated the hostile, so Jabba must be on attacker's side
-        for (const pn of [1, 2]) {
-          if (pn === defenderPlayerNum) continue; // Jabba's owner must be the one who defeated someone
-          const _jabbaOnBoard = Object.keys(game.figurePositions?.[pn] || {}).some(fk => fk.startsWith('Jabba the Hutt-'));
-          if (_jabbaOnBoard) {
-            const vpObj = game[vpKey(pn)];
-            if (vpObj) {
-              vpObj.total = (vpObj.total || 0) + 1;
-              vpObj.objectives = (vpObj.objectives || 0) + 1;
-            }
-            await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${pn} VP: ${vpObj?.total ?? 0}`, { phase: 'ROUND', icon: 'card' });
-          }
-        }
+        await checkNefariousGains(game, defenderPlayerNum, client);
         // Into the Force (Obi-Wan): when defeated, a friendly figure becomes Focused
         if (_lsDcName === 'Obi-Wan Kenobi') {
           const _obiAlive = Object.keys(game.figurePositions?.[defenderPlayerNum] || {}).filter(k => !k.startsWith('Obi-Wan Kenobi-'));
@@ -3118,6 +3204,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
               await updateAttachmentMessageForDc(game, blastPlayerNum, blastMsgId, client);
             }
           }
+          // Nefarious Gains (Jabba): blast defeat
+          await checkNefariousGains(game, blastPlayerNum, client);
           await checkWinConditions(game, client);
           const blastDefeatedDcName = blastDcList[blastIdx]?.dcName;
           if (!game.pendingCelebration && isDcUnique(blastDefeatedDcName)) {
@@ -3402,6 +3490,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
               const _ftVp = calculateKillVp(combat.defenderDcName);
               awardKillVp(game, attackerPlayerNum, _ftVp);
               await logGameAction(game, client, `💀 **Incinerate** — **${combat.target.label}** defeated from Strain (+${_ftVp} VP).`, { phase: 'ROUND', icon: 'attack' });
+              // Nefarious Gains (Jabba): Incinerate defeat
+              await checkNefariousGains(game, defenderPlayerNum, client);
               const { dcList: _ftDcList, idx: _ftIdx } = lookupFigureDcIndex(game, defenderPlayerNum, combat.target.figureKey);
               if (_ftIdx >= 0) {
                 await decrementActivationIfGroupDefeated(game, defenderPlayerNum, _ftIdx, client);
@@ -3440,6 +3530,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           const _ftBlastVp = calculateKillVp(_ftBlastName);
           awardKillVp(game, _ftBlastPn === attackerPlayerNum ? defenderPlayerNum : attackerPlayerNum, _ftBlastVp);
           await logGameAction(game, client, `💀 **Incinerate** — **${_ftBlastName}** defeated from Blast Strain (+${_ftBlastVp} VP).`, { phase: 'ROUND', icon: 'attack' });
+          // Nefarious Gains (Jabba): Incinerate blast defeat
+          await checkNefariousGains(game, _ftBlastPn, client);
           const { dcList: _ftBlastDcList, idx: _ftBlastIdx } = lookupFigureDcIndex(game, _ftBlastPn, _ftBlastFk);
           if (_ftBlastIdx >= 0) {
             await decrementActivationIfGroupDefeated(game, _ftBlastPn, _ftBlastIdx, client);
@@ -3522,6 +3614,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         awardKillVp(game, defenderPlayerNum, _sdaVp);
         embedRefreshMsgIds.add(_sdaMsgId);
         await logGameAction(game, client, `**${_sdaName}** defeated itself (self-sacrifice). Opponent gains **${_sdaVp} VP**.`, { phase: 'ROUND', icon: 'attack' });
+        // Nefarious Gains (Jabba): self-defeat
+        await checkNefariousGains(game, attackerPlayerNum, client);
         await checkWinConditions(game, client);
       }
     }
@@ -4312,6 +4406,15 @@ function buildSquadConfirmText(squad, validation) {
   if (!validation.legal) {
     const errorList = validation.errors.map(e => `\u2022 ${e}`).join('\n');
     text += `\n\n\u26a0\ufe0f **Issues detected:**\n${errorList}`;
+  }
+
+  // Informational warnings (non-blocking): upgrade expectations + affiliation
+  const upgradeWarnings = validateUpgradeWarnings(squad);
+  const { warnings: affiliationWarnings } = validateArmyAffiliation(squad);
+  const allWarnings = [...upgradeWarnings, ...affiliationWarnings];
+  if (allWarnings.length) {
+    const warnList = allWarnings.map(w => `\u2022 ${w}`).join('\n');
+    text += `\n\n\u2139\ufe0f **Warnings:**\n${warnList}`;
   }
 
   return text;
@@ -5150,6 +5253,35 @@ client.on('messageCreate', async (message) => {
     if (await maybeAddRequestButtons(message)) return;
   } catch (err) {
     console.error('Request buttons error:', err);
+  }
+
+  // Bothelper support request: detect @bothelpers role mention in a game channel
+  const BOTHELPERS_ROLE_ID = '1472145489817374720';
+  const BOTHELPERS_CHANNEL_ID = '1481314970666008607';
+  try {
+    if (message.mentions.roles.has(BOTHELPERS_ROLE_ID)) {
+      const gameMatch = findGameByChannel(getGamesMap(), message.channel.id);
+      if (gameMatch) {
+        const { gameId, game } = gameMatch;
+        const bothelpersCh = await client.channels.fetch(BOTHELPERS_CHANNEL_ID).catch(() => null);
+        if (bothelpersCh) {
+          const requester = message.author;
+          const sourceLink = `https://discord.com/channels/${message.guild.id}/${message.channel.id}/${message.id}`;
+          const jumpRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`bothelper_jump_${gameId}`).setLabel('Jump In!').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`bothelper_resolve_${gameId}_${message.id}`).setLabel('Resolve').setStyle(ButtonStyle.Secondary),
+          );
+          await bothelpersCh.send({
+            content: `<@&${BOTHELPERS_ROLE_ID}> **Support requested** in **IA Game #${gameId}** by <@${requester.id}>:\n\n> ${message.content.replace(/<@&\d+>/g, '@bothelpers').split('\n').join('\n> ')}\n\n[Jump to message](${sourceLink})`,
+            components: [jumpRow],
+            allowedMentions: { roles: [BOTHELPERS_ROLE_ID] },
+          });
+          await message.react('✅').catch(discordCatch);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Bothelper support request error:', err);
   }
 
   const content = message.content.toLowerCase().trim();
@@ -6203,6 +6335,91 @@ client.on('interactionCreate', async (interaction) => {
       },
       'join_game': async (i) => {
         await i.followUp({ content: 'Browse **#new-games** and click **Join Game** on a lobby post that needs an opponent.', components: [getMainMenu()], ephemeral: true }).catch(discordCatch);
+      },
+      'bothelper_jump_': async (i) => {
+        const gameId = i.customId.replace('bothelper_jump_', '');
+        const game = getGame(gameId);
+        if (!game) {
+          await i.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
+          return;
+        }
+        const helperId = i.user.id;
+        if (helperId === game.player1Id || helperId === game.player2Id) {
+          await i.followUp({ content: 'You are already a player in this game.', ephemeral: true }).catch(discordCatch);
+          return;
+        }
+        const guild = i.guild;
+        if (!guild) return;
+        // Grant read access to all game channels via category + individual channels
+        const channelIds = [game.gameCategoryId, game.generalId, game.chatId, game.boardId, game.p1PlayAreaId, game.p2PlayAreaId].filter(Boolean);
+        for (const chId of channelIds) {
+          try {
+            const ch = await guild.channels.fetch(chId);
+            if (ch) {
+              await ch.permissionOverwrites.create(helperId, {
+                ViewChannel: true,
+                SendMessagesInThreads: true,
+              });
+            }
+          } catch (err) {
+            console.error(`Bothelper permission error for channel ${chId}:`, err);
+          }
+        }
+        // Add to hand threads (private threads need explicit member add)
+        for (const threadId of [game.p1HandId, game.p2HandId].filter(Boolean)) {
+          try {
+            const thread = await client.channels.fetch(threadId);
+            if (thread?.isThread()) await thread.members.add(helperId).catch(discordCatch);
+          } catch (err) {
+            console.error(`Bothelper thread add error for ${threadId}:`, err);
+          }
+        }
+        // Track helpers on the game object
+        if (!game.bothelpers) game.bothelpers = [];
+        if (!game.bothelpers.includes(helperId)) {
+          game.bothelpers.push(helperId);
+          saveGames();
+        }
+        // Update the bothelpers channel message to show who jumped in
+        const existingContent = i.message.content;
+        const helperMention = `<@${helperId}>`;
+        const updatedContent = existingContent + `\n${helperMention} has jumped in to assist!`;
+        await i.message.edit({ content: updatedContent, components: i.message.components }).catch(discordCatch);
+        await i.followUp({ content: `You now have access to **IA Game #${gameId}**. Head to the game channels to help out!`, ephemeral: true }).catch(discordCatch);
+        // Notify the game log
+        try {
+          const generalCh = await client.channels.fetch(game.generalId);
+          if (generalCh) {
+            await generalCh.send({ content: `🛟 <@${helperId}> has joined as a **Bothelper** to assist with this game.`, allowedMentions: { users: [helperId] } }).catch(discordCatch);
+          }
+        } catch (err) {
+          console.error('Bothelper game log notification error:', err);
+        }
+      },
+      'bothelper_resolve_': async (i) => {
+        const remainder = i.customId.replace('bothelper_resolve_', '');
+        const sepIdx = remainder.indexOf('_');
+        const gameId = sepIdx >= 0 ? remainder.slice(0, sepIdx) : remainder;
+        const game = getGame(gameId);
+        if (!game) {
+          await i.followUp({ content: 'Game not found.', ephemeral: true }).catch(discordCatch);
+          return;
+        }
+        const helperId = i.user.id;
+        // Only bothelpers who jumped in (or players) can resolve
+        const isHelper = game.bothelpers?.includes(helperId);
+        const isPlayer = helperId === game.player1Id || helperId === game.player2Id;
+        if (!isHelper && !isPlayer) {
+          await i.followUp({ content: 'Only bothelpers who jumped in or game players can resolve this request.', ephemeral: true }).catch(discordCatch);
+          return;
+        }
+        // Mark message as resolved
+        const existingContent = i.message.content;
+        await i.message.edit({
+          content: existingContent + `\n\n**Resolved** by <@${helperId}>`,
+          components: [], // remove buttons
+        }).catch(discordCatch);
+        await i.followUp({ content: 'Support request resolved.', ephemeral: true }).catch(discordCatch);
       },
     };
     const localHandler = LOCAL_HANDLERS[buttonKey];

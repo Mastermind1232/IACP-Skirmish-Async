@@ -39,6 +39,23 @@ export function awardObjectiveVp(game, playerNum, amount) {
 }
 
 /**
+ * Nefarious Gains (Jabba the Hutt): when any hostile figure is defeated,
+ * check if Jabba is alive on the opposing team and award 1 objective VP.
+ * Pure data mutation — no Discord dependency.
+ * @param {object} game
+ * @param {number} defeatedOwnerPN - playerNum who owned the defeated figure
+ * @returns {{ jabbaOwnerPN: number, vpTotal: number } | null} - info for logging, or null if Jabba not found
+ */
+export function checkNefariousGains(game, defeatedOwnerPN) {
+  const jabbaOwnerPN = defeatedOwnerPN === 1 ? 2 : 1;
+  const jabbaAlive = Object.keys(game.figurePositions?.[jabbaOwnerPN] || {}).some(fk => fk.startsWith('Jabba the Hutt-'));
+  if (!jabbaAlive) return null;
+  awardObjectiveVp(game, jabbaOwnerPN, 1);
+  const vpKey = jabbaOwnerPN === 1 ? 'player1VP' : 'player2VP';
+  return { jabbaOwnerPN, vpTotal: game[vpKey]?.total ?? 0 };
+}
+
+/**
  * Deduct VP (clamped to 0). Deducts from objectives first, then kills.
  * @param {object} game
  * @param {number} playerNum

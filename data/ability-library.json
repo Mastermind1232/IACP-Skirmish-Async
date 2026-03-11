@@ -608,9 +608,9 @@
     },
     "cc:adrenaline": {
       "type": "ccEffect",
-      "label": "Gain +2 MP during your activation",
-      "timing": "duringActivation",
-      "mpBonus": 2,
+      "label": "+5 Health to each friendly WOOKIEE this round; at end of round each suffers 5 Damage",
+      "timing": "startOfRound",
+      "adrenalineEffect": true,
       "wiredStatus": "wired"
     },
     "cc:advance_warning": {
@@ -1472,8 +1472,8 @@
     },
     "Elusive": {
       "type": "ccEffect",
-      "label": "While defending: remove 1 attack die and 1 defense die from results",
-      "defensePoolRemoveMax": 1,
+      "label": "While defending: choose 1 attack die to nullify, then 1 defense die is also nullified",
+      "elusiveEffect": true,
       "wiredStatus": "wired"
     },
     "Emergency Aid": {
@@ -1853,6 +1853,7 @@
       "type": "ccEffect",
       "label": "Return opponent discard to box; draw 1 if SPY",
       "clearOpponentDiscard": true,
+      "strainCostToSelf": 2,
       "draw": 1,
       "drawIfTrait": "SPY",
       "wiredStatus": "wired"

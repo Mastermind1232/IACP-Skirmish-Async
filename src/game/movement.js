@@ -144,8 +144,8 @@ export function getFiguresAdjacentToTarget(game, targetFigureKey, mapId) {
   return out;
 }
 
-export function getMovementKeywords(dcName) {
-  const raw = getDcKeywords()?.[dcName] || [];
+export function getMovementKeywords(dcName, game) {
+  const raw = getDcKeywords(game)?.[dcName] || [];
   return new Set(raw.map((k) => String(k).toLowerCase()));
 }
 
@@ -199,7 +199,7 @@ export function getBoardStateForMovement(game, excludeFigureKey = null) {
     for (const [k, coord] of Object.entries(poses[p] || {})) {
       if (k === excludeFigureKey) continue;
       const dn = dcNameFromFigureKey(k);
-      const kws = getDcKeywords()?.[dn] || [];
+      const kws = getDcKeywords(game)?.[dn] || [];
       if (kws.some((kw) => String(kw).toUpperCase() === 'MASSIVE')) {
         const sz = game.figureOrientations?.[k] || getFigureSize(dn);
         for (const cell of getFootprintCells(coord, sz)) massiveOccupiedSet.add(normalizeCoord(cell));
@@ -213,7 +213,7 @@ export function getMovementProfile(dcName, figureKey, game) {
   const baseSize = getFigureSize(dcName) || '1x1';
   const storedSize = game.figureOrientations?.[figureKey] || baseSize;
   const { cols, rows } = parseSizeString(storedSize);
-  const keywords = getMovementKeywords(dcName);
+  const keywords = getMovementKeywords(dcName, game);
   const isMassive = keywords.has('massive');
   const isMobile = keywords.has('mobile');
   let hasEfficientTravel = keywords.has('efficient travel');

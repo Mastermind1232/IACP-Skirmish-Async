@@ -109,6 +109,11 @@ function ensureGameShape(game) {
     if (game[k] == null) game[k] = {};
   }
 
+  // Tiebreaker tracking: total damage received per player
+  if (!game.totalDamageReceived || typeof game.totalDamageReceived !== 'object') {
+    game.totalDamageReceived = { 1: 0, 2: 0 };
+  }
+
   // Properties that should always be [] (arrays)
   const ARR = [
     'undoStack', 'openedDoors', 'rubbleTokens',

@@ -1,6 +1,6 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { opponentPlayerNum, getPlayerId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
-import { reduceHp, dcNameFromFigureKey, awardKillVp } from '../game/index.js';
+import { reduceHp, dcNameFromFigureKey, awardKillVp, checkNefariousGains } from '../game/index.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -203,6 +203,9 @@ export async function handleVetInstincts(interaction, ctx) {
     if (atkRem > 0 || defRem > 0 || hasForced || hasPreRerolls) {
       combat.attackerRerollsRemaining = atkRem;
       combat.defenderRerollsRemaining = defRem;
+      // G12: ensure per-die reroll tracking arrays exist
+      if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
+      if (!combat.defenderRerolledIndices) combat.defenderRerolledIndices = [];
       if (atkRem > 0 || hasPreRerolls) {
         combat.rerollPhase = 'attacker';
         await sendRerollUI(thread, game, combat, 'attacker');
@@ -367,6 +370,10 @@ export async function handleStrikeMeDown(interaction, ctx) {
 
     if (thread) await thread.send(`**Strike Me Down** — Obi-Wan is defeated (VP cost reduced by 3: ${reducedCost} VP awarded to attacker). Attack ended.`).catch(discordCatch);
     if (logGameAction) await logGameAction(game, client, `**Strike Me Down** — Obi-Wan chose to be defeated. Attacker gains ${reducedCost} VP (cost reduced by 3). Attack cancelled.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+
+    // Nefarious Gains (Jabba): Strike Me Down defeat
+    const _ngSMD = checkNefariousGains(game, defPN);
+    if (_ngSMD && logGameAction) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngSMD.jabbaOwnerPN} VP: ${_ngSMD.vpTotal}`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
 
     // Check win conditions
     if (checkWinConditions) await checkWinConditions(game, client);
@@ -533,6 +540,9 @@ export async function handlePowerConverter(interaction, ctx) {
     const hasForced = (combat.forcedRerollQueue || []).length > 0;
     combat.attackerRerollsRemaining = atkRem;
     combat.defenderRerollsRemaining = defRem;
+    // G12: ensure per-die reroll tracking arrays exist
+    if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
+    if (!combat.defenderRerolledIndices) combat.defenderRerolledIndices = [];
     if (!combat.pendingPreRerolls) combat.pendingPreRerolls = [];
     if (atkRem > 0 || defRem > 0 || hasForced) {
       if (atkRem > 0) {
@@ -623,6 +633,9 @@ export async function handlePowerConverter(interaction, ctx) {
       const totals = recalcAttackTotals(dice);
       combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
       game.powerConverterUsedThisRound = true;
+      // G12: mark this die index as rerolled (cannot be voluntarily rerolled again)
+      if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
+      if (!combat.attackerRerolledIndices.includes(dieIdx)) combat.attackerRerolledIndices.push(dieIdx);
       const swapMsg = colorChoice !== 'skip' && newColor !== oldDie.color ? ` (swapped ${oldDie.color} → ${newColor})` : '';
       if (thread) await thread.send(`⚡ **Power Converter** — Rerolled${swapMsg} #${dieIdx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`).catch(discordCatch);
       if (logGameAction) await logGameAction(game, client, `⚡ **Power Converter** — Rerolled attack die${swapMsg}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);

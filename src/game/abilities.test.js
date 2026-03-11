@@ -108,8 +108,9 @@ test('resolveAbility draw with empty deck: draws what is available', () => {
   assert.strictEqual(game.player1CcDeck.length, 0);
 });
 
-test('resolveAbility returns manual for unimplemented ccEffect', () => {
-  const result = resolveAbility('cc:adrenaline', { game: {}, playerNum: 1 });
+test('resolveAbility Adrenaline returns manual when no WOOKIEEs found', () => {
+  const game = { gameId: 'g1', p1DcMessageIds: [], p1DcList: [] };
+  const result = resolveAbility('cc:adrenaline', { game, playerNum: 1, dcHealthState: new Map() });
   assert.strictEqual(result.applied, false);
   assert.ok(result.manualMessage);
 });
@@ -203,6 +204,32 @@ test("resolveAbility Fool Me Once clears opponent discard and draws 1 if SPY", (
   assert.strictEqual(game.player2CcDiscard.length, 0);
   assert.strictEqual(result.drewCards?.length, 1);
   assert.strictEqual(game.player1CcHand.length, 1);
+});
+
+test("resolveAbility Fool Me Once applies 2 Strain to activating figure", () => {
+  const msgId = 'msg-spy2';
+  const game = {
+    player1CcDeck: ['A'],
+    player2CcDeck: [],
+    player1CcHand: [],
+    player2CcHand: [],
+    player2CcDiscard: ['X', 'Y'],
+    gameId: 'g4b',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: { 1: { 'Agent Blaise-1-0': 'a1' }, 2: {} },
+    p1DcMessageIds: [msgId],
+    p1DcList: [{ dcName: 'Agent Blaise', healthState: [[8, 8]] }],
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g4b', playerNum: 1, dcName: 'Agent Blaise', displayName: 'Agent Blaise [DG 1]' }]]);
+  const dcHealthState = new Map([[msgId, [[8, 8]]]]);
+  const result = resolveAbility('Fool Me Once', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.player2CcDiscard.length, 0);
+  // Strain cost: 8 - 2 = 6
+  const hs = dcHealthState.get(msgId);
+  assert.strictEqual(hs[0][0], 6);
+  assert.ok(result.logMessage.includes('suffered 2 Strain'));
+  assert.strictEqual(result.refreshDcEmbed, true);
 });
 
 test('resolveAbility Battle Scars with active activation gains 1 Power Token', () => {

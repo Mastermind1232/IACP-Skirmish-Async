@@ -395,7 +395,7 @@ Deep-audited against codebase on 2026-03-11 (2nd pass with full code reads).
 | C5 | MANUAL | On the Lam + Return Fire timing interaction is honor-system. No code enforces ordering. |
 | C6 | PASS | Son of Skywalker timing `afterActivationResolves` (cc-effects.json:1711). abilities.js:7662-7675 sets `game.sonOfSkywalkerActive`. activation.js:362-378 auto-readies Luke's DC. Timing allows playing after last figure goes. |
 | C7 | PASS | Bot uses manual "End R{N} Activation Phase" button (activation.js:65-112). Round does NOT auto-end when deployments exhausted — `bothEnded` requires both players to click. |
-| C8 | FAIL | Adrenaline abilityId `cc:adrenaline` is `informational: true` only. Log says "manual HP increase; reset at round end." No code in round.js handles removing +5 Health. Entirely manual. |
+| C8 | PASS | Adrenaline `cc:adrenaline` wired with `adrenalineEffect: true`. abilities.js applies +5 maxHp/curHp to each friendly WOOKIEE. round.js end-of-round reverts +5 maxHp and deals 5 Damage. Tracked via `game.adrenalineBonuses`. |
 | C9 | PASS | Blaze of Glory timing `afterActivationResolves` (cc-effects.json:134), same as Son of Skywalker. `readyOwnDeploymentCard: true` + `endOfRoundSelfDamage: 3` (abilities.js:4792). round.js:223-236 applies self-damage at EOR. |
 | C10 | MANUAL | Capitalize: `defensePoolRemoveMax: 1`. Whether defeated figure gains conditions from that attack is standard defeat logic — no Capitalize-specific code. Requires runtime check. |
 | C11 | PARTIAL | Cloned Reinforcements uses `placeDefeatedFigure` (abilities.js:7971-8137). Places figure on board but does NOT explicitly set respawned group to Readied if entire group was defeated. |
@@ -518,8 +518,7 @@ Deep-audited against codebase on 2026-03-11 (2nd pass with full code reads).
 23. **M77** — Punishing Strike SU not implemented
 24. **M79-M80** — Under Duress SU not implemented
 25. **I48** — Imperial Retrofitting SU not implemented
-26. **C8** — Adrenaline informational only
-27. **C49** — Force Push teleports (no path, no Parting Blow trigger)
+26. **C49** — Force Push teleports (no path, no Parting Blow trigger)
 28. **C54** — Smoke Grenade token not consulted in LOS
 29. **C71-C72** — Self-Augmentation doesn't add DROID keyword
 

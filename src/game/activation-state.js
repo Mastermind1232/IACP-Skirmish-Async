@@ -59,6 +59,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'yhsiwOptions',
   'pendingBoRifle',
   'pendingBombDrop',
+  'activationExtraActionThenStun',
 ];
 
 /**
@@ -198,6 +199,7 @@ const ROUND_OBJECT_FLAGS = [
   'crossTrainingExhausted',
   'massiveMovementLocked',
   'disarmPermanentWeakened',
+  'adrenalineBonuses',
 ];
 
 const ROUND_NULL_FLAGS = [

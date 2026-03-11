@@ -206,8 +206,10 @@ export function getDcEffects() {
 }
 /** Returns a map of dcName → keywords[], derived from dc-effects.json (single source of truth).
  *  Movement/combat-relevant passive traits (Mobile, Massive, Efficient Travel, Reach) are
- *  promoted to keywords so movement.js and combat handlers see them uniformly. */
-export function getDcKeywords() {
+ *  promoted to keywords so movement.js and combat handlers see them uniformly.
+ *  When `game` is provided, dynamically adds keywords granted by CC attachments
+ *  (e.g. Self-Augmentation adds the DROID keyword). */
+export function getDcKeywords(game) {
   const PASSIVE_AS_KEYWORD = new Set(['mobile', 'massive', 'efficient travel', 'reach']);
   const out = {};
   for (const [name, card] of Object.entries(dcEffects)) {
@@ -217,6 +219,32 @@ export function getDcKeywords() {
     }
     if (kws.length) out[name] = kws;
   }
+
+  // ── Overlay dynamic keywords from CC attachments ──
+  if (game) {
+    for (const pn of [1, 2]) {
+      const ccAtts = pn === 1 ? game.p1CcAttachments : game.p2CcAttachments;
+      if (!ccAtts) continue;
+      const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+      const msgIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      if (!dcList || !msgIds) continue;
+      for (const [msgId, cards] of Object.entries(ccAtts)) {
+        if (!Array.isArray(cards)) continue;
+        if (cards.includes('Self-Augmentation')) {
+          const idx = msgIds.indexOf(msgId);
+          if (idx < 0) continue;
+          const dc = dcList[idx];
+          const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+          if (!dcName) continue;
+          if (!out[dcName]) out[dcName] = [];
+          if (!out[dcName].some(k => String(k).toUpperCase() === 'DROID')) {
+            out[dcName].push('Droid');
+          }
+        }
+      }
+    }
+  }
+
   return out;
 }
 export function getDiceData() {

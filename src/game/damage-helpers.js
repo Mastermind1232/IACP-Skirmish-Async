@@ -40,6 +40,13 @@ export function reduceHp(dcHealthState, game, msgId, figureIndex, damage, player
   healthState[figureIndex] = [newHp, maxHp];
   dcHealthState.set(msgId, healthState);
   syncDcList(game, msgId, playerNum, healthState);
+
+  // Track actual damage received for tiebreaker scoring
+  const actualDamage = prevHp - newHp;
+  if (actualDamage > 0 && game.totalDamageReceived) {
+    game.totalDamageReceived[playerNum] = (game.totalDamageReceived[playerNum] || 0) + actualDamage;
+  }
+
   return { newHp, maxHp, prevHp, wasDefeated: newHp <= 0 };
 }
 

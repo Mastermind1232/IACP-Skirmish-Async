@@ -11,7 +11,7 @@ import { getDcImagePath } from '../asset-paths.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..', '..');
-import { setConfig } from '../game/figure-config.js';
+import { getConfig, setConfig } from '../game/figure-config.js';
 import {
   getPlayerId, getSquad, getDcList, getDcMessageIds, getHandChannelId,
   dcAttachmentsKey, ccDeckKey, ccHandKey,
@@ -21,6 +21,27 @@ import {
 import { dcNameFromFigureKey } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
+
+/**
+ * Returns a Set of form names already chosen by OTHER Clawdite Shapeshifters
+ * on the same team.  Used to prevent two Clawdites from sharing a form.
+ * @param {object} game
+ * @param {number} playerNum  1 or 2
+ * @param {string} excludeFigureKey  figureKey of the Clawdite currently picking
+ * @returns {Set<string>}
+ */
+function getFormsChosenByTeamClawdites(game, playerNum, excludeFigureKey) {
+  const taken = new Set();
+  const positions = game.figurePositions?.[playerNum] || {};
+  for (const fk of Object.keys(positions)) {
+    if (fk === excludeFigureKey) continue;
+    // figureKey format: dcName-dgIdx-figIdx  — dcName may contain spaces/hyphens
+    if (!fk.startsWith('Clawdite Shapeshifter')) continue;
+    const form = getConfig(game, fk)?.form;
+    if (form) taken.add(form);
+  }
+  return taken;
+}
 
 /** Keyword tokens recognized as trait/type restrictions (not DC names). */
 const RESTRICTION_KEYWORDS = ['LEADER', 'HUNTER', 'DROID', 'CREATURE', 'TROOPER', 'VEHICLE',
@@ -759,19 +780,89 @@ export async function handleDetermineInitiative(interaction, ctx) {
     }
     return;
   }
-  const winner = Math.random() < 0.5 ? game.player1Id : game.player2Id;
+  // G82/M75: Devious Scheme — check before initiative
+  const dcEffects = getDcEffects();
+  const hasDcInSquad = (squad, dcName) => (squad?.dcList || []).some(n => {
+    const resolved = typeof n === 'string' ? n.replace(/^\[|\]$/g, '') : n;
+    return resolved === dcName || `[${resolved}]` === dcName || resolved === dcName.replace(/^\[|\]$/g, '');
+  });
+  const p1HasDS = hasDcInSquad(game.player1Squad, '[Devious Scheme]');
+  const p2HasDS = hasDcInSquad(game.player2Squad, '[Devious Scheme]');
+
+  // G81: Least deployment points chooses initiative; random only if equal
+  const calcDeployPoints = (squad) => (squad?.dcList || []).reduce((sum, name) => {
+    const resolved = typeof name === 'string' ? name.replace(/^\[|\]$/g, '') : name;
+    const eff = dcEffects[resolved] || dcEffects[`[${resolved}]`];
+    return sum + (eff?.cost ?? 0);
+  }, 0);
+  const p1Points = calcDeployPoints(game.player1Squad);
+  const p2Points = calcDeployPoints(game.player2Squad);
+  let winner;
+  let initiativeReason;
+  let zoneChooser; // who picks deployment zone (normally = initiative winner)
+
+  if (p1HasDS && p2HasDS) {
+    // Both have Devious Scheme — cards cancel, normal initiative rules
+    initiativeReason = null; // set below by normal rules
+  } else if (p1HasDS) {
+    // P1 has DS: P2 gets initiative, P1 chooses zone
+    winner = game.player2Id;
+    initiativeReason = `Devious Scheme — <@${game.player1Id}> played [Devious Scheme], granting opponent initiative`;
+    zoneChooser = game.player1Id;
+  } else if (p2HasDS) {
+    // P2 has DS: P1 gets initiative, P2 chooses zone
+    winner = game.player1Id;
+    initiativeReason = `Devious Scheme — <@${game.player2Id}> played [Devious Scheme], granting opponent initiative`;
+    zoneChooser = game.player2Id;
+  }
+
+  // Normal initiative if no DS or both cancelled
+  if (!winner) {
+    if (p1Points < p2Points) {
+      winner = game.player1Id;
+      initiativeReason = `fewer deployment points (${p1Points} vs ${p2Points})`;
+    } else if (p2Points < p1Points) {
+      winner = game.player2Id;
+      initiativeReason = `fewer deployment points (${p2Points} vs ${p1Points})`;
+    } else {
+      winner = Math.random() < 0.5 ? game.player1Id : game.player2Id;
+      initiativeReason = `random roll (tied at ${p1Points} points)`;
+    }
+  }
+
   const playerNum = winner === game.player1Id ? 1 : 2;
   game.initiativePlayerId = winner;
   game.initiativeDetermined = true;
+  // Store zone chooser if different from initiative winner (Devious Scheme)
+  if (zoneChooser && zoneChooser !== winner) {
+    game.deviousSchemeZoneChooser = zoneChooser;
+  }
   await clearPreGameSetup(game, client);
-  await logGameAction(game, client, `<@${winner}> (**Player ${playerNum}**) won initiative! Chooses deployment zone and activates first each round.`, { allowedMentions: { users: [winner] }, phase: 'INITIATIVE', icon: 'initiative' });
-  const generalChannel = await client.channels.fetch(game.generalId);
-  const zoneMsg = await generalChannel.send({
-    content: `<@${winner}> (**Player ${playerNum}**) — Pick your deployment zone:`,
-    allowedMentions: { users: [winner] },
-    components: [getDeploymentZoneButtons(gameId)],
-  });
-  game.deploymentZoneMessageId = zoneMsg.id;
+
+  if (zoneChooser && zoneChooser !== winner) {
+    // Devious Scheme: split message — opponent gets initiative, DS player picks zone
+    const dsPlayerNum = zoneChooser === game.player1Id ? 1 : 2;
+    await logGameAction(game, client, `🃏 **Devious Scheme** — <@${zoneChooser}> (Player ${dsPlayerNum}) chooses deployment zone. <@${winner}> (Player ${playerNum}) has initiative and deploys first.`, { allowedMentions: { users: [zoneChooser, winner] }, phase: 'INITIATIVE', icon: 'initiative' });
+    if (p1HasDS && p2HasDS) {
+      await logGameAction(game, client, `Both players have **[Devious Scheme]** — cards cancel each other. Normal initiative rules apply.`, { phase: 'INITIATIVE', icon: 'initiative' });
+    }
+    const generalChannel = await client.channels.fetch(game.generalId);
+    const zoneMsg = await generalChannel.send({
+      content: `<@${zoneChooser}> (**Player ${dsPlayerNum}**) — Pick your deployment zone (Devious Scheme):`,
+      allowedMentions: { users: [zoneChooser] },
+      components: [getDeploymentZoneButtons(gameId)],
+    });
+    game.deploymentZoneMessageId = zoneMsg.id;
+  } else {
+    await logGameAction(game, client, `<@${winner}> (**Player ${playerNum}**) won initiative (${initiativeReason})! Chooses deployment zone and activates first each round.`, { allowedMentions: { users: [winner] }, phase: 'INITIATIVE', icon: 'initiative' });
+    const generalChannel = await client.channels.fetch(game.generalId);
+    const zoneMsg = await generalChannel.send({
+      content: `<@${winner}> (**Player ${playerNum}**) — Pick your deployment zone:`,
+      allowedMentions: { users: [winner] },
+      components: [getDeploymentZoneButtons(gameId)],
+    });
+    game.deploymentZoneMessageId = zoneMsg.id;
+  }
   saveGames();
 }
 
@@ -785,8 +876,10 @@ export async function handleDeploymentZone(interaction, ctx) {
   const gameId = interaction.customId.replace(isRed ? 'deployment_zone_red_' : 'deployment_zone_blue_', '');
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-  if (interaction.user.id !== game.initiativePlayerId) {
-    await interaction.followUp({ content: 'Only the player with initiative can choose the deployment zone.', ephemeral: true }).catch(discordCatch);
+  // Devious Scheme: zone chooser may differ from initiative player
+  const zoneChooserId = game.deviousSchemeZoneChooser || game.initiativePlayerId;
+  if (interaction.user.id !== zoneChooserId) {
+    await interaction.followUp({ content: 'Only the designated player can choose the deployment zone.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (game.deploymentZoneChosen) {
@@ -796,11 +889,12 @@ export async function handleDeploymentZone(interaction, ctx) {
   const zone = isRed ? 'red' : 'blue';
   const otherZone = zone === 'red' ? 'blue' : 'red';
   game.deploymentZoneChosen = zone;
-  const initiativePlayerNum = getInitiativePlayerNum(game);
-  game.player1DeploymentZone = initiativePlayerNum === 1 ? zone : otherZone;
-  game.player2DeploymentZone = initiativePlayerNum === 2 ? zone : otherZone;
+  // Assign zones based on who chose (DS player or initiative player)
+  const zoneChooserPlayerNum = zoneChooserId === game.player1Id ? 1 : 2;
+  game[`player${zoneChooserPlayerNum}DeploymentZone`] = zone;
+  game[`player${zoneChooserPlayerNum === 1 ? 2 : 1}DeploymentZone`] = otherZone;
   const zoneLabel = `[${zone.toUpperCase()}] `;
-  await logGameAction(game, client, `<@${game.initiativePlayerId}> (${zoneLabel}**Player ${initiativePlayerNum}**) chose the **${zone}** deployment zone`, { allowedMentions: { users: [game.initiativePlayerId] }, phase: 'INITIATIVE', icon: 'zone' });
+  await logGameAction(game, client, `<@${zoneChooserId}> (${zoneLabel}**Player ${zoneChooserPlayerNum}**) chose the **${zone}** deployment zone`, { allowedMentions: { users: [zoneChooserId] }, phase: 'INITIATIVE', icon: 'zone' });
   if (game.deploymentZoneMessageId) {
     try {
       const generalChannel = await client.channels.fetch(game.generalId);
@@ -1380,7 +1474,8 @@ export async function handleDeployPick(interaction, ctx) {
   const _shapeIds = ['shape_clawdite_elite', 'shape_clawdite_reg'];
   if (dcEff?.specialAbilityIds?.some(id => _shapeIds.includes(id))) {
     const formCards = getFormCards();
-    const formNames = Object.keys(formCards);
+    const takenForms = getFormsChosenByTeamClawdites(game, playerNum, figureKey);
+    const formNames = Object.keys(formCards).filter(n => !takenForms.has(n));
     if (formNames.length > 0) {
       const row = new ActionRowBuilder().addComponents(
         ...formNames.map((name) =>
@@ -1471,6 +1566,23 @@ export async function handleFormPick(interaction, ctx) {
   const formCards = getFormCards();
   const card = formCards[formName];
   if (!card) return;
+
+  // Determine which player owns this figure
+  const ownerPlayerNum = game.figurePositions?.[1]?.[figureKey] != null ? 1
+    : game.figurePositions?.[2]?.[figureKey] != null ? 2 : null;
+
+  // Reject if another Clawdite on the same team already has this form
+  if (ownerPlayerNum) {
+    const takenForms = getFormsChosenByTeamClawdites(game, ownerPlayerNum, figureKey);
+    if (takenForms.has(formName)) {
+      await interaction.message.edit({
+        content: `❌ **${formName}** is already chosen by another Clawdite on your team. Pick a different form.`,
+        components: interaction.message.components,
+      }).catch(discordCatch);
+      return;
+    }
+  }
+
   setConfig(game, figureKey, 'form', formName);
   saveGames();
   const { join } = await import('path');

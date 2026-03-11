@@ -4,7 +4,7 @@
  * concussive bolt, spread the pain, missile salvo.
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
-import { reduceHp, awardKillVp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey } from '../game/index.js';
+import { reduceHp, awardKillVp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey, checkNefariousGains } from '../game/index.js';
 import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, removeFigurePosition } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { requirePlayer } from '../utils/guards.js';
@@ -49,6 +49,9 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
       const splashVP = splashDcEff?.cost ?? 1;
       awardKillVp(game, attackerPlayerNum, splashVP);
       lines.push(`  → **${t.label} defeated!** +${splashVP} VP`);
+      // Nefarious Gains (Jabba): Indiscriminate Fire defeat
+      const _ngIF = checkNefariousGains(game, t.playerNum);
+      if (_ngIF) lines.push(`  → 💰 **Nefarious Gains** — Jabba gains 1 VP (P${_ngIF.jabbaOwnerPN} VP: ${_ngIF.vpTotal})`);
     }
     try {
       const tMeta = dcMessageMeta.get(mid);
@@ -159,6 +162,9 @@ export async function handleBleedResolve(interaction, ctx) {
           const vp = calculateKillVp(dcName);
           awardKillVp(game, oppPN, vp);
           await logGameAction(game, interaction.client, `\u{1FA78} **Bleeding** — **${dcName}** was defeated! +${vp} VP to P${oppPN}`, { phase: 'ROUND', icon: 'attack' });
+          // Nefarious Gains (Jabba): Bleeding defeat
+          const _ngBleed = checkNefariousGains(game, playerNum);
+          if (_ngBleed) await logGameAction(game, interaction.client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngBleed.jabbaOwnerPN} VP: ${_ngBleed.vpTotal}`, { phase: 'ROUND', icon: 'card' });
           if (idx >= 0) {
             await decrementActivationIfGroupDefeated(game, playerNum, idx, interaction.client);
           }
@@ -372,6 +378,9 @@ export async function handleFightingKnifeTarget(interaction, ctx) {
       const vp = calculateKillVp(dcName);
       awardKillVp(game, pending.attackerPlayerNum, vp);
       await logGameAction(game, client, `**Fighting Knife** — **${target.label}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
+      // Nefarious Gains (Jabba): Fighting Knife defeat
+      const _ngFK = checkNefariousGains(game, target.playerNum);
+      if (_ngFK) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngFK.jabbaOwnerPN} VP: ${_ngFK.vpTotal}`, { phase: 'ROUND', icon: 'card' });
       const dcIds = getDcMessageIds(game, target.playerNum);
       const idx = (dcIds || []).indexOf(target.msgId);
       if (idx >= 0) {
