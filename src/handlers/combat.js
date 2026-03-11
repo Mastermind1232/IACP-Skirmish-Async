@@ -15,7 +15,7 @@ import {
   ccDiscardKey, ccHandKey, ccAttachmentsKey, vpKey,
   opponentPlayerNum, getInitiativePlayerNum,
 } from '../game/player-helpers.js';
-import { checkSurgePassiveRedraws } from '../game/cc-passive-redraw.js';
+import { checkSurgePassiveRedraws, checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 
@@ -181,6 +181,13 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     // Nefarious Gains (Jabba): strain/ability defeat
     const _ngStrain = checkNefariousGains(game, playerNum);
     if (_ngStrain && logGameAction) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngStrain.jabbaOwnerPN} VP: ${_ngStrain.vpTotal}`, { phase: 'ROUND', icon: 'card' });
+    // CC Passive Redraw: friendly-defeated trigger (Shared Experience) — strain/ability defeat
+    {
+      const _strPrResult = checkFriendlyDefeatedPassiveRedraws(game, playerNum, dcName);
+      for (const _strPrCard of _strPrResult.redrawn) {
+        if (logGameAction) await logGameAction(game, client, `**Passive Redraw** — **${_strPrCard}** re-drawn from discard (friendly **${dcName}** defeated).`, { phase: 'ROUND', icon: 'card' });
+      }
+    }
     const dcIds = getDcMessageIds(game, playerNum);
     const idx = (dcIds || []).indexOf(msgId);
     if (idx >= 0 && isGroupDefeated?.(game, playerNum, idx)) {
@@ -4053,6 +4060,14 @@ export async function handleCleaveTarget(interaction, ctx) {
         const vp = (figures > 1 && subCost != null) ? subCost : cost;
         awardKillVp(game, attackerPlayerNum, vp);
         await logGameAction(game, client, `Cleave: <@${ownerId}> defeated **${cleaveLabel}** (+${vp} VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+        // CC Passive Redraw: friendly-defeated trigger (Shared Experience) — Cleave defeat
+        {
+          const _clvPrDcName = cleaveDcList[cleaveIdx]?.dcName || cleaveLabel;
+          const _clvPrResult = checkFriendlyDefeatedPassiveRedraws(game, cleavePlayerNum, _clvPrDcName);
+          for (const _clvPrCard of _clvPrResult.redrawn) {
+            await logGameAction(game, client, `**Passive Redraw** — **${_clvPrCard}** re-drawn from discard (friendly **${_clvPrDcName}** defeated by Cleave).`, { phase: 'ROUND', icon: 'card' });
+          }
+        }
         // Nefarious Gains (Jabba): Cleave defeat
         const _ngCleave = checkNefariousGains(game, cleavePlayerNum);
         if (_ngCleave) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngCleave.jabbaOwnerPN} VP: ${_ngCleave.vpTotal}`, { phase: 'ROUND', icon: 'card' });
@@ -4266,6 +4281,13 @@ export async function handleFigureheadDecision(interaction, ctx) {
           awardKillVp(game, attackerPlayerNum, fhVp);
           fhResultText += ` — **${fhLabel || 'Murne Rin'} defeated!** +${fhVp} VP`;
           if (logGameAction) await logGameAction(game, client, `**Figurehead** — ${fhLabel || 'Murne Rin'} was defeated! +${fhVp} VP`, { phase: 'ROUND', icon: 'attack' });
+          // CC Passive Redraw: friendly-defeated trigger (Shared Experience) — Figurehead defeat
+          {
+            const _fhPrResult = checkFriendlyDefeatedPassiveRedraws(game, defenderPlayerNum, fhDcName);
+            for (const _fhPrCard of _fhPrResult.redrawn) {
+              if (logGameAction) await logGameAction(game, client, `**Passive Redraw** — **${_fhPrCard}** re-drawn from discard (friendly **${fhDcName}** defeated by Figurehead).`, { phase: 'ROUND', icon: 'card' });
+            }
+          }
           // Nefarious Gains (Jabba): Figurehead defeat
           const _ngFH = checkNefariousGains(game, defenderPlayerNum);
           if (_ngFH && logGameAction) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngFH.jabbaOwnerPN} VP: ${_ngFH.vpTotal}`, { phase: 'ROUND', icon: 'card' });

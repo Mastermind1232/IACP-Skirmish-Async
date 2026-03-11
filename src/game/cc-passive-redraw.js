@@ -11,7 +11,7 @@
  *   C68 — Rebel Graffiti: Sabine Wren in army → re-draw at start of round
  *   C74 — Targeting Network: DROID spends a surge → re-draw
  */
-import { getDcKeywords, getDcEffects } from '../data-loader.js';
+import { getDcKeywords } from '../data-loader.js';
 import {
   ccHandKey, ccDiscardKey, getDcList,
 } from './player-helpers.js';

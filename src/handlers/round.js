@@ -17,6 +17,7 @@ import {
   opponentPlayerNum,
   getInitiativePlayerNum,
 } from '../game/player-helpers.js';
+import { checkStartOfRoundPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 
@@ -569,6 +570,13 @@ export async function handleEndEndOfRound(interaction, ctx) {
   cleanupRoundStart(game);
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
+  }
+  // CC Passive Redraw: start-of-round trigger (Rebel Graffiti — Sabine in army)
+  for (const _sorPn of [1, 2]) {
+    const _sorPrResult = checkStartOfRoundPassiveRedraws(game, _sorPn);
+    for (const _sorPrCard of _sorPrResult.redrawn) {
+      await logGameAction(game, client, `**Passive Redraw** — **${_sorPrCard}** re-drawn from discard at start of round.`, { phase: 'ROUND', icon: 'card' });
+    }
   }
   // Run start-of-round DC effects (post-deploy for R1, DC abilities every round)
   const hasPendingSor = await runStartOfRoundDcEffects(game, gameId, client, { logGameAction });

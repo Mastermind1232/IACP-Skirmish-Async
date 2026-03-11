@@ -80,6 +80,7 @@ import {
   getDeploymentMapAttachment,
 } from './src/rendering.js';
 import { getHandlerKey } from './src/router.js';
+import { checkFriendlyDefeatedPassiveRedraws, checkStartOfRoundPassiveRedraws } from './src/game/cc-passive-redraw.js';
 import { getHandler, getHandlerGroup } from './src/handlers/index.js';
 import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
 import { buildContext, getAllRequiredDepKeys } from './src/context-factory.js';
@@ -2888,6 +2889,13 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
                   const _fdAtkVp = (_fdAtkFigures > 1 && _fdAtkEffects?.subCost != null) ? _fdAtkEffects.subCost : (_fdAtkStats?.cost ?? 5);
                   awardKillVp(game, defenderPlayerNum, _fdAtkVp);
                   await logGameAction(game, client, `**Force Deflection** — **${combat.attackerDcName}** was defeated! +${_fdAtkVp} VP to Player ${defenderPlayerNum}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+                  // CC Passive Redraw: friendly-defeated trigger (Shared Experience) — Force Deflection defeat
+                  {
+                    const _fdPrResult = checkFriendlyDefeatedPassiveRedraws(game, attackerPlayerNum, combat.attackerDcName);
+                    for (const _fdPrCard of _fdPrResult.redrawn) {
+                      await logGameAction(game, client, `**Passive Redraw** — **${_fdPrCard}** re-drawn from discard (friendly **${combat.attackerDcName}** defeated by Force Deflection).`, { phase: 'ROUND', icon: 'card' });
+                    }
+                  }
                   // Nefarious Gains (Jabba): Force Deflection defeat
                   await checkNefariousGains(game, attackerPlayerNum, client);
                   // Hunt Dissent (Agent Kallus): Force Deflection defeat (defender defeated attacker)
@@ -2929,6 +2937,13 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
                 const _dfAtkVp = (_dfAtkFigures > 1 && _dfAtkEffects?.subCost != null) ? _dfAtkEffects.subCost : (_dfAtkStats?.cost ?? 5);
                 awardKillVp(game, defenderPlayerNum, _dfAtkVp);
                 await logGameAction(game, client, `**Distracting Fire** — **${combat.attackerDcName}** was defeated! +${_dfAtkVp} VP to Player ${defenderPlayerNum}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+                // CC Passive Redraw: friendly-defeated trigger (Shared Experience) — Distracting Fire defeat
+                {
+                  const _dfPrResult = checkFriendlyDefeatedPassiveRedraws(game, attackerPlayerNum, combat.attackerDcName);
+                  for (const _dfPrCard of _dfPrResult.redrawn) {
+                    await logGameAction(game, client, `**Passive Redraw** — **${_dfPrCard}** re-drawn from discard (friendly **${combat.attackerDcName}** defeated by Distracting Fire).`, { phase: 'ROUND', icon: 'card' });
+                  }
+                }
                 await checkNefariousGains(game, attackerPlayerNum, client);
                 await checkHuntDissent(game, defenderPlayerNum, combat.target.figureKey, client);
               }
@@ -3250,6 +3265,14 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             if (_uhGranted > 0) {
               await logGameAction(game, client, `🎭 **Useful Hide** — **Tauntaun Rider** was defeated. Distributed ${_uhGranted} **Evade Token${_uhGranted !== 1 ? 's' : ''}** to ${_uhRecipients.join(', ')}.`, { phase: 'ROUND', icon: 'card' });
             }
+          }
+        }
+        // CC Passive Redraw: friendly-defeated trigger (Shared Experience)
+        {
+          const _fdprDcName = _lsDcName || dcNameFromFigureKey(combat.target.figureKey);
+          const _fdprResult = checkFriendlyDefeatedPassiveRedraws(game, defenderPlayerNum, _fdprDcName);
+          for (const _fdprCard of _fdprResult.redrawn) {
+            await logGameAction(game, client, `**Passive Redraw** — **${_fdprCard}** re-drawn from discard (friendly **${_fdprDcName}** defeated).`, { phase: 'ROUND', icon: 'card' });
           }
         }
         resultText += ` — **${combat.target.label} defeated!** +${vp} VP`;

@@ -7,7 +7,7 @@ import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { reduceHp, awardKillVp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey, checkNefariousGains, applyCondition } from '../game/index.js';
 import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, ccDiscardKey, removeFigurePosition } from '../game/player-helpers.js';
 import { getDcKeywords } from '../data-loader.js';
-import { checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
+import { checkDeckDiscardPassiveRedraws, checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { discordCatch } from '../error-handling.js';
 import { requirePlayer } from '../utils/guards.js';
 
@@ -177,6 +177,13 @@ export async function handleBleedResolve(interaction, ctx) {
           const vp = calculateKillVp(dcName);
           awardKillVp(game, oppPN, vp);
           await logGameAction(game, interaction.client, `\u{1FA78} **Bleeding** — **${dcName}** was defeated! +${vp} VP to P${oppPN}`, { phase: 'ROUND', icon: 'attack' });
+          // CC Passive Redraw: friendly-defeated trigger (Shared Experience) — Bleed defeat
+          {
+            const _bleedPrResult = checkFriendlyDefeatedPassiveRedraws(game, playerNum, dcName);
+            for (const _bleedPrCard of _bleedPrResult.redrawn) {
+              await logGameAction(game, interaction.client, `**Passive Redraw** — **${_bleedPrCard}** re-drawn from discard (friendly **${dcName}** defeated by Bleeding).`, { phase: 'ROUND', icon: 'card' });
+            }
+          }
           // Nefarious Gains (Jabba): Bleeding defeat
           const _ngBleed = checkNefariousGains(game, playerNum);
           if (_ngBleed) await logGameAction(game, interaction.client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngBleed.jabbaOwnerPN} VP: ${_ngBleed.vpTotal}`, { phase: 'ROUND', icon: 'card' });

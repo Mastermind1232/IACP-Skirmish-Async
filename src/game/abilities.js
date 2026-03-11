@@ -5146,9 +5146,18 @@ export function resolveAbility(abilityId, context) {
         const removed = deck.splice(0, n);
         game[deckKey] = deck;
         game[discardKey] = (game[discardKey] || []).concat(removed);
+        // CC Passive Redraw: deck-discard trigger (Built on Hope)
+        const _prRedrawn = [];
+        for (const _prCard of removed) {
+          const _prResult = checkDeckDiscardPassiveRedraws(game, oppNum, _prCard);
+          _prRedrawn.push(..._prResult.redrawn);
+        }
+        const _prMsg = _prRedrawn.length > 0
+          ? ` Passive Redraw: ${_prRedrawn.map(c => `**${c}**`).join(', ')} re-drawn from discard (discarded from deck).`
+          : '';
         return {
           applied: true,
-          logMessage: `Opponent discarded top ${n} card(s) of their Command deck.`,
+          logMessage: `Opponent discarded top ${n} card(s) of their Command deck.${_prMsg}`,
           refreshOpponentDiscard: true,
         };
       }
@@ -5165,9 +5174,18 @@ export function resolveAbility(abilityId, context) {
     const removed = deck.splice(0, n);
     game[deckKey] = deck;
     game[discardKey] = (game[discardKey] || []).concat(removed);
+    // CC Passive Redraw: deck-discard trigger (Built on Hope)
+    const _stmRedrawn = [];
+    for (const _stmCard of removed) {
+      const _stmResult = checkDeckDiscardPassiveRedraws(game, oppNum, _stmCard);
+      _stmRedrawn.push(..._stmResult.redrawn);
+    }
+    const _stmMsg = _stmRedrawn.length > 0
+      ? ` Passive Redraw: ${_stmRedrawn.map(c => `**${c}**`).join(', ')} re-drawn from discard (discarded from deck).`
+      : '';
     return {
       applied: true,
-      logMessage: `Defender was defeated. Opponent discarded top ${n} card(s) of their Command deck.`,
+      logMessage: `Defender was defeated. Opponent discarded top ${n} card(s) of their Command deck.${_stmMsg}`,
       refreshOpponentDiscard: n > 0,
     };
   }

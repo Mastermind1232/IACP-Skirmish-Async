@@ -472,16 +472,16 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 
 | Section | PASS | PARTIAL | FAIL | MANUAL | N/A | Total |
 |---|---|---|---|---|---|---|
-| General Mechanics (G1-G113) | 65 | 24 | 24 | 0 | 0 | 113 |
-| Rebel Deployment (R1-R95) | 65 | 12 | 15 | 3 | 0 | 95 |
-| Mercenary Deployment (M1-M84) | 45 | 12 | 27 | 0 | 0 | 84 |
-| Imperial Deployment (I1-I53) | 22 | 16 | 13 | 0 | 2 | 53 |
-| Command Cards (C1-C77) | 24 | 37 | 10 | 6 | 0 | 77 |
-| **TOTAL** | **221** | **101** | **89** | **9** | **2** | **422** |
+| General Mechanics (G1-G113) | 88 | 14 | 11 | 0 | 0 | 113 |
+| Rebel Deployment (R1-R95) | 81 | 10 | 1 | 3 | 0 | 95 |
+| Mercenary Deployment (M1-M84) | 75 | 6 | 3 | 0 | 0 | 84 |
+| Imperial Deployment (I1-I53) | 39 | 10 | 2 | 0 | 2 | 53 |
+| Command Cards (C1-C77) | 47 | 23 | 1 | 6 | 0 | 77 |
+| **TOTAL** | **330** | **63** | **18** | **9** | **2** | **422** |
 
-**Definitive Pass Rate:** 221 / (221+101+89) = **53.8%**
-**Pass + Partial:** 322 / 411 = **78.3%**
-**Hard Failures:** 89 items require code changes
+**Definitive Pass Rate:** 330 / (330+63+18) = **80.3%**
+**Pass + Partial:** 393 / 411 = **95.6%**
+**Hard Failures:** 18 items require code changes
 **Remaining MANUAL:** 9 items genuinely need runtime testing
 
 ---
@@ -489,13 +489,15 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 ## CRITICAL GAPS (Game-Breaking if Missing)
 
 ### Tier 1 — Core Rules Bugs
-1. **G12** — No per-die reroll tracking (any die rerolled unlimited times)
-2. **G22** — Conditions from surges applied even when damage = 0
-3. **G25-G28 / C3** — Lure of the Dark Side hostile attack not implemented at all
-4. **G34** — Ranged Cleave missing (affects TGI, I17, I18)
-5. **G36** — Parting Blow can be used twice on same move
-6. **G81** — <40 deployment points initiative not implemented
-7. **I46** — Cross-Training die swap fires every defense, should be once per round
+1. ~~**G12** — Per-die reroll tracking~~ FIXED (3rd pass)
+2. ~~**G22** — Surge conditions require damage > 0~~ FIXED (3rd pass)
+3. ~~**G25-G28 / C3** — Lure of the Dark Side~~ FIXED (3rd pass)
+4. ~~**G34** — Ranged Cleave~~ FIXED (3rd pass)
+5. ~~**G36** — Parting Blow once-per-move~~ FIXED (3rd pass)
+6. ~~**G81** — Fewer deployment points initiative~~ FIXED (3rd pass)
+7. ~~**I46** — Cross-Training exhaust tracking~~ FIXED (3rd pass)
+
+All former Tier 1 core rules bugs are now resolved.
 
 ### Tier 2 — Figure-Breaking Gaps
 8. **R28-R29** — Ahsoka Twin Sabers reroll restrictions absent
