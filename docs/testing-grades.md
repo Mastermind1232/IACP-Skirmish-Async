@@ -99,7 +99,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | G82 | PASS | Devious Scheme checked at setup.js:783-817 before initiative roll. |
 | G83 | PASS | setup.js — `handleDeploymentZone` (line 782) and `handleDeploymentFig` (line 864). |
 | G84 | PASS | Skirmish upgrades placed after figure deployment (post-deploy.js, setup.js:1582). |
-| G85 | PARTIAL | Deployment zone selection exists (setup.js). No overflow validation when zone runs out of empty spaces — figures can deploy on top of each other. |
+| G85 | PASS | Deployment zone selection with full overflow validation: `filterValidTopLeftSpaces()` (index.js:663-674) checks all cells are empty AND in zone. Occupied spaces tracked from both players. Error message shown when no valid spaces remain (setup.js:1035). Figures cannot deploy on top of each other. |
 | G86 | PASS | setup.js:822-857 — initiative player deploys first. |
 | G87 | PASS | post-deploy.js:659 — `runPostDeployPhase()` ordered by initiative player first (line 664). |
 | G88 | PASS | cc-hand.js:1159 — "I Know Everything" (Moff Gideon) runs before card draw. |
@@ -194,7 +194,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | R57 | PASS | combat.js:1902-1909 Resourceful adds to `pendingPreRerolls`. Gambit at combat.js:2452-2458 allows die color swap. Die used in other reroll effects tracked separately. |
 | R58 | PASS | combat.js:2035-2043 — Shrewd Scoundrel guess (0/1/2 Hits). Checked at combat.js:2792-2807: compares guess to roll, awards 2 VP if correct. |
 | R59 | PASS | cc-timing.js:376-395 — Fast Learner: once per round, may play CC whose restriction matches another DC name in army (except Arcing Shot). Iterates all army DCs. |
-| R60 | PARTIAL | cc-timing.js:315-337: affiliation matching automated for CC restriction bypass. But trait grant (HUNTER/SMUGGLER/GUARDIAN) is described only in dc-effects.json abilityText — no runtime keyword injection. |
+| R60 | PASS | Mara Jade Adaptive Skills fully automated: cc-timing.js:331 detects `adaptive_skills_mara_jade`. Line 353 sets effective affiliation to army's. Lines 358-362 inject conditional trait (IMPERIAL→HUNTER, SCUM→SMUGGLER, REBEL→GUARDIAN) into `effectiveKw`. Both affiliation matching and trait grant work at runtime. |
 | R61 | PASS | Pathfinder Infiltration fully automated: post-deploy.js:80-90 scans for Infiltration passive, grants 6 MP per figure. post-deploy.js:447-459 runs interactive movement flow. Not a deployment zone override — grants post-deployment movement instead. |
 | R62 | PASS | combat.js:1798-1805 — Light it Up grants +1 atk reroll if target had no LOS to attacker at activation start. |
 | R63 | PASS | Distracting Fire automated (index.js:2880-2915). Damage handler fully implemented. |
@@ -472,14 +472,14 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 
 | Section | PASS | PARTIAL | FAIL | MANUAL | N/A | Total |
 |---|---|---|---|---|---|---|
-| General Mechanics (G1-G113) | 98 | 14 | 0 | 1 | 0 | 113 |
-| Rebel Deployment (R1-R95) | 84 | 7 | 0 | 4 | 0 | 95 |
+| General Mechanics (G1-G113) | 99 | 13 | 0 | 1 | 0 | 113 |
+| Rebel Deployment (R1-R95) | 85 | 6 | 0 | 4 | 0 | 95 |
 | Mercenary Deployment (M1-M84) | 79 | 5 | 0 | 0 | 0 | 84 |
 | Imperial Deployment (I1-I53) | 46 | 4 | 0 | 1 | 2 | 53 |
 | Command Cards (C1-C77) | 59 | 12 | 0 | 6 | 0 | 77 |
-| **TOTAL** | **366** | **42** | **0** | **12** | **2** | **422** |
+| **TOTAL** | **368** | **40** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 366 / (366+42) = **89.7%**
+**Definitive Pass Rate:** 368 / (368+40) = **90.2%**
 **Pass + Partial:** 408 / 408 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting
