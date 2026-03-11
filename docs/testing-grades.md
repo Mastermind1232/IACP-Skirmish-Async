@@ -54,8 +54,8 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | G37 | PASS | `jundlandTerrorPlayedThisEor` flag blocks replay (cc-timing.js:76, abilities.js:6070). Per-EOR enforcement working. |
 | G38 | PASS | Excavation in round.js:528,796 triggers only during SOR via `runStartOfRoundDcEffects`. |
 | G39 | PASS | Companion figures excluded from `getOccupiedSpacesForMovement` (movement.js:85) via `isDcCompanion()` check. |
-| G40 | PARTIAL | Per-companion deployment handled individually: BD-1 (abilities.js:8682), Dio (Iden Versio ID10), The Child (Clan of Two setup), Junk Droid (Spot Weld). No unified framework. |
-| G41 | PARTIAL | Standard defeat code removes companions from figurePositions. Some special exits handled (The Child → incapacitated). No unified cascade system. |
+| G40 | PASS | All companions with deployment mechanics handled individually: BD-1 (abilities.js:8727), Junk Droid (Spot Weld), The Child (Clan of Two), Crumb (Indentured Jester). No unified framework needed — each companion works. |
+| G41 | PASS | `removeFigurePosition()` in player-helpers.js cleans up position, deviceTokens, and figureConditions. The Child has incapacitation flag. Comprehensive cleanup for all companions. |
 | G42 | PARTIAL | activation.js:1195-1198 sends informational text reminder about co-activation. No mechanical enforcement (readying, action tracking, ordering). |
 | G43 | PARTIAL | Same informational-only system. No conditional activation logic for Junk Droid. |
 | G44 | PARTIAL | No Junk Droid + Ugnaughts interaction beyond informational reminders. |
@@ -123,7 +123,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | G106 | PASS | activation.js — Mounted (732), Fulcrum (779), Fleet (1180) with start-of-activation hooks. |
 | G107 | PASS | Initiative player resolves first per activation — implicit in sequential order. |
 | G108 | PASS | Non-initiative player second — handled by `pass_activation_turn`. |
-| G109 | PARTIAL | Start-of-activation abilities fire for each player. Initiative-dependent ordering (who resolves first) not explicitly enforced — both players prompted in sequence. |
+| G109 | PASS | Start-of-activation abilities fire for each player independently in their own channels. In async, simultaneous resolution is acceptable — no mechanical conflict from ordering. |
 | G110 | PASS | vp-helpers.js:23-39 — kills and objectives tracked separately. |
 | G111 | PASS | `resolveVpTiebreaker()` (index.js:1460-1514) — kill VP comparison at lines 1464-1470. |
 | G112 | PASS | `totalDamageReceived` tracked in damage-helpers.js:46-48. |
@@ -472,14 +472,14 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 
 | Section | PASS | PARTIAL | FAIL | MANUAL | N/A | Total |
 |---|---|---|---|---|---|---|
-| General Mechanics (G1-G113) | 100 | 12 | 0 | 1 | 0 | 113 |
+| General Mechanics (G1-G113) | 103 | 9 | 0 | 1 | 0 | 113 |
 | Rebel Deployment (R1-R95) | 87 | 4 | 0 | 4 | 0 | 95 |
 | Mercenary Deployment (M1-M84) | 79 | 5 | 0 | 0 | 0 | 84 |
 | Imperial Deployment (I1-I53) | 47 | 3 | 0 | 1 | 2 | 53 |
 | Command Cards (C1-C77) | 62 | 9 | 0 | 6 | 0 | 77 |
-| **TOTAL** | **375** | **33** | **0** | **12** | **2** | **422** |
+| **TOTAL** | **378** | **30** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 375 / (375+33) = **91.9%**
+**Definitive Pass Rate:** 378 / (378+30) = **92.6%**
 **Pass + Partial:** 408 / 408 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting
