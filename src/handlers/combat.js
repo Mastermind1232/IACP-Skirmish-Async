@@ -773,6 +773,19 @@ export async function handleAttackTarget(interaction, ctx) {
     delete game.scavengedWalkerAttackPenalty[msgId];
     await thread.send('**Scavenged Walker** — -1 Hit applied to this interrupt attack.').catch(discordCatch);
   }
+  // Driven by Hatred: remove 1 die from attack pool on end-of-round attack
+  if (game.drivenByHatredAttackPenalty?.[msgId]) {
+    const _dbhDice = [...(game.pendingCombat.attackInfo.dice || [])];
+    // Remove the weakest die (priority: yellow, green, blue, red)
+    const _dbhRemoveOrder = ['yellow', 'green', 'blue', 'red'];
+    for (const color of _dbhRemoveOrder) {
+      const idx = _dbhDice.indexOf(color);
+      if (idx >= 0) { _dbhDice.splice(idx, 1); break; }
+    }
+    game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: _dbhDice };
+    delete game.drivenByHatredAttackPenalty[msgId];
+    await thread.send('**Driven by Hatred** — 1 die removed from attack pool.').catch(discordCatch);
+  }
   // Flame Trooper Fireproof: this figure cannot suffer Strain (mark on combat object for handlers)
   if (_atkUpgrades.includes('Flame Trooper')) {
     game.pendingCombat.attackerFireproof = true;

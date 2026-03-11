@@ -3,10 +3,11 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getCcEffectsData, getDcEffects, getMapSpaces } from '../data-loader.js';
+import { getCcEffectsData, getDcEffects, getMapSpaces, getFigureSize } from '../data-loader.js';
 import { cleanupActivation } from '../game/activation-state.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, reduceHp, healHp } from '../game/index.js';
 import { getRange } from '../game/spatial.js';
+import { getFootprintCells } from '../game/coords.js';
 import { getDiceData, getDcKeywords } from '../data-loader.js';
 import {
   getPlayerId,
@@ -1266,7 +1267,7 @@ export async function handleConfirmActivate(interaction, ctx) {
         await thread.send({ content: `**Trusted Ally** — No adjacent friendly figures.` }).catch(discordCatch);
       }
     }
-    // Driven by Hatred (Darth Vader): end-of-round move 3 + free attack — not yet automated (needs movement + attack flow at round end)
+    // Driven by Hatred (Darth Vader): end-of-round move 2 + Force Choke or attack (-1 die) — automated in round.js EOR + interrupts.js handler
     // Rogue Smuggler (Han Solo): exhaust to interrupt and attack — not yet automated (needs interrupt trigger + attack flow)
     // Vader's Finest, Smuggler's Run, Z-6 Autofire, Mortar Trooper Fire Mission: injected as special action buttons (automated)
     // Headhunter: auto-triggered via applyStrainToFigure hook (automated)
@@ -1351,6 +1352,94 @@ export async function handleConfirmActivate(interaction, ctx) {
         await thread.send({ content: `🧘 **Calming Presence** (Yoda) — **${meta.dcName}** is a REBEL figure. Remove 1 harmful condition (the activating figure suffers 1 Strain):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
       }
       break;
+    }
+  }
+
+  // Voracious (Rancor): when another figure activates adjacent to the Rancor, offer a free melee attack
+  // Scan BOTH teams for any Rancor with the voracious_rancor ability
+  for (const rancorPn of [1, 2]) {
+    const rDcList = getDcList(game, rancorPn) || [];
+    const rDcMsgIds = getDcMessageIds(game, rancorPn) || [];
+    for (let ri = 0; ri < rDcList.length; ri++) {
+      const rDc = rDcList[ri];
+      if (!rDc?.dcName) continue;
+      const rEff = getDcEffects()?.[rDc.dcName];
+      if (!(rEff?.specialAbilityIds || []).includes('voracious_rancor')) continue;
+      // "another figure" — skip if the activating DC is this same Rancor on the same team
+      if (rDc.dcName === meta.dcName && rancorPn === meta.playerNum) continue;
+      const rMsgId = rDcMsgIds[ri];
+      if (!rMsgId) continue;
+      // Find the Rancor's figure position
+      const rDgIdx = (rDc.displayName || rDc.dcName).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const rFk = `${rDc.dcName}-${rDgIdx}-0`;
+      const rPos = game.figurePositions?.[rancorPn]?.[rFk];
+      if (!rPos) continue; // Rancor not on the board (defeated or not deployed)
+      // Get Rancor footprint cells (Rancor is 2x3)
+      const rSize = game.figureOrientations?.[rFk] || getFigureSize(rDc.dcName) || '2x3';
+      const rCells = getFootprintCells(rPos, rSize);
+      // Get activating figure's footprint cells
+      const actDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const actStats = ctx.getDcStats?.(meta.dcName);
+      const actFigCount = actStats?.figures ?? 1;
+      let anyAdjacent = false;
+      const adjacentActFks = [];
+      for (let fi = 0; fi < actFigCount; fi++) {
+        const actFk = `${meta.dcName}-${actDgIdx}-${fi}`;
+        const actPos = game.figurePositions?.[meta.playerNum]?.[actFk];
+        if (!actPos) continue;
+        const actSize = game.figureOrientations?.[actFk] || getFigureSize(meta.dcName) || '1x1';
+        const actCells = getFootprintCells(actPos, actSize);
+        // Check adjacency: any Rancor cell adjacent to any activating figure cell
+        let isAdj = false;
+        for (const rc of rCells) {
+          for (const ac of actCells) {
+            if (getRange(rc, ac) === 1) { isAdj = true; break; }
+          }
+          if (isAdj) break;
+        }
+        if (isAdj) {
+          anyAdjacent = true;
+          adjacentActFks.push(actFk);
+        }
+      }
+      if (anyAdjacent && adjacentActFks.length > 0) {
+        const rDisplayName = rDc.displayName || rDc.dcName;
+        const rancorOwner = rancorPn === meta.playerNum ? 'friendly' : 'hostile';
+        // Store pending voracious data for the button handler
+        game.pendingVoracious = game.pendingVoracious || {};
+        game.pendingVoracious[rMsgId] = {
+          rancorMsgId: rMsgId,
+          rancorDcName: rDc.dcName,
+          rancorPlayerNum: rancorPn,
+          rancorFigureKey: rFk,
+          rancorDisplayName: rDisplayName,
+          targetFigureKeys: adjacentActFks,
+          targetPlayerNum: meta.playerNum,
+          targetDcName: meta.dcName,
+          activatingMsgId: msgId,
+        };
+        // Build buttons: one attack button per adjacent figure (usually just 1), plus Skip
+        const vorBtns = [];
+        for (const tFk of adjacentActFks.slice(0, 4)) {
+          const tLabel = actFigCount > 1 ? `Attack ${dcNameFromFigureKey(tFk)}` : `Attack ${meta.dcName}`;
+          vorBtns.push(
+            new ButtonBuilder()
+              .setCustomId(`act_passive_${game.gameId}_${msgId}_voracious_${rMsgId}_${tFk}`)
+              .setLabel(tLabel)
+              .setStyle(ButtonStyle.Danger)
+          );
+        }
+        vorBtns.push(
+          new ButtonBuilder()
+            .setCustomId(`act_passive_${game.gameId}_${msgId}_voracious_${rMsgId}_skip`)
+            .setLabel('Skip')
+            .setStyle(ButtonStyle.Secondary)
+        );
+        await thread.send({
+          content: `**Voracious** — **${rDisplayName}** (${rancorOwner}, P${rancorPn}) is adjacent to the activating figure. The Rancor may perform a free melee attack:`,
+          components: [new ActionRowBuilder().addComponents(vorBtns)],
+        }).catch(discordCatch);
+      }
     }
   }
 

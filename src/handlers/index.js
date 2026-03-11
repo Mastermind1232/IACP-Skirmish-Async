@@ -115,7 +115,7 @@ import {
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
-import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight } from './interrupts.js';
+import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred } from './interrupts.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
 import {
   handleBleedResolve,
@@ -351,6 +351,9 @@ register('submit_fight_use_', handleSubmitOrFight, 'interrupts');
 register('submit_fight_skip_', handleSubmitOrFight, 'interrupts');
 register('scavenged_walker_attack_', handleScavengedWalker, 'interrupts');
 register('scavenged_walker_skip_', handleScavengedWalker, 'interrupts');
+register('dbh_force_choke_', handleDrivenByHatred, 'interrupts');
+register('dbh_attack_', handleDrivenByHatred, 'interrupts');
+register('dbh_skip_', handleDrivenByHatred, 'interrupts');
 register('on_diplomatic_', handleOnDiplomatic, 'interrupts');
 register('bel_reorder_1_', handleBelReorder, 'interrupts');
 register('bel_reorder_2_', handleBelReorder, 'interrupts');
@@ -526,7 +529,7 @@ export {
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
-export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight } from './interrupts.js';
+export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred } from './interrupts.js';
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
 export {
   handleBleedResolve,

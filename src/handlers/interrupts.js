@@ -649,6 +649,57 @@ export async function handleExcavationPick(interaction, ctx) {
   saveGames(); return;
 }
 
+// ── 14. Driven by Hatred (Darth Vader EOR) ──────────────────────────────────
+export async function handleDrivenByHatred(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+
+  // Determine which button was pressed
+  let buttonKey;
+  if (interaction.customId.startsWith('dbh_force_choke_')) buttonKey = 'dbh_force_choke_';
+  else if (interaction.customId.startsWith('dbh_attack_')) buttonKey = 'dbh_attack_';
+  else buttonKey = 'dbh_skip_';
+
+  const _dbhSuffix = interaction.customId.replace(buttonKey, '');
+  const _dbhParts = _dbhSuffix.split('_');
+  const _dbhGameId = _dbhParts[0]; const _dbhMsgId = _dbhParts[1];
+  const _dbhGame = await requireGame(interaction, getGame, _dbhGameId);
+  if (!_dbhGame) return;
+  const _dbhMeta = dcMessageMeta.get(_dbhMsgId);
+  if (!_dbhMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
+  if (!await requirePlayer(interaction, _dbhGame, interaction.user.id, _dbhMeta.playerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
+
+  const _dbhDisplayName = _dbhMeta.displayName || _dbhMeta.dcName;
+
+  if (buttonKey === 'dbh_skip_') {
+    await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** skipped end-of-round move + attack.`, { phase: 'ROUND', icon: 'card' });
+  } else {
+    // Grant 2 MP for movement
+    _dbhGame.movementBank = _dbhGame.movementBank || {};
+    if (!_dbhGame.movementBank[_dbhMsgId]) {
+      _dbhGame.movementBank[_dbhMsgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: _dbhDisplayName };
+    } else {
+      _dbhGame.movementBank[_dbhMsgId].total += 2;
+      _dbhGame.movementBank[_dbhMsgId].remaining += 2;
+    }
+
+    if (buttonKey === 'dbh_force_choke_') {
+      // Flag that Vader should use Force Choke after moving (manual resolution — player uses Force Choke special action button)
+      _dbhGame.drivenByHatredForceChoke = _dbhGame.drivenByHatredForceChoke || {};
+      _dbhGame.drivenByHatredForceChoke[_dbhMsgId] = true;
+      await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** gains 2 MP. After moving, use the **Force Choke** special action button.`, { phase: 'ROUND', icon: 'card' });
+    } else {
+      // dbh_attack_: Grant free attack with -1 die (remove weakest die from pool)
+      _dbhGame.drivenByHatredAttackPenalty = _dbhGame.drivenByHatredAttackPenalty || {};
+      _dbhGame.drivenByHatredAttackPenalty[_dbhMsgId] = true;
+      _dbhGame.freeAttackBonusPending = _dbhGame.freeAttackBonusPending || {};
+      _dbhGame.freeAttackBonusPending[_dbhMsgId] = true;
+      await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** gains 2 MP. After moving, use the **Attack** button (1 die will be removed from the attack pool).`, { phase: 'ROUND', icon: 'card' });
+    }
+  }
+  saveGames(); return;
+}
+
 // ── Submit or Fight (Paz Vizsla) ────────────────────────────────────────────
 export async function handleSubmitOrFight(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
