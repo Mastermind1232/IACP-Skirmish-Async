@@ -50,7 +50,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | G33 | FAIL | No Spire tile LOS rule implementation in spatial.js or LOS code. |
 | G34 | PASS | Ranged cleave uses `getFiguresAdjacentToTarget` (index.js:3941). Works for both melee and ranged. |
 | G35 | PASS | combat.js:35-44 — `getPlayableReactionCards` uses Set to deduplicate by cardName per timing instance. |
-| G36 | FAIL | Parting Blow (abilities.js:7197-7211) has no per-move tracking. No `partingBlowUsedThisMove` flag. Could be played multiple times per move. |
+| G36 | PASS | Parting Blow once-per-move: `partingShotTriggered` reset at start of each Move action (dc-play-area.js:1318). Guard at abilities.js:7651 prevents re-trigger within same move. |
 | G37 | PASS | `jundlandTerrorPlayedThisEor` flag blocks replay (cc-timing.js:76, abilities.js:6070). Per-EOR enforcement working. |
 | G38 | PASS | Excavation in round.js:528,796 triggers only during SOR via `runStartOfRoundDcEffects`. |
 | G39 | FAIL | No companion space sharing system. `getOccupiedSpacesForMovement` (movement.js:79-91) has no companion exemptions. |
@@ -116,7 +116,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | G99 | PASS | Round-scoped flags cleared at `cleanupRoundStart` (activation-state.js:279-295). EOR effects persist through EOR, cleared only at round start. |
 | G100 | PASS | Same mechanism — "during this round" flags also cleared at `cleanupRoundStart`, so they apply during EOR. |
 | G101 | PASS | round.js:319 — `setActivatedDcIndices()` called at EOR after all effects complete. |
-| G102 | FAIL | No "Zillo readied before EOR" mechanic. `cleanupRoundStart` resets round flags but no figure-specific readying before EOR exists. Zillo Technique itself has zero code implementation. |
+| G102 | PASS | Zillo readied before EOR: `exhaustedSkirmishUpgrades` cleared in round.js:113-119 before EOR effects. Zillo Technique fully automated (combat.js:771-811). |
 | G103 | PASS | round.js:403 — initiative switches to other player. |
 | G104 | PARTIAL | Strain applied as direct HP damage (`applyStrainToFigure` combat.js:75+). No "choose damage vs discard" option for strain. |
 | G105 | PARTIAL | No multi-strain up-front allocation choice. Strain always applied as damage. |
@@ -254,7 +254,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | M15 | PASS | round.js:532,1178-1193 — 4-LOM Programming Override trait declared at start of round. |
 | M16 | PASS | combat-special-effects.js:14-43 — Indiscriminate Fire respects target exclusion. |
 | M17 | PASS | combat-special-effects.js:449-480 — Spread the Pain with condition picker. |
-| M18 | FAIL | Punishing Strike (SU) — no handler code in src. dc-effects.json:391-397 data only. |
+| M18 | PASS | Punishing Strike automated: prompt in index.js after harmful condition applied, handler in interrupts.js:847-890. |
 | M19 | PASS | Migs 3-token cap via `getMaxPowerTokens` (dc-helpers.js:103-108). Per-figure override for Migs Mayfeld. |
 | M20 | PASS | Droid Arm LOS override (dc-play-area.js:1070-1081). Fully implemented. |
 | M21 | PASS | Droid Arm range from Migs position. Works with M20 implementation. |
@@ -267,7 +267,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | M28 | PASS | Clawdite form uniqueness via `getFormsChosenByTeamClawdites` (setup.js:33, 1477, 1576). Multiple Clawdites blocked from sharing. |
 | M29 | PASS | round.js:551 — Clawdite forms assigned at start of round. |
 | M30 | PASS | Gar Saxon Airborne Commander surge sharing (combat.js:1319-1341). Combat surge-sharing automated. |
-| M31 | FAIL | No Mobile trait verification on the attacking figure. Reminder only says "Mobile figures within 4 spaces may use surge abilities." |
+| M31 | PASS | Gar Saxon Airborne Commander: combat.js:1319-1341 dynamically checks MOBILE keyword on attacking figure and range to Gar Saxon. |
 | M32 | PASS | activation.js:991-992 — Hondo Negotiate asks opponent. |
 | M33 | PASS | abilities.js:1432 — VP payment check for Hondo. |
 | M34 | PASS | Nefarious Gains awards objective VP (vp-helpers.js:49-56). Defeat hook for Jabba VP implemented. |
@@ -303,7 +303,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | M64 | PASS | combat.js — Jawa Take Cover usable with no evade results. |
 | M65 | PASS | -1 evade is noop if no evade results. |
 | M66 | PASS | combat.js:3346-3358 — Jawa Bargain VP mechanics. |
-| M67 | FAIL | `hop_on_kuiil` defined in ability-library.json but no handler code. Data-only, not implemented. |
+| M67 | PASS | `hop_on_kuiil` handler in abilities.js — 3-phase push (pick friendly SMALL figure, pick destination within 4 spaces, move with path/warning). Uses Force Push pattern with `computePushPathAndWarnings`. |
 | M68 | PASS | dc-play-area.js:186 — Orbital Bombardment token depletion. |
 | M69 | PASS | Beast Tamer automated (activation.js:1461+). SU handler fully implemented. |
 | M70 | FAIL | Same — not implemented. |
@@ -313,7 +313,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | M74 | PARTIAL | dc-effects.json defines companion "The Child". activation.js:206-209 posts reminder. Force Heal may have handler but Force Exhaustion (remove die + Weaken) not in combat code. |
 | M75 | PASS | Devious Scheme SU automated (setup.js:783-817). Initiative integration working. |
 | M76 | PARTIAL | [Indentured Jester] companion defined. `scratch_crumb` in ability-library has `targetHostileFigure: { damage: 1, range: 1 }` with handler. activation.js:211-212 posts reminder. But "not counted for control" handled via mission-rules.js:37. |
-| M77 | FAIL | [Punishing Strike] SU — no handler code. |
+| M77 | PASS | [Punishing Strike] SU — index.js prompts after harmful conditions applied in combat. Button handler in interrupts.js replaces condition. Exhaust tracked via `game.exhaustedSkirmishUpgrades[ps_army_pN]`, reset at EOR. |
 | M78 | PASS | combat.js:689-694 — Scavenged Weaponry transfer upon defeat. |
 | M79 | FAIL | [Under Duress] SU — no handler code. |
 | M80 | FAIL | Same — not implemented. |
@@ -344,8 +344,8 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | I14 | PARTIAL | Static Pulse (Dio's CC) automated (abilities.js:5647-5695). But Droid Kit (gain PT if Dio in space) and Pulse Cannon (+4 Acc +1 Hit when spending PT) not automated — honor-system. Dio companion deployment not automated. |
 | I15 | PASS | Dio control counting respects Iden alive state (mission-rules.js:40-57). Counts after Iden defeated. |
 | I16 | PASS | abilities.js:1048-1083 (Elite) and 1085-1115 (Regular) — Coordinated Raid. Elite: IMPERIAL cost ≤4 within 4 spaces. Regular: same group. Both grant interrupt attack. |
-| I17 | FAIL | No ranged cleave implementation found. TGI abilities not automated. |
-| I18 | FAIL | No TGI-specific reroll found. |
+| I17 | PASS | Ranged cleave via `getFiguresAdjacentToTarget` (index.js:3941). TGI Cleave via `deadly_spin` surge (dc-effects.json:6249). |
+| I18 | PASS | `precision_grand_inquisitor` wired in combat.js:1894-1905 via `forcedRerollQueue`. Adjacent attacker/defender can force 1 die reroll. |
 | I19 | PARTIAL | Hunt Dissent at activation.js:1138-1140 — reminder message only. No automated defeat tracking or Block Token granting. ACS range extension not dynamically applied. |
 | I20 | PASS | combat.js:914-922 — auto-Focuses Dark Trooper on attack declare. combat.js:2301-2312 — if rerolled die has fewer Hits, +1 Hit bonus. |
 | I21 | PASS | "I Know Everything" at cc-hand.js:1159-1184,1229-1267 — reveals 2 cards, opponent keeps one, other removed. "The Darksaber" via `pendingDarksaberSecondAttack`. Both automated. |
@@ -401,7 +401,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C11 | PARTIAL | Cloned Reinforcements uses `placeDefeatedFigure` (abilities.js:7971-8137). Places figure on board but does NOT explicitly set respawned group to Readied if entire group was defeated. |
 | C12 | PARTIAL | Same handler. Reinforced figure inherits DC's exhausted state implicitly (per-DC not per-figure). Partially correct by structure but not explicitly coded. |
 | C13 | PARTIAL | Comm Disruption (abilities.js:7425-7439): counts SPY groups, reports cancelable card cost. But no automatic interrupt/prompt system asks "play Comm Disruption?" each time opponent plays a card. |
-| C14 | FAIL | `whenCommandCardPlayed` timing maps to `duringActivation` (cc-timing.js:196-198), requiring it to be YOUR activation. But Comm Disruption should be playable during OPPONENT's turn. **Timing bug**: card cannot be played at the correct time. |
+| C14 | PASS | Comm Disruption auto-prompt: `promptCommDisruption()` in cc-hand.js checks opponent's hand after any CC play. Timing expanded in cc-timing.js:211 to `duringActivation || duringRound || pendingPrompt`. |
 | C15 | PARTIAL | Dirty Trick timing `whenHostileFigureEntersAdjacentSpace` maps to `ctx.duringActivation`. Trigger typically happens during OPPONENT's activation — no automated prompt when hostile moves past smuggler/hunter. Honor-system. |
 | C16 | MANUAL | Parting Blow + Dirty Trick: both available during activation, player must choose. No automated conflict resolution. |
 | C17 | PASS | Evacuate includes attachment costs (abilities.js:6203-6211). Correctly computes half of total cost including attachments. |
@@ -452,19 +452,19 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C62 | PASS | Fool Me Once strain cost enforced (ability-library.json + abilities.js:2545-2568). Strain applied before draw. |
 | C63 | PARTIAL | abilities.js:2430 — `game[discardKey] = []` deletes cards (empty array). Not tracked in separate "game box" collection. If game box needs to be queryable, this is incomplete. |
 | C64 | PASS | data/map-spaces.json has `exterior` sections per map. data-loader.js:197-202 `isExteriorSpace()`. abilities.js:7694-7702 sets `game.harshEnvironmentActive`. |
-| C65 | PARTIAL | abilities.js:7652-7659 — Opportunistic grants 3 MP to active DC's movement bank. Correctly banks during activation. But timing `afterHostileFigureSuffersDamage` maps ONLY to `duringActivation` — cannot be played outside activation. |
-| C66 | FAIL | Opportunistic timing restricts to `duringActivation` only. The "not currently activating, must spend immediately" scenario CANNOT occur — card literally unplayable outside activation. |
+| C65 | PASS | Opportunistic timing expanded to `duringRound` context. Playable both during and outside activation. |
+| C66 | PASS | Opportunistic playable via `duringRound` context. "Not currently activating, must spend immediately" scenario now supported. |
 | C67 | PASS | Parry timing `whileDefending` maps to `ctx.duringAttack && ctx.isDefender`. Shows as playable whenever defending, including modifiers phase. |
 | C68 | PARTIAL | abilities.js:5289-5296 — Rebel Graffiti awards 2 VP. But passive "if Sabine, re-draw" NOT implemented. |
-| C69 | PARTIAL | ability-library.json: Rest in Peace only has `{draw: 1}`. "Players cannot choose/play/re-draw from discard piles" enforcement NOT implemented. Just the EOR draw. |
+| C69 | PASS | Rest in Peace blocks discard access comprehensively. EOR draw + discard pile access prevention enforced. |
 | C70 | PASS | abilities.js:7242-7256 — Reverse Engineer sets `reverseEngineerActive`. combat.js:101-102: uses defender's surge abilities INSTEAD of attacker's. Cannot mix — always uses defender's when flag set. |
-| C71 | FAIL | Self-Augmentation: `roundAttackRerollDice: 1` only. No code adds DROID to figure's keywords. `getDcKeywords()` loads static data. CCs checking DROID won't match. |
-| C72 | FAIL | Same — no dynamic keyword addition. Other abilities checking DROID won't recognize the figure. |
+| C71 | PASS | Self-Augmentation adds DROID keyword dynamically in data-loader.js:233-244 via `getDcKeywords(game)`. All callers pass `game` object. |
+| C72 | PASS | Same as C71 — DROID keyword dynamically added, recognized by all ability/CC checks. |
 | C73 | PASS | abilities.js:5078-5086 — Sit Tight sets `game.sitTightPlayerNum`. dc-play-area.js:79-85 blocks activation if `remaining <= oppRem`. Integrates with passing. |
 | C74 | PARTIAL | Targeting Network: `rerollOneAttackDie: true` works. But passive "DROIDs gain Surge: Re-draw" NOT implemented. |
 | C75 | PARTIAL | abilities.js:5203-5211 — To the Limit: grants extra action then Stunned. But does NOT restrict Move as the extra action, and does not implement "gain 4 MP then Stunned BEFORE spending." |
-| C76 | FAIL | No `cannotGetHarmful` immunity check in To the Limit. Code unconditionally applies Stun. |
-| C77 | PARTIAL | Urgency: `mpBonusFromSpeed: 2` adds Speed+2 MP to movement bank. But no "must spend all at once" enforcement — MP can be spent incrementally. |
+| C76 | PASS | To the Limit checks `isConditionImmune(game, figureKey)` at abilities.js:5480-5488. Immune figures get extra action without Stun. |
+| C77 | PASS | Urgency must-spend-all enforced (movement.js:61-63). MP must be spent in single movement action. |
 
 ---
 
