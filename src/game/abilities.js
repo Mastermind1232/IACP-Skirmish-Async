@@ -3,7 +3,7 @@
  * Surge resolution uses combat.parseSurgeEffect; DCs still reference keys in dc-effects (surgeAbilities array).
  */
 import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapSpaces, getMapTokensData } from '../data-loader.js';
-import { parseCoord } from './coords.js';
+import { parseCoord, normalizeCoord, getFootprintCells } from './coords.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 
@@ -28,6 +28,88 @@ import { applyCondition, resetCondition, filterCondition, isConditionImmune, HAR
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces } from './movement.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum } from './player-helpers.js';
+
+/**
+ * Compute BFS shortest path between two spaces, then detect hostile figures
+ * whose adjacency the pushed figure exits along the way.
+ * Used by Force Push, Force Throw, Wrist Cord, etc. to log intermediate spaces
+ * and warn about Parting Blow / similar triggers.
+ *
+ * @param {object} game
+ * @param {string} fromPos - starting position (will be normalized)
+ * @param {string} toPos - destination position (will be normalized)
+ * @param {number} pushedFigurePlayerNum - which player owns the pushed figure
+ * @returns {{ pathStr: string, warnings: Array<{name:string, space:string}> }}
+ */
+function computePushPathAndWarnings(game, fromPos, toPos, pushedFigurePlayerNum) {
+  const result = { pathStr: '', warnings: [] };
+  const mapId = game.selectedMap?.id;
+  const rawMapSpaces = mapId ? getMapSpaces(mapId) : null;
+  if (!fromPos || !rawMapSpaces) return result;
+  const adjacency = rawMapSpaces.adjacency || {};
+  const startNorm = normalizeCoord(fromPos);
+  const destNorm = normalizeCoord(toPos);
+  if (startNorm === destNorm) return result;
+
+  // BFS to find shortest path (ignoring occupied spaces — pushed figures pass through)
+  const visited = new Map(); // coord → parent coord
+  visited.set(startNorm, null);
+  const queue = [startNorm];
+  let found = false;
+  while (queue.length > 0 && !found) {
+    const cur = queue.shift();
+    for (const neighbor of (adjacency[cur] || []).map(n => normalizeCoord(n))) {
+      if (visited.has(neighbor)) continue;
+      visited.set(neighbor, cur);
+      if (neighbor === destNorm) { found = true; break; }
+      queue.push(neighbor);
+    }
+  }
+  // Reconstruct path
+  const path = [];
+  if (found) {
+    let node = destNorm;
+    while (node !== null) {
+      path.unshift(node);
+      node = visited.get(node) ?? null;
+    }
+  }
+  if (path.length > 2) {
+    const intermediates = path.slice(1, -1);
+    result.pathStr = ` via ${intermediates.map(c => `**${c.toUpperCase()}**`).join(' \u2192 ')}`;
+  }
+
+  // Check at each space along the path if the pushed figure exits adjacency to any hostile figure
+  if (path.length >= 2) {
+    const hostilePn = pushedFigurePlayerNum === 1 ? 2 : 1;
+    const hostilePositions = game.figurePositions?.[hostilePn] || {};
+    const seenKeys = new Set();
+    for (let i = 0; i < path.length - 1; i++) {
+      const exitingSpace = path[i];
+      const enteringSpace = path[i + 1];
+      const exitAdj = new Set((adjacency[exitingSpace] || []).map(n => normalizeCoord(n)));
+      const enterAdj = new Set((adjacency[enteringSpace] || []).map(n => normalizeCoord(n)));
+      for (const [hfk, hPos] of Object.entries(hostilePositions)) {
+        if (!hPos) continue;
+        const hPosNorm = normalizeCoord(hPos);
+        const hDcName = dcNameFromFigureKey(hfk);
+        const hSize = game.figureOrientations?.[hfk] || '1x1';
+        const hCells = getFootprintCells(hPosNorm, hSize).map(c => normalizeCoord(c));
+        const isAdjacentBefore = hCells.some(c => exitAdj.has(c));
+        if (!isAdjacentBefore) continue;
+        const isAdjacentAfter = hCells.some(c => enterAdj.has(c) || c === enteringSpace);
+        if (!isAdjacentAfter) {
+          const warnKey = `${hfk}@${exitingSpace}`;
+          if (seenKeys.has(warnKey)) continue;
+          seenKeys.add(warnKey);
+          const warnName = hDcName.replace(/_/g, ' ');
+          result.warnings.push({ name: warnName, space: exitingSpace.toUpperCase() });
+        }
+      }
+    }
+  }
+  return result;
+}
 
 /** Get ability metadata by id. Returns { type, surgeCost?, label?, ... } or null. */
 export function getAbility(id) {
@@ -230,9 +312,16 @@ export function resolveAbility(abilityId, context) {
         game.forcedAttackTarget = game.forcedAttackTarget || {};
         game.forcedAttackTarget[msgId] = targetFigureKey;
       }
+      // Compute path and adjacency-exit warnings for the push
+      const { pathStr: _pushPathStr, warnings: _pushWarnings } = computePushPathAndWarnings(game, prevPos, chosenSpace, enemyNum);
+      let _pushLogMsg = `**${label}** — **${dcDisplay}** pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} to ${String(chosenSpace).toUpperCase()}${_pushPathStr}.${entry.postPushFreeAttack ? ' Now attack that figure (free action).' : ''}`;
+      if (_pushWarnings.length > 0) {
+        const _warnList = _pushWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
+        _pushLogMsg += `\n⚠️ Exits adjacency to: ${_warnList} — opponent may play **Parting Blow** or similar interrupts.`;
+      }
       return {
         applied: true,
-        logMessage: `**${label}** — **${dcDisplay}** pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} to ${String(chosenSpace).toUpperCase()}.${entry.postPushFreeAttack ? ' Now attack that figure (free action).' : ''}`,
+        logMessage: _pushLogMsg,
         refreshBoard: true,
         refreshMovementBank: !!entry.mpCostToActivate,
         activeMsgId: msgId,
@@ -1714,8 +1803,15 @@ export function resolveAbility(abilityId, context) {
         }
         game.figurePositions = game.figurePositions || {};
         game.figurePositions[oppNum] = game.figurePositions[oppNum] || {};
+        const _slamPrevPos = game.figurePositions[oppNum][targetFigureKey];
         game.figurePositions[oppNum][targetFigureKey] = context.chosenSpace;
-        return { applied: true, logMessage: `**${entry.label}** — Pushed **${_pushDcName}** to **${String(context.chosenSpace).toUpperCase()}**.`, refreshDcEmbed: true, refreshBoard: true };
+        const { pathStr: _slamPathStr, warnings: _slamWarnings } = computePushPathAndWarnings(game, _slamPrevPos, context.chosenSpace, oppNum);
+        let _slamLogMsg = `**${entry.label}** — Pushed **${_pushDcName}** to **${String(context.chosenSpace).toUpperCase()}**${_slamPathStr}.`;
+        if (_slamWarnings.length > 0) {
+          const _slamWarnList = _slamWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
+          _slamLogMsg += `\n⚠️ Exits adjacency to: ${_slamWarnList} — opponent may play **Parting Blow** or similar interrupts.`;
+        }
+        return { applied: true, logMessage: _slamLogMsg, refreshDcEmbed: true, refreshBoard: true };
       }
       // Multi-target variant (Trample): auto-target all adjacent hostiles (up to N), single die roll
       if (entry.rollOneDieMaxTargets && entry.rollOneDieMaxTargets > 1) {
@@ -6464,13 +6560,20 @@ export function resolveAbility(abilityId, context) {
     if (chosenFigureKey && chosenSpace) {
       game.figurePositions = game.figurePositions || {};
       game.figurePositions[oppNum] = game.figurePositions[oppNum] || {};
+      const _fmPrevPos = game.figurePositions[oppNum][chosenFigureKey];
       game.figurePositions[oppNum][chosenFigureKey] = chosenSpace;
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = true;
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[msgId] = { type: 'melee' };
       const dcName = dcNameFromFigureKey(chosenFigureKey);
-      return { applied: true, logMessage: `**Face Me!** — Pushed **${dcName}** to ${String(chosenSpace).toUpperCase()}. Use the Melee Attack button for 1 free attack.`, refreshBoard: true };
+      const { pathStr: _fmPathStr, warnings: _fmWarnings } = computePushPathAndWarnings(game, _fmPrevPos, chosenSpace, oppNum);
+      let _fmLogMsg = `**Face Me!** — Pushed **${dcName}** to ${String(chosenSpace).toUpperCase()}${_fmPathStr}. Use the Melee Attack button for 1 free attack.`;
+      if (_fmWarnings.length > 0) {
+        const _fmWarnList = _fmWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
+        _fmLogMsg += `\n⚠️ Exits adjacency to: ${_fmWarnList} — opponent may play **Parting Blow** or similar interrupts.`;
+      }
+      return { applied: true, logMessage: _fmLogMsg, refreshBoard: true };
     }
     // Phase 2: find spaces adjacent to activating figure for the push landing
     if (chosenFigureKey && !chosenSpace) {
@@ -6608,6 +6711,7 @@ export function resolveAbility(abilityId, context) {
     if (chosenFigureKey && chosenSpace) {
       game.figurePositions = game.figurePositions || {};
       game.figurePositions[oppNum] = game.figurePositions[oppNum] || {};
+      const _dePrevPos = game.figurePositions[oppNum][chosenFigureKey];
       game.figurePositions[oppNum][chosenFigureKey] = chosenSpace;
       const targetName = dcNameFromFigureKey(chosenFigureKey);
       const targetMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
@@ -6625,7 +6729,13 @@ export function resolveAbility(abilityId, context) {
           syncHealthStateToList(game, oppNum, targetMsgId, targetHs);
         }
       }
-      return { applied: true, logMessage: `**Dark Energy** — Pushed **${targetName}** to ${String(chosenSpace).toUpperCase()}, dealt 1 Damage.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
+      const { pathStr: _dePathStr, warnings: _deWarnings } = computePushPathAndWarnings(game, _dePrevPos, chosenSpace, oppNum);
+      let _deLogMsg = `**Dark Energy** — Pushed **${targetName}** to ${String(chosenSpace).toUpperCase()}${_dePathStr}, dealt 1 Damage.`;
+      if (_deWarnings.length > 0) {
+        const _deWarnList = _deWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
+        _deLogMsg += `\n⚠️ Exits adjacency to: ${_deWarnList} — opponent may play **Parting Blow** or similar interrupts.`;
+      }
+      return { applied: true, logMessage: _deLogMsg, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
     }
     // Phase 2: pick landing space adjacent to target (1-space push in any direction)
     if (chosenFigureKey && !chosenSpace) {
@@ -6701,9 +6811,16 @@ export function resolveAbility(abilityId, context) {
     if (chosenFigureKey && chosenFigureKey !== 'move2' && chosenSpace) {
       game.figurePositions = game.figurePositions || {};
       game.figurePositions[oppNum] = game.figurePositions[oppNum] || {};
+      const _lffPrevPos = game.figurePositions[oppNum][chosenFigureKey];
       game.figurePositions[oppNum][chosenFigureKey] = chosenSpace;
       const nm = dcNameFromFigureKey(chosenFigureKey);
-      return { applied: true, logMessage: `**Looking for a Fight** — Pushed **${nm}** to ${String(chosenSpace).toUpperCase()}.`, refreshBoard: true };
+      const { pathStr: _lffPathStr, warnings: _lffWarnings } = computePushPathAndWarnings(game, _lffPrevPos, chosenSpace, oppNum);
+      let _lffLogMsg = `**Looking for a Fight** — Pushed **${nm}** to ${String(chosenSpace).toUpperCase()}${_lffPathStr}.`;
+      if (_lffWarnings.length > 0) {
+        const _lffWarnList = _lffWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
+        _lffLogMsg += `\n⚠️ Exits adjacency to: ${_lffWarnList} — opponent may play **Parting Blow** or similar interrupts.`;
+      }
+      return { applied: true, logMessage: _lffLogMsg, refreshBoard: true };
     }
     // Phase 2a: Move 2 spaces
     if (chosenFigureKey === 'move2') {
@@ -6981,15 +7098,23 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.forcePushEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    // Phase 3: move target figure to chosen space
+    // Phase 3: move target figure to chosen space (space-by-space path with trigger checks)
     if (chosenFigureKey && chosenSpace) {
       const targetPn = game.figurePositions?.[1]?.[chosenFigureKey] != null ? 1 : 2;
       const oldPos = game.figurePositions?.[targetPn]?.[chosenFigureKey];
+      const destLower = String(chosenSpace).toLowerCase();
       game.figurePositions = game.figurePositions || {};
       game.figurePositions[targetPn] = game.figurePositions[targetPn] || {};
-      game.figurePositions[targetPn][chosenFigureKey] = String(chosenSpace).toLowerCase();
+      game.figurePositions[targetPn][chosenFigureKey] = destLower;
       const dcName = dcNameFromFigureKey(chosenFigureKey);
-      return { applied: true, logMessage: `**Force Push** — **${dcName}** pushed from **${String(oldPos || '?').toUpperCase()}** to **${String(chosenSpace).toUpperCase()}**.`, refreshBoard: true };
+
+      const { pathStr, warnings } = computePushPathAndWarnings(game, oldPos, destLower, targetPn);
+      let logMsg = `**Force Push** — **${dcName}** pushed from **${String(oldPos || '?').toUpperCase()}** to **${String(chosenSpace).toUpperCase()}**${pathStr}.`;
+      if (warnings.length > 0) {
+        const warnList = warnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
+        logMsg += `\n⚠️ Exits adjacency to: ${warnList} — opponent may play **Parting Blow** or similar interrupts.`;
+      }
+      return { applied: true, logMessage: logMsg, refreshBoard: true };
     }
     // Phase 2: space picker within 2 of chosen figure's current position
     if (chosenFigureKey) {

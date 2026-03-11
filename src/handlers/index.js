@@ -23,7 +23,7 @@ import {
 } from './post-deploy.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
 import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems } from './combat.js';
-import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive } from './activation.js';
+import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick } from './activation.js';
 import {
   handleMapSelection,
   handleMapTypeChoice,
@@ -115,7 +115,7 @@ import {
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
-import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred } from './interrupts.js';
+import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket } from './interrupts.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
 import {
   handleBleedResolve,
@@ -215,6 +215,8 @@ register('end_turn_', handleEndTurn, 'activation');
 register('dc_end_activation_', handleDcEndActivation, 'activation');
 register('confirm_activate_', handleConfirmActivate, 'activation');
 register('cancel_activate_', handleCancelActivate, 'activation');
+register('field_tactics_pick_', handleFieldTacticsPick, 'activation');
+register('fv_pick_', handleForceVisionPick, 'activation');
 
 // --- Setup ---
 register('map_selection_', handleMapSelection, 'setup');
@@ -364,6 +366,10 @@ register('ab_blade_pick_', handleAssassinsBladePickTarget, 'interrupts');
 register('sf_mp_pick_', handleSuppressiveFireMpPick, 'interrupts');
 register('force_slow_pick_', handleForceSlowPick, 'interrupts');
 register('excavation_pick_', handleExcavationPick, 'interrupts');
+register('bm_draw_', handleBlackMarket, 'interrupts');
+register('bm_discard_', handleBlackMarket, 'interrupts');
+register('bm_return_', handleBlackMarket, 'interrupts');
+register('bm_skip_', handleBlackMarket, 'interrupts');
 
 // --- Map events ---
 register('devaron_door_open_', handleDevaronDoorOpen, 'mapEvents');
@@ -440,7 +446,7 @@ export {
 } from './post-deploy.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
 export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls } from './combat.js';
-export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive } from './activation.js';
+export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick } from './activation.js';
 export {
   handleMapSelection,
   handleMapTypeChoice,
@@ -532,7 +538,7 @@ export {
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
-export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred } from './interrupts.js';
+export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket } from './interrupts.js';
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
 export {
   handleBleedResolve,

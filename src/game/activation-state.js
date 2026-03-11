@@ -225,6 +225,8 @@ const ROUND_NULL_FLAGS = [
   'strengthInNumbersData',
   'provokeNextActivation',
   'agitateNextActivation',
+  'forceVisionNextActivation',
+  'forceVisionPending',
   'stillFasterExcludeMsgId',
   'pendingStillFaster',
   'roundUtinniJawaBuffs',
@@ -237,6 +239,7 @@ const ROUND_NULL_FLAGS = [
   'pendingBombardmentSorin',
   'pendingFiringSquad',
   'pendingCoordinatedRaid',
+  'pendingFieldTactics',
   'pendingAwr',
   'sonOfSkywalkerActive',
   'dataTheftStolenCard',
@@ -288,6 +291,7 @@ const ROUND_DELETE_FLAGS = [
   'partingShotTriggered',
   'jundlandTerrorPlayedThisEor',
   'reinforcementsPlayedThisSor',
+  'pendingBlackMarket',
 ];
 
 /**

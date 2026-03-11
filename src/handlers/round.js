@@ -368,6 +368,80 @@ export async function handleEndEndOfRound(interaction, ctx) {
       }
     }
   }
+  // [Black Market] SU: at end of round, if owner has a friendly SMUGGLER, reveal top CC and offer 3 choices
+  {
+    const _bmEffs = getDcEffects();
+    for (const pn of [1, 2]) {
+      const _bmDcList = getDcList(game, pn) || [];
+      const _bmMsgIds = getDcMessageIds(game, pn) || [];
+      for (let i = 0; i < _bmDcList.length; i++) {
+        const _bmDc = _bmDcList[i];
+        if (!_bmDc || _bmDc.defeated) continue;
+        if (_bmDc.dcName !== '[Black Market]') continue;
+        const _bmMid = _bmMsgIds[i];
+        if (!_bmMid) continue;
+        if (isDepletedRemovedFromGame(game, _bmMid)) continue;
+        // Check if this player has a friendly SMUGGLER on the board
+        const _bmFigPos = game.figurePositions?.[pn] || {};
+        let _bmSmugglerFk = null;
+        let _bmSmugglerMsgId = null;
+        let _bmSmugglerFigIdx = 0;
+        for (let di = 0; di < _bmDcList.length; di++) {
+          const _bmOtherDc = _bmDcList[di];
+          if (!_bmOtherDc || _bmOtherDc.defeated) continue;
+          const _bmOtherName = _bmOtherDc.dcName?.replace(/\s*\[.*\]\s*$/, '');
+          const _bmOtherEff = _bmEffs[_bmOtherDc.dcName] || _bmEffs[_bmOtherName];
+          if (!(_bmOtherEff?.keywords || []).some(k => String(k).toUpperCase() === 'SMUGGLER')) continue;
+          // Found a SMUGGLER DC — find its first alive figure key
+          for (const [fk, pos] of Object.entries(_bmFigPos)) {
+            if (!fk.startsWith((_bmOtherName || _bmOtherDc.dcName) + '-')) continue;
+            if (!pos) continue;
+            // Check if figure is alive (HP > 0)
+            const _bmFkMid = _bmMsgIds[di];
+            if (!_bmFkMid) continue;
+            const _bmFkHs = dcHealthState.get(_bmFkMid);
+            const _bmFkIdx = parseInt(fk.split('-').pop(), 10) || 0;
+            if (_bmFkHs?.[_bmFkIdx] && Array.isArray(_bmFkHs[_bmFkIdx]) && _bmFkHs[_bmFkIdx][0] > 0) {
+              _bmSmugglerFk = fk;
+              _bmSmugglerMsgId = _bmFkMid;
+              _bmSmugglerFigIdx = _bmFkIdx;
+              break;
+            }
+          }
+          if (_bmSmugglerFk) break;
+        }
+        if (!_bmSmugglerFk) continue; // no alive SMUGGLER — skip
+        // Peek at top CC deck card
+        const _bmDeckKey = pn === 1 ? 'player1CcDeck' : 'player2CcDeck';
+        const _bmDeck = game[_bmDeckKey] || [];
+        if (_bmDeck.length === 0) continue; // empty deck — skip
+        const _bmTopCard = _bmDeck[0];
+        const _bmCcEff = getCcEffect(_bmTopCard);
+        const _bmCardCost = _bmCcEff?.cost ?? 0;
+        const _bmOwnerId = game[`player${pn}Id`];
+        const _bmRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`bm_draw_${gameId}_${_bmMid}_${pn}`).setLabel(`Draw (spend ${_bmCardCost} VP)`).setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId(`bm_discard_${gameId}_${_bmMid}_${pn}`).setLabel(`Discard (gain ${_bmCardCost} VP)`).setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`bm_return_${gameId}_${_bmMid}_${pn}`).setLabel('Return to top').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`bm_skip_${gameId}_${_bmMid}_${pn}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        );
+        // Store pending state so the handler knows which card/smuggler to apply
+        game.pendingBlackMarket = game.pendingBlackMarket || {};
+        game.pendingBlackMarket[pn] = {
+          topCard: _bmTopCard,
+          cardCost: _bmCardCost,
+          smugglerFk: _bmSmugglerFk,
+          smugglerMsgId: _bmSmugglerMsgId,
+          smugglerFigIdx: _bmSmugglerFigIdx,
+        };
+        const _bmSmugglerName = dcNameFromFigureKey(_bmSmugglerFk);
+        await logGameAction(game, client, `<@${_bmOwnerId}> **[Black Market]** — Top CC revealed: **${_bmTopCard}** (cost ${_bmCardCost}). A friendly SMUGGLER (**${_bmSmugglerName}**) may suffer 1 Strain. Choose:`, {
+          components: [_bmRow],
+          allowedMentions: { users: [_bmOwnerId] },
+        });
+      }
+    }
+  }
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId) continue;
     if (isDepletedRemovedFromGame(game, msgId)) continue;

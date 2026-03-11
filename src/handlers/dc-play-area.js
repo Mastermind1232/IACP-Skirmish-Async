@@ -106,6 +106,36 @@ export async function handleDcActivate(interaction, ctx) {
       game.agitateNextActivation = null;
     }
   }
+  // Force Vision (Kanan): block activation while opponent hasn't picked yet
+  if (game.forceVisionPending && game.forceVisionPending === playerNum) {
+    await interaction.followUp({ content: `👁️ **Force Vision** — You must first choose a group from the Force Vision prompt before activating.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Force Vision (Kanan): opponent must activate the named group next, if able
+  if (game.forceVisionNextActivation && game.forceVisionNextActivation.playerNum === playerNum) {
+    const _fvForcedDcName = game.forceVisionNextActivation.dcName;
+    if (dcName !== _fvForcedDcName) {
+      const _fvActivatedKey = `p${playerNum}ActivatedDcIndices`;
+      const _fvForcedIdx = dcList.findIndex((d) => d.dcName === _fvForcedDcName);
+      if (_fvForcedIdx >= 0 && !(game[_fvActivatedKey] || []).includes(_fvForcedIdx)) {
+        // Check if the forced group still has alive figures
+        const _fvFigs = game.figurePositions?.[playerNum] || {};
+        const _fvAlive = Object.entries(_fvFigs).some(([fk, pos]) => fk.startsWith(_fvForcedDcName + '-') && pos);
+        if (_fvAlive) {
+          await interaction.followUp({ content: `👁️ **Force Vision** — **${_fvForcedDcName}** must be the next group to activate, if able.`, ephemeral: true }).catch(discordCatch);
+          return;
+        }
+        // Group is defeated — clear the restriction
+        game.forceVisionNextActivation = null;
+      } else {
+        // Group already activated or not found — clear
+        game.forceVisionNextActivation = null;
+      }
+    } else {
+      // Player is activating the forced group — clear the restriction
+      game.forceVisionNextActivation = null;
+    }
+  }
   // Force Slow: if any figure of this DC is flagged to skip activation, block it
   if (game.forceSlowSkipActivation) {
     const _fsFigPos = game.figurePositions?.[playerNum] || {};
@@ -228,6 +258,55 @@ export async function handleDcActivate(interaction, ctx) {
     }
     if (_cmpAtts.includes('Indentured Jester')) {
       await thread.send(`**Indentured Jester** — **Salacious B. Crumb** activates at the start or end of this activation. (Not counted for control.)`).catch(discordCatch);
+    }
+    // Force Vision (Kanan): opponent chooses one of their ready groups and must activate it next
+    {
+      const _fvEff = getDcEffects ? (getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')]) : null;
+      const _fvIds = _fvEff?.specialAbilityIds || [];
+      if (_fvIds.includes('force_vision_kanan')) {
+        const _fvOppNum = opponentPlayerNum(playerNum);
+        const _fvOppOwnerId = getPlayerId(game, _fvOppNum);
+        const _fvOppDcList = getDcList(game, _fvOppNum) || [];
+        const _fvOppActivated = getActivatedDcIndices(game, _fvOppNum) || [];
+        const _fvReadyGroups = [];
+        for (let i = 0; i < _fvOppDcList.length; i++) {
+          if (_fvOppActivated.includes(i)) continue;
+          const dc = _fvOppDcList[i];
+          const figs = game.figurePositions?.[_fvOppNum] || {};
+          const alive = Object.entries(figs).some(([fk, pos]) => fk.startsWith(dc.dcName + '-') && pos);
+          if (!alive) continue;
+          _fvReadyGroups.push({ index: i, dcName: dc.dcName, displayName: dc.displayName || dc.dcName });
+        }
+        if (_fvReadyGroups.length > 0) {
+          game.forceVisionPending = _fvOppNum;
+          const _fvRows = [];
+          const _fvBtns = [];
+          for (const rg of _fvReadyGroups.slice(0, 20)) {
+            _fvBtns.push(
+              new ButtonBuilder()
+                .setCustomId(`fv_pick_${gameId}_${_fvOppNum}_${rg.index}`)
+                .setLabel(rg.displayName.length > 80 ? rg.displayName.slice(0, 77) + '...' : rg.displayName)
+                .setStyle(ButtonStyle.Primary)
+            );
+            if (_fvBtns.length === 5) {
+              _fvRows.push(new ActionRowBuilder().addComponents(..._fvBtns.splice(0)));
+            }
+          }
+          if (_fvBtns.length > 0) _fvRows.push(new ActionRowBuilder().addComponents(..._fvBtns));
+          try {
+            const _fvGeneralCh = await client.channels.fetch(game.generalId);
+            await _fvGeneralCh.send({
+              content: `👁️ **Force Vision** — <@${_fvOppOwnerId}>, **Kanan Jarrus** is activating! Choose one of your ready groups — you **must** activate it next, if possible:`,
+              components: _fvRows.slice(0, 5),
+              allowedMentions: { users: [_fvOppOwnerId] },
+            });
+          } catch (_fvErr) {
+            console.error('Force Vision prompt error:', _fvErr);
+          }
+        } else {
+          await thread.send({ content: `👁️ **Force Vision** — Opponent has no ready groups to choose from.` }).catch(discordCatch);
+        }
+      }
     }
     saveGames();
     const logCh = await client.channels.fetch(game.generalId);

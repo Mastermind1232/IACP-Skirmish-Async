@@ -5,7 +5,7 @@
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
-import { reduceHp, awardObjectiveVp, awardKillVp, dcNameFromFigureKey } from '../game/index.js';
+import { reduceHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey } from '../game/index.js';
 import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -749,6 +749,98 @@ export async function handleSubmitOrFight(interaction, ctx) {
     }
   } else {
     await interaction.message.edit({ content: '**Submit or Fight** — Skipped.', components: [] }).catch(discordCatch);
+  }
+  saveGames();
+}
+
+// ── [Black Market] SU ────────────────────────────────────────────────────────
+/**
+ * Handle [Black Market] EOR choices: draw (spend VP), discard (gain VP), return to top, or skip.
+ * Buttons: bm_draw_, bm_discard_, bm_return_, bm_skip_
+ */
+export async function handleBlackMarket(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, dcHealthState, dcMessageMeta, logGameAction, checkWinConditions } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+
+  // Parse customId: bm_{choice}_{gameId}_{msgId}_{playerNum}
+  const _bmPrefixes = ['bm_draw_', 'bm_discard_', 'bm_return_', 'bm_skip_'];
+  const _bmPrefix = _bmPrefixes.find(p => interaction.customId.startsWith(p));
+  if (!_bmPrefix) return;
+  const _bmChoice = _bmPrefix.replace('bm_', '').replace(/_$/, ''); // draw | discard | return | skip
+  const _bmSuffix = interaction.customId.replace(_bmPrefix, '');
+  const _bmParts = _bmSuffix.split('_');
+  const _bmGameId = _bmParts[0];
+  const _bmMsgId = _bmParts[1];
+  const _bmPn = parseInt(_bmParts[2], 10);
+
+  const game = await requireGame(interaction, getGame, _bmGameId);
+  if (!game) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, _bmPn, canActAsPlayer, 'Only the card owner may respond.')) return;
+
+  const pending = game.pendingBlackMarket?.[_bmPn];
+  if (!pending) {
+    await interaction.followUp({ content: '[Black Market] — No pending choice found.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const { topCard, cardCost, smugglerFk, smugglerMsgId, smugglerFigIdx } = pending;
+  const smugglerName = dcNameFromFigureKey(smugglerFk);
+  const deckKey = _bmPn === 1 ? 'player1CcDeck' : 'player2CcDeck';
+
+  if (_bmChoice === 'skip') {
+    delete game.pendingBlackMarket[_bmPn];
+    await interaction.message.edit({ content: '**[Black Market]** — Skipped. No Strain suffered.', components: [] }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+
+  // Apply 1 Strain (= 1 HP damage) to the SMUGGLER
+  const _bmHs = dcHealthState.get(smugglerMsgId);
+  if (_bmHs?.[smugglerFigIdx] && Array.isArray(_bmHs[smugglerFigIdx])) {
+    const [cur, max] = _bmHs[smugglerFigIdx];
+    _bmHs[smugglerFigIdx] = [Math.max(0, (cur ?? max) - 1), max];
+    dcHealthState.set(smugglerMsgId, _bmHs);
+    // Sync to dcList
+    const _bmDcIds = getDcMessageIds(game, _bmPn) || [];
+    const _bmDcList = getDcList(game, _bmPn) || [];
+    const _bmDcIdx = _bmDcIds.indexOf(smugglerMsgId);
+    if (_bmDcIdx >= 0 && _bmDcList[_bmDcIdx]) _bmDcList[_bmDcIdx].healthState = [..._bmHs];
+  }
+
+  // Remove top card from deck (it was only peeked before)
+  const deck = game[deckKey] || [];
+  if (deck.length > 0 && deck[0] === topCard) {
+    deck.shift();
+  }
+
+  let resultMsg = '';
+  if (_bmChoice === 'draw') {
+    // Spend VP equal to cost, draw the card
+    if (cardCost > 0) {
+      deductVp(game, _bmPn, cardCost);
+    }
+    const handKey = _bmPn === 1 ? 'player1CcHand' : 'player2CcHand';
+    game[handKey] = [...(game[handKey] || []), topCard];
+    resultMsg = `Drew **${topCard}** (spent ${cardCost} VP). **${smugglerName}** suffered 1 Strain.`;
+  } else if (_bmChoice === 'discard') {
+    // Discard the card, gain VP equal to cost
+    const discardKey = _bmPn === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    game[discardKey] = [...(game[discardKey] || []), topCard];
+    if (cardCost > 0) {
+      awardObjectiveVp(game, _bmPn, cardCost);
+    }
+    resultMsg = `Discarded **${topCard}** (gained ${cardCost} VP). **${smugglerName}** suffered 1 Strain.`;
+  } else if (_bmChoice === 'return') {
+    // Return card to top of deck (put it back)
+    deck.unshift(topCard);
+    resultMsg = `Returned **${topCard}** to top of deck. **${smugglerName}** suffered 1 Strain.`;
+  }
+
+  delete game.pendingBlackMarket[_bmPn];
+  await interaction.message.edit({ content: `**[Black Market]** — ${resultMsg}`, components: [] }).catch(discordCatch);
+  await logGameAction(game, client, `**[Black Market]** — ${resultMsg}`, { phase: 'ROUND', icon: 'card' });
+  if (_bmChoice === 'draw' || _bmChoice === 'discard') {
+    await checkWinConditions(game, client);
   }
   saveGames();
 }

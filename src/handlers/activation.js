@@ -29,6 +29,85 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 
 /**
+ * Field Tactics (Death Trooper Elite/Regular): after activation ends, choose a
+ * friendly TROOPER or LEADER figure within 2 spaces (cost ≤6) to perform an
+ * interrupt free attack.  Modelled on Coordinated Raid (pendingCoordinatedRaid).
+ *
+ * @param {object} game
+ * @param {object} meta - dcMessageMeta entry for the activating DC
+ * @param {string} dcMsgId - DC message ID that just finished activating
+ * @param {Function} logGameAction
+ * @param {object} client
+ * @param {Function} findDcMsgIdForFigure - (gameId, playerNum, figureKey) => msgId | null
+ */
+async function maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, client, findDcMsgIdForFigure) {
+  const dcName = meta.dcName;
+  if (dcName !== 'Death Trooper (Elite)' && dcName !== 'Death Trooper (Regular)') return;
+  // Guard: limit once per round per group
+  const ftRoundKey = `fieldTactics_${dcMsgId}`;
+  if (game.roundFigureAbilityUsed?.[ftRoundKey]) return;
+  const eff = getDcEffects();
+  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+  const prefix = `${dcName}-${dgIndex}-`;
+  // Find any figure in this DG that is on the board to serve as origin for range check
+  const myFigKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {}).filter(k => k.startsWith(prefix));
+  if (myFigKeys.length === 0) return;
+  const originPos = game.figurePositions?.[meta.playerNum]?.[myFigKeys[0]];
+  if (!originPos) return;
+  // Scan all friendly figures for TROOPER or LEADER keyword, cost ≤ 6, within 2 spaces
+  const validTargets = [];
+  for (const [fk, pos] of Object.entries(game.figurePositions?.[meta.playerNum] || {})) {
+    if (!pos || fk.startsWith(prefix)) continue; // skip self
+    const fkDcName = dcNameFromFigureKey(fk);
+    const fkEff = eff?.[fkDcName];
+    if (!fkEff) continue;
+    const kws = (fkEff.keywords || []).map(k => String(k).toUpperCase());
+    if (!kws.includes('TROOPER') && !kws.includes('LEADER')) continue;
+    if ((fkEff.cost ?? 99) > 6) continue;
+    if (getRange(originPos, pos) > 2) continue;
+    validTargets.push(fk);
+  }
+  if (validTargets.length === 0) return;
+  const ownerId = getPlayerId(game, meta.playerNum);
+  const gameId = game.gameId;
+  if (validTargets.length === 1) {
+    // Auto-select the only eligible figure
+    const chosenFk = validTargets[0];
+    const chosenMsgId = findDcMsgIdForFigure ? findDcMsgIdForFigure(gameId, meta.playerNum, chosenFk) : null;
+    if (chosenMsgId) {
+      game.pendingFieldTactics = { forMsgId: chosenMsgId, chosenFigureKey: chosenFk, triggeredByMsgId: dcMsgId };
+    }
+    game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+    game.roundFigureAbilityUsed[ftRoundKey] = true;
+    const chosenName = dcNameFromFigureKey(chosenFk);
+    await logGameAction(game, client, `**Field Tactics** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.`, { phase: 'ROUND', icon: 'activate' });
+    return;
+  }
+  // Multiple targets — show picker buttons
+  const btns = validTargets.slice(0, 20).map(fk => {
+    const label = dcNameFromFigureKey(fk);
+    return new ButtonBuilder()
+      .setCustomId(`field_tactics_pick_${gameId}_${dcMsgId}_${fk}`)
+      .setLabel(label.slice(0, 80))
+      .setStyle(ButtonStyle.Primary);
+  });
+  btns.push(
+    new ButtonBuilder()
+      .setCustomId(`field_tactics_pick_${gameId}_${dcMsgId}_skip`)
+      .setLabel('Skip')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  const rows = [];
+  for (let i = 0; i < btns.length; i += 5) {
+    rows.push(new ActionRowBuilder().addComponents(...btns.slice(i, i + 5)));
+  }
+  await logGameAction(game, client, `<@${ownerId}> **Field Tactics** — Choose a friendly TROOPER/LEADER (cost ≤6) within 2 spaces to perform a free interrupt attack:`, {
+    components: rows,
+    allowedMentions: { users: [ownerId] },
+  });
+}
+
+/**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, replyIfGameEnded, hasActionsRemainingInGame, GAME_PHASES, PHASE_COLOR, getInitiativePlayerZoneLabel, logGameAction, updateHandChannelMessages, saveGames, client
  */
@@ -139,6 +218,16 @@ export async function handlePassActivationTurn(interaction, ctx) {
   const turnPlayerId = game.currentActivationTurnPlayerId ?? game.initiativePlayerId;
   const turnPlayerNum = turnPlayerId === game.player1Id ? 1 : 2;
   if (!await requirePlayer(interaction, game, interaction.user.id, turnPlayerNum, canActAsPlayer, "It's not your turn to pass.")) return;
+  // Force Vision: cannot pass if you haven't picked yet or have a named group pending
+  if (game.forceVisionPending && game.forceVisionPending === turnPlayerNum) {
+    await interaction.followUp({ content: `👁️ **Force Vision** — You must first choose a group from the Force Vision prompt before passing.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (game.forceVisionNextActivation && game.forceVisionNextActivation.playerNum === turnPlayerNum) {
+    const _fvDcName = game.forceVisionNextActivation.dcName;
+    await interaction.followUp({ content: `👁️ **Force Vision** — You cannot pass. You must activate **${_fvDcName}** next.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
   const myRem = getActivationsRemaining(game, turnPlayerNum) ?? 0;
   const otherPlayerNum = opponentPlayerNum(turnPlayerNum);
   const otherRem = getActivationsRemaining(game, otherPlayerNum) ?? 0;
@@ -411,6 +500,8 @@ export async function handleEndTurn(interaction, ctx) {
     }
   }
   await maybeShowEndActivationPhaseButton(game, client);
+  // Field Tactics (Death Trooper): after activation, choose a friendly TROOPER/LEADER within 2 to perform a free attack
+  await maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, client, ctx.findDcMessageIdForFigure);
   saveGames();
 }
 
@@ -631,6 +722,9 @@ export async function handleDcEndActivation(interaction, ctx) {
     console.error('End-activation reaction prompt error:', _endActErr?.message ?? _endActErr);
   }
 
+  // Field Tactics (Death Trooper): after activation, choose a friendly TROOPER/LEADER within 2 to perform a free attack
+  await maybePromptFieldTactics(game, meta, msgId, logGameAction, client, ctx.findDcMessageIdForFigure);
+
   saveGames();
 }
 
@@ -673,6 +767,33 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (remaining <= 0) {
     await interaction.followUp({ content: 'No activations remaining.', ephemeral: true }).catch(discordCatch);
     return;
+  }
+  // Force Vision (Kanan): block activation while opponent hasn't picked yet
+  if (game.forceVisionPending && game.forceVisionPending === meta.playerNum) {
+    await interaction.followUp({ content: `👁️ **Force Vision** — You must first choose a group from the Force Vision prompt before activating.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Force Vision (Kanan): enforce forced activation
+  if (game.forceVisionNextActivation && game.forceVisionNextActivation.playerNum === meta.playerNum) {
+    const _fvConfirmDcName = game.forceVisionNextActivation.dcName;
+    if (meta.dcName !== _fvConfirmDcName) {
+      const _fvConfirmDcList = getDcList(game, meta.playerNum) || [];
+      const _fvConfirmActivated = getActivatedDcIndices(game, meta.playerNum) || [];
+      const _fvConfirmIdx = _fvConfirmDcList.findIndex((d) => d.dcName === _fvConfirmDcName);
+      if (_fvConfirmIdx >= 0 && !_fvConfirmActivated.includes(_fvConfirmIdx)) {
+        const _fvConfirmFigs = game.figurePositions?.[meta.playerNum] || {};
+        const _fvConfirmAlive = Object.entries(_fvConfirmFigs).some(([fk, pos]) => fk.startsWith(_fvConfirmDcName + '-') && pos);
+        if (_fvConfirmAlive) {
+          await interaction.followUp({ content: `👁️ **Force Vision** — **${_fvConfirmDcName}** must be the next group to activate, if able.`, ephemeral: true }).catch(discordCatch);
+          return;
+        }
+        game.forceVisionNextActivation = null;
+      } else {
+        game.forceVisionNextActivation = null;
+      }
+    } else {
+      game.forceVisionNextActivation = null;
+    }
   }
   // Strength in Numbers: enforce combined deployment cost <= 12
   const sinData = game.strengthInNumbersData;
@@ -1108,11 +1229,52 @@ export async function handleConfirmActivate(interaction, ctx) {
       await thread.send({ content: `🧘 **Wisdom** — Deck is empty; cannot draw.` }).catch(discordCatch);
     }
   }
-  // Force Vision (Kanan): force opponent to activate a specific group next
+  // Force Vision (Kanan): opponent chooses one of their ready groups and must activate it next
   if (_mountedIds.includes('force_vision_kanan')) {
-    const oppNum = opponentPlayerNum(meta.playerNum);
-    const oppOwnerId = game[`player${oppNum}Id`];
-    await thread.send({ content: `👁️ **Force Vision** — You may choose which group <@${oppOwnerId}> must activate next.`, allowedMentions: { users: [oppOwnerId] } }).catch(discordCatch);
+    const _fvOppNum = opponentPlayerNum(meta.playerNum);
+    const _fvOppOwnerId = getPlayerId(game, _fvOppNum);
+    // Build list of opponent's unactivated (ready) groups that are still alive
+    const _fvOppDcList = getDcList(game, _fvOppNum) || [];
+    const _fvOppActivated = getActivatedDcIndices(game, _fvOppNum) || [];
+    const _fvReadyGroups = [];
+    for (let i = 0; i < _fvOppDcList.length; i++) {
+      if (_fvOppActivated.includes(i)) continue;
+      const dc = _fvOppDcList[i];
+      const figs = game.figurePositions?.[_fvOppNum] || {};
+      const alive = Object.entries(figs).some(([fk, pos]) => fk.startsWith(dc.dcName + '-') && pos);
+      if (!alive) continue;
+      _fvReadyGroups.push({ index: i, dcName: dc.dcName, displayName: dc.displayName || dc.dcName });
+    }
+    if (_fvReadyGroups.length > 0) {
+      // Mark pending so opponent cannot activate until they pick
+      game.forceVisionPending = _fvOppNum;
+      const _fvRows = [];
+      const _fvBtns = [];
+      for (const rg of _fvReadyGroups.slice(0, 20)) {
+        _fvBtns.push(
+          new ButtonBuilder()
+            .setCustomId(`fv_pick_${game.gameId}_${_fvOppNum}_${rg.index}`)
+            .setLabel(rg.displayName.length > 80 ? rg.displayName.slice(0, 77) + '...' : rg.displayName)
+            .setStyle(ButtonStyle.Primary)
+        );
+        if (_fvBtns.length === 5) {
+          _fvRows.push(new ActionRowBuilder().addComponents(..._fvBtns.splice(0)));
+        }
+      }
+      if (_fvBtns.length > 0) _fvRows.push(new ActionRowBuilder().addComponents(..._fvBtns));
+      try {
+        const _fvGeneralCh = await client.channels.fetch(game.generalId);
+        await _fvGeneralCh.send({
+          content: `👁️ **Force Vision** — <@${_fvOppOwnerId}>, **Kanan Jarrus** is activating! Choose one of your ready groups — you **must** activate it next, if possible:`,
+          components: _fvRows.slice(0, 5),
+          allowedMentions: { users: [_fvOppOwnerId] },
+        });
+      } catch (_fvErr) {
+        console.error('Force Vision prompt error:', _fvErr);
+      }
+    } else {
+      await thread.send({ content: `👁️ **Force Vision** — Opponent has no ready groups to choose from.` }).catch(discordCatch);
+    }
   }
   // Arms Distribution (Ko-Tun): distribute 2 power tokens among friendlies within 3
   if (_mountedIds.includes('arms_distribution_kotun')) {
@@ -2026,5 +2188,84 @@ export async function handleActPassive(interaction, ctx) {
       await logGameAction?.(game, client, `🔧 **Unstable Devices** — **${targetDcName}** gains 1 Device token (now ${game.deviceTokens[targetFk]}).`, { phase: 'ACTIVATION', icon: 'activate' });
     }
   }
+  saveGames();
+}
+
+/**
+ * Handle field_tactics_pick_ — player chose a figure (or skip) for Field Tactics interrupt attack.
+ * Button format: field_tactics_pick_{gameId}_{triggerMsgId}_{figureKey|skip}
+ */
+export async function handleFieldTacticsPick(interaction, ctx) {
+  const { getGame, dcMessageMeta, logGameAction, saveGames, client } = ctx;
+  const parts = interaction.customId.replace('field_tactics_pick_', '').split('_');
+  // Format: gameId_triggerMsgId_figureKey (figureKey may contain underscores — but figure keys use hyphens)
+  // Actually: gameId and triggerMsgId are snowflake-like, figureKey is the rest
+  const gameId = parts[0];
+  const triggerMsgId = parts[1];
+  const chosenValue = parts.slice(2).join('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  if (chosenValue === 'skip') {
+    await interaction.message.edit({ content: '**Field Tactics** — Skipped.', components: [] }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+  const figureKey = chosenValue;
+  const triggerMeta = dcMessageMeta.get(triggerMsgId);
+  if (!triggerMeta) {
+    await interaction.followUp({ content: '**Field Tactics** — Could not resolve trigger DC.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const findDcMsgIdForFigure = ctx.findDcMessageIdForFigure;
+  const chosenMsgId = findDcMsgIdForFigure ? findDcMsgIdForFigure(gameId, triggerMeta.playerNum, figureKey) : null;
+  if (chosenMsgId) {
+    game.pendingFieldTactics = { forMsgId: chosenMsgId, chosenFigureKey: figureKey, triggeredByMsgId: triggerMsgId };
+  }
+  const ftRoundKey = `fieldTactics_${triggerMsgId}`;
+  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+  game.roundFigureAbilityUsed[ftRoundKey] = true;
+  const chosenName = dcNameFromFigureKey(figureKey);
+  await interaction.message.edit({ content: `**Field Tactics** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.`, components: [] }).catch(discordCatch);
+  await logGameAction(game, client, `**Field Tactics** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.`, { phase: 'ROUND', icon: 'activate' });
+  saveGames();
+}
+
+/**
+ * Handle Force Vision pick: opponent chooses which of their groups must activate next.
+ * Button prefix: fv_pick_{gameId}_{oppPlayerNum}_{dcIndex}
+ */
+export async function handleForceVisionPick(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, logGameAction, saveGames, client } = ctx;
+  const match = interaction.customId.match(/^fv_pick_([^_]+)_(\d+)_(\d+)$/);
+  if (!match) return;
+  const [, gameId, oppNumStr, dcIndexStr] = match;
+  const oppNum = parseInt(oppNumStr, 10);
+  const dcIndex = parseInt(dcIndexStr, 10);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const clickerId = interaction.user.id;
+  if (!canActAsPlayer(game, clickerId, oppNum)) {
+    await interaction.followUp({ content: 'Only the affected player can pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const dcList = getDcList(game, oppNum) || [];
+  const dc = dcList[dcIndex];
+  if (!dc) {
+    await interaction.followUp({ content: 'Group not found.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const displayName = dc.displayName || dc.dcName;
+  // Store the forced activation and clear the pending flag
+  game.forceVisionNextActivation = { playerNum: oppNum, dcName: dc.dcName };
+  game.forceVisionPending = null;
+  // Remove buttons from message
+  await interaction.message.edit({
+    content: `👁️ **Force Vision** — <@${clickerId}> chose **${displayName}**. That group must be activated next, if possible.`,
+    components: [],
+    allowedMentions: { users: [] },
+  }).catch(discordCatch);
+  await logGameAction(game, client, `👁️ **Force Vision** — **${displayName}** must be activated next by Player ${oppNum}, if possible.`, { phase: 'ROUND', icon: 'activate' });
   saveGames();
 }
