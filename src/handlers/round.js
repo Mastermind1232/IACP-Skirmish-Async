@@ -259,6 +259,28 @@ export async function handleEndEndOfRound(interaction, ctx) {
       });
     }
   }
+  // Driven by Hatred (Darth Vader): end of round, move up to 2 spaces, then may use Force Choke or perform an attack (-1 die)
+  for (const pn of [1, 2]) {
+    const _dbhMsgIds = getDcMessageIds(game, pn) || [];
+    const _dbhDcList = getDcList(game, pn) || [];
+    const _dbhAtts = getDcAttachments(game, pn) || {};
+    for (let i = 0; i < _dbhMsgIds.length; i++) {
+      const _dbhMid = _dbhMsgIds[i];
+      if (!(_dbhAtts[_dbhMid] || []).includes('Driven by Hatred')) continue;
+      const _dbhDc = _dbhDcList[i];
+      if (!_dbhDc?.dcName || _dbhDc.defeated) continue;
+      const _dbhOwnerId = game[`player${pn}Id`];
+      const _dbhRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`dbh_force_choke_${gameId}_${_dbhMid}`).setLabel('Move 2 + Force Choke').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`dbh_attack_${gameId}_${_dbhMid}`).setLabel('Move 2 + Attack (-1 die)').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`dbh_skip_${gameId}_${_dbhMid}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await logGameAction(game, client, `<@${_dbhOwnerId}> **Driven by Hatred** — **${_dbhDc.displayName || _dbhDc.dcName}** may move up to 2 spaces and then use Force Choke or perform an attack (-1 die) at end of round.`, {
+        components: [_dbhRow],
+        allowedMentions: { users: [_dbhOwnerId] },
+      });
+    }
+  }
   // Survivalist (Skirmish Upgrade): end of round, if in exterior space, recover 1 Damage
   const _svMapSpaces = game.selectedMap?.id ? getMapSpaces?.(game.selectedMap.id) : null;
   if (_svMapSpaces?.exterior) {

@@ -2458,7 +2458,7 @@ export async function handleCombatReroll(interaction, ctx) {
  *   trained_yes, trained_no, shrewd_0/1/2, skip
  */
 export async function handlePreReroll(interaction, ctx) {
-  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const { getGame, replyIfGameEnded, rollSingleAttackDie, rollSingleDefenseDie, recalcAttackTotals, recalcDefenseTotals, saveGames } = ctx;
   const match = interaction.customId.match(/^pre_reroll_([^_]+)_(.+)$/);
   if (!match) return;
   const [, gameId, choice] = match;
@@ -2480,17 +2480,44 @@ export async function handlePreReroll(interaction, ctx) {
     combat.pendingPreRerolls.shift();
     await thread.send(`Pre-reroll choice skipped.`);
   } else if (choice === 'twin_sabers_atk') {
-    // Reroll all attack dice: set atkRerolls to number of dice
-    combat.attackerRerollsRemaining = (combat.attackDiceResults || []).length;
+    // R28/R29: Reroll ALL attack dice simultaneously and mark them as rerolled (cannot be rerolled again)
+    const atkDice = combat.attackDiceResults || [];
+    const rerolledIndices = [];
+    const details = [];
+    for (let i = 0; i < atkDice.length; i++) {
+      const oldDie = atkDice[i];
+      const newDie = rollSingleAttackDie(oldDie.color);
+      atkDice[i] = newDie;
+      rerolledIndices.push(i);
+      details.push(`#${i + 1} ${oldDie.color}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s**`);
+    }
+    combat.attackDiceResults = atkDice;
+    const atkTotals = recalcAttackTotals(atkDice);
+    combat.attackRoll = { acc: atkTotals.acc, dmg: atkTotals.dmg, surge: atkTotals.surge };
+    // R28: Mark all indices as rerolled so no further rerolls can target them
+    combat.attackerRerolledIndices = [...(combat.attackerRerolledIndices || []), ...rerolledIndices];
     combat.pendingPreRerolls.shift();
-    await thread.send(`**Twin Sabers** — Will reroll all ${combat.attackerRerollsRemaining} attack dice.`);
+    await thread.send(`**Twin Sabers** — Rerolled all ${atkDice.length} attack dice simultaneously:\n${details.join('\n')}\nNew totals: ${atkTotals.acc} acc, ${atkTotals.dmg} dmg, ${atkTotals.surge} surge`);
   } else if (choice === 'twin_sabers_def') {
-    // Force reroll all defense dice: add to forced queue
-    const defCount = (combat.defenseDiceResults || []).length;
-    combat.forcedRerollQueue = combat.forcedRerollQueue || [];
-    combat.forcedRerollQueue.unshift({ controlPlayer: combat.attackerPlayerNum, pool: 'defense', remaining: defCount, source: 'Twin Sabers' });
+    // R28/R29: Force reroll ALL defense dice simultaneously and mark them as rerolled
+    const defDice = combat.defenseDiceResults || [];
+    const rerolledIndices = [];
+    const details = [];
+    for (let i = 0; i < defDice.length; i++) {
+      const oldDie = defDice[i];
+      const newDie = rollSingleDefenseDie(oldDie.color);
+      defDice[i] = newDie;
+      rerolledIndices.push(i);
+      const dodgeTag = newDie.dodge ? '/DODGE' : '';
+      details.push(`#${i + 1} ${oldDie.color}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}**`);
+    }
+    combat.defenseDiceResults = defDice;
+    const defTotals = recalcDefenseTotals(defDice);
+    combat.defenseRoll = { block: defTotals.block, evade: defTotals.evade, dodge: defTotals.dodge };
+    // R28: Mark all indices as rerolled so no further rerolls can target them
+    combat.defenderRerolledIndices = [...(combat.defenderRerolledIndices || []), ...rerolledIndices];
     combat.pendingPreRerolls.shift();
-    await thread.send(`**Twin Sabers** — Will force reroll all ${defCount} defense dice.`);
+    await thread.send(`**Twin Sabers** — Force rerolled all ${defDice.length} defense dice simultaneously:\n${details.join('\n')}\nNew totals: ${defTotals.block} block, ${defTotals.evade} evade${defTotals.dodge ? ' DODGE' : ''}`);
   } else if (choice === 'resourceful_atk') {
     combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
     combat.resourcefulSide = 'atk';
