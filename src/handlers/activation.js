@@ -21,6 +21,7 @@ import {
   setActivationsRemaining,
   setActivatedDcIndices,
   ccDeckKey,
+  ccDiscardKey,
   ccHandKey,
   opponentPlayerNum,
   getInitiativePlayerNum,
@@ -1203,7 +1204,19 @@ export async function handleConfirmActivate(interaction, ctx) {
   }
   // Strategize (Thrawn): look at top CC of each deck, may discard one
   if (_mountedIds.includes('strategize_thrawn')) {
-    await thread.send({ content: `🧠 **Strategize** — Look at the top CC of each player's deck; you may discard one.` }).catch(discordCatch);
+    const _strOppNum = opponentPlayerNum(meta.playerNum);
+    const _strOwnDeck = game[ccDeckKey(meta.playerNum)] || [];
+    const _strOppDeck = game[ccDeckKey(_strOppNum)] || [];
+    const _strOwnTop = _strOwnDeck[0] || '(empty)';
+    const _strOppTop = _strOppDeck[0] || '(empty)';
+    const _strBtns = [];
+    if (_strOwnDeck.length > 0) _strBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_strategize_own`).setLabel(`Discard yours: ${_strOwnTop.slice(0, 60)}`).setStyle(ButtonStyle.Danger));
+    if (_strOppDeck.length > 0) _strBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_strategize_opp`).setLabel(`Discard opponent: ${_strOppTop.slice(0, 60)}`).setStyle(ButtonStyle.Danger));
+    _strBtns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_strategize_skip`).setLabel('Discard neither').setStyle(ButtonStyle.Secondary));
+    await thread.send({
+      content: `🧠 **Strategize** — Top of each command deck:\n• **Your deck:** ${_strOwnTop}\n• **Opponent's deck:** ${_strOppTop}\n\nYou may discard one:`,
+      components: [new ActionRowBuilder().addComponents(_strBtns)],
+    }).catch(discordCatch);
   }
   // Wisdom (Yoda): draw 1 CC, return 1 to bottom of deck
   if (_mountedIds.includes('wisdom_yoda')) {
@@ -1931,6 +1944,26 @@ export async function handleActPassive(interaction, ctx) {
         game[deckKey].push(cardName);
         await interaction.message.edit({ content: `🧘 **Wisdom** — Returned **${cardName}** to the bottom of the deck.`, components: [] }).catch(discordCatch);
         await logGameAction?.(game, client, `**Wisdom** (Yoda) — Drew 1 CC, returned 1 CC to bottom of deck.`, { phase: 'ACTIVATION', icon: 'card' });
+      }
+    }
+  // --- Strategize (Thrawn): discard top of own or opponent's CC deck ---
+  } else if (ability === 'strategize') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `🧠 **Strategize** — Chose not to discard.`, components: [] }).catch(discordCatch);
+    } else {
+      const _strIsOwn = choice === 'own';
+      const _strTargetPn = _strIsOwn ? meta.playerNum : opponentPlayerNum(meta.playerNum);
+      const _strDeckKey = ccDeckKey(_strTargetPn);
+      const _strDeck = game[_strDeckKey] || [];
+      if (_strDeck.length > 0) {
+        const _strCard = _strDeck.shift();
+        const _strDiscKey = ccDiscardKey(_strTargetPn);
+        game[_strDiscKey] = game[_strDiscKey] || [];
+        game[_strDiscKey].push(_strCard);
+        await interaction.message.edit({ content: `🧠 **Strategize** — Discarded **${_strCard}** from the ${_strIsOwn ? 'own' : "opponent's"} deck.`, components: [] }).catch(discordCatch);
+        await logGameAction?.(game, client, `**Strategize** (Thrawn) — Discarded ${_strCard} from ${_strIsOwn ? 'own' : "opponent's"} command deck.`, { phase: 'ACTIVATION', icon: 'card' });
+      } else {
+        await interaction.message.edit({ content: `🧠 **Strategize** — Deck is empty; nothing to discard.`, components: [] }).catch(discordCatch);
       }
     }
   // --- Trust Goes Both Ways: chosen figure gains 1 MP ---

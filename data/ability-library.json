@@ -232,6 +232,7 @@
       "type": "ccEffect",
       "label": "+3 Hits (first CC this attack; no other CCs)",
       "attackBonusHits": 3,
+      "mutualExcludeAttackCc": true,
       "wiredStatus": "wired"
     },
     "awkward_atst": {
@@ -1458,8 +1459,9 @@
     },
     "Element of Surprise": {
       "type": "ccEffect",
-      "label": "Remove 1 defense die from pool (die removed automatically when played during attack)",
+      "label": "Remove 1 defense die if target had no LOS to you at activation start",
       "defensePoolRemoveMax": 1,
+      "requireNoLosAtActivationStart": true,
       "wiredStatus": "wired"
     },
     "elite_sniper": {

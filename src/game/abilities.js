@@ -28,6 +28,7 @@ import { applyCondition, resetCondition, filterCondition, isConditionImmune, HAR
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces } from './movement.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum } from './player-helpers.js';
+import { hasLineOfSight } from './spatial.js';
 import { checkDeckDiscardPassiveRedraws } from './cc-passive-redraw.js';
 
 /**
@@ -4148,7 +4149,11 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
       return { applied: false, manualMessage: 'Resolve manually: play while attacking (as the attacker).' };
     }
+    if (entry.mutualExcludeAttackCc && (cbt.attackCcCount || 0) > 1) {
+      return { applied: false, manualMessage: 'Assassinate must be the first Command card played this attack. Another CC was already played.' };
+    }
     cbt.bonusHits = (cbt.bonusHits || 0) + entry.attackBonusHits;
+    if (entry.mutualExcludeAttackCc) cbt.ccLockedOut = true;
     return {
       applied: true,
       logMessage: `+${entry.attackBonusHits} Hit added to this attack.`,
@@ -4275,6 +4280,18 @@ export function resolveAbility(abilityId, context) {
     const cbt = combat || game?.pendingCombat || game?.combat;
     if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
       return { applied: false, manualMessage: "Resolve manually: play when declaring an attack (as the attacker)." };
+    }
+    // Element of Surprise: check target had no LOS to attacker at activation start
+    if (entry.requireNoLosAtActivationStart) {
+      const atkStartPos = game.activationStartPositions?.[cbt.attackerFigureKey];
+      const defCoord = cbt.target?.coord;
+      const mapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      if (atkStartPos && defCoord && mapSp) {
+        const targetHadLos = hasLineOfSight(String(defCoord).toLowerCase(), String(atkStartPos).toLowerCase(), mapSp);
+        if (targetHadLos) {
+          return { applied: false, manualMessage: 'Element of Surprise: target had LOS to you at activation start — card cannot be applied. Override if incorrect.' };
+        }
+      }
     }
     cbt.defensePoolRemoveMax = (cbt.defensePoolRemoveMax || 0) + entry.defensePoolRemoveMax;
     return {

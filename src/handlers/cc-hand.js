@@ -339,6 +339,23 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     saveGames();
     return;
   }
+  // Assassinate / mutual-exclude CC lock: block further CCs during this attack
+  const _cbt = game.combat || game.pendingCombat;
+  if (_cbt?.ccLockedOut) {
+    game.pendingIllegalCcPlay = { playerNum, card, reason: 'A card with "no other Command cards this attack" (e.g. Assassinate) was already played.' };
+    const handId = getHandChannelId(game, playerNum);
+    const handChannel = await client.channels.fetch(handId);
+    const msg = await handChannel.send({
+      content: `⚠️ **${card}** cannot be played: a mutual-exclude CC (Assassinate) is active this attack.\n\nChoose **Ignore and play** to override, or **Unplay card** to cancel.`,
+      components: [getIllegalCcPlayButtons(gameId)],
+    });
+    game.pendingIllegalCcPlay.messageId = msg.id;
+    await interaction.message.delete().catch(discordCatch);
+    saveGames();
+    return;
+  }
+  // Track how many CCs played during this attack (for "first CC" conditions like Assassinate)
+  if (_cbt) _cbt.attackCcCount = (_cbt.attackCcCount || 0) + 1;
   // Fast Learner (Mara Jade): if CC was played via Fast Learner bypass, mark ability as used for the round
   if (restriction.fastLearner) {
     const dcList2 = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);

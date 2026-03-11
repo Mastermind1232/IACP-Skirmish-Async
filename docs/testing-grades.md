@@ -349,7 +349,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | I19 | PASS | Hunt Dissent fully automated: defeat tracking (index.js:2195-2237) grants Block Tokens to Kallus/adjacent TROOPERs. Multiple defeat paths covered. |
 | I20 | PASS | combat.js:914-922 — auto-Focuses Dark Trooper on attack declare. combat.js:2301-2312 — if rerolled die has fewer Hits, +1 Hit bonus. |
 | I21 | PASS | "I Know Everything" at cc-hand.js:1159-1184,1229-1267 — reveals 2 cards, opponent keeps one, other removed. "The Darksaber" via `pendingDarksaberSecondAttack`. Both automated. |
-| I22 | PARTIAL | Thrawn: Long-Laid Plans IS automated (activation.js:1035-1053 — distributes N power tokens). Strategize is reminder only (activation.js:1055-1058 — "Look at top CC of each deck"). |
+| I22 | PASS | Thrawn: Long-Laid Plans automated (activation.js:1035-1053 — distributes N power tokens). Strategize now automated: shows top CC of each deck, buttons to discard own/opponent/neither (activation.js:1205-1218 + handler). |
 | I23 | PASS | Interrogate: surge parsed at combat.js:159-160. Handler at post-combat.js:236-326 — shows opponent hand, pick card, optional discard-to-force-discard. Full interactive flow. |
 | I24 | PASS | BT-1 Assassin `battle_meditation` (combat.js:951-957) re-applies Focus before EACH attack. Focus consumed in combat resolution, then re-granted on next attack via `resetCondition`. Works correctly across Missile Salvo multi-attacks. |
 | I25 | PASS | Gifted Mechanic trait filter verified (ability-library.json:2175-2182). Adjacent Droid or Vehicle filter correctly applied. |
@@ -388,7 +388,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 
 | ID | Grade | Evidence |
 |---|---|---|
-| C1 | PARTIAL | Assassinate in cc-effects.json with `attackBonusHits: 3` (abilities.js:3960-3970). +3 Hits mechanic works. But FAQ mutual exclusion ("first CC this attack; no other CCs") NOT enforced — no logic blocks other CCs after Assassinate. |
+| C1 | PASS | Assassinate: +3 Hits (abilities.js attackBonusHits), `mutualExcludeAttackCc` flag blocks further CCs this attack (cc-hand.js ccLockedOut check), and rejects Assassinate if not first CC (attackCcCount check in abilities.js). |
 | C2 | MANUAL | Lord of the Sith timing `whenHostileFigureDefeatedNotYourActivation` (cc-timing.js:160-162). Whether usable "after Parting Blow before Stun" depends on timing window ordering — both are honor-system in async. |
 | C3 | PASS | Lure fully implemented (same as G25). pendingLure + combat delegation with `isLure` flag. |
 | C4 | PARTIAL | On the Lam timing `whenAttackDeclaredOnYou` — grants MP for movement. But bot does NOT auto-check LOS after defender moves. No automated LOS recheck found. |
@@ -447,7 +447,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C57 | PASS | Active effect works (abilities.js:4844-4875). Passive reshuffle implemented via `checkHandDiscardPassiveReshuffle` (cc-passive-redraw.js) — once per round, auto-shuffles into deck when played. Hooked at 3 CC play paths in cc-hand.js. |
 | C58 | PASS | Devotion auto-search (abilities.js:7186-7252). Programmatically searches for and draws matching card. |
 | C59 | PASS | abilities.js:5996-6012 — Droid Mastery: finds J4X-7, applies Focus, grants free attack via `freeAttackBonusPending`. |
-| C60 | PARTIAL | Element of Surprise: `defensePoolRemoveMax: 1` removes defense die when played. But "target did not have LOS to you at start of activation" check NOT enforced. |
+| C60 | PASS | Element of Surprise: `defensePoolRemoveMax: 1` with `requireNoLosAtActivationStart` flag. abilities.js checks `activationStartPositions` + `hasLineOfSight` — rejects if target had LOS at activation start. |
 | C61 | PASS | cc-timing.js:87-88 — `whenYouDeclareAttack` maps to `duringActivation` only. `duringActivation` requires `!game.endOfRoundWhoseTurn` (line 22-23). Cannot be used in SOR or EOR. |
 | C62 | PASS | Fool Me Once strain cost enforced (ability-library.json + abilities.js:2545-2568). Strain applied before draw. |
 | C63 | PASS | Fool Me Once gamebox fully implemented: abilities.js:2542-2602 moves opponent's discard to `game.gameBox[]` array (permanently out of game). Tests confirm proper removal (abilities.test.js:190-235). No effects can retrieve from gameBox. |
@@ -475,11 +475,11 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | General Mechanics (G1-G113) | 99 | 13 | 0 | 1 | 0 | 113 |
 | Rebel Deployment (R1-R95) | 85 | 6 | 0 | 4 | 0 | 95 |
 | Mercenary Deployment (M1-M84) | 79 | 5 | 0 | 0 | 0 | 84 |
-| Imperial Deployment (I1-I53) | 46 | 4 | 0 | 1 | 2 | 53 |
-| Command Cards (C1-C77) | 60 | 11 | 0 | 6 | 0 | 77 |
-| **TOTAL** | **369** | **39** | **0** | **12** | **2** | **422** |
+| Imperial Deployment (I1-I53) | 47 | 3 | 0 | 1 | 2 | 53 |
+| Command Cards (C1-C77) | 62 | 9 | 0 | 6 | 0 | 77 |
+| **TOTAL** | **372** | **36** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 369 / (369+39) = **90.4%**
+**Definitive Pass Rate:** 372 / (372+36) = **91.2%**
 **Pass + Partial:** 408 / 408 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting
