@@ -2626,6 +2626,11 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
             await logGameAction(game, client, `**Condition Immunity** — **${combat.target.label}** is immune to ${blocked.join(', ')}.`, { phase: 'ROUND', icon: 'card' });
           }
         }
+        // I30 Fireproof: Flame Trooper figures cannot be Bleeding
+        if (allConditions.includes('Bleed') && combat.defenderFireproof) {
+          allConditions = allConditions.filter(c => c !== 'Bleed');
+          await logGameAction(game, client, `**Fireproof** — **${combat.target.label}** is immune to Bleed.`, { phase: 'ROUND', icon: 'card' });
+        }
         for (const _ac of allConditions) _applyCondition(game, combat.target.figureKey, _ac);
       }
       // Furious Charge: if defender's player played this CC, and suffered >= threshold damage, grant Focus
@@ -3840,7 +3845,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
 
   // Bleed: attacker prompted to take 1 damage or prevent by discarding CC after Attack action
   // (skipped if player spent a surge to prevent Bleed during the surge window)
-  if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed) {
+  // I30 Fireproof: attacker with Flame Trooper cannot be Bleeding
+  if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed && !combat.attackerFireproof) {
     const bleedThread = await client.channels.fetch(combat.combatThreadId);
     await sendBleedingPrompt(game, bleedThread, combat.attackerFigureKey, combat.attackerPlayerNum, combat.attackerDisplayName);
   }

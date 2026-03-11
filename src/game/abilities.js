@@ -548,6 +548,11 @@ export function resolveAbility(abilityId, context) {
       validTargets.push({ fk, name: dcNameFromFigureKey(fk) });
     }
     if (validTargets.length === 0) {
+      // I36: If ability has selfCondition (e.g. Invasive Procedure), apply it even with no targets
+      if (entry.selfCondition && attackerKey) {
+        applyCondition(game, attackerKey, entry.selfCondition);
+        return { applied: true, freeAction: !!entry.freeAction, logMessage: `**${entry.label}** — No adjacent targets. You became **${entry.selfCondition}ed**.`, refreshDcEmbed: true };
+      }
       return { applied: false, manualMessage: `No valid targets in range/LOS. Apply **${entry.label}** manually.` };
     }
     return { applied: false, requiresChoice: true, choiceOptions: validTargets.map((t) => t.name), targetFigureKeys: validTargets.map((t) => t.fk) };

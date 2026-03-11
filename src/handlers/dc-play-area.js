@@ -975,11 +975,14 @@ async function buildAndSendAttackTargets(
       return !openedSet.has(`${a}|${b}`) && !openedSet.has(`${b}|${a}`);
     });
     const shieldSpaces = (game.ancillaryTokens?.energyShield || []).map(s => String(s).toLowerCase());
-    if (closedEdges.length > 0 || shieldSpaces.length > 0) {
+    // C54: Smoke Grenade tokens block LOS
+    const smokeSpaces = (game.ancillaryTokens?.smoke || []).map(s => String(s).toLowerCase());
+    const extraBlocking = [...shieldSpaces, ...smokeSpaces];
+    if (closedEdges.length > 0 || extraBlocking.length > 0) {
       effectiveMs = {
         ...ms,
         impassableEdges: closedEdges.length > 0 ? [...(ms?.impassableEdges || []), ...closedEdges] : ms?.impassableEdges,
-        blocking: shieldSpaces.length > 0 ? [...(ms?.blocking || []), ...shieldSpaces] : ms?.blocking,
+        blocking: extraBlocking.length > 0 ? [...(ms?.blocking || []), ...extraBlocking] : ms?.blocking,
       };
     }
   }
