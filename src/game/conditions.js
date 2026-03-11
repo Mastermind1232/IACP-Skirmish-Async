@@ -32,7 +32,10 @@ export function isConditionImmune(game, figureKey) {
   const dcName = dcNameFromFigureKey(figureKey);
   const dcEff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const sIds = dcEff?.specialAbilityIds || [];
-  return sIds.includes('immune_onar') || sIds.includes('immune_snowtrooper_elite');
+  if (sIds.includes('immune_onar') || sIds.includes('immune_snowtrooper_elite')) return true;
+  // You Will Not Deny Me: Fifth Brother ignores harmful conditions while active
+  if (game?.youWillNotDenyMeActive && dcName?.toLowerCase().includes('fifth brother')) return true;
+  return false;
 }
 
 /**

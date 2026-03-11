@@ -2715,9 +2715,12 @@ export function resolveAbility(abilityId, context) {
     if (n < 1) return { applied: false, manualMessage: 'Resolve manually: no MP to gain.' };
     addMovementPoints(game, msgId, n);
     // C77: Urgency requires all MP to be spent at once
-    game.urgencyMustSpendAll = game.urgencyMustSpendAll || {};
-    game.urgencyMustSpendAll[msgId] = true;
-    const msg = n === 1 ? 'Gained 1 movement point (must spend all at once).' : `Gained ${n} movement points (must spend all at once).`;
+    if (entry.mustSpendAll) {
+      game.urgencyMustSpendAll = game.urgencyMustSpendAll || {};
+      game.urgencyMustSpendAll[msgId] = true;
+    }
+    const allNote = entry.mustSpendAll ? ' (must spend all at once)' : '';
+    const msg = n === 1 ? `Gained 1 movement point${allNote}.` : `Gained ${n} movement points${allNote}.`;
     return { applied: true, logMessage: msg, refreshMovementBank: true, activeMsgId: msgId };
   }
 
@@ -7175,22 +7178,77 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Push: ${n}`), choiceValues: validKeys };
   }
 
-  // ccEffect: devotionEffect (Devotion) — pick adjacent friendly; note trait to search; shuffle deck
+  // ccEffect: devotionEffect (Devotion) — pick adjacent friendly; search deck for matching CC; draw + shuffle
   if (entry.type === 'ccEffect' && entry.devotionEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    // Phase 2: log trait to search for + shuffle deck
     if (chosenFigureKey) {
-      const deckKey = ccDeckKey(playerNum);
-      const deck = [...(game[deckKey] || [])];
-      // Shuffle deck (Fisher-Yates)
-      for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
+      // Phase 3: card chosen → draw it + shuffle deck
+      if (chosenFigureKey.startsWith('devotion_draw|')) {
+        const cardName = chosenFigureKey.slice('devotion_draw|'.length);
+        const deckKey = ccDeckKey(playerNum);
+        const deck = game[deckKey] || [];
+        const cardIdx = deck.indexOf(cardName);
+        if (cardIdx >= 0) deck.splice(cardIdx, 1);
+        // Add to hand
+        const handKey = ccHandKey(playerNum);
+        game[handKey] = game[handKey] || [];
+        game[handKey].push(cardName);
+        // Shuffle remaining deck (Fisher-Yates)
+        for (let i = deck.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        game[deckKey] = deck;
+        return { applied: true, logMessage: `**Devotion** — Drew **${cardName}** from Command deck. Deck shuffled (${deck.length} cards remaining).` };
       }
-      game[deckKey] = deck;
+      // Phase 2: figure chosen → search deck for cards matching figure's traits
       const dcName = dcNameFromFigureKey(chosenFigureKey);
-      return { applied: true, logMessage: `**Devotion** — Search your Command deck for a card with **${dcName}** as a trait and draw it. Deck shuffled (${deck.length} cards).` };
+      const dcEffectsMap = getDcEffects();
+      const figEff = dcEffectsMap[dcName] || {};
+      const figKws = new Set((figEff.keywords || []).map(k => String(k).toUpperCase()));
+      figKws.add(dcName.toUpperCase()); // figure name also counts as a restriction match
+      const deckKey = ccDeckKey(playerNum);
+      const deck = game[deckKey] || [];
+      const matches = [];
+      for (const cardName of deck) {
+        const ccEff = getCcEffect(cardName);
+        if (!ccEff?.playableBy) continue;
+        const restriction = String(ccEff.playableBy).toUpperCase();
+        if (restriction === 'ANY FIGURE') continue; // skip generic cards
+        // Check if any of the figure's keywords/name matches the restriction words
+        const rWords = restriction.split(/\s+(?:OR)\s+|[,]/i).map(w => w.trim());
+        const found = rWords.some(rw => {
+          const parts = rw.split(/\s+/);
+          return parts.every(p => figKws.has(p));
+        });
+        if (found) matches.push(cardName);
+      }
+      if (matches.length === 0) {
+        // No matches — still shuffle the deck
+        for (let i = deck.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        game[deckKey] = deck;
+        return { applied: true, logMessage: `**Devotion** — No cards in Command deck match **${dcName}**'s traits. Deck shuffled.` };
+      }
+      if (matches.length === 1) {
+        // Auto-draw the single match
+        const cardName = matches[0];
+        const cardIdx = deck.indexOf(cardName);
+        if (cardIdx >= 0) deck.splice(cardIdx, 1);
+        const handKey = ccHandKey(playerNum);
+        game[handKey] = game[handKey] || [];
+        game[handKey].push(cardName);
+        for (let i = deck.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        game[deckKey] = deck;
+        return { applied: true, logMessage: `**Devotion** — Drew **${cardName}** (matched **${dcName}**). Deck shuffled (${deck.length} cards remaining).` };
+      }
+      return { requiresChoice: true, choiceOptions: matches.map(c => `Draw: ${c}`), choiceValues: matches.map(c => `devotion_draw|${c}`) };
     }
     // Phase 1: adjacent friendly picker
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);

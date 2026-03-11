@@ -5052,6 +5052,7 @@
       "type": "ccEffect",
       "label": "Gain movement points equal to Speed +2",
       "mpBonusFromSpeed": 2,
+      "mustSpendAll": true,
       "wiredStatus": "wired"
     },
     "Utinni!": {
