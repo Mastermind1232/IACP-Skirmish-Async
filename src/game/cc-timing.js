@@ -87,6 +87,10 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
   if (cardName === 'Jundland Terror' && game?.jundlandTerrorPlayedThisEor) return false;
   if (cardName === 'Reinforcements' && game?.reinforcementsPlayedThisSor) return false;
 
+  // C1: Assassinate mutual-exclude — no other CCs during this attack
+  const _cbt = game?.pendingCombat || game?.combat;
+  if (_cbt?.ccLockedOut && timing === 'duringattack') return false;
+
   const ctx = getCcPlayContext(game, playerNum);
 
   switch (timing) {

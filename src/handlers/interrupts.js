@@ -128,9 +128,12 @@ export async function handleSquadSwarm(interaction, ctx) {
   if (_swMeta && !await requirePlayer(interaction, _swGame, interaction.user.id, _swMeta.playerNum, canActAsPlayer, 'Only the Squad Swarm player may respond.')) return;
   _swGame.squadSwarmPlayerNum = null;
   if (buttonKey === 'squad_swarm_yes_') {
+    // Keep cumulative cost so next activation continues the tally
     const _swTargetName = _swTargetMsgId ? (dcMessageMeta.get(_swTargetMsgId)?.displayName || 'another figure') : 'another figure';
     await logGameAction(_swGame, client, `**Squad Swarm** — Activating **${_swTargetName}**. Click its card to begin.`, { phase: 'ROUND', icon: 'activate' });
   } else {
+    // G4: Clear cumulative cost when skipping
+    delete _swGame.squadSwarmCumulativeCost;
     await logGameAction(_swGame, client, `**Squad Swarm** — Skipped.`, { phase: 'ROUND', icon: 'activate' });
   }
   saveGames(); return;

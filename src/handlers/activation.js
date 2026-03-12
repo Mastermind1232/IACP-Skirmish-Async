@@ -755,11 +755,14 @@ export async function handleDcEndActivation(interaction, ctx) {
       if (!dc || dc.defeated || dc.dcName !== meta.dcName) return false;
       return !ctx.dcExhaustedState?.get(id);
     });
-    const activatedCost = ctx.getDcStats?.(meta.dcName)?.cost ?? 0;
-    const eligibleIds = sameNameIds.filter((id, i) => {
+    // G4: Track cumulative cost across chained Squad Swarm activations
+    const thisCost = ctx.getDcStats?.(meta.dcName)?.cost ?? 0;
+    const cumulativeCost = (game.squadSwarmCumulativeCost ?? 0) + thisCost;
+    game.squadSwarmCumulativeCost = cumulativeCost;
+    const eligibleIds = sameNameIds.filter((id) => {
       const dc = _sqDcList[_sqDcIds.indexOf(id)];
       const candidateCost = dc ? (ctx.getDcStats?.(dc.dcName)?.cost ?? 0) : 0;
-      return (activatedCost + candidateCost) <= 15;
+      return (cumulativeCost + candidateCost) <= 15;
     });
     if (eligibleIds.length > 0) {
       const ownerId = getPlayerId(game, meta.playerNum);
@@ -770,10 +773,13 @@ export async function handleDcEndActivation(interaction, ctx) {
           .setStyle(ButtonStyle.Success)
       );
       btns.push(new ButtonBuilder().setCustomId(`squad_swarm_no_${gameId}_${msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-      await logGameAction(game, client, `<@${ownerId}> **Squad Swarm** — activate another **${meta.dcName}**?`, {
+      await logGameAction(game, client, `<@${ownerId}> **Squad Swarm** — activate another **${meta.dcName}** (${cumulativeCost} pts used)?`, {
         components: [new ActionRowBuilder().addComponents(...btns)],
         allowedMentions: { users: [ownerId] },
       });
+    } else {
+      // G4: No eligible candidates — clear cumulative cost
+      delete game.squadSwarmCumulativeCost;
     }
   }
 

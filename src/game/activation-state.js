@@ -248,6 +248,7 @@ const ROUND_NULL_FLAGS = [
   'roundUtinniJawaBuffs',
   'roundSmugglersTricksPlayerNum',
   'squadSwarmPlayerNum',
+  'squadSwarmCumulativeCost',
   'whenDefeatHostileWithin3GainBlockTokens',
   'pendingRushPush',
   'pendingEmperorInterrupt',

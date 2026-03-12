@@ -4382,7 +4382,7 @@ export function resolveAbility(abilityId, context) {
     if (entry.mutualExcludeAttackCc) cbt.ccLockedOut = true;
     return {
       applied: true,
-      logMessage: `+${entry.attackBonusHits} Hit added to this attack.`,
+      logMessage: `+${entry.attackBonusHits} Hit added to this attack.${entry.mutualExcludeAttackCc ? ' No other CCs may be played during this attack.' : ''}`,
     };
   }
 
