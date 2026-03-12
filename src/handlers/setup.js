@@ -650,11 +650,11 @@ export async function handleMapSelectionPick(interaction, ctx) {
     await interaction.followUp({ content: 'Invalid mission. Try again or use Random.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  // Show confirmation with type buttons highlighted
+  // Show confirmation with type buttons highlighted and selected mission visible in dropdown
   const { getMapConfirmButton, getMapTypeButtons, getMissionSelectionPickMenu } = ctx;
   const options = buildPlayableMissionOptions(ctx.getPlayReadyMaps, getMissionCardsData);
   const confirmLabel = game.selectedMission?.fullName || game.selectedMap?.name || 'Map';
-  const components = [getMapTypeButtons(gameId, 'selection'), getMissionSelectionPickMenu(gameId, options), getMapConfirmButton(gameId)];
+  const components = [getMapTypeButtons(gameId, 'selection'), getMissionSelectionPickMenu(gameId, options, missionId), getMapConfirmButton(gameId)];
   ctx.saveGames();
   await interaction.editReply({ content: `Selected: **${confirmLabel}**\nClick **Confirm Selection** to proceed, or change your pick above.`, components }).catch(discordCatch);
 }

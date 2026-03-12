@@ -284,12 +284,12 @@ export function getMissionSelectDrawMenu(gameId, options) {
  * @param {string} gameId
  * @param {{ value: string, label: string }[]} options - from buildPlayableMissionOptions
  */
-export function getMissionSelectionPickMenu(gameId, options) {
+export function getMissionSelectionPickMenu(gameId, options, selectedValue) {
   const opts = options.slice(0, MISSION_SELECT_MAX_OPTIONS);
   const select = new StringSelectMenuBuilder()
     .setCustomId(`map_selection_pick_${gameId}`)
     .setPlaceholder('Choose one mission')
-    .addOptions(opts.map((o) => ({ label: o.label, value: o.value })));
+    .addOptions(opts.map((o) => ({ label: o.label, value: o.value, default: selectedValue ? o.value === selectedValue : false })));
   return new ActionRowBuilder().addComponents(select);
 }
 
