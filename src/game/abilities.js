@@ -16,6 +16,31 @@ function syncHealthStateToList(game, playerNum, msgId, healthState) {
   if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...healthState];
 }
 
+/**
+ * Decrement a figure's HP in a healthState array.
+ * @param {Array} hs - healthState array for the DC (from dcHealthState.get(msgId))
+ * @param {number} figIdx - figure index within the group
+ * @param {number} amount - damage/strain to apply
+ * @returns {{ prev: number, cur: number, max: number } | null} - HP change info, or null if no figure
+ */
+function decrementFigureHealth(hs, figIdx, amount) {
+  if (!hs?.[figIdx]) return null;
+  const [cur, max] = hs[figIdx];
+  const prev = cur ?? max;
+  const newCur = Math.max(0, prev - amount);
+  hs[figIdx] = [newCur, max ?? newCur];
+  return { prev, cur: newCur, max: max ?? newCur };
+}
+
+/**
+ * Get uppercased keywords for a DC by name.
+ * @param {string} dcName - DC name (e.g. from dcNameFromFigureKey)
+ * @returns {string[]} - uppercased keyword array (e.g. ['MOBILE', 'TROOPER'])
+ */
+function getKeywordsUpper(dcName) {
+  return (getDcEffects()?.[dcName]?.keywords || []).map(k => String(k).toUpperCase());
+}
+
 /** Look up DC stats by name (handles display variants). */
 function getStatsForDc(dcName) {
   const map = getDcEffects() || {};

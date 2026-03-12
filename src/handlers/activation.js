@@ -1569,7 +1569,25 @@ export async function handleConfirmActivate(interaction, ctx) {
     const isElite = _mountedIds.includes('scrap_battalion_ugnaught_elite');
     game.companionActivatedBefore = game.companionActivatedBefore || {};
     game.companionActivatedBefore[msgId] = 'co-activate'; // Junk Droid co-activates, no before/after choice
-    await thread.send({ content: `🤖 **Scrap Battalion — Junk Droid Co-Activates**\nThe Junk Droid readies and activates **as part of this group**. Move and attack with it during this activation.\n\`\`\`\nJunk Droid: Speed 4 | Health 1 | Melee (1 green) | +1 Hit\nSurge abilities (${meta.dcName}'s): Bleed, Pierce ${isElite ? '2' : '1'}\n\`\`\`${isElite ? '\n⚡ **Overclock** (Special Action): The Junk Droid may **interrupt** to perform a move or attack.' : ''}` }).catch(discordCatch);
+    // Grant Junk Droid its Speed (4 MP) and a free attack for co-activation
+    const _sbCompMsgIds = meta.playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+    const _sbDcMsgIds = meta.playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    let _sbJunkDroidMsgId = null;
+    if (_sbCompMsgIds) {
+      for (let i = 0; i < _sbCompMsgIds.length; i++) {
+        if (_sbCompMsgIds[i] && _sbDcMsgIds?.[i] === msgId) {
+          _sbJunkDroidMsgId = _sbCompMsgIds[i];
+          break;
+        }
+      }
+    }
+    if (_sbJunkDroidMsgId) {
+      game.movementBank = game.movementBank || {};
+      game.movementBank[_sbJunkDroidMsgId] = { remaining: 4, total: 4, threadId: thread.id, messageId: null, displayName: 'Junk Droid' };
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[_sbJunkDroidMsgId] = { from: 'Scrap Battalion' };
+    }
+    await thread.send({ content: `🤖 **Scrap Battalion — Junk Droid Co-Activates**\nThe Junk Droid readies and activates **as part of this group**.${_sbJunkDroidMsgId ? ' **4 MP** and **1 free attack** granted — use its Move/Attack buttons.' : ' Move and attack with it during this activation.'}\n\`\`\`\nJunk Droid: Speed 4 | Health 1 | Melee (1 green) | +1 Hit\nSurge abilities (${meta.dcName}'s): Bleed, Pierce ${isElite ? '2' : '1'}\n\`\`\`${isElite ? '\n⚡ **Overclock** (Special Action): The Junk Droid may **interrupt** to perform a move or attack.' : ''}` }).catch(discordCatch);
   }
   // --- Skirmish Upgrade attachment activation effects ---
   const _suActivationUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
