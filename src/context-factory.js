@@ -263,6 +263,13 @@ const CONTEXT_GROUPS = {
     'getMoveSpaceGridRows', 'buildBoardMapPayload',
   ],
 
+  recover: [
+    'getGame', 'saveGames', 'client', 'logGameAction',
+    'getNegationResponseButtons', 'sendReadyToResolveRolls',
+    'updateHandChannelMessages', 'sendRoundActivationPhaseMessage',
+    'getMoveMpButtonRows',
+  ],
+
   combatSpecialEffects: [
     'getGame', 'saveGames', 'client', 'canActAsPlayer',
     'dcMessageMeta', 'dcHealthState', 'dcExhaustedState',

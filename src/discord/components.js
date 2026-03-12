@@ -301,6 +301,10 @@ export function getBotmenuButtons(gameId) {
       .setLabel('Refresh All')
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
+      .setCustomId(`botmenu_recover_${gameId}`)
+      .setLabel('Recover')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
       .setCustomId(`botmenu_kill_${gameId}`)
       .setLabel('Kill Game')
       .setStyle(ButtonStyle.Danger)

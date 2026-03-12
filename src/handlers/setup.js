@@ -2301,6 +2301,17 @@ export async function handleAttachDoneRedo(interaction, ctx) {
   saveGames();
 }
 
+/**
+ * Recovery helper: re-send the attachment dropdown for a player who has pending attachments.
+ * Exported for use by recover.js.
+ */
+export async function recoverSetupAttachments(game, gameId, playerNum, client) {
+  const pending = game.setupAttachmentPending?.[playerNum] || [];
+  if (pending.length > 0) {
+    await _sendAttachmentDropdown(game, gameId, playerNum, pending[0], client);
+  }
+}
+
 /** Helper: send the attachment dropdown for a card. */
 async function _sendAttachmentDropdown(game, gameId, playerNum, card, client) {
   const handId = getHandChannelId(game, playerNum);

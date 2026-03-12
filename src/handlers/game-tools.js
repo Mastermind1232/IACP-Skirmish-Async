@@ -282,8 +282,18 @@ export async function handleUndo(interaction, ctx) {
   if (last.type === 'attack' || last.type === 'dc_special' || last.type === 'end_activation') {
     // Refresh DC action counter if we have the msgId
     if (last.msgId && updateDcActionsMessage) await updateDcActionsMessage(game, last.msgId, client).catch(discordCatch);
-    // Refresh board if figures may have moved (dc_special with push, etc.)
-    if (last.type === 'dc_special' && game.boardId && game.selectedMap && buildBoardMapPayload) {
+    // Step 15: Attack undo — clean up the combat thread
+    if (last.type === 'attack' && last.snapshot?.pendingCombat?.combatThreadId) {
+      try {
+        const combatThread = await client.channels.fetch(last.snapshot.pendingCombat.combatThreadId);
+        if (combatThread) {
+          await combatThread.send('Combat cancelled (undo).').catch(discordCatch);
+          await combatThread.setArchived(true).catch(discordCatch);
+        }
+      } catch { /* thread already gone or inaccessible */ }
+    }
+    // Step 16: Always refresh board for attack, dc_special, and end_activation undos
+    if (game.boardId && game.selectedMap && buildBoardMapPayload) {
       try {
         const boardChannel = await client.channels.fetch(game.boardId);
         const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);

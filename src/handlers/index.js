@@ -114,6 +114,7 @@ import {
   handleBotmenuKillYes,
   handleBotmenuKillNo,
 } from './botmenu.js';
+import { handleBotmenuRecover } from './recover.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
@@ -314,6 +315,7 @@ register('comm_disruption_play_', handleCommDisruptionPlay, 'ccHand');
 register('comm_disruption_skip_', handleCommDisruptionSkip, 'ccHand');
 
 // --- Botmenu ---
+register('botmenu_recover_', handleBotmenuRecover, 'recover');
 register('botmenu_kill_', handleBotmenuKill, 'botmenu');
 register('botmenu_kill_yes_', handleBotmenuKillYes, 'botmenu');
 register('botmenu_kill_no_', handleBotmenuKillNo, 'botmenu');
@@ -565,6 +567,7 @@ export {
   handleBotmenuKillYes,
   handleBotmenuKillNo,
 } from './botmenu.js';
+export { handleBotmenuRecover, runRecovery } from './recover.js';
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
