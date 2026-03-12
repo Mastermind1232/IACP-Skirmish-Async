@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IACP Skirmish Async — Architecture Comparison</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-muted: #8b949e;
+    --red: #f97583;
+    --green: #7ee787;
+    --blue: #79c0ff;
+    --yellow: #d29922;
+    --node-bg: #21262d;
+    --arrow: #586069;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6;
+  }
+
+  /* ── Header ── */
+  header { text-align: center; padding: 2rem 1rem 1.2rem; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 1.5rem; font-weight: 600; }
+  header p { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.2rem; }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex; justify-content: center; gap: 0;
+    padding: 1rem 1rem 0; position: sticky; top: 0; z-index: 10; background: var(--bg);
+  }
+  .tab {
+    padding: 0.6rem 1.8rem; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text-muted); font-size: 0.85rem; font-weight: 500; transition: all 0.15s;
+  }
+  .tab:first-child { border-radius: 6px 0 0 6px; }
+  .tab:last-child  { border-radius: 0 6px 6px 0; }
+  .tab:not(:last-child) { border-right: none; }
+  .tab.on-red    { background: rgba(249,117,131,0.15); color: var(--red);   border-color: var(--red); }
+  .tab.on-green  { background: rgba(126,231,135,0.15); color: var(--green); border-color: var(--green); }
+  .tab.on-blue   { background: rgba(121,192,255,0.15); color: var(--blue);  border-color: var(--blue); }
+
+  /* ── Panels ── */
+  .panel { display: none; padding: 1.5rem 1rem; max-width: 960px; margin: 0 auto; }
+  .panel.active { display: block; }
+
+  /* ── Analogy banner ── */
+  .analogy {
+    border-radius: 8px; padding: 1rem 1.2rem; margin-bottom: 1.5rem;
+    font-size: 0.92rem; line-height: 1.7;
+  }
+  .analogy.red   { background: rgba(249,117,131,0.07); border: 1px solid rgba(249,117,131,0.25); }
+  .analogy.green { background: rgba(126,231,135,0.07); border: 1px solid rgba(126,231,135,0.25); }
+  .analogy.blue  { background: rgba(121,192,255,0.07); border: 1px solid rgba(121,192,255,0.25); }
+  .analogy strong { font-weight: 600; }
+  .analogy .icon { font-size: 1.3rem; margin-right: 0.4rem; vertical-align: -2px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.2rem; margin-bottom: 1.2rem;
+  }
+  .card h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.6rem; }
+
+  /* ── Phase chain ── */
+  .phase-chain {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 0.3rem; margin: 0.6rem 0; align-items: center;
+  }
+  .pill {
+    padding: 0.3rem 0.65rem; border-radius: 4px;
+    font-size: 0.75rem; font-weight: 600; white-space: nowrap;
+    font-family: 'SF Mono', Consolas, monospace;
+    background: var(--node-bg); border: 1px solid var(--border);
+  }
+  .pill.lit { border-color: var(--green); color: var(--green); background: rgba(126,231,135,0.08); }
+  .sep { color: var(--arrow); font-size: 0.8rem; }
+
+  /* ── Simple diagram (CSS-based, no SVG) ── */
+  .diagram { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding: 0.5rem 0; }
+  .d-row { display: flex; align-items: center; justify-content: center; gap: 0.8rem; flex-wrap: wrap; }
+  .d-box {
+    padding: 0.55rem 1rem; border-radius: 6px; text-align: center;
+    font-size: 0.82rem; font-weight: 500; min-width: 120px;
+    background: var(--node-bg); border: 1px solid var(--border);
+  }
+  .d-box.src-red  { border-color: var(--red);  color: var(--red); }
+  .d-box.src-grn  { border-color: var(--green); color: var(--green); }
+  .d-box.src-blu  { border-color: var(--blue); color: var(--blue); }
+  .d-box small { display: block; font-size: 0.72rem; font-weight: 400; color: var(--text-muted); margin-top: 2px; }
+  .d-arrow { color: var(--arrow); font-size: 1.1rem; }
+  .d-arrow.red  { color: var(--red); }
+  .d-arrow.grn  { color: var(--green); }
+  .d-arrow.blu  { color: var(--blue); }
+  .d-label {
+    font-size: 0.75rem; color: var(--text-muted); font-style: italic; text-align: center;
+    max-width: 500px; margin: 0.2rem auto;
+  }
+  .d-divider {
+    width: 80%; max-width: 500px; border: none;
+    border-top: 1px dashed var(--border); margin: 0.3rem auto;
+  }
+
+  /* ── Bug box ── */
+  .bug-box {
+    background: rgba(210,153,34,0.06); border: 1px solid rgba(210,153,34,0.3);
+    border-radius: 8px; padding: 1rem 1.2rem; margin-top: 1.2rem;
+    font-size: 0.85rem; line-height: 1.7;
+  }
+  .bug-box strong { color: var(--yellow); }
+
+  /* ── Insight rows ── */
+  .insights { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.2rem; }
+  @media (max-width: 640px) { .insights { grid-template-columns: 1fr; } }
+  .insight {
+    background: var(--surface2); border-radius: 6px; padding: 0.9rem 1rem;
+    border-left: 3px solid var(--border);
+  }
+  .insight.red   { border-color: var(--red); }
+  .insight.green { border-color: var(--green); }
+  .insight.blue  { border-color: var(--blue); }
+  .insight h4 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.2rem; }
+  .insight p  { font-size: 0.8rem; color: var(--text-muted); }
+
+  /* ── Evolution bar ── */
+  .evo {
+    display: grid; grid-template-columns: 1fr auto 1fr auto 1fr;
+    align-items: center; gap: 0.5rem; margin: 1.2rem 0;
+  }
+  @media (max-width: 640px) { .evo { grid-template-columns: 1fr; } .evo .evo-arrow { transform: rotate(90deg); } }
+  .evo-step {
+    border-radius: 8px; padding: 0.8rem 1rem; text-align: center; font-size: 0.82rem;
+  }
+  .evo-step.s1 { background: rgba(249,117,131,0.08); border: 1px solid rgba(249,117,131,0.3); }
+  .evo-step.s2 { background: rgba(126,231,135,0.08); border: 1.5px solid rgba(126,231,135,0.4); }
+  .evo-step.s3 { background: rgba(121,192,255,0.08); border: 1px solid rgba(121,192,255,0.3); }
+  .evo-step strong { display: block; font-size: 0.9rem; margin-bottom: 0.15rem; }
+  .evo-arrow { text-align: center; font-size: 1.3rem; color: var(--arrow); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>How the Bot Tracks "What Phase Is It?"</h1>
+  <p>Before, Now, and Future — a visual comparison</p>
+</header>
+
+<div class="tabs">
+  <div class="tab on-red" data-p="before" onclick="go('before')">Before</div>
+  <div class="tab" data-p="now" onclick="go('now')">Now</div>
+  <div class="tab" data-p="future" onclick="go('future')">Future Vision</div>
+</div>
+
+<!-- ═══════════════════════════ BEFORE ═══════════════════════════ -->
+<div class="panel active" id="p-before">
+
+  <div class="analogy red">
+    <span class="icon">🎲</span>
+    <strong>Imagine playing Imperial Assault with no round tracker on the board.</strong>
+    Every time someone needs to know what round it is, they count every card played, every figure activated, and independently figure it out.
+    Sometimes two players get different answers.
+  </div>
+
+  <div class="card">
+    <h3>How it worked: 4 systems, each guessing independently</h3>
+    <div class="diagram">
+
+      <div class="d-box src-red" style="min-width:280px; padding:0.8rem 1.2rem;">
+        Game Object
+        <small>30+ scattered boolean flags like <em>mapSelected</em>, <em>currentRound</em>, <em>player1CcDrawn</em>...</small>
+        <small style="color:var(--red)">No "phase" field anywhere</small>
+      </div>
+
+      <div class="d-row">
+        <span class="d-arrow red">↓</span>
+        <span class="d-arrow red">↓</span>
+        <span class="d-arrow red">↓</span>
+        <span class="d-arrow red">↓</span>
+      </div>
+      <div class="d-label">Each system reads the same 30+ flags and independently tries to figure out the phase</div>
+
+      <div class="d-row">
+        <div class="d-box src-red">"Who's waiting?"<small>15-step checklist</small></div>
+        <div class="d-box src-red">Recovery<small>13 independent checks</small></div>
+        <div class="d-box src-red">Game Status<small>Its own checklist</small></div>
+        <div class="d-box src-red">Ping Player<small>Its own checklist</small></div>
+      </div>
+      <div class="d-label" style="color:var(--red)">
+        Each one has its own copy of the logic. If one copy has a mistake, it silently does the wrong thing.
+      </div>
+
+    </div>
+  </div>
+
+  <div class="bug-box">
+    <strong>Real bug this caused:</strong><br>
+    Recovery looked at the flags and concluded "we're in the card-draw phase" — but the game was actually in deployment zone selection.
+    It sent card-draw prompts at the wrong time, confusing both players.<br><br>
+    <strong>Root cause:</strong> There was no single "phase" label. Recovery had to guess from flags, and it guessed wrong.
+  </div>
+
+  <div class="insights">
+    <div class="insight red">
+      <h4>Duplicated guessing</h4>
+      <p>4 different systems each maintain their own checklist to figure out the same thing — "what phase are we in?"</p>
+    </div>
+    <div class="insight red">
+      <h4>Silent disagreements</h4>
+      <p>When two systems guess differently, there's no error — one just quietly does the wrong thing (like the bug above).</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════ NOW ═══════════════════════════ -->
+<div class="panel" id="p-now">
+
+  <div class="analogy green">
+    <span class="icon">🎯</span>
+    <strong>Now there's a round tracker on the board.</strong>
+    Every time the game advances, the tracker moves to the next phase.
+    When any system needs to know "what phase are we in?" — it just reads the tracker. No guessing.
+  </div>
+
+  <div class="card">
+    <h3>The game now tracks its phase explicitly</h3>
+    <div class="phase-chain">
+      <span class="pill">lobby</span><span class="sep">→</span>
+      <span class="pill">map selection</span><span class="sep">→</span>
+      <span class="pill">initiative</span><span class="sep">→</span>
+      <span class="pill">zone selection</span><span class="sep">→</span>
+      <span class="pill">deployment</span><span class="sep">→</span>
+      <span class="pill">attachment</span><span class="sep">→</span>
+      <span class="pill">card draw</span><span class="sep">→</span>
+      <span class="pill lit">round active</span><span class="sep">→</span>
+      <span class="pill">ended</span>
+    </div>
+    <div style="text-align:center; color:var(--text-muted); font-size:0.78rem; margin: 0.4rem 0 0.2rem;">
+      Within "round active", a sub-tracker:
+    </div>
+    <div class="phase-chain" style="margin-top:0.2rem">
+      <span class="pill lit">start of round</span><span class="sep">→</span>
+      <span class="pill lit">activation</span><span class="sep">→</span>
+      <span class="pill lit">end of round</span>
+      <span class="sep" style="margin-left:0.3rem">↻ repeat</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>How it works now: 1 source, everyone reads it</h3>
+    <div class="diagram">
+
+      <div class="d-row">
+        <div class="d-box">Game transitions<small>12 places that advance the phase</small></div>
+        <span class="d-arrow grn">→</span>
+        <div class="d-box src-grn" style="min-width:200px; padding:0.8rem 1.2rem">
+          Phase Tracker
+          <small style="color:var(--green)">Single source of truth</small>
+        </div>
+      </div>
+
+      <div class="d-row">
+        <span class="d-arrow grn">↓</span>
+        <span class="d-arrow grn">↓</span>
+        <span class="d-arrow grn">↓</span>
+        <span class="d-arrow grn">↓</span>
+      </div>
+
+      <div class="d-row">
+        <div class="d-box src-grn">"Who's waiting?"<small>Reads phase</small></div>
+        <div class="d-box src-grn">Recovery<small>Reads phase</small></div>
+        <div class="d-box src-grn">Game Status<small>Reads phase</small></div>
+        <div class="d-box src-grn">Ping Player<small>Reads phase</small></div>
+      </div>
+      <div class="d-label" style="color:var(--green)">
+        No guessing. Every system reads the same tracker and gets the same answer.
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>How this fixes the bug</h3>
+    <div class="diagram">
+      <div class="d-row">
+        <div class="d-box" style="border-color:var(--yellow)">
+          Phase = "zone selection"
+        </div>
+        <span class="d-arrow">→</span>
+        <div class="d-box src-grn">
+          Recovery checks phase
+          <small>Phase is "zone selection" → skip card-draw recovery entirely</small>
+          <small style="color:var(--green)">Bug is impossible now — structurally prevented</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="insights">
+    <div class="insight green">
+      <h4>One answer, always</h4>
+      <p>The phase is stored once and read everywhere. No system can "get a different answer" because they all read the same field.</p>
+    </div>
+    <div class="insight green">
+      <h4>Recovery is scoped</h4>
+      <p>Recovery only runs the checks that make sense for the current phase. Card-draw recovery can't accidentally fire during zone selection.</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════ FUTURE ═══════════════════════════ -->
+<div class="panel" id="p-future">
+
+  <div class="analogy blue">
+    <span class="icon">🚀</span>
+    <strong>The round tracker was step one. The long-term vision is a full game log system.</strong>
+    Instead of just tracking <em>where</em> the game is, record <em>every move that happened</em>.
+    Then any display — Discord, a website, a replay viewer — can reconstruct the game from that log.
+  </div>
+
+  <div class="card">
+    <h3>How it would work</h3>
+    <div class="diagram">
+
+      <div class="d-box src-blu" style="min-width:280px">
+        Player does something
+        <small>"Deploy Vader to B4", "Attack with Jyn", "End turn"</small>
+      </div>
+      <span class="d-arrow blu">↓</span>
+
+      <div class="d-box src-blu" style="min-width:280px">
+        Game engine (pure rules, no Discord)
+        <small>Validates the action, produces events</small>
+      </div>
+      <span class="d-arrow blu">↓</span>
+
+      <div class="d-box src-blu" style="min-width:280px">
+        Event log (append-only record)
+        <small>"FigureDeployed", "AttackResolved", "TurnEnded" ...</small>
+      </div>
+
+      <div class="d-row" style="margin-top:0.6rem">
+        <span class="d-arrow blu">↓</span>
+        <span class="d-arrow blu">↓</span>
+        <span class="d-arrow blu">↓</span>
+      </div>
+      <div class="d-label">Any number of displays can read the same event log</div>
+      <div class="d-row">
+        <div class="d-box src-blu">Discord bot<small>Messages &amp; buttons</small></div>
+        <div class="d-box src-blu">Web viewer<small>Browser replay</small></div>
+        <div class="d-box src-blu">Spectator mode<small>Read-only view</small></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="insights">
+    <div class="insight blue">
+      <h4>Recovery = just replay</h4>
+      <p>If something goes wrong, replay the event log from the beginning. No more 13 hand-written recovery functions — the log <em>is</em> the recovery.</p>
+    </div>
+    <div class="insight blue">
+      <h4>Undo = rewind the log</h4>
+      <p>Instead of carefully restoring snapshots, just drop the last event and re-derive the game state. Simple and bulletproof.</p>
+    </div>
+    <div class="insight blue">
+      <h4>Test without Discord</h4>
+      <p>The game rules become a self-contained engine. You can test every rule, every card, every interaction — without needing Discord at all.</p>
+    </div>
+    <div class="insight blue">
+      <h4>Multiple UIs from one source</h4>
+      <p>Discord is just one way to view the game. The same event log could power a web app, a mobile viewer, or a tournament replay tool.</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.2rem">
+    <h3>The evolution path</h3>
+    <div class="evo">
+      <div class="evo-step s1">
+        <strong style="color:var(--red)">Before</strong>
+        No phase tracker<br>Every system guesses
+      </div>
+      <div class="evo-arrow">→</div>
+      <div class="evo-step s2">
+        <strong style="color:var(--green)">Now</strong>
+        Phase tracker added<br>Everyone reads it
+      </div>
+      <div class="evo-arrow">→</div>
+      <div class="evo-step s3">
+        <strong style="color:var(--blue)">Future</strong>
+        Full event log<br>Any UI can display it
+      </div>
+    </div>
+    <div class="d-label" style="margin-top:0.5rem">
+      Each step builds on the last. The phase tracker (Now) is a prerequisite for the event log (Future) — you need to know what phase you're in before you can record transitions as events.
+    </div>
+  </div>
+
+</div>
+
+<script>
+function go(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on-red','on-green','on-blue'));
+  document.getElementById('p-' + name).classList.add('active');
+  const cls = { before: 'on-red', now: 'on-green', future: 'on-blue' }[name];
+  document.querySelector(`.tab[data-p="${name}"]`).classList.add(cls);
+}
+</script>
+</body>
+</html>

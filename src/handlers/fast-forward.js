@@ -13,6 +13,7 @@ import {
   ccHandKey, ccDiscardKey,
 } from '../game/player-helpers.js';
 import { dcNameFromFigureKey } from '../game/index.js';
+import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 
@@ -187,6 +188,7 @@ export function simulateMovementRounds(game, activatorNum, defenderNum, timing, 
 
     // Advance game state for next round
     game.currentRound = (game.currentRound || 1) + 1;
+    setRoundPhase(game, ROUND_PHASES.START_OF_ROUND);
     game.p1ActivatedDcIndices = [];
     game.p2ActivatedDcIndices = [];
     game.p1ActivationsRemaining = game.p1ActivationsTotal ?? 0;

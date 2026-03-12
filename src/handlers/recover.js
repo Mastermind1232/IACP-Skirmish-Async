@@ -9,6 +9,7 @@ import {
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { PHASE_GATE_LABELS } from '../game/phase-gate.js';
+import { PHASES, ROUND_PHASES } from '../game/phase.js';
 
 /**
  * Main recovery handler — called from botmenu Recover button.
@@ -47,71 +48,62 @@ export async function runRecovery(game, gameId, ctx) {
   const { client } = ctx;
   const results = [];
 
-  // Step 1: phaseGate (highest priority — blocks all other actions)
+  // Phase gate always highest priority — blocks all other actions
   try {
     const r = await recoverPhaseGate(game, gameId, ctx);
     if (r) results.push(r);
   } catch (err) { console.error('[recover] phaseGate:', err.message); }
 
-  // Step 4: pendingCombat
-  try {
-    const r = await recoverPendingCombat(game, gameId, ctx);
-    if (r) results.push(r);
-  } catch (err) { console.error('[recover] pendingCombat:', err.message); }
+  // Legacy fallback for unmigrated games (no game.phase): run all checks flat
+  if (!game.phase) {
+    try { const r = await recoverPendingCombat(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingCombat:', err.message); }
+    try { const r = await recoverPendingNegation(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingNegation:', err.message); }
+    try { const r = await recoverSetupAttachmentPhase(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] setupAttachmentPhase:', err.message); }
+    try { const r = await recoverPendingEndTurn(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] pendingEndTurn:', err.message); }
+    try { const r = await recoverEndOfRoundWhoseTurn(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] endOfRoundWhoseTurn:', err.message); }
+    try { const r = await recoverForceVisionPending(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] forceVisionPending:', err.message); }
+    try { const r = await recoverPendingStartOfRound(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingStartOfRound:', err.message); }
+    try { const r = await recoverMoveInProgress(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] moveInProgress:', err.message); }
+    try { const r = await recoverRoundActivationMessage(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] roundActivationMessage:', err.message); }
+    try { const r = await recoverCcDrawPhase(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] ccDrawPhase:', err.message); }
+    return results;
+  }
 
-  // Step 5: pendingNegation
-  try {
-    const r = await recoverPendingNegation(game, gameId, ctx);
-    if (r) results.push(r);
-  } catch (err) { console.error('[recover] pendingNegation:', err.message); }
+  // Phase-based dispatch
+  switch (game.phase) {
+    case 'attachment':
+      try { const r = await recoverSetupAttachmentPhase(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] setupAttachmentPhase:', err.message); }
+      break;
 
-  // Step 6: setupAttachmentPhase
-  try {
-    const r = await recoverSetupAttachmentPhase(game, gameId, ctx);
-    results.push(...r);
-  } catch (err) { console.error('[recover] setupAttachmentPhase:', err.message); }
+    case 'cc_draw':
+      try { const r = await recoverCcDrawPhase(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] ccDrawPhase:', err.message); }
+      break;
 
-  // Step 7: pendingEndTurn
-  try {
-    const r = await recoverPendingEndTurn(game, gameId, ctx);
-    results.push(...r);
-  } catch (err) { console.error('[recover] pendingEndTurn:', err.message); }
+    case 'round_active':
+      switch (game.roundPhase) {
+        case 'start_of_round':
+          try { const r = await recoverPendingStartOfRound(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingStartOfRound:', err.message); }
+          break;
+        case 'activation':
+          try { const r = await recoverPendingCombat(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingCombat:', err.message); }
+          try { const r = await recoverPendingNegation(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingNegation:', err.message); }
+          try { const r = await recoverForceVisionPending(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] forceVisionPending:', err.message); }
+          try { const r = await recoverMoveInProgress(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] moveInProgress:', err.message); }
+          try { const r = await recoverPendingEndTurn(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] pendingEndTurn:', err.message); }
+          try { const r = await recoverRoundActivationMessage(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] roundActivationMessage:', err.message); }
+          break;
+        case 'end_of_round':
+          try { const r = await recoverEndOfRoundWhoseTurn(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] endOfRoundWhoseTurn:', err.message); }
+          break;
+        default:
+          break;
+      }
+      break;
 
-  // Step 8: endOfRoundWhoseTurn
-  try {
-    const r = await recoverEndOfRoundWhoseTurn(game, gameId, ctx);
-    if (r) results.push(r);
-  } catch (err) { console.error('[recover] endOfRoundWhoseTurn:', err.message); }
-
-  // Step 9: forceVisionPending
-  try {
-    const r = await recoverForceVisionPending(game, gameId, ctx);
-    if (r) results.push(r);
-  } catch (err) { console.error('[recover] forceVisionPending:', err.message); }
-
-  // Step 10: pendingStartOfRoundResolve
-  try {
-    const r = await recoverPendingStartOfRound(game, gameId, ctx);
-    if (r) results.push(r);
-  } catch (err) { console.error('[recover] pendingStartOfRound:', err.message); }
-
-  // Step 11: moveInProgress
-  try {
-    const r = await recoverMoveInProgress(game, gameId, ctx);
-    results.push(...r);
-  } catch (err) { console.error('[recover] moveInProgress:', err.message); }
-
-  // Step 12: roundActivationMessageId
-  try {
-    const r = await recoverRoundActivationMessage(game, gameId, ctx);
-    if (r) results.push(r);
-  } catch (err) { console.error('[recover] roundActivationMessage:', err.message); }
-
-  // Step 13: CC draw phase
-  try {
-    const r = await recoverCcDrawPhase(game, gameId, ctx);
-    results.push(...r);
-  } catch (err) { console.error('[recover] ccDrawPhase:', err.message); }
+    // lobby, map_selection, initiative, zone_selection, deployment, ended — no recovery needed
+    default:
+      break;
+  }
 
   return results;
 }
@@ -500,8 +492,6 @@ async function recoverRoundActivationMessage(game, gameId, ctx) {
 async function recoverCcDrawPhase(game, gameId, ctx) {
   const { client } = ctx;
   if (game.player1CcDrawn && game.player2CcDrawn) return [];
-  // Only relevant after round has started (currentRound is set when CC draw phase begins)
-  if (!game.currentRound) return [];
   if (!game.p1HandId && !game.p2HandId) return [];
 
   // Dynamically import to avoid circular deps

@@ -83,6 +83,7 @@ import { getHandlerKey } from './src/router.js';
 import { checkFriendlyDefeatedPassiveRedraws, checkStartOfRoundPassiveRedraws } from './src/game/cc-passive-redraw.js';
 import { getHandler, getHandlerGroup } from './src/handlers/index.js';
 import { sendPhaseGateMessages } from './src/handlers/phase-gate.js';
+import { setPhase, setRoundPhase, PHASES, ROUND_PHASES } from './src/game/phase.js';
 import { runRecovery } from './src/handlers/recover.js';
 import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
 import { buildContext, getAllRequiredDepKeys } from './src/context-factory.js';
@@ -1539,6 +1540,7 @@ async function postAchievementNotification(client, channelId, userId, def) {
 
 async function postGameOver(game, client, winnerId, reason) {
   game.ended = true;
+  setPhase(game, PHASES.ENDED);
   game.winnerId = winnerId ?? game.winnerId ?? null;
   cleanupGameLock(game.gameId);
   cleanupGameMaps(game.gameId);
@@ -1856,6 +1858,7 @@ async function finishSetupAttachments(game, client) {
     console.error('Failed to reorder play area after attachments:', err);
   }
   game.currentRound = 1;
+  setPhase(game, PHASES.CC_DRAW);
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
   await clearPreGameSetup(game, client);
 
@@ -1922,6 +1925,7 @@ async function runDraftRandom(game, client, options = {}) {
     const map = playReadyMaps[Math.floor(Math.random() * playReadyMaps.length)];
     game.selectedMap = { id: map.id, name: map.name, imagePath: map.imagePath };
     game.mapSelected = true;
+    setPhase(game, PHASES.INITIATIVE);
     await postMissionCardAfterMapSelection(game, client, map);
   }
 
@@ -1975,6 +1979,7 @@ async function runDraftRandom(game, client, options = {}) {
     const playerNum = winner === game.player1Id ? 1 : 2;
     game.initiativePlayerId = winner;
     game.initiativeDetermined = true;
+    setPhase(game, PHASES.ZONE_SELECTION);
     await logGameAction(
       game,
       client,
@@ -1986,6 +1991,7 @@ async function runDraftRandom(game, client, options = {}) {
     const zone = Math.random() < 0.5 ? 'red' : 'blue';
     const otherZone = zone === 'red' ? 'blue' : 'red';
     game.deploymentZoneChosen = zone;
+    setPhase(game, PHASES.DEPLOYMENT);
     const initiativePlayerNum = getInitiativePlayerNum(game);
     const { p1Zone: _p1z, p2Zone: _p2z } = getPlayerDeploymentZones(game, initiativePlayerNum);
     game.player1DeploymentZone = _p1z;
@@ -2058,6 +2064,7 @@ async function runDraftRandom(game, client, options = {}) {
   game.currentRound = 1;
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
   game.draftRandomUsed = true;
+  setPhase(game, PHASES.ROUND_ACTIVE, ROUND_PHASES.START_OF_ROUND);
 
   if (game.boardId && game.selectedMap) {
     const boardChannel = await client.channels.fetch(game.boardId);
@@ -2122,12 +2129,14 @@ async function runDraftRandom(game, client, options = {}) {
   if (game.currentRound === 1) {
     postDeployActive = await runPostDeployPhase(game, game.gameId, client, { logGameAction, saveGames }, async () => {
       if (!hasPendingSor) {
+        setRoundPhase(game, ROUND_PHASES.ACTIVATION);
         await sendRoundActivationPhaseMessage(game, client);
       }
       saveGames();
     });
   }
   if (!postDeployActive && !hasPendingSor) {
+    setRoundPhase(game, ROUND_PHASES.ACTIVATION);
     await sendRoundActivationPhaseMessage(game, client);
   }
   await clearPreGameSetup(game, client);

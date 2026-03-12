@@ -14,6 +14,7 @@ import {
   ButtonStyle,
   EmbedBuilder,
 } from 'discord.js';
+import { PHASES } from './game/phase.js';
 
 /**
  * Sanitize a display name for use in Discord channel names.
@@ -225,6 +226,7 @@ export async function createTestGame(client, guild, userId, scenarioId, feedback
       testP2IsBot: p2IsBot,
       testScenario: scenarioId || undefined,
       testScenarioPrimaryCard: scenarioId ? getScenarioPrimaryCard(scenarioId) : undefined,
+      phase: PHASES.MAP_SELECTION,
       ended: false,
     };
     setGame(gameId, game);

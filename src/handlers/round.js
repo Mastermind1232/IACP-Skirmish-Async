@@ -8,6 +8,7 @@ import { cleanupRoundStart } from '../game/activation-state.js';
 import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, awardKillVp, deductVp } from '../game/index.js';
 import { getRange } from '../game/spatial.js';
 import { getDeploymentZones, getCcEffect } from '../data-loader.js';
+import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
   getCcHand, getCcDeck, getCcDiscard, getDcAttachments,
@@ -591,6 +592,7 @@ export async function handleEndEndOfRound(interaction, ctx) {
   const prevInitiative = game.initiativePlayerId;
   game.initiativePlayerId = prevInitiative === game.player1Id ? game.player2Id : game.player1Id;
   game.currentRound = (game.currentRound || 1) + 1;
+  setRoundPhase(game, ROUND_PHASES.START_OF_ROUND);
   cleanupRoundStart(game);
   if (runStartOfRoundRules && missionRules?.startOfRound) {
     await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });

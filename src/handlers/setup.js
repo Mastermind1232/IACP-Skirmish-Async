@@ -8,6 +8,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getLoadoutCards, getFormCards, getDcEffects, getDcStats } from '../data-loader.js';
 import { getDcImagePath } from '../asset-paths.js';
+import { setPhase, PHASES } from '../game/phase.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..', '..');
@@ -680,6 +681,7 @@ export async function handleMapConfirm(interaction, ctx) {
     return;
   }
   game.mapSelected = true;
+  setPhase(game, PHASES.INITIATIVE);
   delete game.mapSelectionType;
   // Post mission card
   if (game.selectedMission) {
@@ -827,6 +829,7 @@ export async function handleDetermineInitiative(interaction, ctx) {
   const playerNum = winner === game.player1Id ? 1 : 2;
   game.initiativePlayerId = winner;
   game.initiativeDetermined = true;
+  setPhase(game, PHASES.ZONE_SELECTION);
   // Store zone chooser if different from initiative winner (Devious Scheme)
   if (zoneChooser && zoneChooser !== winner) {
     game.deviousSchemeZoneChooser = zoneChooser;
@@ -885,6 +888,7 @@ export async function handleDeploymentZone(interaction, ctx) {
   const zone = isRed ? 'red' : 'blue';
   const otherZone = zone === 'red' ? 'blue' : 'red';
   game.deploymentZoneChosen = zone;
+  setPhase(game, PHASES.DEPLOYMENT);
   // Assign zones based on who chose (DS player or initiative player)
   const zoneChooserPlayerNum = zoneChooserId === game.player1Id ? 1 : 2;
   game[`player${zoneChooserPlayerNum}DeploymentZone`] = zone;

@@ -9,6 +9,7 @@ import { applyCondition, filterCondition, dcNameFromFigureKey, reduceHp, healHp,
 import { getRange } from '../game/spatial.js';
 import { getFootprintCells } from '../game/coords.js';
 import { getDiceData, getDcKeywords } from '../data-loader.js';
+import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import {
   getPlayerId,
   getDcList,
@@ -240,6 +241,7 @@ export async function handleStatusPhase(interaction, ctx) {
     saveGames();
     return;
   }
+  setRoundPhase(game, ROUND_PHASES.END_OF_ROUND);
   game.p1ActivationPhaseEnded = false;
   game.p2ActivationPhaseEnded = false;
   game.endOfRoundWhoseTurn = game.initiativePlayerId;

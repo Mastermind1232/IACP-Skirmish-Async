@@ -11,6 +11,7 @@ import {
   getPlayerId, getHandChannelId, getInitiativePlayerNum,
   getDcList, getDcMessageIds, opponentPlayerNum,
 } from '../game/player-helpers.js';
+import { setPhase, setRoundPhase, PHASES, ROUND_PHASES } from '../game/phase.js';
 import { discordCatch } from '../error-handling.js';
 import {
   findAutoAttachTarget, applySetupAttachment,
@@ -230,6 +231,7 @@ async function dispatchPhaseAdvance(game, phase, ctx) {
     }
 
     case 'cc_drawn': {
+      setPhase(game, PHASES.ROUND_ACTIVE, ROUND_PHASES.START_OF_ROUND);
       const { runStartOfRoundDcEffects, sendPhaseGateMessages: sendGate } = ctx;
       const hasPendingSor = runStartOfRoundDcEffects
         ? await runStartOfRoundDcEffects(game, gameId, client, { logGameAction })
@@ -242,6 +244,7 @@ async function dispatchPhaseAdvance(game, phase, ctx) {
     }
 
     case 'pre_activation': {
+      setRoundPhase(game, ROUND_PHASES.ACTIVATION);
       const { sendRoundActivationPhaseMessage } = ctx;
       if (sendRoundActivationPhaseMessage) {
         await sendRoundActivationPhaseMessage(game, client);
@@ -278,6 +281,7 @@ async function advanceFromDeployment(game, ctx) {
 
   if (p1SetupAttachments.length > 0 || p2SetupAttachments.length > 0) {
     game.setupAttachmentPhase = true;
+    setPhase(game, PHASES.ATTACHMENT);
     game.setupAttachmentPending = {
       1: p1SetupAttachments.map((e) => resolveDcName(e)),
       2: p2SetupAttachments.map((e) => resolveDcName(e)),
@@ -325,6 +329,7 @@ async function advanceFromDeployment(game, ctx) {
 
   // No attachments — proceed to CC draw
   game.currentRound = 1;
+  setPhase(game, PHASES.CC_DRAW);
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
   if (clearPreGameSetup) await clearPreGameSetup(game, client);
 

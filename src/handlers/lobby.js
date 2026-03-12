@@ -4,6 +4,7 @@
  */
 import { COLORS } from '../discord/colors.js';
 import { CURRENT_GAME_VERSION } from '../game-state.js';
+import { PHASES } from '../game/phase.js';
 
 /**
  * Handle Join Game button in a lobby post.
@@ -124,6 +125,7 @@ export async function handleLobbyStart(interaction, ctx) {
       player2Squad: null,
       player1VP: { total: 0, kills: 0, objectives: 0 },
       player2VP: { total: 0, kills: 0, objectives: 0 },
+      phase: PHASES.MAP_SELECTION,
       ended: false,
     };
 

@@ -13,7 +13,7 @@ const rootDir = join(__dirname, '..');
 const GAMES_STATE_PATH = join(rootDir, 'data', 'games-state.json');
 
 /** Current game state schema version (DB4). Bump when adding migrations. */
-export const CURRENT_GAME_VERSION = 1;
+export const CURRENT_GAME_VERSION = 2;
 
 /** gameId -> game object */
 const games = new Map();
@@ -35,12 +35,68 @@ function sanitizeCcNames(arr) {
   }
 }
 
+/** Compute phase from legacy flags for v1→v2 migration. */
+function computePhaseFromFlags(g) {
+  if (g.phase) return; // already set — idempotent
+  if (g.ended) {
+    g.phase = 'ended';
+    g.roundPhase = null;
+    return;
+  }
+  if (g.currentRound && g.player1CcDrawn && g.player2CcDrawn) {
+    g.phase = 'round_active';
+    if (g.endOfRoundWhoseTurn) {
+      g.roundPhase = 'end_of_round';
+    } else if ((g.pendingStartOfRoundResolve || 0) > 0) {
+      g.roundPhase = 'start_of_round';
+    } else {
+      g.roundPhase = 'activation';
+    }
+    return;
+  }
+  if (g.initiativePlayerDeployed && g.nonInitiativePlayerDeployed) {
+    if (g.setupAttachmentPhase) {
+      g.phase = 'attachment';
+    } else {
+      g.phase = 'cc_draw';
+    }
+    g.roundPhase = null;
+    return;
+  }
+  if (g.deploymentZoneChosen) {
+    g.phase = 'deployment';
+    g.roundPhase = null;
+    return;
+  }
+  if (g.initiativeDetermined) {
+    g.phase = 'zone_selection';
+    g.roundPhase = null;
+    return;
+  }
+  if (g.mapSelected) {
+    g.phase = 'initiative';
+    g.roundPhase = null;
+    return;
+  }
+  if (g.generalId) {
+    g.phase = 'map_selection';
+    g.roundPhase = null;
+    return;
+  }
+  g.phase = 'lobby';
+  g.roundPhase = null;
+}
+
 /** Run migrations on a loaded game so old saves keep working (DB4). */
 function migrateGame(g) {
   if (!g || typeof g !== 'object') return;
   const v = g.version ?? 0;
   if (v < 1) {
     g.version = 1;
+  }
+  if (v < 2) {
+    computePhaseFromFlags(g);
+    g.version = 2;
   }
   if (g.version < CURRENT_GAME_VERSION) {
     g.version = CURRENT_GAME_VERSION;
