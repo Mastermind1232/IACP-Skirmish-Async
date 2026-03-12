@@ -49,6 +49,7 @@ export {
   collectOverlappingFigures,
   pushFigureToNearestValid,
   resolveMassivePush,
+  getEffectiveMapSpaces,
 } from './movement.js';
 
 export {
@@ -95,7 +96,7 @@ export { dcNameFromFigureKey, parseFigureKey, getDcEffect, isFigurelessDc, hasDe
 
 export { opponentPlayerNum, getInitiativePlayerNum } from './player-helpers.js';
 
-export { grantMovementBank, grantPowerTokens, getPlayerDeploymentZones } from './game-helpers.js';
+export { grantMovementBank, grantPowerTokens, resolveOverflowDiscard, getPlayerDeploymentZones } from './game-helpers.js';
 
 export {
   getEffectiveFigureSize,

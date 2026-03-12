@@ -1950,6 +1950,14 @@
       "description": "After an attack targeting you or an adjacent friendly Rebel figure resolves, the attacker suffers Damage equal to the number of attack dice rolled. Limit once per round.",
       "wiredStatus": "wired"
     },
+    "force_exhaustion_child": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "whenAttackDeclared",
+      "label": "Force Exhaustion",
+      "description": "When an attack is declared targeting you or a friendly figure with \"Clan of Two\", you may become Incapacitated. If you do, the attacker removes 1 attack die from the attack pool and becomes Weakened.",
+      "wiredStatus": "wired"
+    },
     "force_heal": {
       "type": "dcSpecial",
       "category": "active",

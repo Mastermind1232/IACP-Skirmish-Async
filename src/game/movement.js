@@ -24,6 +24,99 @@ import {
 import { getDcList, getDcMessageIds, getDcAttachments, opponentPlayerNum } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 
+// ---------------------------------------------------------------------------
+// Wasskah Hunting Ground: breakable walls (blue-line edges on the map diagram).
+// Per mission rules: "Walls between spaces containing difficult terrain
+// (indicated by blue lines on the map diagram) do not block movement,
+// adjacency, line of sight, or counting spaces."
+// Each entry is [spaceA, spaceB] — the two spaces on either side of a
+// blue-line wall edge.  When BOTH spaces contain difficult terrain (including
+// rubble tokens), the wall is passable.
+// ---------------------------------------------------------------------------
+const WASSKAH_BREAKABLE_WALLS = [
+  // Upper-left building — south wall (row 8 → 9 boundary)
+  ['e8', 'e9'],
+  ['f8', 'f9'],
+  // Upper-left building — east wall (col F → G boundary)
+  ['f6', 'g6'],
+  ['f7', 'g7'],
+  // Central building cluster — west walls
+  ['h9', 'h10'],
+  ['h13', 'h14'],
+  // Central building cluster — east walls
+  ['n9', 'o9'],
+  ['n13', 'o13'],
+  // Lower-left building — north wall (row 16 → 15 boundary)
+  ['i15', 'i16'],
+  ['j15', 'j16'],
+  // Lower-left building — east wall
+  ['l17', 'm17'],
+  ['l18', 'm18'],
+  // Lower-right building — north wall
+  ['o18', 'o19'],
+  ['p18', 'p19'],
+  // Lower-right building — west wall
+  ['n19', 'n20'],
+  ['n21', 'n22'],
+];
+
+/**
+ * Build a Set of edgeKey strings for breakable walls that are currently passable
+ * because both adjacent spaces contain difficult terrain.
+ * @param {object} game - game state (for map id, rubble tokens, terrain)
+ * @param {object} mapSpaces - the map's spatial data ({ terrain })
+ * @returns {Set<string>} set of edgeKey strings for currently-broken walls
+ */
+export function getBrokenWallEdges(game, mapSpaces) {
+  if (game?.selectedMap?.id !== 'wasskah-hunting-ground') return new Set();
+  // Collect all difficult-terrain spaces: map terrain + rubble tokens (both storage locations)
+  const difficultSet = new Set();
+  for (const [coord, type] of Object.entries(mapSpaces?.terrain || {})) {
+    if (String(type).toLowerCase() === 'difficult') difficultSet.add(normalizeCoord(coord));
+  }
+  // game.rubbleTokens (Flame Trooper Incinerate)
+  if (Array.isArray(game.rubbleTokens)) {
+    for (const rc of game.rubbleTokens) difficultSet.add(normalizeCoord(rc));
+  }
+  // game.ancillaryTokens.rubble (Demolish, Boulder Barrage, Reduce to Rubble)
+  if (Array.isArray(game.ancillaryTokens?.rubble)) {
+    for (const rc of game.ancillaryTokens.rubble) difficultSet.add(normalizeCoord(rc));
+  }
+  const broken = new Set();
+  for (const [a, b] of WASSKAH_BREAKABLE_WALLS) {
+    if (difficultSet.has(a) && difficultSet.has(b)) {
+      broken.add(edgeKey(a, b));
+    }
+  }
+  return broken;
+}
+
+/**
+ * Return impassableEdges filtered to exclude currently-broken Wasskah walls.
+ * Safe to call for any map — returns the original array unchanged for non-Wasskah maps.
+ * @param {object} game
+ * @param {object} mapSpaces - { impassableEdges, terrain, ... }
+ * @returns {Array} filtered impassableEdges array
+ */
+export function getEffectiveImpassableEdges(game, mapSpaces) {
+  const edges = mapSpaces?.impassableEdges || [];
+  const broken = getBrokenWallEdges(game, mapSpaces);
+  if (broken.size === 0) return edges;
+  return edges.filter((e) => !broken.has(edgeKey(e[0], e[1])));
+}
+
+/**
+ * Return a copy of mapSpaces with impassableEdges filtered for Wasskah breakable walls.
+ * Useful for standalone LOS checks that pass mapSpaces directly.
+ * Returns the original object unchanged for non-Wasskah maps or when no walls are broken.
+ */
+export function getEffectiveMapSpaces(game, mapSpaces) {
+  if (!mapSpaces) return mapSpaces;
+  const filtered = getEffectiveImpassableEdges(game, mapSpaces);
+  if (filtered === mapSpaces?.impassableEdges) return mapSpaces;
+  return { ...mapSpaces, impassableEdges: filtered };
+}
+
 export function isWithinGridBounds(coord, gridBounds) {
   if (!gridBounds || (gridBounds.maxCol == null && gridBounds.maxRow == null)) return true;
   const { col, row } = parseCoord(coord);
@@ -177,6 +270,13 @@ export function getBoardStateForMovement(game, excludeFigureKey = null) {
       if (!terrain[nc] || terrain[nc] === 'normal') terrain[nc] = 'difficult';
     }
   }
+  // Rubble tokens (Demolish, Boulder Barrage, Reduce to Rubble): also difficult terrain
+  if (Array.isArray(game.ancillaryTokens?.rubble)) {
+    for (const rc of game.ancillaryTokens.rubble) {
+      const nc = normalizeCoord(rc);
+      if (!terrain[nc] || terrain[nc] === 'normal') terrain[nc] = 'difficult';
+    }
+  }
   const adjacency = {};
   for (const [coord, neighbors] of Object.entries(mapSpaces.adjacency || {})) {
     adjacency[normalizeCoord(coord)] = (neighbors || []).map((n) => normalizeCoord(n));
@@ -184,7 +284,9 @@ export function getBoardStateForMovement(game, excludeFigureKey = null) {
   const movementBlockingSet = new Set(
     (mapSpaces.movementBlockingEdges || []).map((edge) => edgeKey(edge[0], edge[1]))
   );
-  for (const edge of mapSpaces.impassableEdges || []) {
+  // Wasskah breakable walls: filter out edges that are passable due to difficult terrain
+  const effectiveImpassable = getEffectiveImpassableEdges(game, mapSpaces);
+  for (const edge of effectiveImpassable) {
     if (edge?.length >= 2) movementBlockingSet.add(edgeKey(edge[0], edge[1]));
   }
   const mapData = getMapTokensData()[game.selectedMap.id];
@@ -281,7 +383,7 @@ export function getMovementProfile(dcName, figureKey, game) {
   };
 }
 
-export function buildTempBoardState(mapSpaces, occupiedSet, hostileOccupiedSet = null) {
+export function buildTempBoardState(mapSpaces, occupiedSet, hostileOccupiedSet = null, game = null) {
   if (!mapSpaces) return null;
   const blockingSet = toLowerSet(mapSpaces.blocking || []);
   const spacesSet = toLowerSet(mapSpaces.spaces || []);
@@ -296,7 +398,9 @@ export function buildTempBoardState(mapSpaces, occupiedSet, hostileOccupiedSet =
   const movementBlockingSet = new Set(
     (mapSpaces.movementBlockingEdges || []).map((edge) => edgeKey(edge[0], edge[1]))
   );
-  for (const edge of mapSpaces.impassableEdges || []) {
+  // Wasskah breakable walls: filter out edges passable due to difficult terrain
+  const effectiveImpassable = game ? getEffectiveImpassableEdges(game, mapSpaces) : (mapSpaces.impassableEdges || []);
+  for (const edge of effectiveImpassable) {
     if (edge?.length >= 2) movementBlockingSet.add(edgeKey(edge[0], edge[1]));
   }
   const board = {

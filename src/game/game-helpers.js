@@ -2,6 +2,7 @@
  * Shared game-state mutation helpers.
  * Pure game logic — no Discord dependency.
  */
+import { getMaxPowerTokens } from './dc-helpers.js';
 
 /**
  * Grant movement points to a figure's movement bank.
@@ -19,22 +20,63 @@ export function grantMovementBank(game, msgId, amount) {
 }
 
 /**
- * Grant power tokens to a figure, respecting an optional cap.
+ * Grant power tokens to a figure. Always adds the tokens, then checks whether
+ * the figure exceeds its per-figure maximum (default from getMaxPowerTokens).
+ * When overflow occurs, queues a `game.pendingPowerTokenOverflow` entry so the
+ * Discord layer can prompt the player to discard down.
+ *
  * @param {object} game
  * @param {string} figureKey
  * @param {string} tokenType - e.g. 'Block', 'Evade', 'Hit', 'Surge'
  * @param {number} count - tokens to grant
- * @param {number} [max] - optional maximum total tokens allowed
- * @returns {number} tokens actually granted
+ * @param {number} [max] - optional maximum total tokens allowed (overrides per-figure default)
+ * @returns {number} tokens actually added (always === count when count > 0)
  */
 export function grantPowerTokens(game, figureKey, tokenType, count, max) {
   if (!figureKey || count <= 0) return 0;
   game.figurePowerTokens = game.figurePowerTokens || {};
   game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
-  const current = game.figurePowerTokens[figureKey].length;
-  const actual = max != null ? Math.min(count, Math.max(0, max - current)) : count;
-  for (let i = 0; i < actual; i++) game.figurePowerTokens[figureKey].push(tokenType);
-  return actual;
+  const cap = max != null ? max : getMaxPowerTokens(figureKey);
+  // Always grant the tokens
+  for (let i = 0; i < count; i++) game.figurePowerTokens[figureKey].push(tokenType);
+  // Check for overflow
+  const overflow = game.figurePowerTokens[figureKey].length - cap;
+  if (overflow > 0) {
+    // Queue overflow — Discord layer will prompt a discard choice
+    game.pendingPowerTokenOverflow = game.pendingPowerTokenOverflow || [];
+    game.pendingPowerTokenOverflow.push({ figureKey, discardCount: overflow });
+  }
+  return count;
+}
+
+/**
+ * Discard a specific power token from a figure to resolve overflow.
+ * Removes the token at the given index and decrements the first matching
+ * pendingPowerTokenOverflow entry. When an entry's discardCount reaches 0 it is
+ * removed; when the array is empty the field is cleared.
+ *
+ * @param {object} game
+ * @param {string} figureKey
+ * @param {number} tokenIndex - index into game.figurePowerTokens[figureKey]
+ * @returns {{ discarded: string|null, remaining: number }} the discarded token type and remaining overflow
+ */
+export function resolveOverflowDiscard(game, figureKey, tokenIndex) {
+  const tokens = game.figurePowerTokens?.[figureKey];
+  if (!tokens || tokenIndex < 0 || tokenIndex >= tokens.length) return { discarded: null, remaining: 0 };
+  const [discarded] = tokens.splice(tokenIndex, 1);
+  // Decrement the overflow counter
+  const overflowArr = game.pendingPowerTokenOverflow || [];
+  const entry = overflowArr.find(e => e.figureKey === figureKey && e.discardCount > 0);
+  if (entry) {
+    entry.discardCount--;
+    if (entry.discardCount <= 0) {
+      const idx = overflowArr.indexOf(entry);
+      overflowArr.splice(idx, 1);
+    }
+  }
+  if (overflowArr.length === 0) game.pendingPowerTokenOverflow = null;
+  const remaining = overflowArr.filter(e => e.figureKey === figureKey).reduce((s, e) => s + e.discardCount, 0);
+  return { discarded, remaining };
 }
 
 /**

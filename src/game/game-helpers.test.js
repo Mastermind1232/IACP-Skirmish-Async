@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { grantMovementBank, grantPowerTokens, getPlayerDeploymentZones } from './game-helpers.js';
+import { grantMovementBank, grantPowerTokens, resolveOverflowDiscard, getPlayerDeploymentZones } from './game-helpers.js';
 
 describe('grantMovementBank', () => {
   it('initializes bank and entry when absent', () => {
@@ -32,28 +32,70 @@ describe('grantPowerTokens', () => {
     const granted = grantPowerTokens(game, 'fig-1-0', 'Block', 2);
     assert.strictEqual(granted, 2);
     assert.deepStrictEqual(game.figurePowerTokens['fig-1-0'], ['Block', 'Block']);
+    // No overflow since default max is 2 (from getMaxPowerTokens)
   });
-  it('respects max cap', () => {
+  it('always grants tokens and queues overflow when exceeding max', () => {
     const game = { figurePowerTokens: { 'fig-1-0': ['Hit'] } };
     const granted = grantPowerTokens(game, 'fig-1-0', 'Block', 3, 2);
-    assert.strictEqual(granted, 1);
-    assert.deepStrictEqual(game.figurePowerTokens['fig-1-0'], ['Hit', 'Block']);
+    assert.strictEqual(granted, 3);
+    assert.deepStrictEqual(game.figurePowerTokens['fig-1-0'], ['Hit', 'Block', 'Block', 'Block']);
+    // Should have overflow: 4 tokens, max 2, so overflow = 2
+    assert.ok(game.pendingPowerTokenOverflow);
+    assert.strictEqual(game.pendingPowerTokenOverflow[0].figureKey, 'fig-1-0');
+    assert.strictEqual(game.pendingPowerTokenOverflow[0].discardCount, 2);
   });
-  it('returns 0 when already at max', () => {
+  it('queues overflow when already at max', () => {
     const game = { figurePowerTokens: { 'fig-1-0': ['Hit', 'Block', 'Surge'] } };
     const granted = grantPowerTokens(game, 'fig-1-0', 'Block', 2, 3);
-    assert.strictEqual(granted, 0);
-  });
-  it('grants without limit when max not provided', () => {
-    const game = {};
-    const granted = grantPowerTokens(game, 'fig-1-0', 'Evade', 5);
-    assert.strictEqual(granted, 5);
+    assert.strictEqual(granted, 2);
     assert.strictEqual(game.figurePowerTokens['fig-1-0'].length, 5);
+    assert.ok(game.pendingPowerTokenOverflow);
+    assert.strictEqual(game.pendingPowerTokenOverflow[0].discardCount, 2);
+  });
+  it('no overflow when under max', () => {
+    const game = {};
+    const granted = grantPowerTokens(game, 'fig-1-0', 'Evade', 1, 5);
+    assert.strictEqual(granted, 1);
+    assert.strictEqual(game.figurePowerTokens['fig-1-0'].length, 1);
+    assert.strictEqual(game.pendingPowerTokenOverflow, undefined);
   });
   it('no-ops for null figureKey', () => {
     const game = {};
     grantPowerTokens(game, null, 'Block', 1);
     assert.strictEqual(game.figurePowerTokens, undefined);
+  });
+});
+
+describe('resolveOverflowDiscard', () => {
+  it('removes the chosen token and decrements overflow', () => {
+    const game = {
+      figurePowerTokens: { 'fig-1-0': ['Hit', 'Block', 'Surge'] },
+      pendingPowerTokenOverflow: [{ figureKey: 'fig-1-0', discardCount: 1 }],
+    };
+    const result = resolveOverflowDiscard(game, 'fig-1-0', 1); // discard 'Block'
+    assert.strictEqual(result.discarded, 'Block');
+    assert.strictEqual(result.remaining, 0);
+    assert.deepStrictEqual(game.figurePowerTokens['fig-1-0'], ['Hit', 'Surge']);
+    assert.strictEqual(game.pendingPowerTokenOverflow, null); // cleared
+  });
+  it('handles multiple discards needed', () => {
+    const game = {
+      figurePowerTokens: { 'fig-1-0': ['Hit', 'Block', 'Surge', 'Evade'] },
+      pendingPowerTokenOverflow: [{ figureKey: 'fig-1-0', discardCount: 2 }],
+    };
+    const result = resolveOverflowDiscard(game, 'fig-1-0', 0); // discard 'Hit'
+    assert.strictEqual(result.discarded, 'Hit');
+    assert.strictEqual(result.remaining, 1);
+    assert.deepStrictEqual(game.figurePowerTokens['fig-1-0'], ['Block', 'Surge', 'Evade']);
+    assert.ok(game.pendingPowerTokenOverflow); // still has overflow
+  });
+  it('returns null for invalid index', () => {
+    const game = {
+      figurePowerTokens: { 'fig-1-0': ['Hit'] },
+      pendingPowerTokenOverflow: [{ figureKey: 'fig-1-0', discardCount: 1 }],
+    };
+    const result = resolveOverflowDiscard(game, 'fig-1-0', 5);
+    assert.strictEqual(result.discarded, null);
   });
 });
 

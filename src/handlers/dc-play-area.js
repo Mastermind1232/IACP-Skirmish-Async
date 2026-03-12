@@ -3,7 +3,8 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { truncateLabel, getAttachmentSpecials } from '../discord/components.js';
-import { bottomLeftCoord } from '../game/coords.js';
+import { bottomLeftCoord, edgeKey } from '../game/coords.js';
+import { getBrokenWallEdges, getEffectiveMapSpaces } from '../game/movement.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
@@ -978,10 +979,18 @@ async function buildAndSendAttackTargets(
     // C54: Smoke Grenade tokens block LOS
     const smokeSpaces = (game.ancillaryTokens?.smoke || []).map(s => String(s).toLowerCase());
     const extraBlocking = [...shieldSpaces, ...smokeSpaces];
-    if (closedEdges.length > 0 || extraBlocking.length > 0) {
+    // Wasskah breakable walls: filter out edges passable due to difficult terrain on both sides
+    const brokenWalls = getBrokenWallEdges(game, ms);
+    const baseImpassable = ms?.impassableEdges || [];
+    const filteredImpassable = brokenWalls.size > 0
+      ? baseImpassable.filter(e => !brokenWalls.has(edgeKey(e[0], e[1])))
+      : baseImpassable;
+    const mergedImpassable = closedEdges.length > 0 ? [...filteredImpassable, ...closedEdges] : filteredImpassable;
+    const needsOverride = closedEdges.length > 0 || extraBlocking.length > 0 || brokenWalls.size > 0;
+    if (needsOverride) {
       effectiveMs = {
         ...ms,
-        impassableEdges: closedEdges.length > 0 ? [...(ms?.impassableEdges || []), ...closedEdges] : ms?.impassableEdges,
+        impassableEdges: mergedImpassable,
         blocking: extraBlocking.length > 0 ? [...(ms?.blocking || []), ...extraBlocking] : ms?.blocking,
       };
     }
@@ -1926,7 +1935,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         return;
       }
       const mapId = game.selectedMap?.id;
-      const ms = getMapSpaces(mapId);
+      const ms = getEffectiveMapSpaces(game, getMapSpaces(mapId));
       if (!ms?.adjacency) {
         await thread.send('**Overwatch** — Map data not available.').catch(discordCatch);
         saveGames();
@@ -1978,7 +1987,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       return;
     }
     const mapId = game.selectedMap?.id;
-    const ms = getMapSpaces(mapId);
+    const ms = getEffectiveMapSpaces(game, getMapSpaces(mapId));
     if (!ms?.adjacency) {
       await thread.send('**Bomb Drop** — Map data not available.').catch(discordCatch);
       saveGames();
@@ -2140,6 +2149,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     if (logGameAction) {
       await logGameAction(game, client, `<@${oppOwnerId}> **You Have Something I Want** — **${dcNameFromFigureKey(_yhsiw.targetFk)}**'s **${_yhsiw.token}** is targeted by **Moff Gideon**. Choose: transfer the token or suffer 3 Damage.`, { components: [_yhsiwRow], allowedMentions: { users: [oppOwnerId] } });
     }
+  }
+  // Track special action usage for CC purposes (To the Limit, All in a Day's Work)
+  if (buttonKey === 'dc_special_' && resolveResult.applied) {
+    game.specialActionUsedThisActivation = game.specialActionUsedThisActivation || {};
+    game.specialActionUsedThisActivation[msgId] = (game.specialActionUsedThisActivation[msgId] || 0) + 1;
   }
   // Expertise (Ko-Tun Feralo): once per activation, using a Special grants 1 extra action
   if (buttonKey === 'dc_special_' && abilityId !== 'expertise' && actionsData) {
@@ -2759,7 +2773,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   let foEffectiveMaxRange = foHasReach && foMaxRange < 2 ? 2 : foMaxRange;
   // Lure of the Dark Side: cap range at 4 (or whatever maxRange is set)
   if (fo.isLure && fo.maxRange) foEffectiveMaxRange = Math.min(foEffectiveMaxRange, fo.maxRange);
-  const ms = getMapSpaces(game.selectedMap?.id);
+  const ms = getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap?.id));
   if (!ms) {
     await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
     return;

@@ -67,6 +67,8 @@ const ACTIVATION_MSGID_FLAGS = [
   'beastTamerInteractOverride',
   'imperialRetrofittingMultiAttack',
   'arcingShotActive',
+  'wookieeAvengerSlamUsed',
+  'specialActionUsedThisActivation',
 ];
 
 /**
@@ -102,6 +104,7 @@ const ACTIVATION_SCALAR_FLAGS = [
   'partingShotTriggered',
   'onTheLamActive',
   'arcingShotActiveScalar',
+  'pendingWookSlamPush',
 ];
 
 /**

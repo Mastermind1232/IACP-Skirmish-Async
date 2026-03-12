@@ -137,7 +137,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 |---|---|---|
 | R1 | PASS | dc-effects.json — Chewbacca `"cost": 15`. |
 | R2 | PASS | abilities.js:3324 — Debts Repaid readied into starting hand. |
-| R3 | PARTIAL | Slam mechanism exists (abilities.js:1685-1855) but Wookiee Avenger free Slam noted at activation.js:1215 as "not yet automated (needs target picker)". No `specialAction` counter for CC purposes (To the Limit, All in a Day's Work). |
+| R3 | WIRED | Slam mechanism (abilities.js) fully automated. Wookiee Avenger free Slam at activation with target picker + push space picker (activation.js). `specialActionUsedThisActivation` counter tracks usage for CC purposes (To the Limit, All in a Day's Work). |
 | R4 | PASS | dc-effects.json — Chewbacca Dodge converts to evade. |
 | R5 | PASS | Upgrade warning (validation.js:384-401). Chewbacca upgrade validation at army setup. |
 | R6 | PASS | dc-effects.json — Han Solo `"cost": 12`. |
@@ -228,7 +228,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | R91 | PASS | activation.js:583-608 — explicitly checks `(game.currentRound || 1) > 1` to skip round 1. Checks 3+ exhausted/defeated groups. |
 | R92 | PASS | abilities.js — deck order preserved for Smuggling Compartment/Heroic Effort. |
 | R93 | PASS | dc-effects.json — bottom cards stay on bottom unless shuffled. |
-| R94 | PARTIAL | Rogue One token sharing (discard PT from friendly for +1 Surge while attacking) — no automated mid-attack handler. Only start-of-round draw-3/return-2 automated (round.js:637-674). |
+| R94 | PASS | Rogue One token sharing (discard PT from friendly for +1 Surge while attacking) — combat.js surge phase offers Rogue One button when attacker is a named Rogue One figure and friendly figures have power tokens. Token picker via rogue_one_token_ handler. |
 | R95 | PASS | round.js:637-674,1106-1154 — Rogue One start-of-round draw 3, return 2 with interactive picker. Blocking until resolved. |
 
 ---
@@ -310,13 +310,13 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | M71 | PASS | Black Market SU automated (interrupts.js:756-845). Fully implemented. |
 | M72 | PASS | Black Market three-choice mechanic implemented (interrupts.js:756-845). |
 | M73 | PASS | Black Market strain cost enforced (interrupts.js:756-845). |
-| M74 | PARTIAL | dc-effects.json defines companion "The Child". activation.js:206-209 posts reminder. Force Heal may have handler but Force Exhaustion (remove die + Weaken) not in combat code. |
+| M74 | PASS | dc-effects.json defines companion "The Child". Force Heal wired in abilities.js. Force Exhaustion implemented in combat.js (attack declaration prompt) and combat-reactions.js (handleForceExhaustion): incapacitates The Child, removes 1 attack die, applies Weakened to attacker. |
 | M75 | PASS | Devious Scheme SU automated (setup.js:783-817). Initiative integration working. |
 | M76 | PASS | Indentured Jester/Crumb: scratch ability has handler (`scratch_crumb` in ability-library), control exclusion at board-helpers.js:45 (`dcName === 'salacious b. crumb' → true`), activation reminder posted. |
 | M77 | PASS | [Punishing Strike] SU — index.js prompts after harmful conditions applied in combat. Button handler in interrupts.js replaces condition. Exhaust tracked via `game.exhaustedSkirmishUpgrades[ps_army_pN]`, reset at EOR. |
 | M78 | PASS | combat.js:689-694 — Scavenged Weaponry transfer upon defeat. |
-| M79 | PARTIAL | Under Duress defined in dc-effects.json but no handler. Depends on G104-G105 strain choice system (strain auto-applied as HP, no damage-vs-CC choice). |
-| M80 | PARTIAL | Same dependency on strain choice system (G104-G105). Under Duress modifier (2 CCs per HP prevented) cannot function without base strain choice. |
+| M79 | PASS | [Under Duress] SU — combat.js detects UD in opponent army during applyStrainToFigure. Passive: CC discards cost 2 CCs each. Deplete: UD owner takes control of strain choice via ud_deplete_use_/skip_ buttons. Handler in combat.js (handleUnderDuress). |
+| M80 | PASS | Under Duress Gaarkhan example: 2 strain → 4 CC discards (2 per strain point). ccCostPerStrain=2 stored in pendingStrainChoice; handleStrainCcPick discards chosen CC + 1 extra per pick. |
 | M81 | PASS | post-deploy.js:115-127,494-518,937-952 — Scavenged Walker post-deploy movement fully automated with move/skip buttons. |
 | M82 | PASS | interrupts.js:428-451 — Scavenged Walker EOR attack with -1 Hit penalty (activation-state.js:187). Attack/skip buttons. |
 | M83 | PASS | dc-play-area.js:1333-1335 — affiliation change (loses Assault). |
@@ -519,7 +519,7 @@ All former Tier 1 core rules bugs are now resolved.
 21. **M71-M73** — Black Market (PARTIAL)
 22. ~~**M75** — Devious Scheme~~ FIXED
 23. ~~**M77** — Punishing Strike~~ FIXED
-24. **M79-M80** — Under Duress (PARTIAL — depends on strain choice G104-G105)
+24. ~~**M79-M80** — Under Duress~~ FIXED
 25. ~~**I48** — Imperial Retrofitting~~ FIXED
 26. ~~**C49** — Force Push~~ FIXED
 28. ~~**C54** — Smoke Grenade LOS~~ FIXED

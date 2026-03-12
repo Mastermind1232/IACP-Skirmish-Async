@@ -1437,7 +1437,29 @@ export async function handleConfirmActivate(interaction, ctx) {
       await thread.send({ content: `**Focused on the Kill** — **${meta.dcName}** gains **2 MP** at start of activation.` }).catch(discordCatch);
     }
     // Survivalist: end-of-round recovery handled in round.js; movement cost ignore handled in movement.js
-    // Wookiee Avenger (Chewbacca): free Slam action (choose adjacent hostile, push 1 space) — not yet automated (needs target picker + space picker)
+    // Wookiee Avenger (Chewbacca): free Slam once during activation (choose adjacent hostile, roll 1 red, push if SMALL)
+    if (_suActivationUpgrades.includes('Wookiee Avenger') && !game.wookieeAvengerSlamUsed?.[msgId]) {
+      const _waMapId = game.selectedMap?.id;
+      const _waMs = _waMapId ? getMapSpaces(_waMapId) : null;
+      const _waDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _waSelfFk = `${meta.dcName}-${_waDgIndex}-0`;
+      const _waSelfPos = game.figurePositions?.[meta.playerNum]?.[_waSelfFk];
+      if (_waSelfPos && _waMs) {
+        const _waAdj = (_waMs.adjacency?.[String(_waSelfPos).toLowerCase()] || []).map(a => String(a).toLowerCase());
+        const _waEnemyNum = opponentPlayerNum(meta.playerNum);
+        const _waHostiles = Object.entries(game.figurePositions?.[_waEnemyNum] || {})
+          .filter(([, fp]) => fp && _waAdj.includes(String(fp).toLowerCase()));
+        if (_waHostiles.length > 0) {
+          const btns = _waHostiles.slice(0, 4).map(([fk]) =>
+            new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_wookslam_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+          );
+          btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_wookslam_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+          await thread.send({ content: `**Wookiee Avenger** — **${meta.dcName}** may use **Slam** without spending an action. Choose an adjacent hostile figure:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+        } else {
+          await thread.send({ content: `**Wookiee Avenger** — No adjacent hostile figures for free Slam.` }).catch(discordCatch);
+        }
+      }
+    }
     // Motivation (UNIQUE): exhaust during activation — friendly with lower cost + LOS discards harmful or recovers 1, gains 1 MP
     if (_suActivationUpgrades.includes('Motivation') && !(game.exhaustedSkirmishUpgrades?.[msgId] || []).includes('Motivation')) {
       const _motGetRange = ctx.getRange || getRange;
@@ -2114,6 +2136,108 @@ export async function handleActPassive(interaction, ctx) {
           delete game.pendingGeneralsOrders;
         }
       }
+    }
+  // --- Durasteel Fist: roll 1 green die on adjacent target ---
+  // --- Wookiee Avenger free Slam: roll 1 red die on adjacent target ---
+  } else if (ability === 'wookslam') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `**Wookiee Avenger** — Free Slam skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const targetFk = choice;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      // Mark Slam as used this activation
+      game.wookieeAvengerSlamUsed = game.wookieeAvengerSlamUsed || {};
+      game.wookieeAvengerSlamUsed[msgId] = true;
+      // Track as special action for CC purposes (To the Limit, All in a Day's Work)
+      game.specialActionUsedThisActivation = game.specialActionUsedThisActivation || {};
+      game.specialActionUsedThisActivation[msgId] = (game.specialActionUsedThisActivation[msgId] || 0) + 1;
+      // Roll 1 red die
+      const faces = getDiceData()?.attack?.red;
+      if (!faces?.length) {
+        await interaction.message.edit({ content: `**Wookiee Avenger Slam** — Roll 1 red die manually and apply results to **${targetDcName}**.`, components: [] }).catch(discordCatch);
+      } else {
+        const face = faces[Math.floor(Math.random() * faces.length)];
+        const hits = face.dmg ?? 0;
+        const surges = face.surge ?? 0;
+        const dieParts = [];
+        if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+        if (surges) dieParts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
+        const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
+        const resultParts = [`Rolled: **${diceResult}**`];
+        // Determine target's playerNum
+        let targetPlayerNum = null;
+        for (const pn of [1, 2]) {
+          if (game.figurePositions?.[pn]?.[targetFk]) { targetPlayerNum = pn; break; }
+        }
+        if (hits > 0 && targetPlayerNum) {
+          let targetMsgId = null;
+          for (const [mId, mMeta] of dcMessageMeta) {
+            if (mMeta.gameId !== gameId || mMeta.playerNum !== targetPlayerNum || mMeta.dcName !== targetDcName) continue;
+            targetMsgId = mId;
+            break;
+          }
+          if (targetMsgId) {
+            const fkMatch = targetFk.match(/-(\d+)-(\d+)$/);
+            const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+            const res = reduceHp(dcHealthState, game, targetMsgId, figIdx, hits, targetPlayerNum);
+            resultParts.push(`${hits} Damage to **${targetDcName}** (HP: ${res.prevHp} -> ${res.newHp})`);
+          } else {
+            resultParts.push(`Apply ${hits} Damage to **${targetDcName}** manually`);
+          }
+        }
+        // SMALL push check: if target is SMALL, offer space picker for push
+        const targetKws = getDcKeywords(game)?.[targetDcName] || [];
+        const isSmall = !targetKws.some(k => /large|massive/i.test(String(k)));
+        if (isSmall && hits > 0) {
+          const _waMapId = game.selectedMap?.id;
+          const _waMs = _waMapId ? getMapSpaces(_waMapId) : null;
+          const _waDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+          const _waSelfFk = `${meta.dcName}-${_waDgIndex}-0`;
+          const _waSelfPos = game.figurePositions?.[meta.playerNum]?.[_waSelfFk];
+          if (_waSelfPos && _waMs) {
+            const adjSpaces = _waMs.adjacency?.[String(_waSelfPos).toLowerCase()] || [];
+            const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean).map(s => String(s).toLowerCase()));
+            const targetCurPos = game.figurePositions?.[targetPlayerNum]?.[targetFk];
+            const validPushSpaces = adjSpaces.filter(s => {
+              const sl = String(s).toLowerCase();
+              return !occupiedSet.has(sl) || (targetCurPos && sl === String(targetCurPos).toLowerCase());
+            });
+            if (validPushSpaces.length > 0) {
+              // Store pending push state
+              game.pendingWookSlamPush = { targetFk, targetPlayerNum, gameId, msgId };
+              const spaceBtns = validPushSpaces.slice(0, 4).map(s =>
+                new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_wookslamspace_${String(s).toLowerCase()}`).setLabel(String(s).toUpperCase()).setStyle(ButtonStyle.Primary)
+              );
+              spaceBtns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_wookslamspace_skip`).setLabel('Skip push').setStyle(ButtonStyle.Secondary));
+              await interaction.message.edit({ content: `**Wookiee Avenger Slam** — ${resultParts.join('. ')}. Push **${targetDcName}** to which space?`, components: [new ActionRowBuilder().addComponents(spaceBtns)] }).catch(discordCatch);
+              await logGameAction?.(game, client, `**Wookiee Avenger Slam** — Rolled ${diceResult} against ${targetDcName}. Push pending.`, { phase: 'ACTIVATION', icon: 'activate' });
+              saveGames();
+              return; // Don't save again at the end
+            }
+          }
+        }
+        await interaction.message.edit({ content: `**Wookiee Avenger Slam** — Target: **${targetDcName}**. ${resultParts.join('. ')}.`, components: [] }).catch(discordCatch);
+        await logGameAction?.(game, client, `**Wookiee Avenger Slam** — Rolled ${diceResult} against ${targetDcName}.`, { phase: 'ACTIVATION', icon: 'activate' });
+      }
+    }
+  // --- Wookiee Avenger Slam push space chosen ---
+  } else if (ability === 'wookslamspace') {
+    const pending = game.pendingWookSlamPush;
+    if (!pending) {
+      await interaction.message.edit({ content: `**Wookiee Avenger Slam** — No pending push.`, components: [] }).catch(discordCatch);
+    } else if (choice === 'skip') {
+      delete game.pendingWookSlamPush;
+      await interaction.message.edit({ content: `**Wookiee Avenger Slam** — Push skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const { targetFk, targetPlayerNum } = pending;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      const chosenSpace = String(choice).toLowerCase();
+      game.figurePositions = game.figurePositions || {};
+      game.figurePositions[targetPlayerNum] = game.figurePositions[targetPlayerNum] || {};
+      game.figurePositions[targetPlayerNum][targetFk] = chosenSpace;
+      delete game.pendingWookSlamPush;
+      await interaction.message.edit({ content: `**Wookiee Avenger Slam** — Pushed **${targetDcName}** to **${chosenSpace.toUpperCase()}**.`, components: [] }).catch(discordCatch);
+      await logGameAction?.(game, client, `**Wookiee Avenger Slam** — Pushed **${targetDcName}** to **${chosenSpace.toUpperCase()}**.`, { phase: 'ACTIVATION', icon: 'move' });
     }
   // --- Durasteel Fist: roll 1 green die on adjacent target ---
   } else if (ability === 'durasteelfist') {

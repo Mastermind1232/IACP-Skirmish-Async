@@ -7,7 +7,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getMapSpaces, getCcEffectsData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, getRange as _getRange } from '../game/spatial.js';
-import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp, applyCondition, resetCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
   getCcHand, getActivatedDcIndices,
@@ -138,19 +138,78 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     return;
   }
 
+  // ── Under Duress detection (M79-M80) ──
+  // Check if the opponent has [Under Duress] in their army (standalone SU DC card).
+  const _udOpponentNum = 3 - playerNum;
+  const _udDcList = getDcList(game, _udOpponentNum) || [];
+  const _udMsgIds = getDcMessageIds(game, _udOpponentNum) || [];
+  const _udDepletedIds = _udOpponentNum === 1 ? (game.p1DepletedDcMessageIds || []) : (game.p2DepletedDcMessageIds || []);
+  let _udActive = false;   // passive: each CC discard costs 2 CCs instead of 1
+  let _udCanDeplete = false; // deplete available: opponent can take over the choice
+  let _udDepleteMsgId = null;
+  for (let _udIdx = 0; _udIdx < _udDcList.length; _udIdx++) {
+    const _udDc = _udDcList[_udIdx];
+    const _udDcName = typeof _udDc === 'object' ? (_udDc.dcName || _udDc.displayName) : _udDc;
+    if (_udDcName !== '[Under Duress]') continue;
+    _udActive = true;
+    const _udMid = _udMsgIds[_udIdx];
+    if (_udMid && !_udDepletedIds.includes(_udMid)) {
+      _udCanDeplete = true;
+      _udDepleteMsgId = _udMid;
+    }
+    break;
+  }
+
   // ── Strain choice: player may discard CCs from hand instead of taking HP damage ──
   // Headhunter damage is always HP damage (not strain), so only `amount` can be allocated to CC discards.
   const ownerHand = getCcHand(game, playerNum) || [];
-  if (amount > 0 && ownerHand.length > 0) {
+  // Under Duress passive: each CC discard costs 2 CCs instead of 1
+  const ccCostPerStrain = _udActive ? 2 : 1;
+  const maxDiscards = amount > 0 ? Math.min(amount, Math.floor(ownerHand.length / ccCostPerStrain)) : 0;
+  if (amount > 0 && ownerHand.length > 0 && maxDiscards > 0) {
     // Player has CCs — offer the choice
     const ownerId = getPlayerId(game, playerNum);
-    const maxDiscards = Math.min(amount, ownerHand.length);
     // Save pending state so the button handler can finish resolution
     game.pendingStrainChoice = {
       figureKey, playerNum, amount, headhunterDmg,
       abilityLabel, sourceLabel, dcName, msgId, figureIndex,
       threadId: thread.id, discardedCount: 0,
+      underDuressActive: _udActive,
+      ccCostPerStrain,
     };
+    // Apply headhunter direct damage immediately (it's not strain — no choice)
+    if (headhunterDmg > 0) {
+      reduceHp(dcHealthState, game, msgId, figureIndex, headhunterDmg, playerNum);
+      await thread.send(`**${abilityLabel}** — **${dcName}** suffers ${headhunterDmg} Damage from Headhunter.`).catch(discordCatch);
+    }
+
+    // Under Duress deplete: opponent can take control of the strain choice
+    if (_udCanDeplete) {
+      game.pendingStrainChoice.underDuressDepleteMsgId = _udDepleteMsgId;
+      game.pendingStrainChoice.underDuressOpponentNum = _udOpponentNum;
+      const udOwnerId = getPlayerId(game, _udOpponentNum);
+      const udBtns = [
+        new ButtonBuilder()
+          .setCustomId(`ud_deplete_use_${game.gameId}`)
+          .setLabel('Deplete Under Duress (take control)')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`ud_deplete_skip_${game.gameId}`)
+          .setLabel('Skip')
+          .setStyle(ButtonStyle.Secondary),
+      ];
+      await thread.send({
+        content: `**[Under Duress]** — <@${udOwnerId}>, **${dcName}** (opponent) suffers ${amount} Strain from **${abilityLabel}**.`
+          + ` You may **deplete** Under Duress to resolve strain choices for your opponent (each CC discard costs 2 CCs).`,
+        components: [new ActionRowBuilder().addComponents(udBtns)],
+        allowedMentions: { users: [udOwnerId] },
+      }).catch(discordCatch);
+      // Don't show strain choice yet — wait for UD owner's decision
+      return;
+    }
+
+    // No deplete available — show strain choice to figure owner directly
+    const udNote = _udActive ? ' (**Under Duress**: each CC discard costs 2 CCs)' : '';
     const btns = [
       new ButtonBuilder()
         .setCustomId(`strain_choice_alldmg_${game.gameId}`)
@@ -160,10 +219,11 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     // Offer individual CC discard buttons for each point of strain (up to CCs available)
     for (let i = 1; i <= maxDiscards; i++) {
       const hpRemaining = amount - i;
+      const ccCost = i * ccCostPerStrain;
       btns.push(
         new ButtonBuilder()
           .setCustomId(`strain_choice_discard_${game.gameId}_${i}`)
-          .setLabel(`Discard ${i} CC${i > 1 ? 's' : ''}${hpRemaining > 0 ? ` + ${hpRemaining} HP` : ''}`)
+          .setLabel(`Discard ${ccCost} CC${ccCost > 1 ? 's' : ''}${hpRemaining > 0 ? ` + ${hpRemaining} HP` : ''}`)
           .setStyle(ButtonStyle.Primary),
       );
     }
@@ -175,15 +235,10 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     await thread.send({
       content: `**Strain** — <@${ownerId}>, **${dcName}** suffers ${amount} Strain from **${abilityLabel}** (${sourceLabel}).`
         + ` You have ${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''} in hand.`
-        + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from hand.`,
+        + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from hand.${udNote}`,
       components: rows,
       allowedMentions: { users: [ownerId] },
     }).catch(discordCatch);
-    // Apply headhunter direct damage immediately (it's not strain — no choice)
-    if (headhunterDmg > 0) {
-      reduceHp(dcHealthState, game, msgId, figureIndex, headhunterDmg, playerNum);
-      await thread.send(`**${abilityLabel}** — **${dcName}** suffers ${headhunterDmg} Damage from Headhunter.`).catch(discordCatch);
-    }
     // Don't apply strain HP damage yet — wait for player's choice
     return;
   }
@@ -360,7 +415,9 @@ export async function handleStrainChoice(interaction, ctx) {
     await interaction.followUp({ content: 'No pending strain choice found.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the figure owner may choose.')) return;
+  // Under Duress deplete: if active, the UD owner controls the choice, not the figure owner
+  const _udController = pending.underDuressControllerPlayerNum || pending.playerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, _udController, canActAsPlayer, _udController !== pending.playerNum ? 'Only the Under Duress owner may choose.' : 'Only the figure owner may choose.')) return;
 
   // Edit the choice message to remove buttons
   await interaction.message.edit({ components: [] }).catch(discordCatch);
@@ -402,8 +459,11 @@ export async function handleStrainChoice(interaction, ctx) {
  */
 async function sendStrainCcPickButtons(game, pending, thread) {
   const hand = getCcHand(game, pending.playerNum) || [];
+  const ccCostPerStrain = pending.ccCostPerStrain || 1;
   const remaining = pending.discardTarget - pending.discardedCount;
-  const ownerId = getPlayerId(game, pending.playerNum);
+  // Under Duress deplete: if UD owner controls, address them instead
+  const _controlPn = pending.underDuressControllerPlayerNum || pending.playerNum;
+  const ownerId = getPlayerId(game, _controlPn);
   // Deduplicate hand for button labels but track indices
   const uniqueCards = [...new Set(hand)];
   const btns = uniqueCards.slice(0, 25).map((cardName) =>
@@ -417,7 +477,7 @@ async function sendStrainCcPickButtons(game, pending, thread) {
     rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
   }
   await thread.send({
-    content: `**Strain** — <@${ownerId}>, pick a CC to discard (${remaining} remaining). Hand: ${hand.length} card${hand.length > 1 ? 's' : ''}.`,
+    content: `**Strain** — <@${ownerId}>, pick a CC to discard (${remaining} strain point${remaining > 1 ? 's' : ''} remaining, ${ccCostPerStrain} CC${ccCostPerStrain > 1 ? 's' : ''} each). Hand: ${hand.length} card${hand.length > 1 ? 's' : ''}.`,
     components: rows,
     allowedMentions: { users: [ownerId] },
   }).catch(discordCatch);
@@ -441,7 +501,9 @@ export async function handleStrainCcPick(interaction, ctx) {
     await interaction.followUp({ content: 'No pending strain choice found.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the figure owner may choose.')) return;
+  // Under Duress deplete: if active, the UD owner controls the choice
+  const _udCtrl = pending.underDuressControllerPlayerNum || pending.playerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, _udCtrl, canActAsPlayer, _udCtrl !== pending.playerNum ? 'Only the Under Duress owner may choose.' : 'Only the figure owner may choose.')) return;
 
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
@@ -452,7 +514,8 @@ export async function handleStrainCcPick(interaction, ctx) {
     return;
   }
 
-  // Discard the CC from hand
+  // Discard CCs from hand (Under Duress: 2 per strain point, otherwise 1)
+  const ccCost = pending.ccCostPerStrain || 1;
   const handKey = ccHandKey(pending.playerNum);
   const hand = game[handKey] || [];
   const cardIdx = hand.indexOf(cardName);
@@ -465,21 +528,33 @@ export async function handleStrainCcPick(interaction, ctx) {
     saveGames();
     return;
   }
+  // Discard the chosen CC first
   hand.splice(cardIdx, 1);
   const discKey = ccDiscardKey(pending.playerNum);
   game[discKey] = game[discKey] || [];
   game[discKey].push(cardName);
+  const extraDiscards = [];
+  // Under Duress: discard additional CCs (ccCost - 1 more) from hand
+  for (let _udPick = 1; _udPick < ccCost; _udPick++) {
+    if (hand.length === 0) break;
+    // Discard from top of hand (first available)
+    const extraCard = hand.shift();
+    game[discKey].push(extraCard);
+    extraDiscards.push(extraCard);
+  }
   pending.discardedCount += 1;
 
-  await thread.send(`**Strain** — **${pending.dcName}** discards **${cardName}** instead of 1 HP damage.`).catch(discordCatch);
+  const extraMsg = extraDiscards.length > 0 ? ` (+ ${extraDiscards.map(c => '**' + c + '**').join(', ')} from Under Duress)` : '';
+  await thread.send(`**Strain** — **${pending.dcName}** discards **${cardName}**${extraMsg} instead of 1 HP damage.`).catch(discordCatch);
   if (ctx.logGameAction) {
-    await ctx.logGameAction(game, client, `**Strain Choice** — **${pending.dcName}** discards **${cardName}** instead of 1 Strain damage.`, { phase: 'ROUND', icon: 'card' });
+    const _logExtra = extraDiscards.length > 0 ? ` (+ ${extraDiscards.join(', ')} from Under Duress)` : '';
+    await ctx.logGameAction(game, client, `**Strain Choice** — **${pending.dcName}** discards **${cardName}**${_logExtra} instead of 1 Strain damage.`, { phase: 'ROUND', icon: 'card' });
   }
 
   if (pending.discardedCount < pending.discardTarget) {
     // More CCs to discard — show next pick
     const remainingHand = getCcHand(game, pending.playerNum) || [];
-    if (remainingHand.length === 0) {
+    if (remainingHand.length < ccCost) {
       // Ran out of CCs — apply rest as damage
       const hpDmg = pending.amount - pending.discardedCount;
       const pendingCopy = { ...pending };
@@ -498,6 +573,151 @@ export async function handleStrainCcPick(interaction, ctx) {
     } else {
       await thread.send(`**Strain** — All ${pending.amount} Strain resolved via CC discard${pending.amount > 1 ? 's' : ''}.`).catch(discordCatch);
     }
+  }
+  saveGames();
+}
+
+// ── Under Duress deplete handler (M79-M80) ──────────────────────────────────
+// ud_deplete_use_{gameId} / ud_deplete_skip_{gameId}
+// Opponent of the straining figure decides whether to deplete Under Duress.
+export async function handleUnderDuress(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames, client } = ctx;
+  const customId = interaction.customId;
+  const isUse = customId.startsWith('ud_deplete_use_');
+  const prefix = isUse ? 'ud_deplete_use_' : 'ud_deplete_skip_';
+  const gameId = customId.replace(prefix, '');
+
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const pending = game.pendingStrainChoice;
+  if (!pending) {
+    await interaction.followUp({ content: 'No pending strain choice found.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const udOwnerNum = pending.underDuressOpponentNum;
+  if (!udOwnerNum) {
+    await interaction.followUp({ content: 'No Under Duress prompt pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, udOwnerNum, canActAsPlayer, 'Only the Under Duress owner may decide.')) return;
+
+  // Remove the UD prompt buttons
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  const thread = await client.channels.fetch(pending.threadId).catch(() => null);
+  if (!thread) {
+    delete game.pendingStrainChoice;
+    saveGames();
+    return;
+  }
+
+  if (isUse) {
+    // Deplete Under Duress — mark as depleted
+    const udMsgId = pending.underDuressDepleteMsgId;
+    if (udMsgId) {
+      const depKey = udOwnerNum === 1 ? 'p1DepletedDcMessageIds' : 'p2DepletedDcMessageIds';
+      game[depKey] = game[depKey] || [];
+      if (!game[depKey].includes(udMsgId)) game[depKey].push(udMsgId);
+    }
+    // The UD owner now controls the strain choice
+    pending.underDuressControllerPlayerNum = udOwnerNum;
+    delete pending.underDuressDepleteMsgId;
+    delete pending.underDuressOpponentNum;
+
+    await thread.send(`**[Under Duress]** — Depleted! P${udOwnerNum} now resolves strain choices for **${pending.dcName}**.`).catch(discordCatch);
+    if (ctx.logGameAction) {
+      await ctx.logGameAction(game, client, `**[Under Duress]** — Depleted by P${udOwnerNum}. Controlling strain choice for **${pending.dcName}**.`, { phase: 'ROUND', icon: 'card' });
+    }
+
+    // Show strain choice buttons to the UD owner
+    const controllerId = getPlayerId(game, udOwnerNum);
+    const ownerHand = getCcHand(game, pending.playerNum) || [];
+    const ccCostPerStrain = pending.ccCostPerStrain || 1;
+    const maxDiscards = Math.min(pending.amount, Math.floor(ownerHand.length / ccCostPerStrain));
+
+    if (maxDiscards <= 0) {
+      // No CC discards possible — all damage
+      delete game.pendingStrainChoice;
+      await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
+      saveGames();
+      return;
+    }
+
+    const btns = [
+      new ButtonBuilder()
+        .setCustomId(`strain_choice_alldmg_${gameId}`)
+        .setLabel(`All as Damage (${pending.amount} HP)`)
+        .setStyle(ButtonStyle.Danger),
+    ];
+    for (let i = 1; i <= maxDiscards; i++) {
+      const hpRemaining = pending.amount - i;
+      const ccCost = i * ccCostPerStrain;
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`strain_choice_discard_${gameId}_${i}`)
+          .setLabel(`Discard ${ccCost} CC${ccCost > 1 ? 's' : ''}${hpRemaining > 0 ? ` + ${hpRemaining} HP` : ''}`)
+          .setStyle(ButtonStyle.Primary),
+      );
+    }
+    const rows = [];
+    for (let r = 0; r < btns.length; r += 5) {
+      rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+    }
+    await thread.send({
+      content: `**[Under Duress]** — <@${controllerId}>, choose how **${pending.dcName}** allocates ${pending.amount} Strain:`
+        + ` take HP damage or discard from opponent's hand (${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''}, costs ${ccCostPerStrain} CC${ccCostPerStrain > 1 ? 's' : ''} per strain).`,
+      components: rows,
+      allowedMentions: { users: [controllerId] },
+    }).catch(discordCatch);
+  } else {
+    // Skip — show normal strain choice to figure owner
+    delete pending.underDuressDepleteMsgId;
+    delete pending.underDuressOpponentNum;
+
+    await thread.send(`**[Under Duress]** — Skipped deplete.`).catch(discordCatch);
+
+    const ownerId = getPlayerId(game, pending.playerNum);
+    const ownerHand = getCcHand(game, pending.playerNum) || [];
+    const ccCostPerStrain = pending.ccCostPerStrain || 1;
+    const maxDiscards = Math.min(pending.amount, Math.floor(ownerHand.length / ccCostPerStrain));
+
+    if (maxDiscards <= 0) {
+      // No CC discards possible — all damage
+      delete game.pendingStrainChoice;
+      await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
+      saveGames();
+      return;
+    }
+
+    const udNote = pending.underDuressActive ? ' (**Under Duress**: each CC discard costs 2 CCs)' : '';
+    const btns = [
+      new ButtonBuilder()
+        .setCustomId(`strain_choice_alldmg_${gameId}`)
+        .setLabel(`All as Damage (${pending.amount} HP)`)
+        .setStyle(ButtonStyle.Danger),
+    ];
+    for (let i = 1; i <= maxDiscards; i++) {
+      const hpRemaining = pending.amount - i;
+      const ccCost = i * ccCostPerStrain;
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`strain_choice_discard_${gameId}_${i}`)
+          .setLabel(`Discard ${ccCost} CC${ccCost > 1 ? 's' : ''}${hpRemaining > 0 ? ` + ${hpRemaining} HP` : ''}`)
+          .setStyle(ButtonStyle.Primary),
+      );
+    }
+    const rows = [];
+    for (let r = 0; r < btns.length; r += 5) {
+      rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+    }
+    await thread.send({
+      content: `**Strain** — <@${ownerId}>, **${pending.dcName}** suffers ${pending.amount} Strain from **${pending.abilityLabel}** (${pending.sourceLabel}).`
+        + ` You have ${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''} in hand.`
+        + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from hand.${udNote}`,
+      components: rows,
+      allowedMentions: { users: [ownerId] },
+    }).catch(discordCatch);
   }
   saveGames();
 }
@@ -1290,7 +1510,7 @@ export async function handleAttackTarget(interaction, ctx) {
   // Distracting (Han Solo, C-3PO): if this figure is adjacent to the targeted space, +1 Evade for defender
   // "Friendly figure defending" — check if any friendly figure with distracting is adjacent to target.coord
   const distractingIds = ['distracting_han', 'distracting_c3po'];
-  const mapSpaces = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+  const mapSpaces = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap.id)) : null;
   const targetCoord = target.coord ? String(target.coord).toLowerCase() : null;
   if (mapSpaces && targetCoord) {
     const adjToTarget = new Set((mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase()));
@@ -1946,6 +2166,40 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
+  // Force Exhaustion (The Child / Clan of Two): when attack targets The Child or a figure with Clan of Two,
+  // The Child's owner may choose to incapacitate The Child to remove 1 attack die and Weaken the attacker.
+  {
+    // Check if the target is The Child or has "Clan of Two" attachment
+    const _feTargetIsChild = targetDcName === 'The Child';
+    const _feDefMsgId = target.isNpc ? null : (findDcMessageIdForFigure?.(game.gameId, defenderPlayerNum, target.figureKey) || null);
+    const _feDefUpgrades = _feDefMsgId ? (game.p1DcAttachments?.[_feDefMsgId] || game.p2DcAttachments?.[_feDefMsgId] || []) : [];
+    const _feTargetHasClanOfTwo = _feDefUpgrades.includes('Clan of Two');
+    if (_feTargetIsChild || _feTargetHasClanOfTwo) {
+      // Find The Child on the defender's side — must be alive (in figurePositions) and not already incapacitated
+      const _feDefPositions = game.figurePositions?.[defenderPlayerNum] || {};
+      let _feChildFigureKey = null;
+      for (const fk of Object.keys(_feDefPositions)) {
+        if (dcNameFromFigureKey(fk) === 'The Child') { _feChildFigureKey = fk; break; }
+      }
+      if (_feChildFigureKey && !game.childIncapacitated) {
+        const defOwnerId = getPlayerId(game, defenderPlayerNum);
+        game.pendingForceExhaustion = {
+          gameId: game.gameId,
+          defenderPlayerNum,
+          attackerPlayerNum,
+          attackerFigureKey,
+          childFigureKey: _feChildFigureKey,
+          combatThreadId: thread.id,
+        };
+        const feRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`force_exhaustion_yes_${game.gameId}`).setLabel('Use Force Exhaustion (Incapacitate The Child)').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId(`force_exhaustion_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send({ content: `<@${defOwnerId}> **Force Exhaustion** — The Child may become **Incapacitated** to remove 1 attack die and apply **Weakened** to the attacker. Use this ability?`, components: [feRow], allowedMentions: { users: [defOwnerId] } });
+      }
+    }
+  }
+
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
   if (nextPierce) delete game.nextAttackBonusPierce?.[attackerPlayerNum];
   if (nextBonusAcc) delete game.nextAttackBonusAccuracy?.[attackerPlayerNum];
@@ -2336,7 +2590,7 @@ export async function handleCombatRoll(interaction, ctx) {
         const atkKwsCH = (atkEffR?.keywords || []).map(k => String(k).toUpperCase());
         if (atkKwsCH.includes('HUNTER')) {
           const chFigs = game.figurePositions?.[attackerPlayerNum] || {};
-          const chMapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+          const chMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap.id)) : null;
           const chAtkPos = chFigs[combat.attackerFigureKey];
           if (chAtkPos && chMapSp && ctx.hasLineOfSight) {
             for (const [fk, pos] of Object.entries(chFigs)) {
@@ -2355,7 +2609,7 @@ export async function handleCombatRoll(interaction, ctx) {
     // Light It Up (Rebel Pathfinder Elite): +1 atk reroll if target had no LOS to attacker at activation start
     if (atkSIds.includes('light_it_up_rebel_pathfinder')) {
       const liuStartPos = game.activationStartPositions?.[combat.attackerFigureKey];
-      const liuMapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const liuMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap.id)) : null;
       if (liuStartPos && combat.target?.coord && liuMapSp && ctx.hasLineOfSight) {
         const targetHadLos = ctx.hasLineOfSight(String(combat.target.coord).toLowerCase(), String(liuStartPos).toLowerCase(), liuMapSp);
         if (!targetHadLos) atkSpecialReroll += 1;
@@ -2371,7 +2625,7 @@ export async function handleCombatRoll(interaction, ctx) {
     // Shared Calculations (Zuckuss): attacker forces 1 def die reroll if friendly DROID within 3 + LOS to target
     if (atkSIds.includes('shared_calculations_zuckuss') && combat.target?.coord) {
       const scFigs = game.figurePositions?.[attackerPlayerNum] || {};
-      const scMapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const scMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap.id)) : null;
       if (scMapSp) {
         for (const [fk, pos] of Object.entries(scFigs)) {
           if (fk === combat.attackerFigureKey) continue;
@@ -3176,8 +3430,68 @@ function getEligibleTokens(game, figureKey, role) {
     .filter(t => allowed.includes(t.type));
 }
 
-/** Sends the spending window with up to 4 token buttons + Skip */
-async function sendTokenWindow(thread, gameId, role, tokens, displayName) {
+/**
+ * Squad Cohesion (Ko-Tun Feralo): gather spendable tokens from nearby friendly REBEL figures.
+ * Returns { cohesionTokens: [{type, index, figureKey, ownerName}], announced: bool }
+ * or null if Squad Cohesion is not active for this combat figure.
+ *
+ * Condition: Ko-Tun must be alive on the same team, the combat figure must be REBEL and
+ * within 3 spaces of Ko-Tun, and donor figures must be REBEL and within 3 spaces of
+ * the combat figure.
+ */
+function getSquadCohesionTokens(game, combat, role) {
+  const combatFigureKey = role === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
+  if (!combatFigureKey) return null;
+  const playerNum = role === 'attacker' ? combat.attackerPlayerNum : (combat.target?.playerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+  const friendlyPos = game.figurePositions?.[playerNum] || {};
+  const combatPos = friendlyPos[combatFigureKey];
+  if (!combatPos) return null;
+
+  const dcEff = getDcEffectsGlobal();
+  const combatDcName = dcNameFromFigureKey(combatFigureKey);
+  const combatEff = dcEff[combatDcName] || dcEff[combatDcName?.replace(/\s*\[.*\]\s*$/, '')];
+  // The combat figure must be a REBEL
+  if (String(combatEff?.affiliation || '').toLowerCase() !== 'rebel') return null;
+
+  const mapSp = getMapSpaces(game.selectedMap?.id);
+  if (!mapSp) return null;
+  const combatPosLc = String(combatPos).toLowerCase();
+
+  // Find Ko-Tun on the same team with squad_cohesion_kotun
+  let koTunInRange = false;
+  for (const [fk, pos] of Object.entries(friendlyPos)) {
+    if (fk === combatFigureKey) continue;
+    const fDcName = dcNameFromFigureKey(fk);
+    const fEff = dcEff[fDcName] || dcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if (!(fEff?.specialAbilityIds || []).includes('squad_cohesion_kotun')) continue;
+    if (isWithinSpaces(mapSp, String(pos).toLowerCase(), combatPosLc, 3)) {
+      koTunInRange = true;
+      break;
+    }
+  }
+  if (!koTunInRange) return null;
+
+  // Gather tokens from friendly REBEL figures within 3 spaces of the combat figure
+  const allowed = role === 'attacker' ? ['Hit', 'Surge', 'Wild'] : ['Block', 'Evade', 'Wild'];
+  const cohesionTokens = [];
+  for (const [fk, pos] of Object.entries(friendlyPos)) {
+    if (fk === combatFigureKey) continue; // skip own tokens (already shown normally)
+    const fDcName = dcNameFromFigureKey(fk);
+    const fEff = dcEff[fDcName] || dcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if (String(fEff?.affiliation || '').toLowerCase() !== 'rebel') continue;
+    if (!isWithinSpaces(mapSp, String(pos).toLowerCase(), combatPosLc, 3)) continue;
+    const tokens = game.figurePowerTokens?.[fk] || [];
+    tokens.forEach((type, index) => {
+      if (allowed.includes(type)) {
+        cohesionTokens.push({ type, index, figureKey: fk, ownerName: fDcName });
+      }
+    });
+  }
+  return cohesionTokens.length > 0 ? { cohesionTokens } : null;
+}
+
+/** Sends the spending window with up to 4 token buttons + Skip, plus optional Squad Cohesion tokens */
+async function sendTokenWindow(thread, gameId, role, tokens, displayName, combat) {
   const prefix = role === 'attacker' ? 'att' : 'def';
   const btns = tokens.slice(0, 4).map(({ type, index }) =>
     new ButtonBuilder()
@@ -3185,15 +3499,40 @@ async function sendTokenWindow(thread, gameId, role, tokens, displayName) {
       .setLabel(type === 'Wild' ? 'Wild (choose type)' : `Spend ${type} (+1 ${type})`)
       .setStyle(ButtonStyle.Secondary)
   );
+
+  // Squad Cohesion: add buttons for tokens from nearby friendly REBEL figures
+  const scTokens = combat?.squadCohesionTokens?.[role] || [];
+  if (scTokens.length > 0) {
+    // Store the mapping on combat so handleCombatToken can look up which figure to deduct from
+    if (!combat.squadCohesionTokenMap) combat.squadCohesionTokenMap = {};
+    scTokens.slice(0, 4).forEach((sc, scIdx) => {
+      const scKey = `${prefix}_sc${scIdx}`;
+      combat.squadCohesionTokenMap[scKey] = { figureKey: sc.figureKey, tokenIndex: sc.index, type: sc.type, ownerName: sc.ownerName };
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`combat_token_${gameId}_${prefix}_sc${scIdx}`)
+          .setLabel(sc.type === 'Wild' ? `Wild from ${sc.ownerName}` : `${sc.type} from ${sc.ownerName}`)
+          .setStyle(ButtonStyle.Success)
+      );
+    });
+  }
+
   btns.push(
     new ButtonBuilder()
       .setCustomId(`combat_token_${gameId}_${prefix}_skip`)
       .setLabel('Skip (no token)')
       .setStyle(ButtonStyle.Primary)
   );
+  // Split into rows of 5 if needed (Discord max 5 buttons per ActionRow)
+  const rows = [];
+  for (let i = 0; i < btns.length; i += 5) {
+    rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+  }
+  let content = `**Power Token — ${role === 'attacker' ? 'Attacker' : 'Defender'}** (${displayName}): spend a token or skip.`;
+  if (scTokens.length > 0) content += '\n*Squad Cohesion (Ko-Tun Feralo): tokens from nearby friendly Rebel figures are also available.*';
   await thread.send({
-    content: `**Power Token — ${role === 'attacker' ? 'Attacker' : 'Defender'}** (${displayName}): spend a token or skip.`,
-    components: [new ActionRowBuilder().addComponents(btns)],
+    content,
+    components: rows,
   });
 }
 
@@ -3244,14 +3583,55 @@ function removeSpentToken(game, figureKey, index) {
   if (game.figurePowerTokens[figureKey].length === 0) delete game.figurePowerTokens[figureKey];
 }
 
+// --- Rogue One token sharing helpers ---
+
+const ROGUE_ONE_FIGURES = ['Baze Malbus', 'Bodhi Rook', 'Cassian Andor', 'Chirrut Imwe', 'Jyn Erso', 'K-2SO'];
+
+/**
+ * Check if Rogue One token sharing is available for the current attacker.
+ * Returns an array of { figureKey, dcName, tokenIndex, tokenType } for eligible donor figures,
+ * or an empty array if not applicable.
+ */
+function getRogueOneDonors(game, combat) {
+  const attackerPlayerNum = combat.attackerPlayerNum;
+  const attackerDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
+  if (!ROGUE_ONE_FIGURES.some(name => attackerDcName.includes(name))) return [];
+  const dcList = getDcList(game, attackerPlayerNum) || [];
+  const hasRogueOne = dcList.some(dc => dc?.dcName?.includes('Rogue One'));
+  if (!hasRogueOne) return [];
+  const friendlyPositions = game.figurePositions?.[attackerPlayerNum] || {};
+  const donors = [];
+  for (const fk of Object.keys(friendlyPositions)) {
+    if (fk === combat.attackerFigureKey) continue;
+    const tokens = game.figurePowerTokens?.[fk] || [];
+    for (let i = 0; i < tokens.length; i++) {
+      donors.push({ figureKey: fk, dcName: dcNameFromFigureKey(fk), tokenIndex: i, tokenType: tokens[i] });
+    }
+  }
+  return donors;
+}
+
+/** Build a single Rogue One button for the surge UI if eligible and donors exist. */
+function buildRogueOneSurgeButton(game, combat) {
+  const donors = getRogueOneDonors(game, combat);
+  if (donors.length === 0) return [];
+  return [
+    new ButtonBuilder()
+      .setCustomId(`combat_surge_${game.gameId}_rogue_one`)
+      .setLabel('Rogue One: +1 Surge (discard ally token)')
+      .setStyle(ButtonStyle.Success)
+  ];
+}
+
 /** Advance to next phase: attacker done → check defender; defender done → proceedAfterTokens */
 async function advanceTokenPhase(thread, game, combat, completedRole, ctx) {
   combat.tokenPhase = null;
   if (completedRole === 'attacker') {
     const defTokens = getEligibleTokens(game, combat.target.figureKey, 'defender');
-    if (defTokens.length > 0) {
+    const hasDefCohesion = (combat.squadCohesionTokens?.defender || []).length > 0;
+    if (defTokens.length > 0 || hasDefCohesion) {
       combat.tokenPhase = 'defender';
-      await sendTokenWindow(thread, game.gameId, 'defender', defTokens, combat.target.label);
+      await sendTokenWindow(thread, game.gameId, 'defender', defTokens, combat.target.label, combat);
       return;
     }
   }
@@ -3738,14 +4118,26 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
 
   const attackerTokens = getEligibleTokens(game, combat.attackerFigureKey, 'attacker');
   const defenderTokens = getEligibleTokens(game, combat.target.figureKey, 'defender');
-  if (!_vagueBlockTokens && attackerTokens.length > 0) {
+
+  // Squad Cohesion (Ko-Tun Feralo): gather cross-figure tokens for attacker and defender
+  if (!_vagueBlockTokens) {
+    combat.squadCohesionTokens = {};
+    const scAtk = getSquadCohesionTokens(game, combat, 'attacker');
+    if (scAtk) combat.squadCohesionTokens.attacker = scAtk.cohesionTokens;
+    const scDef = getSquadCohesionTokens(game, combat, 'defender');
+    if (scDef) combat.squadCohesionTokens.defender = scDef.cohesionTokens;
+  }
+
+  const hasAtkCohesion = (combat.squadCohesionTokens?.attacker || []).length > 0;
+  const hasDefCohesion = (combat.squadCohesionTokens?.defender || []).length > 0;
+  if (!_vagueBlockTokens && (attackerTokens.length > 0 || hasAtkCohesion)) {
     combat.tokenPhase = 'attacker';
-    await sendTokenWindow(thread, game.gameId, 'attacker', attackerTokens, combat.attackerDisplayName);
+    await sendTokenWindow(thread, game.gameId, 'attacker', attackerTokens, combat.attackerDisplayName, combat);
     return;
   }
-  if (!_vagueBlockTokens && defenderTokens.length > 0) {
+  if (!_vagueBlockTokens && (defenderTokens.length > 0 || hasDefCohesion)) {
     combat.tokenPhase = 'defender';
-    await sendTokenWindow(thread, game.gameId, 'defender', defenderTokens, combat.target.label);
+    await sendTokenWindow(thread, game.gameId, 'defender', defenderTokens, combat.target.label, combat);
     return;
   }
   await proceedAfterTokens(thread, game, combat, ctx);
@@ -3848,7 +4240,10 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   const surgeAbilities = getAttackerSurgeAbilities(combat);
   const remaining = totalSurge;
   const affordable = surgeAbilities.filter((key) => ((key?.startsWith?.('double:') ? 2 : (getAbility(key)?.surgeCost ?? 1))) <= remaining);
-  if (totalSurge > 0 && (affordable.length > 0 || combat.attackerConds?.includes('Bleed'))) {
+  // Rogue One: even with 0 surge, show the surge UI if the attacker can gain surge via token sharing
+  const _rogueOneBtns = buildRogueOneSurgeButton(game, combat);
+  const hasRogueOneOption = _rogueOneBtns.length > 0;
+  if ((totalSurge > 0 && (affordable.length > 0 || combat.attackerConds?.includes('Bleed'))) || hasRogueOneOption) {
     combat.surgeRemaining = totalSurge;
     combat.surgeDamage = 0;
     combat.surgePierce = 0;
@@ -3884,6 +4279,8 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
           .setStyle(ButtonStyle.Secondary)
       );
     }
+    // Rogue One: discard a power token from a friendly figure for +1 Surge
+    surgeRows.push(..._rogueOneBtns);
     surgeRows.push(
       new ButtonBuilder()
         .setCustomId(`combat_surge_${game.gameId}_done`)
@@ -3945,14 +4342,15 @@ export async function handleCombatSurge(interaction, ctx) {
   const getAbility = ctx.getAbility || (() => null);
   const resolveSurge = resolveSurgeAbility || parseSurgeEffect;
   const getSurgeLabel = getSurgeAbilityLabel || ((id) => (SURGE_LABELS && SURGE_LABELS[id]) || id);
-  const match = interaction.customId.match(/^combat_surge_([^_]+)_(done|\d+|bleed_prevention)$/);
+  const match = interaction.customId.match(/^combat_surge_([^_]+)_(done|\d+|bleed_prevention|rogue_one)$/);
   if (!match) return;
   const [, gameId, choice] = match;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
-  if (!combat || combat.gameId !== gameId || !combat.surgeRemaining) {
+  // Allow rogue_one even with 0 surgeRemaining (it adds surge)
+  if (!combat || combat.gameId !== gameId || (choice !== 'rogue_one' && !combat.surgeRemaining)) {
     await interaction.followUp({ content: 'No surge step or already resolved.', ephemeral: true }).catch(discordCatch);
     return;
   }
@@ -3964,7 +4362,40 @@ export async function handleCombatSurge(interaction, ctx) {
   const getDcEffS = ctx.getDcEffects || (() => ({}));
   const atkEffS = getDcEffS()[combat.attackerDcName] || getDcEffS()[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
   const overloadActive = (atkEffS?.specialAbilityIds || []).includes('overload_saboteur');
-  if (choice === 'bleed_prevention') {
+  if (choice === 'rogue_one') {
+    // Rogue One: show a picker for which friendly figure's token to discard
+    const donors = getRogueOneDonors(game, combat);
+    if (donors.length === 0) {
+      await thread.send('**Rogue One** — No friendly figures with power tokens available.').catch(discordCatch);
+    } else {
+      game.pendingRogueOneTokenPick = { gameId, combatThreadId: combat.combatThreadId, attackerPlayerNum: combat.attackerPlayerNum };
+      const btns = [];
+      // Group by figure and show one button per token
+      for (let d = 0; d < donors.length && d < 20; d++) {
+        const donor = donors[d];
+        btns.push(
+          new ButtonBuilder()
+            .setCustomId(`rogue_one_token_${gameId}_${donor.figureKey}_${donor.tokenIndex}`)
+            .setLabel(`${donor.dcName}: ${donor.tokenType}`.slice(0, 80))
+            .setStyle(ButtonStyle.Danger)
+        );
+      }
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`rogue_one_token_${gameId}_skip`)
+          .setLabel('Cancel')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      const rows = [];
+      for (let r = 0; r < btns.length; r += 5) rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+      await thread.send({
+        content: '**Rogue One** — Choose a power token to discard from a friendly figure for **+1 Surge**:',
+        components: rows,
+      }).catch(discordCatch);
+      saveGames();
+      return; // wait for player to pick a token
+    }
+  } else if (choice === 'bleed_prevention') {
     combat.surgeRemaining = Math.max(0, (combat.surgeRemaining || 0) - 1);
     combat.surgePreventBleed = true;
     await thread.send('Spent 1 surge — Bleeding will be prevented this activation.').catch(discordCatch);
@@ -4064,30 +4495,20 @@ export async function handleCombatSurge(interaction, ctx) {
       }
       // Power token grants to attacker's figurePowerTokens
       if ((mod.surgeGrantHitToken || 0) > 0 && combat.attackerFigureKey) {
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[combat.attackerFigureKey] = game.figurePowerTokens[combat.attackerFigureKey] || [];
-        for (let _i = 0; _i < mod.surgeGrantHitToken; _i++) game.figurePowerTokens[combat.attackerFigureKey].push('Hit');
+        grantPowerTokens(game, combat.attackerFigureKey, 'Hit', mod.surgeGrantHitToken);
       }
       if ((mod.surgeGrantBlockToken || 0) > 0 && combat.attackerFigureKey) {
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[combat.attackerFigureKey] = game.figurePowerTokens[combat.attackerFigureKey] || [];
-        for (let _i = 0; _i < mod.surgeGrantBlockToken; _i++) game.figurePowerTokens[combat.attackerFigureKey].push('Block');
+        grantPowerTokens(game, combat.attackerFigureKey, 'Block', mod.surgeGrantBlockToken);
       }
       if ((mod.surgeGrantPowerToken || 0) > 0 && combat.attackerFigureKey) {
         const figName = dcNameFromFigureKey(combat.attackerFigureKey);
         game.pendingPowerTokenGrant = { grants: [{ figureKey: combat.attackerFigureKey, figName, count: mod.surgeGrantPowerToken }], channelId: null, playerNum: combat.attackerPlayerNum };
       }
       if ((mod.surgeGrantEvade || 0) > 0 && combat.attackerFigureKey) {
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[combat.attackerFigureKey] = game.figurePowerTokens[combat.attackerFigureKey] || [];
-        const _evMax = getMaxPowerTokens(combat.attackerFigureKey);
-        for (let _i = 0; _i < mod.surgeGrantEvade; _i++) { if (game.figurePowerTokens[combat.attackerFigureKey].length < _evMax) game.figurePowerTokens[combat.attackerFigureKey].push('Evade'); }
+        grantPowerTokens(game, combat.attackerFigureKey, 'Evade', mod.surgeGrantEvade);
       }
       if ((mod.surgeAttackerBlock || 0) > 0 && combat.attackerFigureKey) {
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[combat.attackerFigureKey] = game.figurePowerTokens[combat.attackerFigureKey] || [];
-        const _blMax = getMaxPowerTokens(combat.attackerFigureKey);
-        for (let _i = 0; _i < mod.surgeAttackerBlock; _i++) { if (game.figurePowerTokens[combat.attackerFigureKey].length < _blMax) game.figurePowerTokens[combat.attackerFigureKey].push('Block'); }
+        grantPowerTokens(game, combat.attackerFigureKey, 'Block', mod.surgeAttackerBlock);
       }
       // Surge-for-surge: add back to remaining before the cost decrement below
       if ((mod.surgeGrantExtraSurge || 0) > 0) {
@@ -4212,6 +4633,8 @@ export async function handleCombatSurge(interaction, ctx) {
           .setStyle(ButtonStyle.Secondary)
       );
     }
+    // Rogue One: discard a power token from a friendly figure for +1 Surge
+    surgeRows.push(...buildRogueOneSurgeButton(game, combat));
     surgeRows.push(
       new ButtonBuilder()
         .setCustomId(`combat_surge_${gameId}_done`)
@@ -4253,10 +4676,19 @@ export async function handleCombatToken(interaction, ctx) {
     const resolvedType = typeMap[choice];
     if (!resolvedType) return;
     applyTokenBonus(combat, resolvedType);
-    const figKey = combat.pendingWildRole === 'attacker' ? combat.attackerFigureKey : combat.target.figureKey;
+    // Squad Cohesion: if the Wild token came from a cohesion source, use that figure key
+    const figKey = combat.pendingWildCohesionFigureKey
+      || (combat.pendingWildRole === 'attacker' ? combat.attackerFigureKey : combat.target.figureKey);
+    const isCohesion = !!combat.pendingWildCohesionFigureKey;
+    const cohesionOwner = combat.pendingWildCohesionOwnerName || '';
     removeSpentToken(game, figKey, combat.pendingWildTokenIndex);
-    await thread.send(`**Power Token spent:** Wild → +1 ${resolvedType}`);
-    logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${combat.pendingWildRole === 'attacker' ? 'Attacker' : 'Defender'}: Wild → +1 ${resolvedType}`, { phase: 'ROUND', icon: 'attack' });
+    if (isCohesion) {
+      await thread.send(`**Power Token spent (Squad Cohesion):** Wild → +1 ${resolvedType} (from ${cohesionOwner})`);
+      logGameAction?.(game, interaction.client, `🎯 **Power Token spent (Squad Cohesion)** — ${combat.pendingWildRole === 'attacker' ? 'Attacker' : 'Defender'}: Wild → +1 ${resolvedType} from ${cohesionOwner}`, { phase: 'ROUND', icon: 'attack' });
+    } else {
+      await thread.send(`**Power Token spent:** Wild → +1 ${resolvedType}`);
+      logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${combat.pendingWildRole === 'attacker' ? 'Attacker' : 'Defender'}: Wild → +1 ${resolvedType}`, { phase: 'ROUND', icon: 'attack' });
+    }
     // Track attacker Power Token spending for Pulse Cannon (Iden Versio)
     if (combat.pendingWildRole === 'attacker') combat.attackerSpentPowerToken = true;
     // Track defender modifications for Quick Strike (Electrostaff loadout)
@@ -4275,6 +4707,8 @@ export async function handleCombatToken(interaction, ctx) {
     const completedRole = combat.pendingWildRole;
     combat.pendingWildRole = null;
     combat.pendingWildTokenIndex = null;
+    combat.pendingWildCohesionFigureKey = null;
+    combat.pendingWildCohesionOwnerName = null;
     await advanceTokenPhase(thread, game, combat, completedRole, ctx);
     saveGames();
     return;
@@ -4290,6 +4724,45 @@ export async function handleCombatToken(interaction, ctx) {
   // Skip
   if (choice === 'skip') {
     await thread.send(`**Power Token — ${isAttacker ? 'Attacker' : 'Defender'}:** No token spent.`);
+    await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);
+    saveGames();
+    return;
+  }
+
+  // Squad Cohesion: spend a token from a nearby friendly REBEL figure
+  if (choice.startsWith('sc')) {
+    const scKey = `${role}_${choice}`;
+    const scEntry = combat.squadCohesionTokenMap?.[scKey];
+    if (!scEntry) return;
+    const scTokens = game.figurePowerTokens?.[scEntry.figureKey] || [];
+    const scTokenType = scTokens[scEntry.tokenIndex];
+    if (!scTokenType) return;
+    // Wild: prompt for type selection, store the cohesion source info
+    if (scTokenType === 'Wild') {
+      combat.pendingWildRole = expectedPhase;
+      combat.pendingWildTokenIndex = scEntry.tokenIndex;
+      combat.pendingWildCohesionFigureKey = scEntry.figureKey;
+      combat.pendingWildCohesionOwnerName = scEntry.ownerName;
+      await sendWildTypeWindow(thread, game.gameId, expectedPhase);
+      saveGames();
+      return;
+    }
+    applyTokenBonus(combat, scTokenType);
+    removeSpentToken(game, scEntry.figureKey, scEntry.tokenIndex);
+    await thread.send(`**Power Token spent (Squad Cohesion):** +1 ${scTokenType} (from ${scEntry.ownerName})`);
+    logGameAction?.(game, interaction.client, `🎯 **Power Token spent (Squad Cohesion)** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${scTokenType} from ${scEntry.ownerName}`, { phase: 'ROUND', icon: 'attack' });
+    if (isAttacker) combat.attackerSpentPowerToken = true;
+    if (!isAttacker) combat.defenderRerolledOrModified = true;
+    if (!isAttacker && scTokenType === 'Block') combat.defenderSpentBlock = true;
+    if (!isAttacker && scTokenType === 'Block') {
+      const _pcsDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+      const _pcsDefDcName = dcNameFromFigureKey(combat.target?.figureKey || '');
+      const _pcsDefEff = _pcsDcEff[_pcsDefDcName] || _pcsDcEff[(_pcsDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+      if ((_pcsDefEff?.specialAbilityIds || []).includes('personal_combat_shield_gar_saxon')) {
+        combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+        await thread.send('**Personal Combat Shield** — Gar Saxon spent a Block token: +1 Evade.');
+      }
+    }
     await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);
     saveGames();
     return;
@@ -4480,18 +4953,20 @@ export async function handlePowerTokenChoice(interaction, ctx) {
   game.figurePowerTokens = game.figurePowerTokens || {};
   const lines = [];
   for (const { figureKey, figName, count } of grants) {
-    game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
-    const maxTokens = getMaxPowerTokens(figureKey);
-    let added = 0;
-    for (let i = 0; i < count; i++) {
-      if (game.figurePowerTokens[figureKey].length < maxTokens) { game.figurePowerTokens[figureKey].push(type); added++; }
-    }
-    lines.push(`${figName}: ${added > 1 ? `${added}× ` : ''}**${type}**`);
+    grantPowerTokens(game, figureKey, type, count);
+    lines.push(`${figName}: ${count > 1 ? `${count}× ` : ''}**${type}**`);
   }
   game.pendingPowerTokenGrant = null;
   if (channelId) {
     const ch = await interaction.client.channels.fetch(channelId).catch(() => null);
-    if (ch) await ch.send(`**Power Token(s) granted:** ${lines.join(', ')}`).catch(discordCatch);
+    if (ch) {
+      await ch.send(`**Power Token(s) granted:** ${lines.join(', ')}`).catch(discordCatch);
+      // Check for overflow and prompt discard if needed
+      if (game.pendingPowerTokenOverflow?.length > 0) {
+        await sendPowerTokenOverflowUI(game, gameId, ch, playerNum, saveGames);
+        return; // wait for overflow resolution before continuing
+      }
+    }
   }
   // If we're mid-surge and there are still surges remaining, continue the surge flow
   const combat = game.pendingCombat;
@@ -4519,6 +4994,8 @@ export async function handlePowerTokenChoice(interaction, ctx) {
         const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
         surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_${i}`).setLabel(btnLabel.slice(0, 80)).setStyle(ButtonStyle.Secondary));
       }
+      // Rogue One: discard a power token from a friendly figure for +1 Surge
+      surgeRows.push(...buildRogueOneSurgeButton(game, combat));
       surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
       const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
       await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch(discordCatch);
@@ -4582,6 +5059,8 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
     if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed) {
       surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_bleed_prevention`).setLabel('Spend 1 Surge — Prevent Bleed').setStyle(ButtonStyle.Secondary));
     }
+    // Rogue One: discard a power token from a friendly figure for +1 Surge
+    surgeRows.push(...buildRogueOneSurgeButton(game, combat));
     surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
     const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
     await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch(discordCatch);
@@ -4589,6 +5068,116 @@ export async function handleSpreadThePainCondPick(interaction, ctx) {
     await sendReadyToResolveRolls(thread, gameId);
   }
   saveGames();
+}
+
+/**
+ * Handle Rogue One token pick: player selects which friendly figure's power token to discard.
+ * Custom ID: rogue_one_token_{gameId}_{figureKey}_{tokenIndex}  or  rogue_one_token_{gameId}_skip
+ */
+export async function handleRogueOneTokenPick(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames } = ctx;
+  const customId = interaction.customId;
+  // Parse: rogue_one_token_{gameId}_skip  OR  rogue_one_token_{gameId}_{figureKey}_{tokenIndex}
+  const skipMatch = customId.match(/^rogue_one_token_([^_]+)_skip$/);
+  if (skipMatch) {
+    const [, gameId] = skipMatch;
+    const game = await requireGame(interaction, getGame, gameId, { silent: true });
+    if (!game) return;
+    delete game.pendingRogueOneTokenPick;
+    const combat = game.pendingCombat;
+    if (!combat) return;
+    const thread = await interaction.client.channels.fetch(combat.combatThreadId).catch(() => null);
+    if (!thread) { saveGames(); return; }
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    await thread.send('**Rogue One** — Cancelled, no token discarded.').catch(discordCatch);
+    // Re-show surge UI
+    await _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx);
+    saveGames();
+    return;
+  }
+  // Parse figureKey and tokenIndex — figureKey can contain hyphens (e.g. "Cassian Andor-1-0")
+  // Format: rogue_one_token_{gameId}_{dcName}-{dgIdx}-{figIdx}_{tokenIndex}
+  const prefix = 'rogue_one_token_';
+  const rest = customId.slice(prefix.length); // gameId_figureKey_tokenIndex
+  const firstUnderscore = rest.indexOf('_');
+  if (firstUnderscore < 0) return;
+  const gameId = rest.slice(0, firstUnderscore);
+  const remainder = rest.slice(firstUnderscore + 1); // figureKey_tokenIndex
+  const lastUnderscore = remainder.lastIndexOf('_');
+  if (lastUnderscore < 0) return;
+  const figureKey = remainder.slice(0, lastUnderscore);
+  const tokenIndex = parseInt(remainder.slice(lastUnderscore + 1), 10);
+  if (isNaN(tokenIndex)) return;
+
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (!game.pendingRogueOneTokenPick) {
+    await interaction.followUp({ content: 'No pending Rogue One token pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const { attackerPlayerNum } = game.pendingRogueOneTokenPick;
+  if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Not your choice.')) return;
+  delete game.pendingRogueOneTokenPick;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) { saveGames(); return; }
+  const thread = await interaction.client.channels.fetch(combat.combatThreadId).catch(() => null);
+  if (!thread) { saveGames(); return; }
+
+  // Validate the token still exists
+  const tokens = game.figurePowerTokens?.[figureKey] || [];
+  if (tokenIndex >= tokens.length) {
+    await thread.send('**Rogue One** — That token is no longer available.').catch(discordCatch);
+    await _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx);
+    saveGames();
+    return;
+  }
+  const tokenType = tokens[tokenIndex];
+  const donorDcName = dcNameFromFigureKey(figureKey);
+  removeSpentToken(game, figureKey, tokenIndex);
+
+  // Add +1 surge to the attack
+  combat.surgeRemaining = (combat.surgeRemaining || 0) + 1;
+  combat.rogueOneSurgeGained = (combat.rogueOneSurgeGained || 0) + 1;
+  await thread.send(`**Rogue One** — Discarded **${tokenType}** token from **${donorDcName}** → **+1 Surge** (now ${combat.surgeRemaining} surge remaining).`).catch(discordCatch);
+
+  // Re-show surge UI
+  await _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx);
+  saveGames();
+}
+
+/** Helper to re-show the surge UI after Rogue One token pick resolves. */
+async function _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx) {
+  const remaining = combat.surgeRemaining || 0;
+  if (remaining <= 0 && getRogueOneDonors(game, combat).length === 0) {
+    await sendReadyToResolveRolls(thread, gameId);
+    return;
+  }
+  const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (ctx.SURGE_LABELS?.[id]) || id);
+  const surgeAbilities = ctx.getAttackerSurgeAbilities ? ctx.getAttackerSurgeAbilities(combat) : [];
+  // Overload (Rebel Saboteur): allow same surge to be used twice
+  const _roAtkEff = getDcEffectsGlobal()?.[combat.attackerDcName] || getDcEffectsGlobal()?.[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  const _roMaxUses = (_roAtkEff?.specialAbilityIds || []).includes('overload_saboteur') ? 2 : 1;
+  const surgeRows = [];
+  for (let i = 0; i < surgeAbilities.length; i++) {
+    const k = surgeAbilities[i];
+    const cost = (k?.startsWith?.('double:') ? 2 : (ctx.getAbility?.(k)?.surgeCost ?? 1));
+    if (cost > remaining) continue;
+    if (((combat.surgeSpentCount || {})[i] || 0) >= _roMaxUses) continue;
+    const label = (getSurgeLabel(k) || k).slice(0, 80);
+    const btnLabel = cost > 1 ? `Spend ${cost} surge: ${label}` : `Spend 1 surge: ${label}`;
+    surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_${i}`).setLabel(btnLabel.slice(0, 80)).setStyle(ButtonStyle.Secondary));
+  }
+  if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed) {
+    surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_bleed_prevention`).setLabel('Spend 1 Surge — Prevent Bleed').setStyle(ButtonStyle.Secondary));
+  }
+  // Rogue One: may still be usable if more donor tokens exist
+  surgeRows.push(...buildRogueOneSurgeButton(game, combat));
+  surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
+  const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
+  await thread.send({ content: `**Spend surge?** **${remaining}** surge left. Choose an ability or Done.`, components: [surgeRow] }).catch(discordCatch);
 }
 
 /**
@@ -4919,12 +5508,16 @@ export async function handleCoverFireBlock(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the attacker can choose.')) return;
-  game.figurePowerTokens = game.figurePowerTokens || {};
-  game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
-  game.figurePowerTokens[figureKey].push('Block');
+  grantPowerTokens(game, figureKey, 'Block', 1);
   const dcName = dcNameFromFigureKey(figureKey);
   await interaction.message.edit({ content: `🛡️ **Cover Fire** — **${dcName}** received 1 Block Token.`, components: [] }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, `🛡️ **Cover Fire** — **${dcName}** gained 1 Block Token.`, { phase: 'ROUND', icon: 'card' });
+  // G73: Check for power token overflow
+  if (game.pendingPowerTokenOverflow?.length > 0) {
+    const ch = await interaction.client.channels.fetch(interaction.channelId).catch(() => null);
+    if (ch) await sendPowerTokenOverflowUI(game, gameId, ch, playerNum, saveGames);
+    return;
+  }
   saveGames();
 }
 
@@ -5046,6 +5639,150 @@ export async function handleZilloDiscard(interaction, ctx) {
       delete game.pendingZilloDiscard;
       await interaction.message.edit({ content: `**Zillo Technique** — Discarded **${cardName}**: +1 Block applied to defense.`, components: [] }).catch(discordCatch);
       if (thread) await thread.send(`**Zillo Technique** — Defender discarded **${cardName}** for **+1 Block**.`).catch(discordCatch);
+    }
+  }
+  saveGames();
+}
+
+// ─── Power Token Overflow (G73) ─────────────────────────────────────────────
+
+/** Token-type emoji map for display. */
+const TOKEN_EMOJI = { Hit: '🔴', Surge: '⚡', Block: '🛡️', Evade: '🟢' };
+
+/**
+ * Check whether game.pendingPowerTokenOverflow has any entries and, if so,
+ * send discard-choice buttons for the first figure that is over its cap.
+ * Should be called after any grantPowerTokens() call from the Discord layer.
+ *
+ * @param {object} game
+ * @param {string} gameId
+ * @param {object} channel - Discord TextChannel / ThreadChannel to send the prompt in
+ * @param {number} playerNum - player who owns the figure (for access control)
+ * @param {Function} saveGames
+ * @returns {Promise<boolean>} true if an overflow prompt was sent
+ */
+export async function sendPowerTokenOverflowUI(game, gameId, channel, playerNum, saveGames) {
+  const overflowArr = game.pendingPowerTokenOverflow;
+  if (!overflowArr?.length) return false;
+  const entry = overflowArr[0];
+  const { figureKey, discardCount } = entry;
+  const tokens = game.figurePowerTokens?.[figureKey] || [];
+  const max = getMaxPowerTokens(figureKey);
+  const figName = dcNameFromFigureKey(figureKey);
+
+  // Build one button per token the figure currently holds
+  const rows = [];
+  const btns = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    const emoji = TOKEN_EMOJI[t] || '';
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`pt_overflow_${gameId}_${playerNum}_${figureKey}_${i}`)
+        .setLabel(`${emoji} ${t}`.trim())
+        .setStyle(ButtonStyle.Secondary)
+    );
+  }
+  // Split into rows of 5 (Discord limit)
+  for (let i = 0; i < btns.length; i += 5) {
+    rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+  }
+
+  // Store the playerNum so the handler can enforce access
+  entry.playerNum = playerNum;
+  entry.channelId = channel.id;
+
+  const tokenList = tokens.map(t => `${TOKEN_EMOJI[t] || ''} ${t}`).join(', ');
+  await channel.send({
+    content: `⚠️ **Power Token Overflow** — **${figName}** has **${tokens.length}** tokens (max ${max}). ` +
+      `Discard **${discardCount}** token${discardCount > 1 ? 's' : ''}.\n` +
+      `Current tokens: ${tokenList}\n` +
+      `Choose which token to discard:`,
+    components: rows.slice(0, 5), // max 5 rows
+  }).catch(discordCatch);
+
+  saveGames();
+  return true;
+}
+
+/**
+ * Handle overflow discard button: pt_overflow_{gameId}_{playerNum}_{figureKey}_{tokenIndex}
+ */
+export async function handlePowerTokenOverflowDiscard(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames } = ctx;
+  const match = interaction.customId.match(/^pt_overflow_(\d+)_(\d+)_(.+)_(\d+)$/);
+  if (!match) {
+    await interaction.followUp({ content: 'Invalid overflow discard.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, gameId, playerNumStr, figureKey, indexStr] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const tokenIndex = parseInt(indexStr, 10);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Not your token to discard.')) return;
+
+  // Validate we still have a pending overflow for this figure
+  const overflowArr = game.pendingPowerTokenOverflow;
+  if (!overflowArr?.length || !overflowArr.some(e => e.figureKey === figureKey && e.discardCount > 0)) {
+    await interaction.followUp({ content: 'No pending overflow for this figure.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const { discarded, remaining } = resolveOverflowDiscard(game, figureKey, tokenIndex);
+  if (!discarded) {
+    await interaction.followUp({ content: 'Invalid token index.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const figName = dcNameFromFigureKey(figureKey);
+  const emoji = TOKEN_EMOJI[discarded] || '';
+
+  if (remaining > 0) {
+    // Still need more discards — rebuild the buttons with updated indices
+    const tokens = game.figurePowerTokens?.[figureKey] || [];
+    const btns = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      const te = TOKEN_EMOJI[t] || '';
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`pt_overflow_${gameId}_${playerNum}_${figureKey}_${i}`)
+          .setLabel(`${te} ${t}`.trim())
+          .setStyle(ButtonStyle.Secondary)
+      );
+    }
+    const rows = [];
+    for (let i = 0; i < btns.length; i += 5) {
+      rows.push(new ActionRowBuilder().addComponents(btns.slice(i, i + 5)));
+    }
+    const max = getMaxPowerTokens(figureKey);
+    const tokenList = tokens.map(t => `${TOKEN_EMOJI[t] || ''} ${t}`).join(', ');
+    await interaction.message.edit({
+      content: `⚠️ **Power Token Overflow** — **${figName}** discarded ${emoji} **${discarded}**. Still has **${tokens.length}** tokens (max ${max}). ` +
+        `Discard **${remaining}** more.\n` +
+        `Current tokens: ${tokenList}\n` +
+        `Choose which token to discard:`,
+      components: rows.slice(0, 5),
+    }).catch(discordCatch);
+  } else {
+    // Overflow resolved
+    const tokens = game.figurePowerTokens?.[figureKey] || [];
+    const tokenList = tokens.map(t => `${TOKEN_EMOJI[t] || ''} ${t}`).join(', ');
+    await interaction.message.edit({
+      content: `✅ **${figName}** discarded ${emoji} **${discarded}**. Tokens: ${tokenList || 'none'}`,
+      components: [],
+    }).catch(discordCatch);
+
+    // Check if there are more figures with overflow
+    if (game.pendingPowerTokenOverflow?.length > 0) {
+      const nextEntry = game.pendingPowerTokenOverflow[0];
+      const ch = await interaction.client.channels.fetch(nextEntry.channelId || interaction.channelId).catch(() => null);
+      if (ch) {
+        await sendPowerTokenOverflowUI(game, gameId, ch, nextEntry.playerNum || playerNum, saveGames);
+        return; // saveGames already called
+      }
     }
   }
   saveGames();

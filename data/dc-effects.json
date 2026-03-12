@@ -6223,7 +6223,8 @@
       "unique": true,
       "affiliation": "Any",
       "specialAbilityIds": [
-        "force_heal"
+        "force_heal",
+        "force_exhaustion_child"
       ]
     },
     "The Grand Inquisitor": {

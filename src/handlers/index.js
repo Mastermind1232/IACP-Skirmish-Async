@@ -22,7 +22,7 @@ import {
   handleWalkerMove, handleWalkerSkip,
 } from './post-deploy.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
-import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleStrainChoice, handleStrainCcPick } from './combat.js';
+import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleStrainChoice, handleStrainCcPick, handleUnderDuress, handleRogueOneTokenPick } from './combat.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick } from './activation.js';
 import {
   handleMapSelection,
@@ -115,7 +115,7 @@ import {
   handleBotmenuKillNo,
 } from './botmenu.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
-import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms } from './combat-reactions.js';
+import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush } from './map-events.js';
@@ -203,7 +203,9 @@ register('pre_reroll_', handlePreReroll, 'combat');
 register('combat_passive_', handleCombatPassive, 'combat');
 register('combat_token_', handleCombatToken, 'combat');
 register('power_token_choice_', handlePowerTokenChoice, 'combat');
+register('pt_overflow_', handlePowerTokenOverflowDiscard, 'combat');
 register('spread_pain_cond_', handleSpreadThePainCondPick, 'combat');
+register('rogue_one_token_', handleRogueOneTokenPick, 'combat');
 register('figurehead_use_', handleFigureheadDecision, 'combat');
 register('figurehead_skip_', handleFigureheadDecision, 'combat');
 register('lasat_die_', handleLasatDiePick, 'combat');
@@ -216,6 +218,8 @@ register('zillo_discard_', handleZilloDiscard, 'combat');
 register('strain_choice_alldmg_', handleStrainChoice, 'combat');
 register('strain_choice_discard_', handleStrainChoice, 'combat');
 register('strain_cc_pick_', handleStrainCcPick, 'combat');
+register('ud_deplete_use_', handleUnderDuress, 'combat');
+register('ud_deplete_skip_', handleUnderDuress, 'combat');
 
 // --- Activation ---
 register('act_passive_', handleActPassive, 'activation');
@@ -337,6 +341,8 @@ register('power_converter_color_', handlePowerConverter, 'combatReactions');
 register('illicit_arms_use_', handleIllicitArms, 'combatReactions');
 register('illicit_arms_skip_', handleIllicitArms, 'combatReactions');
 register('illicit_arms_pick_', handleIllicitArms, 'combatReactions');
+register('force_exhaustion_yes_', handleForceExhaustion, 'combatReactions');
+register('force_exhaustion_no_', handleForceExhaustion, 'combatReactions');
 
 // --- Post-combat ---
 register('reaction_skip_', handleReactionSkip, 'postCombat');
@@ -467,7 +473,7 @@ export {
   handleWalkerMove, handleWalkerSkip,
 } from './post-deploy.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
-export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls, handleStrainChoice, handleStrainCcPick } from './combat.js';
+export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, sendPowerTokenOverflowUI, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls, handleStrainChoice, handleStrainCcPick, handleRogueOneTokenPick } from './combat.js';
 export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick } from './activation.js';
 export {
   handleMapSelection,

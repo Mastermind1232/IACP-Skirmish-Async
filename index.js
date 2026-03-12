@@ -113,6 +113,7 @@ import {
   sendRerollUI,
   proceedAfterRerolls,
   sendReadyToResolveRolls,
+  sendPowerTokenOverflowUI,
 } from './src/handlers/index.js';
 import {
   validateDeckLegal,
@@ -155,6 +156,7 @@ import {
   collectOverlappingFigures,
   pushFigureToNearestValid,
   resolveMassivePush,
+  getEffectiveMapSpaces,
   rollAttackDice,
   rollDefenseDice,
   rollSingleAttackDie,
@@ -2960,7 +2962,7 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
       {
         const _dfAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
         if (_dfAtkPos && combat.attackerMsgId && game.selectedMap?.id) {
-          const _dfMapSp = getMapSpaces(game.selectedMap.id);
+          const _dfMapSp = getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap.id));
           // Scan the defender's side for alive Rebel Pathfinder figures
           const _dfFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
           for (const [_dfFk, _dfPos] of Object.entries(_dfFriendlyFigs)) {
@@ -4745,6 +4747,15 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
   // Refresh activation thread minimap after combat (conditions/actions may have changed)
   if (combat.attackerMsgId) {
     await updateDcActionsMessage(game, combat.attackerMsgId, client).catch(discordCatch);
+  }
+  // G73: Power Token Overflow — if any tokens were granted beyond the cap during combat
+  // resolution, prompt the owning player to discard down.
+  if (game.pendingPowerTokenOverflow?.length > 0 && thread) {
+    // Determine the owning player from the first overflow entry's figureKey
+    const _ptOvEntry = game.pendingPowerTokenOverflow[0];
+    const _ptOvPlayerNum = Object.entries(game.figurePositions || {}).find(([, figs]) => figs?.[_ptOvEntry.figureKey])?.[0];
+    const _ptOvPN = _ptOvPlayerNum ? parseInt(_ptOvPlayerNum, 10) : attackerPlayerNum;
+    await sendPowerTokenOverflowUI(game, game.gameId, thread, _ptOvPN, saveGames);
   }
 }
 

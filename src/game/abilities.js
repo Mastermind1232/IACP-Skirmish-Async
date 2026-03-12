@@ -5,6 +5,7 @@
 import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapSpaces, getMapTokensData } from '../data-loader.js';
 import { parseCoord, normalizeCoord, getFootprintCells } from './coords.js';
 import { dcNameFromFigureKey, getMaxPowerTokens } from './dc-helpers.js';
+import { grantPowerTokens } from './game-helpers.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 
 /** Sync a healthState array back to the player's dcList entry. */
@@ -26,7 +27,7 @@ function getStatsForDc(dcName) {
 }
 import { applyCondition, resetCondition, filterCondition, isConditionImmune, HARMFUL_CONDITIONS } from './conditions.js';
 import { parseSurgeEffect } from './combat.js';
-import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces } from './movement.js';
+import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces, getEffectiveMapSpaces } from './movement.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum } from './player-helpers.js';
 import { hasLineOfSight, isWithinRange } from './spatial.js';
 import { checkDeckDiscardPassiveRedraws } from './cc-passive-redraw.js';
@@ -567,14 +568,10 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve ${entry.label} manually.` };
     const mapId = game.selectedMap?.id;
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    // Helper: add Hit tokens to a figure key (up to per-figure max) — specifically Hit tokens, not generic power tokens
+    // Helper: add Hit tokens to a figure key — overflow handled by grantPowerTokens
     function addHitToken(fk, n) {
       if (n <= 0) return;
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-      const current = game.figurePowerTokens[fk].length;
-      const cap = getMaxPowerTokens(fk);
-      for (let i = 0; i < Math.min(n, cap - current); i++) game.figurePowerTokens[fk].push('Hit');
+      grantPowerTokens(game, fk, 'Hit', n);
     }
     // Second call: apply effects to self + chosen target
     if (choiceIndex != null && targetFigureKey) {
@@ -824,9 +821,7 @@ export function resolveAbility(abilityId, context) {
       // Apply 1 damage to target (direct damage — reduce HP)
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       // Grant 1 Hit Token to target
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
-      if (game.figurePowerTokens[targetFigureKey].length < getMaxPowerTokens(targetFigureKey)) game.figurePowerTokens[targetFigureKey].push('Hit');
+      grantPowerTokens(game, targetFigureKey, 'Hit', 1);
       return { applied: true, logMessage: `**Tempt** — **${chosenName}** suffers 1 Damage and gains 1 Hit Token. *(Apply 1 damage manually via HP buttons.)*`, refreshDcEmbed: true };
     }
     // Enumerate all figures (friendly + hostile) within 4 spaces except self
@@ -1308,11 +1303,7 @@ export function resolveAbility(abilityId, context) {
     // Phase 2: target chosen — grant 1 Block Token
     if (choiceIndex != null && targetFigureKey) {
       const tName = dcNameFromFigureKey(targetFigureKey);
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
-      const current = game.figurePowerTokens[targetFigureKey].length;
-      if (current >= 2) return { applied: true, logMessage: `**Rat Catcher** — **${tName}** already has max Power Tokens.` };
-      game.figurePowerTokens[targetFigureKey].push('Block');
+      grantPowerTokens(game, targetFigureKey, 'Block', 1);
       return { applied: true, logMessage: `**Rat Catcher** — **${tName}** gained 1 **Block Token**.`, refreshDcEmbed: true };
     }
     // Phase 1: enumerate self + adjacent CREATUREs
@@ -1334,11 +1325,7 @@ export function resolveAbility(abilityId, context) {
     if (validTargets.length === 0) return { applied: false, manualMessage: '**Rat Catcher** — No valid targets.' };
     if (validTargets.length === 1) {
       const tName = dcNameFromFigureKey(validTargets[0]);
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[validTargets[0]] = game.figurePowerTokens[validTargets[0]] || [];
-      const current = game.figurePowerTokens[validTargets[0]].length;
-      if (current >= 2) return { applied: true, logMessage: `**Rat Catcher** — **${tName}** already has max Power Tokens.` };
-      game.figurePowerTokens[validTargets[0]].push('Block');
+      grantPowerTokens(game, validTargets[0], 'Block', 1);
       return { applied: true, logMessage: `**Rat Catcher** — **${tName}** gained 1 **Block Token**.`, refreshDcEmbed: true };
     }
     return {
@@ -1368,14 +1355,8 @@ export function resolveAbility(abilityId, context) {
       const diceResult = parts.length ? parts.join(', ') : 'blank';
       const effectParts = [];
       if (hits > 0) {
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
-        if (game.figurePowerTokens[targetFigureKey].length < getMaxPowerTokens(targetFigureKey)) {
-          game.figurePowerTokens[targetFigureKey].push('Block');
-          effectParts.push(`**${tName}** gained 1 **Block Token**`);
-        } else {
-          effectParts.push(`**${tName}** at max tokens (Block Token not added)`);
-        }
+        grantPowerTokens(game, targetFigureKey, 'Block', 1);
+        effectParts.push(`**${tName}** gained 1 **Block Token**`);
       }
       if (surges > 0) {
         applyCondition(game, targetFigureKey, 'Focus');
@@ -1412,14 +1393,8 @@ export function resolveAbility(abilityId, context) {
       const diceResult = parts.length ? parts.join(', ') : 'blank';
       const effectParts = [];
       if (hits > 0) {
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[tFk] = game.figurePowerTokens[tFk] || [];
-        if (game.figurePowerTokens[tFk].length < getMaxPowerTokens(tFk)) {
-          game.figurePowerTokens[tFk].push('Block');
-          effectParts.push(`**${tName}** gained 1 **Block Token**`);
-        } else {
-          effectParts.push(`**${tName}** at max tokens (Block Token not added)`);
-        }
+        grantPowerTokens(game, tFk, 'Block', 1);
+        effectParts.push(`**${tName}** gained 1 **Block Token**`);
       }
       if (surges > 0) {
         applyCondition(game, tFk, 'Focus');
@@ -1770,9 +1745,7 @@ export function resolveAbility(abilityId, context) {
     const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
     const dgIndex = dgMatch ? dgMatch[1] : '1';
     const figureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
-    game.figurePowerTokens = game.figurePowerTokens || {};
-    game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
-    game.figurePowerTokens[figureKey].push('Block');
+    grantPowerTokens(game, figureKey, 'Block', 1);
     return { applied: true, freeAction: !!entry.freeAction, refreshMovementBank: true, activeMsgId: msgId, refreshDcEmbed: true, logMessage: `**${entry.label}** — Spent ${mpCost} MP → gained 1 **Block Token** (${remaining - mpCost} MP remaining).` };
   }
 
@@ -3089,11 +3062,7 @@ export function resolveAbility(abilityId, context) {
     // Phase 2+: sequential allocation — player picks one figure at a time to receive a Hit token
     const pending = game.pendingCombatResupply?.[msgId];
     if (pending && choiceIndex != null && targetFigureKey) {
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[targetFigureKey] = game.figurePowerTokens[targetFigureKey] || [];
-      if (game.figurePowerTokens[targetFigureKey].length < getMaxPowerTokens(targetFigureKey)) {
-        game.figurePowerTokens[targetFigureKey].push('Hit');
-      }
+      grantPowerTokens(game, targetFigureKey, 'Hit', 1);
       pending.remaining -= 1;
       const tName = dcNameFromFigureKey(targetFigureKey);
       if (pending.remaining <= 0) {
@@ -3131,11 +3100,8 @@ export function resolveAbility(abilityId, context) {
 
     // Auto-distribute if only 1 eligible figure
     if (eligible.length === 1) {
-      const tokensToAdd = Math.min(roundNum, getMaxPowerTokens(eligible[0]) - (game.figurePowerTokens[eligible[0]] || []).length);
-      for (let i = 0; i < tokensToAdd; i++) {
-        game.figurePowerTokens[eligible[0]] = game.figurePowerTokens[eligible[0]] || [];
-        if (game.figurePowerTokens[eligible[0]].length < getMaxPowerTokens(eligible[0])) game.figurePowerTokens[eligible[0]].push('Hit');
-      }
+      const tokensToAdd = roundNum; // grantPowerTokens handles overflow
+      grantPowerTokens(game, eligible[0], 'Hit', tokensToAdd);
       const eName = dcNameFromFigureKey(eligible[0]);
       return { applied: true, requiresPowerTokenChoice: ptToAdd > 0, logMessage: `Gained ${ptToAdd} Power Token(s). **${eName}** gained ${tokensToAdd} Hit Token(s) (round ${roundNum}).`, refreshDcEmbed: true };
     }
@@ -4433,7 +4399,7 @@ export function resolveAbility(abilityId, context) {
     if (entry.requireNoLosAtActivationStart) {
       const atkStartPos = game.activationStartPositions?.[cbt.attackerFigureKey];
       const defCoord = cbt.target?.coord;
-      const mapSp = game.selectedMap?.id ? getMapSpaces(game.selectedMap.id) : null;
+      const mapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapSpaces(game.selectedMap.id)) : null;
       if (atkStartPos && defCoord && mapSp) {
         const targetHadLos = hasLineOfSight(String(defCoord).toLowerCase(), String(atkStartPos).toLowerCase(), mapSp);
         if (targetHadLos) {
@@ -4602,10 +4568,8 @@ export function resolveAbility(abilityId, context) {
       if (msgId) {
         const meta = dcMessageMeta.get(msgId);
         const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-        game.figurePowerTokens = game.figurePowerTokens || {};
         for (const fk of figureKeys) {
-          game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-          for (let i = 0; i < entry.evadeTokenGain; i++) game.figurePowerTokens[fk].push('Evade');
+          grantPowerTokens(game, fk, 'Evade', entry.evadeTokenGain);
         }
       }
     }
@@ -4748,9 +4712,7 @@ export function resolveAbility(abilityId, context) {
       const hostilePos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
       if (!hostilePos) return { applied: false, manualMessage: 'Hostile figure has no position.' };
       // Grant +2 Hit power tokens to the hostile figure
-      game.figurePowerTokens = game.figurePowerTokens || {};
-      game.figurePowerTokens[chosenFigureKey] = game.figurePowerTokens[chosenFigureKey] || [];
-      game.figurePowerTokens[chosenFigureKey].push('Hit', 'Hit');
+      grantPowerTokens(game, chosenFigureKey, 'Hit', 2);
       // Set up Lure attack (analogous to False Orders)
       game.pendingLure = {
         controllerPlayerNum: playerNum,        // force user's player
@@ -5920,10 +5882,8 @@ export function resolveAbility(abilityId, context) {
       // Grant Block Token (stand-in for Armor Token)
       if (grantBlockToken) {
         const figKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-        game.figurePowerTokens = game.figurePowerTokens || {};
         for (const fk of figKeys) {
-          game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-          game.figurePowerTokens[fk].push('Block');
+          grantPowerTokens(game, fk, 'Block', 1);
         }
       }
       grantedNames.push(meta.displayName || meta.dcName);
@@ -5964,10 +5924,8 @@ export function resolveAbility(abilityId, context) {
       });
       if (!hasAdjacentFriendly) qualified.push(fk);
     }
-    game.figurePowerTokens = game.figurePowerTokens || {};
     for (const fk of qualified) {
-      game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-      game.figurePowerTokens[fk].push('Block');
+      grantPowerTokens(game, fk, 'Block', 1);
       applyCondition(game, fk, 'Hide');
     }
     if (qualified.length === 0) return { applied: true, logMessage: `**Guerilla Warfare** — No isolated friendly figures (all have adjacent friendlies).` };
@@ -6102,9 +6060,7 @@ export function resolveAbility(abilityId, context) {
     if (!figureKeys.length) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
     const fk = figureKeys[0];
     const count = entry.grantHitTokensToActivating;
-    game.figurePowerTokens = game.figurePowerTokens || {};
-    game.figurePowerTokens[fk] = [...(game.figurePowerTokens[fk] || [])];
-    for (let i = 0; i < count; i++) game.figurePowerTokens[fk].push('Hit');
+    grantPowerTokens(game, fk, 'Hit', count);
     const vpNote = entry.vpNoteIfAdjacentTerminal ? ` If adjacent to a terminal, use \`/editvp +${entry.vpNoteIfAdjacentTerminal}\` to gain ${entry.vpNoteIfAdjacentTerminal} VP.` : '';
     return { applied: true, logMessage: `**${entry.label}** — Granted **${count} Hit Token${count !== 1 ? 's' : ''}** to ${meta.dcName}.${vpNote}` };
   }
@@ -6429,9 +6385,7 @@ export function resolveAbility(abilityId, context) {
         if (!conds.length || figuresProcessed >= 2) continue;
         const count = conds.length;
         game.figureConditions[fk] = [];
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        game.figurePowerTokens[fk] = [...(game.figurePowerTokens[fk] || [])];
-        for (let i = 0; i < count; i++) game.figurePowerTokens[fk].push('Hit');
+        grantPowerTokens(game, fk, 'Hit', count);
         const dcName = dcNameFromFigureKey(fk);
         results.push(`**${dcName}** lost [${conds.join(', ')}] → +${count} Hit Token${count !== 1 ? 's' : ''}`);
         figuresProcessed++;
@@ -7052,9 +7006,7 @@ export function resolveAbility(abilityId, context) {
       return { requiresSpaceChoice: true, validSpaces, chosenFigureKey, spaceChoiceLabel: `**Looking for a Fight** — Push **${nm}** to which space?` };
     }
     // Phase 1: grant Wild Power Token + present Move/Push choice
-    game.figurePowerTokens = game.figurePowerTokens || {};
-    game.figurePowerTokens[activatorFk] = game.figurePowerTokens[activatorFk] || [];
-    if (game.figurePowerTokens[activatorFk].length < getMaxPowerTokens(activatorFk)) game.figurePowerTokens[activatorFk].push('Wild');
+    grantPowerTokens(game, activatorFk, 'Wild', 1);
     const mapId = game.selectedMap?.id;
     const adjHostileFks = [];
     if (mapId) {

@@ -1,6 +1,6 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { opponentPlayerNum, getPlayerId, getDcList, getDcMessageIds, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
-import { reduceHp, dcNameFromFigureKey, awardKillVp, checkNefariousGains } from '../game/index.js';
+import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, checkNefariousGains } from '../game/index.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 
@@ -762,4 +762,72 @@ export async function handleIllicitArms(interaction, ctx) {
     saveGames();
     return;
   }
+}
+
+/**
+ * Handle force_exhaustion_yes_ / force_exhaustion_no_ buttons.
+ * Force Exhaustion (The Child): when attack declared targeting The Child or a Clan of Two figure,
+ * The Child may become Incapacitated to remove 1 attack die and Weaken the attacker.
+ */
+export async function handleForceExhaustion(interaction, ctx) {
+  const {
+    getGame, canActAsPlayer, saveGames, client,
+    logGameAction,
+  } = ctx;
+
+  const isYes = interaction.customId.startsWith('force_exhaustion_yes_');
+  const gameId = interaction.customId.replace(/^force_exhaustion_(?:yes|no)_/, '');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!game.pendingForceExhaustion) {
+    await interaction.followUp({ content: 'No pending Force Exhaustion.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const fe = game.pendingForceExhaustion;
+  const defPN = fe.defenderPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, defPN, canActAsPlayer, 'Only The Child\'s owner may respond.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+
+  const thread = await client.channels.fetch(fe.combatThreadId).catch(() => null);
+
+  // Clear buttons
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
+
+  if (isYes) {
+    // Incapacitate The Child
+    game.childIncapacitated = true;
+
+    // Remove 1 attack die (weakest first: yellow > green > blue > red)
+    if (game.pendingCombat) {
+      const dice = [...(game.pendingCombat.attackInfo.dice || [])];
+      const removeOrder = ['yellow', 'green', 'blue', 'red'];
+      let removed = false;
+      for (const color of removeOrder) {
+        const idx = dice.indexOf(color);
+        if (idx !== -1) {
+          dice.splice(idx, 1);
+          removed = true;
+          if (thread) await thread.send(`**Force Exhaustion** — Removed 1 **${color}** attack die.`).catch(discordCatch);
+          break;
+        }
+      }
+      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice };
+
+      // Apply Weakened to the attacker
+      const atkFk = fe.attackerFigureKey;
+      applyCondition(game, atkFk, 'Weakened');
+      // Also track in pendingCombat attacker conditions so combat resolution sees it
+      if (!game.pendingCombat.attackerConds.includes('Weakened')) {
+        game.pendingCombat.attackerConds.push('Weakened');
+      }
+    }
+
+    if (thread) await thread.send(`**Force Exhaustion** — **The Child** is now **Incapacitated**. Attacker is **Weakened**.`).catch(discordCatch);
+    if (logGameAction) await logGameAction(game, client, '**Force Exhaustion** — The Child became Incapacitated. 1 attack die removed, attacker Weakened.', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+  } else {
+    if (thread) await thread.send('**Force Exhaustion** — Declined.').catch(discordCatch);
+  }
+
+  delete game.pendingForceExhaustion;
+  saveGames();
 }
