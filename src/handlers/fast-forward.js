@@ -206,6 +206,7 @@ export async function startActivationThreadForFastForward(game, playerNum, dcInd
     dcHealthState,
     buildDcEmbedAndFiles,
     getConditionsForDcMessage,
+    getNicknamesForDcMessage,
     getDcPlayAreaComponents,
     getDcActionButtons,
     getActionsCounterContent,
@@ -233,7 +234,7 @@ export async function startActivationThreadForFastForward(game, playerNum, dcInd
   const msg = await channel.messages.fetch(msgId);
 
   dcExhaustedState.set(msgId, true);
-  const { embed, files } = await buildDcEmbedAndFiles(dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, { dcName, displayName }), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
+  const { embed, files } = await buildDcEmbedAndFiles(dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, { dcName, displayName }), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, { dcName, displayName }));
   await msg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, dcName) });
 
   const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;

@@ -1171,13 +1171,15 @@ async function postPinnedMissionCardFromGameState(game, client) {
 }
 
 /** Per-figure deploy labels (delegates to discord with helpers). */
-function getDeployFigureLabels(dcList) {
-  return getDeployFigureLabelsFromDiscord(dcList, { resolveDcName, isFigurelessDc, getDcStats });
+function getDeployFigureLabels(dcList, game) {
+  const getNickname = game ? (dcName, dgIndex, figIdx) => game.figureNicknames?.[`${dcName}-${dgIndex}-${figIdx}`] || null : undefined;
+  return getDeployFigureLabelsFromDiscord(dcList, { resolveDcName, isFigurelessDc, getDcStats, getNickname });
 }
 
 /** Deploy button rows (delegates to discord with helpers). */
-function getDeployButtonRows(gameId, playerNum, dcList, zone, figurePositions) {
-  return getDeployButtonRowsFromDiscord(gameId, playerNum, dcList, zone, figurePositions, { resolveDcName, isFigurelessDc, getDcStats });
+function getDeployButtonRows(gameId, playerNum, dcList, zone, figurePositions, game) {
+  const getNickname = game ? (dcName, dgIndex, figIdx) => game.figureNicknames?.[`${dcName}-${dgIndex}-${figIdx}`] || null : undefined;
+  return getDeployButtonRowsFromDiscord(gameId, playerNum, dcList, zone, figurePositions, { resolveDcName, isFigurelessDc, getDcStats, getNickname });
 }
 
 /** Rebuilds deploy prompt messages for a player, removing buttons for already-deployed figures. */
@@ -1197,7 +1199,7 @@ async function updateDeployPromptMessages(game, playerNum, client) {
       try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
     }
     game[idsKey] = [];
-    const { deployRows, doneRow } = getDeployButtonRows(game.gameId, playerNum, dcList, zone, game.figurePositions);
+    const { deployRows, doneRow } = getDeployButtonRows(game.gameId, playerNum, dcList, zone, game.figurePositions, game);
     const DEPLOY_ROWS_PER_MSG = 4;
     const zoneLabel = zone === 'red' ? 'red' : 'blue';
     const firstContent = isInitiative
@@ -1657,7 +1659,7 @@ async function refreshAllGameComponents(game, client) {
       const channelId = getPlayAreaId(game, meta.playerNum);
       const channel = await client.channels.fetch(channelId);
       const msg = await channel.messages.fetch(msgId);
-      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState, getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, msgId));
+      const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, displayName, healthState, getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, msgId), null, null, getNicknamesForDcMessage(game, meta));
       const components = getDcPlayAreaComponents(msgId, exhausted, game, meta.dcName);
       await msg.edit({ embeds: [embed], files: files?.length ? files : [], components });
     } catch (err) {
@@ -1783,7 +1785,7 @@ async function reorderPlayAreaAfterAttachments(game, playerNum, client) {
     const healthState = dc.healthState || [];
 
     // Re-send DC embed
-    const { embed, files } = await buildDcEmbedAndFiles(dc.dcName, false, dc.displayName, healthState);
+    const { embed, files } = await buildDcEmbedAndFiles(dc.dcName, false, dc.displayName, healthState, undefined, [], null, null, getNicknamesForDcMessage(game, dc));
     const newDcMsg = await channel.send({ embeds: [embed], files });
     const newDcMsgId = newDcMsg.id;
     newDcMsgIds.push(newDcMsgId);
@@ -2008,7 +2010,7 @@ async function runDraftRandom(game, client, options = {}) {
   const deployForPlayer = (playerNum, zone, opponentZone) => {
     const squad = getSquad(game, playerNum);
     const dcList = squad?.dcList || [];
-    const { metadata } = getDeployFigureLabels(dcList);
+    const { metadata } = getDeployFigureLabels(dcList, game);
     // Compute centroid of opponent zone to rank spaces by proximity to the "entrance"
     const oppZoneCoords = (zones?.[opponentZone] || []).map((s) => parseCoord(String(s).toLowerCase()));
     const oppCx = oppZoneCoords.length ? oppZoneCoords.reduce((s, c) => s + c.col, 0) / oppZoneCoords.length : 0;
@@ -4704,6 +4706,41 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     if (game.pendingOverrideAttackDice?.[combat.attackerMsgId]) delete game.pendingOverrideAttackDice[combat.attackerMsgId];
     await thread.send('**The Darksaber** — You may now perform a normal attack (use Attack button).').catch(discordCatch);
   }
+  // Focus Fire: after first attack, enforce same target for second attack
+  if (game.focusFireActive?.[combat.attackerMsgId]) {
+    const ff = game.focusFireActive[combat.attackerMsgId];
+    ff.attacksRemaining -= 1;
+    if (ff.attacksRemaining > 0) {
+      // Store first target — second attack must hit the same figure
+      game.forcedAttackTarget = game.forcedAttackTarget || {};
+      game.forcedAttackTarget[combat.attackerMsgId] = combat.defenderFigureKey;
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[combat.attackerMsgId] = { from: 'Focus Fire' };
+      await thread.send(`**Focus Fire** — 1 attack remaining. Must target the **same figure**. Use the Attack button.`).catch(discordCatch);
+    } else {
+      delete game.focusFireActive[combat.attackerMsgId];
+    }
+  }
+  // Multi-Fire: after first attack, enforce different target + apply -1 Hit for second attack
+  if (game.multiFireActive?.[combat.attackerMsgId]) {
+    const mf = game.multiFireActive[combat.attackerMsgId];
+    mf.attacksRemaining -= 1;
+    if (mf.attacksRemaining > 0) {
+      mf.firstTargetFigureKey = combat.defenderFigureKey;
+      // Block same target for second attack
+      game.multiFireBlockedTarget = game.multiFireBlockedTarget || {};
+      game.multiFireBlockedTarget[combat.attackerMsgId] = combat.defenderFigureKey;
+      // Apply -1 Hit to second attack too
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[combat.attackerMsgId] = { bonusHits: -1 };
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[combat.attackerMsgId] = { from: 'Multi-Fire' };
+      await thread.send(`**Multi-Fire** — 1 attack remaining. Must target a **different figure** (−1 Hit). Use the Attack button.`).catch(discordCatch);
+    } else {
+      delete game.multiFireActive[combat.attackerMsgId];
+      if (game.multiFireBlockedTarget?.[combat.attackerMsgId]) delete game.multiFireBlockedTarget[combat.attackerMsgId];
+    }
+  }
   // Saber Orbit (Second Sister): re-apply override dice for remaining chained attacks
   if (game.saberOrbitAttacksRemaining?.[combat.attackerMsgId] > 0) {
     game.saberOrbitAttacksRemaining[combat.attackerMsgId] -= 1;
@@ -4728,7 +4765,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
         const dcMsg = await channel.messages.fetch(msgId);
         const exhausted = dcExhaustedState.get(msgId) ?? false;
         const healthState = dcHealthState.get(msgId) || [];
-        const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, msgId));
+        const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, exhausted, meta.displayName, healthState, getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, msgId), null, null, getNicknamesForDcMessage(game, meta));
         await dcMsg.edit({ embeds: [embed], files }).catch(discordCatch);
       }
     } catch (err) {
@@ -5353,7 +5390,7 @@ async function populatePlayAreas(game, client) {
   game.p2ActivationsMessageId = p2ActivationsMsg.id;
 
   for (const { dcName, displayName, healthState } of p1Dcs) {
-    const { embed, files } = await buildDcEmbedAndFiles(dcName, false, displayName, healthState);
+    const { embed, files } = await buildDcEmbedAndFiles(dcName, false, displayName, healthState, undefined, [], null, null, getNicknamesForDcMessage(game, { dcName, displayName }));
     const msg = await p1PlayArea.send({ embeds: [embed], files });
     dcMessageMeta.set(msg.id, { gameId, playerNum: 1, dcName, displayName });
     dcExhaustedState.set(msg.id, false);
@@ -5366,7 +5403,7 @@ async function populatePlayAreas(game, client) {
     game.p1DcCompanionMessageIds.push(null);
   }
   for (const { dcName, displayName, healthState } of p2Dcs) {
-    const { embed, files } = await buildDcEmbedAndFiles(dcName, false, displayName, healthState);
+    const { embed, files } = await buildDcEmbedAndFiles(dcName, false, displayName, healthState, undefined, [], null, null, getNicknamesForDcMessage(game, { dcName, displayName }));
     const msg = await p2PlayArea.send({ embeds: [embed], files });
     dcMessageMeta.set(msg.id, { gameId, playerNum: 2, dcName, displayName });
     dcExhaustedState.set(msg.id, false);
@@ -6041,7 +6078,8 @@ async function refreshGameVisuals(game) {
             const exhausted = dcExhaustedState.get(id) || false;
             const { embed, files } = await buildDcEmbedAndFiles(
               meta.dcName, exhausted, meta.displayName, healthState,
-              getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, id)
+              getConditionsForDcMessage(game, meta), getDcUpgradeAttachments(game, id),
+              null, null, getNicknamesForDcMessage(game, meta)
             );
             const components = getDcPlayAreaComponents(id, exhausted, game, meta.dcName);
             await msg.edit({ embeds: [embed], files, components }).catch(err => console.error('[refresh:dc-embed]', id, err?.message ?? err));
@@ -6119,7 +6157,7 @@ function buildAllDeps() {
     sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, runPostDeployPhase,
     buildDiscardPileDisplayPayload, updateDiscardPileMessage,
     updateAttachmentMessageForDc, updateDcActionsMessage,
-    buildDcEmbedAndFiles, getConditionsForDcMessage, getDcPlayAreaComponents,
+    buildDcEmbedAndFiles, getConditionsForDcMessage, getNicknamesForDcMessage, getDcPlayAreaComponents,
     buildBoardMapPayload, getMapAttachmentForSpaces, ensureMovementBankMessage,
     updateMovementBankMessage, getConditionCardPath, getDcActionButtons,
     getActivationMinimapAttachment, getActivateDcButtons,

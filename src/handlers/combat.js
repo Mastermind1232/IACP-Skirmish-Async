@@ -795,14 +795,23 @@ export async function handleAttackTarget(interaction, ctx) {
       return;
     }
   }
-  // Mandalorian Whip: forced attack target validation — must target the pushed figure
+  // Forced attack target validation (Mandalorian Whip, Focus Fire, etc.) — must target a specific figure
   if (game.forcedAttackTarget?.[msgId] && target.figureKey) {
     if (target.figureKey !== game.forcedAttackTarget[msgId]) {
       const forcedName = dcNameFromFigureKey(game.forcedAttackTarget[msgId]);
-      await interaction.followUp({ content: `**Mandalorian Whip** — You must target the pushed figure (**${forcedName.replace(/_/g, ' ')}**).`, ephemeral: true }).catch(discordCatch);
+      const reason = game.focusFireActive?.[msgId] ? 'Focus Fire — must target the **same figure**' : 'You must target the specified figure';
+      await interaction.followUp({ content: `**${reason}** (**${forcedName.replace(/_/g, ' ')}**).`, ephemeral: true }).catch(discordCatch);
       return;
     }
     delete game.forcedAttackTarget[msgId];
+  }
+  // Multi-Fire: second attack must target a DIFFERENT figure
+  if (game.multiFireBlockedTarget?.[msgId] && target.figureKey) {
+    if (target.figureKey === game.multiFireBlockedTarget[msgId]) {
+      await interaction.followUp({ content: '**Multi-Fire** — Second attack must target a **different figure**.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    delete game.multiFireBlockedTarget[msgId];
   }
   // Droid Arm (Migs Mayfeld): deduct 1 Power Token when attacking a target only visible via Droid Arm
   if (target.droidArmLOS) {
@@ -817,7 +826,7 @@ export async function handleAttackTarget(interaction, ctx) {
     if (_arcValid === false) {
       // Warn but allow override (bot may not have perfect LOS/map data)
       await interaction.followUp({
-        content: `\u26a0\ufe0f **Arcing Shot** — No empty space adjacent to **${target.label}** was found in attacker's LOS. The target may not be valid for Arcing Shot. Proceeding anyway (honor-system).`,
+        content: `\u26a0\ufe0f **Arcing Shot** — No empty space adjacent to **${target.label}** was found in attacker's LOS. The target may not be valid for Arcing Shot. Proceeding with attack.`,
         ephemeral: false,
       }).catch(discordCatch);
     }

@@ -6,7 +6,7 @@ import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, ModalB
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { getLoadoutCards, getFormCards, getDcEffects } from '../data-loader.js';
+import { getLoadoutCards, getFormCards, getDcEffects, getDcStats } from '../data-loader.js';
 import { getDcImagePath } from '../asset-paths.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -256,6 +256,27 @@ async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) {
       game[handKey] = [...(game[handKey] || []), 'Debts Repaid'];
       game.wookieeAvengerDrawPenalty = (game.wookieeAvengerDrawPenalty || 0) + 1;
       if (logGameAction) await logGameAction(game, client, '**Wookiee Avenger** — Searched deck for **Debts Repaid**, added to hand. Will draw 1 fewer starting card.', { phase: 'SETUP', icon: 'card' });
+    }
+  }
+
+  // Squad Upgrade figures (Z-6 Trooper, Mortar Trooper, Riot Trooper): auto-set nickname for the SU figure
+  const SU_FIGURE_CARDS = ['Z-6 Trooper', 'Mortar Trooper', 'Riot Trooper'];
+  if (SU_FIGURE_CARDS.includes(card)) {
+    const dcList = getDcList(game, playerNum) || [];
+    const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+    const dcIdx = dcMsgIds.indexOf(dcMsgId);
+    if (dcIdx >= 0 && dcList[dcIdx]) {
+      const dcName = dcList[dcIdx].dcName || dcList[dcIdx].displayName;
+      const totals = {};
+      for (let i = 0; i <= dcIdx; i++) {
+        const n = dcList[i]?.dcName || dcList[i]?.displayName || '';
+        totals[n] = (totals[n] || 0) + 1;
+      }
+      const dgIndex = totals[dcName] || 1;
+      const baseFigCount = getDcStats(dcName)?.figures ?? 1;
+      const suFigKey = `${dcName}-${dgIndex}-${baseFigCount}`;
+      game.figureNicknames = game.figureNicknames || {};
+      game.figureNicknames[suFigKey] = card;
     }
   }
 
@@ -907,7 +928,7 @@ export async function handleDeploymentZone(interaction, ctx) {
   const initiativeHandId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
   const initiativeSquad = getSquad(game, initiativePlayerNum);
   const initiativeDcList = initiativeSquad?.dcList || [];
-  const { labels: initiativeLabels, metadata: initiativeMetadata } = getDeployFigureLabels(initiativeDcList);
+  const { labels: initiativeLabels, metadata: initiativeMetadata } = getDeployFigureLabels(initiativeDcList, game);
   const deployLabelsKey = _deployLabelsKey(initiativePlayerNum);
   const deployMetadataKey = _deployMetadataKey(initiativePlayerNum);
   game[deployLabelsKey] = initiativeLabels;
@@ -915,7 +936,7 @@ export async function handleDeploymentZone(interaction, ctx) {
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
   try {
     const initiativeHandChannel = await client.channels.fetch(initiativeHandId);
-    const { deployRows, doneRow } = getDeployButtonRows(game.gameId, initiativePlayerNum, initiativeDcList, zone, game.figurePositions);
+    const { deployRows, doneRow } = getDeployButtonRows(game.gameId, initiativePlayerNum, initiativeDcList, zone, game.figurePositions, game);
     const DEPLOY_ROWS_PER_MSG = 4;
     game.initiativeDeployMessageIds = game.initiativeDeployMessageIds || [];
     const initiativePing = `<@${game.initiativePlayerId}>`;
@@ -1674,7 +1695,7 @@ export async function handleDeploymentDone(interaction, ctx) {
     const nonInitiativePlayerNum = opponentPlayerNum(getInitiativePlayerNum(game));
     const nonInitiativeSquad = getSquad(game, nonInitiativePlayerNum);
     const nonInitiativeDcList = nonInitiativeSquad?.dcList || [];
-    const { labels: nonInitiativeLabels, metadata: nonInitiativeMetadata } = getDeployFigureLabels(nonInitiativeDcList);
+    const { labels: nonInitiativeLabels, metadata: nonInitiativeMetadata } = getDeployFigureLabels(nonInitiativeDcList, game);
     const deployLabelsKey = _deployLabelsKey(nonInitiativePlayerNum);
     const deployMetadataKey = _deployMetadataKey(nonInitiativePlayerNum);
     game[deployLabelsKey] = nonInitiativeLabels;
@@ -1683,7 +1704,7 @@ export async function handleDeploymentDone(interaction, ctx) {
     try {
       const nonInitiativePlayerId = getPlayerId(game, nonInitiativePlayerNum);
       const nonInitiativeHandChannel = await client.channels.fetch(nonInitiativeHandId);
-      const { deployRows, doneRow } = getDeployButtonRows(gameId, nonInitiativePlayerNum, nonInitiativeDcList, otherZone, game.figurePositions);
+      const { deployRows, doneRow } = getDeployButtonRows(gameId, nonInitiativePlayerNum, nonInitiativeDcList, otherZone, game.figurePositions, game);
       const DEPLOY_ROWS_PER_MSG = 4;
       game.nonInitiativeDeployMessageIds = game.nonInitiativeDeployMessageIds || [];
       game.nonInitiativeDeployedConfirmIds = game.nonInitiativeDeployedConfirmIds || [];
@@ -1879,7 +1900,7 @@ export async function handleAutoDeploy(interaction, ctx) {
 
   const squad = getSquad(game, playerNum);
   const dcList = squad?.dcList || [];
-  const { metadata } = getDeployFigureLabels(dcList);
+  const { metadata } = getDeployFigureLabels(dcList, game);
 
   // Compute centroid of opponent zone to rank spaces by proximity to "entrance"
   const oppZoneCoords = (zones?.[opponentZone] || []).map((s) => parseCoord(String(s).toLowerCase()));
@@ -1927,7 +1948,7 @@ export async function handleAutoDeploy(interaction, ctx) {
     }
     game[idsKey] = [];
     // Re-post deploy buttons with updated positions
-    const { deployRows, doneRow } = getDeployButtonRows(gameId, playerNum, dcList, playerZone, game.figurePositions);
+    const { deployRows, doneRow } = getDeployButtonRows(gameId, playerNum, dcList, playerZone, game.figurePositions, game);
     const DEPLOY_ROWS_PER_MSG = 4;
     const playerId = getPlayerId(game, playerNum);
     for (let i = 0; i < deployRows.length; i += DEPLOY_ROWS_PER_MSG) {

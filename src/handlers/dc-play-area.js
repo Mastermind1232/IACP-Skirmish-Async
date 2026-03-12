@@ -41,6 +41,7 @@ export async function handleDcActivate(interaction, ctx) {
     dcExhaustedState,
     buildDcEmbedAndFiles,
     getConditionsForDcMessage,
+    getNicknamesForDcMessage,
     getDcPlayAreaComponents,
     getDcActionButtons,
     getActionsCounterContent,
@@ -188,7 +189,7 @@ export async function handleDcActivate(interaction, ctx) {
     const channel = await client.channels.fetch(getPlayAreaId(game, playerNum));
     const msg = await channel.messages.fetch(msgId);
     dcExhaustedState.set(msgId, true);
-    const { embed, files } = await buildDcEmbedAndFiles(dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, { dcName, displayName }), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
+    const { embed, files } = await buildDcEmbedAndFiles(dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, { dcName, displayName }), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, { dcName, displayName }));
     await msg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, dcName) });
     const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
     const thread = await msg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
@@ -373,6 +374,7 @@ export async function handleDcUnactivate(interaction, ctx) {
     dcHealthState,
     buildDcEmbedAndFiles,
     getConditionsForDcMessage,
+    getNicknamesForDcMessage,
     getDcPlayAreaComponents,
     updateActivationsMessage,
     saveGames,
@@ -446,7 +448,7 @@ export async function handleDcUnactivate(interaction, ctx) {
     delete game.dcActivationLogMessageIds[msgId];
   }
   const healthState = dcHealthState.get(msgId) ?? [[null, null]];
-  const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
+  const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
   await interaction.message.edit({
     embeds: [embed],
     files,
@@ -467,6 +469,7 @@ export async function handleDcToggle(interaction, ctx) {
     dcHealthState,
     buildDcEmbedAndFiles,
     getConditionsForDcMessage,
+    getNicknamesForDcMessage,
     getDcPlayAreaComponents,
     getDcActionButtons,
     getActionsCounterContent,
@@ -592,7 +595,7 @@ export async function handleDcToggle(interaction, ctx) {
     const pLabel = `P${meta.playerNum}`;
     await logGameAction(game, client, `**${pLabel}:** <@${playerId}> readied **${displayName}**`, { allowedMentions: { users: [playerId] }, icon: 'ready' });
   }
-  const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, nowExhausted, displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
+  const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, nowExhausted, displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
   const components = getDcPlayAreaComponents(msgId, nowExhausted, game, meta.dcName);
   await interaction.editReply({
     embeds: [embed],
@@ -612,6 +615,7 @@ export async function handleDcDeplete(interaction, ctx) {
     isDepletedRemovedFromGame,
     buildDcEmbedAndFiles,
     getConditionsForDcMessage,
+    getNicknamesForDcMessage,
     logGameAction,
     saveGames,
     client,
@@ -638,7 +642,7 @@ export async function handleDcDeplete(interaction, ctx) {
     if (!game.p2DepletedDcMessageIds.includes(msgId)) game.p2DepletedDcMessageIds.push(msgId);
   }
   const displayName = meta.displayName || meta.dcName;
-  const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, displayName, [], getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
+  const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, false, displayName, [], getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
   embed.setTitle(`REMOVED FROM GAME (Depleted) — ${displayName}`);
   embed.setDescription((embed.data.description || '') + '\n\n*This upgrade was depleted and is no longer in play (one-time use).*');
   embed.setColor(COLORS.GRAY);

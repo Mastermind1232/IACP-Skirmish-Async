@@ -348,6 +348,7 @@ export async function handleEndTurn(interaction, ctx) {
     dcHealthState,
     buildDcEmbedAndFiles,
     getConditionsForDcMessage,
+    getNicknamesForDcMessage,
     getDcPlayAreaComponents,
     logGameAction,
     maybeShowEndActivationPhaseButton,
@@ -497,7 +498,7 @@ export async function handleEndTurn(interaction, ctx) {
     const playChannel = await client.channels.fetch(playAreaId);
     const dcMsg = await playChannel.messages.fetch(dcMsgId);
     const healthState = dcHealthState.get(dcMsgId) ?? [[null, null]];
-    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[dcMsgId] || game?.p2DcAttachments?.[dcMsgId] || []));
+    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, meta.displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[dcMsgId] || game?.p2DcAttachments?.[dcMsgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
     const components = getDcPlayAreaComponents(dcMsgId, true, game, meta.dcName);
     await dcMsg.edit({
       embeds: [embed],
@@ -597,6 +598,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     dcHealthState,
     buildDcEmbedAndFiles,
     getConditionsForDcMessage,
+    getNicknamesForDcMessage,
     getDcPlayAreaComponents,
     logGameAction,
     maybeShowEndActivationPhaseButton,
@@ -661,7 +663,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     const playChannel = await client.channels.fetch(playAreaId);
     const dcMsg = await playChannel.messages.fetch(msgId);
     const healthState = dcHealthState.get(msgId) ?? [[null, null]];
-    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
+    const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, healthState, getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
     await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, meta.dcName) }).catch(discordCatch);
   } catch (err) {
     console.error('Failed to update DC card after End Activation:', err);
@@ -839,6 +841,7 @@ export async function handleConfirmActivate(interaction, ctx) {
     dcHealthState,
     buildDcEmbedAndFiles,
     getConditionsForDcMessage,
+    getNicknamesForDcMessage,
     getDcPlayAreaComponents,
     updateActivationsMessage,
     getActionsCounterContent,
@@ -928,7 +931,7 @@ export async function handleConfirmActivate(interaction, ctx) {
   const playAreaId = getPlayAreaId(game, meta.playerNum);
   const playChannel = await client.channels.fetch(playAreaId);
   const dcMsg = await playChannel.messages.fetch(msgId);
-  const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, dcHealthState.get(msgId) ?? [[null, null]], getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []));
+  const { embed, files } = await buildDcEmbedAndFiles(meta.dcName, true, displayName, dcHealthState.get(msgId) ?? [[null, null]], getConditionsForDcMessage?.(game, meta), (game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || []), null, null, getNicknamesForDcMessage?.(game, meta));
   await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, meta.dcName) });
   const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
   const thread = await dcMsg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });

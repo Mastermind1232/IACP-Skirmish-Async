@@ -679,9 +679,9 @@ export function buildSpaceSelectMenu(selectPrefix, contextSuffix, available, lab
   return new ActionRowBuilder().addComponents(select);
 }
 
-/** Per-figure deploy labels; helpers = { resolveDcName, isFigurelessDc, getDcStats }. */
+/** Per-figure deploy labels; helpers = { resolveDcName, isFigurelessDc, getDcStats, getNickname }. */
 export function getDeployFigureLabels(dcList, helpers = {}) {
-  const { resolveDcName = (d) => (typeof d === 'object' ? d?.dcName || d?.displayName : d), isFigurelessDc = () => false, getDcStats = () => ({ figures: 1 }) } = helpers;
+  const { resolveDcName = (d) => (typeof d === 'object' ? d?.dcName || d?.displayName : d), isFigurelessDc = () => false, getDcStats = () => ({ figures: 1 }), getNickname = () => null } = helpers;
   if (!dcList?.length) return { labels: [], metadata: [] };
   const figureDcs = dcList.map(resolveDcName).filter((n) => n && !isFigurelessDc(n));
   const totals = {};
@@ -701,7 +701,10 @@ export function getDeployFigureLabels(dcList, helpers = {}) {
       metadata.push({ dcName, dgIndex, figureIndex: 0 });
     } else {
       for (let f = 0; f < figures; f++) {
-        labels.push(`Deploy ${baseName} ${dgIndex}${FIGURE_LETTERS[f]}`);
+        const nick = getNickname(dcName, dgIndex, f);
+        const nickSuffix = nick ? ` (${nick})` : '';
+        const rawLabel = `Deploy ${baseName} ${dgIndex}${FIGURE_LETTERS[f]}${nickSuffix}`;
+        labels.push(rawLabel.length > 80 ? rawLabel.slice(0, 77) + '...' : rawLabel);
         metadata.push({ dcName, dgIndex, figureIndex: f });
       }
     }
@@ -894,7 +897,8 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   if (figures > 1) {
     if (selectedFigure != null && selectedFigure < figures) {
       // Figure already selected: show action buttons (no dropdown — frees up a row slot)
-      const suffix = ` ${dgIndex}${FIGURE_LETTERS[selectedFigure]}`;
+      const _selNick = game?.figureNicknames?.[`${dcName}-${dgIndex}-${selectedFigure}`];
+      const suffix = _selNick ? ` ${dgIndex}${FIGURE_LETTERS[selectedFigure]} (${_selNick})` : ` ${dgIndex}${FIGURE_LETTERS[selectedFigure]}`;
       const moveLbl = toTheLimitActive ? `Move${suffix} (blocked)` : `Move${suffix}`;
       const interactLbl = _isNonSentient && !_beastTamerOverride ? `Interact${suffix} (Non-Sentient)` : `Interact${suffix}`;
       const comps = [
@@ -907,8 +911,10 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       // No figure selected yet: show dropdown only
       const options = [];
       for (let f = 0; f < figures; f++) {
-        const label = `Figure ${dgIndex}${FIGURE_LETTERS[f]}`;
-        options.push({ label, value: String(f), default: false });
+        const fk = `${dcName}-${dgIndex}-${f}`;
+        const nick = game?.figureNicknames?.[fk];
+        const label = nick ? `Figure ${dgIndex}${FIGURE_LETTERS[f]} (${nick})` : `Figure ${dgIndex}${FIGURE_LETTERS[f]}`;
+        options.push({ label: label.slice(0, 100), value: String(f), default: false });
       }
       const selectMenu = new StringSelectMenuBuilder()
         .setCustomId(`dc_fig_select_${msgId}`)

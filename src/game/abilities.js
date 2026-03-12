@@ -1551,6 +1551,90 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // Focus Fire (SC2-M2 Tank): Double Action — perform 2 attacks targeting the same figure
+  if (entry.type === 'dcSpecial' && entry.focusFireDoubleAttack) {
+    const { game, msgId } = context;
+    if (game && msgId) {
+      // Grant a free attack for the second shot; after first attack resolves, grant another
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = { from: 'Focus Fire' };
+      // Track that Focus Fire is active — second attack must target the same figure
+      game.focusFireActive = game.focusFireActive || {};
+      game.focusFireActive[msgId] = { attacksRemaining: 2 };
+    }
+    return {
+      applied: true,
+      logMessage: '**Focus Fire** — Perform 2 attacks targeting the **same figure**. Use the **Attack** button for each attack.',
+    };
+  }
+
+  // Multi-Fire (HK Assassin Droid): 2 attacks, different targets, -1 Hit each
+  if (entry.type === 'dcSpecial' && entry.multiFireDoubleAttack) {
+    const { game, msgId } = context;
+    if (game && msgId) {
+      // Grant a free attack for the second shot
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = { from: 'Multi-Fire' };
+      // Apply -1 Hit to all attacks during Multi-Fire
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[msgId] = { bonusHits: -1 };
+      // Track Multi-Fire state: second attack must target different figure
+      game.multiFireActive = game.multiFireActive || {};
+      game.multiFireActive[msgId] = { attacksRemaining: 2, firstTargetFigureKey: null };
+    }
+    return {
+      applied: true,
+      logMessage: '**Multi-Fire** — Perform 2 attacks with **different targets**. **−1 Hit** applied to each attack. Use the **Attack** button for each attack.',
+    };
+  }
+
+  // Overclock (Elite Ugnaught): Junk Droid companion may interrupt to perform a move or attack
+  if (entry.type === 'dcSpecial' && entry.overclockCompanionInterrupt) {
+    const { game, msgId, playerNum } = context;
+    if (game && msgId) {
+      // Find the Junk Droid companion DC msgId for this player
+      const companionMsgIds = playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+      const dcMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      let junkDroidMsgId = null;
+      if (companionMsgIds) {
+        for (let i = 0; i < companionMsgIds.length; i++) {
+          if (companionMsgIds[i]) {
+            const parentMeta = context.dcMessageMeta?.get?.(dcMsgIds?.[i]);
+            if (parentMeta?.dcName?.includes('Ugnaught')) {
+              junkDroidMsgId = companionMsgIds[i];
+              break;
+            }
+          }
+        }
+      }
+      if (junkDroidMsgId) {
+        // Grant Junk Droid companion 4 MP (its Speed) and a free attack
+        game.movementBank = game.movementBank || {};
+        game.movementBank[junkDroidMsgId] = { remaining: 4, total: 4 };
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[junkDroidMsgId] = { from: 'Overclock' };
+      }
+    }
+    return {
+      applied: true,
+      logMessage: '**Overclock** — Your **Junk Droid** companion may interrupt to perform a **move** (4 MP granted) or **attack** (free attack granted). Use the Junk Droid\'s Move/Attack buttons.',
+    };
+  }
+
+  // Spot Weld (Ugnaught): Place a Junk Droid companion in an adjacent space
+  if (entry.type === 'dcSpecial' && entry.spotWeldCompanionPlace) {
+    const { game, msgId, playerNum } = context;
+    if (game && msgId) {
+      // Mark that Spot Weld is pending — the companion needs to be placed
+      game.spotWeldPending = game.spotWeldPending || {};
+      game.spotWeldPending[msgId] = true;
+    }
+    return {
+      applied: true,
+      logMessage: '**Spot Weld** — Place your **Junk Droid** companion in a space **adjacent to this figure**. Deploy the Junk Droid using its deploy button if not yet on the board, or move it to an adjacent space.',
+    };
+  }
+
   // dcSpecial: informational — manual resolution with instruction message (no automated game-state change)
   // Supports strainCostToSelf: auto-deducts HP from activating figure if specified.
   if (entry.type === 'dcSpecial' && entry.informational && !entry.freeMoveBonus && !entry.nextAttacksBonusHits) {
@@ -4192,7 +4276,7 @@ export function resolveAbility(abilityId, context) {
     game.nextAttackBonusPierce[playerNum] = entry.nextAttackBonusPierce;
     return {
       applied: true,
-      logMessage: `Your next attack gains +${entry.nextAttackBonusPierce} Pierce (honor: use vs the chosen adjacent hostile).`,
+      logMessage: `Your next attack gains +${entry.nextAttackBonusPierce} Pierce.`,
     };
   }
 
@@ -5384,12 +5468,18 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.celebrationVp === 'number' && !entry.increaseArmyCostBy) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    // Validate: at least one hostile was defeated this activation
+    const killCounts = game.activationKills || {};
+    const totalKills = Object.values(killCounts).reduce((sum, n) => sum + (n || 0), 0);
+    if (totalKills < 1) {
+      return { applied: false, manualMessage: 'Celebration: No unique hostile defeated this activation.' };
+    }
     const vk = vpKey(playerNum);
     game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
     game[vk].total = (game[vk].total ?? 0) + entry.celebrationVp;
     return {
       applied: true,
-      logMessage: `**Celebration** — Gained ${entry.celebrationVp} VP (honor: play after a unique hostile figure is defeated).`,
+      logMessage: `**Celebration** — Gained ${entry.celebrationVp} VP (a unique hostile was defeated this activation).`,
     };
   }
 
@@ -5526,7 +5616,7 @@ export function resolveAbility(abilityId, context) {
     }
     const oppNum = opponentPlayerNum(playerNum);
     if (!chosenFigureKey) {
-      // Build choice list from opponent DCs (honor: player picks an adjacent hostile DC)
+      // Build choice list from opponent DCs (player picks an adjacent hostile DC)
       const choiceOptions = [];
       const choiceValues = [];
       for (const [dcMsgId, meta] of dcMessageMeta) {
@@ -5561,7 +5651,7 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const targetName = repositionFriendlyDcName || chosenOption;
     if (!targetName) {
-      // Build choice list from friendly DCs (honor: player picks a SMALL figure within 3 spaces)
+      // Build choice list from friendly DCs (player picks a SMALL figure within 3 spaces)
       const dcList = getDcList(game, playerNum) || [];
       const opts = dcList
         .filter((dc) => dc && !dc.defeated)
@@ -5729,14 +5819,28 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: rebelGraffitiVp (Rebel Graffiti) — end of activation: gain 2 VP (honor: only when no adjacent hostiles)
+  // ccEffect: rebelGraffitiVp (Rebel Graffiti) — end of activation: gain 2 VP only if no adjacent hostile figures
   if (entry.type === 'ccEffect' && typeof entry.rebelGraffitiVp === 'number' && entry.rebelGraffitiVp > 0) {
-    const { game, playerNum } = context;
+    const { game, playerNum, dcMessageMeta, meta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    // Validate: activating figure must not have any adjacent hostile figures
+    const oppNum = opponentPlayerNum(playerNum);
+    const activatingKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const activatingPositions = activatingKeys.map((k) => game.figurePositions?.[playerNum]?.[k]).filter(Boolean);
+    if (activatingPositions.length > 0) {
+      const hostilePositions = Object.values(game.figurePositions?.[oppNum] || {}).filter(Boolean);
+      const getRng = context.getRange ?? ((c1, c2) => { const a = parseCoord(c1); const b = parseCoord(c2); return (a.col < 0 || b.col < 0) ? 999 : Math.abs(a.col - b.col) + Math.abs(a.row - b.row); });
+      const hasAdjacentHostile = activatingPositions.some((aPos) =>
+        hostilePositions.some((hPos) => getRng(String(aPos).toLowerCase(), String(hPos).toLowerCase()) <= 1)
+      );
+      if (hasAdjacentHostile) {
+        return { applied: false, manualMessage: 'Rebel Graffiti: Cannot gain VP — there are adjacent hostile figures.' };
+      }
+    }
     const vk = vpKey(playerNum);
     game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
     game[vk].total = (game[vk].total ?? 0) + entry.rebelGraffitiVp;
-    return { applied: true, logMessage: `Gained ${entry.rebelGraffitiVp} VP (end of activation; honor: no adjacent hostiles).` };
+    return { applied: true, logMessage: `Gained ${entry.rebelGraffitiVp} VP (end of activation; no adjacent hostiles verified).` };
   }
 
   // ccEffect: shuffleHandIntoDeckThenDraw (Strategic Shift) — chosen player shuffles hand into deck, then draws N; choiceIndex 0 = P1, 1 = P2
@@ -6652,7 +6756,7 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Overheated** — **${meta.dcName}**: ${strainNote}. 2 Melee attacks queued; −1 Hit applied automatically per attack.`, refreshDcEmbed: true };
   }
 
-  // ccEffect: setTheChargesEffect (Set the Charges) — pick a space within 3; roll blue die; apply Hit+Surge as damage; open doors (honor)
+  // ccEffect: setTheChargesEffect (Set the Charges) — pick a space within 3; roll blue die; apply Hit+Surge as damage; open doors
   if (entry.type === 'ccEffect' && entry.setTheChargesEffect) {
     const { game, playerNum, dcMessageMeta, dcHealthState, chosenSpace } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
@@ -7130,7 +7234,7 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Interrupt: ${n}`), choiceValues: validKeys };
   }
 
-  // ccEffect: triangulateEffect (Triangulate) — move DROIDs manually (honor); pick hostile; deal damage = # friendly DROIDs in play (LOS honor)
+  // ccEffect: triangulateEffect (Triangulate) — move DROIDs manually; pick hostile; deal damage = # friendly DROIDs in play
   if (entry.type === 'ccEffect' && entry.triangulateEffect) {
     const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
@@ -8376,7 +8480,7 @@ export function resolveAbility(abilityId, context) {
     game.toughLuckPlayerNum = playerNum;
     return {
       applied: true,
-      logMessage: 'This round, when your opponent rerolls a die, remove that die from the results (honor).',
+      logMessage: 'This round, when your opponent rerolls a die, remove that die from the results.',
     };
   }
 
@@ -8387,7 +8491,7 @@ export function resolveAbility(abilityId, context) {
     game.thereIsNoTryPlayerNum = playerNum;
     return {
       applied: true,
-      logMessage: 'This round, when a friendly REBEL FORCE USER rolls dice: set 1 die to any side and convert Dodge results to your choice (honor).',
+      logMessage: 'This round, when a friendly REBEL FORCE USER rolls dice: set 1 die to any side and convert Dodge results to your choice.',
     };
   }
 
@@ -8398,7 +8502,7 @@ export function resolveAbility(abilityId, context) {
     game.youWillNotDenyMeActive = { playerNum };
     return {
       applied: true,
-      logMessage: '**You Will Not Deny Me** active — Fifth Brother cannot be defeated, ignores conditions, and recovers 2 Damage each time a hostile figure is defeated this round (honor).',
+      logMessage: '**You Will Not Deny Me** active — Fifth Brother cannot be defeated, ignores conditions, and recovers 2 Damage each time a hostile figure is defeated this round.',
     };
   }
 
@@ -8409,7 +8513,7 @@ export function resolveAbility(abilityId, context) {
     game.mandaAsteelPlayerNum = playerNum;
     return {
       applied: true,
-      logMessage: 'This round, when a friendly figure spends a Block Token during defense, recover 1 Damage on that figure (honor).',
+      logMessage: 'This round, when a friendly figure spends a Block Token during defense, recover 1 Damage on that figure.',
     };
   }
 
@@ -8420,7 +8524,7 @@ export function resolveAbility(abilityId, context) {
     game.stillFasterPlayerNum = playerNum;
     return {
       applied: true,
-      logMessage: 'This round, at the start of a hostile activation: interrupt to move 2 spaces and attack a different hostile figure (honor).',
+      logMessage: 'This round, at the start of a hostile activation: interrupt to move 2 spaces and attack a different hostile figure.',
     };
   }
 
@@ -8438,7 +8542,7 @@ export function resolveAbility(abilityId, context) {
     if (!game.disabledFigures.includes(chosenOption)) game.disabledFigures.push(chosenOption);
     return {
       applied: true,
-      logMessage: `**${chosenOption}** is Disabled — cannot use Surge abilities or Special Actions this round (honor).`,
+      logMessage: `**${chosenOption}** is Disabled — cannot use Surge abilities or Special Actions this round.`,
     };
   }
 
@@ -8449,7 +8553,7 @@ export function resolveAbility(abilityId, context) {
     game.holdGroundPlayerNum = playerNum;
     return {
       applied: true,
-      logMessage: 'This round, SMALL hostile figures cannot voluntarily exit spaces adjacent to your figures (honor).',
+      logMessage: 'This round, SMALL hostile figures cannot voluntarily exit spaces adjacent to your figures.',
     };
   }
 
@@ -8621,7 +8725,7 @@ export function resolveAbility(abilityId, context) {
     if (!game.crippledFigures.includes(chosenOption)) game.crippledFigures.push(chosenOption);
     return {
       applied: true,
-      logMessage: `**${chosenOption}** is Crippled — cannot voluntarily exit its space this round (honor).`,
+      logMessage: `**${chosenOption}** is Crippled — cannot voluntarily exit its space this round.`,
     };
   }
 

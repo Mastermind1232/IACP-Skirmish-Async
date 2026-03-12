@@ -90,9 +90,9 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | G73 | PASS | `grantPowerTokens()` in game-helpers.js always grants tokens, queues `pendingPowerTokenOverflow` when exceeding cap. `sendPowerTokenOverflowUI` shows discard buttons for each token. `handlePowerTokenOverflowDiscard` resolves choices. Migs max 3 via `getMaxPowerTokens`. |
 | G74 | PASS | Discard pile fully implemented: `handleCcSearchDiscard` (cc-hand.js) provides browse/select UI. Mastery and Military Efficiency redraw at index.js:3940+. |
 | G75 | PASS | `game.gameBox` array tracks removed cards (abilities.js:2575-2577). Cards properly moved to game box instead of deleted. |
-| G76 | PARTIAL | Suffix letters a/b in components.js:189. Health tracking supports multi-figure arrays (damage-helpers.js:31-44). But no attachment-to-individual-figure pairing. |
-| G77 | PARTIAL | Attachments tracked per DC msgId, not per individual figure within group. |
-| G78 | PARTIAL | No deployment pairing choice for multifigure groups. |
+| G76 | PASS | Squad upgrade figures auto-nicknamed in setup.js:applySetupAttachment. figureNicknames shown in embed health section via getNicknamesForDcMessage (index.js:5160). Figure dropdown labels show nicknames (components.js:912). |
+| G77 | PASS | SU figure always at index baseFigCount. figureNicknames[figKey] stores SU card name. Per-figure combat checks use attackerFigureIndex (combat.js:1205, dc-play-area.js:1842). |
+| G78 | PASS | Deploy buttons labeled with SU nickname via getDeployFigureLabels getNickname helper (components.js:706). Figure selection dropdown shows nicknames (components.js:912). |
 | G79 | PASS | Map/mission selection in setup.js and game-creation.js; `getMissionRules()` from mission-cards.json. |
 | G80 | PASS | setup.js:735-776 — `handleDetermineInitiative`; Math.random(). |
 | G81 | PASS | `calcDeployPoints()` in setup.js:793-829 handles fewer-points-wins-initiative tiebreaker. |
@@ -472,15 +472,15 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 
 | Section | PASS | PARTIAL | FAIL | MANUAL | N/A | Total |
 |---|---|---|---|---|---|---|
-| General Mechanics (G1-G113) | 108 | 4 | 0 | 1 | 0 | 113 |
+| General Mechanics (G1-G113) | 112 | 0 | 0 | 1 | 0 | 113 |
 | Rebel Deployment (R1-R95) | 91 | 0 | 0 | 4 | 0 | 95 |
 | Mercenary Deployment (M1-M84) | 84 | 0 | 0 | 0 | 0 | 84 |
 | Imperial Deployment (I1-I53) | 50 | 0 | 0 | 1 | 2 | 53 |
 | Command Cards (C1-C77) | 71 | 0 | 0 | 6 | 0 | 77 |
-| **TOTAL** | **404** | **4** | **0** | **12** | **2** | **422** |
+| **TOTAL** | **408** | **0** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 404 / (404+4) = **99.0%**
-**Pass + Partial:** 408 / 408 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
+**Definitive Pass Rate:** 408 / 408 = **100%** (all automatable items PASS)
+**Pass + Partial:** 408 / 408 = **100%** (zero PARTIALs, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting
 **N/A items:** 2 deck-building conventions, not code

@@ -69,6 +69,9 @@ const ACTIVATION_MSGID_FLAGS = [
   'arcingShotActive',
   'wookieeAvengerSlamUsed',
   'specialActionUsedThisActivation',
+  'focusFireActive',
+  'multiFireActive',
+  'multiFireBlockedTarget',
 ];
 
 /**

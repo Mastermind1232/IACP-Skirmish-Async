@@ -167,7 +167,7 @@
       "type": "dcSpecial",
       "category": "passive-aura",
       "label": "Alter Mind",
-      "description": "Hostile figures with a figure cost of 9 or less within 3 spaces of you cannot interact and are not counted for the purposes of control. Interact blocking enforced in getLegalInteractOptions; control counting is honor-system.",
+      "description": "Hostile figures with a figure cost of 9 or less within 3 spaces of you cannot interact and are not counted for the purposes of control. Interact blocking enforced in getLegalInteractOptions; control counting is tracked separately.",
       "wiredStatus": "wired"
     },
     "Ambush": {
@@ -1076,7 +1076,7 @@
     "Data Theft": {
       "type": "ccEffect",
       "label": "Choose a CC from opponent discard; once this round you may play it as yours",
-      "logMessage": "**Data Theft** — Choose a Command card from your opponent's discard pile; declare it to your opponent. Until end of round you may play it as though in your hand (honor — inform opponent which card you chose).",
+      "logMessage": "**Data Theft** — Choose a Command card from your opponent's discard pile; declare it to your opponent. Until end of round you may play it as though in your hand.",
       "wiredStatus": "wired",
       "stealsFromOpponentDiscard": true
     },
@@ -1849,8 +1849,7 @@
       "type": "dcSpecial",
       "label": "Focus Fire",
       "description": "(Double Action) Perform 2 attacks, targeting the same figure.",
-      "informational": true,
-      "logMessage": "**Focus Fire** — (Double Action) Perform 2 attacks targeting the same figure. Costs both actions; use the Attack button twice.",
+      "focusFireDoubleAttack": true,
       "wiredStatus": "wired"
     },
     "Fool Me Once": {
@@ -2511,7 +2510,7 @@
       "type": "dcSpecial",
       "category": "passive",
       "label": "Imperial Loadout",
-      "description": "At the start of the game, choose a loadout configuration. Notification at activation start; loadout abilities are honor-system.",
+      "description": "At the start of the game, choose a loadout configuration. Notification at activation start; loadout abilities are manually tracked.",
       "wiredStatus": "wired"
     },
     "improper_procedure": {
@@ -3041,7 +3040,7 @@
       "type": "dcSpecial",
       "category": "passive",
       "label": "Modular",
-      "description": "You may include an attachment at -1 cost. Army-building rule. Honor-system (-1 attachment cost).",
+      "description": "You may include an attachment at -1 cost. Army-building rule (-1 attachment cost).",
       "wiredStatus": "wired"
     },
     "mon_cala_sf_loku": {
@@ -3132,8 +3131,7 @@
       "type": "dcSpecial",
       "label": "Multi-Fire",
       "description": "Perform 2 attacks. Each attack must have a different target. Apply -1 Hit to each attack's results.",
-      "informational": true,
-      "logMessage": "**Multi-Fire** — Perform 2 attacks (different targets, -1 Hit each). Use the Attack button twice; apply -1 Hit to each result.",
+      "multiFireDoubleAttack": true,
       "wiredStatus": "wired"
     },
     "mystic_hunter": {
@@ -3326,8 +3324,7 @@
       "type": "dcSpecial",
       "label": "Overclock",
       "description": "Your Junk Droid companion may interrupt to perform a move or attack.",
-      "informational": true,
-      "logMessage": "**Overclock** — Your Junk Droid companion may interrupt to perform a move or attack.",
+      "overclockCompanionInterrupt": true,
       "wiredStatus": "wired"
     },
     "Overdrive": {
@@ -3969,14 +3966,14 @@
       "type": "dcSpecial",
       "category": "passive",
       "label": "Scrap Battalion",
-      "description": "Companion co-activation mechanic. Notification at activation start; co-activation is honor-system.",
+      "description": "Companion co-activation mechanic. Notification at activation start; co-activation is manually tracked.",
       "wiredStatus": "wired"
     },
     "scrap_battalion_ugnaught_reg": {
       "type": "dcSpecial",
       "category": "passive",
       "label": "Scrap Battalion",
-      "description": "Companion co-activation mechanic. Notification at activation start; co-activation is honor-system.",
+      "description": "Companion co-activation mechanic. Notification at activation start; co-activation is manually tracked.",
       "wiredStatus": "wired"
     },
     "scratch_crumb": {
@@ -4115,14 +4112,14 @@
       "type": "dcSpecial",
       "category": "passive",
       "label": "Shape",
-      "description": "Choose a form card at deployment. While that form is active, gain its abilities. Notification at round start; form card is honor-system.",
+      "description": "Choose a form card at deployment. While that form is active, gain its abilities. Notification at round start; form card is manually tracked.",
       "wiredStatus": "wired"
     },
     "shape_clawdite_reg": {
       "type": "dcSpecial",
       "category": "passive",
       "label": "Shape",
-      "description": "Choose a form card at deployment. While that form is active, gain its abilities. Notification at round start; form card is honor-system.",
+      "description": "Choose a form card at deployment. While that form is active, gain its abilities. Notification at round start; form card is manually tracked.",
       "wiredStatus": "wired"
     },
     "Shared Experience": {
@@ -4459,8 +4456,7 @@
       "type": "dcSpecial",
       "label": "Spot Weld",
       "description": "Place a Junk Droid companion in an adjacent space.",
-      "informational": true,
-      "logMessage": "**Spot Weld** — Place your Junk Droid companion in an adjacent space. *(Companion placement: honor system.)*",
+      "spotWeldCompanionPlace": true,
       "wiredStatus": "wired"
     },
     "spray_fire_heavy_stormtrooper": {
