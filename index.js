@@ -1950,11 +1950,7 @@ async function runDraftRandom(game, client, options = {}) {
         console.error('runDraftRandom: failed to post map to Map Updates:', err);
       }
     }
-    // Send persistent Ping Active Player button
-    const _pingRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`ping_active_${game.gameId}`).setLabel('Ping Active Player').setStyle(ButtonStyle.Secondary).setEmoji('🔔')
-    );
-    await boardChannel.send({ content: 'Use this button to nudge the active player (5-minute cooldown).', components: [_pingRow] }).catch(discordCatch);
+    // Ping Active Player button is already included in the map update standard row
   }
 
   // Hand threads live inside each player's play area

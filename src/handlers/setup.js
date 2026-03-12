@@ -529,11 +529,7 @@ async function finishMapSelectionAfterChoice(game, client, ctx) {
           console.error('Failed to post map to Map Updates channel:', err);
         }
       }
-      // Send persistent Ping Active Player button
-      const _pingRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`ping_active_${game.gameId}`).setLabel('Ping Active Player').setStyle(ButtonStyle.Secondary).setEmoji('🔔')
-      );
-      await boardChannel.send({ content: 'Use this button to nudge the active player (5-minute cooldown).', components: [_pingRow] }).catch(discordCatch);
+      // Ping Active Player button is already included in the map update standard row
     } else if (map) {
       // Board channel already exists (re-entry); post the map to it
       try {
