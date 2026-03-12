@@ -169,7 +169,7 @@ function _matchesKeywordPhrase(phrase, dcKw, affiliation) {
  * @param {Set} [alreadyAttached] - Set of dcMsgIds that already have an attachment
  * @returns {string|null} dcMsgId if exactly 1 match, null otherwise
  */
-function findAutoAttachTarget(cardName, dcList, dcMsgIds, alreadyAttached) {
+export function findAutoAttachTarget(cardName, dcList, dcMsgIds, alreadyAttached) {
   const effects = getDcEffects();
   const card = effects[cardName] || effects[`[${cardName}]`];
   if (!card?.abilityText) return null;
@@ -222,7 +222,7 @@ function findAutoAttachTarget(cardName, dcList, dcMsgIds, alreadyAttached) {
  * Apply a setup attachment to a DC (shared by manual picker and auto-attach).
  * Handles special cards (Focused on the Kill health boost, Wookiee Avenger deck search).
  */
-async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) {
+export async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) {
   const { dcHealthState, logGameAction, client, updateAttachmentMessageForDc } = ctx;
   const attachKey = dcAttachmentsKey(playerNum);
   game[attachKey] = game[attachKey] || {};
@@ -797,7 +797,6 @@ export async function handleDetermineInitiative(interaction, ctx) {
     return;
   }
   // G82/M75: Devious Scheme — check before initiative
-  const dcEffects = getDcEffects();
   const hasDcInSquad = (squad, dcName) => (squad?.dcList || []).some(n => {
     const resolved = typeof n === 'string' ? n.replace(/^\[|\]$/g, '') : n;
     return resolved === dcName || `[${resolved}]` === dcName || resolved === dcName.replace(/^\[|\]$/g, '');
@@ -805,45 +804,24 @@ export async function handleDetermineInitiative(interaction, ctx) {
   const p1HasDS = hasDcInSquad(game.player1Squad, '[Devious Scheme]');
   const p2HasDS = hasDcInSquad(game.player2Squad, '[Devious Scheme]');
 
-  // G81: Least deployment points chooses initiative; random only if equal
-  const calcDeployPoints = (squad) => (squad?.dcList || []).reduce((sum, name) => {
-    const resolved = typeof name === 'string' ? name.replace(/^\[|\]$/g, '') : name;
-    const eff = dcEffects[resolved] || dcEffects[`[${resolved}]`];
-    return sum + (eff?.cost ?? 0);
-  }, 0);
-  const p1Points = calcDeployPoints(game.player1Squad);
-  const p2Points = calcDeployPoints(game.player2Squad);
   let winner;
-  let initiativeReason;
   let zoneChooser; // who picks deployment zone (normally = initiative winner)
 
   if (p1HasDS && p2HasDS) {
     // Both have Devious Scheme — cards cancel, normal initiative rules
-    initiativeReason = null; // set below by normal rules
   } else if (p1HasDS) {
     // P1 has DS: P2 gets initiative, P1 chooses zone
     winner = game.player2Id;
-    initiativeReason = `Devious Scheme — <@${game.player1Id}> played [Devious Scheme], granting opponent initiative`;
     zoneChooser = game.player1Id;
   } else if (p2HasDS) {
     // P2 has DS: P1 gets initiative, P2 chooses zone
     winner = game.player1Id;
-    initiativeReason = `Devious Scheme — <@${game.player2Id}> played [Devious Scheme], granting opponent initiative`;
     zoneChooser = game.player2Id;
   }
 
-  // Normal initiative if no DS or both cancelled
+  // Initiative is always determined by random roll
   if (!winner) {
-    if (p1Points < p2Points) {
-      winner = game.player1Id;
-      initiativeReason = `fewer deployment points (${p1Points} vs ${p2Points})`;
-    } else if (p2Points < p1Points) {
-      winner = game.player2Id;
-      initiativeReason = `fewer deployment points (${p2Points} vs ${p1Points})`;
-    } else {
-      winner = Math.random() < 0.5 ? game.player1Id : game.player2Id;
-      initiativeReason = `random roll (tied at ${p1Points} points)`;
-    }
+    winner = Math.random() < 0.5 ? game.player1Id : game.player2Id;
   }
 
   const playerNum = winner === game.player1Id ? 1 : 2;
@@ -870,7 +848,7 @@ export async function handleDetermineInitiative(interaction, ctx) {
     });
     game.deploymentZoneMessageId = zoneMsg.id;
   } else {
-    await logGameAction(game, client, `<@${winner}> (**Player ${playerNum}**) won initiative (${initiativeReason})! Chooses deployment zone and activates first each round.`, { allowedMentions: { users: [winner] }, phase: 'INITIATIVE', icon: 'initiative' });
+    await logGameAction(game, client, `<@${winner}> (**Player ${playerNum}**) won initiative (random roll)! Choose your deployment zone.`, { allowedMentions: { users: [winner] }, phase: 'INITIATIVE', icon: 'initiative' });
     const generalChannel = await client.channels.fetch(game.generalId);
     const zoneMsg = await generalChannel.send({
       content: `<@${winner}> (**Player ${playerNum}**) — Pick your deployment zone:`,
@@ -1769,98 +1747,9 @@ export async function handleDeploymentDone(interaction, ctx) {
     console.error('Failed to update non-initiative deploy message:', err);
   }
 
-  const p1CcList = game.player1Squad?.ccList || [];
-  const p2CcList = game.player2Squad?.ccList || [];
-  // DC attachments (Skirmish Upgrades like [Focused on the Kill]) are always placed at start of game.
-  // CC attachments stay in the command deck and are played from hand during the game when drawn.
-  const p1DcListRaw = game.player1Squad?.dcList || [];
-  const p2DcListRaw = game.player2Squad?.dcList || [];
-  const p1SetupAttachments = p1DcListRaw.filter((entry) => isDcAttachment(resolveDcName(entry)));
-  const p2SetupAttachments = p2DcListRaw.filter((entry) => isDcAttachment(resolveDcName(entry)));
-  if (p1SetupAttachments.length > 0 || p2SetupAttachments.length > 0) {
-    game.setupAttachmentPhase = true;
-    game.setupAttachmentPending = { 1: p1SetupAttachments.map((e) => resolveDcName(e)), 2: p2SetupAttachments.map((e) => resolveDcName(e)) };
-    // Save originals for potential redo
-    game.setupAttachmentOriginal = { 1: [...game.setupAttachmentPending[1]], 2: [...game.setupAttachmentPending[2]] };
-    game.setupAttachmentApplied = { 1: [], 2: [] };
-    const generalChannel = await client.channels.fetch(game.generalId);
-    await generalChannel.send({
-      content: '**Both players have deployed.** Place your Skirmish Upgrade card(s) on your Deployment cards (see the **Your Hand** thread in your Play Area). When everyone has placed them, shuffle and draw your starting hands.',
-    });
-    for (const pn of [1, 2]) {
-      const pending = game.setupAttachmentPending[pn];
-      if (pending.length === 0) {
-        // Player has no attachments — auto-confirm so they don't block opponent
-        game.setupAttachmentConfirmed = game.setupAttachmentConfirmed || {};
-        game.setupAttachmentConfirmed[pn] = true;
-        continue;
-      }
-      // Auto-attach all character-specific attachments first
-      const dcList = getDcList(game, pn) || [];
-      const dcMsgIds = getDcMessageIds(game, pn) || [];
-      const attached = new Set((game.setupAttachmentApplied?.[pn] || []).map(a => a.dcMsgId));
-      while (pending.length > 0) {
-        const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds, attached);
-        if (!autoTarget) break; // needs manual picker
-        const card = pending[0];
-        await applySetupAttachment(game, pn, card, autoTarget, ctx);
-        pending.shift();
-        game.setupAttachmentApplied[pn].push({ card, dcMsgId: autoTarget });
-        attached.add(autoTarget);
-        await logGameAction(game, client, `**${card}** auto-attached to **${ctx.dcMessageMeta?.get(autoTarget)?.displayName || 'DC'}** (setup).`, { phase: 'SETUP', icon: 'card' });
-      }
-      if (pending.length === 0) {
-        // All auto-attached — show done prompt for confirmation
-        await _sendAttachDonePrompt(game, gameId, pn, client);
-        continue;
-      }
-      await _sendAttachmentDropdown(game, gameId, pn, pending[0], client);
-    }
-    // Check if all attachments were auto-placed AND no confirmation needed
-    // (Both players still need to confirm, so don't auto-finalize)
-    saveGames();
-    return;
-  }
-
-  game.currentRound = 1;
-  game.currentActivationTurnPlayerId = game.initiativePlayerId;
-  await clearPreGameSetup(game, client);
-
-  // Run post-deploy effects BEFORE CC draw (per rules: "after deployment" is before CC shuffle)
-  const { runPostDeployPhase } = ctx;
-  const _sendCcPrompts = async () => {
-    const generalChannel = await client.channels.fetch(game.generalId);
-    const initPlayerNum = getInitiativePlayerNum(game);
-    const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
-    await generalChannel.send({
-      content: deployContent,
-      allowedMentions: { users: [game.initiativePlayerId] },
-    });
-    try {
-      const p1HandChannel = await client.channels.fetch(game.p1HandId);
-      const p2HandChannel = await client.channels.fetch(game.p2HandId);
-      const ccDeckText = (list) => list.length ? list.join(', ') : '(no command cards)';
-      await p1HandChannel.send({
-        content: `**Your Command Card deck** (${p1CcList.length} cards):\n${ccDeckText(p1CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
-        components: [getCcShuffleDrawButton(gameId)],
-      });
-      await p2HandChannel.send({
-        content: `**Your Command Card deck** (${p2CcList.length} cards):\n${ccDeckText(p2CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
-        components: [getCcShuffleDrawButton(gameId)],
-      });
-    } catch (err) {
-      console.error('Failed to send CC deck prompt:', err);
-    }
-    saveGames();
-  };
-
-  let postDeployActive = false;
-  if (runPostDeployPhase) {
-    postDeployActive = await runPostDeployPhase(game, gameId, client, { logGameAction, saveGames }, _sendCcPrompts);
-  }
-  if (!postDeployActive) {
-    await _sendCcPrompts();
-  }
+  // Phase gate: both players deployed — wait for both to confirm before advancing
+  const { sendPhaseGateMessages } = ctx;
+  await sendPhaseGateMessages(game, 'deploy_done', ctx);
   saveGames();
 }
 
@@ -2178,7 +2067,9 @@ export async function handleAttachDoneConfirm(interaction, ctx) {
     game.setupAttachmentConfirmed = null;
     game.pendingAttachConfirm = null;
     game.attachRedoNoticeIds = null;
-    await finishSetupAttachments(game, client);
+    // Phase gate: attachments confirmed — wait for both to confirm before drawing CCs
+    const { sendPhaseGateMessages } = ctx;
+    await sendPhaseGateMessages(game, 'attach_done', ctx);
   } else {
     const handId = getHandChannelId(game, playerNum);
     const handChannel = await client.channels.fetch(handId);
@@ -2312,8 +2203,8 @@ export async function recoverSetupAttachments(game, gameId, playerNum, client) {
   }
 }
 
-/** Helper: send the attachment dropdown for a card. */
-async function _sendAttachmentDropdown(game, gameId, playerNum, card, client) {
+/** Helper: send the attachment dropdown for a card. Exported for phase-gate.js. */
+export async function _sendAttachmentDropdown(game, gameId, playerNum, card, client) {
   const handId = getHandChannelId(game, playerNum);
   const handChannel = await client.channels.fetch(handId);
   const dcList = getDcList(game, playerNum) || [];
@@ -2349,8 +2240,8 @@ async function _sendAttachmentDropdown(game, gameId, playerNum, card, client) {
   await handChannel.send(payload);
 }
 
-/** Helper: send the "all done" prompt with confirm/redo. */
-async function _sendAttachDonePrompt(game, gameId, playerNum, client) {
+/** Helper: send the "all done" prompt with confirm/redo. Exported for phase-gate.js. */
+export async function _sendAttachDonePrompt(game, gameId, playerNum, client) {
   const handId = getHandChannelId(game, playerNum);
   const handChannel = await client.channels.fetch(handId);
   const oppNum = opponentPlayerNum(playerNum);
