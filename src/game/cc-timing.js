@@ -36,6 +36,11 @@ export function getCcPlayContext(game, playerNum) {
     !game.endOfRoundWhoseTurn
   );
 
+  // Combat details for timing validation
+  const combatHit = combat?.hit ?? null;
+  const defenderRerolled = (combat?.defenderRerolledIndices?.length ?? 0) > 0;
+  const recentDefeat = !!(game?.lastDefeatInfo); // set after a figure is defeated
+
   return {
     startOfRound,
     duringActivation,
@@ -44,6 +49,10 @@ export function getCcPlayContext(game, playerNum) {
     isAttacker,
     isDefender,
     duringRound,
+    combatHit,
+    defenderRerolled,
+    recentDefeat,
+    combat,
   };
 }
 
@@ -104,8 +113,8 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'afterattackdice':
       return ctx.duringAttack;
     case 'afteryouresolveattackthatdidnotmissduetoaccuracy':
-      // Reduce to Rubble: playable during/after attack (honor: only when attack did not miss due to accuracy)
-      return ctx.duringAttack;
+      // Reduce to Rubble: playable only when attack hit (did not miss due to accuracy)
+      return ctx.duringAttack && ctx.isAttacker && ctx.combatHit !== false;
     case 'afterattacktargetingyouresolved':
       return ctx.duringAttack && ctx.isDefender;
     case 'whenyouhavesuffereddamageequaltoyourhealth':
@@ -154,8 +163,8 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
       // No Cheating: playable at start of hostile activation in your LOS (honor: play when hostile in LOS starts activation)
       return ctx.duringActivation;
     case 'whenoneofyourfiguresdefeated':
-      // Of No Importance: playable when your non-unique figure is defeated (honor: play when your figure defeated)
-      return ctx.duringActivation;
+      // Of No Importance: playable when your figure is defeated (validated via recentDefeat flag)
+      return (ctx.duringActivation || ctx.duringRound) && ctx.recentDefeat;
     case 'afteryouresolvegroupsactivation':
       // Change of Plans: playable after you resolve a group's activation ()
       return ctx.duringActivation;
@@ -166,8 +175,8 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
       // Marksman: playable before declaring a Ranged attack (play when about to declare ranged attack)
       return ctx.duringActivation;
     case 'afteryouresolveattacktargetingfigure':
-      // Field Promotion, Shoot the Messenger: playable after you resolve an attack targeting a figure (honor: play when attack just resolved)
-      return ctx.duringAttack;
+      // Field Promotion, Shoot the Messenger: playable after you resolve an attack (attacker only)
+      return ctx.duringAttack && ctx.isAttacker;
     case 'whenhostilefigurewithin3spacesdefeated':
       // Paid in Beskar: play when you defeat a hostile within 3 spaces ()
       return ctx.duringActivation;

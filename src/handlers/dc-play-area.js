@@ -963,10 +963,16 @@ async function buildAndSendAttackTargets(
   if (_overrideMinRange != null && _overrideMinRange > minRange) minRange = _overrideMinRange;
   // Priority Target (LOS-ignoring): Loku Kanoloa + Rebel Saboteur Elite have it in abilityText.
   // MASSIVE figures also ignore figure blocking. (Intercept-defender PT is checked separately below.)
+  // Clawdite Scout form also grants Priority Target.
   const abilityTextLower = (stats.abilityText || '').toLowerCase();
-  const attackerIgnoresFigureBlocking =
+  let attackerIgnoresFigureBlocking =
     (abilityTextLower.includes('priority target') && abilityTextLower.includes('line of sight')) ||
     attackerKws.includes('MASSIVE');
+  // Check Clawdite Scout form for Priority Target
+  if (!attackerIgnoresFigureBlocking && figureKey) {
+    const _formName = getConfig(game, figureKey)?.form;
+    if (_formName === 'Scout') attackerIgnoresFigureBlocking = true;
+  }
   // Build effective mapSpaces: merge closed doors + energy shields into LOS-blocking data.
   // Doors block LOS (rules: "Doors block line of sight and adjacency", p.27).
   // Energy shields block LOS but not movement (rules: "A space containing an energy shield blocks LOS", p.29).

@@ -1,0 +1,74 @@
+{
+  "loadoutCards": {
+    "Electrobatons": {
+      "label": "Electrobatons",
+      "pierce": 2,
+      "surgeAbilities": ["+1 hit"],
+      "abilities": {
+        "flurryOfBlows": true,
+        "deadly": true
+      },
+      "description": "Pierce 2. Surge: +1 Hit.\nFlurry of Blows: After attack, free melee attack (1 green die, +1 Hit). 1/activation.\nDeadly: -1 Evade to defense results."
+    },
+    "Electrohammer": {
+      "label": "Electrohammer",
+      "pierce": 2,
+      "surgeAbilities": ["+2 hit"],
+      "abilities": {
+        "electropulse": true
+      },
+      "description": "Pierce 2. Surge: +2 Hit.\nElectro-pulse: After attack, each figure adjacent to target suffers 1 Strain."
+    },
+    "Electrostaff": {
+      "label": "Electrostaff",
+      "pierce": 2,
+      "reach": true,
+      "surgeAbilities": ["+1 hit"],
+      "abilities": {
+        "quickStrike": true
+      },
+      "description": "Pierce 2. Reach. Surge: +1 Hit.\nQuick Strike: After attack, if defender rerolled/modified defense, defender suffers 1 Strain."
+    }
+  },
+  "formCards": {
+    "Scout": {
+      "label": "Scout",
+      "attackModifier": { "replaceDieWithBlue": true },
+      "surgeAbilities": ["+2 accuracy, pierce 1"],
+      "passives": ["+2 Accuracy", "+1 Evade", "+2 Block"],
+      "abilities": {
+        "rifleman": true,
+        "priorityTarget": true
+      },
+      "description": "+2 Accuracy, +1 Evade surge, +2 Block surge.\nSurge: +2 Accuracy, Pierce 1.\nRifleman: Replace 1 attack die with 1 blue die.\nPriority Target: Figures don't block LOS for your attacks."
+    },
+    "Senator": {
+      "label": "Senator",
+      "surgeAbilities": ["recover 2", "gain 1 power token"],
+      "passives": ["+1 Accuracy", "+1 Surge", "+1 Block"],
+      "abilities": {
+        "conspire": true
+      },
+      "description": "+1 Accuracy, +1 Surge surge, +1 Block surge.\nSurge: Recover 2. Surge: Gain 1 Power Token.\nConspire: Distribute 1 Power Token per attack die to friendlies within 1 space."
+    },
+    "Soldier": {
+      "label": "Soldier",
+      "surgeAbilities": ["+2 accuracy", "blast 1"],
+      "passives": ["+1 Accuracy", "+1 Hit", "+1 Block", "Professional"],
+      "abilities": {
+        "shieldsUp": true
+      },
+      "description": "+1 Accuracy, +1 Hit surge, +1 Block surge.\nSurge: +2 Accuracy. Surge: Blast 1 Strain.\nShields Up: Place energy shield adjacent (Health 4, no defense).\nProfessional: Reroll 1 attack die."
+    },
+    "Streetrat": {
+      "label": "Streetrat",
+      "surgeAbilities": ["+1 hit"],
+      "passives": ["+1 Surge", "+Gain 1 Power Token"],
+      "abilities": {
+        "assassinsBlade": true,
+        "fleet": { "mp": 2 }
+      },
+      "description": "+1 Surge, +Gain 1 Power Token surge.\nSurge: +1 Hit.\nAssassin's Blade: After attack, roll 1 red die, adjacent hostile suffers Strain = Hits.\nFleet: +2 MP at activation start."
+    }
+  }
+}

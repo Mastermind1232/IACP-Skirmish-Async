@@ -142,6 +142,7 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys) {
 const ROUND_OBJECT_FLAGS = [
   'roundDefenseBonusBlock',
   'roundDefenseBonusEvade',
+  'roundMobileDefenseBonusBlock',
   'roundDefenderBonusBlockPerEvade',
   'roundTrooperAttackHitBonus',
   'roundVehicleSpeedBonus',

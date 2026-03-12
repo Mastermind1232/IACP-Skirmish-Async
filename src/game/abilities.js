@@ -3071,19 +3071,45 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: +N MP (Fleet Footed, Rank and File, Opportunistic, etc.)
   if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
-    const { game, playerNum, dcMessageMeta, cardName } = context;
+    const { game, playerNum, dcMessageMeta, cardName, choiceIndex, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     // Opportunistic (C66): playable outside activation when a hostile suffers damage.
-    // If no activation is in progress, mark as applied with manual MP spend instruction.
+    // Phase 1: show DC picker. Phase 2 (choiceIndex set): grant MP to chosen DC.
     if (!msgId) {
       const ccEffect = getCcEffect(cardName);
       const timing = (ccEffect?.timing || '').toLowerCase().replace(/\s+/g, '');
       if (timing === 'afterhostilefiguresuffersdamage') {
         const n = entry.mpBonus;
-        game.opportunisticMustSpendNow = game.opportunisticMustSpendNow || {};
-        game.opportunisticMustSpendNow[playerNum] = { mp: n, card: cardName };
-        return { applied: true, logMessage: `Gained **${n} MP** (outside activation — must be spent immediately on any friendly SCUM figure). Move the figure manually.` };
+        // Phase 2: choice resolved — grant MP to chosen DC
+        if (choiceIndex !== undefined && choiceIndex !== null && chosenFigureKey) {
+          const chosenMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+          if (chosenMsgId) {
+            addMovementPoints(game, chosenMsgId, n);
+            game.opportunisticMustSpendNow = game.opportunisticMustSpendNow || {};
+            game.opportunisticMustSpendNow[playerNum] = { mp: n, card: cardName, msgId: chosenMsgId };
+            return { applied: true, logMessage: `**Opportunistic** — **${dcNameFromFigureKey(chosenFigureKey)}** gained **${n} MP** (must be spent immediately).` };
+          }
+          return { applied: true, logMessage: `Gained **${n} MP** (outside activation — spend on the chosen figure immediately).` };
+        }
+        // Phase 1: enumerate friendly figures for choice
+        const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+        const dcListOpp = getDcList(game, playerNum) || [];
+        const choiceOptions = [];
+        const choiceValues = [];
+        for (let i = 0; i < dcMsgIds.length; i++) {
+          const dcObj = dcListOpp[i];
+          if (!dcObj || dcObj.defeated) continue;
+          const dcN = typeof dcObj === 'object' ? (dcObj.dcName || dcObj.displayName) : dcObj;
+          const fks = getFigureKeysForDcMsg(game, playerNum, dcMessageMeta.get(dcMsgIds[i]));
+          if (fks.length === 0) continue;
+          choiceOptions.push(dcN);
+          choiceValues.push(fks[0]); // Use first figure key as identifier
+        }
+        if (choiceOptions.length === 0) {
+          return { applied: true, logMessage: `Gained **${n} MP** but no friendly figures available to move.` };
+        }
+        return { requiresChoice: true, choiceOptions, choiceValues };
       }
       return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
     }
@@ -5913,25 +5939,66 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: pushFriendlyWithin3Spaces (Reposition) — choiceOptions from dcList; chosenOption = figure to push
+  // ccEffect: pushFriendlyWithin3Spaces (Reposition) — pick a SMALL friendly figure, then pick landing space
+  // Phase 1 (no targetFigureKey): enumerate valid SMALL friendly figures → requiresChoice.
+  // Phase 2 (targetFigureKey set, no chosenSpace): enumerate valid landing spaces → requiresSpaceChoice.
+  // Phase 3 (targetFigureKey + chosenSpace set): apply position update.
   if (entry.type === 'ccEffect' && typeof entry.pushFriendlyWithin3Spaces === 'number' && entry.pushFriendlyWithin3Spaces > 0) {
-    const { game, playerNum, repositionFriendlyDcName, chosenOption } = context;
+    const pushDist = entry.pushFriendlyWithin3Spaces;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace, getRange: getRng, getMapSpaces: getMs } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const targetName = repositionFriendlyDcName || chosenOption;
-    if (!targetName) {
-      // Build choice list from friendly DCs (player picks a SMALL figure within 3 spaces)
-      const dcList = getDcList(game, playerNum) || [];
-      const opts = dcList
-        .filter((dc) => dc && !dc.defeated)
-        .map((dc) => (typeof dc === 'object' ? dc.displayName || dc.dcName : dc))
-        .filter(Boolean);
-      if (opts.length === 0) return { applied: false, manualMessage: 'No friendly figures to push. Resolve manually.' };
-      return { applied: false, requiresChoice: true, choiceOptions: opts };
+    const targetFigureKey = chosenFigureKey;
+
+    // Phase 3: apply push
+    if (targetFigureKey && chosenSpace) {
+      game.figurePositions = game.figurePositions || {};
+      game.figurePositions[playerNum] = game.figurePositions[playerNum] || {};
+      const prevPos = game.figurePositions[playerNum][targetFigureKey];
+      game.figurePositions[playerNum][targetFigureKey] = chosenSpace;
+      const targetName = dcNameFromFigureKey(targetFigureKey);
+      const { pathStr: _rpPathStr, warnings: _rpWarnings } = computePushPathAndWarnings(game, prevPos, chosenSpace, playerNum);
+      let _rpLogMsg = `**Reposition** — pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} to ${String(chosenSpace).toUpperCase()}${_rpPathStr}.`;
+      if (_rpWarnings.length > 0) {
+        const _warnList = _rpWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
+        _rpLogMsg += `\n⚠️ Exits adjacency to: ${_warnList} — opponent may play interrupts.`;
+      }
+      return { applied: true, logMessage: _rpLogMsg, refreshBoard: true };
     }
-    return {
-      applied: true,
-      logMessage: `Push **${targetName}** up to ${entry.pushFriendlyWithin3Spaces} spaces (resolve movement manually).`,
-    };
+
+    // Phase 2: figure chosen — enumerate valid landing spaces (up to N spaces away)
+    if (targetFigureKey && !chosenSpace) {
+      const targetPos = game.figurePositions?.[playerNum]?.[targetFigureKey];
+      if (!targetPos) return { applied: false, manualMessage: 'Reposition — target has no position.' };
+      const mapSpaces = getMs ? getMs(game.selectedMap?.id) : null;
+      if (!mapSpaces) return { applied: false, manualMessage: 'Reposition — map data unavailable. Resolve manually.' };
+      const occupiedSet = new Set([
+        ...Object.values(game.figurePositions?.[1] || {}),
+        ...Object.values(game.figurePositions?.[2] || {}),
+      ].filter(Boolean));
+      occupiedSet.delete(targetPos);
+      const validSpaces = [];
+      for (const coord of Object.keys(mapSpaces)) {
+        if (occupiedSet.has(coord)) continue;
+        if (getRng && getRng(targetPos, coord) > pushDist) continue;
+        validSpaces.push(coord);
+      }
+      if (validSpaces.length === 0) return { applied: false, manualMessage: 'Reposition — no valid landing spaces.' };
+      return { applied: false, requiresSpaceChoice: true, validSpaces, chosenFigureKey: targetFigureKey, spaceChoiceLabel: `**Reposition** — Pick a landing space for **${dcNameFromFigureKey(targetFigureKey)}** (up to ${pushDist} spaces):` };
+    }
+
+    // Phase 1: enumerate valid SMALL friendly figures
+    const dcEffects = getDcEffects() || {};
+    const validTargets = [];
+    for (const [fk, coord] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!coord) continue;
+      const dcN = dcNameFromFigureKey(fk);
+      const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
+      if (kws.includes('LARGE') || kws.includes('MASSIVE')) continue; // SMALL only
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: 'No SMALL friendly figures to push.' };
+    const choiceOptions = validTargets.map((fk) => dcNameFromFigureKey(fk));
+    return { applied: false, requiresChoice: true, choiceOptions, choiceValues: validTargets };
   }
 
   // ccEffect: opponentHandRandomToDeckTop (Stall for Time)
@@ -8184,17 +8251,28 @@ export function resolveAbility(abilityId, context) {
         return kws.includes('MOBILE') && (msgId ? !getFigureKeysForDcMsg(game, playerNum, dcMessageMeta?.get(msgId)).includes(fk) : true);
       });
       if (choiceIndex === 0) {
-        // SCUM: Personal Combat Shield — +1 Block per attack for Mobile friendlies (approximate with roundDefenseBonusBlock)
-        game.roundDefenseBonusBlock = game.roundDefenseBonusBlock || {};
-        game.roundDefenseBonusBlock[playerNum] = (game.roundDefenseBonusBlock[playerNum] || 0) + 1;
-        return { applied: true, logMessage: `**Choose a Side (SCUM)** — This round, +1 Block when defending for your figures (${mobileKeys.length} Mobile figure${mobileKeys.length !== 1 ? 's' : ''} benefit). [Personal Combat Shield effect approximated for full team.]` };
+        // SCUM: Personal Combat Shield — +1 Block per attack for Mobile friendlies only
+        game.roundMobileDefenseBonusBlock = game.roundMobileDefenseBonusBlock || {};
+        game.roundMobileDefenseBonusBlock[playerNum] = (game.roundMobileDefenseBonusBlock[playerNum] || 0) + 1;
+        return { applied: true, logMessage: `**Choose a Side (SCUM)** — This round, **+1 Block** when defending for your **Mobile** figures (${mobileKeys.length} figure${mobileKeys.length !== 1 ? 's' : ''}).` };
       } else {
-        // IMPERIAL: Gar Saxon Flamethrower — grant free fixedAreaEffect-style attack
-        if (msgId) {
-          game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-          game.freeAttackBonusPending[msgId] = true;
+        // IMPERIAL: Gar Saxon Flamethrower — grant free Flamethrower attack to ALL Mobile friendlies
+        const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+        const dcListAll = getDcList(game, playerNum) || [];
+        let grantedNames = [];
+        for (let i = 0; i < dcMsgIds.length; i++) {
+          const mid = dcMsgIds[i];
+          const dcObj = dcListAll[i];
+          if (!dcObj || dcObj.defeated) continue;
+          const dcN = typeof dcObj === 'object' ? (dcObj.dcName || dcObj.displayName) : dcObj;
+          const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
+          if (kws.includes('MOBILE')) {
+            game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+            game.freeAttackBonusPending[mid] = { from: 'Choose a Side (Flamethrower)' };
+            grantedNames.push(dcN);
+          }
         }
-        return { applied: true, logMessage: `**Choose a Side (IMPERIAL)** — This round, Mobile friendlies gain Gar Saxon's Flamethrower. Gar Saxon gains 1 free Flamethrower attack (use Special). For other Mobile figures, apply Flamethrower manually.` };
+        return { applied: true, logMessage: `**Choose a Side (IMPERIAL)** — This round, all **Mobile** friendlies gain a free Flamethrower attack: ${grantedNames.length ? grantedNames.join(', ') : 'none found'}.` };
       }
     }
     return { requiresChoice: true, choiceOptions: ['SCUM: Personal Combat Shield (+1 Block for Mobile figures)', "IMPERIAL: Gar Saxon's Flamethrower (area attack)"] };
@@ -8620,25 +8698,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: mpBonus (standalone — gain N MP during your activation; no damage or condition cost)
-  if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
-    const { game, playerNum, dcMessageMeta, cardName } = context;
-    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) {
-      // Opportunistic (C66): playable outside activation — MP must be spent immediately
-      const ccEff = getCcEffect(cardName);
-      const tmg = (ccEff?.timing || '').toLowerCase().replace(/\s+/g, '');
-      if (tmg === 'afterhostilefiguresuffersdamage') {
-        game.opportunisticMustSpendNow = game.opportunisticMustSpendNow || {};
-        game.opportunisticMustSpendNow[playerNum] = { mp: entry.mpBonus, card: cardName };
-        return { applied: true, logMessage: `Gained **${entry.mpBonus} MP** (outside activation — must be spent immediately on any friendly SCUM figure). Move the figure manually.` };
-      }
-      return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
-    }
-    addMovementPoints(game, msgId, entry.mpBonus);
-    return { applied: true, logMessage: `Gained **${entry.mpBonus} MP**.` };
-  }
+  // (Duplicate mpBonus handler removed — primary handler at line ~3072 covers all cases)
 
   // ccEffect: adrenalineEffect (Adrenaline) — +5 Health to each friendly WOOKIEE this round; at end of round each suffers 5 Damage
   if (entry.type === 'ccEffect' && entry.adrenalineEffect) {

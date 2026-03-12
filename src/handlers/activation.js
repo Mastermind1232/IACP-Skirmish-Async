@@ -1513,6 +1513,53 @@ export async function handleConfirmActivate(interaction, ctx) {
         }
         await thread.send({ content: `🏃 **Fleet** — **${meta.dcName}** gains **${fCard.fleetMp} MP** at start of activation.` }).catch(discordCatch);
       }
+      // Conspire (Senator): special action — distribute Power Tokens to friendlies within 1 space
+      if (chosenForm === 'Senator') {
+        const _conFk = fks[0];
+        const _conPos = game.figurePositions?.[meta.playerNum]?.[_conFk];
+        if (_conPos) {
+          const { getMapSpaces: _gms } = await import('../data-loader.js');
+          const _conMs = _gms(game.selectedMap?.id);
+          const _conAdj = (_conMs?.adjacency?.[String(_conPos).toLowerCase()] || []).map(s => String(s).toLowerCase());
+          // Count printed attack dice for token distribution
+          const _conEff = getDcEffects()[meta.dcName] || {};
+          const _conDiceCount = (_conEff.attack?.dice || []).length;
+          const _conFriendlies = Object.entries(game.figurePositions?.[meta.playerNum] || {})
+            .filter(([fk2, pos2]) => fk2 !== _conFk && pos2 && _conAdj.includes(String(pos2).toLowerCase()));
+          if (_conFriendlies.length > 0 && _conDiceCount > 0) {
+            const btns = _conFriendlies.slice(0, 4).map(([fk2]) =>
+              new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_conspire_${fk2}`).setLabel(dcNameFromFigureKey(fk2)).setStyle(ButtonStyle.Primary)
+            );
+            btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_conspire_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+            game.pendingConspire = { tokensRemaining: _conDiceCount, senderFk: _conFk };
+            await thread.send({ content: `🗣️ **Conspire** (Special Action) — Distribute **${_conDiceCount} Focus token(s)** to friendly figures within 1 space. Choose a figure:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+          } else {
+            await thread.send({ content: `🗣️ **Conspire** — No friendly figures within 1 space (or no dice in attack pool). Use manually if needed.` }).catch(discordCatch);
+          }
+        }
+      }
+      // Shields Up (Soldier): special action — place energy shield in adjacent space
+      if (chosenForm === 'Soldier') {
+        const _suFk = fks[0];
+        const _suPos = game.figurePositions?.[meta.playerNum]?.[_suFk];
+        if (_suPos) {
+          const { getMapSpaces: _gms2 } = await import('../data-loader.js');
+          const _suMs = _gms2(game.selectedMap?.id);
+          const _suAdj = (_suMs?.adjacency?.[String(_suPos).toLowerCase()] || []).map(s => String(s).toLowerCase());
+          // Filter out occupied spaces
+          const _suOccupied = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean).map(s => String(s).toLowerCase()));
+          const _suAvail = _suAdj.filter(s => !_suOccupied.has(s));
+          if (_suAvail.length > 0) {
+            const btns = _suAvail.slice(0, 4).map(s =>
+              new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_shieldsup_${s}`).setLabel(s.toUpperCase()).setStyle(ButtonStyle.Primary)
+            );
+            btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_shieldsup_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+            await thread.send({ content: `🛡️ **Shields Up** (Special Action) — Place an energy shield in an adjacent space:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+          } else {
+            await thread.send({ content: `🛡️ **Shields Up** — No adjacent empty spaces. Use manually if needed.` }).catch(discordCatch);
+          }
+        }
+      }
     } else {
       await thread.send({ content: `🔄 **Shape** — No form card selected. Apply abilities manually.` }).catch(discordCatch);
     }
@@ -2669,6 +2716,66 @@ export async function handleActPassive(interaction, ctx) {
           await interaction.message.edit({ content: `🤖 **Droid Kit** — **${displayName}** is at max Power Tokens (${cap}). No token gained.`, components: [] }).catch(discordCatch);
         }
       }
+    }
+  // --- Conspire (Senator form): distribute Focus tokens to friendlies within 1 space ---
+  } else if (ability === 'conspire') {
+    if (choice === 'skip') {
+      delete game.pendingConspire;
+      await interaction.message.edit({ content: `🗣️ **Conspire** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const targetFk = choice;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      game.figurePowerTokens = game.figurePowerTokens || {};
+      game.figurePowerTokens[targetFk] = game.figurePowerTokens[targetFk] || [];
+      const cap = getMaxPowerTokens(targetFk);
+      if (game.figurePowerTokens[targetFk].length < cap) {
+        game.figurePowerTokens[targetFk].push('Hit');
+        await interaction.message.edit({ content: `🗣️ **Conspire** — **${targetDcName}** gained **1 Focus (Hit) Token**.`, components: [] }).catch(discordCatch);
+        await logGameAction?.(game, client, `🗣️ **Conspire** — **${targetDcName}** gained 1 Focus (Hit) Token.`, { phase: 'ACTIVATION', icon: 'activate' });
+      } else {
+        await interaction.message.edit({ content: `🗣️ **Conspire** — **${targetDcName}** is at max tokens (${cap}). No token gained.`, components: [] }).catch(discordCatch);
+      }
+      // If more tokens to distribute, show picker again
+      if (game.pendingConspire) {
+        game.pendingConspire.tokensRemaining = (game.pendingConspire.tokensRemaining || 1) - 1;
+        if (game.pendingConspire.tokensRemaining > 0) {
+          const _conFk = game.pendingConspire.senderFk;
+          const _conPos = game.figurePositions?.[meta.playerNum]?.[_conFk];
+          if (_conPos) {
+            const { getMapSpaces: _gms } = await import('../data-loader.js');
+            const _conMs = _gms(game.selectedMap?.id);
+            const _conAdj = (_conMs?.adjacency?.[String(_conPos).toLowerCase()] || []).map(s => String(s).toLowerCase());
+            const _conFriendlies = Object.entries(game.figurePositions?.[meta.playerNum] || {})
+              .filter(([fk2, pos2]) => fk2 !== _conFk && pos2 && _conAdj.includes(String(pos2).toLowerCase()));
+            if (_conFriendlies.length > 0) {
+              const btns = _conFriendlies.slice(0, 4).map(([fk2]) =>
+                new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_conspire_${fk2}`).setLabel(dcNameFromFigureKey(fk2)).setStyle(ButtonStyle.Primary)
+              );
+              btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_conspire_skip`).setLabel('Done').setStyle(ButtonStyle.Secondary));
+              const thread = interaction.channel;
+              await thread.send({ content: `🗣️ **Conspire** — ${game.pendingConspire.tokensRemaining} Focus token(s) remaining. Choose a figure:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+              saveGames();
+              return;
+            }
+          }
+        }
+        delete game.pendingConspire;
+      }
+    }
+  // --- Shields Up (Soldier form): place energy shield in adjacent space ---
+  } else if (ability === 'shieldsup') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `🛡️ **Shields Up** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const space = choice.toLowerCase();
+      game.ancillaryTokens = game.ancillaryTokens || {};
+      game.ancillaryTokens.energyShield = game.ancillaryTokens.energyShield || [];
+      game.ancillaryTokens.energyShield.push(space);
+      // Track as special action for CC purposes
+      game.specialActionUsedThisActivation = game.specialActionUsedThisActivation || {};
+      game.specialActionUsedThisActivation[msgId] = (game.specialActionUsedThisActivation[msgId] || 0) + 1;
+      await interaction.message.edit({ content: `🛡️ **Shields Up** — Energy shield placed at **${space.toUpperCase()}**.`, components: [] }).catch(discordCatch);
+      await logGameAction?.(game, client, `🛡️ **Shields Up** — Energy shield placed at **${space.toUpperCase()}**.`, { phase: 'ACTIVATION', icon: 'activate' });
     }
   } else if (ability === 'companionbefore') {
     // Player chose to activate companion BEFORE the main group

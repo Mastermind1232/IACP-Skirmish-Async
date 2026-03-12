@@ -2443,6 +2443,13 @@ async function resolveCombatAfterRolls(game, combat, client) {
   const roundEvade = game.roundDefenseBonusEvade?.[defenderPlayerNum] || 0;
   if (roundBlock) combat.bonusBlock = (combat.bonusBlock || 0) + roundBlock;
   if (roundEvade) combat.bonusEvade = (combat.bonusEvade || 0) + roundEvade;
+  // Choose a Side (SCUM): +1 Block only for defenders with MOBILE keyword
+  const mobileBlock = game.roundMobileDefenseBonusBlock?.[defenderPlayerNum] || 0;
+  if (mobileBlock && combat.target?.figureKey) {
+    const _defDcName = dcNameFromFigureKey(combat.target.figureKey);
+    const _defKws = (getDcEffects()?.[_defDcName]?.keywords || []).map((k) => String(k).toUpperCase());
+    if (_defKws.includes('MOBILE')) combat.bonusBlock = (combat.bonusBlock || 0) + mobileBlock;
+  }
   const perEvade = game.roundDefenderBonusBlockPerEvade?.[defenderPlayerNum] || 0;
   if (perEvade && combat.defenseRoll) combat.bonusBlock = (combat.bonusBlock || 0) + (combat.defenseRoll.evade || 0) * perEvade;
   // Harsh Environment: exterior spaces -1 Evade; interior spaces +1 Block (applied once per combat resolution)
@@ -3128,6 +3135,8 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
         // F7: Keep healthState, figurePositions, and DC embed in sync when one figure in a group dies.
         removeFigurePosition(game, defenderPlayerNum, combat.target.figureKey);
         if (game.figureConditions?.[combat.target.figureKey]) delete game.figureConditions[combat.target.figureKey];
+        // Set defeat info for CC timing validation (Of No Importance, etc.)
+        game.lastDefeatInfo = { playerNum: defenderPlayerNum, figureKey: combat.target.figureKey, dcName: targetDcName };
         const vp = calculateKillVp(targetDcName);
         const _vpK = vpKey(attackerPlayerNum);
         awardKillVp(game, attackerPlayerNum, vp);
