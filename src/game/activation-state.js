@@ -99,6 +99,7 @@ const ACTIVATION_PLAYERNUM_FLAGS = [
 const ACTIVATION_SCALAR_FLAGS = [
   'commsJammerActivePlayerNum',
   'partingShotTriggered',
+  'onTheLamActive',
 ];
 
 /**
@@ -276,6 +277,8 @@ const ROUND_NULL_FLAGS = [
   'powerfulInfluencePlayerNum',
   'restInPeaceActive',
   'pendingIllicitArms',
+  'pendingExtraProtection',
+  'extraProtectionTriggeredThisCombat',
 ];
 
 const ROUND_ARRAY_FLAGS = [
@@ -295,6 +298,7 @@ const ROUND_FALSE_FLAGS = [
 const ROUND_DELETE_FLAGS = [
   'commsJammerActivePlayerNum',
   'partingShotTriggered',
+  'onTheLamActive',
   'jundlandTerrorPlayedThisEor',
   'reinforcementsPlayedThisSor',
   'pendingBlackMarket',

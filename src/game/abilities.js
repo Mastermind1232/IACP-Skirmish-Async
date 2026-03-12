@@ -28,7 +28,7 @@ import { applyCondition, resetCondition, filterCondition, isConditionImmune, HAR
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces } from './movement.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum } from './player-helpers.js';
-import { hasLineOfSight } from './spatial.js';
+import { hasLineOfSight, isWithinRange } from './spatial.js';
 import { checkDeckDiscardPassiveRedraws } from './cc-passive-redraw.js';
 
 /**
@@ -2721,6 +2721,10 @@ export function resolveAbility(abilityId, context) {
     const n = speed + entry.mpBonusFromSpeed;
     if (n < 1) return { applied: false, manualMessage: 'Resolve manually: no MP to gain.' };
     addMovementPoints(game, msgId, n);
+    // C4: On the Lam — flag for post-move LOS recheck (attack misses if target moves out of LOS)
+    if (context.cardName === 'On the Lam' && game.pendingCombat) {
+      game.onTheLamActive = true;
+    }
     // C77: Urgency requires all MP to be spent at once
     if (entry.mustSpendAll) {
       game.urgencyMustSpendAll = game.urgencyMustSpendAll || {};
@@ -2885,6 +2889,127 @@ export function resolveAbility(abilityId, context) {
       refreshDcEmbedMsgIds: [msgId],
       refreshBoard: true,
     };
+  }
+
+  // ccEffect: attackTargetSwap + mpBonus (Bodyguard, Get Behind Me!) — swap combat target to the activating figure
+  if (entry.type === 'ccEffect' && entry.attackTargetSwap && typeof entry.mpBonus === 'number') {
+    const { game, playerNum, dcMessageMeta } = context;
+    const isGetBehindMe = !!entry.getsBehindMe;
+    const cardLabel = isGetBehindMe ? 'Get Behind Me!' : 'Bodyguard';
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const n = entry.mpBonus;
+    addMovementPoints(game, msgId, n);
+    const mpNote = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
+
+    // Attempt to swap the combat target to the activating figure
+    const combat = game.pendingCombat || game.combat;
+    if (!combat || !combat.target) {
+      return { applied: true, logMessage: `${mpNote} No active combat found — resolve target swap manually.`, refreshMovementBank: true, activeMsgId: msgId };
+    }
+    const defenderPlayerNum = combat.defenderPlayerNum;
+    // Card is played by the defender's side (the player whose friendly is being attacked)
+    if (playerNum !== defenderPlayerNum) {
+      return { applied: true, logMessage: `${mpNote} ${cardLabel} target swap — resolve manually (player mismatch).`, refreshMovementBank: true, activeMsgId: msgId };
+    }
+    const originalTargetCoord = combat.target?.coord ? String(combat.target.coord).toLowerCase() : null;
+    const mapId = game.selectedMap?.id;
+    const mapSpaces = mapId ? getMapSpaces(mapId) : null;
+    const adjToTarget = (mapSpaces && originalTargetCoord) ? new Set((mapSpaces.adjacency?.[originalTargetCoord] || []).map(s => String(s).toLowerCase())) : null;
+
+    // Find the activating figure — it's the currently selected figure for the active DC
+    const meta = dcMessageMeta.get(msgId);
+    const figureKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const selectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const swapperFk = figureKeys[selectedIdx] || figureKeys[0];
+    if (!swapperFk) {
+      return { applied: true, logMessage: `${mpNote} Could not identify ${cardLabel} figure — resolve target swap manually.`, refreshMovementBank: true, activeMsgId: msgId };
+    }
+    const swapperPos = game.figurePositions?.[playerNum]?.[swapperFk];
+    const swapperPosNorm = swapperPos ? String(swapperPos).toLowerCase() : null;
+
+    // Verify keyword: Bodyguard requires GUARDIAN; Get Behind Me requires GUARDIAN or FORCE USER
+    const swapperDcName = dcNameFromFigureKey(swapperFk);
+    const swapperEff = getDcEffects()?.[swapperDcName] || getDcEffects()?.[swapperDcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const swapperKws = (swapperEff?.keywords || []).map(k => String(k).toUpperCase());
+    if (isGetBehindMe) {
+      if (!swapperKws.includes('GUARDIAN') && !swapperKws.includes('FORCE USER')) {
+        return { applied: true, logMessage: `${mpNote} Activating figure is not a GUARDIAN or FORCE USER — resolve target swap manually.`, refreshMovementBank: true, activeMsgId: msgId };
+      }
+    } else {
+      if (!swapperKws.includes('GUARDIAN')) {
+        return { applied: true, logMessage: `${mpNote} Activating figure is not a GUARDIAN — resolve target swap manually.`, refreshMovementBank: true, activeMsgId: msgId };
+      }
+    }
+
+    // Get Behind Me! additional validation: original target must be Small, cost ≤ 10, within 3 spaces of card player
+    if (isGetBehindMe) {
+      const origTargetFk = combat.target?.figureKey;
+      const origTargetDcName = origTargetFk ? dcNameFromFigureKey(origTargetFk) : null;
+      const origTargetStats = origTargetDcName ? getStatsForDc(origTargetDcName) : null;
+      // Small check: not LARGE or MASSIVE (keywords or passives)
+      const origKws = (origTargetStats?.keywords || []).map(k => String(k).toUpperCase());
+      const origPassives = (origTargetStats?.passives || []).map(p => String(p).toUpperCase());
+      const isSmall = !origKws.includes('LARGE') && !origKws.includes('MASSIVE') && !origPassives.includes('MASSIVE');
+      if (!isSmall) {
+        return { applied: true, logMessage: `${mpNote} Original target is not a Small figure — resolve manually.`, refreshMovementBank: true, activeMsgId: msgId };
+      }
+      // Cost check: figure cost ≤ 10
+      const origCost = origTargetStats?.cost ?? 99;
+      if (origCost > 10) {
+        return { applied: true, logMessage: `${mpNote} Original target cost (${origCost}) exceeds 10 — resolve manually.`, refreshMovementBank: true, activeMsgId: msgId };
+      }
+      // Range check: original target within 3 spaces of the card player
+      if (swapperPosNorm && originalTargetCoord && !isWithinRange(swapperPosNorm, originalTargetCoord, 3)) {
+        return { applied: true, logMessage: `${mpNote} Original target is not within 3 spaces of activating figure — resolve manually.`, refreshMovementBank: true, activeMsgId: msgId };
+      }
+    }
+
+    // The figure must be adjacent to the original target (or will move there with the granted MP).
+    // Per the rules, the player gains MP to move into position first, then the swap happens.
+    // We swap the target now; the player is responsible for actually moving the figure adjacent.
+    const isAdjacentNow = adjToTarget && swapperPosNorm && adjToTarget.has(swapperPosNorm);
+    const adjacencyNote = isAdjacentNow ? '' : ' (Use the granted MP to move adjacent to the original target.)';
+
+    // Perform the combat target swap
+    const swapperStats = getStatsForDc(swapperDcName);
+    const swapperLabel = swapperDcName.replace(/_/g, ' ');
+    const originalLabel = combat.target?.label || 'unknown';
+    combat.target.figureKey = swapperFk;
+    combat.target.coord = swapperPos || combat.target.coord;
+    combat.target.label = swapperLabel;
+    combat.defenderDcName = swapperDcName;
+    combat.targetStats = {
+      ...combat.targetStats,
+      defense: swapperStats?.defense || 'white',
+      cost: swapperStats?.cost ?? combat.targetStats?.cost ?? 5,
+    };
+    // Update defender conditions from the new target figure
+    const swapperConds = game.figureConditions?.[playerNum]?.[swapperFk] || [];
+    combat.defenderConds = swapperConds;
+
+    // C20: When target changes via Get Behind Me, cancel defender-side CC effects on the combat
+    // (defense bonuses that were applied for the original defender no longer apply)
+    if (isGetBehindMe) {
+      const cancelledEffects = [];
+      if (combat.bonusBlock) { cancelledEffects.push(`+${combat.bonusBlock} Block`); delete combat.bonusBlock; }
+      if (combat.bonusEvade) { cancelledEffects.push(`+${combat.bonusEvade} Evade`); delete combat.bonusEvade; }
+      if (combat.defenseBonusDice && combat.defenseBonusDice.length > 0) {
+        cancelledEffects.push(`bonus defense dice (${combat.defenseBonusDice.join(', ')})`);
+        combat.defenseBonusDice = [];
+      }
+      if (combat.defensePoolRemoveMax) { cancelledEffects.push(`defense pool remove limit`); delete combat.defensePoolRemoveMax; }
+      if (combat.defensePoolRemoveAll) { cancelledEffects.push(`defense pool remove all`); delete combat.defensePoolRemoveAll; }
+      if (cancelledEffects.length > 0) {
+        const cancelNote = ` Cancelled prior defender CC effects: ${cancelledEffects.join(', ')}.`;
+        const swapLog = `${mpNote} **${cardLabel}** — Attack target swapped from **${originalLabel}** to **${swapperLabel}**.${adjacencyNote}${cancelNote}`;
+        return { applied: true, logMessage: swapLog, refreshMovementBank: true, activeMsgId: msgId };
+      }
+    }
+
+    const swapLog = `${mpNote} **${cardLabel}** — Attack target swapped from **${originalLabel}** to **${swapperLabel}**.${adjacencyNote}`;
+    return { applied: true, logMessage: swapLog, refreshMovementBank: true, activeMsgId: msgId };
   }
 
   // ccEffect: +N MP (Fleet Footed, Rank and File, Opportunistic, etc.)

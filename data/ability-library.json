@@ -422,6 +422,7 @@
       "type": "ccEffect",
       "label": "Gain 2 MP; attack targets you instead of adjacent friendly",
       "mpBonus": 2,
+      "attackTargetSwap": true,
       "logMessage": "Gained **2 MP**. Move into position; the incoming attack targets you instead. Inform your opponent, then click Attack as the defender (if attacked) to proceed.",
       "wiredStatus": "wired"
     },
@@ -2157,6 +2158,8 @@
       "type": "ccEffect",
       "label": "Gain 3 MP; attack targets you instead of friendly",
       "mpBonus": 3,
+      "attackTargetSwap": true,
+      "getsBehindMe": true,
       "logMessage": "Gained **3 MP**. Move into position; the incoming attack targets you instead. Inform your opponent, then proceed with you as the target.",
       "wiredStatus": "wired"
     },

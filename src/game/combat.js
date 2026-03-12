@@ -221,6 +221,11 @@ export function computeCombatResult(combat) {
   const totalAccuracy = roll.acc + surgeA + bonusAcc - hiddenAccPenalty;
   let hit = true;
   let missReason = '';
+  // C4: On the Lam — forced miss when defender moved out of LOS
+  if (combat.forceMiss) {
+    hit = false;
+    missReason = 'On the Lam (target moved out of LOS)';
+  }
   // Wookiee Avenger (Skirmish Upgrade): convert Dodge results to Evade results
   if (defRoll.dodge && combat.wookieeAvengerDefend) {
     defRoll.evade = (defRoll.evade || 0) + 1;

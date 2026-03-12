@@ -334,12 +334,12 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | I4 | PASS | activation.js:1017-1033,1647-1695 — General's Orders picks up to 2 friendlies, each gains 2 MP via `addMovementPoints`. |
 | I5 | PASS | dc-play-area.js:838-843,1372-1386 — Epic Arsenal 3-dice selector correctly skips `c1 === c2 && c2 === c3`. Focus adds green die separately at combat time, NOT counted toward the 2-same-color limit. |
 | I6 | PASS | combat.js:1202-1208 — `awkward_atst` cancels attack if `distanceToTarget <= 1`. |
-| I7 | PARTIAL | Executor defined as `freeMoveBonus: 2, freeAttackBonus: true`. Handler is generic (abilities.js:2226-2235). But no special timing to ensure it fires BEFORE "after attack resolves" — relies on player manually triggering. |
+| I7 | PASS | Executor interrupt: in applyDamageAndFinishCombat, when friendly defeated within 3 of RGC, prompts Use/Skip buttons BEFORE post-combat effects. Grants 2 MP + free attack. Once per round via roundFigureAbilityUsed. |
 | I8 | PASS | combat.js:1114-1141 — Sentinel at line 1130: `if (fkAbilityIds.includes('sentinel') && !defenderIsGuardian)` — +1 Block only for non-GUARDIAN. |
 | I9 | PASS | abilities.js:7898-7940 — `searchDeckForCC` filters by traits (FORCE USER, BRAWLER) and cost (≤2), shows choices, moves to hand, shuffles deck. |
 | I10 | PASS | Composite Plating (+1 Block at 4+ spaces) at combat.js:1067-1070. Spray Fire (-3 Accuracy +1 Surge) at combat.js:1253-1258. Both wired. Modular -1 cost discount is a deck-building convention. |
 | I11 | PASS | combat.js:1210-1218 — `camouflage_scout_trooper` blocks ranged attacks from 4+ spaces. Cancels attack. Unit tested (abilities.test.js:658-672). |
-| I12 | PARTIAL | Forward Mounted Blasters passive at combat.js:582-599 (reroll if target in same row, -1 Hit otherwise). But no movement restriction for the Bikes specifically. |
+| I12 | PASS | Forward Mounted Blasters at combat.js (reroll/penalty). Thrusters enforced in movement.js:handleMovePick — rejects moves where new footprint doesn't overlap old footprint. |
 | I13 | PASS | combat.js:588-597 — uses `getFootprintCells` to check if target row matches ALL bike cells. Correct geometric check. |
 | I14 | PARTIAL | Static Pulse (Dio's CC) automated (abilities.js:5647-5695). But Droid Kit (gain PT if Dio in space) and Pulse Cannon (+4 Acc +1 Hit when spending PT) not automated — honor-system. Dio companion deployment not automated. |
 | I15 | PASS | Dio control counting respects Iden alive state (mission-rules.js:40-57). Counts after Iden defeated. |
@@ -391,7 +391,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C1 | PASS | Assassinate: +3 Hits (abilities.js attackBonusHits), `mutualExcludeAttackCc` flag blocks further CCs this attack (cc-hand.js ccLockedOut check), and rejects Assassinate if not first CC (attackCcCount check in abilities.js). |
 | C2 | MANUAL | Lord of the Sith timing `whenHostileFigureDefeatedNotYourActivation` (cc-timing.js:160-162). Whether usable "after Parting Blow before Stun" depends on timing window ordering — both are honor-system in async. |
 | C3 | PASS | Lure fully implemented (same as G25). pendingLure + combat delegation with `isLure` flag. |
-| C4 | PARTIAL | On the Lam timing `whenAttackDeclaredOnYou` — grants MP for movement. But bot does NOT auto-check LOS after defender moves. No automated LOS recheck found. |
+| C4 | PASS | On the Lam grants MP + sets `onTheLamActive` flag. Before dice roll in handleCombatRoll, checks LOS from attacker to defender's new position. If broken, sets `combat.forceMiss` and skips dice. computeCombatResult respects forceMiss. |
 | C5 | MANUAL | On the Lam + Return Fire timing interaction is honor-system. No code enforces ordering. |
 | C6 | PASS | Son of Skywalker timing `afterActivationResolves` (cc-effects.json:1711). abilities.js:7662-7675 sets `game.sonOfSkywalkerActive`. activation.js:362-378 auto-readies Luke's DC. Timing allows playing after last figure goes. |
 | C7 | PASS | Bot uses manual "End R{N} Activation Phase" button (activation.js:65-112). Round does NOT auto-end when deployments exhausted — `bothEnded` requires both players to click. |
@@ -406,8 +406,8 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C16 | MANUAL | Parting Blow + Dirty Trick: both available during activation, player must choose. No automated conflict resolution. |
 | C17 | PASS | Evacuate includes attachment costs (abilities.js:6203-6211). Correctly computes half of total cost including attachments. |
 | C18 | PASS | Final Stand timing `whenFriendlyFigureWithin3SpacesWouldBeDefeated`, playableBy `Baze Malbus`. Baze is within 0 spaces of himself. No code prevents self-targeting. |
-| C19 | PARTIAL | Get Behind Me timing exists in cc-timing.js. But no dedicated handler found — complex mechanics (check small, cost ≤10, within 3, redirect attack) are not automated. |
-| C20 | PARTIAL | Get Behind Me not automated (see C19). Defense pool card cancellation on target change not coded. |
+| C19 | PASS | Get Behind Me: attackTargetSwap handler in abilities.js validates Small/cost≤10/within 3, swaps combat.target to eligible figure. Grants 3 MP. |
+| C20 | PASS | Get Behind Me cancels defender-side CC effects on target swap: resets bonusBlock, bonusEvade, defenseBonusDice, defensePoolRemoveMax. |
 | C21 | PASS | Jundland Terror per-EOR enforcement via `jundlandTerrorPlayedThisEor` flag (same as G37). |
 | C22 | PASS | Knowledge and Defense: defense die bonus works (abilities.js:4150-4165). Passive redraw implemented via `checkSurgePassiveRedraws` (cc-passive-redraw.js:86-108) — FORCE USER surge triggers re-draw. |
 | C23 | PARTIAL | Parting Blow timing `whenHostileFigureExitsAdjacentSpace` maps to `ctx.duringActivation`. No per-space movement tracking to trigger multiple checks. Honor-system. |
@@ -423,7 +423,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C33 | PASS | You Will Not Deny Me fully implemented: abilities.js:8277-8286 sets `youWillNotDenyMeActive`. index.js:2958-2967 prevents Fifth Brother defeat (restores HP to 1). conditions.js:36-37 grants condition immunity. index.js:3092-3109 recovers 2 HP on hostile defeat then game-boxes card. Zillo interaction correct — Zillo resolves pre-damage, YWNDM fires post-damage. |
 | C34 | PASS | Combat.js:1445-1453 auto-prompts defender with all playable reaction cards (including `whenAttackDeclaredOnYou` cards like Ambush) when attack declared. Defender sees Ambush automatically if in hand. |
 | C35 | PARTIAL | Arcing Shot timing `beforeYouDeclareAttack` for Drokkatta. Can be played (timing works). But targeting override (target figure adjacent to empty space in your LOS) not automated — honor-system. |
-| C36 | PARTIAL | Bodyguard timing `whenAttackDeclaredOnAdjacentFriendly`. Grants MP and logs redirect. But actual attack target swap not automated in combat resolution. |
+| C36 | PASS | Bodyguard: attackTargetSwap handler in abilities.js validates GUARDIAN keyword, swaps combat.target (figureKey, coord, label, defense dice, conditions). Grants 2 MP. |
 | C37 | PASS | Built on Hope: active effect works (abilities.js:5853-5877). Passive re-draw implemented via `checkDeckDiscardPassiveRedraws` (cc-passive-redraw.js:119-135) — triggers when discarded from deck. |
 | C38 | PASS | Cal's Buddy (abilities.js:8140-8169): finds Cal's position, prompts adjacent space, places BD-1. |
 | C39 | PASS | Change of Plans cost comparison implemented (same as G6). Shared keywords + equal or lower deployment cost enforced. |
@@ -433,7 +433,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C43 | PARTIAL | Disengage CC exists and can be played during activation (cc-timing.js:112). No per-square movement interrupt — player must manually play when hostile passes near Mak. |
 | C44 | PASS | Elusive implemented (abilities.js:5304-5310). Handler fully coded. |
 | C45 | PASS | abilities.js:3181-3205 — Escalating Hostility counts copies in discard, adds to base 1 Strain. |
-| C46 | PARTIAL | Extra Protection timing maps to `ctx.duringActivation`. No automated check whether friendly within 2 suffered 3+ damage. Honor-system. |
+| C46 | PASS | Extra Protection auto-check: after damage applied in applyDamageAndFinishCombat, if damage >= 3 and figure survives, checks defending player's CC hand for Extra Protection and Onar Koma within 2 spaces (BFS). Prompts play/skip; on play, removes card from hand, adds to discard, grants 2 MP + free attack to Onar. |
 | C47 | PASS | abilities.js:5968-5993 — Ferocity scans CREATURE figures from BOTH players (`for (const pn of [1, 2])`). Opponent's creatures included. |
 | C48 | PASS | Field Tactician (abilities.js:6608-6619) grants MP to any friendly within 2, which includes companions. |
 | C49 | PASS | Force Push uses `computePushPathAndWarnings` (abilities.js:44-80). Path computed for Parting Blow triggers. |
@@ -475,11 +475,11 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | General Mechanics (G1-G113) | 103 | 9 | 0 | 1 | 0 | 113 |
 | Rebel Deployment (R1-R95) | 87 | 4 | 0 | 4 | 0 | 95 |
 | Mercenary Deployment (M1-M84) | 79 | 5 | 0 | 0 | 0 | 84 |
-| Imperial Deployment (I1-I53) | 47 | 3 | 0 | 1 | 2 | 53 |
-| Command Cards (C1-C77) | 62 | 9 | 0 | 6 | 0 | 77 |
-| **TOTAL** | **378** | **30** | **0** | **12** | **2** | **422** |
+| Imperial Deployment (I1-I53) | 49 | 1 | 0 | 1 | 2 | 53 |
+| Command Cards (C1-C77) | 67 | 4 | 0 | 6 | 0 | 77 |
+| **TOTAL** | **385** | **23** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 378 / (378+30) = **92.6%**
+**Definitive Pass Rate:** 385 / (385+23) = **94.4%**
 **Pass + Partial:** 408 / 408 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting

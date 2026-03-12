@@ -1769,6 +1769,35 @@ export async function handleCombatRoll(interaction, ctx) {
   const thread = await interaction.client.channels.fetch(combat.combatThreadId);
   const effectiveAttackerPlayerNum = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
 
+  // C4: On the Lam — recheck LOS before rolling; if defender moved out of LOS, attack auto-misses
+  if (game.onTheLamActive && !combat.attackRoll) {
+    delete game.onTheLamActive;
+    const _otlMapId = game.selectedMap?.id;
+    const _otlMapSpaces = _otlMapId ? getMapSpaces(_otlMapId) : null;
+    const _otlAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
+    const _otlDefPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target?.figureKey];
+    if (_otlMapSpaces && _otlAtkPos && _otlDefPos && ctx.hasLineOfSight) {
+      const _otlHasLOS = ctx.hasLineOfSight(
+        String(_otlAtkPos).toLowerCase(),
+        String(_otlDefPos).toLowerCase(),
+        _otlMapSpaces,
+        null,
+      );
+      if (!_otlHasLOS) {
+        combat.forceMiss = true;
+        combat.attackRoll = { acc: 0, dmg: 0, surge: 0 };
+        combat.attackDiceResults = [];
+        combat.defenseRoll = { block: 0, evade: 0, dodge: false };
+        combat.defenseDiceResults = [];
+        combat.defenseDiceCount = 0;
+        await thread.send('**On the Lam** — Target moved out of line of sight. The attack misses.');
+        await sendReadyToResolveRolls(thread, game.gameId);
+        saveGames();
+        return;
+      }
+    }
+  }
+
   if (!combat.attackRoll) {
     if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerPlayerNum, canActAsPlayer, `Only the attacker (P${effectiveAttackerPlayerNum}) may roll attack dice.`)) return;
     const baseDice = combat.attackInfo?.dice || [];

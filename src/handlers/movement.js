@@ -479,6 +479,24 @@ export async function handleMovePick(interaction, ctx) {
     }
   }
 
+  // Thrusters (74-Z Speeder Bike): after moving, must overlap at least 1 space the figure already occupies
+  {
+    const _thrEff = getDcEffects()?.[meta.dcName];
+    if ((_thrEff?.passives || []).includes('Thrusters')) {
+      const currentPos = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
+      if (currentPos && targetInfo.topLeft !== currentPos) {
+        const currentSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
+        const oldFootprint = new Set(getNormalizedFootprint(currentPos, currentSize));
+        const newFootprint = getNormalizedFootprint(targetInfo.topLeft, targetInfo.size || currentSize);
+        const hasOverlap = newFootprint.some((cell) => oldFootprint.has(cell));
+        if (!hasOverlap) {
+          await interaction.followUp({ content: `**${displayName}** has **Thrusters** — must enter at least 1 space it already occupies.`, ephemeral: true }).catch(discordCatch);
+          return;
+        }
+      }
+    }
+  }
+
   const terminalsBefore = mapId ? countTerminalsControlledByPlayer(game, playerNum, mapId) : 0;
   if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
   if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};

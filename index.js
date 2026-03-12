@@ -2713,6 +2713,47 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           }
         }
       }
+      // Extra Protection (Onar Koma CC): when a friendly figure within 2 spaces suffers 3+ damage
+      // and survives, prompt the defending player to play Extra Protection (move 2 + free attack).
+      if (damage >= 3 && newCur > 0 && !game.extraProtectionTriggeredThisCombat) {
+        const _epHand = getCcHand(game, defenderPlayerNum) || [];
+        const _epCardIdx = _epHand.indexOf('Extra Protection');
+        if (_epCardIdx >= 0) {
+          // Check if Onar Koma is alive and within 2 spaces of the damaged figure
+          const _epTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+          if (_epTargetPos && game.selectedMap?.id) {
+            const _epFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
+            for (const [_epFk, _epPos] of Object.entries(_epFriendlyFigs)) {
+              if (_epFk === combat.target.figureKey) continue; // "another" friendly figure
+              const _epDcName = dcNameFromFigureKey(_epFk);
+              if (_epDcName !== 'Onar Koma') continue;
+              // Check within 2 spaces (BFS adjacency)
+              if (!isWithinN(_epPos, _epTargetPos, 2, game.selectedMap.id)) continue;
+              // Find Onar's msgId for movement grant
+              const _epOnarMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, _epFk);
+              if (!_epOnarMsgId) continue;
+              // All conditions met — prompt the player
+              game.extraProtectionTriggeredThisCombat = true;
+              game.pendingExtraProtection = {
+                targetFigKey: combat.target.figureKey, targetMsgId, targetFigIndex,
+                damage, playerNum: defenderPlayerNum,
+                onarFigKey: _epFk, onarMsgId: _epOnarMsgId, onarDcName: _epDcName,
+                // Store combat flow state for re-entry
+                hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId,
+              };
+              const _epOwnerId = game[`player${defenderPlayerNum}Id`];
+              const _epDamagedLabel = combat.target.label || dcNameFromFigureKey(combat.target.figureKey);
+              const _epRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`extra_protection_play_${game.gameId}`).setLabel('Play Extra Protection (move 2 + attack)').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`extra_protection_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+              );
+              await logGameAction(game, client, `<@${_epOwnerId}> **Extra Protection** — **${_epDamagedLabel}** suffered ${damage} Damage. **${_epDcName}** is within 2 spaces and may play Extra Protection (move up to 2 spaces, then perform an attack).`, { components: [_epRow], allowedMentions: { users: [_epOwnerId] } });
+              saveGames();
+              return;
+            }
+          }
+        }
+      }
       // Guerilla (Rebel Pathfinder E/R, Alliance Ranger E): after attack, if defender defeated, attacker becomes Hidden
       if (newCur <= 0) {
         const _guerAttEff = getDcEffects()?.[combat.attackerDcName];
@@ -3031,6 +3072,45 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           await logGameAction(game, client, `<@${_lrOwnerId}> **Last Resort** — **${combat.target.label}** is about to be defeated! Deplete to roll 1 red die — adjacent figures suffer Hits as Damage.`, { components: [_lrRow], allowedMentions: { users: [_lrOwnerId] } });
           saveGames();
           return;
+        }
+      }
+      // Executor (Royal Guard Champion): when a friendly figure is defeated within 3 spaces,
+      // RGC may interrupt to move 2 spaces + perform a free attack. Limit once per round.
+      if (newCur <= 0 && !_sbrImmune && !game.executorTriggered?.[targetMsgId]) {
+        const _exDefeatedPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+        if (_exDefeatedPos && game.selectedMap?.id) {
+          const _exFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
+          for (const [_exFk, _exPos] of Object.entries(_exFriendlyFigs)) {
+            if (_exFk === combat.target.figureKey) continue;
+            const _exDcName = dcNameFromFigureKey(_exFk);
+            const _exEff = getDcEffects()?.[_exDcName];
+            if (!(_exEff?.specialAbilityIds || []).includes('executor')) continue;
+            // Check within 3 spaces
+            if (!isWithinN(_exPos, _exDefeatedPos, 3, game.selectedMap.id)) continue;
+            // Limit once per round
+            const _exRoundKey = `${_exFk}_executor`;
+            if (game.roundFigureAbilityUsed?.[_exRoundKey]) continue;
+            // Find RGC's msgId
+            const _exRgcMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, _exFk);
+            if (!_exRgcMsgId) continue;
+            // Trigger the interrupt
+            game.executorTriggered = game.executorTriggered || {};
+            game.executorTriggered[targetMsgId] = true;
+            game.pendingExecutorInterrupt = {
+              rgcFigKey: _exFk, rgcMsgId: _exRgcMsgId, rgcPlayerNum: defenderPlayerNum,
+              rgcDcName: _exDcName, defeatedLabel: combat.target.label,
+              targetMsgId, defenderPlayerNum, attackerPlayerNum,
+              damage, hit, resultText, totalBlast, ownerId, targetFigIndex,
+            };
+            const _exOwnerId = game[`player${defenderPlayerNum}Id`];
+            const _exRow = new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId(`executor_use_${game.gameId}_${_exRgcMsgId}`).setLabel('Use Executor').setStyle(ButtonStyle.Primary),
+              new ButtonBuilder().setCustomId(`executor_skip_${game.gameId}_${_exRgcMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+            );
+            await logGameAction(game, client, `<@${_exOwnerId}> **Executor** — **${_exDcName}** may interrupt (friendly **${combat.target.label}** defeated within 3 spaces). Move up to 2 spaces, then perform an attack.`, { components: [_exRow], allowedMentions: { users: [_exOwnerId] } });
+            saveGames();
+            return;
+          }
         }
       }
       if (newCur <= 0 && !_sbrImmune && !(game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum && ((idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey))?.toLowerCase().includes('fifth')))) {

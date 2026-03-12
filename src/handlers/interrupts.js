@@ -888,3 +888,121 @@ export async function handlePunishingStrike(interaction, ctx) {
   await logGameAction(game, client, `**[Punishing Strike]** — Replaced **${originalCondition}** with **${choice}** on **${targetName}**.`, { phase: 'ROUND', icon: 'card' });
   saveGames();
 }
+
+// ── Executor (Royal Guard Champion) ──────────────────────────────────────────
+// When a friendly figure within 3 spaces is defeated, RGC may interrupt to
+// move up to 2 spaces and then perform an attack. Limit once per round.
+export async function handleExecutor(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, applyDamageAndFinishCombat } = ctx;
+  const buttonKey = interaction.customId.startsWith('executor_use_') ? 'executor_use_' : 'executor_skip_';
+
+  await interaction.deferUpdate().catch(discordCatch);
+  const _exSuffix = interaction.customId.replace(buttonKey, '');
+  const _exParts = _exSuffix.split('_');
+  const _exGameId = _exParts[0];
+  const _exRgcMsgId = _exParts[1];
+  const _exGame = await requireGame(interaction, getGame, _exGameId, { silent: true });
+  if (!_exGame) return;
+  if (!_exGame.pendingExecutorInterrupt) {
+    await interaction.followUp({ content: 'No pending Executor interrupt.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const _exPending = _exGame.pendingExecutorInterrupt;
+  if (!await requirePlayer(interaction, _exGame, interaction.user.id, _exPending.rgcPlayerNum, canActAsPlayer, 'Only the RGC owner may respond.')) return;
+  delete _exGame.pendingExecutorInterrupt;
+  const _exCombat = _exGame.pendingCombat;
+
+  if (buttonKey === 'executor_use_') {
+    // Mark once-per-round usage
+    _exGame.roundFigureAbilityUsed = _exGame.roundFigureAbilityUsed || {};
+    _exGame.roundFigureAbilityUsed[`${_exPending.rgcFigKey}_executor`] = true;
+
+    // Grant 2 free movement points to RGC
+    _exGame.movementBank = _exGame.movementBank || {};
+    if (!_exGame.movementBank[_exPending.rgcMsgId]) {
+      _exGame.movementBank[_exPending.rgcMsgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: _exPending.rgcDcName };
+    } else {
+      _exGame.movementBank[_exPending.rgcMsgId].total = (_exGame.movementBank[_exPending.rgcMsgId].total || 0) + 2;
+      _exGame.movementBank[_exPending.rgcMsgId].remaining = (_exGame.movementBank[_exPending.rgcMsgId].remaining || 0) + 2;
+    }
+
+    // Grant free attack (next attack costs no action)
+    _exGame.freeAttackBonusPending = _exGame.freeAttackBonusPending || {};
+    _exGame.freeAttackBonusPending[_exPending.rgcMsgId] = true;
+
+    await logGameAction(_exGame, client, `**Executor** — **${_exPending.rgcDcName}** gains 2 MP and a free attack (friendly **${_exPending.defeatedLabel}** defeated). Use Move/Attack buttons on the DC.`, { phase: 'ROUND', icon: 'card' });
+  } else {
+    await logGameAction(_exGame, client, `**Executor** — Skipped.`, { phase: 'ROUND', icon: 'card' });
+  }
+
+  // Finalize defeat by re-calling applyDamageAndFinishCombat (executorTriggered flag already set)
+  await applyDamageAndFinishCombat(_exGame, _exCombat, {
+    damage: _exPending.damage, hit: _exPending.hit, resultText: _exPending.resultText,
+    totalBlast: _exPending.totalBlast, defenderPlayerNum: _exPending.defenderPlayerNum,
+    attackerPlayerNum: _exPending.attackerPlayerNum, ownerId: _exPending.ownerId,
+    targetMsgId: _exPending.targetMsgId, targetFigIndex: _exPending.targetFigIndex,
+  }, client);
+  saveGames();
+  return;
+}
+
+// ── Extra Protection (Onar Koma CC) ─────────────────────────────────────────
+// When another friendly figure within 2 spaces suffers 3+ Damage from an attack,
+// Onar may play Extra Protection to move up to 2 spaces and perform an attack.
+export async function handleExtraProtection(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, logGameAction, applyDamageAndFinishCombat } = ctx;
+  const isPlay = interaction.customId.startsWith('extra_protection_play_');
+  const buttonKey = isPlay ? 'extra_protection_play_' : 'extra_protection_skip_';
+
+  await interaction.deferUpdate().catch(discordCatch);
+  const _epGameId = interaction.customId.replace(buttonKey, '');
+  const _epGame = await requireGame(interaction, getGame, _epGameId, { silent: true });
+  if (!_epGame) return;
+  if (!_epGame.pendingExtraProtection) {
+    await interaction.followUp({ content: 'No pending Extra Protection prompt.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const _epPending = _epGame.pendingExtraProtection;
+  if (!await requirePlayer(interaction, _epGame, interaction.user.id, _epPending.playerNum, canActAsPlayer, 'Only the defending player may respond.')) return;
+  delete _epGame.pendingExtraProtection;
+  const _epCombat = _epGame.pendingCombat;
+
+  if (isPlay) {
+    // Remove Extra Protection from hand, add to discard
+    const _epHandKey = _epPending.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
+    const _epDiscardKey = _epPending.playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+    const _epHand = _epGame[_epHandKey] || [];
+    const _epIdx = _epHand.indexOf('Extra Protection');
+    if (_epIdx >= 0) _epHand.splice(_epIdx, 1);
+    _epGame[_epDiscardKey] = _epGame[_epDiscardKey] || [];
+    _epGame[_epDiscardKey].push('Extra Protection');
+
+    // Grant 2 free movement points to Onar Koma
+    _epGame.movementBank = _epGame.movementBank || {};
+    if (!_epGame.movementBank[_epPending.onarMsgId]) {
+      _epGame.movementBank[_epPending.onarMsgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: _epPending.onarDcName };
+    } else {
+      _epGame.movementBank[_epPending.onarMsgId].total = (_epGame.movementBank[_epPending.onarMsgId].total || 0) + 2;
+      _epGame.movementBank[_epPending.onarMsgId].remaining = (_epGame.movementBank[_epPending.onarMsgId].remaining || 0) + 2;
+    }
+
+    // Grant free attack (next attack costs no action)
+    _epGame.freeAttackBonusPending = _epGame.freeAttackBonusPending || {};
+    _epGame.freeAttackBonusPending[_epPending.onarMsgId] = true;
+
+    await logGameAction(_epGame, client, `**Extra Protection** — **${_epPending.onarDcName}** plays Extra Protection! Gains 2 MP and a free attack. Use Move/Attack buttons on the DC.`, { phase: 'ROUND', icon: 'card' });
+  } else {
+    await logGameAction(_epGame, client, `**Extra Protection** — Skipped.`, { phase: 'ROUND', icon: 'card' });
+  }
+
+  // Continue post-combat flow by re-calling applyDamageAndFinishCombat
+  // (extraProtectionTriggeredThisCombat flag prevents re-trigger)
+  await applyDamageAndFinishCombat(_epGame, _epCombat, {
+    damage: _epPending.damage, hit: _epPending.hit, resultText: _epPending.resultText,
+    totalBlast: _epPending.totalBlast, defenderPlayerNum: _epPending.defenderPlayerNum,
+    attackerPlayerNum: _epPending.attackerPlayerNum, ownerId: _epPending.ownerId,
+    targetMsgId: _epPending.targetMsgId, targetFigIndex: _epPending.targetFigIndex,
+  }, client);
+  saveGames();
+  return;
+}
