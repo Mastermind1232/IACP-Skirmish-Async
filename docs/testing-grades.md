@@ -137,7 +137,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 |---|---|---|
 | R1 | PASS | dc-effects.json — Chewbacca `"cost": 15`. |
 | R2 | PASS | abilities.js:3324 — Debts Repaid readied into starting hand. |
-| R3 | WIRED | Slam mechanism (abilities.js) fully automated. Wookiee Avenger free Slam at activation with target picker + push space picker (activation.js). `specialActionUsedThisActivation` counter tracks usage for CC purposes (To the Limit, All in a Day's Work). |
+| R3 | PASS | Slam mechanism (abilities.js) fully automated. Wookiee Avenger free Slam at activation with target picker + push space picker (activation.js). `specialActionUsedThisActivation` counter tracks usage for CC purposes (To the Limit, All in a Day's Work). |
 | R4 | PASS | dc-effects.json — Chewbacca Dodge converts to evade. |
 | R5 | PASS | Upgrade warning (validation.js:384-401). Chewbacca upgrade validation at army setup. |
 | R6 | PASS | dc-effects.json — Han Solo `"cost": 12`. |
@@ -155,7 +155,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | R18 | PASS | Smash has "may push" requiring valid adjacent space check. |
 | R19 | PASS | dc-effects.json — Hunker Down confirmed. |
 | R20 | PASS | dc-effects.json and abilities.js:2096 — Demolish. |
-| R21 | PARTIAL | Rubble tokens placed by Demolish and rendered on board. Movement cost IS enforced (movement.js:173-179 treats rubble as difficult terrain, +1 MP cost). But no Wasskah wall-breaking interaction. |
+| R21 | PASS | Rubble tokens placed by Demolish. Movement cost enforced. Wasskah wall-breaking: `getBrokenWallEdges` in movement.js checks rubble on breakable wall edges, filters from impassable edges for movement + LOS. |
 | R22 | PASS | dc-effects.json — Shrapnel surge ability. |
 | R23 | PASS | dc-effects.json: Drokkatta has `unique: true` but NO `elite: true`. Fury of Kashyyyk Pierce check at combat.js:775 requires `_fokIsElite` — Drokkatta correctly excluded. |
 | R24 | PASS | abilities.js:581-604 — Battlefield Leadership. |
@@ -174,7 +174,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | R37 | PASS | Ko-Tun Arms Distribution at activation.js:1093-1109 distributes 2 power tokens among friendlies within 3 spaces with interactive picker. |
 | R38 | PASS | Ko-Tun in standard activation system with `elite: true, unique: true`. |
 | R39 | PASS | Dead Precise at combat.js:1245-1250: checks `!game.figureMoved?.[attackerFigureKey]`, applies +2 Accuracy. |
-| R40 | PARTIAL | Squad Cohesion in ability-library.json as `passive-aura` with `wiredStatus: "wired"`, but no code enforces cross-figure power token spending. Players must handle manually. |
+| R40 | PASS | Squad Cohesion automated in combat.js — `getSquadCohesionTokens` finds Ko-Tun + nearby Rebel figures with tokens. Token window shows extra green buttons for ally tokens. Wild cohesion tokens handled via `pendingWildCohesionFigureKey`. |
 | R41 | PASS | Upgrade warning for Luke Hero (validation.js:384-401). |
 | R42 | PASS | combat.js:615-666 — Luke (Hero) reroll on sabre strike. |
 | R43 | PASS | Heir to the Jedi +1 Hit on melee (combat.js:647). Luke Hero sabre strike bonus implemented. |
@@ -279,7 +279,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | M40 | PASS | abilities.js:3081-3085,3466-3469 — Sustained by Rage damage recovery. |
 | M41 | PASS | combat.js:2688,2873-2881 — Onar Get Down defensive bonus via pending combat passive. |
 | M42 | PASS | cc-timing.js:303,313,341-355 — Fallen Master: FORCE USER figures re-check CC restrictions with IMPERIAL affiliation override. Correctly allows FORCE USER figures to use IMPERIAL CCs. |
-| M43 | PARTIAL | Boulder Barrage places rubble tokens correctly (abilities.js:2291-2295). Rubble affects movement cost (movement.js:173-179). But Wasskah wall-breaking interaction not implemented — rubble does not modify `impassableEdges` map geometry. |
+| M43 | PASS | Boulder Barrage places rubble tokens correctly. Rubble affects movement cost. Wasskah wall-breaking: same `getBrokenWallEdges` system as R21 — rubble on breakable walls makes them passable for movement and LOS. |
 | M44 | PASS | combat.js:121 — Stun Net as surge effect, applies without damage requirement. |
 | M45 | PASS | activation.js:1274-1305 — Cad Bane triggers at other figure activation. |
 | M46 | PASS | Same handler triggers on hostile figure activation. |
@@ -473,13 +473,13 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | Section | PASS | PARTIAL | FAIL | MANUAL | N/A | Total |
 |---|---|---|---|---|---|---|
 | General Mechanics (G1-G113) | 105 | 7 | 0 | 1 | 0 | 113 |
-| Rebel Deployment (R1-R95) | 87 | 4 | 0 | 4 | 0 | 95 |
-| Mercenary Deployment (M1-M84) | 79 | 5 | 0 | 0 | 0 | 84 |
+| Rebel Deployment (R1-R95) | 91 | 0 | 0 | 4 | 0 | 95 |
+| Mercenary Deployment (M1-M84) | 83 | 1 | 0 | 0 | 0 | 84 |
 | Imperial Deployment (I1-I53) | 50 | 0 | 0 | 1 | 2 | 53 |
 | Command Cards (C1-C77) | 68 | 3 | 0 | 6 | 0 | 77 |
-| **TOTAL** | **389** | **19** | **0** | **12** | **2** | **422** |
+| **TOTAL** | **397** | **11** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 389 / (389+19) = **95.3%**
+**Definitive Pass Rate:** 397 / (397+11) = **97.3%**
 **Pass + Partial:** 408 / 408 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting
