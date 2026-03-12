@@ -694,6 +694,9 @@ const client = new Client({
   ],
 });
 
+/** Global readiness gate — false until the ready handler completes. */
+let botReady = false;
+
 /** User IDs currently creating a test game (prevents duplicate creation from double-send or double-click). */
 const testGameCreationInProgress = new Set();
 /** Message IDs we've already handled for testgame (prevents duplicate from Discord firing messageCreate twice). */
@@ -5719,6 +5722,8 @@ client.once('ready', async () => {
       console.log(`Testgame HTTP: POST http://127.0.0.1:${port}/testgame (body: { "userId?", "scenarioId?", "player2Id?" }, or set TESTGAME_USER_ID)`);
     });
   }
+  botReady = true;
+  console.log('Bot fully ready — accepting interactions.');
 });
 
 const requestsWithButtons = new Set();
@@ -5763,6 +5768,7 @@ async function maybeAddRequestButtons(message) {
 
 client.on('messageCreate', async (message) => {
   try {
+  if (!botReady) return;
   if (message.author.bot) return;
 
   // Forum post first message: set up lobby buttons (thread isn't messageable until author posts)
@@ -6258,6 +6264,15 @@ function buildAllDeps() {
 }
 
 client.on('interactionCreate', async (interaction) => {
+  // Global readiness gate — reject all interactions while the bot is still starting up
+  if (!botReady) {
+    try {
+      if (interaction.isRepliable()) {
+        await interaction.reply({ content: '🔄 **Bot is rebooting.** Please wait a few minutes and try again.', ephemeral: true });
+      }
+    } catch {}
+    return;
+  }
   try {
   if (interaction.isAutocomplete()) {
     const cmd = interaction.commandName;
