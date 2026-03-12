@@ -4451,6 +4451,11 @@ export function resolveAbility(abilityId, context) {
       game.surgeDoublingActive = game.surgeDoublingActive || {};
       game.surgeDoublingActive[playerNum] = true;
     }
+    // Bladestorm: set post-attack AoE flag on combat object
+    if (entry.postAttackAoeDamage > 0) {
+      cbt.postAttackAoeDamage = entry.postAttackAoeDamage;
+      cbt.postAttackAoeRange = entry.postAttackAoeRange || 2;
+    }
     return {
       applied: true,
       logMessage: `+${n} Surge added to this attack.`,
@@ -4840,6 +4845,254 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: Blood Feud — place on hostile DC; persistent +1 Hit when attacking that group
+  if (entry.type === 'ccEffect' && entry.bloodFeudEffect) {
+    const { game, playerNum, combat, dcMessageMeta } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play when declaring an attack.' };
+    }
+    // Apply +1 Hit to current attack AND mark the hostile DC for persistent bonus
+    cbt.bonusHits = (cbt.bonusHits || 0) + 1;
+    const defMsgId = cbt.defenderMsgId;
+    if (defMsgId) {
+      game.bloodFeudTargets = game.bloodFeudTargets || {};
+      game.bloodFeudTargets[defMsgId] = playerNum;
+    }
+    return { applied: true, logMessage: `**Blood Feud** — +1 Hit this attack. Future attacks on this group also gain +1 Hit.` };
+  }
+
+  // ccEffect: Telekinetic Throw — choose hostile within 3 with LOS, roll 2 blue dice, deal Hits as Damage
+  if (entry.type === 'ccEffect' && entry.telekineticThrowEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
+    const oppNum = opponentPlayerNum(playerNum);
+    if (chosenFigureKey) {
+      // Phase 2: roll 2 blue dice and apply Hits as damage
+      const faces = getDiceData().attack?.blue || [];
+      let totalHits = 0;
+      const rollParts = [];
+      for (let i = 0; i < 2; i++) {
+        const face = faces[Math.floor(Math.random() * faces.length)];
+        totalHits += face?.dmg ?? 0;
+        const p = []; if (face?.dmg) p.push(`${face.dmg} Hit`); if (face?.surge) p.push(`${face.surge} Surge`); if (face?.acc) p.push(`${face.acc} Acc`);
+        rollParts.push(p.length ? p.join('/') : 'blank');
+      }
+      const targetMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
+      if (targetMsgId && dcHealthState && totalHits > 0) {
+        const hs = dcHealthState.get(targetMsgId) || [];
+        const fkMatch = chosenFigureKey.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const hp = hs[figIdx];
+        if (hp) {
+          const [cur, max] = hp;
+          hs[figIdx] = [Math.max(0, (cur ?? max) - totalHits), max];
+          dcHealthState.set(targetMsgId, hs);
+          syncHealthStateToList(game, oppNum, targetMsgId, hs);
+        }
+      }
+      return { applied: true, logMessage: `**Telekinetic Throw** — Rolled 2 blue dice: [${rollParts.join('], [')}] → **${totalHits} Damage** to **${dcNameFromFigureKey(chosenFigureKey)}**.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: targetMsgId ? [targetMsgId] : [] };
+    }
+    // Phase 1: find hostiles within 3 + LOS
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: 'Resolve manually.' };
+    const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
+    const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
+    if (!activatorPos) return { applied: false, manualMessage: 'Resolve manually: position unknown.' };
+    const getRng = context.getRange ?? ((c1, c2) => { const a = parseCoord(c1); const b = parseCoord(c2); return (a.col < 0 || b.col < 0) ? 999 : Math.abs(a.col - b.col) + Math.abs(a.row - b.row); });
+    const losCheck = context.hasLineOfSight ?? null;
+    const mapId = game.selectedMap?.id;
+    const mapSpaces = mapId ? getMapSpaces(mapId) : null;
+    const hostiles = [];
+    for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+      if (!coord) continue;
+      if (getRng(activatorPos, coord) > 3) continue;
+      if (losCheck && mapSpaces && !losCheck(activatorPos, coord, mapSpaces)) continue;
+      hostiles.push(fk);
+    }
+    if (hostiles.length === 0) return { applied: true, logMessage: 'No hostile within 3 spaces with LOS.' };
+    if (hostiles.length === 1) return resolveAbility(entry, { ...context, chosenFigureKey: hostiles[0] });
+    return { applied: false, requiresChoice: true, choiceOptions: hostiles.map(fk => dcNameFromFigureKey(fk)), choiceValues: hostiles };
+  }
+
+  // ccEffect: Chaotic Force — roll 1 green die, all figures on both sides suffer Strain = Accuracy
+  if (entry.type === 'ccEffect' && entry.chaoticForceEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
+    const faces = getDiceData().attack?.green || [];
+    if (!faces.length) return { applied: false, manualMessage: 'Roll 1 green die manually.' };
+    const face = faces[Math.floor(Math.random() * faces.length)];
+    const acc = face.acc ?? 0;
+    if (acc === 0) return { applied: true, logMessage: '**Chaotic Force** — Rolled 1 green die: **0 Accuracy** — no Strain applied.' };
+    const refreshIds = [];
+    const parts = [];
+    for (const pn of [1, 2]) {
+      for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!coord) continue;
+        const fMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+        if (!fMsgId) continue;
+        const hs = dcHealthState.get(fMsgId) || [];
+        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const hp = hs[figIdx];
+        if (hp) {
+          const [cur, max] = hp;
+          hs[figIdx] = [Math.max(0, (cur ?? max) - acc), max];
+          dcHealthState.set(fMsgId, hs);
+          syncHealthStateToList(game, pn, fMsgId, hs);
+          parts.push(`${dcNameFromFigureKey(fk)}: ${cur ?? max}→${Math.max(0, (cur ?? max) - acc)}`);
+          if (!refreshIds.includes(fMsgId)) refreshIds.push(fMsgId);
+        }
+      }
+    }
+    return { applied: true, logMessage: `**Chaotic Force** — Rolled 1 green die: **${acc} Accuracy** → ${acc} Strain to all figures.\n${parts.join(', ')}`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
+  }
+
+  // ccEffect: Corrupting Force — roll 1 blue die, all figures on both sides suffer Damage = Hits
+  if (entry.type === 'ccEffect' && entry.corruptingForceEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
+    const faces = getDiceData().attack?.blue || [];
+    if (!faces.length) return { applied: false, manualMessage: 'Roll 1 blue die manually.' };
+    const face = faces[Math.floor(Math.random() * faces.length)];
+    const hits = face.dmg ?? 0;
+    if (hits === 0) return { applied: true, logMessage: '**Corrupting Force** — Rolled 1 blue die: **0 Hits** — no Damage applied.' };
+    const refreshIds = [];
+    const parts = [];
+    for (const pn of [1, 2]) {
+      for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!coord) continue;
+        const fMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+        if (!fMsgId) continue;
+        const hs = dcHealthState.get(fMsgId) || [];
+        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const hp = hs[figIdx];
+        if (hp) {
+          const [cur, max] = hp;
+          hs[figIdx] = [Math.max(0, (cur ?? max) - hits), max];
+          dcHealthState.set(fMsgId, hs);
+          syncHealthStateToList(game, pn, fMsgId, hs);
+          parts.push(`${dcNameFromFigureKey(fk)}: ${cur ?? max}→${Math.max(0, (cur ?? max) - hits)}`);
+          if (!refreshIds.includes(fMsgId)) refreshIds.push(fMsgId);
+        }
+      }
+    }
+    return { applied: true, logMessage: `**Corrupting Force** — Rolled 1 blue die: **${hits} Hit${hits !== 1 ? 's' : ''}** → ${hits} Damage to all figures.\n${parts.join(', ')}`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
+  }
+
+  // ccEffect: Balancing Force — roll 1 red die, all damaged friendly figures recover Damage = Hits
+  if (entry.type === 'ccEffect' && entry.balancingForceEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
+    const faces = getDiceData().attack?.red || [];
+    if (!faces.length) return { applied: false, manualMessage: 'Roll 1 red die manually.' };
+    const face = faces[Math.floor(Math.random() * faces.length)];
+    const hits = face.dmg ?? 0;
+    const healAmt = Math.max(1, hits); // minimum 1 recovery guaranteed
+    const refreshIds = [];
+    const parts = [];
+    // Apply to ALL damaged figures on both sides (card says "each player chooses up to 3" — auto-heal all)
+    for (const pn of [1, 2]) {
+      for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!coord) continue;
+        const fMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+        if (!fMsgId) continue;
+        const hs = dcHealthState.get(fMsgId) || [];
+        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const hp = hs[figIdx];
+        if (hp) {
+          const [cur, max] = hp;
+          const damage = (max ?? cur) - (cur ?? 0);
+          if (damage <= 0) continue;
+          const heal = Math.min(healAmt, damage);
+          hs[figIdx] = [(cur ?? 0) + heal, max];
+          dcHealthState.set(fMsgId, hs);
+          syncHealthStateToList(game, pn, fMsgId, hs);
+          parts.push(`${dcNameFromFigureKey(fk)}: +${heal} HP`);
+          if (!refreshIds.includes(fMsgId)) refreshIds.push(fMsgId);
+        }
+      }
+    }
+    return { applied: true, logMessage: `**Balancing Force** — Rolled 1 red die: **${hits} Hit${hits !== 1 ? 's' : ''}** → all damaged figures recover ${healAmt} Damage.\n${parts.length ? parts.join(', ') : 'No damaged figures.'}`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
+  }
+
+  // ccEffect: Whistling Birds — gain 2 MP, roll 1 red die, all hostiles within 2 suffer Hits as Damage
+  if (entry.type === 'ccEffect' && entry.whistlingBirdsEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
+    // Grant 2 MP
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (msgId) addMovementPoints(game, msgId, 2);
+    // Roll 1 red die
+    const faces = getDiceData().attack?.red || [];
+    if (!faces.length) return { applied: true, logMessage: 'Gained 2 MP. Roll 1 red die manually for Whistling Birds.' };
+    const face = faces[Math.floor(Math.random() * faces.length)];
+    const hits = face.dmg ?? 0;
+    if (hits === 0) return { applied: true, logMessage: '**Whistling Birds** — Gained 2 MP. Rolled 1 red die: **0 Hits** — no Damage applied.', refreshMovementBank: true };
+    // Apply to all hostiles within 2 spaces (up to 3)
+    const oppNum = opponentPlayerNum(playerNum);
+    const meta = msgId ? dcMessageMeta.get(msgId) : null;
+    const activatingKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
+    const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
+    const getRng = context.getRange ?? ((c1, c2) => { const a = parseCoord(c1); const b = parseCoord(c2); return (a.col < 0 || b.col < 0) ? 999 : Math.abs(a.col - b.col) + Math.abs(a.row - b.row); });
+    const refreshIds = [];
+    const parts = [];
+    let count = 0;
+    if (activatorPos && dcHealthState) {
+      for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+        if (!coord || count >= 3) continue;
+        if (getRng(activatorPos, coord) > 2) continue;
+        const fMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
+        if (!fMsgId) continue;
+        const hs = dcHealthState.get(fMsgId) || [];
+        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const hp = hs[figIdx];
+        if (hp) {
+          const [cur, max] = hp;
+          hs[figIdx] = [Math.max(0, (cur ?? max) - hits), max];
+          dcHealthState.set(fMsgId, hs);
+          syncHealthStateToList(game, oppNum, fMsgId, hs);
+          parts.push(`${dcNameFromFigureKey(fk)}: ${hits} Dmg`);
+          if (!refreshIds.includes(fMsgId)) refreshIds.push(fMsgId);
+          count++;
+        }
+      }
+    }
+    return { applied: true, logMessage: `**Whistling Birds** — Gained 2 MP. Rolled 1 red die: **${hits} Hit${hits !== 1 ? 's' : ''}** → ${parts.length ? parts.join(', ') : 'no hostiles within 2 spaces'}.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshMovementBank: true };
+  }
+
+  // ccEffect: Second Chance — place on DC as attachment; triggers defeat prevention + EOR recovery
+  if (entry.type === 'ccEffect' && entry.secondChanceEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    // Store Second Chance on this DC for defeat prevention
+    game.secondChanceDcMsgId = game.secondChanceDcMsgId || {};
+    game.secondChanceDcMsgId[msgId] = playerNum;
+    return { applied: true, logMessage: `**Second Chance** placed on this DC. Will trigger: recover 2 Damage before defeat, or at end of round.` };
+  }
+
+  // ccEffect: Self-Augmentation — attachment: DROID trait + reroll 1 attack die (scoped to attached DC)
+  if (entry.type === 'ccEffect' && entry.selfAugmentationEffect) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    // Store reroll bonus scoped to the specific DC (not the whole player)
+    game.selfAugmentationMsgId = game.selfAugmentationMsgId || {};
+    game.selfAugmentationMsgId[msgId] = true;
+    // DROID trait injection happens via getDcKeywords in data-loader.js (already implemented)
+    return { applied: true, logMessage: `**Self-Augmentation** — Attached. Gained DROID trait + may reroll 1 attack die while attacking.` };
+  }
+
   // ccEffect: chooseAdjacentHostileThen — choose one adjacent hostile figure, apply damage and/or strain.
   // Supports: damage, strain, scaleStrainToRound, weaken/stun/bleed (conditions on target), selfStrain (cost),
   //           healSelfIfTrait: {trait, amount} — recover N damage if activating DC has the named trait.
@@ -4883,6 +5136,13 @@ export function resolveAbility(abilityId, context) {
       if (abilityId === 'Disarm' && targetConditions.includes('Weaken')) {
         game.disarmPermanentWeakened = game.disarmPermanentWeakened || {};
         game.disarmPermanentWeakened[targetFk] = true;
+      }
+      // Disorient: discard one beneficial condition from target
+      if (cah.discardBeneficialCondition) {
+        const BENEFICIAL = ['Focus', 'Hidden'];
+        const targetConds = game.figureConditions?.[targetFk] || [];
+        const toDiscard = targetConds.find(c => BENEFICIAL.includes(c));
+        if (toDiscard) filterCondition(game, targetFk, toDiscard);
       }
       // Apply self-strain to activating figure(s)
       const refreshIds = [targetMsgId];
@@ -5040,7 +5300,15 @@ export function resolveAbility(abilityId, context) {
         hostileSet.add(fk);
       }
     }
-    const hostiles = [...hostileSet];
+    let hostiles = [...hostileSet];
+    // Disorient: filter to hostiles with a beneficial condition (Focus or Hidden)
+    if (cah.requireBeneficialCondition) {
+      const BENEFICIAL = ['Focus', 'Hidden'];
+      hostiles = hostiles.filter(fk => {
+        const conds = game.figureConditions?.[fk] || [];
+        return conds.some(c => BENEFICIAL.includes(c));
+      });
+    }
     if (hostiles.length === 0) return { applied: true, logMessage: 'No valid hostile figure in range.' };
     // Helper to get a display label for a figure key
     const getFigLabel = (fk) => {

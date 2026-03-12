@@ -3015,6 +3015,13 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
           await logGameAction(game, client, `**You Will Not Deny Me** — Fifth Brother cannot be defeated! HP restored to 1.`, { phase: 'ROUND', icon: 'card' });
         }
       }
+      // Second Chance: CC attachment — before defeated, recover 2 Damage and discard the card
+      if (newCur <= 0 && game.secondChanceDcMsgId?.[targetMsgId] === defenderPlayerNum) {
+        const { newHp: _scNew } = healHp(dcHealthState, game, targetMsgId, targetFigIndex, 2, defenderPlayerNum);
+        newCur = _scNew;
+        delete game.secondChanceDcMsgId[targetMsgId];
+        await logGameAction(game, client, `**Second Chance** triggered! Recovered 2 Damage (HP → ${newCur}). Card discarded.`, { phase: 'ROUND', icon: 'card' });
+      }
       // Sustained by Rage (Maul): cannot be defeated if has not activated this round — set HP to 1
       let _sbrImmune = false;
       if (newCur <= 0) {
@@ -4754,6 +4761,45 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
       delete game.saberOrbitAttacksRemaining[combat.attackerMsgId];
       await thread.send('**Saber Orbit** — All attacks resolved.').catch(discordCatch);
     }
+  }
+
+  // Bladestorm: after attack resolves, all hostiles within N spaces of attacker suffer AoE damage
+  if (combat.postAttackAoeDamage > 0 && combat.hit) {
+    const aoeDmg = combat.postAttackAoeDamage;
+    const aoeRange = combat.postAttackAoeRange || 2;
+    const atkFk = combat.attackerFigureKey;
+    const atkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[atkFk];
+    const defPn = combat.defenderPlayerNum;
+    if (atkPos) {
+      const aoeParts = [];
+      for (const [fk, coord] of Object.entries(game.figurePositions?.[defPn] || {})) {
+        if (!coord || fk === combat.defenderFigureKey) continue;
+        const dist = getRange(atkPos, coord);
+        if (dist > aoeRange) continue;
+        const fMsgId = findDcMessageIdForFigure(game.gameId, defPn, fk);
+        if (!fMsgId) continue;
+        const hs = dcHealthState.get(fMsgId) || [];
+        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const hp = hs[figIdx];
+        if (hp) {
+          const [cur, max] = hp;
+          const newCur = Math.max(0, (cur ?? max) - aoeDmg);
+          hs[figIdx] = [newCur, max];
+          dcHealthState.set(fMsgId, hs);
+          syncHealthStateToList(game, defPn, fMsgId, hs);
+          aoeParts.push(`**${dcNameFromFigureKey(fk)}** ${aoeDmg} Dmg (${cur ?? max}→${newCur})`);
+          if (!embedRefreshMsgIds.includes(fMsgId)) embedRefreshMsgIds.push(fMsgId);
+        }
+      }
+      if (aoeParts.length > 0) {
+        await thread.send(`**Bladestorm** — Hostiles within ${aoeRange} spaces: ${aoeParts.join(', ')}`).catch(discordCatch);
+      }
+    }
+  }
+  // Blood Feud: check if defender's DC has a persistent Blood Feud marker → auto +1 Hit
+  if (combat.hit && game.bloodFeudTargets?.[combat.defenderMsgId] && game.bloodFeudTargets[combat.defenderMsgId] === combat.attackerPlayerNum) {
+    // Already applied during CC play for the first attack; for subsequent attacks the bonus is applied in combat.js pre-roll
   }
 
   for (const msgId of embedRefreshMsgIds) {

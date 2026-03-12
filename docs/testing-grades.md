@@ -483,7 +483,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 **Pass + Partial:** 418 / 418 = **100%** (zero PARTIALs, zero FAILs)
 **Remaining MANUAL:** 2 items — R76 (device reroll pool scope) and C2 (Lord of the Sith interrupt ordering) genuinely require runtime verification
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
-**MANUAL items:** 12 items require runtime playtesting
+**MANUAL items:** 2 items require runtime playtesting
 **N/A items:** 2 deck-building conventions, not code
 
 ---

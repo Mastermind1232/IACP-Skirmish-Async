@@ -1155,6 +1155,12 @@ export async function handleAttackTarget(interaction, ctx) {
   const defenderPassives = target.isNpc ? [] : (getDcStats(targetDcName).passives || []);
   applyDcPassivesToCombat(game.pendingCombat, attackerPassives, defenderPassives);
 
+  // Blood Feud: persistent +1 Hit when attacking a DC marked with Blood Feud
+  if (game.bloodFeudTargets?.[target.msgId] === attackerPlayerNum) {
+    game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
+    game.pendingCombat.bloodFeudApplied = true;
+  }
+
   // Forward Mounted Blasters (74-Z Speeder Bike): if target in same row as both attacker spaces → reroll 1 atk die; else → -1 Hit
   if ((getDcStats(meta.dcName).passives || []).includes('Forward Mounted Blasters')) {
     const _fmbSize = game.figureOrientations?.[attackerFigureKey] || getFigureSize(meta.dcName);
@@ -2712,7 +2718,8 @@ export async function handleCombatRoll(interaction, ctx) {
         }
       }
     }
-    const atkRerolls = (combat.rerollOneAttackDie || 0) + (game.roundAttackRerollDice?.[attackerPlayerNum] || 0) + atkInnate.attackReroll + atkSpecialReroll;
+    const selfAugReroll = game.selfAugmentationMsgId?.[combat.attackerMsgId] ? 1 : 0;
+    const atkRerolls = (combat.rerollOneAttackDie || 0) + (game.roundAttackRerollDice?.[attackerPlayerNum] || 0) + atkInnate.attackReroll + atkSpecialReroll + selfAugReroll;
     const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll + defSpecialReroll + _dmForcedReroll;
     // Build pre-reroll prompt queue early (before any interrupts that might save+return)
     combat.pendingPreRerolls = [];

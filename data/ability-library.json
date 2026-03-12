@@ -245,8 +245,8 @@
     },
     "Balancing Force": {
       "type": "ccEffect",
-      "label": "Rebel: each player chooses 3 figures, roll red, recover = Hit (1 auto)",
-      "recoverDamage": 1,
+      "label": "Each player: roll red die, all damaged figures recover Damage = Hits",
+      "balancingForceEffect": true,
       "wiredStatus": "wired"
     },
     "Ballistics Matrix": {
@@ -352,6 +352,8 @@
       "type": "ccEffect",
       "label": "+1 Surge; after attack, hostiles within 2 spaces suffer 1 Damage",
       "attackSurgeBonus": 1,
+      "postAttackAoeDamage": 1,
+      "postAttackAoeRange": 2,
       "wiredStatus": "wired"
     },
     "blast 1": {
@@ -390,8 +392,8 @@
     },
     "Blood Feud": {
       "type": "ccEffect",
-      "label": "Place on hostile DC; when attack that group +1 Hit",
-      "attackBonusHits": 1,
+      "label": "Place on hostile DC; when attacking that group +1 Hit",
+      "bloodFeudEffect": true,
       "wiredStatus": "wired"
     },
     "bo_rifle_staff_strike": {
@@ -659,9 +661,8 @@
     },
     "Chaotic Force": {
       "type": "ccEffect",
-      "label": "Roll 1 green die; each player's chosen figures suffer Strain = Accuracy result",
-      "rollOneDie": "green",
-      "rollOneDieNote": "Each player chooses up to 3 figures. Each chosen figure suffers Strain equal to the Accuracy result above.",
+      "label": "Roll 1 green die; all figures suffer Strain = Accuracy result",
+      "chaoticForceEffect": true,
       "wiredStatus": "wired"
     },
     "charge": {
@@ -884,9 +885,8 @@
     },
     "Corrupting Force": {
       "type": "ccEffect",
-      "label": "Roll 1 blue die; each player's chosen figures suffer Damage = Hit results",
-      "rollOneDie": "blue",
-      "rollOneDieNote": "Each player chooses up to 3 figures. Each chosen figure suffers Damage equal to the Hit results above.",
+      "label": "Roll 1 blue die; all figures suffer Damage = Hits",
+      "corruptingForceEffect": true,
       "wiredStatus": "wired"
     },
     "cortosis_weave": {
@@ -1285,9 +1285,11 @@
     },
     "Disorient": {
       "type": "ccEffect",
-      "label": "After hostile with BENEFICIAL suffers damage: discard 1 BENEFICIAL, that figure 2 Strain",
+      "label": "Choose adjacent hostile with Focus/Hidden: discard 1 beneficial condition, suffer 2 Strain",
       "chooseAdjacentHostileThen": {
-        "strain": 2
+        "strain": 2,
+        "requireBeneficialCondition": true,
+        "discardBeneficialCondition": true
       },
       "wiredStatus": "wired"
     },
@@ -3989,8 +3991,8 @@
     },
     "Second Chance": {
       "type": "ccEffect",
-      "label": "Attachment: before defeated or end of round recover 2 Damage, discard card",
-      "recoverDamage": 2,
+      "label": "Attachment: before defeated recover 2, or end of round recover 2; discard card",
+      "secondChanceEffect": true,
       "wiredStatus": "wired"
     },
     "security_detail": {
@@ -4043,8 +4045,8 @@
     },
     "Self-Augmentation": {
       "type": "ccEffect",
-      "label": "Attachment: gain DROID trait; reroll 1 attack die while attacking",
-      "roundAttackRerollDice": 1,
+      "label": "Attachment: gain DROID trait; attached figure may reroll 1 attack die",
+      "selfAugmentationEffect": true,
       "wiredStatus": "wired"
     },
     "Self-Defense": {
@@ -4855,12 +4857,8 @@
     },
     "Telekinetic Throw": {
       "type": "ccEffect",
-      "label": "Choose hostile within 3 with LOS: deal 2 Damage",
-      "chooseAdjacentHostileThen": {
-        "damage": 2,
-        "range": 3,
-        "requiresLos": true
-      },
+      "label": "Choose hostile within 3 with LOS: roll 2 blue dice, deal Hits as Damage",
+      "telekineticThrowEffect": true,
       "wiredStatus": "wired"
     },
     "tempt": {
@@ -5151,11 +5149,8 @@
     },
     "Whistling Birds": {
       "type": "ccEffect",
-      "label": "Move 2 then up to 3 within 2 suffer Hit (one adjacent 1 Damage)",
-      "mpBonus": 2,
-      "chooseAdjacentHostileThen": {
-        "damage": 1
-      },
+      "label": "Gain 2 MP; roll 1 red die, up to 3 hostiles within 2 suffer Hits as Damage",
+      "whistlingBirdsEffect": true,
       "wiredStatus": "wired"
     },
     "Wild Attack": {

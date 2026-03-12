@@ -263,6 +263,29 @@ export async function handleEndEndOfRound(interaction, ctx) {
     }
     game.endOfRoundSelfDamage = {};
   }
+  // Second Chance: end-of-round — recover 2 Damage for any DC that still has Second Chance, then discard
+  if (game.secondChanceDcMsgId && typeof game.secondChanceDcMsgId === 'object') {
+    for (const [msgId, pn] of Object.entries(game.secondChanceDcMsgId)) {
+      const meta = dcMessageMeta.get(msgId);
+      if (!meta) continue;
+      const healthState = dcHealthState.get(msgId);
+      if (!healthState) continue;
+      for (let fi = 0; fi < healthState.length; fi++) {
+        const hp = healthState[fi];
+        if (!Array.isArray(hp)) continue;
+        const [cur, max] = hp;
+        const damage = (max ?? cur) - (cur ?? 0);
+        if (damage <= 0) continue;
+        const heal = Math.min(2, damage);
+        healthState[fi] = [(cur ?? 0) + heal, max];
+        dcHealthState.set(msgId, healthState);
+        syncHealthStateToList(game, pn, msgId, healthState);
+        await logGameAction(game, client, `**Second Chance** (end of round) — **${meta.displayName || meta.dcName}** recovered ${heal} Damage. Card discarded.`, { phase: 'ROUND', icon: 'card' });
+        break; // only heal first damaged figure
+      }
+    }
+    game.secondChanceDcMsgId = {};
+  }
   // Adrenaline: deal 5 Damage then revert +5 maxHp bonus for each boosted WOOKIEE
   if (game.adrenalineBonuses && typeof game.adrenalineBonuses === 'object') {
     for (const [msgId, info] of Object.entries(game.adrenalineBonuses)) {
