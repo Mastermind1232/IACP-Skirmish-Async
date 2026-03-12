@@ -402,7 +402,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C12 | PASS | Reinforced figure joining existing group inherits DC's exhausted/readied state implicitly — exhaustion is tracked per-DC, not per-figure, so correct by design. |
 | C13 | PASS | Comm Disruption fully automated: `promptCommDisruption` (cc-hand.js:45-90) prompts opponent after every CC play. SPY group count check, cancel + return to hand, skip buttons. |
 | C14 | PASS | Comm Disruption auto-prompt: `promptCommDisruption()` in cc-hand.js checks opponent's hand after any CC play. Timing expanded in cc-timing.js:211 to `duringActivation || duringRound || pendingPrompt`. |
-| C15 | PARTIAL | Dirty Trick timing `whenHostileFigureEntersAdjacentSpace` maps to `ctx.duringActivation`. Trigger typically happens during OPPONENT's activation — no automated prompt when hostile moves past smuggler/hunter. Honor-system. |
+| C15 | PASS | Post-move interrupt detection in movement-interrupts.js — `detectPostMoveInterrupts` walks path, checks if hostile entered adjacent to Smuggler/Hunter with Dirty Trick in hand. Prompts opponent with Play/Skip buttons via `mvint_play_`/`mvint_skip_` handlers. |
 | C16 | MANUAL | Parting Blow + Dirty Trick: both available during activation, player must choose. No automated conflict resolution. |
 | C17 | PASS | Evacuate includes attachment costs (abilities.js:6203-6211). Correctly computes half of total cost including attachments. |
 | C18 | PASS | Final Stand timing `whenFriendlyFigureWithin3SpacesWouldBeDefeated`, playableBy `Baze Malbus`. Baze is within 0 spaces of himself. No code prevents self-targeting. |
@@ -410,7 +410,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C20 | PASS | Get Behind Me cancels defender-side CC effects on target swap: resets bonusBlock, bonusEvade, defenseBonusDice, defensePoolRemoveMax. |
 | C21 | PASS | Jundland Terror per-EOR enforcement via `jundlandTerrorPlayedThisEor` flag (same as G37). |
 | C22 | PASS | Knowledge and Defense: defense die bonus works (abilities.js:4150-4165). Passive redraw implemented via `checkSurgePassiveRedraws` (cc-passive-redraw.js:86-108) — FORCE USER surge triggers re-draw. |
-| C23 | PARTIAL | Parting Blow timing `whenHostileFigureExitsAdjacentSpace` maps to `ctx.duringActivation`. No per-space movement tracking to trigger multiple checks. Honor-system. |
+| C23 | PASS | Post-move interrupt detection in movement-interrupts.js — walks path step by step, checks if moving figure left space adjacent to hostile Brawler with Parting Blow in hand. Once per move. Prompts with Play/Skip buttons. |
 | C24 | PASS | Reduce to Rubble timing `afterYouResolveAttackThatDidNotMissDueToAccuracy`. A dodge is NOT missing due to accuracy, so card IS playable after dodge. |
 | C25 | PASS | Reinforcements per-SOR enforcement implemented. Only one copy playable per start of round. |
 | C26 | PASS | Repair timing `duringActivation` (not `specialAction`). For Technicians, plays without consuming action slot. cc-effects.json text confirms. |
@@ -430,7 +430,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C40 | PASS | Disarm locks Weakened (abilities.js:4670-4671, conditions.js:18). Undiscardable flag enforced. |
 | C41 | PASS | Disarm Weakened removal blocked in all paths. Locked condition cannot be discarded by any ability. |
 | C42 | PASS | Punishing Strike can use different condition; Weakened still locked by Disarm. Interaction correct. |
-| C43 | PARTIAL | Disengage CC exists and can be played during activation (cc-timing.js:112). No per-square movement interrupt — player must manually play when hostile passes near Mak. |
+| C43 | PASS | Post-move interrupt detection in movement-interrupts.js — checks if hostile entered within 3 spaces of Mak (via `getRange` from spatial.js) when opponent has Disengage in hand. Prompts with Play/Skip buttons. |
 | C44 | PASS | Elusive implemented (abilities.js:5304-5310). Handler fully coded. |
 | C45 | PASS | abilities.js:3181-3205 — Escalating Hostility counts copies in discard, adds to base 1 Strain. |
 | C46 | PASS | Extra Protection auto-check: after damage applied in applyDamageAndFinishCombat, if damage >= 3 and figure survives, checks defending player's CC hand for Extra Protection and Onar Koma within 2 spaces (BFS). Prompts play/skip; on play, removes card from hand, adds to discard, grants 2 MP + free attack to Onar. |

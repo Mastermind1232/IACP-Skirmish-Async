@@ -1,0 +1,155 @@
+/**
+ * Post-move interrupt detection for Command Cards that trigger during movement:
+ *   C23 — Parting Blow (BRAWLER): when hostile exits adjacent space
+ *   C15 — Dirty Trick (SMUGGLER or HUNTER): when hostile enters adjacent space
+ *   C43 — Disengage (Mak Eshka'rey): when hostile enters space within 3 spaces
+ *
+ * These functions walk the reconstructed movement path and check for interrupt
+ * opportunities, then return structured trigger data for the handler to post
+ * notifications/buttons.
+ */
+import { normalizeCoord, getFootprintCells } from './coords.js';
+import { getMapSpaces, getDcEffects } from '../data-loader.js';
+import { dcNameFromFigureKey } from './dc-helpers.js';
+import { getCcHand, getPlayerId, opponentPlayerNum } from './player-helpers.js';
+import { getRange } from './spatial.js';
+
+/**
+ * Check whether a DC name has any of the given trait keywords (case-insensitive).
+ * @param {string} dcName
+ * @param {string[]} traits - e.g. ['BRAWLER']
+ * @returns {boolean}
+ */
+function dcHasTrait(dcName, traits) {
+  const effects = getDcEffects();
+  const entry = effects?.[dcName];
+  if (!entry) return false;
+  const kws = (entry.keywords || []).map(k => String(k).toUpperCase());
+  return traits.some(t => kws.includes(t.toUpperCase()));
+}
+
+/**
+ * Check whether a player has a specific CC name in hand.
+ * @param {object} game
+ * @param {number} playerNum
+ * @param {string} cardName - exact card name, e.g. 'Parting Blow'
+ * @returns {boolean}
+ */
+function hasCardInHand(game, playerNum, cardName) {
+  const hand = getCcHand(game, playerNum) || [];
+  return hand.some(c => c === cardName);
+}
+
+/**
+ * Walk the movement path and detect interrupt opportunities for C23, C15, C43.
+ *
+ * @param {object} game - game state
+ * @param {number} movingPlayerNum - player who moved
+ * @param {string} movingFigureKey - figure key that moved
+ * @param {string[]} path - array of coordinate strings (from getMovementPath)
+ * @returns {Array<{type: string, cardName: string, candidatePlayerNum: number, candidateFigureKey: string, candidateDcName: string, triggerSpace: string, description: string}>}
+ */
+export function detectPostMoveInterrupts(game, movingPlayerNum, movingFigureKey, path) {
+  if (!path || path.length < 2) return [];
+
+  const mapId = game.selectedMap?.id;
+  const rawMapSpaces = mapId ? getMapSpaces(mapId) : null;
+  const adjacency = rawMapSpaces?.adjacency || {};
+  const oppNum = opponentPlayerNum(movingPlayerNum);
+  const hostilePositions = game.figurePositions?.[oppNum] || {};
+  const triggers = [];
+  let partingBlowTriggered = false;
+
+  // Pre-compute hostile figure info
+  const hostileFigures = [];
+  for (const [hfk, hPos] of Object.entries(hostilePositions)) {
+    if (!hPos) continue;
+    const hDcName = dcNameFromFigureKey(hfk);
+    const hSize = game.figureOrientations?.[hfk] || '1x1';
+    const hCells = getFootprintCells(hPos, hSize).map(c => normalizeCoord(c));
+    hostileFigures.push({ figureKey: hfk, dcName: hDcName, cells: hCells, pos: hPos });
+  }
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const exitingSpace = normalizeCoord(path[i]);
+    const enteringSpace = normalizeCoord(path[i + 1]);
+    const exitAdj = new Set((adjacency[exitingSpace] || []).map(n => normalizeCoord(n)));
+    const enterAdj = new Set((adjacency[enteringSpace] || []).map(n => normalizeCoord(n)));
+
+    for (const hf of hostileFigures) {
+      // --- C23: Parting Blow (BRAWLER, once per move) ---
+      if (!partingBlowTriggered) {
+        const wasAdjacent = hf.cells.some(c => exitAdj.has(c) || c === exitingSpace);
+        const stillAdjacent = hf.cells.some(c => enterAdj.has(c) || c === enteringSpace);
+        if (wasAdjacent && !stillAdjacent) {
+          if (dcHasTrait(hf.dcName, ['BRAWLER']) && hasCardInHand(game, oppNum, 'Parting Blow')) {
+            partingBlowTriggered = true;
+            const displayName = hf.dcName.replace(/_/g, ' ');
+            triggers.push({
+              type: 'partingBlow',
+              cardName: 'Parting Blow',
+              candidatePlayerNum: oppNum,
+              candidateFigureKey: hf.figureKey,
+              candidateDcName: hf.dcName,
+              triggerSpace: exitingSpace,
+              description: `**${displayName}** (Brawler) — hostile exited adjacent space **${exitingSpace.toUpperCase()}**. Parting Blow opportunity.`,
+            });
+          }
+        }
+      }
+
+      // --- C15: Dirty Trick (SMUGGLER or HUNTER, entering adjacent) ---
+      {
+        const nowAdjacent = hf.cells.some(c => enterAdj.has(c) || c === enteringSpace);
+        const wasAdjacentBefore = hf.cells.some(c => exitAdj.has(c) || c === exitingSpace);
+        // Only trigger when entering adjacency (not already adjacent)
+        if (nowAdjacent && !wasAdjacentBefore) {
+          if (dcHasTrait(hf.dcName, ['SMUGGLER', 'HUNTER']) && hasCardInHand(game, oppNum, 'Dirty Trick')) {
+            const displayName = hf.dcName.replace(/_/g, ' ');
+            // Avoid duplicate triggers for the same figure in the same move
+            const alreadyTriggered = triggers.some(t => t.type === 'dirtyTrick' && t.candidateFigureKey === hf.figureKey);
+            if (!alreadyTriggered) {
+              triggers.push({
+                type: 'dirtyTrick',
+                cardName: 'Dirty Trick',
+                candidatePlayerNum: oppNum,
+                candidateFigureKey: hf.figureKey,
+                candidateDcName: hf.dcName,
+                triggerSpace: enteringSpace,
+                description: `**${displayName}** (Smuggler/Hunter) — hostile entered adjacent space **${enteringSpace.toUpperCase()}**. Dirty Trick opportunity.`,
+              });
+            }
+          }
+        }
+      }
+
+      // --- C43: Disengage (Mak Eshka'rey, entering within 3 spaces) ---
+      {
+        // Only check for Mak specifically
+        if (hf.dcName === "Mak Eshka'rey") {
+          const distAfter = getRange(enteringSpace, hf.pos);
+          const distBefore = getRange(exitingSpace, hf.pos);
+          // Trigger when entering within 3 spaces (was further, now within)
+          if (distAfter <= 3 && distBefore > 3) {
+            if (hasCardInHand(game, oppNum, 'Disengage')) {
+              const alreadyTriggered = triggers.some(t => t.type === 'disengage' && t.candidateFigureKey === hf.figureKey);
+              if (!alreadyTriggered) {
+                triggers.push({
+                  type: 'disengage',
+                  cardName: 'Disengage',
+                  candidatePlayerNum: oppNum,
+                  candidateFigureKey: hf.figureKey,
+                  candidateDcName: hf.dcName,
+                  triggerSpace: enteringSpace,
+                  description: `**Mak Eshka'rey** — hostile entered within 3 spaces (at **${enteringSpace.toUpperCase()}**). Disengage opportunity.`,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return triggers;
+}

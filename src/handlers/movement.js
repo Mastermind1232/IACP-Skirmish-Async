@@ -9,6 +9,7 @@ import { reduceHp, dcNameFromFigureKey, getMaxPowerTokens } from '../game/index.
 import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
+import { detectPostMoveInterrupts } from '../game/movement-interrupts.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
@@ -918,5 +919,91 @@ export async function handleMovePick(interaction, ctx) {
       }
     }
   }
+  // --- Post-move interrupt detection: C23 Parting Blow, C15 Dirty Trick, C43 Disengage ---
+  if (path && path.length >= 2) {
+    const interruptTriggers = detectPostMoveInterrupts(game, playerNum, figureKey, path);
+    for (const trigger of interruptTriggers) {
+      const oppId = getPlayerId(game, trigger.candidatePlayerNum);
+      const triggerBtns = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`mvint_play_${game.gameId}_${trigger.type}_${trigger.candidateFigureKey}`)
+          .setLabel(`Play ${trigger.cardName}`)
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(`mvint_skip_${game.gameId}_${trigger.type}_${trigger.candidateFigureKey}`)
+          .setLabel('Skip')
+          .setStyle(ButtonStyle.Secondary),
+      );
+      await interaction.channel.send({
+        content: `⚠️ <@${oppId}> — ${trigger.description}`,
+        components: [triggerBtns],
+        allowedMentions: { users: oppId ? [oppId] : [] },
+      }).catch(discordCatch);
+      await logGameAction(game, client, `⚠️ Movement interrupt opportunity: ${trigger.description}`, { phase: 'ROUND', icon: 'warn' });
+    }
+  }
+  saveGames();
+}
+
+/**
+ * Handle mvint_play_ — player chose to play a movement interrupt CC (Parting Blow / Dirty Trick / Disengage).
+ * This acknowledges the choice and logs it; actual card resolution still goes through the normal CC play flow.
+ */
+export async function handleMoveInterruptPlay(interaction, ctx) {
+  const { getGame, logGameAction, saveGames, client } = ctx;
+  const m = interaction.customId.match(/^mvint_play_([^_]+)_(\w+)_(.+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, gameId, triggerType, candidateFigureKey] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+
+  const cardNames = { partingBlow: 'Parting Blow', dirtyTrick: 'Dirty Trick', disengage: 'Disengage' };
+  const cardName = cardNames[triggerType] || triggerType;
+  const dcName = dcNameFromFigureKey(candidateFigureKey).replace(/_/g, ' ');
+
+  // Disable the buttons on the original message
+  try {
+    await interaction.update({ components: [] });
+  } catch {
+    try { await interaction.deferUpdate(); } catch { /* already handled */ }
+  }
+
+  await logGameAction(game, client, `**${dcName}** chose to play **${cardName}**. Resolve via the CC hand (play the card normally).`, { phase: 'ROUND', icon: 'cc' });
+  await interaction.followUp({
+    content: `✅ **${cardName}** acknowledged — play the card from your hand to resolve it.`,
+    ephemeral: true,
+  }).catch(discordCatch);
+  saveGames();
+}
+
+/**
+ * Handle mvint_skip_ — player chose to skip a movement interrupt opportunity.
+ */
+export async function handleMoveInterruptSkip(interaction, ctx) {
+  const { getGame, logGameAction, saveGames, client } = ctx;
+  const m = interaction.customId.match(/^mvint_skip_([^_]+)_(\w+)_(.+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, gameId, triggerType, candidateFigureKey] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+
+  const cardNames = { partingBlow: 'Parting Blow', dirtyTrick: 'Dirty Trick', disengage: 'Disengage' };
+  const cardName = cardNames[triggerType] || triggerType;
+  const dcName = dcNameFromFigureKey(candidateFigureKey).replace(/_/g, ' ');
+
+  // Disable the buttons on the original message
+  try {
+    await interaction.update({ components: [] });
+  } catch {
+    try { await interaction.deferUpdate(); } catch { /* already handled */ }
+  }
+
+  await logGameAction(game, client, `**${dcName}** skipped **${cardName}** opportunity.`, { phase: 'ROUND', icon: 'skip' });
   saveGames();
 }

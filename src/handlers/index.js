@@ -21,7 +21,7 @@ import {
   handlePostDeployMoveSkip,
   handleWalkerMove, handleWalkerSkip,
 } from './post-deploy.js';
-import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
+import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack, handleMoveInterruptPlay, handleMoveInterruptSkip } from './movement.js';
 import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleStrainChoice, handleStrainCcPick, handleUnderDuress, handleRogueOneTokenPick } from './combat.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick } from './activation.js';
 import {
@@ -187,6 +187,8 @@ register('move_adjust_mp_', handleMoveAdjustMp, 'moveAdjust');
 register('move_back_letters_', handleMoveLetterBack, 'moveBackLetters');
 register('move_letter_', handleMoveLetter, 'moveLetter');
 register('move_pick_', handleMovePick, 'movePick');
+register('mvint_play_', handleMoveInterruptPlay, 'movePick');
+register('mvint_skip_', handleMoveInterruptSkip, 'movePick');
 
 // --- Combat ---
 register('attack_target_', handleAttackTarget, 'combat');
@@ -472,7 +474,7 @@ export {
   handlePostDeployMoveSkip,
   handleWalkerMove, handleWalkerSkip,
 } from './post-deploy.js';
-export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack } from './movement.js';
+export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveLetter, handleMoveLetterBack, handleMoveInterruptPlay, handleMoveInterruptSkip } from './movement.js';
 export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, sendPowerTokenOverflowUI, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls, handleStrainChoice, handleStrainCcPick, handleRogueOneTokenPick } from './combat.js';
 export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick } from './activation.js';
 export {
