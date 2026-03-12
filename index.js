@@ -82,6 +82,7 @@ import {
 import { getHandlerKey } from './src/router.js';
 import { checkFriendlyDefeatedPassiveRedraws, checkStartOfRoundPassiveRedraws } from './src/game/cc-passive-redraw.js';
 import { getHandler, getHandlerGroup } from './src/handlers/index.js';
+import { sendPhaseGateMessages } from './src/handlers/phase-gate.js';
 import { runRecovery } from './src/handlers/recover.js';
 import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
 import { buildContext, getAllRequiredDepKeys } from './src/context-factory.js';
@@ -6229,7 +6230,7 @@ function buildAllDeps() {
     // Locally defined helpers
     applySquadSubmission, shuffleArray, buildHandDisplayPayload,
     updateHandVisualMessage, updatePlayAreaDcButtons,
-    sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, runPostDeployPhase,
+    sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, runPostDeployPhase, sendPhaseGateMessages,
     buildDiscardPileDisplayPayload, updateDiscardPileMessage,
     updateAttachmentMessageForDc, updateDcActionsMessage,
     buildDcEmbedAndFiles, getConditionsForDcMessage, getNicknamesForDcMessage, getDcPlayAreaComponents,
@@ -6595,72 +6596,38 @@ client.on('interactionCreate', async (interaction) => {
       }
       game._lastPingActive = now;
 
-      // Determine active player
-      let activePlayerId = null;
-      let contextChannelId = null;
-      let hint = '';
-
-      // Check if either player hasn't submitted their squad yet
+      // Pre-game checks (map/squad) — handle before getWaitingPlayers
       const p1HasSquad = !!(game.p1DcList?.length);
       const p2HasSquad = !!(game.p2DcList?.length);
       if (!game.mapSelected) {
-        // Map selection phase — both players can act
-        activePlayerId = game.currentActivationTurnPlayerId || game.initiativePlayerId || game.player1Id;
-        contextChannelId = game.generalId;
-        hint = 'Map selection is pending.';
-      } else if (!p1HasSquad && !p2HasSquad) {
-        // Neither has submitted — ping both
-        const generalCh = await client.channels.fetch(game.generalId).catch(() => null);
-        if (generalCh) {
-          await generalCh.send({ content: `🔔 **Nudge** — <@${game.player1Id}> <@${game.player2Id}> it's time to submit your squads!`, allowedMentions: { users: [game.player1Id, game.player2Id] } }).catch(discordCatch);
-        }
+        const pingId = game.currentActivationTurnPlayerId || game.initiativePlayerId || game.player1Id;
+        await logGameAction(game, client, `🔔 **Nudge** — <@${pingId}> Map selection is pending.`, { allowedMentions: { users: [pingId] } }).catch(discordCatch);
+        await interaction.followUp({ content: `Pinged <@${pingId}>.`, ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      if (!p1HasSquad && !p2HasSquad) {
+        await logGameAction(game, client, `🔔 **Nudge** — <@${game.player1Id}> <@${game.player2Id}> it's time to submit your squads!`, { allowedMentions: { users: [game.player1Id, game.player2Id] } }).catch(discordCatch);
         await interaction.followUp({ content: 'Pinged both players to submit squads.', ephemeral: true }).catch(discordCatch);
         return;
-      } else if (!p1HasSquad) {
-        activePlayerId = game.player1Id;
-        contextChannelId = game.p1HandId;
-        hint = 'Squad submission is pending.';
-      } else if (!p2HasSquad) {
-        activePlayerId = game.player2Id;
-        contextChannelId = game.p2HandId;
-        hint = 'Squad submission is pending.';
-      } else if (game.currentActivationTurnPlayerId) {
-        activePlayerId = game.currentActivationTurnPlayerId;
-        const isP1 = activePlayerId === game.player1Id;
-        contextChannelId = isP1 ? game.p1PlayAreaId : game.p2PlayAreaId;
-        // Check if there's an active DC thread to ping in as well
-        const activeMsgIds = isP1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
-        for (const mid of activeMsgIds) {
-          const data = game.dcActionsData?.[mid];
-          if (data?.threadId && data.remaining != null) {
-            // Found an active DC thread — ping there too
-            try {
-              const thread = await client.channels.fetch(data.threadId);
-              if (thread) await thread.send({ content: `🔔 <@${activePlayerId}> it's your turn!`, allowedMentions: { users: [activePlayerId] } }).catch(discordCatch);
-            } catch (_) {}
-            break;
-          }
-        }
-        hint = 'It\'s their activation turn.';
-      } else {
-        activePlayerId = game.player1Id;
-        contextChannelId = game.generalId;
-        hint = '';
+      }
+      if (!p1HasSquad) {
+        await logGameAction(game, client, `🔔 **Nudge** — <@${game.player1Id}> Squad submission is pending.`, { allowedMentions: { users: [game.player1Id] } }).catch(discordCatch);
+        await interaction.followUp({ content: `Pinged <@${game.player1Id}>.`, ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      if (!p2HasSquad) {
+        await logGameAction(game, client, `🔔 **Nudge** — <@${game.player2Id}> Squad submission is pending.`, { allowedMentions: { users: [game.player2Id] } }).catch(discordCatch);
+        await interaction.followUp({ content: `Pinged <@${game.player2Id}>.`, ephemeral: true }).catch(discordCatch);
+        return;
       }
 
-      // Ping in game log
-      const generalCh = await client.channels.fetch(game.generalId).catch(() => null);
-      if (generalCh) {
-        await generalCh.send({ content: `🔔 **Nudge** — <@${activePlayerId}> ${hint}`, allowedMentions: { users: [activePlayerId] } }).catch(discordCatch);
-      }
-      // Ping in contextual channel (if different from game log)
-      if (contextChannelId && contextChannelId !== game.generalId) {
-        try {
-          const ctxCh = await client.channels.fetch(contextChannelId);
-          if (ctxCh) await ctxCh.send({ content: `🔔 <@${activePlayerId}> it's your turn!`, allowedMentions: { users: [activePlayerId] } }).catch(discordCatch);
-        } catch (_) {}
-      }
-      await interaction.followUp({ content: `Pinged <@${activePlayerId}>.`, ephemeral: true }).catch(discordCatch);
+      // Use getWaitingPlayers to determine who to ping
+      const { getWaitingPlayers } = await import('./src/game/phase-gate.js');
+      const waiting = getWaitingPlayers(game);
+      const playerIds = waiting.playerNums.map(pn => pn === 1 ? game.player1Id : game.player2Id);
+      const mentions = playerIds.map(id => `<@${id}>`).join(' and ');
+      await logGameAction(game, client, `⏳ ${mentions} — ${waiting.description}`, { allowedMentions: { users: playerIds } }).catch(discordCatch);
+      await interaction.followUp({ content: `Pinged ${mentions}.`, ephemeral: true }).catch(discordCatch);
       return;
     }
   }

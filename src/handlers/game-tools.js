@@ -152,6 +152,19 @@ export async function handleUndo(interaction, ctx) {
     }
     Object.assign(game, last.snapshot);
     game.undoStack = savedStack;
+
+    // If restored snapshot has an active phase gate, re-send gate messages
+    // (old Discord messages are stale after undo)
+    if (game.phaseGate) {
+      const { sendPhaseGateMessages } = ctx;
+      if (sendPhaseGateMessages) {
+        try {
+          await sendPhaseGateMessages(game, game.phaseGate.phase, ctx);
+        } catch (err) {
+          console.error('Failed to re-send phase gate after undo:', err);
+        }
+      }
+    }
   }
   // ===================================
 

@@ -1360,10 +1360,8 @@ export async function handleCcShuffleDraw(interaction, ctx) {
   await updateHandVisualMessage(game, playerNum, client);
   if (game.player1CcDrawn && game.player2CcDrawn) {
     await updatePlayAreaDcButtons(game, client);
-    const hasPendingSor = runStartOfRoundDcEffects ? await runStartOfRoundDcEffects(game, gameId, client, { logGameAction }) : false;
-    if (!hasPendingSor) {
-      await sendRoundActivationPhaseMessage(game, client);
-    }
+    const { sendPhaseGateMessages } = ctx;
+    await sendPhaseGateMessages(game, 'cc_drawn', ctx);
   }
   saveGames();
 }
@@ -1432,10 +1430,8 @@ export async function handleIKnowEverythingKeep(interaction, ctx) {
   await updateHandVisualMessage(game, playerNum, client);
   if (game.player1CcDrawn && game.player2CcDrawn) {
     await updatePlayAreaDcButtons(game, client);
-    const hasPendingSor = runStartOfRoundDcEffects ? await runStartOfRoundDcEffects(game, gameId, client, { logGameAction }) : false;
-    if (!hasPendingSor) {
-      await sendRoundActivationPhaseMessage(game, client);
-    }
+    const { sendPhaseGateMessages } = ctx;
+    await sendPhaseGateMessages(game, 'cc_drawn', ctx);
   }
   saveGames();
 }

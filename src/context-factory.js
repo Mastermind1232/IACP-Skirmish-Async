@@ -26,7 +26,7 @@ const CONTEXT_GROUPS = {
     'validateDeckLegal', 'sendDeckIllegalAlert', 'sendSquadConfirmation', 'applySquadSubmission',
     'getHandTooltipEmbed', 'getHandSquadButtons', 'shuffleArray',
     'buildHandDisplayPayload', 'updateHandVisualMessage', 'updatePlayAreaDcButtons',
-    'sendRoundActivationPhaseMessage', 'runStartOfRoundDcEffects', 'logGameAction',
+    'sendRoundActivationPhaseMessage', 'runStartOfRoundDcEffects', 'logGameAction', 'sendPhaseGateMessages',
     'buildDiscardPileDisplayPayload', 'updateDiscardPileMessage', 'getCcEffect',
     'isCcAttachment', 'isCcPlayableNow', 'isCcPlayLegalByRestriction',
     'getIllegalCcPlayButtons', 'getNegationResponseButtons',
@@ -140,12 +140,13 @@ const CONTEXT_GROUPS = {
     'updateHandVisualMessage', 'buildHandDisplayPayload',
     'sendRoundActivationPhaseMessage', 'buildBoardMapPayload',
     'postDevaronDoorButtons', 'postDevaronCratePushPrompts',
-    'postKryknaPushButtons', 'client',
+    'postKryknaPushButtons', 'client', 'sendPhaseGateMessages',
   ],
 
   startOfRound: [
     'getGame', 'replyIfGameEnded', 'getPlayerZoneLabel', 'logGameAction',
     'updateHandChannelMessages', 'saveGames', 'shouldShowEndActivationPhaseButton',
+    'sendPhaseGateMessages',
     'countTerminalsControlledByPlayer', 'GAME_PHASES', 'PHASE_COLOR', 'client',
   ],
 
@@ -167,6 +168,7 @@ const CONTEXT_GROUPS = {
     'resolveDcName', 'isFigurelessDc', 'finishSetupAttachments',
     'dcHealthState', 'dcMessageMeta', 'updateAttachmentMessageForDc',
     'runPostDeployPhase', 'applySquadSubmission',
+    'sendPhaseGateMessages',
   ],
 
   interactCancel: [
@@ -192,6 +194,7 @@ const CONTEXT_GROUPS = {
     'logGameAction', 'updateDeployPromptMessages', 'updateDcActionsMessage',
     'updateHandVisualMessage', 'updateDiscardPileMessage',
     'updateAttachmentMessageForDc', 'getDeploymentZoneButtons', 'client',
+    'sendPhaseGateMessages',
   ],
 
   botmenu: [
@@ -267,6 +270,17 @@ const CONTEXT_GROUPS = {
     'getGame', 'saveGames', 'client', 'logGameAction',
     'getNegationResponseButtons', 'sendReadyToResolveRolls',
     'updateHandChannelMessages', 'getMoveMpButtonRows',
+    'sendPhaseGateMessages',
+  ],
+
+  phaseGate: [
+    'getGame', 'saveGames', 'client', 'logGameAction',
+    'finishSetupAttachments', 'runStartOfRoundDcEffects', 'sendRoundActivationPhaseMessage',
+    'sendPhaseGateMessages',
+    // Gate 1 (deploy_done) deps:
+    'isDcAttachment', 'resolveDcName', 'dcMessageMeta', 'dcHealthState',
+    'getInitiativePlayerZoneLabel', 'clearPreGameSetup', 'runPostDeployPhase',
+    'getCcShuffleDrawButton', 'updateAttachmentMessageForDc',
   ],
 
   combatSpecialEffects: [

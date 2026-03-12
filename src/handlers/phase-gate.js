@@ -1,0 +1,365 @@
+/**
+ * Phase gate handlers: phase_gate_ready_, phase_gate_unready_
+ * Sends confirmation messages to both hand channels before advancing phases.
+ */
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import {
+  createPhaseGate, recordPhaseGateReady, recordPhaseGateUnready,
+  clearPhaseGate, PHASE_GATE_LABELS, playerNumFromId,
+} from '../game/phase-gate.js';
+import {
+  getPlayerId, getHandChannelId, getInitiativePlayerNum,
+  getDcList, getDcMessageIds, opponentPlayerNum,
+} from '../game/player-helpers.js';
+import { discordCatch } from '../error-handling.js';
+import {
+  findAutoAttachTarget, applySetupAttachment,
+  _sendAttachDonePrompt, _sendAttachmentDropdown,
+} from './setup.js';
+
+// ── Message builders ────────────────────────────────────────────────────────
+
+function buildStatusLine(gate) {
+  const p1 = gate.p1Ready ? 'P1 ✅' : 'P1 ⏳';
+  const p2 = gate.p2Ready ? 'P2 ✅' : 'P2 ⏳';
+  const suffix = (gate.p1Ready && gate.p2Ready) ? ' — Advancing...' : '';
+  return `${p1} | ${p2}${suffix}`;
+}
+
+function buildGateLabel(phase, game) {
+  return (PHASE_GATE_LABELS[phase] || 'Phase gate active')
+    .replace('{round}', String(game.currentRound || 1));
+}
+
+function buildGateContent(phase, gate, game) {
+  const label = buildGateLabel(phase, game);
+  const status = buildStatusLine(gate);
+  return `🔔 ${label}\n${status}`;
+}
+
+function buildGateButtons(gameId, playerNum, gate) {
+  const isReady = playerNum === 1 ? gate.p1Ready : gate.p2Ready;
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`phase_gate_ready_${gameId}`)
+      .setLabel('✅ Ready')
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(isReady),
+    new ButtonBuilder()
+      .setCustomId(`phase_gate_unready_${gameId}`)
+      .setLabel('❌ Not Ready')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!isReady),
+  );
+}
+
+function buildGatePayload(gameId, playerNum, gate, game) {
+  const content = buildGateContent(gate.phase, gate, game);
+  const bothReady = gate.p1Ready && gate.p2Ready;
+  return {
+    content,
+    components: bothReady ? [] : [buildGateButtons(gameId, playerNum, gate)],
+  };
+}
+
+// ── Send phase gate messages ────────────────────────────────────────────────
+
+/**
+ * Create and send phase gate messages to both hand channels.
+ * @param {object} game
+ * @param {string} phase - One of the PHASE_GATE_LABELS keys
+ * @param {object} ctx - needs client, logGameAction, saveGames
+ */
+export async function sendPhaseGateMessages(game, phase, ctx) {
+  const { client, logGameAction, saveGames } = ctx;
+  const gameId = game.gameId;
+
+  createPhaseGate(game, phase);
+  const gate = game.phaseGate;
+
+  // Send to each player's hand channel
+  for (const pn of [1, 2]) {
+    const handId = getHandChannelId(game, pn);
+    if (!handId) continue;
+    try {
+      const handCh = await client.channels.fetch(handId);
+      const payload = buildGatePayload(gameId, pn, gate, game);
+      const msg = await handCh.send(payload);
+      if (pn === 1) gate.p1MsgId = msg.id;
+      else gate.p2MsgId = msg.id;
+    } catch (err) {
+      console.error(`[phase-gate] Failed to send gate message to P${pn} hand:`, err.message);
+    }
+  }
+
+  // Log to general channel (informational, no buttons)
+  if (logGameAction) {
+    const label = buildGateLabel(phase, game);
+    await logGameAction(game, client, `🔔 **Phase gate:** ${label} Confirm in your Hand channel when ready.`).catch(discordCatch);
+  }
+
+  if (saveGames) saveGames();
+}
+
+// ── Update gate messages ────────────────────────────────────────────────────
+
+async function updateGateMessages(game, ctx) {
+  const { client } = ctx;
+  const gate = game.phaseGate;
+  if (!gate) return;
+  const gameId = game.gameId;
+
+  for (const pn of [1, 2]) {
+    const handId = getHandChannelId(game, pn);
+    const msgId = pn === 1 ? gate.p1MsgId : gate.p2MsgId;
+    if (!handId || !msgId) continue;
+    try {
+      const handCh = await client.channels.fetch(handId);
+      const msg = await handCh.messages.fetch(msgId);
+      const payload = buildGatePayload(gameId, pn, gate, game);
+      await msg.edit(payload).catch(discordCatch);
+    } catch {
+      // Message gone — ignore, recovery can handle later
+    }
+  }
+}
+
+// ── Ready handler ───────────────────────────────────────────────────────────
+
+/**
+ * Handle phase_gate_ready_ button click.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handlePhaseGateReady(interaction, ctx) {
+  const { getGame, saveGames, client } = ctx;
+  const gameId = interaction.customId.replace('phase_gate_ready_', '');
+  const game = getGame(gameId);
+  if (!game || game.ended) {
+    await interaction.followUp({ content: 'Game not found or ended.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!game.phaseGate) {
+    await interaction.followUp({ content: 'No pending phase gate.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const userId = interaction.user.id;
+  const clickerPn = playerNumFromId(game, userId);
+  if (clickerPn === 0 && !game.isTestGame) {
+    await interaction.followUp({ content: 'Only players in this game can use this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const { alreadyReady, bothReady, playerNum } = recordPhaseGateReady(game, userId);
+  if (alreadyReady) {
+    await interaction.followUp({ content: "You're already marked as ready.", ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  if (!bothReady) {
+    await updateGateMessages(game, ctx);
+    saveGames();
+    return;
+  }
+
+  // Both ready — finalize
+  // Edit both messages to final state (no buttons)
+  await updateGateMessages(game, ctx);
+
+  const phase = game.phaseGate.phase;
+  clearPhaseGate(game);
+  await dispatchPhaseAdvance(game, phase, ctx);
+  saveGames();
+}
+
+// ── Unready handler ─────────────────────────────────────────────────────────
+
+/**
+ * Handle phase_gate_unready_ button click.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx
+ */
+export async function handlePhaseGateUnready(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  const gameId = interaction.customId.replace('phase_gate_unready_', '');
+  const game = getGame(gameId);
+  if (!game || game.ended) {
+    await interaction.followUp({ content: 'Game not found or ended.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!game.phaseGate) {
+    await interaction.followUp({ content: 'No pending phase gate.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const userId = interaction.user.id;
+  const clickerPn = playerNumFromId(game, userId);
+  if (clickerPn === 0 && !game.isTestGame) {
+    await interaction.followUp({ content: 'Only players in this game can use this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const { alreadyUnready } = recordPhaseGateUnready(game, userId);
+  if (alreadyUnready) {
+    await interaction.followUp({ content: "You're already marked as not ready.", ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  await updateGateMessages(game, ctx);
+  saveGames();
+}
+
+// ── Dispatch table ──────────────────────────────────────────────────────────
+
+async function dispatchPhaseAdvance(game, phase, ctx) {
+  const { client, logGameAction, saveGames } = ctx;
+  const gameId = game.gameId;
+
+  switch (phase) {
+    case 'deploy_done':
+      await advanceFromDeployment(game, ctx);
+      break;
+
+    case 'attach_done': {
+      const { finishSetupAttachments } = ctx;
+      if (finishSetupAttachments) {
+        await finishSetupAttachments(game, client);
+      }
+      break;
+    }
+
+    case 'cc_drawn': {
+      const { runStartOfRoundDcEffects, sendPhaseGateMessages: sendGate } = ctx;
+      const hasPendingSor = runStartOfRoundDcEffects
+        ? await runStartOfRoundDcEffects(game, gameId, client, { logGameAction })
+        : false;
+      if (!hasPendingSor) {
+        const gateFn = sendGate || sendPhaseGateMessages;
+        await gateFn(game, 'pre_activation', ctx);
+      }
+      break;
+    }
+
+    case 'pre_activation': {
+      const { sendRoundActivationPhaseMessage } = ctx;
+      if (sendRoundActivationPhaseMessage) {
+        await sendRoundActivationPhaseMessage(game, client);
+      }
+      break;
+    }
+
+    default:
+      console.warn(`[phase-gate] Unknown phase for dispatch: ${phase}`);
+  }
+}
+
+// ── advanceFromDeployment (extracted from setup.js) ─────────────────────────
+
+/**
+ * Logic formerly in handleDeploymentDone after both players deployed.
+ * Checks for setup attachments and either starts attachment phase or sends CC prompts.
+ */
+async function advanceFromDeployment(game, ctx) {
+  const {
+    client, logGameAction, saveGames,
+    isDcAttachment, resolveDcName, dcMessageMeta,
+    getInitiativePlayerZoneLabel, clearPreGameSetup,
+    runPostDeployPhase, getCcShuffleDrawButton,
+  } = ctx;
+  const gameId = game.gameId;
+
+  const p1CcList = game.player1Squad?.ccList || [];
+  const p2CcList = game.player2Squad?.ccList || [];
+  const p1DcListRaw = game.player1Squad?.dcList || [];
+  const p2DcListRaw = game.player2Squad?.dcList || [];
+  const p1SetupAttachments = p1DcListRaw.filter((entry) => isDcAttachment(resolveDcName(entry)));
+  const p2SetupAttachments = p2DcListRaw.filter((entry) => isDcAttachment(resolveDcName(entry)));
+
+  if (p1SetupAttachments.length > 0 || p2SetupAttachments.length > 0) {
+    game.setupAttachmentPhase = true;
+    game.setupAttachmentPending = {
+      1: p1SetupAttachments.map((e) => resolveDcName(e)),
+      2: p2SetupAttachments.map((e) => resolveDcName(e)),
+    };
+    game.setupAttachmentOriginal = {
+      1: [...game.setupAttachmentPending[1]],
+      2: [...game.setupAttachmentPending[2]],
+    };
+    game.setupAttachmentApplied = { 1: [], 2: [] };
+    const generalChannel = await client.channels.fetch(game.generalId);
+    await generalChannel.send({
+      content: '**Both players have deployed.** Place your Skirmish Upgrade card(s) on your Deployment cards (see the **Your Hand** thread in your Play Area). When everyone has placed them, shuffle and draw your starting hands.',
+    });
+
+    for (const pn of [1, 2]) {
+      const pending = game.setupAttachmentPending[pn];
+      if (pending.length === 0) {
+        game.setupAttachmentConfirmed = game.setupAttachmentConfirmed || {};
+        game.setupAttachmentConfirmed[pn] = true;
+        continue;
+      }
+      // Auto-attach character-specific attachments (using direct imports from setup.js)
+      const dcList = getDcList(game, pn) || [];
+      const dcMsgIds = getDcMessageIds(game, pn) || [];
+      const attached = new Set((game.setupAttachmentApplied?.[pn] || []).map(a => a.dcMsgId));
+      while (pending.length > 0) {
+        const autoTarget = findAutoAttachTarget(pending[0], dcList, dcMsgIds, attached);
+        if (!autoTarget) break;
+        const card = pending[0];
+        await applySetupAttachment(game, pn, card, autoTarget, ctx);
+        pending.shift();
+        game.setupAttachmentApplied[pn].push({ card, dcMsgId: autoTarget });
+        attached.add(autoTarget);
+        await logGameAction(game, client, `**${card}** auto-attached to **${dcMessageMeta?.get(autoTarget)?.displayName || 'DC'}** (setup).`, { phase: 'SETUP', icon: 'card' });
+      }
+      if (pending.length === 0) {
+        await _sendAttachDonePrompt(game, gameId, pn, client);
+        continue;
+      }
+      await _sendAttachmentDropdown(game, gameId, pn, pending[0], client);
+    }
+    if (saveGames) saveGames();
+    return;
+  }
+
+  // No attachments — proceed to CC draw
+  game.currentRound = 1;
+  game.currentActivationTurnPlayerId = game.initiativePlayerId;
+  if (clearPreGameSetup) await clearPreGameSetup(game, client);
+
+  const _sendCcPrompts = async () => {
+    const generalChannel = await client.channels.fetch(game.generalId);
+    const initPlayerNum = getInitiativePlayerNum(game);
+    const deployContent = `<@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}**Player ${initPlayerNum}**) **Both players have deployed.** Both players: draw your starting hands in the **Your Hand** thread (inside your Play Area). Round 1 will begin when both have drawn.`;
+    await generalChannel.send({
+      content: deployContent,
+      allowedMentions: { users: [game.initiativePlayerId] },
+    });
+    try {
+      const p1HandChannel = await client.channels.fetch(game.p1HandId);
+      const p2HandChannel = await client.channels.fetch(game.p2HandId);
+      const ccDeckText = (list) => list.length ? list.join(', ') : '(no command cards)';
+      await p1HandChannel.send({
+        content: `**Your Command Card deck** (${p1CcList.length} cards):\n${ccDeckText(p1CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
+        components: [getCcShuffleDrawButton(gameId)],
+      });
+      await p2HandChannel.send({
+        content: `**Your Command Card deck** (${p2CcList.length} cards):\n${ccDeckText(p2CcList)}\n\nWhen ready, shuffle and draw your starting 3.`,
+        components: [getCcShuffleDrawButton(gameId)],
+      });
+    } catch (err) {
+      console.error('Failed to send CC deck prompt:', err);
+    }
+    if (saveGames) saveGames();
+  };
+
+  let postDeployActive = false;
+  if (runPostDeployPhase) {
+    postDeployActive = await runPostDeployPhase(game, gameId, client, { logGameAction, saveGames }, _sendCcPrompts);
+  }
+  if (!postDeployActive) {
+    await _sendCcPrompts();
+  }
+  if (saveGames) saveGames();
+}

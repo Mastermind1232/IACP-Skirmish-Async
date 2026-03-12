@@ -115,6 +115,7 @@ import {
   handleBotmenuKillNo,
 } from './botmenu.js';
 import { handleBotmenuRecover } from './recover.js';
+import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
@@ -313,6 +314,10 @@ register('celebration_play_', handleCelebrationPlay, 'ccHand');
 register('celebration_pass_', handleCelebrationPass, 'ccHand');
 register('comm_disruption_play_', handleCommDisruptionPlay, 'ccHand');
 register('comm_disruption_skip_', handleCommDisruptionSkip, 'ccHand');
+
+// --- Phase gate ---
+register('phase_gate_ready_', handlePhaseGateReady, 'phaseGate');
+register('phase_gate_unready_', handlePhaseGateUnready, 'phaseGate');
 
 // --- Botmenu ---
 register('botmenu_recover_', handleBotmenuRecover, 'recover');
@@ -568,6 +573,8 @@ export {
   handleBotmenuKillNo,
 } from './botmenu.js';
 export { handleBotmenuRecover, runRecovery } from './recover.js';
+export { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
+export { getWaitingPlayers } from '../game/phase-gate.js';
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 export { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';

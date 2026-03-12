@@ -631,7 +631,10 @@ export async function handleEndEndOfRound(interaction, ctx) {
   const initNum = getInitiativePlayerNum(game);
   await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
   if (!hasPendingSor) {
-    await sendRoundActivationPhaseMessage(game, client);
+    const { sendPhaseGateMessages } = ctx;
+    if (sendPhaseGateMessages) {
+      await sendPhaseGateMessages(game, 'pre_activation', ctx);
+    }
   }
 
   // Devaron Garrison B: terminal→door selection + crate push prompts (posted after round starts)
@@ -903,9 +906,9 @@ async function resolveStartOfRoundEffect(game, ctx) {
   game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 1) - 1;
   if (game.pendingStartOfRoundResolve <= 0) {
     delete game.pendingStartOfRoundResolve;
-    const { sendRoundActivationPhaseMessage, client, saveGames } = ctx;
-    if (sendRoundActivationPhaseMessage) {
-      await sendRoundActivationPhaseMessage(game, client);
+    const { sendPhaseGateMessages, saveGames } = ctx;
+    if (sendPhaseGateMessages) {
+      await sendPhaseGateMessages(game, 'pre_activation', ctx);
     }
     if (saveGames) saveGames();
   }

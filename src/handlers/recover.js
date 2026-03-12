@@ -8,6 +8,7 @@ import {
   getActivatedDcIndices, opponentPlayerNum, ccHandKey,
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
+import { PHASE_GATE_LABELS } from '../game/phase-gate.js';
 
 /**
  * Main recovery handler — called from botmenu Recover button.
@@ -45,6 +46,12 @@ export async function handleBotmenuRecover(interaction, ctx) {
 export async function runRecovery(game, gameId, ctx) {
   const { client } = ctx;
   const results = [];
+
+  // Step 1: phaseGate (highest priority — blocks all other actions)
+  try {
+    const r = await recoverPhaseGate(game, gameId, ctx);
+    if (r) results.push(r);
+  } catch (err) { console.error('[recover] phaseGate:', err.message); }
 
   // Step 4: pendingCombat
   try {
@@ -515,4 +522,47 @@ async function recoverCcDrawPhase(game, gameId, ctx) {
     results.push(`Re-sent shuffle/draw button for P${pn}`);
   }
   return results;
+}
+
+// ─── Step 1: Recover phaseGate ────────────────────────────────────────────────
+
+async function recoverPhaseGate(game, gameId, ctx) {
+  if (!game.phaseGate) return null;
+  const { client } = ctx;
+  const gate = game.phaseGate;
+
+  // Check if gate messages still exist; re-send if missing
+  for (const pn of [1, 2]) {
+    const handId = getHandChannelId(game, pn);
+    if (!handId) continue;
+    const msgId = pn === 1 ? gate.p1MsgId : gate.p2MsgId;
+    let msgExists = false;
+    if (msgId) {
+      try {
+        const handCh = await client.channels.fetch(handId);
+        await handCh.messages.fetch(msgId);
+        msgExists = true;
+      } catch {}
+    }
+    if (!msgExists) {
+      // Re-send gate message with current ready state
+      const handCh = await client.channels.fetch(handId);
+      const label = (PHASE_GATE_LABELS[gate.phase] || 'Phase gate active')
+        .replace('{round}', String(game.currentRound || 1));
+      const isReady = pn === 1 ? gate.p1Ready : gate.p2Ready;
+      const p1s = gate.p1Ready ? 'P1 ✅' : 'P1 ⏳';
+      const p2s = gate.p2Ready ? 'P2 ✅' : 'P2 ⏳';
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`phase_gate_ready_${gameId}`).setLabel('✅ Ready').setStyle(ButtonStyle.Success).setDisabled(isReady),
+        new ButtonBuilder().setCustomId(`phase_gate_unready_${gameId}`).setLabel('❌ Not Ready').setStyle(ButtonStyle.Danger).setDisabled(!isReady),
+      );
+      const newMsg = await handCh.send({
+        content: `🔔 ${label}\n${p1s} | ${p2s}`,
+        components: [row],
+      });
+      if (pn === 1) gate.p1MsgId = newMsg.id;
+      else gate.p2MsgId = newMsg.id;
+    }
+  }
+  return 'Re-sent phase gate messages';
 }
