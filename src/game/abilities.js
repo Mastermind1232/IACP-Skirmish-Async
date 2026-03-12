@@ -1116,7 +1116,7 @@ export function resolveAbility(abilityId, context) {
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = dcEffects?.[fkDcName];
         if (!fkEff?.elite) continue;
-        if (fkEff.affiliation !== 'Scum' && fkEff.affiliation !== 'Mercenary') continue;
+        if (fkEff.affiliation !== 'Scum') continue;
         validTargets.push(fk);
       }
     }
