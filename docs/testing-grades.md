@@ -118,8 +118,8 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | G101 | PASS | round.js:319 — `setActivatedDcIndices()` called at EOR after all effects complete. |
 | G102 | PASS | Zillo readied before EOR: `exhaustedSkirmishUpgrades` cleared in round.js:113-119 before EOR effects. Zillo Technique fully automated (combat.js:771-811). |
 | G103 | PASS | round.js:403 — initiative switches to other player. |
-| G104 | PARTIAL | Strain applied as direct HP damage (`applyStrainToFigure` combat.js:75+). No "choose damage vs discard" option for strain. |
-| G105 | PARTIAL | No multi-strain up-front allocation choice. Strain always applied as damage. |
+| G104 | PASS | Strain choice system in combat.js:141-258 — `applyStrainToFigure` shows "All as Damage" / "Discard CCs" buttons. Handlers: `handleStrainChoice`, `sendStrainCcPickButtons`, `handleStrainCcPick`. |
+| G105 | PASS | Multi-strain allocation uses same strain choice system (combat.js:141-258). Player decides damage vs CC discard per strain point via button flow. |
 | G106 | PASS | activation.js — Mounted (732), Fulcrum (779), Fleet (1180) with start-of-activation hooks. |
 | G107 | PASS | Initiative player resolves first per activation — implicit in sequential order. |
 | G108 | PASS | Non-initiative player second — handled by `pass_activation_turn`. |
@@ -341,7 +341,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | I11 | PASS | combat.js:1210-1218 — `camouflage_scout_trooper` blocks ranged attacks from 4+ spaces. Cancels attack. Unit tested (abilities.test.js:658-672). |
 | I12 | PASS | Forward Mounted Blasters at combat.js (reroll/penalty). Thrusters enforced in movement.js:handleMovePick — rejects moves where new footprint doesn't overlap old footprint. |
 | I13 | PASS | combat.js:588-597 — uses `getFootprintCells` to check if target row matches ALL bike cells. Correct geometric check. |
-| I14 | PARTIAL | Static Pulse (Dio's CC) automated (abilities.js:5647-5695). But Droid Kit (gain PT if Dio in space) and Pulse Cannon (+4 Acc +1 Hit when spending PT) not automated — honor-system. Dio companion deployment not automated. |
+| I14 | PASS | Droid Kit start-of-activation check (activation.js:1149+) — if Dio in same space, shows PT type buttons. Pulse Cannon (combat.js:3499) — +4 Acc +1 Hit when PT spent (`attackerSpentPowerToken` tracking at combat.js:3951,4009). Static Pulse CC also automated. |
 | I15 | PASS | Dio control counting respects Iden alive state (mission-rules.js:40-57). Counts after Iden defeated. |
 | I16 | PASS | abilities.js:1048-1083 (Elite) and 1085-1115 (Regular) — Coordinated Raid. Elite: IMPERIAL cost ≤4 within 4 spaces. Regular: same group. Both grant interrupt attack. |
 | I17 | PASS | Ranged cleave via `getFiguresAdjacentToTarget` (index.js:3941). TGI Cleave via `deadly_spin` surge (dc-effects.json:6249). |
@@ -422,7 +422,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | C32 | PASS | Vanish (abilities.js:5275-5285): `vanishImmunityUntilNextActivation: true` + `nextActivationMpBonus: 4`. Immunity + 4 MP at next activation. |
 | C33 | PASS | You Will Not Deny Me fully implemented: abilities.js:8277-8286 sets `youWillNotDenyMeActive`. index.js:2958-2967 prevents Fifth Brother defeat (restores HP to 1). conditions.js:36-37 grants condition immunity. index.js:3092-3109 recovers 2 HP on hostile defeat then game-boxes card. Zillo interaction correct — Zillo resolves pre-damage, YWNDM fires post-damage. |
 | C34 | PASS | Combat.js:1445-1453 auto-prompts defender with all playable reaction cards (including `whenAttackDeclaredOnYou` cards like Ambush) when attack declared. Defender sees Ambush automatically if in hand. |
-| C35 | PARTIAL | Arcing Shot timing `beforeYouDeclareAttack` for Drokkatta. Can be played (timing works). But targeting override (target figure adjacent to empty space in your LOS) not automated — honor-system. |
+| C35 | PASS | Arcing Shot targeting automated (abilities.js:4349-4370 sets `arcingShotActive`, dc-play-area.js validates targets have adjacent empty space with attacker LOS, tags invalid with `[No Arc]`). +1 Accuracy applied. |
 | C36 | PASS | Bodyguard: attackTargetSwap handler in abilities.js validates GUARDIAN keyword, swaps combat.target (figureKey, coord, label, defense dice, conditions). Grants 2 MP. |
 | C37 | PASS | Built on Hope: active effect works (abilities.js:5853-5877). Passive re-draw implemented via `checkDeckDiscardPassiveRedraws` (cc-passive-redraw.js:119-135) — triggers when discarded from deck. |
 | C38 | PASS | Cal's Buddy (abilities.js:8140-8169): finds Cal's position, prompts adjacent space, places BD-1. |
@@ -472,14 +472,14 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 
 | Section | PASS | PARTIAL | FAIL | MANUAL | N/A | Total |
 |---|---|---|---|---|---|---|
-| General Mechanics (G1-G113) | 103 | 9 | 0 | 1 | 0 | 113 |
+| General Mechanics (G1-G113) | 105 | 7 | 0 | 1 | 0 | 113 |
 | Rebel Deployment (R1-R95) | 87 | 4 | 0 | 4 | 0 | 95 |
 | Mercenary Deployment (M1-M84) | 79 | 5 | 0 | 0 | 0 | 84 |
-| Imperial Deployment (I1-I53) | 49 | 1 | 0 | 1 | 2 | 53 |
-| Command Cards (C1-C77) | 67 | 4 | 0 | 6 | 0 | 77 |
-| **TOTAL** | **385** | **23** | **0** | **12** | **2** | **422** |
+| Imperial Deployment (I1-I53) | 50 | 0 | 0 | 1 | 2 | 53 |
+| Command Cards (C1-C77) | 68 | 3 | 0 | 6 | 0 | 77 |
+| **TOTAL** | **389** | **19** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 385 / (385+23) = **94.4%**
+**Definitive Pass Rate:** 389 / (389+19) = **95.3%**
 **Pass + Partial:** 408 / 408 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting

@@ -202,6 +202,7 @@
       "type": "ccEffect",
       "label": "Before attack: may target figure adjacent to empty space in LOS (+1 Accuracy)",
       "attackAccuracyBonus": 1,
+      "arcingShotTargeting": true,
       "wiredStatus": "wired"
     },
     "Armed Escort": {

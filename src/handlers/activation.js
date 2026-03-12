@@ -1146,6 +1146,28 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (_mountedIds.includes('airborne_commander_gar_saxon')) {
     await thread.send({ content: `🪂 **Airborne Commander** — Mobile figures within 4 spaces may use Gar Saxon's surge abilities.` }).catch(discordCatch);
   }
+  // Droid Kit (Iden Versio): if friendly Dio is in Iden's space, gain 1 Power Token (once per activation)
+  if (meta.dcName === 'Iden Versio') {
+    const _dkDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _dkSelfFk = `${meta.dcName}-${_dkDgIndex}-0`;
+    const _dkSelfPos = game.figurePositions?.[meta.playerNum]?.[_dkSelfFk];
+    // Find Dio in figurePositions for the same player
+    const _dkDioFk = Object.keys(game.figurePositions?.[meta.playerNum] || {}).find(fk => fk.startsWith('Dio-'));
+    const _dkDioPos = _dkDioFk ? game.figurePositions[meta.playerNum][_dkDioFk] : null;
+    if (_dkSelfPos && _dkDioPos && String(_dkSelfPos).toLowerCase() === String(_dkDioPos).toLowerCase()) {
+      const dkRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_droidkit_hit`).setLabel('Hit Token').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_droidkit_surge`).setLabel('Surge Token').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_droidkit_block`).setLabel('Block Token').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_droidkit_evade`).setLabel('Evade Token').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_droidkit_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `🤖 **Droid Kit** — **Dio** is in **${displayName}**'s space. Gain 1 Power Token:`, components: [dkRow] }).catch(discordCatch);
+    } else {
+      const reason = !_dkDioFk ? 'Dio is not in play' : 'Dio is not in the same space';
+      await thread.send({ content: `🤖 **Droid Kit** — ${reason}; no Power Token gained.` }).catch(discordCatch);
+    }
+  }
   // Advanced Firepower (General Sorin): adjacent DROID/VEHICLE may use your surge abilities
   if (_mountedIds.includes('advanced_firepower_sorin')) {
     await thread.send({ content: `🔧 **Advanced Firepower** — Adjacent DROID or VEHICLE figures may use Sorin's surge abilities.` }).catch(discordCatch);
@@ -2371,6 +2393,27 @@ export async function handleActPassive(interaction, ctx) {
       game.unstableDevicesUsedThisActivation[msgId] = true;
       await interaction.message.edit({ content: `🔧 **Unstable Devices** — **${targetDcName}** gains **1 Device token** (now ${game.deviceTokens[targetFk]}).`, components: [] }).catch(discordCatch);
       await logGameAction?.(game, client, `🔧 **Unstable Devices** — **${targetDcName}** gains 1 Device token (now ${game.deviceTokens[targetFk]}).`, { phase: 'ACTIVATION', icon: 'activate' });
+    }
+  } else if (ability === 'droidkit') {
+    if (choice === 'skip') {
+      await interaction.message.edit({ content: `🤖 **Droid Kit** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const tokenMap = { hit: 'Hit', surge: 'Surge', block: 'Block', evade: 'Evade' };
+      const tokenType = tokenMap[choice];
+      if (tokenType) {
+        const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const fk = `${meta.dcName}-${dgIndex}-0`;
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+        const cap = getMaxPowerTokens(fk);
+        if (game.figurePowerTokens[fk].length < cap) {
+          game.figurePowerTokens[fk].push(tokenType);
+          await interaction.message.edit({ content: `🤖 **Droid Kit** — **${displayName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(discordCatch);
+          await logGameAction?.(game, client, `🤖 **Droid Kit** — **${displayName}** gained 1 ${tokenType} Token.`, { phase: 'ACTIVATION', icon: 'activate' });
+        } else {
+          await interaction.message.edit({ content: `🤖 **Droid Kit** — **${displayName}** is at max Power Tokens (${cap}). No token gained.`, components: [] }).catch(discordCatch);
+        }
+      }
     }
   }
   saveGames();

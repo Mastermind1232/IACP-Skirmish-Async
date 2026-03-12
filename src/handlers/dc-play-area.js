@@ -1157,12 +1157,41 @@ async function buildAndSendAttackTargets(
     if (_barrageFiltered.length > 0) targets.splice(0, targets.length, ..._barrageFiltered);
     delete game.barrageTargetSpace[msgId];
   }
+  // Arcing Shot: validate each target — must be adjacent to an empty space in attacker's LOS
+  if (game.arcingShotActive?.[msgId] || game.arcingShotActiveScalar) {
+    // Build set of all occupied spaces (both players' figures)
+    const _arcOccupied = new Set();
+    for (const pn of [1, 2]) {
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!pos) continue;
+        const fkSize = game.figureOrientations?.[fk] || ctx.getFigureSize(dcNameFromFigureKey(fk));
+        for (const cell of getFootprintCells(pos, fkSize)) _arcOccupied.add(String(cell).toLowerCase());
+      }
+    }
+    // Also treat blocking terrain as non-empty
+    const _arcBlocking = new Set((effectiveMs?.blocking || []).map(s => String(s).toLowerCase()));
+    for (const t of targets) {
+      // Find spaces adjacent to target (via map adjacency)
+      const tAdj = (effectiveMs?.adjacency?.[String(t.coord).toLowerCase()] || []).map(s => String(s).toLowerCase());
+      // Check if any adjacent space is empty AND attacker has LOS to it
+      let found = false;
+      for (const adjSpace of tAdj) {
+        if (_arcOccupied.has(adjSpace)) continue;
+        if (_arcBlocking.has(adjSpace)) continue;
+        // Check attacker LOS to this empty adjacent space
+        const losOk = attackerFpCells.some(ac => hasLineOfSight(ac, adjSpace, effectiveMs, allFigureBlockingCoords));
+        if (losOk) { found = true; break; }
+      }
+      t.arcingShotValid = found;
+    }
+  }
   if (targets.length === 0) {
     await interaction.followUp({ content: 'No valid targets in range.', ephemeral: true }).catch(discordCatch);
     return;
   }
   const displayName = meta.displayName || meta.dcName;
   const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
+  const _arcActive = game.arcingShotActive?.[msgId] || game.arcingShotActiveScalar;
   const targetRows = [];
   for (let i = 0; i < targets.length; i += 5) {
     const chunk = targets.slice(i, i + 5);
@@ -1172,10 +1201,11 @@ async function buildAndSendAttackTargets(
           const targetIndex = i + idx;
           const noLOS = t.hasLOS === false;
           const daTag = t.droidArmLOS ? ' [Droid Arm]' : '';
+          const arcTag = (_arcActive && t.arcingShotValid === false) ? ' [No Arc]' : '';
           return new ButtonBuilder()
             .setCustomId(`attack_target_${msgId}_${figureIndex}_${targetIndex}`)
-            .setLabel(`${t.label} (${t.coord.toUpperCase()})${noLOS ? ' [No LOS]' : daTag}`.slice(0, 80))
-            .setStyle(noLOS ? ButtonStyle.Secondary : ButtonStyle.Danger)
+            .setLabel(`${t.label} (${t.coord.toUpperCase()})${noLOS ? ' [No LOS]' : daTag}${arcTag}`.slice(0, 80))
+            .setStyle(noLOS ? ButtonStyle.Secondary : (arcTag ? ButtonStyle.Secondary : ButtonStyle.Danger))
             .setDisabled(noLOS);
         })
       )

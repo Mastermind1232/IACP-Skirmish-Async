@@ -138,6 +138,56 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     return;
   }
 
+  // ── Strain choice: player may discard CCs from hand instead of taking HP damage ──
+  // Headhunter damage is always HP damage (not strain), so only `amount` can be allocated to CC discards.
+  const ownerHand = getCcHand(game, playerNum) || [];
+  if (amount > 0 && ownerHand.length > 0) {
+    // Player has CCs — offer the choice
+    const ownerId = getPlayerId(game, playerNum);
+    const maxDiscards = Math.min(amount, ownerHand.length);
+    // Save pending state so the button handler can finish resolution
+    game.pendingStrainChoice = {
+      figureKey, playerNum, amount, headhunterDmg,
+      abilityLabel, sourceLabel, dcName, msgId, figureIndex,
+      threadId: thread.id, discardedCount: 0,
+    };
+    const btns = [
+      new ButtonBuilder()
+        .setCustomId(`strain_choice_alldmg_${game.gameId}`)
+        .setLabel(`All as Damage (${amount} HP)`)
+        .setStyle(ButtonStyle.Danger),
+    ];
+    // Offer individual CC discard buttons for each point of strain (up to CCs available)
+    for (let i = 1; i <= maxDiscards; i++) {
+      const hpRemaining = amount - i;
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`strain_choice_discard_${game.gameId}_${i}`)
+          .setLabel(`Discard ${i} CC${i > 1 ? 's' : ''}${hpRemaining > 0 ? ` + ${hpRemaining} HP` : ''}`)
+          .setStyle(ButtonStyle.Primary),
+      );
+    }
+    // Discord limits 5 buttons per row; split into rows of 5
+    const rows = [];
+    for (let r = 0; r < btns.length; r += 5) {
+      rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+    }
+    await thread.send({
+      content: `**Strain** — <@${ownerId}>, **${dcName}** suffers ${amount} Strain from **${abilityLabel}** (${sourceLabel}).`
+        + ` You have ${ownerHand.length} CC${ownerHand.length > 1 ? 's' : ''} in hand.`
+        + ` Choose how to allocate: take HP damage or discard CC${maxDiscards > 1 ? 's' : ''} from hand.`,
+      components: rows,
+      allowedMentions: { users: [ownerId] },
+    }).catch(discordCatch);
+    // Apply headhunter direct damage immediately (it's not strain — no choice)
+    if (headhunterDmg > 0) {
+      reduceHp(dcHealthState, game, msgId, figureIndex, headhunterDmg, playerNum);
+      await thread.send(`**${abilityLabel}** — **${dcName}** suffers ${headhunterDmg} Damage from Headhunter.`).catch(discordCatch);
+    }
+    // Don't apply strain HP damage yet — wait for player's choice
+    return;
+  }
+
   const { newHp: newCur, prevHp: _strainPrev } = reduceHp(dcHealthState, game, msgId, figureIndex, totalHpLoss, playerNum);
   if (!headhunterTriggered) {
     await thread.send(`**${abilityLabel}** (${sourceLabel}) — **${dcName}** suffers 1 Strain (${_strainPrev} → ${newCur} HP).`);
@@ -204,6 +254,252 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     }
     await checkWinConditions?.(game, client);
   }
+}
+
+/**
+ * Resolve strain that was deferred while waiting for player's damage-vs-CC choice.
+ * Applies HP damage, defeat logic, Submit or Fight, etc. — mirrors the tail of applyStrainToFigure.
+ */
+async function resolveStrainDamage(game, hpDamage, pending, ctx, thread) {
+  const {
+    dcHealthState, logGameAction, isGroupDefeated, checkWinConditions,
+    updateActivationsMessage, updateAttachmentMessageForDc, getDcStats, getDcEffects, client,
+  } = ctx;
+  const { playerNum, figureKey, dcName, msgId, figureIndex, abilityLabel } = pending;
+  if (hpDamage <= 0) return;
+  const { newHp: newCur, prevHp: _strainPrev } = reduceHp(dcHealthState, game, msgId, figureIndex, hpDamage, playerNum);
+  await thread.send(`**${abilityLabel}** — **${dcName}** takes ${hpDamage} HP Strain damage (${_strainPrev} → ${newCur} HP).`).catch(discordCatch);
+  if (logGameAction) {
+    await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** suffered ${hpDamage} Strain as damage.`, { phase: 'ROUND', icon: 'attack' });
+  }
+  // Submit or Fight (Paz Vizsla)
+  {
+    const _sofEff = getDcEffects?.()?.[dcName] || getDcEffects?.()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if ((_sofEff?.specialAbilityIds || []).includes('submit_or_fight_paz') && newCur > 0 && !game.restInPeaceActive) {
+      const _sofDiscardKey = ccDiscardKey(playerNum);
+      const _sofDiscard = game[_sofDiscardKey] || [];
+      if (_sofDiscard.length > 0) {
+        const _sofOwnerId = getPlayerId(game, playerNum);
+        const _sofBtns = [
+          new ButtonBuilder().setCustomId(`submit_fight_use_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Use Submit or Fight').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`submit_fight_skip_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        ];
+        await thread.send({
+          content: `🛡️ **Submit or Fight** — <@${_sofOwnerId}>, **${dcName}** may return a CC from discard to game box to heal 1 Strain damage (${_sofDiscard.length} CC${_sofDiscard.length > 1 ? 's' : ''} in discard).`,
+          components: [new ActionRowBuilder().addComponents(_sofBtns)],
+          allowedMentions: { users: [_sofOwnerId] },
+        }).catch(discordCatch);
+      }
+    }
+  }
+  if (newCur <= 0) {
+    const attackerPlayerNum = opponentPlayerNum(playerNum);
+    if (game.figurePositions?.[playerNum]) delete game.figurePositions[playerNum][figureKey];
+    const stats = getDcStats?.(dcName);
+    const effects = getDcEffects?.()?.[dcName];
+    const figures = stats?.figures ?? 1;
+    const vp = (figures > 1 && effects?.subCost != null) ? effects.subCost : (stats?.cost ?? 5);
+    awardKillVp(game, attackerPlayerNum, vp);
+    if (logGameAction) {
+      await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** was defeated! +${vp} VP`, { phase: 'ROUND', icon: 'attack' });
+    }
+    const _ngStrain = checkNefariousGains(game, playerNum);
+    if (_ngStrain && logGameAction) await logGameAction(game, client, `💰 **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${_ngStrain.jabbaOwnerPN} VP: ${_ngStrain.vpTotal}`, { phase: 'ROUND', icon: 'card' });
+    {
+      const _strPrResult = checkFriendlyDefeatedPassiveRedraws(game, playerNum, dcName);
+      for (const _strPrCard of _strPrResult.redrawn) {
+        if (logGameAction) await logGameAction(game, client, `**Passive Redraw** — **${_strPrCard}** re-drawn from discard (friendly **${dcName}** defeated).`, { phase: 'ROUND', icon: 'card' });
+      }
+    }
+    const dcIds = getDcMessageIds(game, playerNum);
+    const idx = (dcIds || []).indexOf(msgId);
+    if (idx >= 0 && isGroupDefeated?.(game, playerNum, idx)) {
+      const activatedIndices = getActivatedDcIndices(game, playerNum) || [];
+      if (!activatedIndices.includes(idx)) {
+        setActivationsRemaining(game, playerNum, Math.max(0, (getActivationsRemaining(game, playerNum) ?? 0) - 1));
+        if (updateActivationsMessage) await updateActivationsMessage(game, playerNum, client);
+      }
+      const ccAttachKey = ccAttachmentsKey(playerNum);
+      if (game[ccAttachKey]?.[msgId]?.length) {
+        delete game[ccAttachKey][msgId];
+        if (updateAttachmentMessageForDc) await updateAttachmentMessageForDc(game, playerNum, msgId, client);
+      }
+    }
+    await checkWinConditions?.(game, client);
+  }
+}
+
+// ── Strain choice handlers ──────────────────────────────────────────────────
+
+/**
+ * Handle strain_choice_alldmg_ and strain_choice_discard_ buttons.
+ * Player chose how to allocate strain: all as HP damage, or N as CC discards.
+ */
+export async function handleStrainChoice(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames, client } = ctx;
+  const customId = interaction.customId;
+  const isAllDmg = customId.startsWith('strain_choice_alldmg_');
+  const prefix = isAllDmg ? 'strain_choice_alldmg_' : 'strain_choice_discard_';
+  const suffix = customId.replace(prefix, '');
+
+  let gameId, discardCount;
+  if (isAllDmg) {
+    gameId = suffix;
+    discardCount = 0;
+  } else {
+    const lastUnderscore = suffix.lastIndexOf('_');
+    gameId = suffix.slice(0, lastUnderscore);
+    discardCount = parseInt(suffix.slice(lastUnderscore + 1), 10);
+  }
+
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const pending = game.pendingStrainChoice;
+  if (!pending) {
+    await interaction.followUp({ content: 'No pending strain choice found.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the figure owner may choose.')) return;
+
+  // Edit the choice message to remove buttons
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  const thread = await client.channels.fetch(pending.threadId).catch(() => null);
+  if (!thread) {
+    delete game.pendingStrainChoice;
+    saveGames();
+    return;
+  }
+
+  if (isAllDmg || discardCount === 0) {
+    // All strain as HP damage (headhunterDmg already applied when pending was created)
+    delete game.pendingStrainChoice;
+    await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
+    saveGames();
+    return;
+  }
+
+  // Player wants to discard N CCs — show CC pick buttons
+  const hand = getCcHand(game, pending.playerNum) || [];
+  if (hand.length === 0) {
+    // Fall back to all damage (headhunterDmg already applied when pending was created)
+    delete game.pendingStrainChoice;
+    await resolveStrainDamage(game, pending.amount, pending, ctx, thread);
+    saveGames();
+    return;
+  }
+
+  pending.discardTarget = discardCount;
+  pending.discardedCount = 0;
+  // Show CC pick buttons for the first discard
+  await sendStrainCcPickButtons(game, pending, thread);
+  saveGames();
+}
+
+/**
+ * Send buttons for the player to pick which CC to discard for strain.
+ */
+async function sendStrainCcPickButtons(game, pending, thread) {
+  const hand = getCcHand(game, pending.playerNum) || [];
+  const remaining = pending.discardTarget - pending.discardedCount;
+  const ownerId = getPlayerId(game, pending.playerNum);
+  // Deduplicate hand for button labels but track indices
+  const uniqueCards = [...new Set(hand)];
+  const btns = uniqueCards.slice(0, 25).map((cardName) =>
+    new ButtonBuilder()
+      .setCustomId(`strain_cc_pick_${game.gameId}_${encodeURIComponent(cardName)}`)
+      .setLabel(cardName.length > 75 ? cardName.slice(0, 72) + '...' : cardName)
+      .setStyle(ButtonStyle.Primary),
+  );
+  const rows = [];
+  for (let r = 0; r < btns.length; r += 5) {
+    rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
+  }
+  await thread.send({
+    content: `**Strain** — <@${ownerId}>, pick a CC to discard (${remaining} remaining). Hand: ${hand.length} card${hand.length > 1 ? 's' : ''}.`,
+    components: rows,
+    allowedMentions: { users: [ownerId] },
+  }).catch(discordCatch);
+}
+
+/**
+ * Handle strain_cc_pick_ button — player picked a CC to discard for strain.
+ */
+export async function handleStrainCcPick(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames, client } = ctx;
+  const suffix = interaction.customId.replace('strain_cc_pick_', '');
+  const firstUnderscore = suffix.indexOf('_');
+  const gameId = suffix.slice(0, firstUnderscore);
+  const cardName = decodeURIComponent(suffix.slice(firstUnderscore + 1));
+
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const pending = game.pendingStrainChoice;
+  if (!pending) {
+    await interaction.followUp({ content: 'No pending strain choice found.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the figure owner may choose.')) return;
+
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  const thread = await client.channels.fetch(pending.threadId).catch(() => null);
+  if (!thread) {
+    delete game.pendingStrainChoice;
+    saveGames();
+    return;
+  }
+
+  // Discard the CC from hand
+  const handKey = ccHandKey(pending.playerNum);
+  const hand = game[handKey] || [];
+  const cardIdx = hand.indexOf(cardName);
+  if (cardIdx < 0) {
+    await thread.send(`**Strain** — Could not find **${cardName}** in hand. Taking remaining Strain as damage.`).catch(discordCatch);
+    const hpDmg = pending.amount - pending.discardedCount;
+    const pendingCopy = { ...pending };
+    delete game.pendingStrainChoice;
+    await resolveStrainDamage(game, hpDmg, pendingCopy, ctx, thread);
+    saveGames();
+    return;
+  }
+  hand.splice(cardIdx, 1);
+  const discKey = ccDiscardKey(pending.playerNum);
+  game[discKey] = game[discKey] || [];
+  game[discKey].push(cardName);
+  pending.discardedCount += 1;
+
+  await thread.send(`**Strain** — **${pending.dcName}** discards **${cardName}** instead of 1 HP damage.`).catch(discordCatch);
+  if (ctx.logGameAction) {
+    await ctx.logGameAction(game, client, `**Strain Choice** — **${pending.dcName}** discards **${cardName}** instead of 1 Strain damage.`, { phase: 'ROUND', icon: 'card' });
+  }
+
+  if (pending.discardedCount < pending.discardTarget) {
+    // More CCs to discard — show next pick
+    const remainingHand = getCcHand(game, pending.playerNum) || [];
+    if (remainingHand.length === 0) {
+      // Ran out of CCs — apply rest as damage
+      const hpDmg = pending.amount - pending.discardedCount;
+      const pendingCopy = { ...pending };
+      delete game.pendingStrainChoice;
+      if (hpDmg > 0) await resolveStrainDamage(game, hpDmg, pendingCopy, ctx, thread);
+    } else {
+      await sendStrainCcPickButtons(game, pending, thread);
+    }
+  } else {
+    // All CC discards done — apply remaining strain as HP damage
+    const hpDmg = pending.amount - pending.discardedCount;
+    const pendingCopy = { ...pending };
+    delete game.pendingStrainChoice;
+    if (hpDmg > 0) {
+      await resolveStrainDamage(game, hpDmg, pendingCopy, ctx, thread);
+    } else {
+      await thread.send(`**Strain** — All ${pending.amount} Strain resolved via CC discard${pending.amount > 1 ? 's' : ''}.`).catch(discordCatch);
+    }
+  }
+  saveGames();
 }
 
 /**
@@ -294,6 +590,20 @@ export async function handleAttackTarget(interaction, ctx) {
     if (_daTokens.length > 0) {
       _daTokens.splice(0, 1); // remove first token
     }
+  }
+  // Arcing Shot: validate target is adjacent to an empty space in attacker's LOS
+  if (game.arcingShotActive?.[msgId] || game.arcingShotActiveScalar) {
+    const _arcValid = target.arcingShotValid;
+    if (_arcValid === false) {
+      // Warn but allow override (bot may not have perfect LOS/map data)
+      await interaction.followUp({
+        content: `\u26a0\ufe0f **Arcing Shot** — No empty space adjacent to **${target.label}** was found in attacker's LOS. The target may not be valid for Arcing Shot. Proceeding anyway (honor-system).`,
+        ephemeral: false,
+      }).catch(discordCatch);
+    }
+    // Clear the flag now that an attack target has been selected
+    if (game.arcingShotActive?.[msgId]) delete game.arcingShotActive[msgId];
+    if (game.arcingShotActiveScalar) delete game.arcingShotActiveScalar;
   }
   // Ballistics Matrix: clear per-attack flag after this attack proceeds
   if (game.nextAttackIgnoreFigureLOS?.[attackerPlayerNum]) delete game.nextAttackIgnoreFigureLOS[attackerPlayerNum];
@@ -3496,6 +3806,18 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     combat.survivalResolved = true;
   }
 
+  // Pulse Cannon (Iden Versio): if attacker spent a Power Token, apply +4 Accuracy and +1 Hit
+  if (combat.attackerSpentPowerToken) {
+    const _pcDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _pcAtkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const _pcAtkEff = _pcDcEff[_pcAtkDcName] || _pcDcEff[(_pcAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((_pcAtkEff?.specialAbilityIds || []).includes('pulse_cannon_iden')) {
+      combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 4;
+      combat.bonusHits = (combat.bonusHits || 0) + 1;
+      await thread.send('**Pulse Cannon** — Iden Versio spent a Power Token: **+4 Accuracy, +1 Hit** applied.');
+    }
+  }
+
   const { getAttackerSurgeAbilities, SURGE_LABELS } = ctx;
   const getAbility = ctx.getAbility || (() => null);
   const getSurgeLabel = ctx.getSurgeAbilityLabel || ((id) => (SURGE_LABELS && SURGE_LABELS[id]) || id);
@@ -3935,6 +4257,8 @@ export async function handleCombatToken(interaction, ctx) {
     removeSpentToken(game, figKey, combat.pendingWildTokenIndex);
     await thread.send(`**Power Token spent:** Wild → +1 ${resolvedType}`);
     logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${combat.pendingWildRole === 'attacker' ? 'Attacker' : 'Defender'}: Wild → +1 ${resolvedType}`, { phase: 'ROUND', icon: 'attack' });
+    // Track attacker Power Token spending for Pulse Cannon (Iden Versio)
+    if (combat.pendingWildRole === 'attacker') combat.attackerSpentPowerToken = true;
     // Track defender modifications for Quick Strike (Electrostaff loadout)
     if (combat.pendingWildRole === 'defender') combat.defenderRerolledOrModified = true;
     // Track Block spending for Mandalorian Steel / Personal Combat Shield
@@ -3991,6 +4315,8 @@ export async function handleCombatToken(interaction, ctx) {
   removeSpentToken(game, figureKey, tokenIndex);
   await thread.send(`**Power Token spent:** +1 ${tokenType}`);
   logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${tokenType}`, { phase: 'ROUND', icon: 'attack' });
+  // Track attacker Power Token spending for Pulse Cannon (Iden Versio)
+  if (isAttacker) combat.attackerSpentPowerToken = true;
   // Track defender modifications for Quick Strike (Electrostaff loadout)
   if (!isAttacker) combat.defenderRerolledOrModified = true;
   // Track Block token spending for Mandalorian Steel

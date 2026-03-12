@@ -66,6 +66,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'activationExtraActionThenStun',
   'beastTamerInteractOverride',
   'imperialRetrofittingMultiAttack',
+  'arcingShotActive',
 ];
 
 /**
@@ -100,6 +101,7 @@ const ACTIVATION_SCALAR_FLAGS = [
   'commsJammerActivePlayerNum',
   'partingShotTriggered',
   'onTheLamActive',
+  'arcingShotActiveScalar',
 ];
 
 /**
@@ -214,6 +216,7 @@ const ROUND_OBJECT_FLAGS = [
   'opportunisticMustSpendNow',
   'imperialRetrofittingMultiAttack',
   'urgencyMustSpendAll',
+  'arcingShotActive',
 ];
 
 const ROUND_NULL_FLAGS = [
@@ -303,6 +306,7 @@ const ROUND_DELETE_FLAGS = [
   'reinforcementsPlayedThisSor',
   'pendingBlackMarket',
   'deWannaWangaUsedThisRound',
+  'arcingShotActiveScalar',
 ];
 
 /**

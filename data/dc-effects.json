@@ -3383,7 +3383,11 @@
       "companion": "Dio",
       "elite": true,
       "unique": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "specialAbilityIds": [
+        "droid_kit_iden",
+        "pulse_cannon_iden"
+      ]
     },
     "IG-11": {
       "abilityText": "Special Action (Rapid Fire): Perform 2 attacks.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.\n\nSelf-Destruct Protocol: When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.",

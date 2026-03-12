@@ -4346,6 +4346,29 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: Arcing Shot — +1 Accuracy AND set arcingShotActive flag for targeting validation
+  if (entry.type === 'ccEffect' && entry.arcingShotTargeting) {
+    const { game, playerNum, combat, dcMessageMeta } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play before declaring an attack (as the attacker).' };
+    }
+    cbt.bonusAccuracy = (cbt.bonusAccuracy || 0) + (entry.attackAccuracyBonus || 0);
+    // Set flag so target selection validates adjacent empty space in attacker's LOS
+    const msgId = context.msgId || (dcMessageMeta && cbt.attackerMsgId);
+    if (msgId) {
+      game.arcingShotActive = game.arcingShotActive || {};
+      game.arcingShotActive[msgId] = true;
+    } else {
+      // Fallback: set scalar flag
+      game.arcingShotActiveScalar = true;
+    }
+    return {
+      applied: true,
+      logMessage: `**Arcing Shot** — +${entry.attackAccuracyBonus || 0} Accuracy. Target must be adjacent to an empty space in attacker's LOS.`,
+    };
+  }
+
   // ccEffect: attackAccuracyBonus (Deadeye) — +N Accuracy to this attack; attacker only
   if (entry.type === 'ccEffect' && typeof entry.attackAccuracyBonus === 'number' && entry.attackAccuracyBonus > 0) {
     const { game, playerNum, combat } = context;
