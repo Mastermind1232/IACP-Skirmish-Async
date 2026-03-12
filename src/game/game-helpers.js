@@ -40,11 +40,18 @@ export function grantPowerTokens(game, figureKey, tokenType, count, max) {
   // Always grant the tokens
   for (let i = 0; i < count; i++) game.figurePowerTokens[figureKey].push(tokenType);
   // Check for overflow
-  const overflow = game.figurePowerTokens[figureKey].length - cap;
+  const totalTokens = game.figurePowerTokens[figureKey].length;
+  const overflow = totalTokens - cap;
   if (overflow > 0) {
-    // Queue overflow — Discord layer will prompt a discard choice
+    // Queue or update overflow — Discord layer will prompt a discard choice
     game.pendingPowerTokenOverflow = game.pendingPowerTokenOverflow || [];
-    game.pendingPowerTokenOverflow.push({ figureKey, discardCount: overflow });
+    const existing = game.pendingPowerTokenOverflow.find(e => e.figureKey === figureKey);
+    if (existing) {
+      // Update to reflect total overflow (tokens minus cap)
+      existing.discardCount = overflow;
+    } else {
+      game.pendingPowerTokenOverflow.push({ figureKey, discardCount: overflow });
+    }
   }
   return count;
 }

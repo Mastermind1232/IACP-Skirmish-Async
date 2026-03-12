@@ -87,7 +87,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | G70 | PASS | Same as G69 — friendly-first ordering enforced in `collectOverlappingFigures`. |
 | G71 | PASS | `collectOverlappingFigures` (movement.js:609) iterates all figurePositions directly — companions included. `resolveMassivePush` pushes all overlapping figures including companions. |
 | G72 | PASS | combat.js and abilities.js — Hit, Block, Surge, Evade tokens; `figurePowerTokens` in game state. |
-| G73 | PARTIAL | Token cap enforced at 2 (game-helpers.js:30-38). Migs has max 3. But no "choose which to discard" when gaining 3rd — code simply caps. |
+| G73 | PASS | `grantPowerTokens()` in game-helpers.js always grants tokens, queues `pendingPowerTokenOverflow` when exceeding cap. `sendPowerTokenOverflowUI` shows discard buttons for each token. `handlePowerTokenOverflowDiscard` resolves choices. Migs max 3 via `getMaxPowerTokens`. |
 | G74 | PASS | Discard pile fully implemented: `handleCcSearchDiscard` (cc-hand.js) provides browse/select UI. Mastery and Military Efficiency redraw at index.js:3940+. |
 | G75 | PASS | `game.gameBox` array tracks removed cards (abilities.js:2575-2577). Cards properly moved to game box instead of deleted. |
 | G76 | PARTIAL | Suffix letters a/b in components.js:189. Health tracking supports multi-figure arrays (damage-helpers.js:31-44). But no attachment-to-individual-figure pairing. |
