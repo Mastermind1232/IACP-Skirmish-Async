@@ -500,7 +500,8 @@ async function recoverRoundActivationMessage(game, gameId, ctx) {
 async function recoverCcDrawPhase(game, gameId, ctx) {
   const { client } = ctx;
   if (game.player1CcDrawn && game.player2CcDrawn) return [];
-  // Only relevant after deployment is done (hand channels exist)
+  // Only relevant after round has started (currentRound is set when CC draw phase begins)
+  if (!game.currentRound) return [];
   if (!game.p1HandId && !game.p2HandId) return [];
 
   // Dynamically import to avoid circular deps
