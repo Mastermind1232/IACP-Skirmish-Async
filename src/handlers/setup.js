@@ -922,6 +922,7 @@ export async function handleDeploymentZone(interaction, ctx) {
       console.error('Failed to remove deployment zone buttons:', err);
     }
   }
+  const initiativePlayerNum = getInitiativePlayerNum(game);
   const initiativeHandId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
   const initiativeSquad = getSquad(game, initiativePlayerNum);
   const initiativeDcList = initiativeSquad?.dcList || [];
