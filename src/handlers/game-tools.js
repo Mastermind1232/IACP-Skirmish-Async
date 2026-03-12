@@ -7,6 +7,36 @@ import { deleteGameChannelsAndGame } from './botmenu.js';
 import { discordCatch } from '../error-handling.js';
 import { logGameAction } from '../discord/messages.js';
 import { requireGame } from '../utils/guards.js';
+import { getInitiativePlayerNum, getPlayerId } from '../game/player-helpers.js';
+
+/** Build a short description of the current game state after an undo, so players know what to do next. */
+function describeGameState(game) {
+  if (!game.deploymentZoneChosen) {
+    const chooserId = game.deviousSchemeZoneChooser || game.initiativePlayerId;
+    return `Waiting for <@${chooserId}> to pick a deployment zone.`;
+  }
+  if (!game.initiativePlayerDeployed) {
+    const initPn = getInitiativePlayerNum(game);
+    return `Waiting for <@${getPlayerId(game, initPn)}> (initiative) to deploy figures.`;
+  }
+  if (!game.nonInitiativePlayerDeployed) {
+    const otherPn = getInitiativePlayerNum(game) === 1 ? 2 : 1;
+    return `Waiting for <@${getPlayerId(game, otherPn)}> to deploy figures.`;
+  }
+  if (game.setupAttachmentPhase) {
+    return 'Place Skirmish Upgrade attachments, then confirm.';
+  }
+  if (!game.player1CcDrawn || !game.player2CcDrawn) {
+    const waiting = [];
+    if (!game.player1CcDrawn) waiting.push(`<@${game.player1Id}>`);
+    if (!game.player2CcDrawn) waiting.push(`<@${game.player2Id}>`);
+    return `Waiting for ${waiting.join(' and ')} to shuffle and draw starting hand.`;
+  }
+  if (game.currentRound && game.currentActivationTurnPlayerId) {
+    return `Round ${game.currentRound} — <@${game.currentActivationTurnPlayerId}>'s turn.`;
+  }
+  return null;
+}
 
 /**
  * @param {import('discord.js').ButtonInteraction} interaction
@@ -125,10 +155,14 @@ export async function handleUndo(interaction, ctx) {
   }
   // ===================================
 
-  // Log undo to game log so both players can see what was reverted
+  // Log undo to game log so both players can see what was reverted + current state
   const undoLabel = last.label || last.card || last.type?.replace(/_/g, ' ') || 'action';
   const undoUser = interaction.user.username;
-  logGameAction(game, client, `**${undoUser}** undid: ${undoLabel}`).catch(discordCatch);
+  const stateDesc = describeGameState(game);
+  const undoLogMsg = stateDesc
+    ? `**${undoUser}** undid: ${undoLabel}\n**Current state:** ${stateDesc}`
+    : `**${undoUser}** undid: ${undoLabel}`;
+  logGameAction(game, client, undoLogMsg).catch(discordCatch);
 
   // Per-type Discord UI sync (game state is already restored above)
   if (last.type === 'pass_turn') {

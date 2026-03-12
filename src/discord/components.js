@@ -293,9 +293,13 @@ export function getMissionSelectionPickMenu(gameId, options, selectedValue) {
   return new ActionRowBuilder().addComponents(select);
 }
 
-/** F16/F11: Bot Stuff menu — Kill Game (shown via /botmenu in Game Log). */
+/** F16/F11: Bot Stuff menu — Kill Game + Refresh All (shown via /botmenu in Game Log). */
 export function getBotmenuButtons(gameId) {
   return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`refresh_all_${gameId}`)
+      .setLabel('Refresh All')
+      .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(`botmenu_kill_${gameId}`)
       .setLabel('Kill Game')
