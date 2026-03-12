@@ -544,6 +544,10 @@ export async function handleAssassinsBladePickTarget(interaction, ctx) {
   const pending = game.pendingAssassinsBlade;
   if (!pending) { await interaction.followUp({ content: 'No pending Assassin\'s Blade.', ephemeral: true }).catch(discordCatch); return; }
   const { hits, rollStr, defenderPlayerNum, attackerPlayerNum } = pending;
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, attackerPlayerNum)) {
+    await interaction.followUp({ content: 'Only the attacker can pick the target.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   delete game.pendingAssassinsBlade;
   const dcName = dcNameFromFigureKey(figureKey);
   // Find the DC message for this figure and apply damage
@@ -861,7 +865,7 @@ export async function handlePunishingStrike(interaction, ctx) {
   }
   const attackerPn = pending.attackerPlayerNum;
   const playerId = getPlayerId(game, attackerPn);
-  if (!canActAsPlayer(interaction, game, attackerPn)) {
+  if (!canActAsPlayer(game, interaction.user.id, attackerPn)) {
     await interaction.reply({ content: 'Only the attacker\'s player can choose.', ephemeral: true }).catch(discordCatch);
     return;
   }

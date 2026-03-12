@@ -289,6 +289,15 @@ const ROUND_NULL_FLAGS = [
   'pendingIllicitArms',
   'pendingExtraProtection',
   'extraProtectionTriggeredThisCombat',
+  'pendingExecutorInterrupt',
+  'pendingCcConfirmation',
+  'pendingNegation',
+  'pendingCommDisruptionPrompt',
+  'pendingCoverFire',
+  'pendingVoracious',
+  'pendingAssassinsBlade',
+  'pendingPunishingStrike',
+  'pendingConspire',
 ];
 
 const ROUND_ARRAY_FLAGS = [

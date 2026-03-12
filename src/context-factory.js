@@ -257,7 +257,7 @@ const CONTEXT_GROUPS = {
   ],
 
   postDeploy: [
-    'getGame', 'saveGames', 'client', 'logGameAction',
+    'getGame', 'saveGames', 'client', 'canActAsPlayer', 'logGameAction',
     'dcMessageMeta', 'getBoardStateForMovement', 'getMovementProfile',
     'computeMovementCache', 'getMovementMinimapAttachment',
     'getMoveSpaceGridRows', 'buildBoardMapPayload',

@@ -721,7 +721,7 @@ export async function advancePostDeployQueue(game, gameId, client, ctx) {
  * Player picks which ability to resolve next.
  */
 export async function handlePostDeployPick(interaction, ctx) {
-  const { getGame, saveGames, logGameAction, client } = ctx;
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
   const parts = interaction.customId.replace('pd_pick_', '').split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
@@ -729,6 +729,10 @@ export async function handlePostDeployPick(interaction, ctx) {
 
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the owning player can pick post-deploy abilities.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   const q = game.postDeployQueue;
   if (!q || q.currentPlayerNum !== playerNum) {
     await interaction.followUp({ content: 'Not your turn for post-deploy abilities.', ephemeral: true }).catch(discordCatch);
@@ -761,15 +765,17 @@ export async function handlePostDeployPick(interaction, ctx) {
  * Security Detail: player picks which LEADER gets the Block Token.
  */
 export async function handleSecurityDetailPick(interaction, ctx) {
-  const { getGame, saveGames, logGameAction, client } = ctx;
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
   const parts = interaction.customId.replace('pd_security_pick_', '').split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
-  const leaderFk = parts.slice(2).join('_');
-
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
-
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the owning player can pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const leaderFk = parts.slice(2).join('_');
   const leaderDcName = dcNameFromFigureKey(leaderFk);
   game.figurePowerTokens = game.figurePowerTokens || {};
   game.figurePowerTokens[leaderFk] = game.figurePowerTokens[leaderFk] || [];
@@ -790,7 +796,7 @@ export async function handleSecurityDetailPick(interaction, ctx) {
  * Strike Team: player picks adjacent friendly for 2 MP.
  */
 export async function handleStrikeTeamAdjPick(interaction, ctx) {
-  const { getGame, saveGames, logGameAction, client } = ctx;
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
   const parts = interaction.customId.replace('pd_strike_adj_', '').split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
@@ -798,6 +804,10 @@ export async function handleStrikeTeamAdjPick(interaction, ctx) {
 
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the owning player can pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
 
   const friendDcName = dcNameFromFigureKey(friendFk);
   const active = game.postDeployQueue?.activeAbility;
@@ -822,7 +832,7 @@ export async function handleStrikeTeamAdjPick(interaction, ctx) {
  * Strike Team: player picks a figure outside deployment zone for Hit Token.
  */
 export async function handleStrikeTeamTokenPick(interaction, ctx) {
-  const { getGame, saveGames, logGameAction, client } = ctx;
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
   const parts = interaction.customId.replace('pd_strike_token_', '').split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
@@ -830,6 +840,10 @@ export async function handleStrikeTeamTokenPick(interaction, ctx) {
 
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the owning player can pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
 
   const active = game.postDeployQueue?.activeAbility;
   if (!active || active.abilityId !== 'strike_team') return;
@@ -857,12 +871,17 @@ export async function handleStrikeTeamTokenPick(interaction, ctx) {
  * Strike Team: player is done distributing Hit Tokens.
  */
 export async function handleStrikeTeamTokenDone(interaction, ctx) {
-  const { getGame, saveGames, logGameAction, client } = ctx;
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
   const parts = interaction.customId.replace('pd_strike_token_done_', '').split('_');
   const gameId = parts[0];
 
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  const _tdPn = game.postDeployQueue?.currentPlayerNum;
+  if (_tdPn && canActAsPlayer && !canActAsPlayer(game, interaction.user.id, _tdPn)) {
+    await interaction.followUp({ content: 'Only the owning player can do this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
 
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
 
@@ -878,7 +897,7 @@ export async function handleStrikeTeamTokenDone(interaction, ctx) {
  * Post-deploy movement skip: player skips movement for a figure.
  */
 export async function handlePostDeployMoveSkip(interaction, ctx) {
-  const { getGame, saveGames, logGameAction, client } = ctx;
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
   const parts = interaction.customId.replace('pd_move_skip_', '').split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
@@ -886,6 +905,10 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
 
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the owning player can skip.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
 
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
 
@@ -935,12 +958,17 @@ export async function handlePostDeployMoveSkip(interaction, ctx) {
  * Scavenged Walker: player starts the post-deploy move.
  */
 export async function handleWalkerMove(interaction, ctx) {
-  const { getGame, saveGames, logGameAction, client } = ctx;
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
   const parts = interaction.customId.replace('pd_walker_move_', '').split('_');
   const gameId = parts[0];
 
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  const _wmPn = game.postDeployQueue?.currentPlayerNum;
+  if (_wmPn && canActAsPlayer && !canActAsPlayer(game, interaction.user.id, _wmPn)) {
+    await interaction.followUp({ content: 'Only the owning player can move.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
 
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
 
@@ -956,12 +984,17 @@ export async function handleWalkerMove(interaction, ctx) {
  * Scavenged Walker: player skips the post-deploy move.
  */
 export async function handleWalkerSkip(interaction, ctx) {
-  const { getGame, saveGames, logGameAction, client } = ctx;
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
   const parts = interaction.customId.replace('pd_walker_skip_', '').split('_');
   const gameId = parts[0];
 
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
+  const _wsPn = game.postDeployQueue?.currentPlayerNum;
+  if (_wsPn && canActAsPlayer && !canActAsPlayer(game, interaction.user.id, _wsPn)) {
+    await interaction.followUp({ content: 'Only the owning player can skip.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
 
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
 
