@@ -266,8 +266,7 @@ const CONTEXT_GROUPS = {
   recover: [
     'getGame', 'saveGames', 'client', 'logGameAction',
     'getNegationResponseButtons', 'sendReadyToResolveRolls',
-    'updateHandChannelMessages', 'sendRoundActivationPhaseMessage',
-    'getMoveMpButtonRows',
+    'updateHandChannelMessages', 'getMoveMpButtonRows',
   ],
 
   combatSpecialEffects: [

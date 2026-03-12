@@ -463,19 +463,28 @@ async function recoverMoveInProgress(game, gameId, ctx) {
 // ─── Step 12: Recover roundActivationMessageId ───────────────────────────────
 
 async function recoverRoundActivationMessage(game, gameId, ctx) {
-  const { client, sendRoundActivationPhaseMessage } = ctx;
+  const { client } = ctx;
   if (!game.roundActivationMessageId || !game.generalId) return null;
   if (!game.currentRound) return null;
 
   // Check if message still exists
+  let generalCh;
   try {
-    const generalCh = await client.channels.fetch(game.generalId);
+    generalCh = await client.channels.fetch(game.generalId);
     await generalCh.messages.fetch(game.roundActivationMessageId);
     return null; // message exists, no recovery needed
   } catch {
-    // Message is gone — re-send
-    await sendRoundActivationPhaseMessage(game, client);
-    return 'Re-sent round activation phase message';
+    // Message is gone — re-create using current turn player (not initiative player)
+    const activePlayerId = game.currentActivationTurnPlayerId || game.initiativePlayerId;
+    const activePlayerNum = activePlayerId === game.player1Id ? 1 : 2;
+    const round = game.currentRound;
+    if (!generalCh) generalCh = await client.channels.fetch(game.generalId);
+    const sent = await generalCh.send({
+      content: `**[Recover]** <@${activePlayerId}> (**Player ${activePlayerNum}**) **Round ${round}** — Your turn!`,
+      allowedMentions: { users: [activePlayerId] },
+    });
+    game.roundActivationMessageId = sent.id;
+    return 'Re-sent round activation message';
   }
 }
 
