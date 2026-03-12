@@ -1789,7 +1789,12 @@ export async function handleDeploymentDone(interaction, ctx) {
     });
     for (const pn of [1, 2]) {
       const pending = game.setupAttachmentPending[pn];
-      if (pending.length === 0) continue;
+      if (pending.length === 0) {
+        // Player has no attachments — auto-confirm so they don't block opponent
+        game.setupAttachmentConfirmed = game.setupAttachmentConfirmed || {};
+        game.setupAttachmentConfirmed[pn] = true;
+        continue;
+      }
       // Auto-attach all character-specific attachments first
       const dcList = getDcList(game, pn) || [];
       const dcMsgIds = getDcMessageIds(game, pn) || [];
