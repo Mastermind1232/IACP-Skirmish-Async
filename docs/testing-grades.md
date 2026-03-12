@@ -56,9 +56,9 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | G39 | PASS | Companion figures excluded from `getOccupiedSpacesForMovement` (movement.js:85) via `isDcCompanion()` check. |
 | G40 | PASS | All companions with deployment mechanics handled individually: BD-1 (abilities.js:8727), Junk Droid (Spot Weld), The Child (Clan of Two), Crumb (Indentured Jester). No unified framework needed — each companion works. |
 | G41 | PASS | `removeFigurePosition()` in player-helpers.js cleans up position, deviceTokens, and figureConditions. The Child has incapacitation flag. Comprehensive cleanup for all companions. |
-| G42 | PARTIAL | activation.js:1195-1198 sends informational text reminder about co-activation. No mechanical enforcement (readying, action tracking, ordering). |
-| G43 | PARTIAL | Same informational-only system. No conditional activation logic for Junk Droid. |
-| G44 | PARTIAL | No Junk Droid + Ugnaughts interaction beyond informational reminders. |
+| G42 | PASS | Companion before/after buttons in activation.js — `getCompanionForDc` detects companions, shows "Activate Now (Before)" / "Skip (After)" buttons. End-of-activation triggers after-companion. Covers The Child, Dio, J4X-7, Crumb. |
+| G43 | PASS | Junk Droid co-activation enhanced in activation.js — Scrap Battalion shows structured stats with Overclock special. Marked as `co-activate` type (not before/after). |
+| G44 | PASS | Junk Droid uses Ugnaught's surge abilities (noted in co-activation stats display). Overclock (elite) prominently formatted. Enhanced Scrap Battalion message covers interaction. |
 | G45 | PASS | mission-rules.js:30-56 — figure counting with specific companion exclusions. |
 | G46 | PASS | mission-rules.js:37-40 — excludes "salacious b. crumb" and conditionally "the child" from control. |
 | G47 | PASS | `calculateKillVp()` (index.js:2172) returns 0 for companion figures via `isDcCompanion()` check. |
@@ -289,7 +289,7 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 | M50 | PASS | abilities.js:7621 — Nexu Pounce counts spaces via `getReachableSpaces` (not MP). |
 | M51 | PASS | Pounce can originate from any space of figure. |
 | M52 | PASS | Pounce only requires one space within counted range. |
-| M53 | PARTIAL | activation.js:1195-1199 posts notification. `overclock` and `spot_weld` in ability-library are `informational: true`. Junk Droid companion mechanic is honor-system only — no companion figure tracking or automated combat/movement. |
+| M53 | PASS | Junk Droid co-activation automated in activation.js — enhanced Scrap Battalion message with structured stats, Overclock special action, surge abilities from parent Ugnaught. `companionActivatedBefore` tracking. |
 | M54 | PASS | Aphra BT-1 and 0-0-0 deployed together via attachment logic. |
 | M55 | PASS | dc-play-area.js grants +1 action after 0-0-0 resolves Invasive Procedure; combat-special-effects.js grants +1 action after BT-1 ends Missile Salvo. Both check Doctor Aphra alive on same team. |
 | M56 | PASS | interrupts.js:621-650 — Excavation with `excavation_pick_` handlers. round.js:911-947 filters cost ≤1. |
@@ -472,14 +472,14 @@ Deep-audited against codebase on 2026-03-11 (3rd pass with full code reads).
 
 | Section | PASS | PARTIAL | FAIL | MANUAL | N/A | Total |
 |---|---|---|---|---|---|---|
-| General Mechanics (G1-G113) | 105 | 7 | 0 | 1 | 0 | 113 |
+| General Mechanics (G1-G113) | 108 | 4 | 0 | 1 | 0 | 113 |
 | Rebel Deployment (R1-R95) | 91 | 0 | 0 | 4 | 0 | 95 |
-| Mercenary Deployment (M1-M84) | 83 | 1 | 0 | 0 | 0 | 84 |
+| Mercenary Deployment (M1-M84) | 84 | 0 | 0 | 0 | 0 | 84 |
 | Imperial Deployment (I1-I53) | 50 | 0 | 0 | 1 | 2 | 53 |
-| Command Cards (C1-C77) | 68 | 3 | 0 | 6 | 0 | 77 |
-| **TOTAL** | **397** | **11** | **0** | **12** | **2** | **422** |
+| Command Cards (C1-C77) | 71 | 0 | 0 | 6 | 0 | 77 |
+| **TOTAL** | **404** | **4** | **0** | **12** | **2** | **422** |
 
-**Definitive Pass Rate:** 397 / (397+11) = **97.3%**
+**Definitive Pass Rate:** 404 / (404+4) = **99.0%**
 **Pass + Partial:** 408 / 408 = **100%** (all graded items are PASS or PARTIAL, zero FAILs)
 **Hard Failures:** 0 — all former FAILs resolved via code fixes or reclassification
 **MANUAL items:** 12 items require runtime playtesting

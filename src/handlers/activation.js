@@ -30,6 +30,62 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 
 /**
+ * Determine the companion (if any) for a given DC, considering both
+ * direct companion fields (e.g. Iden Versio → Dio) and attachment-based
+ * companions (e.g. [Clan of Two] → The Child, [Indentured Jester] → Salacious B. Crumb).
+ * Returns { companionName, companionStats, isCoActivation } or null.
+ * isCoActivation is true for Junk Droid (Ugnaught) which co-activates rather than before/after.
+ */
+function getCompanionForDc(dcName, attachments) {
+  const eff = getDcEffects();
+  if (!eff) return null;
+  const dcData = eff[dcName];
+  if (!dcData) return null;
+  // Direct companion field (string = named companion, true = IS a companion)
+  if (typeof dcData.companion === 'string') {
+    const companionName = dcData.companion;
+    const companionStats = eff[companionName];
+    if (!companionStats) return null;
+    // Junk Droid co-activates as part of Ugnaught group
+    const isCoActivation = companionName === 'Junk Droid';
+    return { companionName, companionStats, isCoActivation };
+  }
+  // Attachment-based companions (attachments stored as plain names, dc-effects uses [brackets])
+  if (attachments?.length) {
+    for (const attName of attachments) {
+      // Try both plain name and bracketed name
+      const attData = eff[attName] || eff[`[${attName}]`];
+      if (attData && typeof attData.companion === 'string') {
+        const companionName = attData.companion;
+        const companionStats = eff[companionName];
+        if (!companionStats) continue;
+        return { companionName, companionStats, isCoActivation: false };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Build a summary string for a companion's stats.
+ */
+function formatCompanionStats(name, stats) {
+  const parts = [`**${name}**`];
+  if (stats.health) parts.push(`Health ${stats.health}`);
+  if (stats.speed) parts.push(`Speed ${stats.speed}`);
+  if (stats.attack) {
+    const dice = (stats.attack.dice || []).join(', ');
+    parts.push(`${stats.attack.type === 'melee' ? 'Melee' : 'Ranged'} (${dice})`);
+  }
+  if (stats.defense?.length) parts.push(`Defense: ${stats.defense.join(', ')}`);
+  if (stats.passives?.length) parts.push(stats.passives.join(', '));
+  if (stats.surgeAbilities?.length) parts.push(`Surges: ${stats.surgeAbilities.join('; ')}`);
+  const specials = stats.specials?.length ? `\nSpecials: ${stats.specials.join(', ')}` : '';
+  const abilitySnippet = stats.abilityText ? `\n${stats.abilityText.split('\n').slice(0, 2).join(' | ')}` : '';
+  return parts.join(' | ') + specials + abilitySnippet;
+}
+
+/**
  * Field Tactics (Death Trooper Elite/Regular): after activation ends, choose a
  * friendly TROOPER or LEADER figure within 2 spaces (cost ≤6) to perform an
  * interrupt free attack.  Modelled on Coordinated Raid (pendingCoordinatedRaid).
@@ -451,6 +507,26 @@ export async function handleEndTurn(interaction, ctx) {
   } catch (err) {
     console.error('Failed to update DC card after End Turn:', err);
   }
+
+  // --- Companion activation at end of turn ---
+  {
+    const _compAttachments = game.p1DcAttachments?.[dcMsgId] || game.p2DcAttachments?.[dcMsgId] || [];
+    const _compInfo = getCompanionForDc(meta.dcName, _compAttachments);
+    if (_compInfo && !_compInfo.isCoActivation) {
+      const _compState = game.companionActivatedBefore?.[dcMsgId];
+      if (_compState === 'pending-after' || !_compState) {
+        const _compSummary = formatCompanionStats(_compInfo.companionName, _compInfo.companionStats);
+        await logGameAction(game, client, `🐾 **${_compInfo.companionName} activates NOW** (after **${meta.displayName || meta.dcName}**'s activation).\nPerform the companion's activation (move, attack, special actions) manually.\n\n${_compSummary}`, {
+          phase: 'ACTIVATION',
+          icon: 'activate',
+        });
+      }
+    }
+    if (game.companionActivatedBefore?.[dcMsgId]) {
+      delete game.companionActivatedBefore[dcMsgId];
+    }
+  }
+
   // Son of Skywalker: auto-ready Luke's DC after any activation ends
   if (game.sonOfSkywalkerActive) {
     const sos = game.sonOfSkywalkerActive;
@@ -589,6 +665,27 @@ export async function handleDcEndActivation(interaction, ctx) {
     await dcMsg.edit({ embeds: [embed], files, components: getDcPlayAreaComponents(msgId, true, game, meta.dcName) }).catch(discordCatch);
   } catch (err) {
     console.error('Failed to update DC card after End Activation:', err);
+  }
+
+  // --- Companion activation at end of activation ---
+  // If companion was marked 'pending-after' or was never addressed (player ignored buttons), activate now
+  {
+    const _compAttachments = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _compInfo = getCompanionForDc(meta.dcName, _compAttachments);
+    if (_compInfo && !_compInfo.isCoActivation) {
+      const _compState = game.companionActivatedBefore?.[msgId];
+      if (_compState === 'pending-after' || !_compState) {
+        const _compSummary = formatCompanionStats(_compInfo.companionName, _compInfo.companionStats);
+        await logGameAction(game, client, `🐾 **${_compInfo.companionName} activates NOW** (after **${displayName}**'s activation).\nPerform the companion's activation (move, attack, special actions) manually.\n\n${_compSummary}`, {
+          phase: 'ACTIVATION',
+          icon: 'activate',
+        });
+      }
+    }
+    // Clean up companion tracking for this activation
+    if (game.companionActivatedBefore?.[msgId]) {
+      delete game.companionActivatedBefore[msgId];
+    }
   }
 
   // Ping opponent
@@ -1417,10 +1514,12 @@ export async function handleConfirmActivate(interaction, ctx) {
       await thread.send({ content: `🔄 **Shape** — No form card selected. Apply abilities manually.` }).catch(discordCatch);
     }
   }
-  // Scrap Battalion (Ugnaught): Junk Droid readies and co-activates
+  // Scrap Battalion (Ugnaught): Junk Droid readies and co-activates as part of group
   if (_mountedIds.includes('scrap_battalion_ugnaught_elite') || _mountedIds.includes('scrap_battalion_ugnaught_reg')) {
     const isElite = _mountedIds.includes('scrap_battalion_ugnaught_elite');
-    await thread.send({ content: `🤖 **Scrap Battalion** — Your Junk Droid readies and activates as part of this group.\n• Speed 4, Health 1, Melee (1 green die), +1 Hit passive\n• Uses ${meta.dcName}'s surge abilities: Bleed, Pierce ${isElite ? '2' : '1'}${isElite ? '\n• **Overclock** (Special Action): Junk Droid may interrupt to move or attack' : ''}` }).catch(discordCatch);
+    game.companionActivatedBefore = game.companionActivatedBefore || {};
+    game.companionActivatedBefore[msgId] = 'co-activate'; // Junk Droid co-activates, no before/after choice
+    await thread.send({ content: `🤖 **Scrap Battalion — Junk Droid Co-Activates**\nThe Junk Droid readies and activates **as part of this group**. Move and attack with it during this activation.\n\`\`\`\nJunk Droid: Speed 4 | Health 1 | Melee (1 green) | +1 Hit\nSurge abilities (${meta.dcName}'s): Bleed, Pierce ${isElite ? '2' : '1'}\n\`\`\`${isElite ? '\n⚡ **Overclock** (Special Action): The Junk Droid may **interrupt** to perform a move or attack.' : ''}` }).catch(discordCatch);
   }
   // --- Skirmish Upgrade attachment activation effects ---
   const _suActivationUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
@@ -1772,6 +1871,35 @@ export async function handleConfirmActivate(interaction, ctx) {
         await thread.send({
           content: `**Voracious** — **${rDisplayName}** (${rancorOwner}, P${rancorPn}) is adjacent to the activating figure. The Rancor may perform a free melee attack:`,
           components: [new ActionRowBuilder().addComponents(vorBtns)],
+        }).catch(discordCatch);
+      }
+    }
+  }
+
+  // --- Companion activation ordering (before/after) ---
+  // Check for companions that activate at the start or end of the parent's activation
+  // (excludes Junk Droid which co-activates and is handled by Scrap Battalion above)
+  {
+    const _compAttachments = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _compInfo = getCompanionForDc(meta.dcName, _compAttachments);
+    if (_compInfo && !_compInfo.isCoActivation) {
+      game.companionActivatedBefore = game.companionActivatedBefore || {};
+      // Only prompt if companion hasn't already been marked (shouldn't happen, but guard)
+      if (!game.companionActivatedBefore[msgId]) {
+        const _compRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`act_passive_${game.gameId}_${msgId}_companionbefore_activate`)
+            .setLabel(`Activate ${_compInfo.companionName} Now (Before)`)
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`act_passive_${game.gameId}_${msgId}_companionafter_skip`)
+            .setLabel(`Skip (Activate ${_compInfo.companionName} After)`)
+            .setStyle(ButtonStyle.Secondary),
+        );
+        const _compSummary = formatCompanionStats(_compInfo.companionName, _compInfo.companionStats);
+        await thread.send({
+          content: `🐾 **Companion: ${_compInfo.companionName}** — Activates at the start or end of **${displayName}**'s activation.\n${_compSummary}\n\nActivate the companion now (before ${meta.dcName}) or after?`,
+          components: [_compRow],
         }).catch(discordCatch);
       }
     }
@@ -2538,6 +2666,32 @@ export async function handleActPassive(interaction, ctx) {
           await interaction.message.edit({ content: `🤖 **Droid Kit** — **${displayName}** is at max Power Tokens (${cap}). No token gained.`, components: [] }).catch(discordCatch);
         }
       }
+    }
+  } else if (ability === 'companionbefore') {
+    // Player chose to activate companion BEFORE the main group
+    const _compAttachments = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _compInfo = getCompanionForDc(meta.dcName, _compAttachments);
+    if (_compInfo) {
+      game.companionActivatedBefore = game.companionActivatedBefore || {};
+      game.companionActivatedBefore[msgId] = 'before';
+      const _compSummary = formatCompanionStats(_compInfo.companionName, _compInfo.companionStats);
+      await interaction.message.edit({
+        content: `🐾 **${_compInfo.companionName} activates NOW** (before **${displayName}**).\nPerform the companion's activation (move, attack, special actions) manually, then continue with **${meta.dcName}**'s activation.\n\n${_compSummary}`,
+        components: [],
+      }).catch(discordCatch);
+      await logGameAction?.(game, client, `🐾 **${_compInfo.companionName}** activates **before** **${displayName}**.`, { phase: 'ACTIVATION', icon: 'activate' });
+    }
+  } else if (ability === 'companionafter') {
+    // Player chose to skip — companion will activate after the main group's activation ends
+    const _compAttachments = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _compInfo = getCompanionForDc(meta.dcName, _compAttachments);
+    if (_compInfo) {
+      game.companionActivatedBefore = game.companionActivatedBefore || {};
+      game.companionActivatedBefore[msgId] = 'pending-after'; // Will activate at end
+      await interaction.message.edit({
+        content: `🐾 **${_compInfo.companionName}** will activate **after** **${displayName}**'s activation ends.`,
+        components: [],
+      }).catch(discordCatch);
     }
   }
   saveGames();
