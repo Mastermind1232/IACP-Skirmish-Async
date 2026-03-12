@@ -74,6 +74,7 @@ export async function handleUndo(interaction, ctx) {
     updateHandVisualMessage,
     updateDiscardPileMessage,
     updateAttachmentMessageForDc,
+    getDeploymentZoneButtons,
     client,
   } = ctx;
   const gameId = interaction.customId.replace('undo_', '');
@@ -186,6 +187,36 @@ export async function handleUndo(interaction, ctx) {
     }
     saveGames();
     await interaction.followUp({ content: 'Last deployment undone.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (last.type === 'deployment_zone') {
+    // Delete the deploy prompt messages that were sent to initiative player's hand
+    if (last.deployMessageIds?.length && last.deployHandChannelId) {
+      try {
+        const handCh = await client.channels.fetch(last.deployHandChannelId);
+        for (const msgId of last.deployMessageIds) {
+          const msg = await handCh.messages.fetch(msgId).catch(() => null);
+          if (msg) await msg.delete().catch(discordCatch);
+        }
+      } catch { /* ignore */ }
+    }
+    // Restore the zone picker buttons
+    if (game.deploymentZoneMessageId && game.generalId && getDeploymentZoneButtons) {
+      try {
+        const generalChannel = await client.channels.fetch(game.generalId);
+        const zoneMsg = await generalChannel.messages.fetch(game.deploymentZoneMessageId).catch(() => null);
+        if (zoneMsg) {
+          const zoneChooserId = game.deviousSchemeZoneChooser || game.initiativePlayerId;
+          const zoneChooserPlayerNum = zoneChooserId === game.player1Id ? 1 : 2;
+          await zoneMsg.edit({
+            content: `<@${zoneChooserId}> (**Player ${zoneChooserPlayerNum}**) — Pick your deployment zone:`,
+            components: [getDeploymentZoneButtons(last.gameId || gameId)],
+          }).catch(discordCatch);
+        }
+      } catch { /* ignore */ }
+    }
+    saveGames();
+    await interaction.followUp({ content: 'Deployment zone selection undone.', ephemeral: true }).catch(discordCatch);
     return;
   }
   if (last.type === 'interact') {

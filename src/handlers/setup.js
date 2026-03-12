@@ -891,7 +891,7 @@ export async function handleDetermineInitiative(interaction, ctx) {
  * @param {object} ctx - getGame, logGameAction, getDeployFigureLabels, getDeployButtonRows, getDeploymentMapAttachment, client, saveGames
  */
 export async function handleDeploymentZone(interaction, ctx) {
-  const { getGame, logGameAction, getDeployFigureLabels, getDeployButtonRows, getDeploymentMapAttachment, client, saveGames } = ctx;
+  const { getGame, logGameAction, getDeployFigureLabels, getDeployButtonRows, getDeploymentMapAttachment, pushUndo, getDeploymentZoneButtons, client, saveGames } = ctx;
   const isRed = interaction.customId.startsWith('deployment_zone_red_');
   const gameId = interaction.customId.replace(isRed ? 'deployment_zone_red_' : 'deployment_zone_blue_', '');
   const game = await requireGame(interaction, getGame, gameId);
@@ -906,6 +906,8 @@ export async function handleDeploymentZone(interaction, ctx) {
     await interaction.followUp({ content: `Deployment zone already chosen: **${game.deploymentZoneChosen}**.`, ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Push undo snapshot before mutation
+  pushUndo(game, { type: 'deployment_zone', label: 'Deployment zone selection', gameId });
   const zone = isRed ? 'red' : 'blue';
   const otherZone = zone === 'red' ? 'blue' : 'red';
   game.deploymentZoneChosen = zone;
@@ -967,6 +969,12 @@ export async function handleDeploymentZone(interaction, ctx) {
     game.initiativeDeployMessageId = game.initiativeDeployMessageIds[game.initiativeDeployMessageIds.length - 1];
   } catch (err) {
     console.error('Failed to send deploy prompt to initiative player:', err);
+  }
+  // Store deploy message IDs in the undo entry so they can be cleaned up on undo
+  const undoEntry = game.undoStack?.[game.undoStack.length - 1];
+  if (undoEntry && undoEntry.type === 'deployment_zone') {
+    undoEntry.deployMessageIds = game.initiativeDeployMessageIds || [];
+    undoEntry.deployHandChannelId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
   }
   saveGames();
 }

@@ -191,7 +191,7 @@ const CONTEXT_GROUPS = {
     'getGame', 'saveGames', 'updateMovementBankMessage', 'buildBoardMapPayload',
     'logGameAction', 'updateDeployPromptMessages', 'updateDcActionsMessage',
     'updateHandVisualMessage', 'updateDiscardPileMessage',
-    'updateAttachmentMessageForDc', 'client',
+    'updateAttachmentMessageForDc', 'getDeploymentZoneButtons', 'client',
   ],
 
   botmenu: [
