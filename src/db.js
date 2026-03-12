@@ -70,6 +70,21 @@ export async function initDb() {
         UNIQUE(user_id, achievement_id)
       )
     `);
+    // Event log table for audit trail
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS game_events (
+        id SERIAL PRIMARY KEY,
+        game_id TEXT NOT NULL,
+        seq INT NOT NULL,
+        handler_key TEXT NOT NULL,
+        custom_id TEXT,
+        player_id TEXT,
+        timestamp TIMESTAMPTZ DEFAULT NOW(),
+        state_diff JSONB,
+        metadata JSONB
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_game_events_game_seq ON game_events (game_id, seq)').catch((err) => { console.error('[discord]', err?.message ?? err); });
     await seedAchievements();
     console.log('[DB] PostgreSQL connected, games and completed_games tables ready.');
   } catch (err) {
@@ -549,6 +564,46 @@ export async function checkAndGrantAchievements(userId, trigger, statCount) {
     return defs.rows;
   } catch (err) {
     console.error('[DB] checkAndGrantAchievements failed:', err.message);
+    return [];
+  }
+}
+
+// ── Event Log ─────────────────────────────────────────────────────────────
+
+/** Insert a game event into the database. */
+export async function insertGameEvent(gameId, event) {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO game_events (game_id, seq, handler_key, custom_id, player_id, timestamp, state_diff, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        gameId,
+        event.seq,
+        event.handlerKey,
+        event.customId ?? null,
+        event.playerId ?? null,
+        event.timestamp,
+        event.diff ? JSON.stringify(event.diff) : null,
+        event.metadata ? JSON.stringify(event.metadata) : null,
+      ]
+    );
+  } catch (err) {
+    console.error('[DB] insertGameEvent failed:', err.message);
+  }
+}
+
+/** Query game events from the database. */
+export async function getGameEvents(gameId, { afterSeq = 0, limit = 100 } = {}) {
+  if (!pool) return [];
+  try {
+    const res = await pool.query(
+      `SELECT * FROM game_events WHERE game_id = $1 AND seq > $2 ORDER BY seq ASC LIMIT $3`,
+      [gameId, afterSeq, limit]
+    );
+    return res.rows;
+  } catch (err) {
+    console.error('[DB] getGameEvents failed:', err.message);
     return [];
   }
 }

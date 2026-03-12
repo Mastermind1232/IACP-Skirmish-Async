@@ -1,6 +1,10 @@
 /**
  * Recover handler: detect stuck game states and re-send missing UI prompts.
  * Invoked via botmenu_recover_ button or auto-recovery on bot startup.
+ *
+ * Phase 3.7.2: Now uses the available-actions system as a diagnostic layer.
+ * getRecoveryPrompts() tells us which players need actions; the legacy
+ * recover functions know HOW to reconstruct the Discord prompts.
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import {
@@ -10,6 +14,7 @@ import {
 import { discordCatch } from '../error-handling.js';
 import { PHASE_GATE_LABELS } from '../game/phase-gate.js';
 import { PHASES, ROUND_PHASES } from '../game/phase.js';
+import { getRecoveryPrompts, needsRecovery } from '../engine/recovery.js';
 
 /**
  * Main recovery handler — called from botmenu Recover button.
@@ -43,18 +48,42 @@ export async function handleBotmenuRecover(interaction, ctx) {
 /**
  * Core recovery logic — also called by auto-recovery on startup.
  * Returns array of description strings for each recovered prompt.
+ *
+ * Phase 3.7.2: Uses getRecoveryPrompts() from the available-actions system
+ * as a diagnostic layer. The actions system tells us WHICH players need
+ * prompts and WHAT types; the legacy recover functions know HOW to
+ * reconstruct the specific Discord UI for each case.
  */
 export async function runRecovery(game, gameId, ctx) {
   const { client } = ctx;
   const results = [];
 
-  // Phase gate always highest priority — blocks all other actions
+  // ── Available-actions diagnostic ───────────────────────────────────
+  // Use the available-actions system to understand what the game needs.
+  // This provides a cross-check: if available-actions says a player has
+  // actions but the legacy recovery didn't send anything, we log a warning.
+  let actionsDiag = [];
+  try {
+    const deps = { dcMessageMeta: ctx.dcMessageMeta, dcExhaustedState: ctx.dcExhaustedState };
+    actionsDiag = getRecoveryPrompts(game, deps);
+    if (actionsDiag.length > 0) {
+      console.log(`[recover] Available-actions diagnostic for game ${gameId}:`,
+        actionsDiag.map(p => `P${p.playerNum}: ${p.description}`).join('; '));
+    }
+  } catch (err) {
+    console.error('[recover] Available-actions diagnostic failed:', err.message);
+  }
+
+  // ── Phase gate (highest priority — blocks all other actions) ───────
   try {
     const r = await recoverPhaseGate(game, gameId, ctx);
     if (r) results.push(r);
   } catch (err) { console.error('[recover] phaseGate:', err.message); }
 
-  // Legacy fallback for unmigrated games (no game.phase): run all checks flat
+  // If phase gate was recovered, it blocks everything else
+  if (game.phaseGate && results.length > 0) return results;
+
+  // ── Legacy fallback for unmigrated games (no game.phase) ──────────
   if (!game.phase) {
     try { const r = await recoverPendingCombat(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingCombat:', err.message); }
     try { const r = await recoverPendingNegation(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingNegation:', err.message); }
@@ -66,10 +95,11 @@ export async function runRecovery(game, gameId, ctx) {
     try { const r = await recoverMoveInProgress(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] moveInProgress:', err.message); }
     try { const r = await recoverRoundActivationMessage(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] roundActivationMessage:', err.message); }
     try { const r = await recoverCcDrawPhase(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] ccDrawPhase:', err.message); }
+    logRecoveryCrossCheck(actionsDiag, results, gameId);
     return results;
   }
 
-  // Phase-based dispatch
+  // ── Phase-based dispatch ──────────────────────────────────────────
   switch (game.phase) {
     case 'attachment':
       try { const r = await recoverSetupAttachmentPhase(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] setupAttachmentPhase:', err.message); }
@@ -105,7 +135,21 @@ export async function runRecovery(game, gameId, ctx) {
       break;
   }
 
+  // Cross-check: warn if available-actions detected needs that legacy didn't recover
+  logRecoveryCrossCheck(actionsDiag, results, gameId);
+
   return results;
+}
+
+/**
+ * Cross-check: compare available-actions diagnostic with actual recovery results.
+ * Logs warnings when available-actions says players need prompts but legacy recovery
+ * didn't send any. This helps identify recovery gaps over time.
+ */
+function logRecoveryCrossCheck(actionsDiag, results, gameId) {
+  if (actionsDiag.length > 0 && results.length === 0) {
+    console.warn(`[recover] Cross-check: available-actions detected needs for game ${gameId} but legacy recovery sent nothing. Players: ${actionsDiag.map(p => `P${p.playerNum}: ${p.description}`).join('; ')}`);
+  }
 }
 
 // ─── Step 4: Recover pendingCombat ────────────────────────────────────────────

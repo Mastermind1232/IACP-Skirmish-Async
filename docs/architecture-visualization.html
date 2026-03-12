@@ -321,9 +321,20 @@
 
   <div class="analogy blue">
     <span class="icon">🚀</span>
-    <strong>The round tracker was step one. The long-term vision is a full game log system.</strong>
+    <strong>The round tracker was step one. The next step is a full game log system.</strong>
     Instead of just tracking <em>where</em> the game is, record <em>every move that happened</em>.
     Then any display — Discord, a website, a replay viewer — can reconstruct the game from that log.
+    <br><br>
+    <strong>Why this matters today:</strong> Every time the bot restarts for a patch, players mid-game
+    rely on 13 hand-written recovery functions to get their prompts back. If any one of those has
+    a bug, players are stuck until the next deploy. With a game log, recovery is automatic —
+    replay the log, get perfect state, every time.
+    <br><br>
+    <strong>Why it's not done yet:</strong> Right now, the code that updates game state and the code that
+    sends Discord messages are mixed together in the same functions. That's fine for normal play,
+    but it means you can't "replay" a game's history without also re-sending every Discord message.
+    Separating "what happened" from "tell Discord about it" is a major rewrite across 23 handler
+    files and ~6,000 lines. High value, but high effort and risk.
   </div>
 
   <div class="card">
@@ -356,7 +367,7 @@
       <div class="d-row">
         <div class="d-box src-blu">Discord bot<small>Messages &amp; buttons</small></div>
         <div class="d-box src-blu">Web viewer<small>Browser replay</small></div>
-        <div class="d-box src-blu">Spectator mode<small>Read-only view</small></div>
+        <div class="d-box src-blu">AI player<small>Reads log, submits moves</small></div>
       </div>
 
     </div>
@@ -382,6 +393,66 @@
   </div>
 
   <div class="card" style="margin-top:1.2rem">
+    <h3>Why this enables an AI player (and Phase 2 doesn't)</h3>
+    <div class="diagram">
+      <div class="d-label" style="color:var(--red); font-style:normal; font-weight:600; font-size:0.85rem; margin-bottom:0.3rem">
+        Phase 2 (today): AI can't plug in
+      </div>
+      <div class="d-row">
+        <div class="d-box src-red" style="min-width:280px">
+          Game logic + Discord messaging = one thing
+          <small>To "play a move," you have to go through Discord buttons</small>
+          <small style="color:var(--red)">An AI would need to fake being a Discord user</small>
+        </div>
+      </div>
+
+      <hr class="d-divider" style="margin:0.8rem auto">
+
+      <div class="d-label" style="color:var(--blue); font-style:normal; font-weight:600; font-size:0.85rem; margin-bottom:0.3rem">
+        Phase 3 (event sourcing): AI plugs in naturally
+      </div>
+      <div class="d-row">
+        <div class="d-box src-blu">
+          AI reads the event log
+          <small>Sees every move that happened, in order</small>
+        </div>
+        <span class="d-arrow blu">→</span>
+        <div class="d-box src-blu">
+          AI picks a move
+          <small>Submits it to the game engine directly</small>
+        </div>
+        <span class="d-arrow blu">→</span>
+        <div class="d-box src-blu">
+          Engine validates &amp; records
+          <small>Event log grows, Discord gets notified</small>
+        </div>
+      </div>
+      <div class="d-label" style="color:var(--blue)">
+        The AI never touches Discord. It talks to the game engine, same as any other player.
+      </div>
+    </div>
+  </div>
+
+  <div class="insights" style="margin-top:1.2rem">
+    <div class="insight blue">
+      <h4>Every game = training data</h4>
+      <p>The event log is a complete, structured record of every decision in every game. Feed thousands of these to an AI and it can learn strategy — no extra work needed.</p>
+    </div>
+    <div class="insight blue">
+      <h4>AI can "think ahead"</h4>
+      <p>The game engine is just rules — no Discord involved. The AI can copy the current state, try hundreds of hypothetical moves, evaluate which is best, then submit only the one it picks. Today, every move goes through Discord, so this is impossible.</p>
+    </div>
+    <div class="insight blue">
+      <h4>AI difficulty levels for free</h4>
+      <p>An easy AI looks ahead 1 move. A hard AI looks ahead 5. The engine supports both equally — you just control how many simulations the AI runs before deciding.</p>
+    </div>
+    <div class="insight blue">
+      <h4>Humans and AI play the same way</h4>
+      <p>Both submit moves to the game engine. Both see the same event log. A human in Discord and an AI player can be in the same game — neither knows or cares how the other is connected.</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1.2rem">
     <h3>The evolution path</h3>
     <div class="evo">
       <div class="evo-step s1">
@@ -396,7 +467,7 @@
       <div class="evo-arrow">→</div>
       <div class="evo-step s3">
         <strong style="color:var(--blue)">Future</strong>
-        Full event log<br>Any UI can display it
+        Full event log<br>AI + any UI can plug in
       </div>
     </div>
     <div class="d-label" style="margin-top:0.5rem">
