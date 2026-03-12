@@ -200,19 +200,21 @@ export async function handleUndo(interaction, ctx) {
         }
       } catch { /* ignore */ }
     }
-    // Restore the zone picker buttons
-    if (game.deploymentZoneMessageId && game.generalId && getDeploymentZoneButtons) {
+    // Delete old zone picker message and send a new one at the bottom of chat
+    if (game.generalId && getDeploymentZoneButtons) {
       try {
         const generalChannel = await client.channels.fetch(game.generalId);
-        const zoneMsg = await generalChannel.messages.fetch(game.deploymentZoneMessageId).catch(() => null);
-        if (zoneMsg) {
-          const zoneChooserId = game.deviousSchemeZoneChooser || game.initiativePlayerId;
-          const zoneChooserPlayerNum = zoneChooserId === game.player1Id ? 1 : 2;
-          await zoneMsg.edit({
-            content: `<@${zoneChooserId}> (**Player ${zoneChooserPlayerNum}**) — Pick your deployment zone:`,
-            components: [getDeploymentZoneButtons(last.gameId || gameId)],
-          }).catch(discordCatch);
+        if (game.deploymentZoneMessageId) {
+          const oldMsg = await generalChannel.messages.fetch(game.deploymentZoneMessageId).catch(() => null);
+          if (oldMsg) await oldMsg.delete().catch(discordCatch);
         }
+        const zoneChooserId = game.deviousSchemeZoneChooser || game.initiativePlayerId;
+        const zoneChooserPlayerNum = zoneChooserId === game.player1Id ? 1 : 2;
+        const newMsg = await generalChannel.send({
+          content: `<@${zoneChooserId}> (**Player ${zoneChooserPlayerNum}**) — Pick your deployment zone:`,
+          components: [getDeploymentZoneButtons(last.gameId || gameId)],
+        });
+        game.deploymentZoneMessageId = newMsg.id;
       } catch { /* ignore */ }
     }
     saveGames();
