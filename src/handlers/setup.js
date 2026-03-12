@@ -585,7 +585,6 @@ function applyMissionToGame(game, missionId, getMapRegistry, getMissionCardsData
   if (!mapDef || !missionData) return false;
   game.selectedMap = { id: mapDef.id, name: mapDef.name, imagePath: mapDef.imagePath };
   game.selectedMission = { variant: v, name: missionData.name, fullName: `${mapDef.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {} };
-  game.mapSelected = true;
   return true;
 }
 
