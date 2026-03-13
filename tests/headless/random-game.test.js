@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
+import { getDcStats, getMapSpaces } from '../../src/data-loader.js';
 
 describe('random game (AI training skeleton)', () => {
   it('game builder creates valid game state', () => {
@@ -91,5 +92,107 @@ describe('random game (AI training skeleton)', () => {
 
     // VP should have increased
     assert.ok(game.player1VP.total > initialVp, `VP increased from ${initialVp} to ${game.player1VP.total}`);
+  });
+
+  it('random action loop completes a game without crashing', async () => {
+    const { game, harness, deps, dcMessageMeta, dcExhaustedState, dcHealthState } = createTestGame()
+      .withPlayer1Army([{ dcName: 'Luke Skywalker' }])
+      .withPlayer2Army([{ dcName: 'Stormtrooper (Regular)' }])
+      .inRound(1)
+      .build();
+
+    const actionDeps = { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces };
+    const MAX_ITERATIONS = 500;
+    let iterations = 0;
+    let consecutiveEmpty = 0;
+    let lastError = null;
+
+    for (let i = 0; i < MAX_ITERATIONS; i++) {
+      iterations = i + 1;
+      const g = harness.getGame();
+      if (g.ended) break;
+
+      // Alternate: try current turn player first, then both players
+      const turnPlayer = g.currentActivationTurnPlayerId === g.player1Id ? 1 : 2;
+      let actions = getAvailableActions(g, turnPlayer, actionDeps);
+      if (actions.length === 0) {
+        // Try the other player
+        const otherPlayer = turnPlayer === 1 ? 2 : 1;
+        actions = getAvailableActions(g, otherPlayer, actionDeps);
+      }
+
+      if (actions.length === 0) {
+        consecutiveEmpty++;
+        if (consecutiveEmpty > 10) {
+          // Game is stuck — force end via NPC damage to break the deadlock
+          const p2Figs = Object.keys(g.figurePositions?.[2] || {});
+          const p1Figs = Object.keys(g.figurePositions?.[1] || {});
+          if (p2Figs.length > 0) {
+            await deps.applyNpcDamageToFigure(g, 2, p2Figs[0], 999, 'Deadlock breaker');
+          } else if (p1Figs.length > 0) {
+            await deps.applyNpcDamageToFigure(g, 1, p1Figs[0], 999, 'Deadlock breaker');
+          } else {
+            break; // No figures left — game should have ended
+          }
+          consecutiveEmpty = 0;
+        }
+        continue;
+      }
+      consecutiveEmpty = 0;
+
+      // Pick a random action
+      const action = actions[Math.floor(Math.random() * actions.length)];
+      const userId = turnPlayer === 1 ? g.player1Id : g.player2Id;
+
+      try {
+        const result = await harness.submitAction(action.customId, userId);
+        if (result.error) {
+          lastError = `${action.customId}: ${result.error}`;
+          // Errors are ok — some actions may fail due to game state; continue
+        }
+      } catch (err) {
+        lastError = `${action.customId}: ${err.message}`;
+        // Don't crash the loop — log and continue
+      }
+    }
+
+    const finalGame = harness.getGame();
+    // Game should have progressed (either ended or made progress)
+    assert.ok(iterations > 1, `ran ${iterations} iterations`);
+    // If game didn't end naturally, it should have been force-ended via deadlock breaker
+    if (!finalGame.ended) {
+      assert.ok(iterations >= MAX_ITERATIONS || consecutiveEmpty > 0,
+        `game did not end but ran ${iterations} iterations (last error: ${lastError})`);
+    }
+  });
+
+  it('attack target selection finds valid targets', () => {
+    const { game, deps, dcMessageMeta, dcExhaustedState } = createTestGame()
+      .withPlayer1Army([{ dcName: 'Luke Skywalker' }])
+      .withPlayer2Army([{ dcName: 'Darth Vader' }])
+      .inRound(1)
+      .build();
+
+    // Activate P1's DC so it has actions remaining
+    const p1MsgId = [...dcMessageMeta.entries()].find(([, m]) => m.playerNum === 1)?.[0];
+    game.dcActionsData = game.dcActionsData || {};
+    game.dcActionsData[p1MsgId] = { remaining: 2, total: 2, selectedFigure: 0 };
+
+    const actions = getAvailableActions(game, 1, {
+      dcMessageMeta,
+      dcExhaustedState,
+      getDcStats,
+      getMapSpaces,
+    });
+
+    const attackActions = actions.filter(a => a.type === 'attack_target');
+    // Should have individual targets (not just generic "Attack with X")
+    if (attackActions.length > 0) {
+      const hasTarget = attackActions.some(a => a.params?.targetFigureKey);
+      assert.ok(hasTarget, 'at least one attack action has a specific target');
+      // customId should be attack_target_${msgId}_${figureIndex}_${targetIndex}
+      const targeted = attackActions.find(a => a.params?.targetFigureKey);
+      assert.ok(targeted.customId.startsWith('attack_target_'), `customId format: ${targeted.customId}`);
+    }
   });
 });

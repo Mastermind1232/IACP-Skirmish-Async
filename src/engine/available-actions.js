@@ -9,6 +9,8 @@
 import { ACTION_TYPES, buildCustomId } from './action-types.js';
 import { getPlayerId, getInitiativePlayerNum, opponentPlayerNum } from '../game/player-helpers.js';
 import { PHASES, ROUND_PHASES } from '../game/phase.js';
+import { getRange, hasLineOfSight } from '../game/spatial.js';
+import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 
 /**
  * Get all available actions for a player in the current game state.
@@ -300,25 +302,44 @@ function getActivationActions(game, playerNum, deps) {
       if (!data || data.remaining <= 0) continue;
 
       // This DC has actions remaining — can move, attack, interact, or special
+      const displayName = meta.displayName || meta.dcName;
       actions.push({
         type: ACTION_TYPES.MOVE_FIGURE,
         customId: buildCustomId(ACTION_TYPES.MOVE_FIGURE, { msgId }),
-        description: `Move with ${meta.displayName || meta.dcName}`,
+        description: `Move with ${displayName}`,
         params: { msgId, dcName: meta.dcName },
       });
 
-      actions.push({
-        type: ACTION_TYPES.ATTACK_TARGET,
-        customId: buildCustomId(ACTION_TYPES.ATTACK_TARGET, { msgId }),
-        description: `Attack with ${meta.displayName || meta.dcName}`,
-        params: { msgId, dcName: meta.dcName },
-      });
+      // Attack: compute individual targets if deps available
+      const figureIndex = data.selectedFigure ?? 0;
+      const targets = computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps);
+      if (targets.length > 0) {
+        game.attackTargets = game.attackTargets || {};
+        game.attackTargets[`${msgId}_${figureIndex}`] = targets;
+        for (let ti = 0; ti < targets.length; ti++) {
+          const t = targets[ti];
+          actions.push({
+            type: ACTION_TYPES.ATTACK_TARGET,
+            customId: `attack_target_${msgId}_${figureIndex}_${ti}`,
+            description: `Attack ${t.label} with ${displayName}`,
+            params: { msgId, dcName: meta.dcName, targetIndex: ti, targetFigureKey: t.figureKey },
+          });
+        }
+      } else {
+        // Fallback: generic attack action (no target info available)
+        actions.push({
+          type: ACTION_TYPES.ATTACK_TARGET,
+          customId: buildCustomId(ACTION_TYPES.ATTACK_TARGET, { msgId }),
+          description: `Attack with ${displayName}`,
+          params: { msgId, dcName: meta.dcName },
+        });
+      }
 
       // End turn for this DC
       actions.push({
         type: ACTION_TYPES.END_TURN,
         customId: buildCustomId(ACTION_TYPES.END_TURN, { msgId }),
-        description: `End turn for ${meta.displayName || meta.dcName}`,
+        description: `End turn for ${displayName}`,
         params: { msgId, dcName: meta.dcName },
       });
     }
@@ -567,4 +588,56 @@ function getLegacyActions(game, playerNum, deps) {
 function getDcListForPlayer(game, playerNum) {
   if (playerNum === 1) return game.player1Squad?.dcList || [];
   return game.player2Squad?.dcList || [];
+}
+
+/**
+ * Compute valid attack targets for a given figure.
+ * Simplified version of dc-play-area.js target computation for headless use.
+ * Returns array of { figureKey, coord, label, hasLOS, dist }.
+ */
+function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
+  const getDcStats = deps.getDcStats;
+  const getMapSpaces = deps.getMapSpaces;
+  if (!getDcStats || !getMapSpaces || !game.selectedMap?.id) return [];
+
+  const stats = getDcStats(meta.dcName);
+  const attackInfo = stats?.attack;
+  if (!attackInfo) return [];
+
+  // Determine attacker position
+  const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+  const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!attackerPos) return [];
+
+  // Range: melee = 1, ranged = accuracy-based (use generous max since accuracy is checked after roll)
+  const isRanged = attackInfo.type === 'range';
+  const [minRange, maxRange] = attackInfo.range || (isRanged ? [1, 20] : [1, 1]);
+  const ms = getMapSpaces(game.selectedMap.id);
+  if (!ms) return [];
+
+  const enemyPn = opponentPlayerNum(playerNum);
+  const enemyPositions = game.figurePositions?.[enemyPn] || {};
+  const targets = [];
+
+  for (const [fk, coord] of Object.entries(enemyPositions)) {
+    if (!coord) continue;
+    const dist = getRange(String(attackerPos).toLowerCase(), String(coord).toLowerCase());
+    if (dist < minRange || dist > maxRange) continue;
+
+    // LOS check (skip figure blocking for simplicity — full version is in dc-play-area)
+    const los = hasLineOfSight(
+      String(attackerPos).toLowerCase(),
+      String(coord).toLowerCase(),
+      ms,
+      null,
+    );
+    if (!los) continue;
+
+    const targetDcName = dcNameFromFigureKey(fk);
+    targets.push({ figureKey: fk, coord: String(coord).toLowerCase(), label: targetDcName, hasLOS: los, dist });
+  }
+
+  return targets;
 }

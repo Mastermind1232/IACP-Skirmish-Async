@@ -92,14 +92,17 @@ export function initializeFigurePositions(game, dcMessageMeta, opts = {}) {
     let deploySpaces = [];
     if (opts.deploymentZones && game.selectedMap?.id) {
       const mapZones = opts.deploymentZones[game.selectedMap.id];
-      if (mapZones?.[zone]) {
-        deploySpaces = Object.keys(mapZones[zone]);
+      const zoneData = mapZones?.[zone];
+      if (Array.isArray(zoneData)) {
+        deploySpaces = zoneData;
+      } else if (zoneData) {
+        deploySpaces = Object.keys(zoneData);
       }
     }
 
-    // If no zone data, use map spaces as fallback
-    if (deploySpaces.length === 0 && opts.mapSpaces) {
-      deploySpaces = Object.keys(opts.mapSpaces).slice(0, 50);
+    // If no zone data, use map adjacency keys as fallback (actual coords)
+    if (deploySpaces.length === 0 && opts.mapSpaces?.adjacency) {
+      deploySpaces = Object.keys(opts.mapSpaces.adjacency).slice(0, 50);
     }
 
     let spaceIdx = 0;
