@@ -296,8 +296,11 @@
     </div>
 
     <div class="card" data-tip="Deployment cards ranked by win rate across all training games.">
-      <div class="card-label">DC Leaderboard</div>
-      <div class="dc-list" id="oDcList"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="card-label">DC Leaderboard</div>
+        <button id="oDcToggle" onclick="toggleDcList('oDcList','oDcToggle')" style="background:none;border:1px solid var(--border);color:var(--text-dim);padding:2px 8px;border-radius:4px;font-family:'Rajdhani';font-size:11px;cursor:pointer">Show Top 25</button>
+      </div>
+      <div class="dc-list" id="oDcList" data-limit="10"></div>
     </div>
 
     <div class="grid g2">
@@ -509,15 +512,26 @@ function findTroubles(s){
   }).filter(s=>s.reasons.length>0).sort((a,b)=>b.score-a.score).slice(0,12);
 }
 
-function renderDcList(targetId,stats,maxHeight){
+function renderDcList(targetId,stats){
+  const el=document.getElementById(targetId);
+  const limit=parseInt(el.dataset.limit)||999;
   const dcE=Object.entries(stats.dcStats).map(([n,d])=>({name:n,...d,wr:d.games>0?d.wins/d.games:0})).sort((a,b)=>b.wr-a.wr||b.games-a.games);
   const affColor={rebel:'var(--rebel)',imperial:'var(--imperial)',scum:'var(--scum)'};
-  document.getElementById(targetId).innerHTML=dcE.map((dc,i)=>{
+  el.innerHTML=dcE.slice(0,limit).map((dc,i)=>{
     const wrP=(dc.wr*100).toFixed(0),c=affColor[(dc.affiliation||'').toLowerCase()]||'var(--text-dim)';
     const rk=i===0?'gold':i===1?'silver':i===2?'bronze':'';
     const ac=(dc.affiliation||'unknown').toLowerCase();
     return `<div class="dc-row" data-tip="${dc.name}: ${dc.wins}W ${dc.losses}L (${wrP}%)"><span class="dc-rank ${rk}">${i+1}</span><span class="dc-name">${dc.name}</span><span class="dc-aff ${ac}">${(dc.affiliation||'?').toUpperCase()}</span><div class="dc-winbar"><div class="dc-winbar-fill" style="width:${wrP}%;background:${c}"></div></div><span class="dc-wr">${wrP}%</span><span class="dc-games">${dc.games}g</span></div>`;
   }).join('')||'<div style="text-align:center;color:var(--text-dim);padding:16px">No data yet. Run training first.</div>';
+}
+
+function toggleDcList(listId,btnId){
+  const el=document.getElementById(listId);
+  const btn=document.getElementById(btnId);
+  const cur=parseInt(el.dataset.limit)||10;
+  if(cur<=10){el.dataset.limit='25';btn.textContent='Show Top 10';}
+  else{el.dataset.limit='10';btn.textContent='Show Top 25';}
+  if(latestStats)renderDcList(listId,latestStats);
 }
 
 function renderAff(prefixId,stats){
