@@ -543,6 +543,76 @@ export function translateDiffToEvents(handlerKey, diff, context, skipTypes = nul
     }
   }
 
+  // ── Draft random started ──
+  if (set?.draftRandomStarted && !before?.draftRandomStarted) {
+    emit('DraftRandomStarted', {});
+  }
+
+  // ── Combat passive applied (bonus fields on pendingCombat) ──
+  if (set?.pendingCombat && before?.pendingCombat) {
+    for (const bonusKey of ['bonusHits', 'bonusSurge', 'bonusAccuracy', 'bonusBlock', 'bonusEvade', 'bonusPierce', 'bonusBlast']) {
+      const oldVal = before.pendingCombat[bonusKey] || 0;
+      const newVal = after?.pendingCombat?.[bonusKey] || 0;
+      if (newVal !== oldVal && newVal > oldVal) {
+        emit('CombatPassiveApplied', { effect: { [bonusKey]: newVal - oldVal } });
+      }
+    }
+  }
+
+  // ── Ability triggered / resolved (via lastResolvedAbility or triggeredAbilities) ──
+  if (set?.lastResolvedAbility && !before?.lastResolvedAbility) {
+    emit('AbilityResolved', {
+      abilityId: set.lastResolvedAbility.abilityId || 'unknown',
+      result: set.lastResolvedAbility.result || {},
+    });
+  }
+  if (set?.triggeredAbilities) {
+    const oldLen = before?.triggeredAbilities?.length || 0;
+    const newArr = after?.triggeredAbilities || [];
+    for (let i = oldLen; i < newArr.length; i++) {
+      emit('AbilityTriggered', {
+        abilityId: newArr[i].abilityId || 'unknown',
+        source: newArr[i].source || 'unknown',
+      });
+    }
+  }
+
+  // ── Start/End of round effects run ──
+  if (set?.sorEffectsRun) {
+    const oldLen = before?.sorEffectsRun?.length || 0;
+    const newArr = after?.sorEffectsRun || [];
+    for (let i = oldLen; i < newArr.length; i++) {
+      emit('StartOfRoundEffectRun', { effectId: newArr[i] });
+    }
+  }
+  if (set?.eorEffectsRun) {
+    const oldLen = before?.eorEffectsRun?.length || 0;
+    const newArr = after?.eorEffectsRun || [];
+    for (let i = oldLen; i < newArr.length; i++) {
+      emit('EndOfRoundEffectRun', { effectId: newArr[i] });
+    }
+  }
+
+  // ── Interrupt prompted / resolved ──
+  // Detect any pending* field that looks like an interrupt
+  for (const key of Object.keys(set || {})) {
+    if (/^pending[A-Z]/.test(key) && set[key]?.interruptType && !before?.[key]) {
+      emit('InterruptPrompted', {
+        interruptType: set[key].interruptType,
+        playerNum: set[key].playerNum || 0,
+        pendingField: key,
+      });
+    }
+  }
+  for (const key of Object.keys(before || {})) {
+    if (/^pending[A-Z]/.test(key) && before[key]?.interruptType && !after?.[key]) {
+      emit('InterruptResolved', {
+        interruptType: before[key].interruptType,
+        pendingField: key,
+      });
+    }
+  }
+
   return events;
 }
 

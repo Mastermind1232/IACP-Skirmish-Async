@@ -323,6 +323,68 @@ describe('DiffTranslator', () => {
     assert.equal(events.find(e => e.type === 'CommandCardsDrawn').payload.playerNum, 1);
   });
 
+  it('draftRandomStarted → DraftRandomStarted', () => {
+    const before = {};
+    const after = { draftRandomStarted: true };
+    const diff = { set: { draftRandomStarted: true }, deleted: [] };
+    const events = translateDiffToEvents('draft_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'DraftRandomStarted'));
+  });
+
+  it('combat bonus fields → CombatPassiveApplied', () => {
+    const before = { pendingCombat: { attackerMsgId: 'msg1', bonusHits: 0 } };
+    const after = { pendingCombat: { attackerMsgId: 'msg1', bonusHits: 2 } };
+    const diff = { set: { pendingCombat: after.pendingCombat }, deleted: [] };
+    const events = translateDiffToEvents('combat_passive_', diff, makeContext(before, after));
+    const passiveEvent = events.find(e => e.type === 'CombatPassiveApplied');
+    assert.ok(passiveEvent);
+    assert.deepEqual(passiveEvent.payload.effect, { bonusHits: 2 });
+  });
+
+  it('lastResolvedAbility set → AbilityResolved', () => {
+    const before = {};
+    const after = { lastResolvedAbility: { abilityId: 'focus_shot', result: { applied: true } } };
+    const diff = { set: { lastResolvedAbility: after.lastResolvedAbility }, deleted: [] };
+    const events = translateDiffToEvents('cc_play_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'AbilityResolved'));
+    assert.equal(events.find(e => e.type === 'AbilityResolved').payload.abilityId, 'focus_shot');
+  });
+
+  it('triggeredAbilities appended → AbilityTriggered', () => {
+    const before = { triggeredAbilities: [{ abilityId: 'a1', source: 's1' }] };
+    const after = { triggeredAbilities: [{ abilityId: 'a1', source: 's1' }, { abilityId: 'a2', source: 's2' }] };
+    const diff = { set: { triggeredAbilities: after.triggeredAbilities }, deleted: [] };
+    const events = translateDiffToEvents('ability_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'AbilityTriggered'));
+    assert.equal(events.find(e => e.type === 'AbilityTriggered').payload.abilityId, 'a2');
+  });
+
+  it('sorEffectsRun appended → StartOfRoundEffectRun', () => {
+    const before = { sorEffectsRun: [] };
+    const after = { sorEffectsRun: ['saska_device_token'] };
+    const diff = { set: { sorEffectsRun: after.sorEffectsRun }, deleted: [] };
+    const events = translateDiffToEvents('round_', diff, makeContext(before, after));
+    assert.ok(events.some(e => e.type === 'StartOfRoundEffectRun'));
+    assert.equal(events.find(e => e.type === 'StartOfRoundEffectRun').payload.effectId, 'saska_device_token');
+  });
+
+  it('pending interrupt field → InterruptPrompted / InterruptResolved', () => {
+    // Prompted
+    const before1 = {};
+    const after1 = { pendingMastery: { interruptType: 'Mastery', playerNum: 1, data: {} } };
+    const diff1 = { set: { pendingMastery: after1.pendingMastery }, deleted: [] };
+    const events1 = translateDiffToEvents('mastery_', diff1, makeContext(before1, after1));
+    assert.ok(events1.some(e => e.type === 'InterruptPrompted'));
+    assert.equal(events1.find(e => e.type === 'InterruptPrompted').payload.interruptType, 'Mastery');
+
+    // Resolved
+    const before2 = { pendingMastery: { interruptType: 'Mastery', playerNum: 1 } };
+    const after2 = {};
+    const diff2 = { set: {}, deleted: ['pendingMastery'] };
+    const events2 = translateDiffToEvents('mastery_pick_', diff2, makeContext(before2, after2));
+    assert.ok(events2.some(e => e.type === 'InterruptResolved'));
+  });
+
   it('phaseGate open → ready → cleared lifecycle', () => {
     // Open
     let before = {};
