@@ -13,7 +13,6 @@ import {
 } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { PHASE_GATE_LABELS } from '../game/phase-gate.js';
-import { PHASES, ROUND_PHASES } from '../game/phase.js';
 import { getRecoveryPrompts, needsRecovery } from '../engine/recovery.js';
 
 /**
@@ -57,13 +56,23 @@ export async function handleBotmenuRecover(interaction, ctx) {
  * reconstruct the specific Discord UI for each case.
  */
 export async function runRecovery(game, gameId, ctx) {
-  const { client } = ctx;
   const results = [];
 
+  // Helper: run a recovery function, collect results, log errors.
+  // Each recovery fn returns null (nothing to recover), a string, or string[].
+  async function tryRecover(name, fn) {
+    try {
+      const r = await fn();
+      if (r == null) return;
+      if (Array.isArray(r)) results.push(...r);
+      else results.push(r);
+    } catch (err) {
+      console.error(`[recover] ${name}:`, err.message);
+      results.push(`[ERROR] ${name}: ${err.message}`);
+    }
+  }
+
   // ── Available-actions diagnostic ───────────────────────────────────
-  // Use the available-actions system to understand what the game needs.
-  // This provides a cross-check: if available-actions says a player has
-  // actions but the legacy recovery didn't send anything, we log a warning.
   let actionsDiag = [];
   try {
     const deps = { dcMessageMeta: ctx.dcMessageMeta, dcExhaustedState: ctx.dcExhaustedState };
@@ -77,76 +86,26 @@ export async function runRecovery(game, gameId, ctx) {
   }
 
   // ── Phase gate (highest priority — blocks all other actions) ───────
-  try {
-    const r = await recoverPhaseGate(game, gameId, ctx);
-    if (r) results.push(r);
-  } catch (err) { console.error('[recover] phaseGate:', err.message); }
-
-  // If phase gate was recovered, it blocks everything else
+  await tryRecover('phaseGate', () => recoverPhaseGate(game, gameId, ctx));
   if (game.phaseGate && results.length > 0) return results;
 
-  // ── Legacy fallback for unmigrated games (no game.phase) ──────────
-  if (!game.phase) {
-    try { const r = await recoverPendingCombat(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingCombat:', err.message); }
-    try { const r = await recoverPendingNegation(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingNegation:', err.message); }
-    try { const r = await recoverSetupAttachmentPhase(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] setupAttachmentPhase:', err.message); }
-    try { const r = await recoverPendingEndTurn(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] pendingEndTurn:', err.message); }
-    try { const r = await recoverEndOfRoundWhoseTurn(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] endOfRoundWhoseTurn:', err.message); }
-    try { const r = await recoverForceVisionPending(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] forceVisionPending:', err.message); }
-    try { const r = await recoverPendingStartOfRound(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingStartOfRound:', err.message); }
-    try { const r = await recoverMoveInProgress(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] moveInProgress:', err.message); }
-    try { const r = await recoverRoundActivationMessage(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] roundActivationMessage:', err.message); }
-    try { const r = await recoverCcDrawPhase(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] ccDrawPhase:', err.message); }
-    try { const r = await recoverBothSquadsReady(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] bothSquadsReady:', err.message); }
-    logRecoveryCrossCheck(actionsDiag, results, gameId);
-    return results;
-  }
+  // ── Run all recovery functions unconditionally ─────────────────────
+  // Each function has its own internal guards (e.g. recoverPendingCombat
+  // checks game.pendingCombat). No phase-based dispatch needed — the
+  // guards are the single source of truth for "is this recovery relevant?"
+  await tryRecover('bothSquadsReady',     () => recoverBothSquadsReady(game, gameId, ctx));
+  await tryRecover('pendingCombat',       () => recoverPendingCombat(game, gameId, ctx));
+  await tryRecover('pendingNegation',     () => recoverPendingNegation(game, gameId, ctx));
+  await tryRecover('setupAttachment',     () => recoverSetupAttachmentPhase(game, gameId, ctx));
+  await tryRecover('pendingEndTurn',      () => recoverPendingEndTurn(game, gameId, ctx));
+  await tryRecover('endOfRoundWhoseTurn', () => recoverEndOfRoundWhoseTurn(game, gameId, ctx));
+  await tryRecover('forceVisionPending',  () => recoverForceVisionPending(game, gameId, ctx));
+  await tryRecover('pendingStartOfRound', () => recoverPendingStartOfRound(game, gameId, ctx));
+  await tryRecover('moveInProgress',      () => recoverMoveInProgress(game, gameId, ctx));
+  await tryRecover('roundActivation',     () => recoverRoundActivationMessage(game, gameId, ctx));
+  await tryRecover('ccDrawPhase',         () => recoverCcDrawPhase(game, gameId, ctx));
 
-  // ── Phase-based dispatch ──────────────────────────────────────────
-  switch (game.phase) {
-    case 'attachment':
-      try { const r = await recoverSetupAttachmentPhase(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] setupAttachmentPhase:', err.message); }
-      break;
-
-    case 'cc_draw':
-      try { const r = await recoverCcDrawPhase(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] ccDrawPhase:', err.message); }
-      break;
-
-    case 'round_active':
-      switch (game.roundPhase) {
-        case 'start_of_round':
-          try { const r = await recoverPendingStartOfRound(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingStartOfRound:', err.message); }
-          break;
-        case 'activation':
-          try { const r = await recoverPendingCombat(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingCombat:', err.message); }
-          try { const r = await recoverPendingNegation(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] pendingNegation:', err.message); }
-          try { const r = await recoverForceVisionPending(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] forceVisionPending:', err.message); }
-          try { const r = await recoverMoveInProgress(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] moveInProgress:', err.message); }
-          try { const r = await recoverPendingEndTurn(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] pendingEndTurn:', err.message); }
-          try { const r = await recoverRoundActivationMessage(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] roundActivationMessage:', err.message); }
-          break;
-        case 'end_of_round':
-          try { const r = await recoverEndOfRoundWhoseTurn(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] endOfRoundWhoseTurn:', err.message); }
-          break;
-        default:
-          break;
-      }
-      break;
-
-    // zone_selection, deployment, lobby, ended — handled by bothSquadsReady below if applicable
-    default:
-      break;
-  }
-
-  // ── Both squads ready (phase-independent) ─────────────────────────
-  // Run AFTER phase switch — this handles the "both squads submitted but
-  // initiative button never posted" case regardless of what game.phase is,
-  // because a partial state save could leave game.phase at any value.
-  try { const r = await recoverBothSquadsReady(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] bothSquadsReady:', err.message); results.push(`[ERROR] bothSquadsReady: ${err.message}`); }
-
-  // Cross-check: warn if available-actions detected needs that legacy didn't recover
   logRecoveryCrossCheck(actionsDiag, results, gameId);
-
   return results;
 }
 
