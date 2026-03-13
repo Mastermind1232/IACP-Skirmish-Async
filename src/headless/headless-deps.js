@@ -120,7 +120,7 @@ import {
 import { checkFriendlyDefeatedPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { isWithinN } from '../engine/utils.js';
 import { lookupFigureDcIndex as _lookupFigureDcIndex } from '../engine/game-readers.js';
-import { findFigureheadFigure } from '../engine/misc-helpers.js';
+import { findFigureheadFigure as _findFigureheadFigureRaw } from '../engine/misc-helpers.js';
 import { getCleaveTargetButtons, getFightingKnifeTargetButtons } from '../discord/components.js';
 import { PHASES } from '../game/phase.js';
 import { setPhase } from '../game/phase.js';
@@ -143,7 +143,9 @@ import {
   countActiveGamesForPlayer as _countActiveGamesForPlayerRaw,
 } from '../engine/game-readers.js';
 import {
-  getDcUpgradeAttachments, getConditionsForDcMessage, getNicknamesForDcMessage,
+  getDcUpgradeAttachments,
+  getConditionsForDcMessage as _getConditionsForDcMessageRaw,
+  getNicknamesForDcMessage as _getNicknamesForDcMessageRaw,
 } from '../engine/dc-ui-helpers.js';
 import { getPlayReadyMaps } from '../engine/board-ui-helpers.js';
 
@@ -166,6 +168,7 @@ import {
   sendRerollUI,
   proceedAfterRerolls,
   sendReadyToResolveRolls,
+  runStatusPhaseAfterEndOfRound,
 } from '../handlers/index.js';
 
 import { sendPhaseGateMessages } from '../handlers/phase-gate.js';
@@ -219,7 +222,8 @@ export function buildHeadlessDeps(options = {}) {
   const pushUndo = (game) => {
     if (!game) return;
     game.undoStack = game.undoStack || [];
-    game.undoStack.push(JSON.parse(JSON.stringify(game)));
+    const { undoStack: _, ...rest } = game;
+    game.undoStack.push(JSON.parse(JSON.stringify(rest)));
     if (game.undoStack.length > 5) game.undoStack.shift();
   };
 
@@ -283,6 +287,14 @@ export function buildHeadlessDeps(options = {}) {
   const _isGroupDefeated = (game, playerNum, dcIndex) => _isGroupDefeatedRaw(game, playerNum, dcIndex, { getDcList: (g, pn) => (pn === 1 ? g.p1DcList : g.p2DcList) || [], getDcStats });
   const _findDcMessageIdForFigure = (gameId, playerNum, figureKey) => _findDcMessageIdForFigureRaw(gameId, playerNum, figureKey, dcMessageMeta);
   const _getFigureLabel = (game, playerNum, figureKey, fallback, maxLen) => _getFigureLabelRaw(game, playerNum, figureKey, fallback, maxLen, { dcMessageMeta, dcNameFromFigureKey, getDcList, getDcMessageIds });
+  const _findFigureheadFigure = (game, defenderPlayerNum, targetFigureKey) => _findFigureheadFigureRaw(game, defenderPlayerNum, targetFigureKey, {
+    getDcList, getDcEffect, dcNameFromFigureKey,
+    isWithinN: (a, b, n, mapId) => isWithinN(a, b, n, mapId, getMapSpaces),
+    findDcMessageIdForFigure: _findDcMessageIdForFigure, parseFigureKey,
+  });
+  // Wrap DC UI helpers that need deps.getDcStats bound
+  const getConditionsForDcMessage = (game, meta) => _getConditionsForDcMessageRaw(game, meta, { getDcStats });
+  const getNicknamesForDcMessage = (game, meta) => _getNicknamesForDcMessageRaw(game, meta, { getDcStats });
 
   // Build the shared deps object used by combat-bridge and win-conditions functions
   const _buildCombatDeps = () => ({
@@ -308,7 +320,7 @@ export function buildHeadlessDeps(options = {}) {
     ButtonBuilder, ButtonStyle, ActionRowBuilder,
     getCelebrationButtons, getCleaveTargetButtons, getFightingKnifeTargetButtons,
     normalizeCoord, computeCombatResult, getBoardStateForMovement,
-    findFigureheadFigure,
+    findFigureheadFigure: _findFigureheadFigure,
     updateAttachmentMessageForDc, updateMovementBankMessage, ensureMovementBankMessage,
     updateDcActionsMessage, updateHandChannelMessages, updateHandVisualMessage,
     sendPowerTokenOverflowUI: noopAsync,
@@ -552,7 +564,7 @@ export function buildHeadlessDeps(options = {}) {
 
     // Phase gate / round (real)
     sendPhaseGateMessages,
-    runStartOfRoundDcEffects, runPostDeployPhase,
+    runStartOfRoundDcEffects, runPostDeployPhase, runStatusPhaseAfterEndOfRound,
 
     // Conditions (real)
     filterCondition, isConditionImmune, applyCondition, HARMFUL_CONDITIONS,

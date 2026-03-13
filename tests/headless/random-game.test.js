@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
 import { getDcStats, getMapSpaces } from '../../src/data-loader.js';
+import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 
 describe('random game (AI training skeleton)', () => {
   it('game builder creates valid game state', () => {
@@ -101,7 +102,10 @@ describe('random game (AI training skeleton)', () => {
       .inRound(1)
       .build();
 
-    const actionDeps = { dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces };
+    const actionDeps = {
+      dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces,
+      computeMovementCache, getBoardStateForMovement, getMovementProfile,
+    };
     const MAX_ITERATIONS = 500;
     let iterations = 0;
     let consecutiveEmpty = 0;
@@ -112,16 +116,19 @@ describe('random game (AI training skeleton)', () => {
       const g = harness.getGame();
       if (g.ended) break;
 
-      // Alternate: try current turn player first, then both players
+      // Try both players — some phases (combat) need actions from both
       const turnPlayer = g.currentActivationTurnPlayerId === g.player1Id ? 1 : 2;
-      let actions = getAvailableActions(g, turnPlayer, actionDeps);
-      if (actions.length === 0) {
-        // Try the other player
-        const otherPlayer = turnPlayer === 1 ? 2 : 1;
-        actions = getAvailableActions(g, otherPlayer, actionDeps);
-      }
+      const otherPlayer = turnPlayer === 1 ? 2 : 1;
+      const p1Actions = getAvailableActions(g, 1, actionDeps);
+      const p2Actions = getAvailableActions(g, 2, actionDeps);
 
-      if (actions.length === 0) {
+      // Combine with player attribution
+      const allActions = [
+        ...p1Actions.map(a => ({ ...a, actingPlayer: 1 })),
+        ...p2Actions.map(a => ({ ...a, actingPlayer: 2 })),
+      ];
+
+      if (allActions.length === 0) {
         consecutiveEmpty++;
         if (consecutiveEmpty > 10) {
           // Game is stuck — force end via NPC damage to break the deadlock
@@ -141,8 +148,8 @@ describe('random game (AI training skeleton)', () => {
       consecutiveEmpty = 0;
 
       // Pick a random action
-      const action = actions[Math.floor(Math.random() * actions.length)];
-      const userId = turnPlayer === 1 ? g.player1Id : g.player2Id;
+      const action = allActions[Math.floor(Math.random() * allActions.length)];
+      const userId = action.actingPlayer === 1 ? g.player1Id : g.player2Id;
 
       try {
         const result = await harness.submitAction(action.customId, userId);

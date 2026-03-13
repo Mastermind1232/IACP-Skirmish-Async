@@ -124,6 +124,7 @@ class GameBuilder {
       player2Id: this._p2Id,
       selectedMap: { id: this._mapId },
       round: this._round || 1,
+      currentRound: this._round || 1,
       ended: false,
 
       // Squads

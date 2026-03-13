@@ -104,6 +104,7 @@ export function createHarness(initialGame, options = {}) {
         // Handler with no group — call with no context
         const interaction = createFakeInteraction(customId, userId, {
           ...actionOpts,
+          client,
           channel: client._channelCache.values().next().value,
         });
         try {
@@ -126,7 +127,7 @@ export function createHarness(initialGame, options = {}) {
       }
 
       const context = buildContext(group, deps);
-      const interaction = createFakeInteraction(customId, userId, actionOpts);
+      const interaction = createFakeInteraction(customId, userId, { ...actionOpts, client });
 
       try {
         await handler(interaction, context);

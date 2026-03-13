@@ -276,6 +276,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   } = deps;
 
   const thread = await client.channels.fetch(combat.combatThreadId);
+  const targetDcName = dcNameFromFigureKey(combat.target.figureKey);
   // Store applied damage on combat object for post-combat checks (Return Fire, etc.)
   combat._appliedDamage = damage;
   // Store last attack metadata for post-attack CC effect handlers

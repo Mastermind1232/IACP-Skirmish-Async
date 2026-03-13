@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Brain Viewer — Imperial Assault Bot Training</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; }
+
+  /* Tooltip styles */
+  [data-tip] { position: relative; cursor: help; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    background: #1c2128; color: #e6edf3; border: 1px solid #484f58; border-radius: 6px;
+    padding: 8px 12px; font-size: 12px; font-weight: 400; line-height: 1.4;
+    white-space: normal; width: max-content; max-width: 320px;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 100;
+    text-transform: none; letter-spacing: normal;
+  }
+  [data-tip]:hover::after { opacity: 1; }
+
+  .header {
+    background: #161b22; border-bottom: 1px solid #30363d; padding: 16px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .header h1 { font-size: 20px; color: #58a6ff; }
+  .header .subtitle { font-size: 13px; color: #8b949e; margin-top: 2px; }
+  .header .status { font-size: 13px; color: #8b949e; text-align: right; }
+  .header .status .live { color: #3fb950; font-weight: 600; }
+
+  .explainer {
+    background: #1a2332; border-bottom: 1px solid #30363d; padding: 12px 24px;
+    font-size: 13px; color: #8b949e; line-height: 1.5;
+  }
+  .explainer strong { color: #58a6ff; }
+
+  .controls {
+    background: #161b22; border-bottom: 1px solid #30363d; padding: 10px 24px;
+    display: flex; gap: 16px; align-items: center;
+  }
+  .controls label { font-size: 13px; color: #8b949e; }
+  .controls select {
+    background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 4px 8px; border-radius: 4px; font-size: 13px;
+  }
+
+  .grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
+    padding: 24px; max-width: 1600px; margin: 0 auto;
+  }
+
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 16px; min-height: 120px;
+  }
+  .card h2 {
+    font-size: 13px; color: #8b949e; margin-bottom: 12px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .card h2 .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%; background: #21262d;
+    color: #8b949e; font-size: 10px; font-weight: 700; cursor: help;
+    flex-shrink: 0;
+  }
+  .card .big-number { font-size: 42px; font-weight: 700; color: #f0f6fc; line-height: 1; }
+  .card .sub { font-size: 13px; color: #8b949e; margin-top: 4px; }
+
+  .card.full { grid-column: 1 / -1; }
+  .card.span2 { grid-column: span 2; }
+
+  .bar-chart { display: flex; flex-direction: column; gap: 6px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; }
+  .bar-label {
+    font-size: 12px; width: 140px; text-align: right; color: #8b949e;
+    flex-shrink: 0; cursor: help;
+  }
+  .bar-track { flex: 1; height: 24px; background: #21262d; border-radius: 3px; overflow: hidden; position: relative; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; min-width: 2px; }
+  .bar-value { font-size: 11px; color: #c9d1d9; position: absolute; right: 6px; top: 4px; }
+
+  .q-histo { display: flex; align-items: flex-end; gap: 1px; height: 120px; }
+  .q-bar { flex: 1; background: #58a6ff; border-radius: 2px 2px 0 0; transition: height 0.5s ease; min-width: 3px; cursor: help; }
+  .q-bar.negative { background: #f85149; }
+  .q-labels { display: flex; justify-content: space-between; font-size: 11px; color: #8b949e; margin-top: 4px; }
+  .q-explainer { font-size: 11px; color: #484f58; margin-top: 8px; text-align: center; }
+
+  .state-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+  .state-table th {
+    text-align: left; color: #8b949e; padding: 6px 8px;
+    border-bottom: 1px solid #30363d; cursor: help;
+  }
+  .state-table td { padding: 6px 8px; border-bottom: 1px solid #21262d; }
+  .state-table tr:hover td { background: #1c2128; }
+
+  .win-bars { display: flex; height: 28px; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+  .win-bars .p1 { background: #58a6ff; transition: width 0.5s; }
+  .win-bars .p2 { background: #f85149; transition: width 0.5s; }
+  .win-bars .draw { background: #484f58; transition: width 0.5s; }
+  .win-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 12px; }
+  .win-legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .win-legend .p1::before { background: #58a6ff; }
+  .win-legend .p2::before { background: #f85149; }
+  .win-legend .draw::before { background: #484f58; }
+
+  .sparkline { display: flex; align-items: flex-end; gap: 1px; height: 40px; }
+  .sparkline .dot { flex: 1; background: #58a6ff; border-radius: 1px; min-width: 2px; transition: height 0.3s; }
+
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .pill.green { background: #23312e; color: #3fb950; }
+  .pill.red { background: #3d1f20; color: #f85149; }
+  .pill.blue { background: #1a2332; color: #58a6ff; }
+  .pill.yellow { background: #2d2a1e; color: #d29922; }
+  .pill.gray { background: #21262d; color: #8b949e; }
+
+  .state-tag { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-family: monospace; background: #21262d; cursor: help; }
+
+  .section-label {
+    font-size: 11px; color: #484f58; text-transform: uppercase; letter-spacing: 1px;
+    grid-column: 1 / -1; margin-top: 8px; padding-bottom: 4px;
+    border-bottom: 1px solid #21262d;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Imperial Assault AI — Brain Viewer</h1>
+    <div class="subtitle">Watch the bot learn in real time. Run <code style="background:#21262d;padding:2px 6px;border-radius:3px;color:#f0883e">node tests/headless/train.js 100</code> in a terminal to see numbers change.</div>
+  </div>
+  <div class="status">
+    <span class="live" id="liveIndicator">LIVE</span>
+    <span id="lastUpdate"></span>
+  </div>
+</div>
+
+<div class="explainer">
+  The bot plays games against itself and remembers what worked. Each <strong>situation</strong> it encounters gets scored:
+  did attacking here lead to a win? Did moving away backfire?
+  Over hundreds of games, it builds a map of <strong>"in this situation, do this"</strong> — that's what you're seeing below.
+</div>
+
+<div class="controls">
+  <label>Auto-refresh:</label>
+  <select id="refreshRate">
+    <option value="2000">Every 2s</option>
+    <option value="5000" selected>Every 5s</option>
+    <option value="10000">Every 10s</option>
+    <option value="30000">Every 30s</option>
+    <option value="0">Paused</option>
+  </select>
+  <label>Sort game situations by:</label>
+  <select id="stateSort">
+    <option value="visits">Most encountered</option>
+    <option value="qMax">Best outcome found</option>
+    <option value="qMin">Worst outcome found</option>
+    <option value="actions">Most choices available</option>
+  </select>
+</div>
+
+<div class="grid" id="dashboard">
+
+  <!-- ═══ OVERVIEW ═══ -->
+  <div class="section-label">Overview</div>
+
+  <div class="card"
+       data-tip="Each game is two AI players fighting to the death. More games = smarter bot.">
+    <h2>Games Played <span class="info-icon">?</span></h2>
+    <div class="big-number" id="totalGames">—</div>
+    <div class="sub" id="gamesPerMin"></div>
+  </div>
+
+  <div class="card"
+       data-tip="A 'situation' is a unique game snapshot — like 'Round 2, I'm winning by 5 VP, enemy is 3 spaces away with low HP.' More situations = deeper understanding of the game.">
+    <h2>Unique Situations Seen <span class="info-icon">?</span></h2>
+    <div class="big-number" id="totalStates">—</div>
+    <div class="sub" id="statesPerGame"></div>
+  </div>
+
+  <div class="card"
+       data-tip="Total situation+action pairs the bot has tried. If a situation has 4 possible moves, that's 4 entries. More entries = more options explored.">
+    <h2>Decisions Recorded <span class="info-icon">?</span></h2>
+    <div class="big-number" id="totalActions">—</div>
+    <div class="sub" id="avgActionsPerState"></div>
+  </div>
+
+  <!-- ═══ PERFORMANCE ═══ -->
+  <div class="section-label">Performance</div>
+
+  <div class="card"
+       data-tip="Who wins more? Both sides use the same AI brain. If one side wins way more, it might mean those armies are stronger, or the bot found a strategy that favors one side.">
+    <h2>Win Rate <span class="info-icon">?</span></h2>
+    <div class="win-bars">
+      <div class="p1" id="winBarP1"></div>
+      <div class="p2" id="winBarP2"></div>
+      <div class="draw" id="winBarDraw"></div>
+    </div>
+    <div class="win-legend">
+      <span class="p1" id="winP1Label">P1: —</span>
+      <span class="p2" id="winP2Label">P2: —</span>
+      <span class="draw" id="winDrawLabel">Incomplete: —</span>
+    </div>
+    <div class="sub" style="margin-top:8px" id="winDetail"></div>
+  </div>
+
+  <div class="card span2"
+       data-tip="Each bar = a score range. Blue bars (right) = moves that led to winning. Red bars (left) = moves that led to losing. A wider spread means the bot has strong opinions about what works and what doesn't.">
+    <h2>Move Quality Scores <span class="info-icon">?</span></h2>
+    <div class="q-histo" id="qHistogram"></div>
+    <div class="q-labels" id="qLabels"></div>
+    <div class="q-explainer" id="qExplainer"></div>
+  </div>
+
+  <!-- ═══ STRATEGY ═══ -->
+  <div class="section-label">What the Bot Does</div>
+
+  <div class="card span2"
+       data-tip="How often the bot picks each type of move. Attack actions should dominate if the bot is learning to be aggressive. Movement toward enemies is also good — it means the bot is closing distance to fight.">
+    <h2>Move Type Breakdown <span class="info-icon">?</span></h2>
+    <div class="bar-chart" id="actionBars"></div>
+  </div>
+
+  <div class="card">
+    <h2 data-tip="How often the bot tries random moves vs. using its learned strategy. Starts at 30% random (exploring), drops toward 5% as it gets confident. Lower = more exploiting what it learned.">
+      Experimentation Rate <span class="info-icon">?</span>
+    </h2>
+    <div class="big-number" id="epsilon">—</div>
+    <div class="sub">Starts at 30%, drops to 5% as it learns</div>
+    <div style="margin-top:16px">
+      <h2 data-tip="How many times the bot has been in a decision-making moment across all games. Median = the 'typical' number of times a single decision has been revisited.">
+        Total Decisions Made <span class="info-icon">?</span>
+      </h2>
+      <div class="sub" id="visitStats"></div>
+    </div>
+  </div>
+
+  <!-- ═══ GAME FLOW ═══ -->
+  <div class="section-label">Where Time is Spent</div>
+
+  <div class="card"
+       data-tip="What part of a turn the bot is usually in. 'mid_activate' = a unit is taking its turn. 'movement' = moving a figure. 'combat' = attacking. 'between_acts' = picking the next unit.">
+    <h2>Turn Phase <span class="info-icon">?</span></h2>
+    <div class="bar-chart" id="phaseBars"></div>
+  </div>
+
+  <div class="card"
+       data-tip="How far apart the armies typically are (Manhattan distance: count of squares horizontally + vertically). Lower distance = more fighting. If most time is at distance 1-2, the bot is engaging well.">
+    <h2>Distance Between Armies <span class="info-icon">?</span></h2>
+    <div class="bar-chart" id="distBars"></div>
+  </div>
+
+  <div class="card"
+       data-tip="Which round of the game the bot spends the most time in. Games have up to 6 rounds. If most time is in rounds 1-3, games are ending quickly (good — the bot is decisive).">
+    <h2>Game Round <span class="info-icon">?</span></h2>
+    <div class="bar-chart" id="roundBars"></div>
+  </div>
+
+  <!-- ═══ SITUATION DETAILS ═══ -->
+  <div class="section-label">Top Game Situations (hover tags for meaning)</div>
+
+  <div class="card full">
+    <h2>Most Important Situations <span class="info-icon" data-tip="Each row is a game situation the bot has encountered. The colored tags describe it: VP difference, turn phase, round number, distance between figures, figure counts, HP totals. 'Best Move' = what the bot thinks is optimal. Score = how confident it is (higher = better).">?</span>
+      <span id="stateCount" style="margin-left:auto;font-size:12px;color:#8b949e"></span>
+    </h2>
+    <table class="state-table">
+      <thead>
+        <tr>
+          <th data-tip="A snapshot of the game state — VP lead, phase, round, army distance, figure counts, HP totals">Situation</th>
+          <th data-tip="How many times the bot has been in this exact situation">Times Seen</th>
+          <th data-tip="How many different moves the bot has tried from this situation">Moves Tried</th>
+          <th data-tip="The move the bot currently thinks is best in this situation">Best Move</th>
+          <th data-tip="Confidence score for the best move. Positive = leads toward winning. Higher = more confident.">Best Score</th>
+          <th data-tip="Score of the worst move tried. Very negative = the bot learned this move is terrible here.">Worst Score</th>
+        </tr>
+      </thead>
+      <tbody id="stateTableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- ═══ LIVE TRENDS ═══ -->
+  <div class="section-label">Live Trends (updates each refresh)</div>
+
+  <div class="card full">
+    <h2>Growth Since You Opened This Page <span class="info-icon" data-tip="These mini-charts track changes since you opened this page. If training is running, you'll see them climb. Each bar = one refresh snapshot.">?</span></h2>
+    <div style="display:flex;gap:24px">
+      <div style="flex:1">
+        <div class="sub" style="margin-bottom:4px">Situations Discovered</div>
+        <div class="sparkline" id="statesSparkline"></div>
+      </div>
+      <div style="flex:1">
+        <div class="sub" style="margin-bottom:4px">Score Spread (wider = smarter)</div>
+        <div class="sparkline" id="qSpreadSparkline"></div>
+      </div>
+      <div style="flex:1">
+        <div class="sub" style="margin-bottom:4px">Total Decisions Made</div>
+        <div class="sparkline" id="visitsSparkline"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const history = { states: [], qSpread: [], visits: [], timestamps: [] };
+let prevGames = null;
+let firstLoadTime = Date.now();
+
+// Human-readable action names + colors
+const ACTION_LABELS = {
+  attack_close:   'Melee Attack',
+  attack_ranged:  'Ranged Attack',
+  move_toward:    'Move Toward Enemy',
+  move_away:      'Move Away from Enemy',
+  move_lateral:   'Move Sideways',
+  activate:       'Activate a Unit',
+  end_activation: 'End Unit Turn',
+  pass:           'Pass / Skip',
+  gate:           'Confirm Phase',
+  combat_flow:    'Resolve Combat',
+  ability:        'Use Ability',
+};
+const ACTION_TIPS = {
+  attack_close:   'Attacking an adjacent enemy (melee range)',
+  attack_ranged:  'Attacking a distant enemy (ranged)',
+  move_toward:    'Moving closer to the nearest enemy',
+  move_away:      'Moving further from enemies (retreating)',
+  move_lateral:   'Moving sideways (repositioning, not closer or farther)',
+  activate:       'Choosing which deployment card to activate next',
+  end_activation: 'Ending a unit\'s turn early (forfeiting remaining actions)',
+  pass:           'Passing the turn or skipping an optional action',
+  gate:           'Confirming a phase transition (both players must agree)',
+  combat_flow:    'Rolling dice, spending surges, resolving damage — combat steps',
+  ability:        'Using a special ability or command card',
+};
+const COLORS = {
+  attack_close: '#f85149', attack_ranged: '#ff7b72', move_toward: '#58a6ff',
+  move_away: '#79c0ff', move_lateral: '#a5d6ff', activate: '#3fb950',
+  end_activation: '#d29922', pass: '#484f58', gate: '#bc8cff',
+  combat_flow: '#f0883e', ability: '#db61a2',
+};
+
+const PHASE_LABELS = {
+  mid_activate: 'Unit Taking Actions',
+  movement: 'Moving a Figure',
+  combat: 'In Combat',
+  between_acts: 'Choosing Next Unit',
+  pre_round: 'Round Setup',
+  post_round: 'Round Cleanup',
+  setup: 'Game Setup',
+  unknown: 'Other',
+};
+const PHASE_TIPS = {
+  mid_activate: 'A unit is activated and choosing to move, attack, or use abilities',
+  movement: 'A figure is actively moving across the board',
+  combat: 'Dice are being rolled, surges spent, damage resolved',
+  between_acts: 'Between activations — picking which unit goes next',
+  pre_round: 'Start of round — resetting activations, drawing cards',
+  post_round: 'End of round — scoring objectives, cleanup',
+  setup: 'Initial game setup (deployment, initiative)',
+};
+
+function parseFeatures(stateKey) {
+  const parts = {};
+  for (const seg of stateKey.split('|')) {
+    const [k, v] = seg.split(':');
+    parts[k] = v;
+  }
+  return parts;
+}
+
+function formatStateKey(key) {
+  const f = parseFeatures(key);
+  const tags = [];
+
+  // VP difference
+  if (f.vp !== undefined) {
+    const vp = +f.vp;
+    const cls = vp > 0 ? 'green' : vp < 0 ? 'red' : 'blue';
+    const label = vp > 0 ? `Winning by ${vp} VP` : vp < 0 ? `Losing by ${-vp} VP` : 'Tied on VP';
+    tags.push(`<span class="pill ${cls}" data-tip="Victory Point difference from this player's perspective">${label}</span>`);
+  }
+
+  // Phase
+  if (f.ph) {
+    const label = PHASE_LABELS[f.ph] || f.ph;
+    const tip = PHASE_TIPS[f.ph] || 'Current turn phase';
+    tags.push(`<span class="pill blue" data-tip="${tip}">${label}</span>`);
+  }
+
+  // Round
+  if (f.r) {
+    tags.push(`<span class="pill yellow" data-tip="Which round of the game (1-6). Later rounds = closer to time running out.">Round ${f.r}</span>`);
+  }
+
+  // Distance
+  if (f.d !== undefined) {
+    const d = +f.d;
+    const desc = d <= 1 ? 'Adjacent' : d <= 3 ? 'Close' : d <= 6 ? 'Medium range' : 'Far apart';
+    tags.push(`<span class="state-tag" data-tip="Average distance to nearest enemy (${d} squares). ${desc}.">${desc} (${d})</span>`);
+  }
+
+  // Figure counts
+  if (f.mf !== undefined) {
+    tags.push(`<span class="state-tag" data-tip="My figures alive vs. opponent figures alive">${f.mf} vs ${f.of} figs</span>`);
+  }
+
+  // HP
+  if (f.mhp !== undefined) {
+    tags.push(`<span class="state-tag" data-tip="My total HP remaining: ${f.mhp}%, Opponent HP: ${f.ohp}%">HP ${f.mhp}%/${f.ohp}%</span>`);
+  }
+
+  return tags.join(' ');
+}
+
+async function loadData() {
+  try {
+    const resp = await fetch('learnings-data.json?t=' + Date.now());
+    if (!resp.ok) throw new Error('fetch failed');
+    return await resp.json();
+  } catch (e) {
+    document.getElementById('liveIndicator').textContent = 'OFFLINE';
+    document.getElementById('liveIndicator').style.color = '#f85149';
+    return null;
+  }
+}
+
+function computeStats(data) {
+  const states = Object.keys(data.states).length;
+  let actionEntries = 0, totalVisits = 0;
+  let minQ = Infinity, maxQ = -Infinity;
+  const actionTypeCounts = {};
+  const phaseCounts = {};
+  const distCounts = {};
+  const roundCounts = {};
+  const visitList = [];
+  const topStates = [];
+
+  for (const [sk, state] of Object.entries(data.states)) {
+    const features = parseFeatures(sk);
+    const ph = features.ph || 'unknown';
+    phaseCounts[ph] = (phaseCounts[ph] || 0) + (state.visits || 0);
+    const dist = features.d || '?';
+    distCounts[dist] = (distCounts[dist] || 0) + (state.visits || 0);
+    const round = features.r || '?';
+    roundCounts[round] = (roundCounts[round] || 0) + (state.visits || 0);
+
+    let bestAction = null, bestQ = -Infinity, worstQ = Infinity;
+    let stateActionCount = 0;
+
+    for (const [ak, action] of Object.entries(state.actions || {})) {
+      actionEntries++;
+      stateActionCount++;
+      const v = action.visits || 0;
+      const q = action.qValue || 0;
+      totalVisits += v;
+      visitList.push(v);
+      if (isFinite(q) && q < minQ) minQ = q;
+      if (isFinite(q) && q > maxQ) maxQ = q;
+      if (q > bestQ) { bestQ = q; bestAction = ak; }
+      if (q < worstQ) worstQ = q;
+      actionTypeCounts[ak] = (actionTypeCounts[ak] || 0) + v;
+    }
+
+    topStates.push({
+      key: sk, visits: state.visits || 0, actions: stateActionCount,
+      bestAction, bestQ: isFinite(bestQ) ? bestQ : 0, worstQ: isFinite(worstQ) ? worstQ : 0,
+    });
+  }
+
+  if (!isFinite(minQ)) minQ = 0;
+  if (!isFinite(maxQ)) maxQ = 0;
+
+  visitList.sort((a, b) => a - b);
+  const median = visitList[Math.floor(visitList.length / 2)] || 0;
+  const mean = totalVisits / (visitList.length || 1);
+
+  // Q histogram
+  const bins = 40;
+  const range = maxQ - minQ || 1;
+  const qHisto = new Array(bins).fill(0);
+  for (const state of Object.values(data.states)) {
+    for (const action of Object.values(state.actions || {})) {
+      const q = action.qValue || 0;
+      if (!isFinite(q)) continue;
+      const idx = Math.min(bins - 1, Math.floor((q - minQ) / range * bins));
+      qHisto[idx] += action.visits || 1;
+    }
+  }
+
+  const epsilon = Math.max(0.05, 0.3 * Math.pow(0.995, data.meta.totalGames || 0));
+
+  return {
+    states, actionEntries, totalVisits, minQ, maxQ, qHisto,
+    actionTypeCounts, phaseCounts, distCounts, roundCounts,
+    topStates, epsilon, visitMedian: median, visitMean: mean,
+    meta: data.meta,
+  };
+}
+
+function render(stats) {
+  // === Overview cards ===
+  document.getElementById('totalGames').textContent = stats.meta.totalGames.toLocaleString();
+  if (prevGames !== null && prevGames < stats.meta.totalGames) {
+    const elapsed = (Date.now() - firstLoadTime) / 60000;
+    const gamesAdded = stats.meta.totalGames - (history._initialGames || prevGames);
+    if (elapsed > 0.1) {
+      document.getElementById('gamesPerMin').textContent = `+${gamesAdded} since you opened this (${(gamesAdded / elapsed).toFixed(1)}/min)`;
+    }
+  }
+  if (!history._initialGames) history._initialGames = stats.meta.totalGames;
+  prevGames = stats.meta.totalGames;
+
+  document.getElementById('totalStates').textContent = stats.states.toLocaleString();
+  document.getElementById('statesPerGame').textContent =
+    `~${(stats.states / (stats.meta.totalGames || 1)).toFixed(0)} new situations per game`;
+
+  document.getElementById('totalActions').textContent = stats.actionEntries.toLocaleString();
+  document.getElementById('avgActionsPerState').textContent =
+    `~${(stats.actionEntries / (stats.states || 1)).toFixed(1)} different moves tried per situation`;
+
+  // === Win rates ===
+  const total = stats.meta.totalGames || 1;
+  const p1Pct = stats.meta.p1Wins / total * 100;
+  const p2Pct = stats.meta.p2Wins / total * 100;
+  const drawPct = 100 - p1Pct - p2Pct;
+  const dnf = total - stats.meta.p1Wins - stats.meta.p2Wins;
+  document.getElementById('winBarP1').style.width = p1Pct + '%';
+  document.getElementById('winBarP2').style.width = p2Pct + '%';
+  document.getElementById('winBarDraw').style.width = drawPct + '%';
+  document.getElementById('winP1Label').textContent = `Player 1: ${stats.meta.p1Wins} wins (${p1Pct.toFixed(1)}%)`;
+  document.getElementById('winP2Label').textContent = `Player 2: ${stats.meta.p2Wins} wins (${p2Pct.toFixed(1)}%)`;
+  document.getElementById('winDrawLabel').textContent = `Incomplete: ${dnf}`;
+  const completionPct = ((stats.meta.p1Wins + stats.meta.p2Wins) / total * 100).toFixed(1);
+  document.getElementById('winDetail').textContent = `${completionPct}% of games finish with a winner`;
+
+  // === Q histogram ===
+  const qMax = Math.max(...stats.qHisto);
+  const qEl = document.getElementById('qHistogram');
+  const zeroIdx = Math.floor((0 - stats.minQ) / (stats.maxQ - stats.minQ || 1) * stats.qHisto.length);
+  qEl.innerHTML = stats.qHisto.map((v, i) => {
+    const h = qMax > 0 ? (v / qMax * 100) : 0;
+    const neg = i < zeroIdx ? ' negative' : '';
+    const binMin = (stats.minQ + (stats.maxQ - stats.minQ) * i / stats.qHisto.length).toFixed(1);
+    const binMax = (stats.minQ + (stats.maxQ - stats.minQ) * (i + 1) / stats.qHisto.length).toFixed(1);
+    return `<div class="q-bar${neg}" style="height:${Math.max(1, h)}%" title="Score ${binMin} to ${binMax}: ${v.toLocaleString()} decisions"></div>`;
+  }).join('');
+  document.getElementById('qLabels').innerHTML =
+    `<span>Worst: ${stats.minQ.toFixed(0)}</span><span>Neutral: 0</span><span>Best: ${stats.maxQ.toFixed(0)}</span>`;
+  document.getElementById('qExplainer').textContent =
+    `Red bars (left) = moves the bot learned are bad. Blue bars (right) = moves that lead to winning. Spread: ${(stats.maxQ - stats.minQ).toFixed(0)} points.`;
+
+  // === Action type bars ===
+  const sorted = Object.entries(stats.actionTypeCounts).sort((a, b) => b[1] - a[1]);
+  const topVal = sorted[0]?.[1] || 1;
+  document.getElementById('actionBars').innerHTML = sorted.map(([type, count]) => {
+    const pct = (count / topVal * 100).toFixed(1);
+    const color = COLORS[type] || '#8b949e';
+    const label = ACTION_LABELS[type] || type;
+    const tip = ACTION_TIPS[type] || '';
+    const totalPct = (count / stats.totalVisits * 100).toFixed(1);
+    return `<div class="bar-row">
+      <div class="bar-label" title="${tip}">${label}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${pct}%;background:${color}"></div>
+        <div class="bar-value">${count.toLocaleString()} (${totalPct}%)</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // === Epsilon ===
+  document.getElementById('epsilon').textContent = (stats.epsilon * 100).toFixed(1) + '%';
+
+  document.getElementById('visitStats').innerHTML =
+    `${stats.totalVisits.toLocaleString()} total decisions | Typical situation revisited ${stats.visitMedian}x | Average ${stats.visitMean.toFixed(1)}x`;
+
+  // === Phase bars ===
+  const phSorted = Object.entries(stats.phaseCounts).sort((a, b) => b[1] - a[1]);
+  const phMax = phSorted[0]?.[1] || 1;
+  document.getElementById('phaseBars').innerHTML = phSorted.map(([ph, count]) => {
+    const pct = (count / phMax * 100).toFixed(1);
+    const label = PHASE_LABELS[ph] || ph;
+    const tip = PHASE_TIPS[ph] || '';
+    return `<div class="bar-row">
+      <div class="bar-label" title="${tip}">${label}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${pct}%;background:#bc8cff"></div>
+        <div class="bar-value">${count.toLocaleString()}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // === Distance bars ===
+  const dSorted = Object.entries(stats.distCounts).sort((a, b) => +a[0] - +b[0]);
+  const dMax = Math.max(...dSorted.map(d => d[1]));
+  document.getElementById('distBars').innerHTML = dSorted.map(([d, count]) => {
+    const pct = (count / dMax * 100).toFixed(1);
+    const desc = +d <= 1 ? 'Adjacent' : +d <= 3 ? 'Close range' : +d <= 6 ? 'Mid range' : 'Far away';
+    return `<div class="bar-row">
+      <div class="bar-label" title="${desc} — ${d} squares between nearest figures">${d} squares (${desc})</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${pct}%;background:#58a6ff"></div>
+        <div class="bar-value">${count.toLocaleString()}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // === Round bars ===
+  const rSorted = Object.entries(stats.roundCounts).sort((a, b) => +a[0] - +b[0]);
+  const rMax = Math.max(...rSorted.map(r => r[1]));
+  document.getElementById('roundBars').innerHTML = rSorted.map(([r, count]) => {
+    const pct = (count / rMax * 100).toFixed(1);
+    return `<div class="bar-row">
+      <div class="bar-label" title="Round ${r} of 6. Games that end in earlier rounds = faster, more decisive wins.">Round ${r}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${pct}%;background:#3fb950"></div>
+        <div class="bar-value">${count.toLocaleString()}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // === Top states table ===
+  const sortBy = document.getElementById('stateSort').value;
+  stats.topStates.sort((a, b) => {
+    if (sortBy === 'visits') return b.visits - a.visits;
+    if (sortBy === 'qMax') return b.bestQ - a.bestQ;
+    if (sortBy === 'qMin') return a.worstQ - b.worstQ;
+    if (sortBy === 'actions') return b.actions - a.actions;
+    return 0;
+  });
+  document.getElementById('stateCount').textContent = `Showing top 25 of ${stats.states.toLocaleString()}`;
+  document.getElementById('stateTableBody').innerHTML = stats.topStates.slice(0, 25).map(s => {
+    const bestLabel = ACTION_LABELS[s.bestAction] || s.bestAction || '—';
+    const bestTip = ACTION_TIPS[s.bestAction] || '';
+    return `<tr>
+      <td>${formatStateKey(s.key)}</td>
+      <td title="The bot has been in this exact situation ${s.visits} times">${s.visits.toLocaleString()}</td>
+      <td title="The bot has tried ${s.actions} different moves from here">${s.actions}</td>
+      <td><span class="pill blue" title="${bestTip}">${bestLabel}</span></td>
+      <td style="color:${s.bestQ >= 0 ? '#3fb950' : '#f85149'}" title="Positive = leads to winning. This is the highest-scoring move from this situation.">${s.bestQ >= 0 ? '+' : ''}${s.bestQ.toFixed(1)}</td>
+      <td style="color:${s.worstQ >= 0 ? '#3fb950' : '#f85149'}" title="The worst move the bot tried here. Very negative = confidently bad.">${s.worstQ >= 0 ? '+' : ''}${s.worstQ.toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+
+  // === Sparklines ===
+  history.states.push(stats.states);
+  history.qSpread.push(stats.maxQ - stats.minQ);
+  history.visits.push(stats.totalVisits);
+  history.timestamps.push(Date.now());
+  if (history.states.length > 100) {
+    history.states.shift(); history.qSpread.shift();
+    history.visits.shift(); history.timestamps.shift();
+  }
+
+  renderSparkline('statesSparkline', history.states, '#58a6ff');
+  renderSparkline('qSpreadSparkline', history.qSpread, '#bc8cff');
+  renderSparkline('visitsSparkline', history.visits, '#3fb950');
+
+  // === Status ===
+  document.getElementById('lastUpdate').textContent =
+    `Updated ${new Date().toLocaleTimeString()}`;
+  document.getElementById('liveIndicator').textContent = 'LIVE';
+  document.getElementById('liveIndicator').style.color = '#3fb950';
+}
+
+function renderSparkline(id, data, color) {
+  const el = document.getElementById(id);
+  if (data.length < 2) { el.innerHTML = '<span style="color:#484f58;font-size:11px">Waiting for changes...</span>'; return; }
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  el.innerHTML = data.map(v => {
+    const h = Math.max(4, ((v - min) / range) * 100);
+    return `<div class="dot" style="height:${h}%;background:${color}"></div>`;
+  }).join('');
+}
+
+let refreshInterval;
+async function tick() {
+  const data = await loadData();
+  if (!data) return;
+  render(computeStats(data));
+}
+
+function setupRefresh() {
+  if (refreshInterval) clearInterval(refreshInterval);
+  const ms = +document.getElementById('refreshRate').value;
+  if (ms > 0) refreshInterval = setInterval(tick, ms);
+}
+
+document.getElementById('refreshRate').addEventListener('change', setupRefresh);
+document.getElementById('stateSort').addEventListener('change', tick);
+
+tick();
+setupRefresh();
+</script>
+</body>
+</html>

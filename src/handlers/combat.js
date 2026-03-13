@@ -1086,7 +1086,9 @@ export async function handleAttackTarget(interaction, ctx) {
     defenderConds,
     target: { ...target },
     targetStats: {
-      defense: target.isNpc ? (targetStats.defense || null) : (targetStats.defense || 'white'),
+      defense: target.isNpc
+        ? (targetStats.defense || null)
+        : (Array.isArray(targetStats.defense) ? targetStats.defense : (targetStats.defense ? [targetStats.defense] : ['white'])),
       cost: target.isNpc ? 2 : (targetStats.cost ?? 5), // NPC kill = 2 VP
       subCost: target.isNpc ? null : targetEff?.subCost,
       figures: 1,
@@ -2435,9 +2437,10 @@ export async function handleCombatRoll(interaction, ctx) {
 
   if (!combat.defenseRoll) {
     if (!await requirePlayer(interaction, game, interaction.user.id, defenderPlayerNum, canActAsPlayer, `Only the defender (P${defenderPlayerNum}) may roll defense dice.`)) return;
-    const baseColor = combat.targetStats.defense || 'white';
+    const baseDef = combat.targetStats.defense || 'white';
+    const baseDice = Array.isArray(baseDef) ? baseDef : [baseDef];
     const bonusDice = combat.defenseBonusDice || [];
-    const pool = [baseColor, ...bonusDice];
+    const pool = [...baseDice, ...bonusDice];
     // Cross Training (Skirmish Upgrade): replace 1 non-white defense die with white
     if (combat.crossTrainingDefend) {
       const _ctIdx = pool.findIndex(c => c !== 'white');

@@ -1,24 +1,95 @@
 /**
  * Fake Discord Interaction for headless testing.
  * Captures all replies/followUps for later inspection.
+ *
+ * Provides enough Discord API surface for all handlers to run:
+ *   - channel.messages.fetch(id) → returns a fake message with edit(), startThread()
+ *   - message.startThread() → returns a fake thread channel with send()
+ *   - channel.send() → returns a fake message
+ *   - interaction.deferUpdate/followUp/editReply/reply → capture output
  */
 
-export function createFakeChannel(channelId = 'fake-channel-1') {
-  const messages = [];
-  return {
-    id: channelId,
-    messages: {
-      fetch: async () => new Map(),
-    },
-    send: async (payload) => {
-      const msg = { id: `fake-msg-${messages.length}`, ...payload, channel: null };
-      messages.push(msg);
+let _globalMsgCounter = 0;
+
+function createFakeMessage(id, channel) {
+  const msg = {
+    id,
+    channel,
+    content: '',
+    embeds: [],
+    components: [],
+    attachments: new Map(),
+    edit: async (payload) => {
+      if (typeof payload === 'string') {
+        msg.content = payload;
+      } else {
+        Object.assign(msg, payload);
+      }
       return msg;
     },
-    _sentMessages: messages,
-    isThread: () => false,
-    parent: null,
+    startThread: async (opts = {}) => {
+      const threadId = `thread-${id}`;
+      const thread = createFakeChannel(threadId);
+      thread.name = opts.name || threadId;
+      thread.isThread = () => true;
+      thread.parent = channel;
+      thread.parentId = channel.id;
+      return thread;
+    },
+    delete: async () => {},
+    react: async () => {},
+    pin: async () => {},
+    unpin: async () => {},
   };
+  return msg;
+}
+
+export function createFakeChannel(channelId = 'fake-channel-1') {
+  const sentMessages = [];
+  const messageStore = new Map();
+
+  const channel = {
+    id: channelId,
+    name: channelId,
+    messages: {
+      fetch: async (idOrOpts) => {
+        // fetch(id) → single message; fetch() → Map of all
+        if (typeof idOrOpts === 'string') {
+          if (!messageStore.has(idOrOpts)) {
+            // Auto-create missing messages so handlers don't crash
+            const msg = createFakeMessage(idOrOpts, channel);
+            messageStore.set(idOrOpts, msg);
+          }
+          return messageStore.get(idOrOpts);
+        }
+        return messageStore;
+      },
+    },
+    send: async (payload) => {
+      const id = `fake-msg-${++_globalMsgCounter}`;
+      const msg = createFakeMessage(id, channel);
+      if (typeof payload === 'string') {
+        msg.content = payload;
+      } else if (payload) {
+        Object.assign(msg, payload);
+      }
+      messageStore.set(id, msg);
+      sentMessages.push(msg);
+      return msg;
+    },
+    bulkDelete: async () => {},
+    _sentMessages: sentMessages,
+    _messageStore: messageStore,
+    isThread: () => false,
+    isTextBased: () => true,
+    delete: async () => {},
+    parent: null,
+    parentId: null,
+    type: 0,
+    guild: { id: 'fake-guild' },
+  };
+
+  return channel;
 }
 
 export function createFakeInteraction(customId, userId, options = {}) {
@@ -29,20 +100,14 @@ export function createFakeInteraction(customId, userId, options = {}) {
     customId,
     user: { id: userId, username: options.username || 'TestPlayer' },
     member: { id: userId },
-    message: {
-      id: options.messageId || 'fake-msg',
-      channel,
-      content: '',
-      embeds: [],
-      components: [],
-      edit: async (payload) => {
-        sentMessages.push({ type: 'edit', ...payload });
-        return interaction.message;
-      },
-    },
+    message: createFakeMessage(options.messageId || 'fake-msg', channel),
     channel,
     channelId: channel.id,
-    guild: options.guild || { id: 'fake-guild', channels: { fetch: async () => channel } },
+    guild: options.guild || {
+      id: 'fake-guild',
+      channels: { fetch: async () => channel },
+      members: { fetch: async (id) => ({ id, displayName: `Player_${id}` }) },
+    },
     values: options.values || [],
     fields: options.fields || { getTextInputValue: () => '' },
 
@@ -64,6 +129,14 @@ export function createFakeInteraction(customId, userId, options = {}) {
       sentMessages.push(msg);
       return msg;
     },
+    update: async (payload) => {
+      const msg = { type: 'update', ...(typeof payload === 'string' ? { content: payload } : payload) };
+      sentMessages.push(msg);
+      return msg;
+    },
+    showModal: async (modal) => {
+      sentMessages.push({ type: 'showModal', ...modal });
+    },
 
     // Type checks (pretend to be a button by default)
     isButton: () => options.type !== 'select' && options.type !== 'modal',
@@ -79,6 +152,9 @@ export function createFakeInteraction(customId, userId, options = {}) {
       getUser: () => null,
       getSubcommand: () => null,
     },
+
+    // Client reference (for handlers that use interaction.client.channels.fetch)
+    client: options.client || null,
 
     // Captured output
     sentMessages,

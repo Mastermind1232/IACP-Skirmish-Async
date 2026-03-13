@@ -13,10 +13,10 @@ const TRANSIENT_FIELDS = ['undoStack', 'moveGridMessageIds'];
  */
 export function captureSnapshot(game) {
   if (!game) return null;
-  const clone = JSON.parse(JSON.stringify(game));
-  for (const field of TRANSIENT_FIELDS) {
-    delete clone[field];
-  }
+  const clone = JSON.parse(JSON.stringify(game, (key, value) => {
+    if (TRANSIENT_FIELDS.includes(key)) return undefined;
+    return value;
+  }));
   return clone;
 }
 

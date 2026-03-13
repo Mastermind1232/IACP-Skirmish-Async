@@ -591,7 +591,18 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     }
   }
   for (const pn of [1, 2]) {
-    setActivationsRemaining(game, pn, getActivationsTotal(game, pn) ?? 0);
+    let total = getActivationsTotal(game, pn) ?? 0;
+    // Subtract activations for fully defeated deployment groups
+    const dcList = getDcList(game, pn) || [];
+    const figs = game.figurePositions?.[pn] || {};
+    const figKeys = Object.keys(figs);
+    for (const dc of dcList) {
+      const dcName = dc.dcName || dc;
+      if (!figKeys.some(fk => fk.startsWith(dcName + '-'))) {
+        total = Math.max(0, total - 1);
+      }
+    }
+    setActivationsRemaining(game, pn, total);
     setActivatedDcIndices(game, pn, []);
   }
   const mapId = game.selectedMap?.id;

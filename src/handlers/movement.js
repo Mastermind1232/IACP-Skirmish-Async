@@ -388,6 +388,19 @@ export async function handleMovePick(interaction, ctx) {
   }
   const { figureKey, playerNum, mpRemaining, displayName } = moveState;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner can move.')) return;
+
+  // Early termination: "done" ends movement immediately (forfeit remaining MP)
+  if (space === 'done') {
+    await clearMoveGridMessages(game, moveKey, interaction.channel);
+    try { await interaction.message.delete(); } catch { /* already gone */ }
+    if (game.mobileMovementActive?.[msgId]) delete game.mobileMovementActive[msgId];
+    if (game.urgencyMustSpendAll?.[msgId]) delete game.urgencyMustSpendAll[msgId];
+    delete game.moveInProgress[moveKey];
+    await interaction.followUp({ content: `**${displayName}** finished moving (${mpRemaining} MP forfeited).`, ephemeral: false }).catch(discordCatch);
+    saveGames();
+    return;
+  }
+
   await clearMoveGridMessages(game, moveKey, interaction.channel);
   // Also delete the message the user clicked on (it may have been edited in-place
   // by handleMoveLetter and removed from moveGridMessageIds tracking)

@@ -66,38 +66,41 @@ export const ACTION_TYPES = {
  * This encodes the handler prefix + game-specific identifiers.
  */
 export function buildCustomId(type, params = {}) {
-  const { gameId, msgId, playerNum, dcIndex, figureIndex, coord, targetInfo } = params;
+  const { gameId, msgId, playerNum, dcIndex, figureIndex = 0, coord, targetInfo } = params;
 
   switch (type) {
     // Phase gate
     case ACTION_TYPES.PHASE_GATE_READY:
-      return `phase_gate_ready_${gameId}_${playerNum}`;
+      return `phase_gate_ready_${gameId}`;
     case ACTION_TYPES.PHASE_GATE_UNREADY:
-      return `phase_gate_unready_${gameId}_${playerNum}`;
+      return `phase_gate_unready_${gameId}`;
 
-    // Activation
+    // Activation — must match handler parsing formats
     case ACTION_TYPES.ACTIVATE_DC:
-      return `dc_activate_${msgId}`;
+      // Handler parses: dc_activate_{gameId}_{playerNum}_{dcIndex}
+      return `dc_activate_${gameId}_${playerNum}_${dcIndex}`;
     case ACTION_TYPES.END_TURN:
-      return `end_turn_${msgId}`;
+      // Handler parses: end_turn_{gameId}_{msgId} (regex: /^end_turn_([^_]+)_(.+)$/)
+      return `end_turn_${gameId}_${msgId}`;
     case ACTION_TYPES.DC_END_ACTIVATION:
+      // Handler parses: dc_end_activation_{msgId} (simple replace)
       return `dc_end_activation_${msgId}`;
     case ACTION_TYPES.PASS_ACTIVATION_TURN:
       return `pass_activation_turn_${gameId}`;
     case ACTION_TYPES.END_ACTIVATION_PHASE:
       return `status_phase_${gameId}`;
 
-    // Movement
+    // Movement — handler expects _f{figureIndex} suffix
     case ACTION_TYPES.MOVE_FIGURE:
-      return `dc_move_${msgId}`;
+      return `dc_move_${msgId}_f${figureIndex}`;
     case ACTION_TYPES.MOVE_MP:
       return `move_mp_${params.moveKey}_${params.mp}`;
     case ACTION_TYPES.MOVE_PICK_SPACE:
       return `move_pick_${params.moveKey}_${coord}`;
 
-    // Combat
+    // Combat — handler expects _f{figureIndex} suffix for attack
     case ACTION_TYPES.ATTACK_TARGET:
-      return `dc_attack_${msgId}`;
+      return `dc_attack_${msgId}_f${figureIndex}`;
     case ACTION_TYPES.COMBAT_READY:
       return `combat_ready_${gameId}`;
     case ACTION_TYPES.COMBAT_ROLL:

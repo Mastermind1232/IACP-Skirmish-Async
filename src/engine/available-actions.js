@@ -255,11 +255,25 @@ function getActivationActions(game, playerNum, deps) {
   const actions = [];
   const gameId = game.gameId;
 
+  // End activation phase — both players must confirm, regardless of turn
+  const noActivations = (game.p1ActivationsRemaining ?? 0) === 0 && (game.p2ActivationsRemaining ?? 0) === 0;
+  const noActionsRemaining = !Object.values(game.dcActionsData || {}).some(d => d.remaining > 0);
+  if (noActivations && noActionsRemaining) {
+    const alreadyEnded = playerNum === 1 ? game.p1ActivationPhaseEnded : game.p2ActivationPhaseEnded;
+    if (!alreadyEnded) {
+      actions.push({
+        type: ACTION_TYPES.END_ACTIVATION_PHASE,
+        customId: buildCustomId(ACTION_TYPES.END_ACTIVATION_PHASE, { gameId }),
+        description: 'End Activation Phase',
+      });
+    }
+  }
+
   // Is it this player's activation turn?
   const isMyTurn = game.currentActivationTurnPlayerId === playerId;
 
   if (!isMyTurn) {
-    // Not our turn — can only play CC cards or pass
+    // Not our turn — can only play CC cards or pass (plus end-phase above)
     return actions;
   }
 
@@ -268,7 +282,9 @@ function getActivationActions(game, playerNum, deps) {
 
   if (activationsRemaining > 0) {
     // Can activate a DC — need dcMessageMeta to list available DCs
+    let hasActivatableDc = false;
     if (deps.dcMessageMeta) {
+      const dcMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
       for (const [msgId, meta] of deps.dcMessageMeta) {
         if (meta.gameId !== gameId || meta.playerNum !== playerNum) continue;
         // Check if this DC is readied (not exhausted) and not depleted
@@ -276,17 +292,42 @@ function getActivationActions(game, playerNum, deps) {
         if (exhausted) continue;
         const depleted = game.p1DepletedDcMessageIds?.includes(msgId) || game.p2DepletedDcMessageIds?.includes(msgId);
         if (depleted) continue;
+        // Skip DCs with no surviving figures on the board
+        const figs = game.figurePositions?.[playerNum] || {};
+        if (!Object.keys(figs).some(fk => fk.startsWith(meta.dcName + '-'))) continue;
 
+        hasActivatableDc = true;
+        const dcIndex = dcMsgIds ? dcMsgIds.indexOf(msgId) : 0;
         actions.push({
           type: ACTION_TYPES.ACTIVATE_DC,
-          customId: buildCustomId(ACTION_TYPES.ACTIVATE_DC, { msgId }),
+          customId: buildCustomId(ACTION_TYPES.ACTIVATE_DC, { gameId, playerNum, dcIndex }),
           description: `Activate ${meta.displayName || meta.dcName}`,
           params: { msgId, dcName: meta.dcName },
         });
       }
     }
 
-    // Can pass activation turn
+    if (hasActivatableDc) {
+      // Can pass activation turn
+      actions.push({
+        type: ACTION_TYPES.PASS_ACTIVATION_TURN,
+        customId: buildCustomId(ACTION_TYPES.PASS_ACTIVATION_TURN, { gameId }),
+        description: 'Pass activation turn',
+      });
+    } else {
+      // Has activations on paper but no DCs to activate (all exhausted/dead)
+      // Offer end activation phase to prevent deadlock
+      const alreadyEnded = playerNum === 1 ? game.p1ActivationPhaseEnded : game.p2ActivationPhaseEnded;
+      if (!alreadyEnded) {
+        actions.push({
+          type: ACTION_TYPES.END_ACTIVATION_PHASE,
+          customId: buildCustomId(ACTION_TYPES.END_ACTIVATION_PHASE, { gameId }),
+          description: 'End Activation Phase (no DCs to activate)',
+        });
+      }
+    }
+  } else if (!noActivations) {
+    // Player has 0 activations but opponent still has some — must pass turn
     actions.push({
       type: ACTION_TYPES.PASS_ACTIVATION_TURN,
       customId: buildCustomId(ACTION_TYPES.PASS_ACTIVATION_TURN, { gameId }),
@@ -301,17 +342,22 @@ function getActivationActions(game, playerNum, deps) {
       const data = game.dcActionsData?.[msgId];
       if (!data || data.remaining <= 0) continue;
 
+      // Skip if all figures for this DC are defeated (no positions on board)
+      const figs = game.figurePositions?.[playerNum] || {};
+      const hasSurvivors = Object.keys(figs).some(fk => fk.startsWith(meta.dcName + '-'));
+      if (!hasSurvivors) continue;
+
       // This DC has actions remaining — can move, attack, interact, or special
       const displayName = meta.displayName || meta.dcName;
+      const figureIndex = data.selectedFigure ?? 0;
       actions.push({
         type: ACTION_TYPES.MOVE_FIGURE,
-        customId: buildCustomId(ACTION_TYPES.MOVE_FIGURE, { msgId }),
+        customId: buildCustomId(ACTION_TYPES.MOVE_FIGURE, { msgId, figureIndex }),
         description: `Move with ${displayName}`,
         params: { msgId, dcName: meta.dcName },
       });
 
       // Attack: compute individual targets if deps available
-      const figureIndex = data.selectedFigure ?? 0;
       const targets = computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps);
       if (targets.length > 0) {
         game.attackTargets = game.attackTargets || {};
@@ -329,19 +375,36 @@ function getActivationActions(game, playerNum, deps) {
         // Fallback: generic attack action (no target info available)
         actions.push({
           type: ACTION_TYPES.ATTACK_TARGET,
-          customId: buildCustomId(ACTION_TYPES.ATTACK_TARGET, { msgId }),
+          customId: buildCustomId(ACTION_TYPES.ATTACK_TARGET, { msgId, figureIndex }),
           description: `Attack with ${displayName}`,
           params: { msgId, dcName: meta.dcName },
         });
       }
 
-      // End turn for this DC
+      // End activation early (forfeit remaining actions)
       actions.push({
-        type: ACTION_TYPES.END_TURN,
-        customId: buildCustomId(ACTION_TYPES.END_TURN, { msgId }),
-        description: `End turn for ${displayName}`,
+        type: ACTION_TYPES.DC_END_ACTIVATION,
+        customId: buildCustomId(ACTION_TYPES.DC_END_ACTIVATION, { msgId }),
+        description: `End activation for ${displayName}`,
         params: { msgId, dcName: meta.dcName },
       });
+    }
+  }
+
+  // Check for DCs with 0 actions remaining — need to end activation
+  if (deps.dcMessageMeta) {
+    for (const [msgId, meta] of deps.dcMessageMeta) {
+      if (meta.gameId !== gameId || meta.playerNum !== playerNum) continue;
+      const data = game.dcActionsData?.[msgId];
+      if (data && data.remaining <= 0) {
+        // DC has been activated but has no actions left — can end activation
+        actions.push({
+          type: ACTION_TYPES.DC_END_ACTIVATION,
+          customId: buildCustomId(ACTION_TYPES.DC_END_ACTIVATION, { msgId }),
+          description: `End activation for ${meta.displayName || meta.dcName}`,
+          params: { msgId, dcName: meta.dcName },
+        });
+      }
     }
   }
 
@@ -360,16 +423,6 @@ function getActivationActions(game, playerNum, deps) {
         });
       }
     }
-  }
-
-  // End activation phase (if both players have used all activations)
-  const shouldShowEnd = (game.p1ActivationsRemaining ?? 0) === 0 && (game.p2ActivationsRemaining ?? 0) === 0;
-  if (shouldShowEnd) {
-    actions.push({
-      type: ACTION_TYPES.END_ACTIVATION_PHASE,
-      customId: buildCustomId(ACTION_TYPES.END_ACTIVATION_PHASE, { gameId }),
-      description: 'End Activation Phase',
-    });
   }
 
   return actions;
@@ -400,13 +453,23 @@ function getCombatActions(game, playerNum, deps) {
     return actions;
   }
 
-  // Rolling phase
-  if (!combat.attackRoll || !combat.defenseRoll) {
-    if (playerNum === attackerPn || playerNum === defenderPn) {
+  // Rolling phase — attacker rolls first, then defender
+  if (!combat.attackRoll) {
+    if (playerNum === attackerPn) {
       actions.push({
         type: ACTION_TYPES.COMBAT_ROLL,
         customId: buildCustomId(ACTION_TYPES.COMBAT_ROLL, { gameId }),
-        description: 'Roll dice',
+        description: 'Roll attack dice',
+      });
+    }
+    return actions;
+  }
+  if (!combat.defenseRoll) {
+    if (playerNum === defenderPn) {
+      actions.push({
+        type: ACTION_TYPES.COMBAT_ROLL,
+        customId: buildCustomId(ACTION_TYPES.COMBAT_ROLL, { gameId }),
+        description: 'Roll defense dice',
       });
     }
     return actions;
@@ -470,6 +533,16 @@ function getCombatActions(game, playerNum, deps) {
     return actions;
   }
 
+  // Both rolls done, no rerolls, no surges — ready to resolve
+  // This covers the case where proceedAfterRerolls/proceedAfterTokens already ran
+  if (combat.attackRoll && combat.defenseRoll) {
+    actions.push({
+      type: ACTION_TYPES.COMBAT_RESOLVE,
+      customId: buildCustomId(ACTION_TYPES.COMBAT_RESOLVE, { gameId }),
+      description: 'Ready to resolve rolls',
+    });
+  }
+
   return actions;
 }
 
@@ -486,19 +559,24 @@ function getMovementActions(game, playerNum, deps) {
       // Compute reachable spaces if deps available
       if (deps.computeMovementCache && deps.getBoardStateForMovement && moveState.figureKey) {
         try {
-          const board = deps.getBoardStateForMovement(game, null);
-          const profile = deps.getMovementProfile?.(moveState.figureKey, game) || {};
+          const board = deps.getBoardStateForMovement(game, moveState.figureKey);
+          const startPos = moveState.currentPosition || moveState.startCoord;
           const mpRemaining = moveState.mpRemaining ?? moveState.totalMp ?? 0;
-          if (board && mpRemaining > 0) {
-            const cache = deps.computeMovementCache(board, moveState.currentPosition || moveState.startCoord, profile, mpRemaining);
-            if (cache?.reachable) {
-              for (const [coord, cost] of Object.entries(cache.reachable)) {
-                if (cost > 0 && cost <= mpRemaining) {
+          // Use stored profile/cache from moveState if available, else compute
+          const profile = moveState.movementProfile
+            || (deps.getMovementProfile
+              ? deps.getMovementProfile(moveState.dcName || '', moveState.figureKey, game)
+              : {});
+          if (board && mpRemaining > 0 && startPos) {
+            const cache = deps.computeMovementCache(startPos, mpRemaining, board, profile);
+            if (cache?.cells?.size > 0) {
+              for (const [coord, info] of cache.cells) {
+                if (info.cost > 0 && info.cost <= mpRemaining) {
                   actions.push({
                     type: ACTION_TYPES.MOVE_PICK_SPACE,
                     customId: buildCustomId(ACTION_TYPES.MOVE_PICK_SPACE, { moveKey, coord }),
-                    description: `Move to ${coord} (cost ${cost})`,
-                    params: { moveKey, coord, cost },
+                    description: `Move to ${coord} (cost ${info.cost})`,
+                    params: { moveKey, coord, cost: info.cost },
                   });
                 }
               }
@@ -561,7 +639,8 @@ function getEndOfRoundActions(game, playerNum) {
   const playerId = getPlayerId(game, playerNum);
 
   // Only the player whose turn it is in the EoR window can act
-  if (game.endOfRoundWhoseTurn && game.endOfRoundWhoseTurn !== playerId) return [];
+  if (!game.endOfRoundWhoseTurn) return [];
+  if (game.endOfRoundWhoseTurn !== playerId) return [];
 
   return [{
     type: ACTION_TYPES.END_END_OF_ROUND,
