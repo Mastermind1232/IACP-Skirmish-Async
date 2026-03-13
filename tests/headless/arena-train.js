@@ -191,7 +191,6 @@ async function main() {
   const reset = args.includes('--reset');
 
   const testDecks = loadTestDecks();
-  console.log(`Loaded ${testDecks.length} test decks for army seeding`);
 
   let arenaData;
   if (reset) {
@@ -214,22 +213,16 @@ async function main() {
       matchHistory: [],
       evolutionLog: [],
     };
-    console.log('Arena reset — initialized 20 agents');
   } else {
     arenaData = loadArenaData(ARENA_PATH);
     if (Object.keys(arenaData.agents).length === 0) {
       arenaData.agents = initializePopulation(20, testDecks);
-      console.log('Initialized 20 agents (first run)');
     }
   }
 
   const learnings = loadLearnings(LEARNINGS_PATH);
-
-  // Log initial roster
-  const roster = Object.values(arenaData.agents).sort((a, b) => b.elo - a.elo);
-  console.log(`\n=== SKIRBO ARENA ===`);
-  console.log(`Population: ${roster.length} agents | Prior games: ${arenaData.meta.totalGames} | Generation: ${arenaData.meta.totalGenerations}`);
-  console.log(`Training ${numGames} games\n`);
+  const roster = Object.values(arenaData.agents);
+  console.log(`Arena: ${roster.length} agents | Game ${arenaData.meta.totalGames} | Gen ${arenaData.meta.totalGenerations} | Training ${numGames}`);
 
   const startTime = Date.now();
   let completed = 0;
@@ -293,30 +286,14 @@ async function main() {
     if (arenaData.meta.totalGames % arenaData.meta.settings.matchesPerCycle === 0) {
       evolve(arenaData, testDecks);
       const sorted = Object.values(arenaData.agents).sort((a, b) => b.elo - a.elo);
-      console.log(`\n  >>> EVOLUTION Gen ${arenaData.meta.totalGenerations} <<<`);
-      const lastEvo = arenaData.evolutionLog[arenaData.evolutionLog.length - 1];
-      if (lastEvo) {
-        console.log(`      Culled: ${lastEvo.culled.map(c => `${c.name}(${c.elo})`).join(', ')}`);
-        console.log(`      Bred:   ${lastEvo.bred.map(b => b.name).join(', ')}`);
-      }
-      console.log(`      Top: ${sorted[0]?.name} (${Math.round(sorted[0]?.elo)})\n`);
+      console.log(`  Gen ${arenaData.meta.totalGenerations} | Top: ${sorted[0]?.name} (${Math.round(sorted[0]?.elo)})`);
     }
 
-    // Progress log every 10 games
-    if ((i + 1) % 10 === 0 || i === numGames - 1) {
+    // Progress + save every 25 games
+    if ((i + 1) % 25 === 0 || i === numGames - 1) {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       const sorted = Object.values(arenaData.agents).sort((a, b) => b.elo - a.elo);
-      const avgElo = Math.round(sorted.reduce((s, a) => s + a.elo, 0) / sorted.length);
-      const stats = getLearningsStats(learnings);
-      console.log(
-        `  [${i + 1}/${numGames}] ${elapsed}s | ` +
-        `Gen ${arenaData.meta.totalGenerations} | ` +
-        `Top: ${sorted[0]?.name} (${Math.round(sorted[0]?.elo)}) | ` +
-        `Avg ELO: ${avgElo} | ` +
-        `Completed: ${completed}/${i + 1} | ` +
-        `States: ${stats.states >= 1000 ? (stats.states / 1000).toFixed(1) + 'K' : stats.states}`
-      );
-      // Save periodically
+      console.log(`  [${i + 1}/${numGames}] ${elapsed}s | ${sorted[0]?.name} (${Math.round(sorted[0]?.elo)}) | ${completed}/${i + 1} done`);
       saveArenaData(arenaData, ARENA_PATH);
       saveLearnings(learnings, LEARNINGS_PATH);
     }
@@ -328,20 +305,10 @@ async function main() {
 
   // Final report
   const sorted = Object.values(arenaData.agents).sort((a, b) => b.elo - a.elo);
-  console.log('\n=== ARENA RESULTS ===');
-  console.log(`Total games: ${arenaData.meta.totalGames} | Generation: ${arenaData.meta.totalGenerations}`);
-  console.log(`This batch: ${completed}/${numGames} completed`);
-  console.log('\nLeaderboard:');
-  sorted.slice(0, 10).forEach((a, i) => {
-    const wr = a.stats.games > 0 ? ((a.stats.wins / a.stats.games) * 100).toFixed(0) : '—';
-    console.log(
-      `  ${String(i + 1).padStart(2)}. ${a.name.padEnd(24)} ` +
-      `ELO: ${Math.round(a.elo).toString().padStart(5)} | ` +
-      `${a.stats.wins}W/${a.stats.losses}L (${wr}%) | ` +
-      `${a.affiliation}`
-    );
+  console.log(`Done. ${arenaData.meta.totalGames} total | Gen ${arenaData.meta.totalGenerations} | Top 5:`);
+  sorted.slice(0, 5).forEach((a, i) => {
+    console.log(`  ${i + 1}. ${a.name} (${Math.round(a.elo)}) ${a.stats.wins}W/${a.stats.losses}L`);
   });
-  console.log(`\nArena data saved to ${ARENA_PATH}`);
 }
 
 main().catch(err => {
