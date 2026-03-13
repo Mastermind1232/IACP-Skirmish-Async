@@ -332,7 +332,6 @@ export async function applySquadSubmission(game, isP1, squad, client, deps) {
   const generalChannel = await client.channels.fetch(game.generalId);
   const bothReady = game.player1Squad && game.player2Squad && !game.bothReadyPosted;
   if (bothReady) {
-    game.bothReadyPosted = true;
     try {
       if (!game.p1PlayAreaId || !game.p2PlayAreaId) {
         const guild = generalChannel.guild;
@@ -364,22 +363,30 @@ export async function applySquadSubmission(game, isP1, squad, client, deps) {
     } catch (err) {
       console.error('Failed to create/populate Play Areas:', err);
     }
-    const bothReadyMsg = await generalChannel.send({
-      content: `<@${game.player1Id}> <@${game.player2Id}> — Both squads are ready! Determine initiative below.`,
-      allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
-      embeds: [
-        new EmbedBuilder()
-          .setTitle('Both Squads Ready')
-          .setDescription(
-            `**Player 1:** ${game.player1Squad.name || 'Unnamed'} (${game.player1Squad.dcCount} DCs, ${game.player1Squad.ccCount} CCs)\n` +
-              `**Player 2:** ${game.player2Squad.name || 'Unnamed'} (${game.player2Squad.dcCount} DCs, ${game.player2Squad.ccCount} CCs)\n\n` +
-              'Play Area channels have been populated with one thread per Deployment Card. Next: Determine Initiative.'
-          )
-          .setColor(COLORS.GREEN),
-      ],
-      components: [getDetermineInitiativeButtons(game)],
-    });
-    game.bothReadyMessageId = bothReadyMsg.id;
+    try {
+      const bothReadyMsg = await generalChannel.send({
+        content: `<@${game.player1Id}> <@${game.player2Id}> — Both squads are ready! Determine initiative below.`,
+        allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
+        embeds: [
+          new EmbedBuilder()
+            .setTitle('Both Squads Ready')
+            .setDescription(
+              `**Player 1:** ${game.player1Squad.name || 'Unnamed'} (${game.player1Squad.dcCount} DCs, ${game.player1Squad.ccCount} CCs)\n` +
+                `**Player 2:** ${game.player2Squad.name || 'Unnamed'} (${game.player2Squad.dcCount} DCs, ${game.player2Squad.ccCount} CCs)\n\n` +
+                'Play Area channels have been populated with one thread per Deployment Card. Next: Determine Initiative.'
+            )
+            .setColor(COLORS.GREEN),
+        ],
+        components: [getDetermineInitiativeButtons(game)],
+      });
+      game.bothReadyMessageId = bothReadyMsg.id;
+      // Set flag AFTER message is successfully sent — prevents stuck state
+      // where flag is true but the initiative button was never posted
+      game.bothReadyPosted = true;
+    } catch (err) {
+      console.error('Failed to send Both Squads Ready message:', err);
+      // Do NOT set bothReadyPosted — recovery can retry on next startup
+    }
   }
   saveGames();
 }

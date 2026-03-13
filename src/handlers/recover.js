@@ -37,7 +37,9 @@ export async function handleBotmenuRecover(interaction, ctx) {
   const results = await runRecovery(game, gameId, ctx);
 
   if (results.length === 0) {
-    await interaction.editReply({ content: 'No missing prompts detected.', components: [] }).catch(discordCatch);
+    // Include diagnostic info so the user can report what state the game is in
+    const diag = `phase=${game.phase || 'none'}, round=${game.currentRound || 0}, squads=${!!game.player1Squad}/${!!game.player2Squad}, initiative=${!!game.initiativeDetermined}`;
+    await interaction.editReply({ content: `No missing prompts detected. (${diag})`, components: [] }).catch(discordCatch);
   } else {
     const summary = results.map(r => `- ${r}`).join('\n');
     await interaction.editReply({ content: `**Recovered ${results.length} prompt(s):**\n${summary}`, components: [] }).catch(discordCatch);
@@ -131,16 +133,16 @@ export async function runRecovery(game, gameId, ctx) {
       }
       break;
 
-    // Setup phases: detect stuck "both squads ready" state
-    case 'map_selection':
-    case 'initiative':
-      try { const r = await recoverBothSquadsReady(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] bothSquadsReady:', err.message); }
-      break;
-
-    // zone_selection, deployment, lobby, ended — no recovery needed
+    // zone_selection, deployment, lobby, ended — handled by bothSquadsReady below if applicable
     default:
       break;
   }
+
+  // ── Both squads ready (phase-independent) ─────────────────────────
+  // Run AFTER phase switch — this handles the "both squads submitted but
+  // initiative button never posted" case regardless of what game.phase is,
+  // because a partial state save could leave game.phase at any value.
+  try { const r = await recoverBothSquadsReady(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] bothSquadsReady:', err.message); results.push(`[ERROR] bothSquadsReady: ${err.message}`); }
 
   // Cross-check: warn if available-actions detected needs that legacy didn't recover
   logRecoveryCrossCheck(actionsDiag, results, gameId);
@@ -152,26 +154,41 @@ export async function runRecovery(game, gameId, ctx) {
 
 async function recoverBothSquadsReady(game, gameId, ctx) {
   const { client, getDetermineInitiativeButtons, populatePlayAreas, createPlayAreaChannels, createBoardChannel, buildBoardMapPayload, saveGames } = ctx;
+
+  // Guard: both squads must be submitted
   if (!game.player1Squad || !game.player2Squad) return null;
-  // Already past initiative phase — no recovery needed
-  if (game.initiativePlayerNum) return null;
-  if (game.phase && game.phase !== 'map_selection' && game.phase !== 'initiative') return null;
+  // Guard: initiative already determined — no recovery needed
+  // Note: game.initiativePlayerNum is never set directly; use initiativeDetermined/initiativePlayerId
+  if (game.initiativeDetermined || game.initiativePlayerId) return null;
+  // Guard: game already in active play
+  if (game.currentRound > 0) return null;
+
+  console.log(`[recover] bothSquadsReady: game ${gameId} has both squads, no initiative determined, round 0 — checking for initiative button`);
 
   // Check if the initiative button message actually exists in the game log
+  if (!game.generalId) {
+    console.warn(`[recover] bothSquadsReady: game ${gameId} has no generalId`);
+    return null;
+  }
   const generalChannel = await client.channels.fetch(game.generalId);
   if (!generalChannel) return null;
 
   // Look for an existing initiative button in recent messages
   try {
-    const recentMsgs = await generalChannel.messages.fetch({ limit: 15 });
+    const recentMsgs = await generalChannel.messages.fetch({ limit: 30 });
     const hasInitiativeButton = recentMsgs.some(m =>
       m.author.bot && m.components?.some(row =>
         row.components?.some(c => c.customId?.startsWith('determine_initiative_'))
       )
     );
-    if (hasInitiativeButton) return null; // Button already exists
+    if (hasInitiativeButton) {
+      console.log(`[recover] bothSquadsReady: initiative button already exists in game ${gameId}`);
+      return null;
+    }
+    console.log(`[recover] No initiative button found in ${recentMsgs.size} recent messages for game ${gameId} — will re-post`);
   } catch (err) {
     console.warn('[recover] Failed to check for initiative button:', err.message);
+    // Continue — better to re-post a duplicate than leave the game stuck
   }
 
   // Ensure play area channels exist
@@ -204,6 +221,7 @@ async function recoverBothSquadsReady(game, gameId, ctx) {
     }
   } catch (err) {
     console.error('[recover] Failed to create/populate play areas:', err.message);
+    // Continue — still try to post the initiative button
   }
 
   // Post the initiative button
