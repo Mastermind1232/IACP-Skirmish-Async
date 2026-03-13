@@ -2363,6 +2363,7 @@ function buildAllDeps() {
     getFiguresOnOrAdjacentToSpace, applyNpcDamageToFigure,
     postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons,
     getSpaceController, shouldShowEndActivationPhaseButton, getPlayReadyMaps,
+    getDetermineInitiativeButtons, populatePlayAreas,
     postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState,
     clearPreGameSetup, getDeployFigureLabels, getDeployButtonRows,
     getDeploymentMapAttachment, filterValidTopLeftSpaces,

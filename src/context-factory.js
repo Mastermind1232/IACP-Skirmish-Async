@@ -271,6 +271,10 @@ const CONTEXT_GROUPS = {
     'getNegationResponseButtons', 'sendReadyToResolveRolls',
     'updateHandChannelMessages', 'getMoveMpButtonRows',
     'sendPhaseGateMessages',
+    'getDetermineInitiativeButtons',
+    'populatePlayAreas', 'createPlayAreaChannels', 'createBoardChannel',
+    'buildBoardMapPayload',
+    'dcMessageMeta', 'dcExhaustedState',
   ],
 
   phaseGate: [

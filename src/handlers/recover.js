@@ -95,6 +95,7 @@ export async function runRecovery(game, gameId, ctx) {
     try { const r = await recoverMoveInProgress(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] moveInProgress:', err.message); }
     try { const r = await recoverRoundActivationMessage(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] roundActivationMessage:', err.message); }
     try { const r = await recoverCcDrawPhase(game, gameId, ctx); results.push(...r); } catch (err) { console.error('[recover] ccDrawPhase:', err.message); }
+    try { const r = await recoverBothSquadsReady(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] bothSquadsReady:', err.message); }
     logRecoveryCrossCheck(actionsDiag, results, gameId);
     return results;
   }
@@ -130,7 +131,13 @@ export async function runRecovery(game, gameId, ctx) {
       }
       break;
 
-    // lobby, map_selection, initiative, zone_selection, deployment, ended — no recovery needed
+    // Setup phases: detect stuck "both squads ready" state
+    case 'map_selection':
+    case 'initiative':
+      try { const r = await recoverBothSquadsReady(game, gameId, ctx); if (r) results.push(r); } catch (err) { console.error('[recover] bothSquadsReady:', err.message); }
+      break;
+
+    // zone_selection, deployment, lobby, ended — no recovery needed
     default:
       break;
   }
@@ -139,6 +146,70 @@ export async function runRecovery(game, gameId, ctx) {
   logRecoveryCrossCheck(actionsDiag, results, gameId);
 
   return results;
+}
+
+// ─── Recover: both squads submitted but initiative button never posted ────────
+
+async function recoverBothSquadsReady(game, gameId, ctx) {
+  const { client, getDetermineInitiativeButtons, populatePlayAreas, createPlayAreaChannels, createBoardChannel, buildBoardMapPayload, saveGames } = ctx;
+  if (!game.player1Squad || !game.player2Squad) return null;
+  if (game.bothReadyPosted) return null;
+  // Both squads are set but the initiative button was never posted
+  const generalChannel = await client.channels.fetch(game.generalId);
+  if (!generalChannel) return null;
+
+  // Ensure play area channels exist
+  try {
+    if (!game.p1PlayAreaId || !game.p2PlayAreaId) {
+      if (createPlayAreaChannels) {
+        const guild = generalChannel.guild;
+        const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
+        const prefix = `IA${game.gameId}`;
+        const { p1PlayAreaChannel, p2PlayAreaChannel } = await createPlayAreaChannels(
+          guild, gameCategory, prefix, game.player1Id, game.player2Id
+        );
+        game.p1PlayAreaId = p1PlayAreaChannel.id;
+        game.p2PlayAreaId = p2PlayAreaChannel.id;
+      }
+    }
+    if (!game.boardId && createBoardChannel) {
+      const guild = generalChannel.guild;
+      const gameCategory = await guild.channels.fetch(game.gameCategoryId || generalChannel.parentId);
+      const prefix = `IA${game.gameId}`;
+      const boardChannel = await createBoardChannel(guild, gameCategory, prefix, game.player1Id, game.player2Id);
+      game.boardId = boardChannel.id;
+      if (game.selectedMap && buildBoardMapPayload) {
+        const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
+        await boardChannel.send(payload).catch(discordCatch);
+      }
+    }
+    if (populatePlayAreas) {
+      await populatePlayAreas(game, client);
+    }
+  } catch (err) {
+    console.error('[recover] Failed to create/populate play areas:', err.message);
+  }
+
+  // Post the initiative button
+  game.bothReadyPosted = true;
+  const { EmbedBuilder } = await import('discord.js');
+  await generalChannel.send({
+    content: `<@${game.player1Id}> <@${game.player2Id}> — **[Recovered]** Both squads are ready! Determine initiative below.`,
+    allowedMentions: { users: [...new Set([game.player1Id, game.player2Id])] },
+    embeds: [
+      new EmbedBuilder()
+        .setTitle('Both Squads Ready')
+        .setDescription(
+          `**Player 1:** ${game.player1Squad.name || 'Unnamed'} (${game.player1Squad.dcCount} DCs, ${game.player1Squad.ccCount} CCs)\n` +
+          `**Player 2:** ${game.player2Squad.name || 'Unnamed'} (${game.player2Squad.dcCount} DCs, ${game.player2Squad.ccCount} CCs)\n\n` +
+          'Play Area channels have been populated. Next: Determine Initiative.'
+        )
+        .setColor(0x57F287),
+    ],
+    components: getDetermineInitiativeButtons ? [getDetermineInitiativeButtons(game)] : [],
+  });
+  if (saveGames) saveGames();
+  return 'Re-posted "Both Squads Ready" with initiative button';
 }
 
 /**
