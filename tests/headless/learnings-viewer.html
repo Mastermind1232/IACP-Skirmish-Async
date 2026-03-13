@@ -515,7 +515,7 @@ function findTroubles(s){
 function renderDcList(targetId,stats){
   const el=document.getElementById(targetId);
   const limit=parseInt(el.dataset.limit)||999;
-  const dcE=Object.entries(stats.dcStats).map(([n,d])=>({name:n,...d,wr:d.games>0?d.wins/d.games:0})).sort((a,b)=>b.wr-a.wr||b.games-a.games);
+  const dcE=Object.entries(stats.dcStats).filter(([,d])=>d.games>=10).map(([n,d])=>({name:n,...d,wr:d.wins/d.games})).sort((a,b)=>b.wr-a.wr||b.games-a.games);
   const affColor={rebel:'var(--rebel)',imperial:'var(--imperial)',scum:'var(--scum)'};
   el.innerHTML=dcE.slice(0,limit).map((dc,i)=>{
     const wrP=(dc.wr*100).toFixed(0),c=affColor[(dc.affiliation||'').toLowerCase()]||'var(--text-dim)';
