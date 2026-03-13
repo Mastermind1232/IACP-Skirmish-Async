@@ -153,10 +153,26 @@ export async function runRecovery(game, gameId, ctx) {
 async function recoverBothSquadsReady(game, gameId, ctx) {
   const { client, getDetermineInitiativeButtons, populatePlayAreas, createPlayAreaChannels, createBoardChannel, buildBoardMapPayload, saveGames } = ctx;
   if (!game.player1Squad || !game.player2Squad) return null;
-  if (game.bothReadyPosted) return null;
-  // Both squads are set but the initiative button was never posted
+  // Already past initiative phase — no recovery needed
+  if (game.initiativePlayerNum) return null;
+  if (game.phase && game.phase !== 'map_selection' && game.phase !== 'initiative') return null;
+
+  // Check if the initiative button message actually exists in the game log
   const generalChannel = await client.channels.fetch(game.generalId);
   if (!generalChannel) return null;
+
+  // Look for an existing initiative button in recent messages
+  try {
+    const recentMsgs = await generalChannel.messages.fetch({ limit: 15 });
+    const hasInitiativeButton = recentMsgs.some(m =>
+      m.author.bot && m.components?.some(row =>
+        row.components?.some(c => c.customId?.startsWith('determine_initiative_'))
+      )
+    );
+    if (hasInitiativeButton) return null; // Button already exists
+  } catch (err) {
+    console.warn('[recover] Failed to check for initiative button:', err.message);
+  }
 
   // Ensure play area channels exist
   try {
