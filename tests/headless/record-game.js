@@ -5,10 +5,11 @@
  */
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
-import { getDcStats, getMapSpaces } from '../../src/data-loader.js';
+import { getDcStats, getMapSpaces, getDcEffects } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
+import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 import { parseCoord } from '../../src/game/coords.js';
-import { loadLearnings, saveLearnings, createGameTracer, pickSmartAction } from './learnings.js';
+import { loadLearnings, saveLearnings, createGameTracer, pickSmartAction, recordMatchResult } from './learnings.js';
 import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -177,6 +178,7 @@ async function recordGame() {
   const actionDeps = {
     dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces,
     computeMovementCache, getBoardStateForMovement, getMovementProfile,
+    getPlayableCcFromHand,
   };
 
   const replay = {
@@ -336,6 +338,9 @@ async function recordGame() {
   if (useLearnings) {
     tracer1.finalize(finalGame, true);
     tracer2.finalize(finalGame, false);
+    const winLabel = finalGame.winnerId === finalGame.player1Id ? 'P1' :
+                     finalGame.winnerId === finalGame.player2Id ? 'P2' : null;
+    recordMatchResult(learnings, p1Army, p2Army, winLabel, getDcStats, getDcEffects);
     saveLearnings(learnings, learningsPath);
   }
 

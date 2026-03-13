@@ -38,7 +38,7 @@ const __dirname = dirname(__filename);
 const ARENA_PATH = join(__dirname, 'arena-data.json');
 const LEARNINGS_PATH = join(__dirname, 'learnings-data.json');
 const TEST_DECKS_PATH = join(__dirname, '../../data/destruct-test-decks.json');
-const MAX_ITERATIONS = 1500;
+const MAX_ITERATIONS = 2000;
 
 function loadTestDecks() {
   return JSON.parse(readFileSync(TEST_DECKS_PATH, 'utf8'));

@@ -1,14 +1,19 @@
 /**
- * Strategy learning module — Q-learning over game state-action graphs.
- * Both players share the same graph, indexed from their own perspective.
- * Over many games, finds paths that lead to quicker wins.
+ * Strategy learning module — Linear Function Approximation (Brain Phase 2).
+ * Replaces tabular Q-learning with weighted feature vectors per action type.
+ * Q(state, action) = dot(weights[action], features(state))
+ * Both players share the same weights, indexed from their own perspective.
  */
 import { parseCoord } from '../../src/game/coords.js';
+import { getDcEffects } from '../../src/data-loader.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const GAMMA = 0.95;        // Discount factor (future rewards matter in long games)
+const GAMMA = 0.95;        // Discount factor
+const ALPHA = 0.01;        // Learning rate (fixed for linear approx)
+const WEIGHT_CLAMP = 10.0; // Safety clamp to prevent divergence
+
 const REWARD_WEIGHTS = {
   vp: 10.0,               // VP gained (primary win condition)
   dmg: 0.5,               // Enemy HP removed
@@ -17,42 +22,25 @@ const REWARD_WEIGHTS = {
   terminal: 50.0,         // Win/loss bonus at game end
 };
 
-// ── State Representation ────────────────────────────────────────────────────
+const NUM_FEATURES = 14;
 
-function bucketVpDiff(diff) {
-  return Math.max(-20, Math.min(20, Math.round(diff / 5) * 5));
-}
+const FEATURE_NAMES = [
+  'vpAdv', 'myHpRatio', 'oppHpRatio', 'hpAdv',
+  'myFigsRatio', 'figsAdv', 'closeness', 'nearestEnemy',
+  'roundProgress', 'activationsRatio', 'inCombat', 'inMovement',
+  'attackPower', 'bias',
+];
 
-function bucketHpPct(current, max) {
-  if (max <= 0) return 0;
-  const pct = (current / max) * 100;
-  if (pct <= 0) return 0;
-  if (pct <= 25) return 25;
-  if (pct <= 50) return 50;
-  if (pct <= 75) return 75;
-  return 100;
-}
+const ABSTRACT_TYPES = [
+  'attack_close', 'attack_ranged', 'move_toward', 'move_away', 'move_lateral',
+  'move_done', 'start_move', 'activate', 'end_activation', 'pass',
+  'ability', 'spend_surge', 'skip_surges', 'reroll', 'other',
+];
 
-function bucketDistance(avg) {
-  if (avg <= 1) return 1;
-  if (avg <= 2) return 2;
-  if (avg <= 3) return 3;
-  if (avg <= 5) return 5;
-  return 8;
-}
+// Expected damage per attack die (from dice.json face averages)
+const EXPECTED_DMG_PER_DIE = { red: 2.17, blue: 1.17, green: 1.33, yellow: 0.67 };
 
-function classifyPhase(game, playerNum) {
-  if (game.pendingCombat) return 'combat';
-  const moves = game.moveInProgress || {};
-  if (Object.keys(moves).some(k => moves[k].playerNum === playerNum)) return 'movement';
-  if (game.dcActionsData) {
-    for (const data of Object.values(game.dcActionsData)) {
-      if (data.remaining > 0) return 'mid_activate';
-    }
-  }
-  if (game.roundPhase !== 'activation') return 'round_transition';
-  return 'pre_activate';
-}
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function coordDistance(a, b) {
   const pa = parseCoord(a);
@@ -90,7 +78,47 @@ function getAvgDistToEnemy(game, playerNum) {
   return totalDist / myFigs.length;
 }
 
-export function computeStateHash(game, playerNum, dcHealthState, dcMessageMeta) {
+function getMinDistToEnemy(game, playerNum) {
+  const oppNum = playerNum === 1 ? 2 : 1;
+  const myFigs = Object.values(game.figurePositions?.[playerNum] || {});
+  const oppFigs = Object.values(game.figurePositions?.[oppNum] || {});
+  if (myFigs.length === 0 || oppFigs.length === 0) return 10;
+  let globalMin = Infinity;
+  for (const myPos of myFigs) {
+    for (const oppPos of oppFigs) {
+      const d = coordDistance(myPos, oppPos);
+      if (d < globalMin) globalMin = d;
+    }
+  }
+  return globalMin;
+}
+
+function getArmyAttackPower(game, playerNum) {
+  const figs = game.figurePositions?.[playerNum] || {};
+  const figKeys = Object.keys(figs);
+  if (figKeys.length === 0) return 0;
+  let totalDmg = 0;
+  let dcEffects;
+  try { dcEffects = getDcEffects(); } catch { return 0; }
+  for (const figKey of figKeys) {
+    // Extract DC name: "Darth Vader-1-0" → "Darth Vader"
+    const dcName = figKey.replace(/-\d+-\d+$/, '');
+    const lower = dcName.toLowerCase();
+    const ciKey = Object.keys(dcEffects).find(k => k.toLowerCase() === lower);
+    const eff = dcEffects[dcName] || (ciKey ? dcEffects[ciKey] : null);
+    if (eff?.attack?.dice) {
+      for (const die of eff.attack.dice) {
+        totalDmg += EXPECTED_DMG_PER_DIE[die] || 0;
+      }
+    }
+  }
+  // Normalize — ~15 is roughly max single-army expected damage
+  return Math.min(1, totalDmg / 15);
+}
+
+// ── Feature Extraction ──────────────────────────────────────────────────────
+
+export function extractFeatures(game, playerNum, dcHealthState, dcMessageMeta) {
   const oppNum = playerNum === 1 ? 2 : 1;
   const myVP = (playerNum === 1 ? game.player1VP : game.player2VP)?.total || 0;
   const oppVP = (oppNum === 1 ? game.player1VP : game.player2VP)?.total || 0;
@@ -99,21 +127,99 @@ export function computeStateHash(game, playerNum, dcHealthState, dcMessageMeta) 
   const myFigs = Object.keys(game.figurePositions?.[playerNum] || {}).length;
   const oppFigs = Object.keys(game.figurePositions?.[oppNum] || {}).length;
   const avgDist = getAvgDistToEnemy(game, playerNum);
-  const phase = classifyPhase(game, playerNum);
-  const myActs = Math.min(4, playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0));
-  const round = Math.min(5, game.currentRound || game.round || 1);
+  const minDist = getMinDistToEnemy(game, playerNum);
+  const round = game.currentRound || game.round || 1;
+  const myActs = playerNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+  const oppActs = oppNum === 1 ? (game.p1ActivationsRemaining ?? 0) : (game.p2ActivationsRemaining ?? 0);
+
+  const myHpRatio = myHp.max > 0 ? myHp.current / myHp.max : 0;
+  const oppHpRatio = oppHp.max > 0 ? oppHp.current / oppHp.max : 0;
+  const totalFigs = myFigs + oppFigs;
+  const totalActs = myActs + oppActs;
 
   return [
-    `vp:${bucketVpDiff(myVP - oppVP)}`,
-    `mhp:${bucketHpPct(myHp.current, myHp.max)}`,
-    `ohp:${bucketHpPct(oppHp.current, oppHp.max)}`,
-    `mf:${Math.min(8, myFigs)}`,
-    `of:${Math.min(8, oppFigs)}`,
-    `d:${bucketDistance(avgDist)}`,
-    `ph:${phase}`,
-    `a:${myActs}`,
-    `r:${round}`,
-  ].join('|');
+    /* 0  vpAdv          */ (myVP - oppVP) / 40,
+    /* 1  myHpRatio      */ myHpRatio,
+    /* 2  oppHpRatio     */ oppHpRatio,
+    /* 3  hpAdv          */ myHpRatio - oppHpRatio,
+    /* 4  myFigsRatio    */ totalFigs > 0 ? myFigs / totalFigs : 0.5,
+    /* 5  figsAdv        */ totalFigs > 0 ? (myFigs - oppFigs) / totalFigs : 0,
+    /* 6  closeness      */ 1 - Math.min(avgDist, 10) / 10,
+    /* 7  nearestEnemy   */ 1 - Math.min(minDist, 10) / 10,
+    /* 8  roundProgress  */ Math.min(round, 5) / 5,
+    /* 9  activationsRatio */ totalActs > 0 ? myActs / totalActs : 0.5,
+    /* 10 inCombat       */ game.pendingCombat ? 1 : 0,
+    /* 11 inMovement     */ game.moveInProgress && Object.keys(game.moveInProgress).length > 0 ? 1 : 0,
+    /* 12 attackPower    */ getArmyAttackPower(game, playerNum),
+    /* 13 bias           */ 1.0,
+  ];
+}
+
+// ── Weight System ───────────────────────────────────────────────────────────
+
+export function initializeWeights() {
+  const weights = {};
+  for (const t of ABSTRACT_TYPES) {
+    weights[t] = new Array(NUM_FEATURES).fill(0);
+  }
+  return weights;
+}
+
+export function computeQ(weights, actionType, features) {
+  const w = weights[actionType];
+  if (!w) return 0;
+  let sum = 0;
+  for (let i = 0; i < NUM_FEATURES; i++) {
+    sum += w[i] * (features[i] || 0);
+  }
+  return sum;
+}
+
+function getBestQ(weights, features) {
+  let maxQ = -Infinity;
+  for (const t of ABSTRACT_TYPES) {
+    const q = computeQ(weights, t, features);
+    if (q > maxQ) maxQ = q;
+  }
+  return maxQ === -Infinity ? 0 : maxQ;
+}
+
+function updateWeightsForAction(weights, actionType, features, delta, alpha) {
+  if (!weights[actionType]) weights[actionType] = new Array(NUM_FEATURES).fill(0);
+  const w = weights[actionType];
+  for (let i = 0; i < NUM_FEATURES; i++) {
+    w[i] += alpha * delta * (features[i] || 0);
+    if (w[i] > WEIGHT_CLAMP) w[i] = WEIGHT_CLAMP;
+    if (w[i] < -WEIGHT_CLAMP) w[i] = -WEIGHT_CLAMP;
+  }
+}
+
+// ── Training Update ─────────────────────────────────────────────────────────
+
+function updateTraceLinear(learnings, trace) {
+  if (!learnings.weights) learnings.weights = initializeWeights();
+  if (!learnings.trainingStats) learnings.trainingStats = { totalUpdates: 0, avgAbsDelta: 0, featureNames: FEATURE_NAMES };
+  const weights = learnings.weights;
+  let deltaSum = 0;
+  let count = 0;
+
+  for (let i = trace.length - 1; i >= 0; i--) {
+    const { features, absType, reward, nextFeatures } = trace[i];
+    if (!features) continue;
+    const currentQ = computeQ(weights, absType, features);
+    const maxQNext = nextFeatures ? getBestQ(weights, nextFeatures) : 0;
+    const delta = reward + GAMMA * maxQNext - currentQ;
+    updateWeightsForAction(weights, absType, features, delta, ALPHA);
+    deltaSum += Math.abs(delta);
+    count++;
+  }
+
+  if (count > 0) {
+    learnings.trainingStats.totalUpdates += count;
+    // Running average of |delta|
+    const prevAvg = learnings.trainingStats.avgAbsDelta || 0;
+    learnings.trainingStats.avgAbsDelta = prevAvg * 0.95 + (deltaSum / count) * 0.05;
+  }
 }
 
 // ── Action Abstraction ──────────────────────────────────────────────────────
@@ -156,7 +262,6 @@ export function abstractActionType(action, game) {
       const oppNum = pn === 1 ? 2 : 1;
       const oppFigs = Object.values(game.figurePositions?.[oppNum] || {});
       if (oppFigs.length > 0) {
-        // Compare distance from current position vs proposed position
         const moveKey = action.params.moveKey;
         const moveState = game.moveInProgress?.[moveKey];
         const curPos = moveState?.currentPosition || moveState?.startCoord;
@@ -169,7 +274,7 @@ export function abstractActionType(action, game) {
         }
       }
     }
-    return 'move_toward'; // Default
+    return 'move_toward';
   }
   if (t === 'move_figure') return 'start_move';
   // Activation
@@ -212,52 +317,13 @@ export function computeReward(before, after, isTerminal, didWin) {
   const oppDmgAfter = after.oppHpMax - after.oppHpCurrent;
   const deltaEnemyDmg = oppDmgAfter - oppDmgBefore;
   const deltaMyHP = after.myHpCurrent - before.myHpCurrent;
-  const deltaDist = before.avgDist - after.avgDist; // Positive = got closer
+  const deltaDist = before.avgDist - after.avgDist;
 
   let reward = w.vp * deltaVP + w.dmg * deltaEnemyDmg + w.hp * deltaMyHP + w.dist * deltaDist;
   if (isTerminal) {
     reward += didWin ? w.terminal : -w.terminal;
   }
   return reward;
-}
-
-// ── Q-Learning Core ─────────────────────────────────────────────────────────
-
-function ensureState(learnings, hash) {
-  if (!learnings.states[hash]) {
-    learnings.states[hash] = { visits: 0, actions: {} };
-  }
-  return learnings.states[hash];
-}
-
-function ensureAction(state, absType) {
-  if (!state.actions[absType]) {
-    state.actions[absType] = { visits: 0, qValue: 0, totalReward: 0, transitions: {} };
-  }
-  return state.actions[absType];
-}
-
-function getMaxQ(learnings, stateHash) {
-  const state = learnings.states[stateHash];
-  if (!state || Object.keys(state.actions).length === 0) return 0;
-  return Math.max(...Object.values(state.actions).map(a => a.qValue));
-}
-
-export function updateTrace(learnings, trace) {
-  for (let i = trace.length - 1; i >= 0; i--) {
-    const { stateHash, absType, reward, nextStateHash } = trace[i];
-    const state = ensureState(learnings, stateHash);
-    const action = ensureAction(state, absType);
-    const maxQNext = nextStateHash ? getMaxQ(learnings, nextStateHash) : 0;
-    const alpha = 1 / (1 + 0.01 * action.visits);
-    action.qValue += alpha * (reward + GAMMA * maxQNext - action.qValue);
-    action.visits += 1;
-    action.totalReward += reward;
-    state.visits += 1;
-    if (nextStateHash) {
-      action.transitions[nextStateHash] = (action.transitions[nextStateHash] || 0) + 1;
-    }
-  }
 }
 
 // ── Action Selection ────────────────────────────────────────────────────────
@@ -284,34 +350,30 @@ export function pickSmartAction(allActions, game, learnings, playerNum, dcHealth
   const mandatoryTypes = ['gate', 'combat_flow'];
   const mandatoryActions = allActions.filter(a => mandatoryTypes.includes(abstractActionType(a, game)));
   if (mandatoryActions.length === allActions.length) return pick(mandatoryActions);
-
-  // If we have mandatory actions mixed with strategic ones, always pick mandatory first
   if (mandatoryActions.length > 0) return pick(mandatoryActions);
 
   // Strategic actions only from here
   const strategicActions = allActions.filter(a => !mandatoryTypes.includes(abstractActionType(a, game)));
   if (strategicActions.length === 0) return pick(allActions);
 
-  const stateHash = computeStateHash(game, playerNum, dcHealthState, dcMessageMeta);
-  const state = learnings.states[stateHash];
-
-  // Epsilon-greedy — but explore with heuristic bias, not fully random
+  // Epsilon-greedy exploration
   const epsilon = getEpsilon(learnings.meta.totalGames);
-  if (!state || Math.random() < epsilon) {
-    // Exploration (or unseen state): use heuristic priority with slight randomization
-    // This prevents exploration from making catastrophically bad choices
+  if (Math.random() < epsilon) {
     return heuristicPick(strategicActions, game);
   }
 
-  // Exploitation: pick best abstract type by Q-value
+  // Exploitation: compute Q via linear function approximation
+  const features = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
+  const weights = learnings.weights;
+  if (!weights) return heuristicPick(strategicActions, game);
+
   const absTypes = Object.keys(groups).filter(t => !mandatoryTypes.includes(t));
   if (absTypes.length === 0) return heuristicPick(strategicActions, game);
 
   let bestType = null;
   let bestQ = -Infinity;
   for (const absType of absTypes) {
-    const actionData = state.actions[absType];
-    const q = actionData?.qValue ?? 0;
+    const q = computeQ(weights, absType, features);
     if (q > bestQ) {
       bestQ = q;
       bestType = absType;
@@ -327,17 +389,26 @@ function pickWithinGroup(actions, absType, game) {
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
   if (absType === 'attack_close' || absType === 'attack_ranged') {
-    // Prefer lower-HP targets (more likely to score a kill)
-    // We don't have HP info here easily, so just pick randomly
-    return pick(actions);
+    const scored = actions.map(a => {
+      const fk = a.params?.targetFigureKey;
+      let priority = 0;
+      if (fk) {
+        const oppNum = a.actingPlayer === 1 ? 2 : 1;
+        const oppFigs = Object.keys(game.figurePositions?.[oppNum] || {});
+        priority = 10 - oppFigs.length;
+      }
+      return { action: a, priority };
+    });
+    scored.sort((a, b) => b.priority - a.priority);
+    return scored[0].action;
   }
-  if (absType === 'move_toward') {
-    // Prefer the space closest to nearest enemy
+  if (absType === 'move_toward' || absType === 'move_away' || absType === 'move_lateral') {
     const oppNum = actions[0].actingPlayer === 1 ? 2 : 1;
     const oppFigs = Object.values(game.figurePositions?.[oppNum] || {});
     if (oppFigs.length > 0) {
       const scored = actions.map(a => {
         const coord = a.params?.coord || '';
+        if (!coord || a.params?.done) return { action: a, dist: 999 };
         const dist = Math.min(...oppFigs.map(p => coordDistance(coord, p)));
         return { action: a, dist };
       });
@@ -351,27 +422,44 @@ function pickWithinGroup(actions, absType, game) {
 }
 
 function heuristicPick(allActions, game) {
-  // Same priority as the original pickAction — fallback for unseen states
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
   const gates = allActions.filter(a => a.type === 'phase_gate_ready');
   if (gates.length > 0) return pick(gates);
   const transitions = allActions.filter(a =>
     a.type === 'end_end_of_round' || a.type === 'end_start_of_round' || a.type === 'end_activation_phase');
   if (transitions.length > 0) return pick(transitions);
+
+  const pendingTypes = ['dc_ability_choice', 'celebration_play', 'celebration_pass',
+    'pounce_space', 'missile_salvo_die', 'missile_salvo_done',
+    'power_token_choice', 'cover_fire_block', 'cover_fire_skip',
+    'spread_pain_cond', 'negation_play', 'negation_let_resolve'];
+  const pending = allActions.filter(a => pendingTypes.includes(a.type));
+  if (pending.length > 0) return pick(pending);
+
   const combat = allActions.filter(a => a.type?.startsWith('combat_'));
   if (combat.length > 0) return pick(combat);
+
   const attacks = allActions.filter(a => a.type === 'attack_target' && a.params?.targetFigureKey);
-  if (attacks.length > 0) return pick(attacks);
+  if (attacks.length > 0) return pickWithinGroup(attacks, 'attack_close', game);
+
+  const specials = allActions.filter(a => a.type === 'dc_special');
+  if (specials.length > 0) return pick(specials);
+
   const moveSpaces = allActions.filter(a => a.type === 'move_pick_space' && !a.params?.done);
-  if (moveSpaces.length > 0) return pick(moveSpaces);
-  const moveFinish = allActions.filter(a => a.type === 'move_pick_space' && a.params?.done);
-  if (moveFinish.length > 0) return pick(moveFinish);
+  if (moveSpaces.length > 0) return pickWithinGroup(moveSpaces, 'move_toward', game);
+
   const moveStart = allActions.filter(a => a.type === 'move_figure');
   if (moveStart.length > 0) return pick(moveStart);
+
+  const moveFinish = allActions.filter(a => a.type === 'move_pick_space' && a.params?.done);
+  if (moveFinish.length > 0) return pick(moveFinish);
+
   const endAct = allActions.filter(a => a.type === 'dc_end_activation');
   if (endAct.length > 0) return pick(endAct);
   const activate = allActions.filter(a => a.type === 'activate_dc');
   if (activate.length > 0) return pick(activate);
+
   return pick(allActions);
 }
 
@@ -380,43 +468,38 @@ function heuristicPick(allActions, game) {
 export function createGameTracer(learnings, playerNum, dcHealthState, dcMessageMeta) {
   const trace = [];
   let lastSnapshot = null;
-  let lastStateHash = null;
-  let lastAbsType = null;
+  let lastFeatures = null;
 
   return {
     beforeAction(game) {
       lastSnapshot = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
-      lastStateHash = computeStateHash(game, playerNum, dcHealthState, dcMessageMeta);
+      lastFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
     },
 
     afterAction(game, action) {
-      if (!lastSnapshot || !lastStateHash) return;
+      if (!lastSnapshot || !lastFeatures) return;
       const absType = abstractActionType(action, game);
-      // Skip mandatory flow actions (no strategic choice)
       if (absType === 'gate' || absType === 'combat_flow') {
         lastSnapshot = null;
-        lastStateHash = null;
+        lastFeatures = null;
         return;
       }
       const afterSnap = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
-      const nextHash = computeStateHash(game, playerNum, dcHealthState, dcMessageMeta);
+      const nextFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
       const reward = computeReward(lastSnapshot, afterSnap, false, false);
-      trace.push({ stateHash: lastStateHash, absType, reward, nextStateHash: nextHash });
+      trace.push({ features: lastFeatures, absType, reward, nextFeatures });
       lastSnapshot = null;
-      lastStateHash = null;
+      lastFeatures = null;
     },
 
     finalize(game, updateMeta = false) {
       const didWin = game.ended && game.winnerId === (playerNum === 1 ? game.player1Id : game.player2Id);
       const didLose = game.ended && game.winnerId && !didWin;
-      // Apply terminal bonus to the last trace entry
       if (trace.length > 0 && game.ended) {
         trace[trace.length - 1].reward += didWin ? REWARD_WEIGHTS.terminal : (didLose ? -REWARD_WEIGHTS.terminal : 0);
-        trace[trace.length - 1].nextStateHash = null; // Terminal state
+        trace[trace.length - 1].nextFeatures = null; // Terminal state
       }
-      // Backward Q-update
-      updateTrace(learnings, trace);
-      // Only one tracer should update meta per game
+      updateTraceLinear(learnings, trace);
       if (updateMeta) {
         learnings.meta.totalGames++;
         if (game.ended && game.winnerId) {
@@ -436,7 +519,14 @@ export function loadLearnings(filePath) {
   try {
     if (existsSync(filePath)) {
       const data = JSON.parse(readFileSync(filePath, 'utf8'));
-      // Ensure newer tracking fields exist
+      // Migrate from tabular to linear if needed
+      if (!data.weights) {
+        data.weights = initializeWeights();
+        delete data.states;
+      }
+      if (!data.trainingStats) {
+        data.trainingStats = { totalUpdates: 0, avgAbsDelta: 0, featureNames: FEATURE_NAMES };
+      }
       if (!data.dcStats) data.dcStats = {};
       if (!data.affiliationStats) data.affiliationStats = {};
       if (!data.matchups) data.matchups = [];
@@ -445,10 +535,11 @@ export function loadLearnings(filePath) {
   } catch { /* start fresh */ }
   return {
     meta: { totalGames: 0, p1Wins: 0, p2Wins: 0, lastUpdated: null },
-    states: {},
-    dcStats: {},           // { dcName: { wins, losses, games, kills, deaths } }
-    affiliationStats: {},  // { affiliation: { wins, losses, games } }
-    matchups: [],          // last 200 game results for trend analysis
+    weights: initializeWeights(),
+    trainingStats: { totalUpdates: 0, avgAbsDelta: 0, featureNames: FEATURE_NAMES },
+    dcStats: {},
+    affiliationStats: {},
+    matchups: [],
   };
 }
 
@@ -464,7 +555,6 @@ export function recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcS
   if (!learnings.affiliationStats) learnings.affiliationStats = {};
   if (!learnings.matchups) learnings.matchups = [];
 
-  // Helper to get affiliation for a DC
   function getAffiliation(dcName) {
     try {
       if (getDcEffectsFunc) {
@@ -478,7 +568,6 @@ export function recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcS
     return 'unknown';
   }
 
-  // Track each DC
   function trackDc(dcName, isWinner) {
     if (!learnings.dcStats[dcName]) {
       learnings.dcStats[dcName] = { wins: 0, losses: 0, games: 0, affiliation: getAffiliation(dcName) };
@@ -487,7 +576,6 @@ export function recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcS
     s.games++;
     if (isWinner === true) s.wins++;
     else if (isWinner === false) s.losses++;
-    // Update affiliation in case it was missing
     if (s.affiliation === 'unknown') s.affiliation = getAffiliation(dcName);
   }
 
@@ -500,7 +588,6 @@ export function recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcS
     trackDc(name, winnerLabel === 'P2' ? true : winnerLabel === 'P1' ? false : null);
   }
 
-  // Track affiliations
   const p1Affs = new Set(p1Army.map(dc => getAffiliation(typeof dc === 'object' ? dc.dcName : dc)));
   const p2Affs = new Set(p2Army.map(dc => getAffiliation(typeof dc === 'object' ? dc.dcName : dc)));
   for (const aff of p1Affs) {
@@ -516,30 +603,23 @@ export function recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcS
     else if (winnerLabel === 'P1') learnings.affiliationStats[aff].losses++;
   }
 
-  // Store recent matchup for trend
   learnings.matchups.push({
     p1: p1Army.map(dc => typeof dc === 'object' ? dc.dcName : dc),
     p2: p2Army.map(dc => typeof dc === 'object' ? dc.dcName : dc),
     winner: winnerLabel,
     game: learnings.meta.totalGames,
   });
-  // Keep last 200
   if (learnings.matchups.length > 200) learnings.matchups = learnings.matchups.slice(-200);
 }
 
 // ── Agent-Specific Action Selection (Arena) ─────────────────────────────────
 
-/**
- * Pick an action using an agent's strategy profile instead of global epsilon.
- * Same logic as pickSmartAction but with agent-specific preferences and exploration.
- */
 export function pickAgentAction(agent, allActions, game, learnings, playerNum, dcHealthState, dcMessageMeta) {
   if (allActions.length === 0) return null;
   if (allActions.length === 1) return allActions[0];
 
   const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-  // Group actions by abstract type
   const groups = {};
   for (const action of allActions) {
     const abs = abstractActionType(action, game);
@@ -547,34 +627,32 @@ export function pickAgentAction(agent, allActions, game, learnings, playerNum, d
     groups[abs].push(action);
   }
 
-  // Mandatory actions — always pick first
   const mandatoryTypes = ['gate', 'combat_flow'];
   const mandatoryActions = allActions.filter(a => mandatoryTypes.includes(abstractActionType(a, game)));
   if (mandatoryActions.length === allActions.length) return pickRandom(mandatoryActions);
   if (mandatoryActions.length > 0) return pickRandom(mandatoryActions);
 
-  // Strategic actions only
   const strategicActions = allActions.filter(a => !mandatoryTypes.includes(abstractActionType(a, game)));
   if (strategicActions.length === 0) return pickRandom(allActions);
 
-  const stateHash = computeStateHash(game, playerNum, dcHealthState, dcMessageMeta);
-  const state = learnings.states[stateHash];
-
   // Agent-specific epsilon
   const epsilon = agent.strategy.epsilon;
-  if (!state || Math.random() < epsilon) {
+  if (Math.random() < epsilon) {
     return heuristicPick(strategicActions, game);
   }
 
-  // Exploitation: pick best abstract type by Q-value + agent action preferences
+  // Exploitation: Q via linear function approximation + agent preferences
+  const features = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
+  const weights = learnings.weights;
+  if (!weights) return heuristicPick(strategicActions, game);
+
   const absTypes = Object.keys(groups).filter(t => !mandatoryTypes.includes(t));
   if (absTypes.length === 0) return heuristicPick(strategicActions, game);
 
   let bestType = null;
   let bestQ = -Infinity;
   for (const absType of absTypes) {
-    const actionData = state.actions[absType];
-    const qBase = actionData?.qValue ?? 0;
+    const qBase = computeQ(weights, absType, features);
     const preference = agent.strategy.actionPreferences[absType] ?? 0;
     const effectiveQ = qBase + preference;
     if (effectiveQ > bestQ) {
@@ -619,28 +697,28 @@ export function computeAgentReward(before, after, isTerminal, didWin, rewardMult
 export function createAgentTracer(learnings, playerNum, dcHealthState, dcMessageMeta, rewardMultipliers) {
   const trace = [];
   let lastSnapshot = null;
-  let lastStateHash = null;
+  let lastFeatures = null;
 
   return {
     beforeAction(game) {
       lastSnapshot = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
-      lastStateHash = computeStateHash(game, playerNum, dcHealthState, dcMessageMeta);
+      lastFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
     },
 
     afterAction(game, action) {
-      if (!lastSnapshot || !lastStateHash) return;
+      if (!lastSnapshot || !lastFeatures) return;
       const absType = abstractActionType(action, game);
       if (absType === 'gate' || absType === 'combat_flow') {
         lastSnapshot = null;
-        lastStateHash = null;
+        lastFeatures = null;
         return;
       }
       const afterSnap = captureSnapshot(game, playerNum, dcHealthState, dcMessageMeta);
-      const nextHash = computeStateHash(game, playerNum, dcHealthState, dcMessageMeta);
+      const nextFeatures = extractFeatures(game, playerNum, dcHealthState, dcMessageMeta);
       const reward = computeAgentReward(lastSnapshot, afterSnap, false, false, rewardMultipliers);
-      trace.push({ stateHash: lastStateHash, absType, reward, nextStateHash: nextHash });
+      trace.push({ features: lastFeatures, absType, reward, nextFeatures });
       lastSnapshot = null;
-      lastStateHash = null;
+      lastFeatures = null;
     },
 
     finalize(game, updateMeta = false) {
@@ -651,9 +729,9 @@ export function createAgentTracer(learnings, playerNum, dcHealthState, dcMessage
           ? REWARD_WEIGHTS.terminal * (rewardMultipliers.terminal ?? 1)
           : (didLose ? -REWARD_WEIGHTS.terminal * (rewardMultipliers.terminal ?? 1) : 0);
         trace[trace.length - 1].reward += termReward;
-        trace[trace.length - 1].nextStateHash = null;
+        trace[trace.length - 1].nextFeatures = null;
       }
-      updateTrace(learnings, trace);
+      updateTraceLinear(learnings, trace);
       if (updateMeta) {
         learnings.meta.totalGames++;
         if (game.ended && game.winnerId) {
@@ -670,27 +748,36 @@ export function createAgentTracer(learnings, playerNum, dcHealthState, dcMessage
 // ── Stats ───────────────────────────────────────────────────────────────────
 
 export function getLearningsStats(learnings) {
-  const stateCount = Object.keys(learnings.states).length;
-  let actionCount = 0;
-  let totalVisits = 0;
-  let bestQ = -Infinity;
-  let worstQ = Infinity;
-  for (const state of Object.values(learnings.states)) {
-    totalVisits += state.visits;
-    for (const action of Object.values(state.actions)) {
-      actionCount++;
-      if (action.qValue > bestQ) bestQ = action.qValue;
-      if (action.qValue < worstQ) worstQ = action.qValue;
+  const weights = learnings.weights || {};
+  let weightCount = 0;
+  let maxAbsWeight = 0;
+  let minAbsWeight = Infinity;
+  let totalAbsWeight = 0;
+
+  const perAction = {};
+  for (const [actionType, wArr] of Object.entries(weights)) {
+    if (!Array.isArray(wArr)) continue;
+    perAction[actionType] = [];
+    for (let i = 0; i < wArr.length; i++) {
+      const absW = Math.abs(wArr[i]);
+      weightCount++;
+      totalAbsWeight += absW;
+      if (absW > maxAbsWeight) maxAbsWeight = absW;
+      if (absW < minAbsWeight) minAbsWeight = absW;
+      perAction[actionType].push({ feature: FEATURE_NAMES[i] || `f${i}`, weight: wArr[i], absWeight: absW });
     }
   }
+  if (weightCount === 0) minAbsWeight = 0;
+
   return {
     totalGames: learnings.meta.totalGames,
     p1Wins: learnings.meta.p1Wins,
     p2Wins: learnings.meta.p2Wins,
-    states: stateCount,
-    actionEntries: actionCount,
-    totalVisits,
-    qRange: [worstQ === Infinity ? 0 : worstQ, bestQ === -Infinity ? 0 : bestQ],
+    weightCount,
+    avgAbsWeight: weightCount > 0 ? totalAbsWeight / weightCount : 0,
+    weightRange: [-maxAbsWeight, maxAbsWeight],
+    totalUpdates: learnings.trainingStats?.totalUpdates || 0,
+    avgAbsDelta: learnings.trainingStats?.avgAbsDelta || 0,
     epsilon: getEpsilon(learnings.meta.totalGames),
   };
 }

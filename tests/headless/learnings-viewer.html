@@ -96,7 +96,7 @@
   .stat-val { font-family: 'Orbitron'; font-size: 22px; font-weight: 700; color: var(--text-bright); }
   .stat-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
 
-  /* Battle bar — neutral colors */
+  /* Battle bar */
   .battle-bar { display: flex; height: 30px; border-radius: 6px; overflow: hidden; margin: 6px 0; }
   .battle-side {
     display: flex; align-items: center; justify-content: center;
@@ -109,7 +109,7 @@
   .win-detail { display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px; }
   .win-detail .big { font-family: 'Orbitron'; font-size: 18px; font-weight: 700; display: block; color: var(--text-bright); }
 
-  /* Affiliation cards — color per faction */
+  /* Affiliation cards */
   .aff-card { background: var(--bg-deep); border-radius: 8px; padding: 14px; text-align: center; border: 1px solid var(--border); }
   .aff-card .aff-name { font-family: 'Orbitron'; font-size: 10px; font-weight: 700; letter-spacing: 2px; }
   .aff-card .aff-wr { font-family: 'Orbitron'; font-size: 24px; font-weight: 900; margin: 4px 0; }
@@ -134,40 +134,26 @@
   .dc-wr { font-family: 'Orbitron'; font-size: 12px; font-weight: 700; min-width: 40px; text-align: right; color: var(--text-bright); }
   .dc-games { font-size: 10px; color: var(--text-dim); min-width: 28px; text-align: right; }
 
-  /* Donut */
-  .donut-wrap { display: flex; align-items: center; gap: 16px; }
-  .donut { position: relative; width: 120px; height: 120px; flex-shrink: 0; }
-  .donut svg { transform: rotate(-90deg); }
-  .donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
-  .donut-center .big { font-family: 'Orbitron'; font-size: 14px; font-weight: 700; color: var(--text-bright); display: block; }
-  .donut-center .sub { font-size: 9px; color: var(--text-dim); }
-  .legend { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-  .legend-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
-  .legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-  .legend-name { flex: 1; color: var(--text); }
-  .legend-pct { color: var(--text-dim); min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+  /* Chart.js canvas containers */
+  .chart-container { position: relative; height: 200px; }
+  .chart-sm { height: 55px; }
 
-  /* Heatmap */
-  .heatmap { display: flex; flex-wrap: wrap; gap: 2px; }
-  .heat-cell { width: 11px; height: 11px; border-radius: 2px; transition: background 0.5s; cursor: help; }
-  .heat-legend { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 9px; color: var(--text-dim); }
-  .heat-grad { display: flex; height: 5px; width: 80px; border-radius: 3px; overflow: hidden; }
-  .heat-grad div { flex: 1; }
+  /* Weight heatmap table */
+  .weight-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+  .weight-table th { font-family: 'Orbitron'; font-size: 8px; font-weight: 600; color: var(--text-dim); padding: 3px 2px; text-align: center; letter-spacing: 0.5px; }
+  .weight-table th:first-child { text-align: left; min-width: 70px; }
+  .weight-table td { padding: 2px; text-align: center; border-radius: 3px; font-size: 9px; font-weight: 600; min-width: 32px; }
+  .weight-table tr:hover td { outline: 1px solid var(--border-glow); }
+  .wt-action { font-family: 'Orbitron'; font-size: 8px; color: var(--text); text-align: left !important; white-space: nowrap; }
 
-  /* Phase bar */
-  .phase-bar { display: flex; gap: 2px; height: 24px; border-radius: 5px; overflow: hidden; }
-  .phase-seg { display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: #fff; transition: width 0.8s; min-width: 14px; border-radius: 3px; cursor: help; }
-
-  /* Matchup strip */
-  .matchup-strip { display: flex; gap: 1px; height: 18px; }
-  .matchup-bar { flex: 1; border-radius: 2px; min-width: 2px; cursor: help; }
-
-  /* Trouble */
-  .trouble-card { background: var(--bg-deep); border: 1px solid var(--border); border-radius: 8px; padding: 12px; transition: border-color 0.2s; }
-  .trouble-card:hover { border-color: var(--bad); }
-  .trouble-card .trouble-label { font-size: 10px; color: var(--warn); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
-  .trouble-card .trouble-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 6px; }
-  .trouble-card .trouble-detail { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+  /* Learned pattern cards */
+  .pattern-card { background: var(--bg-deep); border: 1px solid var(--border); border-radius: 8px; padding: 12px; transition: border-color 0.2s; }
+  .pattern-card:hover { border-color: var(--accent); }
+  .pattern-label { font-size: 10px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+  .pattern-detail { font-size: 12px; color: var(--text-bright); line-height: 1.5; }
+  .pattern-weight { font-family: 'Orbitron'; font-size: 14px; font-weight: 700; }
+  .pattern-weight.pos { color: var(--good); }
+  .pattern-weight.neg { color: var(--bad); }
 
   .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; }
   .pill.green { background: rgba(46,204,113,0.12); color: var(--good); }
@@ -175,11 +161,6 @@
   .pill.blue { background: rgba(0,212,255,0.1); color: var(--accent); }
   .pill.yellow { background: rgba(243,156,18,0.12); color: var(--warn); }
   .pill.purple { background: rgba(155,89,182,0.12); color: #bb86fc; }
-  .state-tag { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 9px; background: rgba(26,39,68,0.5); color: var(--text-dim); }
-
-  /* Chart.js canvas containers */
-  .chart-container { position: relative; height: 200px; }
-  .chart-sm { height: 55px; }
 
   /* CHAT */
   .chat-panel {
@@ -248,7 +229,7 @@
     <div class="nav-item active" data-page="overview"><span class="nav-icon">&#9670;</span> Overview</div>
     <div class="nav-item" data-page="strategy"><span class="nav-icon">&#9733;</span> Strategy</div>
     <div class="nav-item" data-page="army"><span class="nav-icon">&#9876;</span> Army Intel</div>
-    <div class="nav-item" data-page="trouble"><span class="nav-icon">&#9888;</span> Trouble Spots</div>
+    <div class="nav-item" data-page="patterns"><span class="nav-icon">&#9881;</span> Learned</div>
     <a class="nav-item" href="arena-viewer.html" style="text-decoration:none;margin-top:8px;border-top:1px solid var(--border);padding-top:12px"><span class="nav-icon">&#9650;</span> Arena</a>
   </nav>
   <div class="sidebar-controls">
@@ -264,7 +245,7 @@
   <div class="page active" id="page-overview">
     <div class="page-title">Command Center</div>
 
-    <!-- Arena Leaderboard (loaded from arena-data.json) -->
+    <!-- Arena Leaderboard -->
     <div class="card" id="arenaCard" style="display:none" data-tip="Top 10 arena agents by ELO. Click to open full Arena viewer.">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div class="card-label" style="margin-bottom:0">Arena Leaderboard</div>
@@ -276,7 +257,7 @@
       <div class="chart-container" style="height:220px"><canvas id="arenaBarChart"></canvas></div>
     </div>
 
-    <!-- Army Intel on Overview -->
+    <!-- Affiliations on Overview -->
     <div class="grid g3">
       <div class="aff-card" data-tip="Win rate for Rebel armies.">
         <div class="aff-name" style="color:var(--rebel)">REBEL</div>
@@ -304,12 +285,12 @@
     </div>
 
     <div class="grid g2">
-      <div class="card" data-tip="Key training metrics.">
-        <div class="card-label">Training</div>
+      <div class="card" data-tip="Key training metrics. Brain Phase 2: Linear Function Approximation.">
+        <div class="card-label">Training <span class="pill blue">Phase 2</span></div>
         <div class="stat-row">
           <div class="stat-item"><div class="stat-val" id="sGames">0</div><div class="stat-label">Games</div></div>
-          <div class="stat-item"><div class="stat-val" id="sStates">0</div><div class="stat-label">States</div></div>
-          <div class="stat-item"><div class="stat-val" id="sEntries">0</div><div class="stat-label">Entries</div></div>
+          <div class="stat-item"><div class="stat-val" id="sWeights">0</div><div class="stat-label">Weights</div></div>
+          <div class="stat-item"><div class="stat-val" id="sUpdates">0</div><div class="stat-label">Updates</div></div>
         </div>
       </div>
       <div class="card" data-tip="Game completion rate across all training.">
@@ -324,8 +305,8 @@
     <div class="card" style="margin-top:14px" data-tip="Growth metrics since page load.">
       <div class="card-label">Live Trends</div>
       <div class="grid g2" style="margin-bottom:0;gap:10px">
-        <div><div style="font-size:11px;color:var(--text-dim);margin-bottom:2px">Games & Brain Size</div><div class="chart-container chart-sm"><canvas id="trendChart1"></canvas></div></div>
-        <div><div style="font-size:11px;color:var(--text-dim);margin-bottom:2px">Confidence & Experience</div><div class="chart-container chart-sm"><canvas id="trendChart2"></canvas></div></div>
+        <div><div style="font-size:11px;color:var(--text-dim);margin-bottom:2px">Games & Weight Magnitude</div><div class="chart-container chart-sm"><canvas id="trendChart1"></canvas></div></div>
+        <div><div style="font-size:11px;color:var(--text-dim);margin-bottom:2px">Updates & Avg |Delta|</div><div class="chart-container chart-sm"><canvas id="trendChart2"></canvas></div></div>
       </div>
     </div>
   </div>
@@ -333,26 +314,31 @@
   <!-- STRATEGY -->
   <div class="page" id="page-strategy">
     <div class="page-title">Strategy Analysis</div>
-    <div class="grid g2">
-      <div class="card" data-tip="How often the AI picks each type of move.">
-        <div class="card-label">Action Distribution</div>
-        <div class="chart-container"><canvas id="actionPieChart"></canvas></div>
-      </div>
-      <div class="card" data-tip="Score heatmap. Blue = good moves, red = bad. Brighter = more data.">
-        <div class="card-label">Q-Value Heatmap</div>
-        <div class="heatmap" id="qHeatmap"></div>
-        <div class="heat-legend">
-          <span>Bad</span>
-          <div class="heat-grad"><div style="background:#7f1d1d"></div><div style="background:#dc2626"></div><div style="background:#333"></div><div style="background:#2563eb"></div><div style="background:#60a5fa"></div></div>
-          <span>Good</span>
-          <span style="margin-left:auto" id="qRangeLabel"></span>
+    <div class="card" data-tip="Weight heatmap. Each row is an action type, each column a feature. Blue=negative, white=zero, red=positive. Stronger color = higher magnitude.">
+      <div class="card-label">Weight Heatmap (15 actions x 14 features)</div>
+      <div style="overflow-x:auto"><table class="weight-table" id="weightHeatmap"></table></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:9px;color:var(--text-dim)">
+        <span>Negative</span>
+        <div style="display:flex;height:8px;width:120px;border-radius:4px;overflow:hidden">
+          <div style="flex:1;background:#2563eb"></div>
+          <div style="flex:1;background:#7093c8"></div>
+          <div style="flex:1;background:#222"></div>
+          <div style="flex:1;background:#c87070"></div>
+          <div style="flex:1;background:#dc2626"></div>
         </div>
+        <span>Positive</span>
+        <span style="margin-left:auto" id="weightRangeLabel"></span>
       </div>
     </div>
-    <div class="card">
-      <div class="card-label" data-tip="Where the bot spends most of its turn time.">Time by Phase</div>
-      <div class="phase-bar" id="phaseBar"></div>
-      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px" id="phaseLegend"></div>
+    <div class="grid g2" style="margin-top:14px">
+      <div class="card" data-tip="Average absolute weight per feature across all action types. Higher = more influential.">
+        <div class="card-label">Feature Importance</div>
+        <div class="chart-container" style="height:260px"><canvas id="featureImportChart"></canvas></div>
+      </div>
+      <div class="card" data-tip="How often the AI picks each type of move.">
+        <div class="card-label">Action Distribution</div>
+        <div class="chart-container" style="height:260px"><canvas id="actionPieChart"></canvas></div>
+      </div>
     </div>
   </div>
 
@@ -382,11 +368,11 @@
     </div>
   </div>
 
-  <!-- TROUBLE -->
-  <div class="page" id="page-trouble">
-    <div class="page-title">Where Skirbo Struggles</div>
-    <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px">Situations with high uncertainty, negative outcomes, or indecision. Improving the engine here will help Skirbo learn faster.</p>
-    <div class="grid g2" id="troubleCards"></div>
+  <!-- LEARNED PATTERNS -->
+  <div class="page" id="page-patterns">
+    <div class="page-title">Top Learned Patterns</div>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px">The strongest relationships the AI has learned between game situations and actions. High positive weights mean "do this when the feature is high". High negative means "avoid this when the feature is high".</p>
+    <div class="grid g2" id="patternCards"></div>
   </div>
 </div>
 
@@ -412,9 +398,9 @@ Try: "What did you learn recently?" or "Who's your best DC?"</div></div>
 
 <script>
 // ═══ STATE ═══
-const hist = { states:[], qSpread:[], visits:[], games:[], ts:[] };
+const hist = { avgW:[], delta:[], updates:[], games:[], ts:[] };
 let latestStats = null;
-let trendChart1 = null, trendChart2 = null, actionChart = null;
+let trendChart1 = null, trendChart2 = null, actionChart = null, featureChart = null;
 
 // Chart.js defaults
 Chart.defaults.color = '#5a6a80';
@@ -424,8 +410,31 @@ Chart.defaults.font.family = 'Rajdhani';
 // ═══ LABELS ═══
 const AL={attack_close:'Melee',attack_ranged:'Ranged',move_toward:'Advance',move_away:'Retreat',move_lateral:'Reposition',move_done:'Finish Move',start_move:'Start Move',activate:'Activate',end_activation:'End Turn',pass:'Pass',gate:'Phase Gate',combat_flow:'Combat',ability:'Ability',spend_surge:'Surge',reroll:'Reroll',skip_surges:'Skip Surges',other:'Other'};
 const AC={attack_close:'#e74c3c',attack_ranged:'#e67e22',move_toward:'#3498db',move_away:'#9b59b6',move_lateral:'#1abc9c',move_done:'#16a085',start_move:'#2980b9',activate:'#2ecc71',end_activation:'#f1c40f',pass:'#7f8c8d',gate:'#8e44ad',combat_flow:'#d35400',ability:'#e84393',spend_surge:'#00cec9',reroll:'#6c5ce7',skip_surges:'#636e72',other:'#555'};
-const PL={mid_activate:'Actions',movement:'Moving',combat:'Combat',pre_activate:'Deciding',round_transition:'Round Gate',unknown:'Other'};
-const PCo={mid_activate:'#2ecc71',movement:'#3498db',combat:'#e74c3c',pre_activate:'#f1c40f',round_transition:'#8e44ad',unknown:'#555'};
+const FL={vpAdv:'VP Adv',myHpRatio:'My HP%',oppHpRatio:'Opp HP%',hpAdv:'HP Adv',myFigsRatio:'My Figs%',figsAdv:'Figs Adv',closeness:'Closeness',nearestEnemy:'Nearest',roundProgress:'Round',activationsRatio:'Acts Left',inCombat:'In Combat',inMovement:'In Move',attackPower:'Atk Power',bias:'Bias'};
+const FEATURE_NAMES=['vpAdv','myHpRatio','oppHpRatio','hpAdv','myFigsRatio','figsAdv','closeness','nearestEnemy','roundProgress','activationsRatio','inCombat','inMovement','attackPower','bias'];
+const ABSTRACT_TYPES=['attack_close','attack_ranged','move_toward','move_away','move_lateral','move_done','start_move','activate','end_activation','pass','ability','spend_surge','skip_surges','reroll','other'];
+
+// ═══ HUMAN READABLE PATTERNS ═══
+const PATTERN_DESC = {
+  'attack_close×closeness': 'Attack when close to enemy',
+  'attack_close×myHpRatio': 'Attack melee when healthy',
+  'attack_close×oppHpRatio': 'Melee weak enemies',
+  'attack_close×attackPower': 'Melee with strong dice',
+  'attack_ranged×closeness': 'Ranged attack at close range',
+  'attack_ranged×attackPower': 'Shoot with strong dice',
+  'move_toward×closeness': 'Advance when already close',
+  'move_toward×oppHpRatio': 'Advance toward weak enemies',
+  'move_toward×myHpRatio': 'Advance when healthy',
+  'move_away×myHpRatio': 'Retreat when healthy/injured',
+  'move_away×oppHpRatio': 'Retreat from strong enemies',
+  'move_away×closeness': 'Retreat when close',
+  'activate×activationsRatio': 'Activate with acts remaining',
+  'end_activation×activationsRatio': 'End turn with acts left',
+  'spend_surge×inCombat': 'Spend surges in combat',
+  'skip_surges×inCombat': 'Skip surges in combat',
+  'ability×myHpRatio': 'Use abilities when healthy',
+  'pass×activationsRatio': 'Pass with acts remaining',
+};
 
 // ═══ NAV ═══
 document.querySelectorAll('.nav-item').forEach(item=>{
@@ -454,8 +463,9 @@ function buildCtx(){
   if(!latestStats)return'No training data loaded.';
   const s=latestStats;
   let c=`You are Skirbo, an AI learning Imperial Assault skirmish. Be direct — answer the question, skip the preamble. No filler, no restating the question. Casual tone. Call yourself "I" and the user "commander."\n\n`;
-  c+=`Stats: ${s.meta.totalGames} games, ${s.states} states, ${(s.epsilon*100).toFixed(0)}% exploration, Q ${s.minQ.toFixed(0)} to ${s.maxQ.toFixed(0)}, ${((s.meta.p1Wins+s.meta.p2Wins)/(s.meta.totalGames||1)*100).toFixed(0)}% completion.\n`;
-  // Top 5 DCs only
+  c+=`Stats: ${s.meta.totalGames} games, ${s.weightCount} weights, ${s.totalUpdates} updates, avg|w| ${s.avgAbsWeight.toFixed(3)}, ${(s.epsilon*100).toFixed(0)}% exploration, ${((s.meta.p1Wins+s.meta.p2Wins)/(s.meta.totalGames||1)*100).toFixed(0)}% completion.\n`;
+  c+=`Brain: Linear Function Approximation (Phase 2). I learn relationships between 14 features and 15 action types.\n`;
+  if(s.topPatterns&&s.topPatterns.length>0){c+='Top patterns: '+s.topPatterns.slice(0,5).map(p=>`${p.action}×${p.feature}=${p.weight>0?'+':''}${p.weight.toFixed(2)}`).join(', ')+'\n';}
   const dcArr=Object.entries(s.dcStats).map(([n,d])=>({n,...d,wr:d.games>0?d.wins/d.games:0})).sort((a,b)=>b.wr-a.wr);
   if(dcArr.length>0){c+='Top DCs: '+dcArr.slice(0,5).map(d=>`${d.n} ${(d.wr*100).toFixed(0)}%`).join(', ')+'\n';}
   if(Object.keys(s.affiliationStats).length>0){c+='Factions: ';for(const[a,d]of Object.entries(s.affiliationStats))c+=`${a} ${d.games>0?(d.wins/d.games*100).toFixed(0):'?'}% `;c+='\n';}
@@ -489,28 +499,6 @@ initChat();
 
 // ═══ HELPERS ═══
 function fmt(n){return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':n.toLocaleString();}
-function parseF(k){const p={};for(const s of k.split('|')){const[a,b]=s.split(':');p[a]=b;}return p;}
-function formatSK(key){
-  const f=parseF(key),tags=[];
-  if(f.vp!==undefined){const v=+f.vp;tags.push(`<span class="pill ${v>0?'green':v<0?'red':'blue'}" data-tip="VP difference">${v>0?'+'+v:v} VP</span>`);}
-  if(f.ph)tags.push(`<span class="pill purple" data-tip="Turn phase">${PL[f.ph]||f.ph}</span>`);
-  if(f.r)tags.push(`<span class="pill yellow" data-tip="Round">R${f.r}</span>`);
-  if(f.d!==undefined){const d=+f.d;tags.push(`<span class="state-tag" data-tip="Distance: ${d}">${d<=1?'Melee':d<=3?'Close':d<=6?'Mid':'Far'}(${d})</span>`);}
-  if(f.mf!==undefined)tags.push(`<span class="state-tag" data-tip="Figures">${f.mf}v${f.of}</span>`);
-  if(f.mhp!==undefined)tags.push(`<span class="state-tag" data-tip="HP">${f.mhp}/${f.ohp}%</span>`);
-  return tags.join(' ');
-}
-
-function findTroubles(s){
-  return s.topStates.map(st=>{
-    const spread=st.bestQ-st.worstQ,reasons=[];
-    if(spread>30&&st.visits>5)reasons.push('High uncertainty');
-    if(st.bestQ<-10&&st.visits>3)reasons.push(`Best move scores ${st.bestQ.toFixed(1)}`);
-    if(st.actions>=4&&spread>20)reasons.push(`${st.actions} moves tried, indecisive`);
-    let score=0;if(reasons.length)score=spread*Math.log(st.visits+1)+(st.bestQ<0?Math.abs(st.bestQ):0);
-    return{...st,score,reasons};
-  }).filter(s=>s.reasons.length>0).sort((a,b)=>b.score-a.score).slice(0,12);
-}
 
 function renderDcList(targetId,stats){
   const el=document.getElementById(targetId);
@@ -535,7 +523,6 @@ function toggleDcList(listId,btnId){
 }
 
 function renderAff(prefixId,stats){
-  const affColor={rebel:'var(--rebel)',imperial:'var(--imperial)',scum:'var(--scum)'};
   for(const[key,label]of[['rebel','Rebel'],['imperial','Imp'],['scum','Scum']]){
     const a=stats.affiliationStats[key];
     const wrEl=document.getElementById(`${prefixId}${label}WR`);
@@ -552,28 +539,68 @@ async function loadData(){
 }
 
 function computeStats(data){
-  const states=Object.keys(data.states).length;
-  let ae=0,tv=0,mnQ=Infinity,mxQ=-Infinity;
-  const atc={},phc={},top=[];
-  for(const[sk,st]of Object.entries(data.states)){
-    const f=parseF(sk);
-    phc[f.ph||'unknown']=(phc[f.ph||'unknown']||0)+(st.visits||0);
-    let ba=null,bq=-Infinity,wq=Infinity,cnt=0;
-    for(const[ak,a]of Object.entries(st.actions||{})){
-      ae++;cnt++;const v=a.visits||0,q=a.qValue||0;tv+=v;
-      if(isFinite(q)){if(q<mnQ)mnQ=q;if(q>mxQ)mxQ=q;}
-      if(q>bq){bq=q;ba=ak;}if(q<wq)wq=q;
-      atc[ak]=(atc[ak]||0)+v;
+  const weights=data.weights||{};
+  let wc=0,maxAbs=0,totalAbs=0;
+  const perFeature=new Array(14).fill(0);
+  const allPatterns=[];
+
+  for(const[action,wArr]of Object.entries(weights)){
+    if(!Array.isArray(wArr))continue;
+    for(let i=0;i<wArr.length;i++){
+      const w=wArr[i],aw=Math.abs(w);
+      wc++;totalAbs+=aw;
+      if(aw>maxAbs)maxAbs=aw;
+      perFeature[i]+=aw;
+      allPatterns.push({action,feature:FEATURE_NAMES[i]||`f${i}`,weight:w,absWeight:aw});
     }
-    top.push({key:sk,visits:st.visits||0,actions:cnt,bestAction:ba,bestQ:isFinite(bq)?bq:0,worstQ:isFinite(wq)?wq:0});
   }
-  if(!isFinite(mnQ))mnQ=0;if(!isFinite(mxQ))mxQ=0;
-  const bins=50,rng=mxQ-mnQ||1,qH=new Array(bins).fill(0);
-  for(const st of Object.values(data.states))for(const a of Object.values(st.actions||{})){const q=a.qValue||0;if(isFinite(q))qH[Math.min(bins-1,Math.floor((q-mnQ)/rng*bins))]++;}
+  const avgAbsWeight=wc>0?totalAbs/wc:0;
+  // Feature importance: average |weight| across all actions
+  const featureImportance=perFeature.map((s,i)=>({name:FEATURE_NAMES[i]||`f${i}`,importance:Object.keys(weights).length>0?s/Object.keys(weights).length:0}));
+  featureImportance.sort((a,b)=>b.importance-a.importance);
+  // Top patterns
+  allPatterns.sort((a,b)=>b.absWeight-a.absWeight);
+  const topPatterns=allPatterns.slice(0,20);
+
   const eps=Math.max(0.05,0.3-0.001*(data.meta.totalGames||0));
-  return{states,actionEntries:ae,totalVisits:tv,minQ:mnQ,maxQ:mxQ,qHisto:qH,
-    actionTypeCounts:atc,phaseCounts:phc,topStates:top,epsilon:eps,
-    meta:data.meta,dcStats:data.dcStats||{},affiliationStats:data.affiliationStats||{},matchups:data.matchups||[]};
+  const ts=data.trainingStats||{};
+
+  return{
+    weightCount:wc,avgAbsWeight,maxAbsWeight:maxAbs,
+    totalUpdates:ts.totalUpdates||0,avgAbsDelta:ts.avgAbsDelta||0,
+    epsilon:eps,weights,featureImportance,topPatterns,
+    meta:data.meta,dcStats:data.dcStats||{},affiliationStats:data.affiliationStats||{},matchups:data.matchups||[]
+  };
+}
+
+// ═══ WEIGHT HEATMAP ═══
+function weightColor(w, maxAbs) {
+  if (maxAbs === 0) return 'background:var(--bg-deep);color:var(--text-dim)';
+  const intensity = Math.min(Math.abs(w) / maxAbs, 1);
+  const alpha = intensity * 0.8;
+  if (w > 0.001) return `background:rgba(220,38,38,${alpha});color:${intensity>0.4?'#fff':'var(--text-dim)'}`;
+  if (w < -0.001) return `background:rgba(37,99,235,${alpha});color:${intensity>0.4?'#fff':'var(--text-dim)'}`;
+  return 'background:var(--bg-deep);color:var(--text-dim)';
+}
+
+function renderWeightHeatmap(s) {
+  const weights = s.weights || {};
+  const maxAbs = s.maxAbsWeight || 1;
+  let html = '<thead><tr><th></th>';
+  for (const fn of FEATURE_NAMES) html += `<th>${FL[fn]||fn}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const action of ABSTRACT_TYPES) {
+    const wArr = weights[action] || new Array(14).fill(0);
+    html += `<tr><td class="wt-action">${AL[action]||action}</td>`;
+    for (let i = 0; i < 14; i++) {
+      const w = wArr[i] || 0;
+      html += `<td style="${weightColor(w, maxAbs)}" data-tip="${action} × ${FEATURE_NAMES[i]}: ${w.toFixed(3)}">${w===0?'·':w.toFixed(2)}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody>';
+  document.getElementById('weightHeatmap').innerHTML = html;
+  document.getElementById('weightRangeLabel').textContent = `Max |w|: ${maxAbs.toFixed(3)}`;
 }
 
 // ═══ RENDER ═══
@@ -583,15 +610,15 @@ function render(s){
 
   // Training stats
   document.getElementById('sGames').textContent=fmt(g);
-  document.getElementById('sStates').textContent=fmt(s.states);
-  document.getElementById('sEntries').textContent=fmt(s.actionEntries);
+  document.getElementById('sWeights').textContent=fmt(s.weightCount);
+  document.getElementById('sUpdates').textContent=fmt(s.totalUpdates);
 
   // Completion
   const t=g||1,compPct=((s.meta.p1Wins+s.meta.p2Wins)/t*100).toFixed(0);
   document.getElementById('wComp').textContent=compPct+'%';
   document.getElementById('wTotal').textContent=fmt(g);
 
-  // Affiliations (overview + army page)
+  // Affiliations
   renderAff('oAff',s);
   renderAff('aff',s);
 
@@ -599,60 +626,53 @@ function render(s){
   renderDcList('oDcList',s);
   renderDcList('dcList',s);
 
-  // ═══ STRATEGY ═══
+  // Weight heatmap
+  renderWeightHeatmap(s);
 
-  // Action pie (Chart.js)
-  const sorted=Object.entries(s.actionTypeCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  const pieLabels=sorted.map(([t])=>AL[t]||t);
-  const pieData=sorted.map(([,v])=>v);
-  const pieColors=sorted.map(([t])=>AC[t]||'#555');
+  // Feature importance chart
+  const fiData=s.featureImportance;
+  const fiLabels=fiData.map(f=>FL[f.name]||f.name);
+  const fiValues=fiData.map(f=>f.importance);
+  const fiColors=fiData.map(f=>f.importance>s.avgAbsWeight*2?'#00d4ff':f.importance>s.avgAbsWeight?'#2980b9':'#1a2744');
+  if(featureChart){featureChart.data.labels=fiLabels;featureChart.data.datasets[0].data=fiValues;featureChart.data.datasets[0].backgroundColor=fiColors;featureChart.update();}
+  else{featureChart=new Chart(document.getElementById('featureImportChart'),{type:'bar',data:{labels:fiLabels,datasets:[{label:'Avg |weight|',data:fiValues,backgroundColor:fiColors,borderWidth:0,borderRadius:3}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(26,39,68,0.5)'},ticks:{font:{size:10}}},y:{ticks:{font:{size:10,family:'Rajdhani'},color:'#b8c4d8'},grid:{display:false}}}}});}
+
+  // Action pie — compute from weights (which actions have highest total weight magnitude)
+  const actionMag=ABSTRACT_TYPES.map(a=>{
+    const wArr=s.weights[a]||[];
+    return{type:a,mag:wArr.reduce((s,w)=>s+Math.abs(w),0)};
+  }).sort((a,b)=>b.mag-a.mag).slice(0,10);
+  const pieLabels=actionMag.map(a=>AL[a.type]||a.type);
+  const pieData=actionMag.map(a=>parseFloat(a.mag.toFixed(3)));
+  const pieColors=actionMag.map(a=>AC[a.type]||'#555');
   if(actionChart){actionChart.data.labels=pieLabels;actionChart.data.datasets[0].data=pieData;actionChart.data.datasets[0].backgroundColor=pieColors;actionChart.update();}
   else{actionChart=new Chart(document.getElementById('actionPieChart'),{type:'doughnut',data:{labels:pieLabels,datasets:[{data:pieData,backgroundColor:pieColors,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'right',labels:{boxWidth:10,padding:6,font:{size:11}}}}}});}
 
-  // Q heatmap
-  const qMx=Math.max(...s.qHisto);
-  const zIdx=Math.floor((0-s.minQ)/(s.maxQ-s.minQ||1)*s.qHisto.length);
-  document.getElementById('qHeatmap').innerHTML=s.qHisto.map((v,i)=>{
-    const int=qMx>0?v/qMx:0;let r,g,b;
-    if(i<zIdx){r=Math.round(30+int*180);g=Math.round(10+int*5);b=Math.round(10+int*5);}
-    else{r=Math.round(10+int*5);g=Math.round(15+int*35);b=Math.round(30+int*180);}
-    return`<div class="heat-cell" style="background:rgb(${r},${g},${b})" data-tip="Score ${(s.minQ+(s.maxQ-s.minQ)*i/s.qHisto.length).toFixed(0)} to ${(s.minQ+(s.maxQ-s.minQ)*(i+1)/s.qHisto.length).toFixed(0)}: ${v}"></div>`;
-  }).join('');
-  document.getElementById('qRangeLabel').textContent=`${s.minQ.toFixed(0)} to ${s.maxQ.toFixed(0)}`;
+  // Learned patterns
+  const patterns=s.topPatterns.slice(0,12);
+  document.getElementById('patternCards').innerHTML=patterns.length>0?patterns.map(p=>{
+    const key=`${p.action}×${p.feature}`;
+    const desc=PATTERN_DESC[key]||`${AL[p.action]||p.action} responds to ${FL[p.feature]||p.feature}`;
+    const cls=p.weight>0?'pos':'neg';
+    const sign=p.weight>0?'+':'';
+    return`<div class="pattern-card"><div class="pattern-label">${AL[p.action]||p.action} × ${FL[p.feature]||p.feature}</div><div class="pattern-detail"><span class="pattern-weight ${cls}">${sign}${p.weight.toFixed(3)}</span> — ${desc}</div></div>`;
+  }).join(''):'<div style="grid-column:1/-1;text-align:center;color:var(--text-dim);padding:24px">No patterns learned yet. Run training first.</div>';
 
-  // Phase
-  const phS=Object.entries(s.phaseCounts).sort((a,b)=>b[1]-a[1]);
-  const phT=phS.reduce((s,[,c])=>s+c,0)||1;
-  document.getElementById('phaseBar').innerHTML=phS.map(([ph,c])=>{
-    const pct=Math.max(c/phT*100,3);
-    return`<div class="phase-seg" style="width:${pct}%;background:${PCo[ph]||'#555'}" data-tip="${PL[ph]||ph}: ${(c/phT*100).toFixed(1)}%">${pct>12?PL[ph]||ph:''}</div>`;
-  }).join('');
-  document.getElementById('phaseLegend').innerHTML=phS.map(([ph,c])=>
-    `<div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--text-dim)"><div style="width:7px;height:7px;border-radius:2px;background:${PCo[ph]||'#555'}"></div>${PL[ph]||ph} ${(c/phT*100).toFixed(0)}%</div>`
-  ).join('');
-
-  // Trouble
-  const troubles=findTroubles(s);
-  document.getElementById('troubleCards').innerHTML=troubles.length>0?troubles.map(t=>{
-    const bL=AL[t.bestAction]||t.bestAction||'?';
-    return`<div class="trouble-card"><div class="trouble-label">${t.reasons[0]}</div><div class="trouble-tags">${formatSK(t.key)}</div><div class="trouble-detail">Seen <strong>${t.visits}x</strong> | ${t.actions} moves | Best: <span style="color:${t.bestQ>=0?'var(--good)':'var(--bad)'}">${t.bestQ>=0?'+':''}${t.bestQ.toFixed(1)}</span> (${bL}) | Worst: <span style="color:var(--bad)">${t.worstQ.toFixed(1)}</span>${t.reasons.length>1?'<br>'+t.reasons.slice(1).map(r=>`<span style="color:var(--warn)">+ ${r}</span>`).join('<br>'):''}</div></div>`;
-  }).join(''):'<div style="grid-column:1/-1;text-align:center;color:var(--text-dim);padding:24px">No trouble spots yet.</div>';
-
-  // Trends (Chart.js)
-  hist.states.push(s.states);hist.qSpread.push(s.maxQ-s.minQ);hist.visits.push(s.totalVisits);hist.games.push(g);hist.ts.push(Date.now());
-  if(hist.states.length>100){hist.states.shift();hist.qSpread.shift();hist.visits.shift();hist.games.shift();hist.ts.shift();}
+  // Trends
+  hist.avgW.push(s.avgAbsWeight);hist.delta.push(s.avgAbsDelta);hist.updates.push(s.totalUpdates);hist.games.push(g);hist.ts.push(Date.now());
+  if(hist.avgW.length>100){hist.avgW.shift();hist.delta.shift();hist.updates.shift();hist.games.shift();hist.ts.shift();}
   const labels=hist.ts.map((_,i)=>i);
 
-  if(trendChart1){trendChart1.data.labels=labels;trendChart1.data.datasets[0].data=[...hist.games];trendChart1.data.datasets[1].data=[...hist.states];trendChart1.update();}
+  if(trendChart1){trendChart1.data.labels=labels;trendChart1.data.datasets[0].data=[...hist.games];trendChart1.data.datasets[1].data=[...hist.avgW];trendChart1.update();}
   else{trendChart1=new Chart(document.getElementById('trendChart1'),{type:'line',data:{labels,datasets:[
     {label:'Games',data:[...hist.games],borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,0.1)',fill:true,tension:0.3,pointRadius:0,borderWidth:1.5},
-    {label:'States',data:[...hist.states],borderColor:'#bb86fc',backgroundColor:'rgba(187,134,252,0.1)',fill:true,tension:0.3,pointRadius:0,borderWidth:1.5,yAxisID:'y1'}
+    {label:'Avg |w|',data:[...hist.avgW],borderColor:'#bb86fc',backgroundColor:'rgba(187,134,252,0.1)',fill:true,tension:0.3,pointRadius:0,borderWidth:1.5,yAxisID:'y1'}
   ]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},scales:{x:{display:false},y:{display:false},y1:{display:false,position:'right'}},plugins:{legend:{display:true,labels:{boxWidth:8,padding:4,font:{size:10}}}}}});}
 
-  if(trendChart2){trendChart2.data.labels=labels;trendChart2.data.datasets[0].data=[...hist.qSpread];trendChart2.data.datasets[1].data=[...hist.visits];trendChart2.update();}
+  if(trendChart2){trendChart2.data.labels=labels;trendChart2.data.datasets[0].data=[...hist.delta];trendChart2.data.datasets[1].data=[...hist.updates];trendChart2.update();}
   else{trendChart2=new Chart(document.getElementById('trendChart2'),{type:'line',data:{labels,datasets:[
-    {label:'Q-Spread',data:[...hist.qSpread],borderColor:'#f39c12',backgroundColor:'rgba(243,156,18,0.1)',fill:true,tension:0.3,pointRadius:0,borderWidth:1.5},
-    {label:'Experience',data:[...hist.visits],borderColor:'#2ecc71',backgroundColor:'rgba(46,204,113,0.1)',fill:true,tension:0.3,pointRadius:0,borderWidth:1.5,yAxisID:'y1'}
+    {label:'Avg |delta|',data:[...hist.delta],borderColor:'#f39c12',backgroundColor:'rgba(243,156,18,0.1)',fill:true,tension:0.3,pointRadius:0,borderWidth:1.5},
+    {label:'Updates',data:[...hist.updates],borderColor:'#2ecc71',backgroundColor:'rgba(46,204,113,0.1)',fill:true,tension:0.3,pointRadius:0,borderWidth:1.5,yAxisID:'y1'}
   ]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},scales:{x:{display:false},y:{display:false},y1:{display:false,position:'right'}},plugins:{legend:{display:true,labels:{boxWidth:8,padding:4,font:{size:10}}}}}});}
 
   document.getElementById('statusText').textContent=new Date().toLocaleTimeString();

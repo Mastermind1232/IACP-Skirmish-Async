@@ -9,6 +9,7 @@ import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
 import { getDcStats, getMapSpaces } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
+import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 
 describe('random game (AI training skeleton)', () => {
   it('game builder creates valid game state', () => {
@@ -105,6 +106,7 @@ describe('random game (AI training skeleton)', () => {
     const actionDeps = {
       dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces,
       computeMovementCache, getBoardStateForMovement, getMovementProfile,
+      getPlayableCcFromHand,
     };
     const MAX_ITERATIONS = 500;
     let iterations = 0;

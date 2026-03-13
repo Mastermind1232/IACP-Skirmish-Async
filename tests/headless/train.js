@@ -9,14 +9,16 @@
  */
 import { createTestGame } from '../fixtures/game-builder.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
-import { getDcStats, getMapSpaces } from '../../src/data-loader.js';
+import { getDcStats, getMapSpaces, getDcEffects } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
+import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
 import { parseCoord } from '../../src/game/coords.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import {
   loadLearnings, saveLearnings, createGameTracer,
   pickSmartAction, abstractActionType, getLearningsStats,
+  recordMatchResult,
 } from './learnings.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,6 +68,7 @@ async function runOneGame(learnings, gameNum) {
   const actionDeps = {
     dcMessageMeta, dcExhaustedState, dcHealthState, getDcStats, getMapSpaces,
     computeMovementCache, getBoardStateForMovement, getMovementProfile,
+    getPlayableCcFromHand,
   };
 
   const tracer1 = createGameTracer(learnings, 1, dcHealthState, dcMessageMeta);
@@ -167,11 +170,16 @@ async function runOneGame(learnings, gameNum) {
   tracer1.finalize(finalGame, true);  // Only tracer1 updates meta
   tracer2.finalize(finalGame, false);
 
+  const winnerLabel = finalGame.winnerId === finalGame.player1Id ? 'P1' :
+                      finalGame.winnerId === finalGame.player2Id ? 'P2' : null;
+
+  // Track per-DC and per-affiliation results
+  recordMatchResult(learnings, p1Army, p2Army, winnerLabel, getDcStats, getDcEffects);
+
   return {
     ended: finalGame.ended || false,
     winnerId: finalGame.winnerId,
-    winnerLabel: finalGame.winnerId === finalGame.player1Id ? 'P1' :
-                 finalGame.winnerId === finalGame.player2Id ? 'P2' : null,
+    winnerLabel,
     p1Army: p1Army.map(a => a.dcName).join(' + '),
     p2Army: p2Army.map(a => a.dcName).join(' + '),
     p1VP: finalGame.player1VP?.total || 0,
@@ -184,7 +192,7 @@ async function main() {
   const numGames = parseInt(args.find(a => !a.startsWith('-')) || '50', 10);
   const reset = args.includes('--reset');
 
-  const learnings = reset ? { meta: { totalGames: 0, p1Wins: 0, p2Wins: 0, lastUpdated: null }, states: {} }
+  const learnings = reset ? loadLearnings('/dev/null') // fresh default
                           : loadLearnings(LEARNINGS_PATH);
 
   console.log(`Training ${numGames} games (starting from ${learnings.meta.totalGames} prior games)`);
@@ -213,9 +221,9 @@ async function main() {
         `  [${i + 1}/${numGames}] ${elapsed}s | ` +
         `completed: ${completed}/${i + 1} | ` +
         `P1: ${p1Wins} P2: ${p2Wins} | ` +
-        `states: ${stats.states} | ` +
-        `epsilon: ${stats.epsilon.toFixed(3)} | ` +
-        `Q: [${stats.qRange[0].toFixed(2)}, ${stats.qRange[1].toFixed(2)}]`
+        `weights: ${stats.weightCount} | ` +
+        `avgW: ${stats.avgAbsWeight.toFixed(4)} | ` +
+        `epsilon: ${stats.epsilon.toFixed(3)}`
       );
       // Save periodically
       saveLearnings(learnings, LEARNINGS_PATH);
@@ -227,11 +235,10 @@ async function main() {
   console.log('\n=== Training Complete ===');
   const stats = getLearningsStats(learnings);
   console.log(`Total games trained: ${stats.totalGames}`);
-  console.log(`States discovered: ${stats.states}`);
-  console.log(`Action entries: ${stats.actionEntries}`);
+  console.log(`Weights: ${stats.weightCount} | Avg |w|: ${stats.avgAbsWeight.toFixed(4)}`);
+  console.log(`Total updates: ${stats.totalUpdates} | Avg |delta|: ${stats.avgAbsDelta.toFixed(4)}`);
   console.log(`This batch — completed: ${completed}/${numGames}, P1 wins: ${p1Wins}, P2 wins: ${p2Wins}`);
   console.log(`All time — P1 wins: ${stats.p1Wins}, P2 wins: ${stats.p2Wins}`);
-  console.log(`Q-value range: [${stats.qRange[0].toFixed(3)}, ${stats.qRange[1].toFixed(3)}]`);
   console.log(`Exploration rate: ${(stats.epsilon * 100).toFixed(1)}%`);
   console.log(`Learnings saved to ${LEARNINGS_PATH}`);
 }
