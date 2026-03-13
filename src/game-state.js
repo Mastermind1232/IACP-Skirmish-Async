@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { isDbConfigured, initDb, loadGamesFromDb, saveGamesToDb, savePromise } from './db.js';
+import { initSeqCounters } from './domain/event-store.js';
 import { getDcList, getDcMessageIds, getActivatedDcIndices } from './game/player-helpers.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -274,6 +275,12 @@ export async function loadGames() {
       }
       gamesLoadedOk = true;
       console.log(`[Games] Loaded ${games.size} game(s) from PostgreSQL.`);
+      // Initialize domain event seq counters from DB
+      try {
+        await initSeqCounters([...games.keys()]);
+      } catch (seqErr) {
+        console.warn('[Games] Seq counter init failed (non-fatal):', seqErr.message);
+      }
     } catch (err) {
       console.error('Failed to load games from DB:', err);
     }

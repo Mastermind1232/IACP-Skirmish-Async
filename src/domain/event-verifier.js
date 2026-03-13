@@ -49,3 +49,29 @@ function compareStates(replayed, actual) {
   const unknownKeys = replayedKeys.filter(k => !COMPARABLE_KEYS.includes(k));
   return { match: mismatches.length === 0, mismatches, unknownKeys };
 }
+
+/**
+ * Shadow comparison: replay events and compare with blob state.
+ * Returns summary suitable for logging. Never throws.
+ * @param {string} gameId
+ * @param {object} blobState - current state from the state blob
+ * @returns {Promise<{ match: boolean, eventCount: number, mismatches: string[] }>}
+ */
+export async function shadowCompare(gameId, blobState) {
+  try {
+    const snapshot = await loadLatestSnapshot(gameId);
+    const events = await getAllEventsSince(gameId, snapshot?.version || 0);
+    let replayedState = snapshot?.state || {};
+    for (const event of events) {
+      replayedState = gameReducer(replayedState, event);
+    }
+    const result = compareStates(replayedState, blobState);
+    return {
+      match: result.match,
+      eventCount: events.length + (snapshot?.version || 0),
+      mismatches: result.mismatches.map(m => m.key),
+    };
+  } catch (e) {
+    return { match: false, eventCount: -1, mismatches: [`error: ${e.message}`] };
+  }
+}

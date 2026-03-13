@@ -3317,17 +3317,17 @@ client.on('interactionCreate', async (interaction) => {
       } catch (_e) { /* never block */ }
     }
 
-    // Periodic verification check
+    // Periodic shadow comparison (env VERIFY_INTERVAL, default 0 = disabled)
     if (_verifyInterval > 0 && _buttonLockId) {
       _verifyCounter++;
       if (_verifyCounter % _verifyInterval === 0) {
         try {
-          const { verifyGameEvents } = await import('./src/domain/event-verifier.js');
+          const { shadowCompare } = await import('./src/domain/event-verifier.js');
           const _verifyState = getGame(_buttonLockId);
           if (_verifyState) {
-            verifyGameEvents(_buttonLockId, _verifyState).then(result => {
+            shadowCompare(_buttonLockId, _verifyState).then(result => {
               if (!result.match) {
-                console.warn(`[verify] Mismatch in game ${_buttonLockId}: ${result.mismatches.map(m => m.key).join(', ')}`);
+                console.warn(`[shadow] Mismatch in game ${_buttonLockId} (${result.eventCount} events): ${result.mismatches.join(', ')}`);
               }
             }).catch(() => {});
           }
