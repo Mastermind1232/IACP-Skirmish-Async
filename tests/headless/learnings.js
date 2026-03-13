@@ -176,6 +176,12 @@ export function abstractActionType(action, game) {
   if (t === 'activate_dc') return 'activate';
   if (t === 'dc_end_activation') return 'end_activation';
   if (t === 'pass_activation_turn') return 'pass';
+  // Pending sub-state actions (ability choices / gates)
+  if (t === 'dc_ability_choice' || t === 'pounce_space' ||
+      t === 'celebration_play' || t === 'celebration_pass' ||
+      t === 'missile_salvo_die' || t === 'missile_salvo_done' ||
+      t === 'power_token_choice' || t === 'cover_fire_block' || t === 'cover_fire_skip' ||
+      t === 'spread_pain_cond' || t === 'negation_play' || t === 'negation_let_resolve') return 'ability';
   // Fallback
   return 'other';
 }

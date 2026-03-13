@@ -30,6 +30,7 @@ export const ACTION_TYPES = {
   ATTACK_TARGET: 'attack_target',
   DC_ACTION: 'dc_action',
   SPECIAL_ACTION: 'special_action',
+  DC_SPECIAL: 'dc_special',
   END_TURN: 'end_turn',
   DC_END_ACTIVATION: 'dc_end_activation',
   PASS_ACTIVATION_TURN: 'pass_activation_turn',
@@ -55,6 +56,18 @@ export const ACTION_TYPES = {
   END_ROUND_PASS: 'end_round_pass',
   END_START_OF_ROUND: 'end_start_of_round',
   END_END_OF_ROUND: 'end_end_of_round',
+
+  // Pending sub-states
+  DC_ABILITY_CHOICE: 'dc_ability_choice',
+  CELEBRATION_PLAY: 'celebration_play',
+  CELEBRATION_PASS: 'celebration_pass',
+  POUNCE_SPACE: 'pounce_space',
+  MISSILE_SALVO_DIE: 'missile_salvo_die',
+  MISSILE_SALVO_DONE: 'missile_salvo_done',
+  POWER_TOKEN_CHOICE: 'power_token_choice',
+  COVER_FIRE_BLOCK: 'cover_fire_block',
+  COVER_FIRE_SKIP: 'cover_fire_skip',
+  SPREAD_PAIN_COND: 'spread_pain_cond',
 
   // Misc
   REFRESH_MAP: 'refresh_map',
@@ -112,6 +125,10 @@ export function buildCustomId(type, params = {}) {
     case ACTION_TYPES.COMBAT_RESOLVE:
       return `combat_resolve_ready_${gameId}`;
 
+    // DC Special
+    case ACTION_TYPES.DC_SPECIAL:
+      return `dc_special_${params.specialIdx}_${msgId}`;
+
     // Setup
     case ACTION_TYPES.DRAFT_RANDOM:
       return `draft_random_${gameId}`;
@@ -133,6 +150,28 @@ export function buildCustomId(type, params = {}) {
       return `end_end_of_round_${gameId}`;
     case ACTION_TYPES.END_START_OF_ROUND:
       return `end_start_of_round_${gameId}`;
+
+    // Pending sub-states
+    case ACTION_TYPES.DC_ABILITY_CHOICE:
+      return `dc_ability_choice_${gameId}_${params.msgId}_${params.specialIdx}_${params.choiceIndex}`;
+    case ACTION_TYPES.CELEBRATION_PLAY:
+      return `celebration_play_${gameId}`;
+    case ACTION_TYPES.CELEBRATION_PASS:
+      return `celebration_pass_${gameId}`;
+    case ACTION_TYPES.POUNCE_SPACE:
+      return `pounce_space_${gameId}_${params.msgId}_${params.figureIndex}_${params.space}`;
+    case ACTION_TYPES.MISSILE_SALVO_DIE:
+      return `missile_salvo_die_${params.color}_${gameId}_${params.msgId}`;
+    case ACTION_TYPES.MISSILE_SALVO_DONE:
+      return `missile_salvo_done_${gameId}_${params.msgId}`;
+    case ACTION_TYPES.POWER_TOKEN_CHOICE:
+      return `power_token_choice_${gameId}_${params.tokenType}`;
+    case ACTION_TYPES.COVER_FIRE_BLOCK:
+      return `cover_fire_block_${gameId}_${params.playerNum}_${params.figureKey}`;
+    case ACTION_TYPES.COVER_FIRE_SKIP:
+      return `cover_fire_discard_skip_${gameId}`;
+    case ACTION_TYPES.SPREAD_PAIN_COND:
+      return `spread_pain_cond_${gameId}_${params.condition}`;
 
     // Misc
     case ACTION_TYPES.REFRESH_MAP:

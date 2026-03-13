@@ -132,8 +132,13 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
 
     let actingPN;
     if (turnActions.length > 0 && otherActions.length > 0) {
-      const turnMandatory = turnActions.some(a => ['phase_gate_ready', 'combat_ready', 'combat_roll'].includes(a.type));
-      const otherMandatory = otherActions.some(a => ['phase_gate_ready', 'combat_ready', 'combat_roll'].includes(a.type));
+      const MANDATORY = ['phase_gate_ready', 'combat_ready', 'combat_roll',
+        'dc_ability_choice', 'celebration_play', 'celebration_pass',
+        'pounce_space', 'missile_salvo_die', 'missile_salvo_done',
+        'power_token_choice', 'cover_fire_block', 'cover_fire_skip',
+        'spread_pain_cond', 'negation_play', 'negation_let_resolve'];
+      const turnMandatory = turnActions.some(a => MANDATORY.includes(a.type));
+      const otherMandatory = otherActions.some(a => MANDATORY.includes(a.type));
       actingPN = (otherMandatory && !turnMandatory) ? otherPlayer : turnPlayer;
     } else {
       actingPN = turnActions.length > 0 ? turnPlayer : otherPlayer;

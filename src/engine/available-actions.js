@@ -11,6 +11,7 @@ import { getPlayerId, getInitiativePlayerNum, opponentPlayerNum } from '../game/
 import { PHASES, ROUND_PHASES } from '../game/phase.js';
 import { getRange, hasLineOfSight } from '../game/spatial.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
+import { getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect } from '../game/combat.js';
 
 /**
  * Get all available actions for a player in the current game state.
@@ -232,6 +233,48 @@ function getRoundActiveActions(game, playerNum, deps) {
     return getNegationActions(game, playerNum);
   }
 
+  // Pending DC ability choice (chooseOne mechanic)
+  if (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0) {
+    const choiceActions = getDcAbilityChoiceActions(game, playerNum);
+    if (choiceActions.length > 0) return choiceActions;
+  }
+
+  // Pending Celebration (after defeating a unique figure)
+  if (game.pendingCelebration) {
+    const celebActions = getCelebrationActions(game, playerNum);
+    if (celebActions.length > 0) return celebActions;
+  }
+
+  // Pending Pounce space choice (Nexu etc.)
+  if (game.pendingPounceSpaceChoice && Object.keys(game.pendingPounceSpaceChoice).length > 0) {
+    const pounceActions = getPounceSpaceActions(game, playerNum);
+    if (pounceActions.length > 0) return pounceActions;
+  }
+
+  // Pending Missile Salvo (BT-1 etc.)
+  if (game.pendingMissileSalvo && Object.keys(game.pendingMissileSalvo).length > 0) {
+    const salvoActions = getMissileSalvoActions(game, playerNum);
+    if (salvoActions.length > 0) return salvoActions;
+  }
+
+  // Pending Power Token grant
+  if (game.pendingPowerTokenGrant) {
+    const tokenActions = getPowerTokenActions(game, playerNum);
+    if (tokenActions.length > 0) return tokenActions;
+  }
+
+  // Pending Cover Fire
+  if (game.pendingCoverFire) {
+    const coverActions = getCoverFireActions(game, playerNum);
+    if (coverActions.length > 0) return coverActions;
+  }
+
+  // Pending Spread the Pain condition pick
+  if (game.pendingSpreadThePainCondPick) {
+    const spreadActions = getSpreadThePainActions(game, playerNum);
+    if (spreadActions.length > 0) return spreadActions;
+  }
+
   // Check round phase
   switch (game.roundPhase) {
     case ROUND_PHASES.START_OF_ROUND:
@@ -272,8 +315,21 @@ function getActivationActions(game, playerNum, deps) {
   // Is it this player's activation turn?
   const isMyTurn = game.currentActivationTurnPlayerId === playerId;
 
-  if (!isMyTurn) {
-    // Not our turn — can only play CC cards or pass (plus end-phase above)
+  // Check for active DC with actions remaining (even if not our turn — we still
+  // need to offer dc_end_activation for our own DCs that have pending actions)
+  if (!isMyTurn && deps.dcMessageMeta) {
+    for (const [msgId, meta] of deps.dcMessageMeta) {
+      if (meta.gameId !== gameId || meta.playerNum !== playerNum) continue;
+      const data = game.dcActionsData?.[msgId];
+      if (data && data.remaining > 0) {
+        actions.push({
+          type: ACTION_TYPES.DC_END_ACTIVATION,
+          customId: buildCustomId(ACTION_TYPES.DC_END_ACTIVATION, { msgId }),
+          description: `End activation for ${meta.displayName || meta.dcName}`,
+          params: { msgId, dcName: meta.dcName },
+        });
+      }
+    }
     return actions;
   }
 
@@ -381,6 +437,29 @@ function getActivationActions(game, playerNum, deps) {
         });
       }
 
+      // DC Specials — list available special abilities
+      if (deps.getDcStats) {
+        const dcStats = deps.getDcStats(meta.dcName);
+        const specials = dcStats?.specials || [];
+        const specialCosts = dcStats?.specialCosts || [];
+        const specialsUsed = data.specialsUsed || [];
+        const isStunned = (game.figureConditions?.[`${meta.dcName}-1-${figureIndex}`] || []).includes('Stun');
+
+        for (let si = 0; si < specials.length; si++) {
+          const cost = specialCosts[si] ?? 1;
+          if (specialsUsed.includes(si)) continue; // Already used this activation
+          if (data.remaining < cost) continue;      // Not enough actions
+          if (isStunned) continue;                   // Stunned figures can't use specials
+
+          actions.push({
+            type: ACTION_TYPES.DC_SPECIAL,
+            customId: buildCustomId(ACTION_TYPES.DC_SPECIAL, { msgId, specialIdx: si }),
+            description: `${specials[si]} (${displayName})`,
+            params: { msgId, dcName: meta.dcName, specialIdx: si, specialName: specials[si], cost },
+          });
+        }
+      }
+
       // End activation early (forfeit remaining actions)
       actions.push({
         type: ACTION_TYPES.DC_END_ACTIVATION,
@@ -412,14 +491,15 @@ function getActivationActions(game, playerNum, deps) {
   if (deps.getPlayableCcFromHand) {
     const hand = playerNum === 1 ? game.player1CcHand : game.player2CcHand;
     if (hand?.length) {
-      const playable = deps.getPlayableCcFromHand(hand, game, playerNum, { timing: 'special_action' });
+      // getPlayableCcFromHand(game, playerNum, hand) returns string[]
+      const playable = deps.getPlayableCcFromHand(game, playerNum, hand);
       for (let i = 0; i < playable.length; i++) {
-        const card = playable[i];
+        const cardName = playable[i];
         actions.push({
           type: ACTION_TYPES.PLAY_CC,
           customId: `cc_play_${gameId}_${playerNum}_${i}`,
-          description: `Play CC: ${card.name || card}`,
-          params: { cardIndex: i, cardName: card.name || card },
+          description: `Play CC: ${cardName}`,
+          params: { cardIndex: i, cardName },
         });
       }
     }
@@ -509,18 +589,25 @@ function getCombatActions(game, playerNum, deps) {
   // Surge assignment phase — list each spendable surge ability
   if (combat.pendingSurges || combat.surgeRemaining > 0) {
     if (playerNum === attackerPn) {
-      const surgeAbilities = combat.surgeAbilities || [];
-      for (let i = 0; i < surgeAbilities.length; i++) {
-        const sa = surgeAbilities[i];
-        const cost = sa.cost ?? 1;
-        if (cost <= (combat.surgeRemaining ?? 0)) {
-          actions.push({
-            type: ACTION_TYPES.COMBAT_SURGE,
-            customId: buildCustomId(ACTION_TYPES.COMBAT_SURGE, { gameId, surgeIndex: i }),
-            description: `Spend surge: ${sa.label || sa.key || `ability ${i}`}`,
-            params: { surgeIndex: i, surgeKey: sa.key },
-          });
-        }
+      // Compute surge abilities dynamically (they're not stored on combat state)
+      const surgeKeys = getAttackerSurgeAbilities(combat);
+      const surgesRemaining = combat.surgeRemaining ?? 0;
+
+      for (let i = 0; i < surgeKeys.length; i++) {
+        const key = surgeKeys[i];
+        const isDouble = key.startsWith('double:');
+        const cost = isDouble ? 2 : 1;
+        if (cost > surgesRemaining) continue;
+
+        const label = SURGE_LABELS[key]
+          || SURGE_LABELS[key.replace('double:', '')]
+          || key;
+        actions.push({
+          type: ACTION_TYPES.COMBAT_SURGE,
+          customId: buildCustomId(ACTION_TYPES.COMBAT_SURGE, { gameId, surgeIndex: i }),
+          description: `Spend surge: ${label}`,
+          params: { surgeIndex: i, surgeKey: key, cost },
+        });
       }
 
       // Skip remaining surges
@@ -660,6 +747,168 @@ function getLegacyActions(game, playerNum, deps) {
     return getActivationActions(game, playerNum, deps);
   }
   return [];
+}
+
+// ── DC Ability Choice ─────────────────────────────────────────────────────
+
+function getDcAbilityChoiceActions(game, playerNum) {
+  const actions = [];
+  const gameId = game.gameId;
+
+  for (const [key, pending] of Object.entries(game.pendingDcAbilityChoice)) {
+    if (pending.playerNum !== playerNum) continue;
+    // Choices can be stored as choiceOptions, choices, or targetFigureKeys
+    const choices = pending.choiceOptions || pending.choices || pending.targetFigureKeys || [];
+    for (let i = 0; i < choices.length; i++) {
+      const label = typeof choices[i] === 'string' ? choices[i] : choices[i]?.label || `Option ${i + 1}`;
+      actions.push({
+        type: ACTION_TYPES.DC_ABILITY_CHOICE,
+        customId: buildCustomId(ACTION_TYPES.DC_ABILITY_CHOICE, {
+          gameId, msgId: pending.msgId, specialIdx: pending.specialIdx, choiceIndex: i,
+        }),
+        description: `Ability choice: ${label}`,
+        params: { key, choiceIndex: i, label },
+      });
+    }
+  }
+
+  return actions;
+}
+
+// ── Celebration ───────────────────────────────────────────────────────────
+
+function getCelebrationActions(game, playerNum) {
+  const pending = game.pendingCelebration;
+  if (!pending || pending.attackerPlayerNum !== playerNum) return [];
+
+  return [
+    {
+      type: ACTION_TYPES.CELEBRATION_PLAY,
+      customId: buildCustomId(ACTION_TYPES.CELEBRATION_PLAY, { gameId: game.gameId }),
+      description: 'Play Celebration',
+    },
+    {
+      type: ACTION_TYPES.CELEBRATION_PASS,
+      customId: buildCustomId(ACTION_TYPES.CELEBRATION_PASS, { gameId: game.gameId }),
+      description: 'Skip Celebration',
+    },
+  ];
+}
+
+// ── Pounce Space ──────────────────────────────────────────────────────────
+
+function getPounceSpaceActions(game, playerNum) {
+  const actions = [];
+  const gameId = game.gameId;
+
+  for (const [msgId, pending] of Object.entries(game.pendingPounceSpaceChoice)) {
+    if (pending.playerNum !== playerNum) continue;
+    const spaces = pending.validSpaces || [];
+    for (const space of spaces) {
+      actions.push({
+        type: ACTION_TYPES.POUNCE_SPACE,
+        customId: buildCustomId(ACTION_TYPES.POUNCE_SPACE, {
+          gameId, msgId, figureIndex: pending.figureIndex ?? 0, space,
+        }),
+        description: `Pounce to ${space}`,
+        params: { msgId, space },
+      });
+    }
+  }
+
+  return actions;
+}
+
+// ── Missile Salvo ─────────────────────────────────────────────────────────
+
+function getMissileSalvoActions(game, playerNum) {
+  const actions = [];
+  const gameId = game.gameId;
+
+  for (const [msgId, pending] of Object.entries(game.pendingMissileSalvo)) {
+    if (pending.playerNum !== playerNum) continue;
+    const dice = pending.diceAvailable || [];
+    for (const color of dice) {
+      actions.push({
+        type: ACTION_TYPES.MISSILE_SALVO_DIE,
+        customId: buildCustomId(ACTION_TYPES.MISSILE_SALVO_DIE, { gameId, msgId, color }),
+        description: `Missile Salvo: ${color} die`,
+        params: { msgId, color },
+      });
+    }
+    actions.push({
+      type: ACTION_TYPES.MISSILE_SALVO_DONE,
+      customId: buildCustomId(ACTION_TYPES.MISSILE_SALVO_DONE, { gameId, msgId }),
+      description: 'End Missile Salvo',
+      params: { msgId },
+    });
+  }
+
+  return actions;
+}
+
+// ── Power Token Choice ────────────────────────────────────────────────────
+
+function getPowerTokenActions(game, playerNum) {
+  const pending = game.pendingPowerTokenGrant;
+  if (!pending || pending.playerNum !== playerNum) return [];
+
+  const gameId = game.gameId;
+  const tokenTypes = ['hit', 'surge', 'block', 'evade'];
+
+  return tokenTypes.map(tokenType => ({
+    type: ACTION_TYPES.POWER_TOKEN_CHOICE,
+    customId: buildCustomId(ACTION_TYPES.POWER_TOKEN_CHOICE, { gameId, tokenType }),
+    description: `Choose ${tokenType} power token`,
+    params: { tokenType },
+  }));
+}
+
+// ── Cover Fire ────────────────────────────────────────────────────────────
+
+function getCoverFireActions(game, playerNum) {
+  const pending = game.pendingCoverFire;
+  if (!pending || pending.attackerPlayerNum !== playerNum) return [];
+
+  const actions = [];
+  const gameId = game.gameId;
+
+  // Offer friendly figures near the target as block token recipients
+  const figs = game.figurePositions?.[playerNum] || {};
+  for (const figureKey of Object.keys(figs)) {
+    actions.push({
+      type: ACTION_TYPES.COVER_FIRE_BLOCK,
+      customId: buildCustomId(ACTION_TYPES.COVER_FIRE_BLOCK, { gameId, playerNum, figureKey }),
+      description: `Cover Fire: grant block to ${figureKey}`,
+      params: { figureKey },
+    });
+  }
+
+  // Always offer skip
+  actions.push({
+    type: ACTION_TYPES.COVER_FIRE_SKIP,
+    customId: buildCustomId(ACTION_TYPES.COVER_FIRE_SKIP, { gameId }),
+    description: 'Skip Cover Fire',
+  });
+
+  return actions;
+}
+
+// ── Spread the Pain ───────────────────────────────────────────────────────
+
+function getSpreadThePainActions(game, playerNum) {
+  const pending = game.pendingSpreadThePainCondPick;
+  if (!pending || pending.attackerPlayerNum !== playerNum) return [];
+
+  const gameId = game.gameId;
+  const conditions = ['stun', 'weaken', 'bleed', 'skip'];
+
+  return conditions.map(condition => ({
+    type: ACTION_TYPES.SPREAD_PAIN_COND,
+    customId: buildCustomId(ACTION_TYPES.SPREAD_PAIN_COND, { gameId, condition }),
+    description: condition === 'skip' ? 'Skip Spread the Pain' : `Spread the Pain: ${condition}`,
+    params: { condition },
+  }));
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
