@@ -90,6 +90,14 @@ import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-eff
 import { buildContext, getAllRequiredDepKeys } from './src/context-factory.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
 import { captureSnapshot, computeDiff, createEvent, appendToBuffer, getRecentEvents } from './src/event-log.js';
+import { translateDiffToEvents } from './src/domain/diff-translator.js';
+import { appendEvents as appendDomainEvents } from './src/domain/event-store.js';
+import { customIdToCommand } from './src/domain/commands/command-router.js';
+import { handlePhaseGateReady, handlePhaseGateUnready } from './src/domain/commands/phase-gate-commands.js';
+import { handleEndTurn as cmdEndTurn, handlePassActivationTurn as cmdPassTurn, handleActivateDc as cmdActivateDc } from './src/domain/commands/activation-commands.js';
+import { handleStartRound as cmdStartRound, handleEndRound as cmdEndRound, handleEndOfRoundStart as cmdEndOfRoundStart, handleActivationPhaseStart as cmdActivationPhaseStart } from './src/domain/commands/round-commands.js';
+import { handleDeclareAttack as cmdDeclareAttack, handleReadyForCombat as cmdReadyForCombat, handleRollCombatDice as cmdRollDice, handleSpendSurge as cmdSpendSurge, handlePerformReroll as cmdPerformReroll } from './src/domain/commands/combat-commands.js';
+import { handleStartMovement as cmdStartMovement, handleMoveToSpace as cmdMoveToSpace, handleCompleteMovement as cmdCompleteMovement } from './src/domain/commands/movement-commands.js';
 import { getAiPlayer, runAiTurnLive, markGameAsAi, AI_USER_PREFIX } from './src/ai/ai-discord.js';
 import { shuffleArray as _shuffleArrayPure, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure, isWithinN as _isWithinNPure } from './src/engine/utils.js';
 import {
@@ -222,6 +230,7 @@ import {
   handleSquadModal, handleDeployModal,
   // Used in allDeps
   runStartOfRoundDcEffects,
+  runStatusPhaseAfterEndOfRound,
   runPostDeployPhase,
   handlePreReroll,
   handleCombatPassive,
@@ -688,6 +697,7 @@ const client = new Client({
 
 /** Global readiness gate — false until the ready handler completes. */
 let botReady = false;
+let _verifyCounter = 0;
 
 /** User IDs currently creating a test game (prevents duplicate creation from double-send or double-click). */
 const testGameCreationInProgress = new Set();
@@ -2329,7 +2339,7 @@ function buildAllDeps() {
     // Locally defined helpers
     applySquadSubmission, shuffleArray, buildHandDisplayPayload,
     updateHandVisualMessage, updatePlayAreaDcButtons,
-    sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, runPostDeployPhase, sendPhaseGateMessages,
+    sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, runPostDeployPhase, sendPhaseGateMessages,
     buildDiscardPileDisplayPayload, updateDiscardPileMessage,
     updateAttachmentMessageForDc, updateDcActionsMessage,
     buildDcEmbedAndFiles, getConditionsForDcMessage, getNicknamesForDcMessage, getDcPlayAreaComponents,
@@ -3016,6 +3026,13 @@ client.on('interactionCreate', async (interaction) => {
             const _evt = createEvent(_evtGameId, fakeButtonKey, interaction.customId, interaction.user.id, _evtDiff);
             appendToBuffer(_evt);
             insertGameEvent(_evtGameId, _evt).catch(e => console.error('[event-log]', e));
+            // Domain events (dual-write)
+            const _domainEvents = translateDiffToEvents(fakeButtonKey, _evtDiff, {
+              gameId: _evtGameId, playerId: interaction.user.id, before: _evtBefore, after: _evtAfter,
+            });
+            if (_domainEvents.length > 0) {
+              appendDomainEvents(_evtGameId, _domainEvents).catch(e => console.error('[domain-events]', e));
+            }
           }
         }
 
@@ -3062,6 +3079,13 @@ client.on('interactionCreate', async (interaction) => {
           const _evt = createEvent(_evtGameId, selectKey, interaction.customId, interaction.user.id, _evtDiff);
           appendToBuffer(_evt);
           insertGameEvent(_evtGameId, _evt).catch(e => console.error('[event-log]', e));
+          // Domain events (dual-write)
+          const _domainEvents = translateDiffToEvents(selectKey, _evtDiff, {
+            gameId: _evtGameId, playerId: interaction.user.id, before: _evtBefore, after: _evtAfter,
+          });
+          if (_domainEvents.length > 0) {
+            appendDomainEvents(_evtGameId, _domainEvents).catch(e => console.error('[domain-events]', e));
+          }
         }
       }
 
@@ -3106,6 +3130,106 @@ client.on('interactionCreate', async (interaction) => {
   const _buttonLockId = resolveGameIdForLock(interaction);
   await withGameLock(_buttonLockId, async () => {
 
+    // ── Command-mode dispatch (event sourcing pipeline) ───────────────
+    // Handlers in this set run through the command→event→reducer pipeline
+    // BEFORE falling through to the existing handler for Discord output.
+    const COMMAND_MODE_HANDLERS = new Set([
+      // Phase gates
+      'phase_gate_ready_',
+      'phase_gate_unready_',
+      // Round transitions
+      'end_end_of_round_',
+      'end_start_of_round_',
+      'status_phase_',
+      // Activation
+      'dc_activate_',
+      'end_turn_',
+      'dc_end_activation_',
+      'pass_activation_turn_',
+      'confirm_activate_',
+      'cancel_activate_',
+      // Movement
+      'move_mp_',
+      'move_pick_',
+      'move_letter_',
+      'move_back_letters_',
+      'move_adjust_mp_',
+      // Combat core
+      'attack_target_',
+      'combat_ready_',
+      'combat_roll_',
+      'combat_surge_',
+      'combat_reroll_',
+      'combat_resolve_ready_',
+      'combat_passive_',
+      'combat_token_',
+    ]);
+
+    const COMMAND_HANDLER_MAP = {
+      'PhaseGateReady': handlePhaseGateReady,
+      'PhaseGateUnready': handlePhaseGateUnready,
+      'ActivateDc': cmdActivateDc,
+      'EndTurn': cmdEndTurn,
+      'DcEndActivation': cmdEndTurn,
+      'PassActivationTurn': cmdPassTurn,
+      'DeclareAttack': cmdDeclareAttack,
+      'AttackTarget': cmdDeclareAttack,
+      'ReadyForCombat': cmdReadyForCombat,
+      'RollCombatDice': cmdRollDice,
+      'SpendSurge': cmdSpendSurge,
+      'PerformReroll': cmdPerformReroll,
+      'StartMovement': cmdStartMovement,
+      'MoveToSpace': cmdMoveToSpace,
+      'CompleteMovement': cmdCompleteMovement,
+      'EndEndOfRound': cmdEndRound,
+      'EndStartOfRound': cmdStartRound,
+      'StatusPhase': cmdActivationPhaseStart,
+    };
+
+    // Periodic event verification (env VERIFY_INTERVAL, default 0 = disabled)
+    const _verifyInterval = parseInt(process.env.VERIFY_INTERVAL, 10) || 0;
+
+    if (COMMAND_MODE_HANDLERS.has(buttonKey)) {
+      const _cmdGameId = _buttonLockId;
+      const _cmdState = _cmdGameId ? getGame(_cmdGameId) : null;
+      const _cmd = customIdToCommand(interaction.customId, buttonKey, interaction.user.id, _cmdGameId);
+      if (_cmd && _cmdState) {
+        const _cmdHandler = COMMAND_HANDLER_MAP[_cmd.type];
+        if (_cmdHandler) {
+          const { events: _cmdEvents, error: _cmdError } = _cmdHandler(_cmdState, _cmd);
+          if (!_cmdError && _cmdEvents.length > 0) {
+            appendDomainEvents(_cmdGameId, _cmdEvents).catch(e => console.error('[command-mode]', e));
+          }
+          if (_cmdError) {
+            console.warn('[command-mode] Command error:', _cmdError, 'for', buttonKey);
+          }
+        }
+        // No handler = command recorded but no direct events emitted
+        // (diff-translator will still capture state changes downstream)
+      }
+      // Fall through to existing handler for Discord output
+    }
+
+    // Periodic verification check
+    if (_verifyInterval > 0 && _buttonLockId) {
+      _verifyCounter++;
+      if (_verifyCounter % _verifyInterval === 0) {
+        try {
+          const { verifyGameEvents } = await import('./src/domain/event-verifier.js');
+          const _verifyState = getGame(_buttonLockId);
+          if (_verifyState) {
+            verifyGameEvents(_buttonLockId, _verifyState).then(result => {
+              if (!result.match) {
+                console.warn(`[verify] Mismatch in game ${_buttonLockId}: ${result.mismatches.map(m => m.key).join(', ')}`);
+              }
+            }).catch(() => {});
+          }
+        } catch (_verifyErr) {
+          // Never block gameplay
+        }
+      }
+    }
+
     // ── Table-driven dispatch ─────────────────────────────────────────
     const allDeps = buildAllDeps();
 
@@ -3132,6 +3256,13 @@ client.on('interactionCreate', async (interaction) => {
           const _evt = createEvent(_evtGameId, buttonKey, interaction.customId, interaction.user.id, _evtDiff);
           appendToBuffer(_evt);
           insertGameEvent(_evtGameId, _evt).catch(e => console.error('[event-log]', e));
+          // Domain events (dual-write)
+          const _domainEvents = translateDiffToEvents(buttonKey, _evtDiff, {
+            gameId: _evtGameId, playerId: interaction.user.id, before: _evtBefore, after: _evtAfter,
+          });
+          if (_domainEvents.length > 0) {
+            appendDomainEvents(_evtGameId, _domainEvents).catch(e => console.error('[domain-events]', e));
+          }
         }
       }
 

@@ -115,7 +115,7 @@ const CONTEXT_GROUPS = {
     'getGame', 'replyIfGameEnded', 'hasActionsRemainingInGame',
     'GAME_PHASES', 'PHASE_COLOR', 'getInitiativePlayerZoneLabel',
     'getPlayerZoneLabel', 'logGameAction', 'pushUndo',
-    'updateHandChannelMessages', 'saveGames', 'client', 'dcMessageMeta',
+    'updateHandChannelMessages', 'saveGames', 'client', 'dcMessageMeta', 'sendPhaseGateMessages',
     'dcHealthState', 'buildDcEmbedAndFiles', 'getConditionsForDcMessage', 'getNicknamesForDcMessage',
     'getDcPlayAreaComponents', 'maybeShowEndActivationPhaseButton',
     'dcExhaustedState', 'updateActivationsMessage', 'getActionsCounterContent',
@@ -276,11 +276,26 @@ const CONTEXT_GROUPS = {
   phaseGate: [
     'getGame', 'saveGames', 'client', 'logGameAction',
     'finishSetupAttachments', 'runStartOfRoundDcEffects', 'sendRoundActivationPhaseMessage',
-    'sendPhaseGateMessages',
+    'sendPhaseGateMessages', 'runStatusPhaseAfterEndOfRound',
+    'updateHandChannelMessages',
     // Gate 1 (deploy_done) deps:
     'isDcAttachment', 'resolveDcName', 'dcMessageMeta', 'dcHealthState',
     'getInitiativePlayerZoneLabel', 'clearPreGameSetup', 'runPostDeployPhase',
     'getCcShuffleDrawButton', 'updateAttachmentMessageForDc',
+    // _runStatusPhaseLogic deps:
+    'replyIfGameEnded', 'getPlayerZoneLabel',
+    'dcExhaustedState', 'isDepletedRemovedFromGame',
+    'buildDcEmbedAndFiles', 'getConditionsForDcMessage', 'getNicknamesForDcMessage',
+    'getDcPlayAreaComponents',
+    'countTerminalsControlledByPlayer', 'isFigureInDeploymentZone', 'checkWinConditions',
+    'getMapTokensData', 'getSpaceController', 'getMissionRules',
+    'runEndOfRoundRules', 'runStartOfRoundRules',
+    'getFiguresOnOrAdjacentToSpace',
+    'runNpcThugActivation', 'runNpcKryknaActivation', 'applyNpcDamageToFigure',
+    'getMapSpaces', 'getMapRegistry', 'filterMapSpacesByBounds',
+    'updateHandVisualMessage', 'buildHandDisplayPayload',
+    'buildBoardMapPayload',
+    'postDevaronDoorButtons', 'postDevaronCratePushPrompts', 'postKryknaPushButtons',
   ],
 
   combatSpecialEffects: [
@@ -323,3 +338,5 @@ export function getAllRequiredDepKeys() {
   }
   return keys;
 }
+
+export { CONTEXT_GROUPS };

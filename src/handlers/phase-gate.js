@@ -243,6 +243,37 @@ async function dispatchPhaseAdvance(game, phase, ctx) {
       break;
     }
 
+    case 'pre_end_of_round': {
+      setRoundPhase(game, ROUND_PHASES.END_OF_ROUND);
+      game.endOfRoundWhoseTurn = game.initiativePlayerId;
+      const { getInitiativePlayerZoneLabel, updateHandChannelMessages } = ctx;
+      const _eorInitPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+      const _eorOtherPlayerId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
+      const _eorInitZone = getInitiativePlayerZoneLabel ? getInitiativePlayerZoneLabel(game) : '';
+      if (logGameAction) {
+        await logGameAction(game, client, `**End of Round** — 1. Mission Rules/Effects (resolve as needed). 2. <@${game.initiativePlayerId}> (${_eorInitZone}Initiative). 3. <@${_eorOtherPlayerId}>. 4. Next phase. Initiative player: play any end-of-round effects or CCs, then click **End 'End of Round' window** in your Hand.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId, _eorOtherPlayerId] } });
+      }
+      if (updateHandChannelMessages) {
+        await updateHandChannelMessages(game, client);
+      }
+      break;
+    }
+
+    case 'post_end_of_round': {
+      // Run the status phase (CC draw, initiative swap, etc.) then gate before activation
+      const { runStatusPhaseAfterEndOfRound } = ctx;
+      if (runStatusPhaseAfterEndOfRound) {
+        await runStatusPhaseAfterEndOfRound(game, ctx);
+      }
+      break;
+    }
+
+    case 'post_start_of_round': {
+      // Start-of-round effects done — gate before activation
+      await sendPhaseGateMessages(game, 'pre_activation', ctx);
+      break;
+    }
+
     case 'pre_activation': {
       setRoundPhase(game, ROUND_PHASES.ACTIVATION);
       const { sendRoundActivationPhaseMessage } = ctx;

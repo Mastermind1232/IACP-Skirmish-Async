@@ -19,6 +19,8 @@ import { buildContext } from '../context-factory.js';
 import { buildHeadlessDeps } from './headless-deps.js';
 import { createFakeInteraction } from './fake-interaction.js';
 import { createFakeClient } from './fake-client.js';
+import { captureSnapshot, computeDiff } from '../event-log.js';
+import { translateDiffToEvents } from '../domain/diff-translator.js';
 
 /**
  * Create a headless game harness for testing.
@@ -55,6 +57,16 @@ export function createHarness(initialGame, options = {}) {
 
   const allMessages = [];
 
+  function _translateEvents(gameId, handlerKey, playerId, beforeSnap, gamesMap) {
+    if (!beforeSnap || !gameId) return [];
+    const afterSnap = captureSnapshot(gamesMap.get(gameId));
+    const diff = computeDiff(beforeSnap, afterSnap);
+    if (!diff) return [];
+    return translateDiffToEvents(handlerKey, diff, {
+      gameId, playerId, before: beforeSnap, after: afterSnap,
+    });
+  }
+
   return {
     /**
      * Submit a handler action headlessly.
@@ -84,6 +96,9 @@ export function createHarness(initialGame, options = {}) {
         };
       }
 
+      const gameId = initialGame?.gameId;
+      const beforeSnap = gameId ? captureSnapshot(gamesMap.get(gameId)) : null;
+
       const group = getHandlerGroup(handlerKey);
       if (!group) {
         // Handler with no group — call with no context
@@ -94,15 +109,18 @@ export function createHarness(initialGame, options = {}) {
         try {
           await handler(interaction);
           allMessages.push(...interaction.sentMessages);
+          const events = _translateEvents(gameId, handlerKey, userId, beforeSnap, gamesMap);
           return {
-            game: gamesMap.get(initialGame?.gameId),
+            game: gamesMap.get(gameId),
             messages: interaction.sentMessages,
+            events,
           };
         } catch (err) {
           return {
-            game: gamesMap.get(initialGame?.gameId),
+            game: gamesMap.get(gameId),
             messages: interaction.sentMessages,
             error: err.message,
+            events: [],
           };
         }
       }
@@ -113,15 +131,18 @@ export function createHarness(initialGame, options = {}) {
       try {
         await handler(interaction, context);
         allMessages.push(...interaction.sentMessages);
+        const events = _translateEvents(gameId, handlerKey, userId, beforeSnap, gamesMap);
         return {
-          game: gamesMap.get(initialGame?.gameId),
+          game: gamesMap.get(gameId),
           messages: interaction.sentMessages,
+          events,
         };
       } catch (err) {
         return {
-          game: gamesMap.get(initialGame?.gameId),
+          game: gamesMap.get(gameId),
           messages: interaction.sentMessages,
           error: err.message,
+          events: [],
         };
       }
     },

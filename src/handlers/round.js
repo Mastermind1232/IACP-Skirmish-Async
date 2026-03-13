@@ -108,6 +108,71 @@ export async function handleEndEndOfRound(interaction, ctx) {
     return;
   }
   game.endOfRoundWhoseTurn = null;
+
+  // Phase gate: both players confirm before advancing to status phase
+  const { sendPhaseGateMessages: _eorSendGate } = ctx;
+  if (_eorSendGate) {
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    await _eorSendGate(game, 'post_end_of_round', ctx);
+    saveGames();
+    return;
+  }
+  // Fallback: no gate function available, run status phase directly
+  await _runStatusPhaseLogic(game, gameId, interaction, ctx);
+}
+
+/**
+ * Extracted status phase logic — called after post_end_of_round gate clears
+ * or directly from handleEndEndOfRound if no gate function is available.
+ * Also exported so phase-gate dispatchPhaseAdvance can call it.
+ */
+export async function runStatusPhaseAfterEndOfRound(game, ctx) {
+  const gameId = game.gameId;
+  await _runStatusPhaseLogic(game, gameId, null, ctx);
+}
+
+async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
+  const {
+    getGame,
+    replyIfGameEnded,
+    getPlayerZoneLabel,
+    logGameAction,
+    updateHandChannelMessages,
+    saveGames,
+    dcMessageMeta,
+    dcExhaustedState,
+    dcHealthState,
+    isDepletedRemovedFromGame,
+    buildDcEmbedAndFiles,
+    getConditionsForDcMessage,
+    getNicknamesForDcMessage,
+    getDcPlayAreaComponents,
+    countTerminalsControlledByPlayer,
+    isFigureInDeploymentZone,
+    checkWinConditions,
+    getMapTokensData,
+    getSpaceController,
+    getMissionRules,
+    runEndOfRoundRules,
+    runStartOfRoundRules,
+    getFiguresOnOrAdjacentToSpace,
+    runNpcThugActivation,
+    runNpcKryknaActivation,
+    applyNpcDamageToFigure,
+    getMapSpaces: getMapSpacesFn,
+    getMapRegistry,
+    filterMapSpacesByBounds,
+    getInitiativePlayerZoneLabel,
+    updateHandVisualMessage,
+    buildHandDisplayPayload,
+    sendRoundActivationPhaseMessage,
+    buildBoardMapPayload,
+    postDevaronDoorButtons,
+    postDevaronCratePushPrompts,
+    postKryknaPushButtons,
+    client,
+  } = ctx;
+
   game.dcFinishedPinged = {};
   game.pendingEndTurn = {};
   // G102: Ready (un-exhaust) all Skirmish Upgrades BEFORE End of Round effects,
@@ -675,7 +740,9 @@ export async function handleEndEndOfRound(interaction, ctx) {
     }
   }
 
-  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  if (interaction) {
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+  }
   saveGames();
 }
 
@@ -1026,6 +1093,16 @@ export async function handleEndStartOfRound(interaction, ctx) {
     }
   }
 
+  // Phase gate: both confirm SOR effects done before activation begins
+  const { sendPhaseGateMessages: _sorSendGate } = ctx;
+  if (_sorSendGate) {
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    await _sorSendGate(game, 'pre_activation', ctx);
+    saveGames();
+    return;
+  }
+
+  // Fallback: no gate function, start activation directly
   const generalChannel = await client.channels.fetch(game.generalId);
   const roundEmbed = new EmbedBuilder()
     .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${game.currentRound} - Start of Round`)

@@ -13,7 +13,7 @@ import {
 } from './game-tools.js';
 import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
-import { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride } from './round.js';
+import { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride } from './round.js';
 import {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
@@ -473,7 +473,7 @@ export {
 } from './game-tools.js';
 export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
-export { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride } from './round.js';
+export { handleEndEndOfRound, handleEndStartOfRound, runStartOfRoundDcEffects, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride } from './round.js';
 export {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,

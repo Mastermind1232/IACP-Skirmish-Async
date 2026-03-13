@@ -15,6 +15,9 @@ const GAMES_STATE_PATH = join(rootDir, 'data', 'games-state.json');
 /** Current game state schema version (DB4). Bump when adding migrations. */
 export const CURRENT_GAME_VERSION = 2;
 
+/** When true, state blob AND domain events are persisted. When false, only events. */
+export const DUAL_WRITE_MODE = true;
+
 /** gameId -> game object */
 const games = new Map();
 

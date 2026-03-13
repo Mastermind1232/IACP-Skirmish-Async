@@ -241,26 +241,15 @@ export async function handleStatusPhase(interaction, ctx) {
     saveGames();
     return;
   }
-  setRoundPhase(game, ROUND_PHASES.END_OF_ROUND);
   game.p1ActivationPhaseEnded = false;
   game.p2ActivationPhaseEnded = false;
-  game.endOfRoundWhoseTurn = game.initiativePlayerId;
-  const initPlayerNum = getInitiativePlayerNum(game);
-  const otherPlayerId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
-  const initZone = getInitiativePlayerZoneLabel(game);
-  await logGameAction(game, client, `**End of Round** — 1. Mission Rules/Effects (resolve as needed). 2. <@${game.initiativePlayerId}> (${initZone}Initiative). 3. <@${otherPlayerId}>. 4. Next phase. Initiative player: play any end-of-round effects or CCs, then click **End 'End of Round' window** in your Hand.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId, otherPlayerId] } });
-  const generalChannel = await client.channels.fetch(game.generalId);
-  const roundEmbed = new EmbedBuilder()
-    .setTitle(`${GAME_PHASES.ROUND.emoji}  ROUND ${round} - Status Phase`)
-    .setDescription(`1. Mission Rules/Effects 2. <@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}Initiative) 3. <@${otherPlayerId}> 4. Go. Both must click **End 'End of Round' window** in their Hand.`)
-    .setColor(PHASE_COLOR);
-  await generalChannel.send({
-    content: `**End of Round window** — <@${game.initiativePlayerId}> (${getInitiativePlayerZoneLabel(game)}Player ${initPlayerNum}), play any end-of-round effects/CCs, then click the button in your Hand.`,
-    embeds: [roundEmbed],
-    allowedMentions: { users: [game.initiativePlayerId] },
-  });
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  await updateHandChannelMessages(game, client);
+
+  // Phase gate: both players confirm before entering end-of-round effects
+  const { sendPhaseGateMessages } = ctx;
+  if (sendPhaseGateMessages) {
+    await sendPhaseGateMessages(game, 'pre_end_of_round', ctx);
+  }
   saveGames();
 }
 

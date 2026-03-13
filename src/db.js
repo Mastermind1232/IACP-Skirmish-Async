@@ -85,6 +85,33 @@ export async function initDb() {
       )
     `);
     await pool.query('CREATE INDEX IF NOT EXISTS idx_game_events_game_seq ON game_events (game_id, seq)').catch((err) => { console.error('[discord]', err?.message ?? err); });
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS domain_events (
+        id SERIAL PRIMARY KEY,
+        game_id TEXT NOT NULL,
+        seq INT NOT NULL,
+        type TEXT NOT NULL,
+        correlation_id TEXT,
+        player_id TEXT,
+        aggregate_version INT NOT NULL,
+        timestamp TIMESTAMPTZ DEFAULT NOW(),
+        payload JSONB NOT NULL,
+        UNIQUE(game_id, seq)
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_domain_events_game_seq ON domain_events (game_id, seq)').catch(() => {});
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_domain_events_game_type ON domain_events (game_id, type)').catch(() => {});
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS game_snapshots (
+        id SERIAL PRIMARY KEY,
+        game_id TEXT NOT NULL,
+        version INT NOT NULL,
+        state JSONB NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(game_id, version)
+      )
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_game_snapshots_game ON game_snapshots (game_id, version DESC)').catch(() => {});
     await seedAchievements();
     console.log('[DB] PostgreSQL connected, games and completed_games tables ready.');
   } catch (err) {
@@ -605,5 +632,86 @@ export async function getGameEvents(gameId, { afterSeq = 0, limit = 100 } = {}) 
   } catch (err) {
     console.error('[DB] getGameEvents failed:', err.message);
     return [];
+  }
+}
+
+// ── Domain Events (Phase 4) ──
+
+export async function insertDomainEvent(gameId, event) {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO domain_events (game_id, seq, type, correlation_id, player_id, aggregate_version, timestamp, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [gameId, event.seq, event.type, event.correlationId || null, event.playerId || null, event.aggregateVersion, event.timestamp, JSON.stringify(event.payload)]
+    );
+  } catch (err) {
+    console.error('[DB] insertDomainEvent failed:', err.message);
+  }
+}
+
+export async function getDomainEvents(gameId, afterSeq = 0, limit = 1000) {
+  if (!pool) return [];
+  try {
+    const res = await pool.query(
+      `SELECT * FROM domain_events WHERE game_id = $1 AND seq > $2 ORDER BY seq ASC LIMIT $3`,
+      [gameId, afterSeq, limit]
+    );
+    return res.rows;
+  } catch (err) {
+    console.error('[DB] getDomainEvents failed:', err.message);
+    return [];
+  }
+}
+
+export async function getLatestDomainSeq(gameId) {
+  if (!pool) return 0;
+  try {
+    const res = await pool.query(
+      `SELECT MAX(seq) AS max_seq FROM domain_events WHERE game_id = $1`,
+      [gameId]
+    );
+    return res.rows[0]?.max_seq ?? 0;
+  } catch (err) {
+    console.error('[DB] getLatestDomainSeq failed:', err.message);
+    return 0;
+  }
+}
+
+// ── Game Snapshots (Phase 4) ──
+
+export async function insertSnapshot(gameId, version, state) {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO game_snapshots (game_id, version, state) VALUES ($1, $2, $3)`,
+      [gameId, version, JSON.stringify(state)]
+    );
+  } catch (err) {
+    console.error('[DB] insertSnapshot failed:', err.message);
+  }
+}
+
+export async function getLatestSnapshot(gameId) {
+  if (!pool) return null;
+  try {
+    const res = await pool.query(
+      `SELECT version, state FROM game_snapshots WHERE game_id = $1 ORDER BY version DESC LIMIT 1`,
+      [gameId]
+    );
+    if (res.rows.length === 0) return null;
+    return { version: res.rows[0].version, state: res.rows[0].state };
+  } catch (err) {
+    console.error('[DB] getLatestSnapshot failed:', err.message);
+    return null;
+  }
+}
+
+export async function deleteSnapshots(gameId) {
+  if (!pool) return;
+  try {
+    await pool.query(`DELETE FROM game_snapshots WHERE game_id = $1`, [gameId]);
+  } catch (err) {
+    console.error('[DB] deleteSnapshots failed:', err.message);
   }
 }
