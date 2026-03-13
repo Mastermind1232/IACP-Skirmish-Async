@@ -264,31 +264,6 @@
   <div class="page active" id="page-overview">
     <div class="page-title">Command Center</div>
 
-    <div class="grid g3">
-      <div class="card" data-tip="Key training metrics at a glance.">
-        <div class="card-label">Training</div>
-        <div class="stat-row">
-          <div class="stat-item"><div class="stat-val" id="sGames">0</div><div class="stat-label">Games</div></div>
-          <div class="stat-item"><div class="stat-val" id="sStates">0</div><div class="stat-label">States</div></div>
-          <div class="stat-item"><div class="stat-val" id="sEntries">0</div><div class="stat-label">Entries</div></div>
-        </div>
-      </div>
-      <div class="card" data-tip="Exploration: how much the bot tries random moves vs learned strategy.">
-        <div class="card-label">Learning Mode</div>
-        <div class="stat-row">
-          <div class="stat-item"><div class="stat-val" id="sEpsilon" style="color:var(--warn)">—</div><div class="stat-label">Random</div></div>
-          <div class="stat-item"><div class="stat-val" id="sExploit" style="color:var(--good)">—</div><div class="stat-label">Learned</div></div>
-        </div>
-      </div>
-      <div class="card" data-tip="Score range: how strongly the bot differentiates good and bad moves.">
-        <div class="card-label">Confidence</div>
-        <div class="stat-row">
-          <div class="stat-item"><div class="stat-val" id="sQBest" style="color:var(--good)">0</div><div class="stat-label">Best</div></div>
-          <div class="stat-item"><div class="stat-val" id="sQWorst" style="color:var(--bad)">0</div><div class="stat-label">Worst</div></div>
-        </div>
-      </div>
-    </div>
-
     <!-- Arena Leaderboard (loaded from arena-data.json) -->
     <div class="card" id="arenaCard" style="display:none" data-tip="Top 10 arena agents by ELO. Click to open full Arena viewer.">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -299,14 +274,6 @@
         </div>
       </div>
       <div class="chart-container" style="height:220px"><canvas id="arenaBarChart"></canvas></div>
-    </div>
-
-    <div class="card" data-tip="Game completion rate across all training.">
-      <div class="card-label">Completion Rate</div>
-      <div class="stat-row">
-        <div class="stat-item"><div class="stat-val" id="wComp" style="color:var(--good)">—</div><div class="stat-label">Completed</div></div>
-        <div class="stat-item"><div class="stat-val" id="wTotal">0</div><div class="stat-label">Total Games</div></div>
-      </div>
     </div>
 
     <!-- Army Intel on Overview -->
@@ -331,6 +298,24 @@
     <div class="card" data-tip="Deployment cards ranked by win rate across all training games.">
       <div class="card-label">DC Leaderboard</div>
       <div class="dc-list" id="oDcList"></div>
+    </div>
+
+    <div class="grid g2">
+      <div class="card" data-tip="Key training metrics.">
+        <div class="card-label">Training</div>
+        <div class="stat-row">
+          <div class="stat-item"><div class="stat-val" id="sGames">0</div><div class="stat-label">Games</div></div>
+          <div class="stat-item"><div class="stat-val" id="sStates">0</div><div class="stat-label">States</div></div>
+          <div class="stat-item"><div class="stat-val" id="sEntries">0</div><div class="stat-label">Entries</div></div>
+        </div>
+      </div>
+      <div class="card" data-tip="Game completion rate across all training.">
+        <div class="card-label">Completion</div>
+        <div class="stat-row">
+          <div class="stat-item"><div class="stat-val" id="wComp" style="color:var(--good)">—</div><div class="stat-label">Rate</div></div>
+          <div class="stat-item"><div class="stat-val" id="wTotal">0</div><div class="stat-label">Total</div></div>
+        </div>
+      </div>
     </div>
 
     <div class="card" style="margin-top:14px" data-tip="Growth metrics since page load.">
@@ -582,14 +567,10 @@ function render(s){
   latestStats=s;
   const g=s.meta.totalGames;
 
-  // Overview stats
+  // Training stats
   document.getElementById('sGames').textContent=fmt(g);
   document.getElementById('sStates').textContent=fmt(s.states);
   document.getElementById('sEntries').textContent=fmt(s.actionEntries);
-  document.getElementById('sEpsilon').textContent=(s.epsilon*100).toFixed(0)+'%';
-  document.getElementById('sExploit').textContent=((1-s.epsilon)*100).toFixed(0)+'%';
-  document.getElementById('sQBest').textContent='+'+s.maxQ.toFixed(0);
-  document.getElementById('sQWorst').textContent=s.minQ.toFixed(0);
 
   // Completion
   const t=g||1,compPct=((s.meta.p1Wins+s.meta.p2Wins)/t*100).toFixed(0);
